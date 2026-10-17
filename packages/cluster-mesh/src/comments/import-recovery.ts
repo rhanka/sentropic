@@ -22,6 +22,16 @@ export const inspectCommentsImport = async (options: CommentsServiceOptions, con
   if (!state.root || !state.unit) throw new CommentsTransportError('incomplete', 'Complete terminal import is required');
   context.replayed(); return { state, unit: state.unit, root: state.root };
 };
+export const inspectCommentsImportProgress = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown) => {
+  const input = supplied as { scope: CanonicalStoreScope; operationId: string; bindingDigest: string };
+  if (!input || input.scope?.tenantId !== context.grant.scope.tenantId || input.scope.workspaceId !== context.grant.scope.workspaceId) throw new CommentsTransportError('denied', 'Import scope is unavailable');
+  const state = await readCommentsImport(context, input.operationId);
+  if (!state || state.bindingDigest !== input.bindingDigest) throw new CommentsTransportError('conflict', 'Import preparation binding differs');
+  for (const capability of state.binding.capabilities) await authorizeComments(options, context, capability, state.binding.targets);
+  const status = await context.inspectStaged(state.begin.operationKey);
+  context.replayed(); return { status, acceptedFragments: state.nextOrdinal,
+    prepared: state.root ? { operationId: state.binding.operationId, bindingDigest: state.bindingDigest, rootReference: state.rootReference } : null };
+};
 export const recoverCommentsReceipts = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<readonly CommentsCompleteReceipt[]> => {
   const input = supplied as { scope: CanonicalStoreScope; batchId: string; manifestHash: string };
   if (!input || input.scope?.tenantId !== context.grant.scope.tenantId || input.scope.workspaceId !== context.grant.scope.workspaceId || typeof input.batchId !== 'string' || typeof input.manifestHash !== 'string') throw new CommentsTransportError('denied', 'Receipt scope is unavailable');

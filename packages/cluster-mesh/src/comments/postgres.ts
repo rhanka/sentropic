@@ -13,7 +13,7 @@ import type { PgInstalledOperation } from '../storage/postgres/installed-contrac
 import { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 import { COMMENTS_IMPORT_CONTRACT_DIGEST } from './import-state.js';
 import { prepareCommentsImport } from './import-prepare.js';
-import { inspectCommentsImport, recoverCommentsReceipts } from './import-recovery.js';
+import { inspectCommentsImport, inspectCommentsImportProgress, recoverCommentsReceipts } from './import-recovery.js';
 import { commentsImportPolicy } from './import-policy.js';
 import { validateCommentsImportProjection } from './import-projection.js';
 import { prepareCommentsExport } from './export-prepare.js';
@@ -35,6 +35,7 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
     'comments.lifecycle': { operation: 'write', execute: (input, context) => executeCommentsLifecycle(services, context, input) },
     'comments.import.prepare': { operation: 'write', execute: (input, context) => prepareCommentsImport(services, context, input) },
     'comments.import.inspect': { operation: 'write', execute: (input, context) => inspectCommentsImport(services, context, input) },
+    'comments.import.progress': { operation: 'write', execute: (input, context) => inspectCommentsImportProgress(services, context, input) },
     'comments.import.recover': { operation: 'read', execute: (input, context) => recoverCommentsReceipts(services, context, input) },
     'comments.export.prepare': { operation: 'read', execute: (input, context) => prepareCommentsExport(services, context, input) },
     'comments.export.fragments': { operation: 'read', execute: (input, context) => readCommentsExportFragments(services, context, input) },

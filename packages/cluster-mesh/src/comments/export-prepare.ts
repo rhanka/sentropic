@@ -14,6 +14,7 @@ import { commentsExportBoundary, readCommentsExport, writeCommentsExport } from 
 import { decodeCommentsExportCursor, encodeCommentsExportCursor, initialCommentsExportPosition, type CommentsExportState } from './boundary-codec.js';
 import { readCommentsExportRecords } from './export-readers.js';
 import { CommentsTransportError, type CommentsExportPreparation, type CommentsExportSelection } from './transport-contracts.js';
+import { authorizeCommentsExport } from './export-authority.js';
 export const prepareCommentsExport = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<CommentsExportPreparation> => {
   const input = supplied as { selection: CommentsExportSelection; continuation: string | null }; const selection = input?.selection;
   if (!selection || !sameScope(selection.scope, context.grant.scope) || typeof selection.exportId !== 'string' || !selection.exportId || selection.exportId.length > 256 ||
@@ -47,6 +48,7 @@ export const prepareCommentsExport = async (options: CommentsServiceOptions, con
   if (state.selectionDigest !== selectionDigest) throw new CommentsTransportError('conflict', 'Export identity has a different frozen selection');
   // Even terminal preparation recovery rechecks current scope coverage.
   for (const selected of selection.selections) await assertCommentsPgVisible(context, chainIdentity(selected).key);
+  await authorizeCommentsExport(options, context, state);
   if (state.payloadDigest) { context.replayed(); return { state: 'prepared', boundary: commentsExportBoundary(state) }; }
   const continuation = input.continuation === null ? null : decodeCommentsExportCursor(state, 'prepare', input.continuation);
   let work = { records: 0, bytes: 0 };
