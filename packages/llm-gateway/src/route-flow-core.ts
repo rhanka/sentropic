@@ -19,6 +19,7 @@ import {
 } from './admission.js';
 
 export interface RouteAttemptSettlement {
+  readonly reportedUsage?: boolean;
   readonly observedServedModel?: string;
   readonly candidateRef: string;
   readonly providerId: string;

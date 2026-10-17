@@ -34,6 +34,21 @@ const freshDir = (): string =>
   mkdtempSync(join(tmpdir(), 'gw-state-test-'));
 
 describe('FileGatewayStateStore', () => {
+  it('refuses an authenticated snapshot with invalid state namespaces', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    for (const field of ['sessions', 'receipts', 'affinities']) {
+      const dir = freshDir(); const key = dekFor('schema');
+      await writeFile(join(dir, 'gateway-state.enc'), sealStateEnvelope(key, { ...emptyState(), [field]: [] }));
+      await expect(new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(key) }).load()).rejects.toMatchObject({ code: 'CORRUPT' });
+    }
+  });
+  it('refuses missing committed ciphertext instead of issuing into a fresh store', async () => {
+    const dir = freshDir();
+    const options = { stateDir: dir, keyring: keyringFor(dekFor('missing')) };
+    await new FileGatewayStateStore(options).compareAndSet(0, { ...emptyState(), revision: 1 });
+    await (await import('node:fs/promises')).unlink(join(dir, 'gateway-state.enc'));
+    await expect(new FileGatewayStateStore(options).load()).rejects.toMatchObject({ code: 'CORRUPT' });
+  });
   it('refuses unavailable keys on an empty store and never steals a live writer by age', async () => {
     const dir = freshDir();
     const locked = new FileGatewayStateStore({ stateDir: dir, keyring: { getSecret: async () => null } });
