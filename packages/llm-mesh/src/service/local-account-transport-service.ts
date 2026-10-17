@@ -24,6 +24,7 @@ import type { LlmMesh } from '../mesh.js';
 import {
   isDeviceFlowSeatAccount,
   isExternalSeatAccount,
+  isExternalSeatUnavailable,
   throwExternalSeatUnavailable,
 } from './external-seat-authority.js';
 import type { ProviderId } from '../providers.js';
@@ -699,18 +700,19 @@ export class LocalAccountTransportService {
     const nowMs = typeof input.now === 'number' ? input.now : Date.now();
 
     // Check if access token is expired
+    // L1 external policy: custodied seats never refresh here and never
+    // serve on unknown expiry. Expired or dateless access becomes
+    // access-unavailable; valid access is returned directly with the owner
+    // claim and policy retained. Mesh-managed device-flow seats fall
+    // through to refreshToken(), which dispatches them to the muse-code
+    // device provider.
+    const externallyManaged = !!account && isExternalSeatAccount(account);
+    if (account && externallyManaged && isExternalSeatUnavailable(account, nowMs)) {
+      await acquisition.release?.();
+      throwExternalSeatUnavailable(account);
+    }
     if (account && account.expiresAt) {
       const expiresAtMs = new Date(account.expiresAt).getTime();
-      // L1 external policy: custodied seats never refresh here. Expired
-      // access becomes access-unavailable; valid access is returned
-      // directly with the owner claim and policy retained. Mesh-managed
-      // device-flow seats fall through to refreshToken(), which dispatches
-      // them to the muse-code device provider.
-      const externallyManaged = isExternalSeatAccount(account);
-      if (expiresAtMs <= nowMs && externallyManaged) {
-        await acquisition.release?.();
-        throwExternalSeatUnavailable(account);
-      }
       if (!externallyManaged && (expiresAtMs <= nowMs || this.refreshInFlight.has(account.accountId))) {
         try {
           const version = this.credentialVersions.get(account.accountId) ?? 'v1.0.0';
