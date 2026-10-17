@@ -77,12 +77,12 @@
   let modelCatalog: ModelCatalogPayload = {
     providers: [],
     models: [],
-    defaults: { provider_id: 'openai', model_id: 'gpt-4.1-nano' },
+    defaults: { provider_id: 'openai', model_id: '' },
   };
   let modelCatalogGroups: ModelCatalogGroup[] = [];
   let selectedGenerationProviderId: ModelProviderId = 'openai';
-  let selectedGenerationModelId = 'gpt-4.1-nano';
-  let selectedGenerationModelSelectionKey = 'openai::gpt-4.1-nano';
+  let selectedGenerationModelId = '';
+  let selectedGenerationModelSelectionKey = '';
   let isLoadingModelCatalog = false;
 
   type MatrixModeRequest = 'organization' | 'generate' | 'default';
