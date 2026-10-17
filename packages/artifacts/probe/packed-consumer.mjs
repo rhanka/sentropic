@@ -4,11 +4,13 @@
  * Runs inside an isolated consumer directory where ONLY the packed
  * `@sentropic/artifacts` and `@sentropic/mcp-platform` tarballs are
  * installed (no workspace source; fetch is trapped before any import).
- * Proves the packed candidate exposes `sentropic.web-pages` with the 15
+ * Proves the packed candidate exposes `sentropic.artifacts` with the 15
  * `artifacts_*` tools, compiles through the platform kernel, and drives
  * the full ensure → publish → get → list round-trip. Prints
  * `PACKED_CONSUMER_OK` on success; any failure throws.
  */
+import assert from "node:assert/strict";
+
 let fetchCalls = 0;
 globalThis.fetch = async () => {
   fetchCalls += 1;
@@ -16,6 +18,7 @@ globalThis.fetch = async () => {
 };
 
 const mcp = await import("@sentropic/artifacts/mcp");
+assert.equal(Object.keys(mcp).some((name) => /WEB_PAGES|WebPages/u.test(name)), false);
 const http = await import("@sentropic/artifacts/http");
 const service = await import("@sentropic/artifacts/server/service");
 const publication = await import("@sentropic/artifacts/server/publication");
@@ -30,7 +33,7 @@ const params = await import("@sentropic/artifacts/parameters");
 const kernel = await import("@sentropic/mcp-platform/registry");
 const toolConfig = await import("@sentropic/mcp-platform/tool-configuration");
 
-if (mcp.WEB_PAGES_PROVIDER_ID !== "sentropic.web-pages") throw new Error("provider id mismatch");
+if (mcp.ARTIFACTS_PROVIDER_ID !== "sentropic.artifacts") throw new Error("provider id mismatch");
 const EXPECTED_TOOLS = [
   "artifacts_get_template", "artifacts_get_api_guide", "artifacts_ensure",
   "artifacts_publish", "artifacts_create_upload", "artifacts_commit_upload",
@@ -65,25 +68,27 @@ const app = http.createHttpArtifactApp({
   blobs,
 });
 
-const definition = mcp.createWebPagesRegistryDefinition({ app, defaultStorageScopeId: "scope-1" });
+const definition = mcp.createArtifactsRegistryDefinition({ app, defaultStorageScopeId: "scope-1" });
 const registry = kernel.createProviderRegistry();
 registry.register(definition);
-registry.select(["sentropic.web-pages"]);
-registry.configure("sentropic.web-pages", { defaultStorageScopeId: "scope-1" });
+assert.throws(() => registry.select(["sentropic.web-pages"]), /unknown provider/u);
+assert.throws(() => registry.configure("sentropic.web-pages", {}), /unknown provider/u);
+registry.select(["sentropic.artifacts"]);
+registry.configure("sentropic.artifacts", { defaultStorageScopeId: "scope-1" });
 const compiled = registry.compile({
   bindings: {},
   compatibility: {
-    "sentropic.web-pages": { manifestDigest: toolConfig.computeManifestDigest(definition.manifest) },
+    "sentropic.artifacts": { manifestDigest: toolConfig.computeManifestDigest(definition.manifest) },
   },
 });
 if (!compiled.ok) throw new Error("kernel compile refused: " + JSON.stringify(compiled.diagnostics));
 for (const name of EXPECTED_TOOLS) {
-  if (compiled.registry.resolveTool(name)?.providerId !== "sentropic.web-pages") {
+  if (compiled.registry.resolveTool(name)?.providerId !== "sentropic.artifacts") {
     throw new Error("unresolved tool " + name);
   }
 }
 
-const executor = mcp.createWebPagesToolExecutor({ app, defaultStorageScopeId: "scope-1" });
+const executor = mcp.createArtifactsToolExecutor({ app, defaultStorageScopeId: "scope-1" });
 const ensured = await executor.invoke({
   tool: "artifacts_ensure",
   actorId: "owner-1",
