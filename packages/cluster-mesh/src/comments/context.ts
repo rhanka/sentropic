@@ -4,7 +4,7 @@ import type { CanonicalStoreScope } from '@sentropic/comments';
 import type { ScopeGrant } from '../storage/authority.js';
 import type { KernelTransaction } from '../storage/scope-runtime.js';
 import type { CommentsStorage, CommentsStorageBinding } from './storage-contracts.js';
-import { own, sameScope } from './storage-schema.js';
+import { sameScope } from './storage-schema.js';
 export interface CommentsRequest { readonly grant: ScopeGrant<unknown>; readonly storage: CommentsStorage; closed: boolean; }
 interface CommentsTransaction { readonly request: CommentsRequest; readonly port: KernelTransaction; failed?: unknown; closed: boolean; }
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
@@ -33,9 +33,9 @@ export class CommentsContext {
     return current.port;
   }
   async enter<T>(supplied: ScopeGrant<unknown>, operation: () => Promise<T>): Promise<T> {
-    const grant = own(supplied); freeze(grant);
+    const grant = JSON.parse(JSON.stringify(supplied)) as ScopeGrant<unknown>; freeze(grant);
     if (grant.moduleId !== 'comments' || this.binding.moduleId !== 'comments') throw new CanonicalCommandError('denied', 'Comments module binding mismatch');
-    const storage = await this.binding.bind(grant);
+    const storage = await this.binding.bind(grant).catch((error: unknown) => { throw commentsError(error); });
     const request: CommentsRequest = { grant, storage, closed: false };
     try { return await this.#requests.run(request, operation); }
     catch (error) { throw commentsError(error); }
