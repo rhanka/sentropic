@@ -25,8 +25,12 @@ describe.skipIf(!pgEnabled)('host-owned migration attachment', () => {
       await applyPgMigrations(session, layout, assets, history, { id: 'drizzle-shaped/0043', checksum: 'a'.repeat(64) });
     });
     await tx.run(true, (session) => verifyPgInstallation(session, layout, assets, history));
+    await tx.run(false, (session) => session.execute({
+      text: `CREATE TABLE "${name}".host_business(id integer PRIMARY KEY); CREATE FUNCTION "${name}".host_function() RETURNS integer LANGUAGE sql AS 'SELECT 1'`, values: [],
+    }));
+    await tx.run(true, (session) => verifyPgInstallation(session, layout, assets, history));
     await tx.run(false, async (session) => { await session.execute({ text: `ALTER TABLE "${name}".payloads ADD COLUMN unregistered text`, values: [] }); });
-    await expect(tx.run(true, (session) => verifyPgInstallation(session, layout, assets, history))).rejects.toMatchObject({ condition: 'configuration' });
+    await expect(tx.run(true, (session) => verifyPgInstallation(session, layout, assets, history))).rejects.toMatchObject({ condition: 'schema-drift', retryable: false });
     await tx.run(false, async (session) => { await session.execute({ text: `ALTER TABLE "${name}".payloads DROP COLUMN unregistered; UPDATE "${name}".host_history SET receipt=jsonb_set(receipt,'{appliedChecksum}','"wrong"') WHERE ordinal=1`, values: [] }); });
     await expect(tx.run(true, (session) => verifyPgInstallation(session, layout, assets, history))).rejects.toMatchObject({ condition: 'configuration' });
   });
