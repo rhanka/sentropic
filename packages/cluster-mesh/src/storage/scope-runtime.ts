@@ -262,16 +262,17 @@ export class ScopedRuntime {
 
   async appendChain(chainId: string, record: ChainRecordInput, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Promise<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }> {
     this.requireOperation('write');
-    return appendChainToScope(this.#deps.backend.scopeState(this.boundScope), chainId, record, expectation);
+    return this.change('append', [chainId], (state) => appendChainToScope(state, chainId, record, expectation));
   }
 
   async genesis(kind: string, id: string, hash: string, value: unknown): Promise<{ readonly hash: string; readonly replayed: boolean }> {
     this.requireOperation('write');
-    return genesisToScope(this.#deps.backend.scopeState(this.boundScope), kind, id, hash, value);
+    return this.change('genesis', [`${kind}:${id}`], (state) => genesisToScope(state, kind, id, hash, value));
   }
 
   async indexGet(key: string): Promise<{ readonly digest: string; readonly resultIds: readonly string[]; readonly resultHash: string | null } | null> {
     this.requireOperation('read');
+    this.assertAccessible('index', key);
     const stored = this.#deps.backend.scopeState(this.boundScope).index.get(key);
     if (!stored) return null;
     return { digest: stored.digest, resultIds: [...stored.resultIds], resultHash: stored.resultHash };
@@ -279,7 +280,7 @@ export class ScopedRuntime {
 
   async indexPut(key: string, entry: { readonly digest: string; readonly resultIds: readonly string[]; readonly resultHash: string | null }): Promise<'insert' | 'replace'> {
     this.requireOperation('write');
-    const state = this.#deps.backend.scopeState(this.boundScope);
+    return this.change('index', [key], (state) => {
     const stored = state.index.get(key);
     // Detached copies: the caller's entry object never aliases canonical
     // state (Sol-3/m4).
@@ -293,10 +294,12 @@ export class ScopedRuntime {
       return 'replace';
     }
     throw new StorageIdempotencyConflictError('index digest conflict');
+    });
   }
 
   async readHead(chainId: string): Promise<string | null> {
     this.requireOperation('read');
+    this.assertAccessible('chain', chainId);
     const chain = this.#deps.backend.scopeState(this.boundScope).chains.get(chainId);
     if (chain?.disposed) throw new StorageDeniedError('chain disposed');
     return chain?.head ?? null;
@@ -304,6 +307,7 @@ export class ScopedRuntime {
 
   async readRecord(key: string): Promise<{ readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string }; readonly contentHash: string } | null> {
     this.requireOperation('read');
+    this.assertAccessible('record', key);
     const stored = this.#deps.backend.scopeState(this.boundScope).records.get(key);
     if (!stored) return null;
     return { bytes: { ...stored.bytes }, contentHash: stored.contentHash };
@@ -311,6 +315,7 @@ export class ScopedRuntime {
 
   async readAggregate(key: string): Promise<{ readonly version: number; readonly value: { readonly format: 'utf8' | 'base64'; readonly data: string } } | null> {
     this.requireOperation('read');
+    this.assertAccessible('aggregate', key);
     const stored = this.#deps.backend.scopeState(this.boundScope).aggregates.get(key);
     if (!stored) return null;
     return { version: stored.version, value: { ...stored.value } };
@@ -318,6 +323,7 @@ export class ScopedRuntime {
 
   async readChain(chainId: string): Promise<readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[]> {
     this.requireOperation('read');
+    this.assertAccessible('chain', chainId);
     const chain = this.#deps.backend.scopeState(this.boundScope).chains.get(chainId);
     if (chain?.disposed) throw new StorageDeniedError('chain disposed');
     return (chain?.records ?? []).map((entry) => ({ ...entry }));
@@ -325,6 +331,7 @@ export class ScopedRuntime {
 
   async readPage(chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number): Promise<ReadPageResult> {
     this.requireOperation('read');
+    if (!this.accessible('chain', chainId)) return { outcome: 'inaccessible', records: [], nextCursor: null };
     return readPageFromScope(this.#deps.backend.scopeState(this.boundScope), chainId, limit, cursor, maxEncodedBytes, {
       moduleId: this.moduleId,
       scope: this.boundScope,
@@ -335,18 +342,15 @@ export class ScopedRuntime {
 
   async disposeChain(chainId: string): Promise<void> {
     this.requireOperation('maintain');
-    disposeChainInScope(this.#deps.backend.scopeState(this.boundScope), chainId);
+    this.change('dispose', [chainId], (state) => disposeChainInScope(state, chainId));
   }
 
   async commitAtomic(unit: AtomicUnit, options: CommitOptions = {}): Promise<CommitReceipt> {
     this.requireOperation('write');
-    return commitAtomicToScope(this.#deps.backend.scopeState(this.boundScope), unit, options, {
-      moduleId: this.moduleId,
-      scope: this.boundScope,
-      clock: this.#deps.clock,
-      commitId: this.#deps.nextCommitId(),
-      predicates: this.#deps.predicates,
-    });
+    const ctx = this.commitContext();
+    return this.#deps.coordinator
+      ? this.#deps.coordinator.commit(this.grant, [unit], options, ctx, () => this.requireOperation('write'))
+      : commitAtomicToScope(this.#deps.backend.scopeState(this.boundScope), unit, options, ctx);
   }
 
   /** §5.5 ordinary transaction with kernel-bound join.
