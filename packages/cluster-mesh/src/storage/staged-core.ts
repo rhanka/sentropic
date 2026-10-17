@@ -7,6 +7,7 @@ import { StorageDeniedError, StorageInvalidCommandError } from './errors.js';
 import type { KernelOptions, KernelRoot } from './kernel.js';
 import type { RootMutationCoordinator } from './mutation-coordinator.js';
 import type { CommitContext } from './record-runtime.js';
+import { HmacExactHeadBoundaryProvider, type ChainBoundaryProvider } from './tokens.js';
 import { coveredBy, createStagedControl, createStagedRootData, lockStagedRootData, type StagedControl, type StagedRootData } from './staged-state.js';
 
 export interface StagedCoreOptions extends Omit<KernelOptions, 'coordinator'> {
@@ -22,10 +23,12 @@ export const opaqueId = (kind: string): string => `${kind}-${randomUUID()}`;
 // a facade is recreated; no durable-storage claim follows from a rebind.
 export class StagedCore {
   readonly clock: () => string;
+  readonly boundaryProvider: ChainBoundaryProvider;
   private readonly empty: StagedRootData;
   constructor(readonly kernel: KernelRoot, readonly backend: MemoryBackend,
     readonly coordinator: RootMutationCoordinator, readonly options: StagedCoreOptions) {
     this.clock = options.now ?? (() => new Date().toISOString());
+    this.boundaryProvider = options.boundaryProvider ?? new HmacExactHeadBoundaryProvider(options.cursorSecret);
     this.empty = lockStagedRootData(createStagedRootData(options.descriptor));
   }
   control(scope: StorageScope): StagedControl {
