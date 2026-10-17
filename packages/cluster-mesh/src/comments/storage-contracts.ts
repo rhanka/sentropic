@@ -9,15 +9,37 @@ import type { WorkLimits, WriterFence } from '../storage/contracts.js';
 export interface CommentsStorage {
   readonly moduleId: string;
   readonly scope: { readonly tenantId: string; readonly workspaceId: string };
-  transact<T>(options: CommitOptions, operation: (tx: KernelTransaction) => Promise<T>): Promise<{ readonly value: T; readonly receipt: CommitReceipt }>;
+  transact<T>(
+    options: CommitOptions,
+    operation: (tx: KernelTransaction) => Promise<T>,
+  ): Promise<{ readonly value: T; readonly receipt: CommitReceipt }>;
   readHead(chainId: string): Promise<string | null>;
-  readRecord(key: string): Promise<{ readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string }; readonly contentHash: string } | null>;
+  readRecord(
+    key: string,
+  ): Promise<{
+    readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string };
+    readonly contentHash: string;
+  } | null>;
   readPage(chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number): Promise<RecordPage>;
   indexGet(key: string): Promise<IdempotencyEntry | null>;
   invoke?(name: string, input: unknown): Promise<unknown>;
   completePurge?(intentId: string): Promise<RootPurgeJob>;
-  sealStep?(input: { readonly unit: AuthenticatedStagedHandle; readonly root: StagedCommitRoot; readonly fence: WriterFence; readonly limits: WorkLimits }): Promise<{ readonly work: { readonly items: number; readonly appends: number; readonly bytes: number }; readonly seal?: AuthenticatedStagedSeal }>;
+  sealStep?(input: {
+    readonly unit: AuthenticatedStagedHandle;
+    readonly root: StagedCommitRoot;
+    readonly fence: WriterFence;
+    readonly limits: WorkLimits;
+  }): Promise<{
+    readonly work: { readonly items: number; readonly appends: number; readonly bytes: number };
+    readonly seal?: AuthenticatedStagedSeal;
+  }>;
   commitStaged?(input: { readonly seal: AuthenticatedStagedSeal; readonly fence: WriterFence }): Promise<CommitReceipt>;
 }
-export interface CommentsStorageBinding { readonly moduleId: string; bind(grant: ScopeGrant<unknown>): Promise<CommentsStorage>; }
-export interface CommentsModuleOptions { readonly storage: CommentsStorageBinding; readonly capacity: CapacityDescriptor; }
+export interface CommentsStorageBinding {
+  readonly moduleId: string;
+  bind(grant: ScopeGrant<unknown>): Promise<CommentsStorage>;
+}
+export interface CommentsModuleOptions {
+  readonly storage: CommentsStorageBinding;
+  readonly capacity: CapacityDescriptor;
+}
