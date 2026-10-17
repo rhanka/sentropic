@@ -10,7 +10,8 @@ import { FileGatewayStateStore } from './gateway-state-store.js';
 import { createNodeGatewayServer, closeNodeServer, listenNodeServer } from './http-server.js';
 import { createSessionAuth } from './session-auth.js';
 import { createGatewayRouteAffinityStore } from './route-affinity-store.js';
-import { freezeLaunchRoutingContract } from '@sentropic/llm-mesh';
+import { freezeLaunchRoutingContract, launchTargets } from '@sentropic/llm-mesh';
+import { GatewayError } from '../router/errors.js';
 import type { GatewayHostHandle, HostReadiness, StartGatewayHostOptions } from './host-types.js';
 export { resolveGatewayStateDir } from './state-directory.js';
 export type { GatewayHostHandle, HostReadiness, MeshBinding, StartGatewayHostOptions } from './host-types.js';
@@ -54,9 +55,17 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
   try {
     const router = createGatewayRouter({ ...mesh.gateway,
       routePlanner: mesh.createRoutePlanner({ affinityStore: createGatewayRouteAffinityStore(store) }),
-      routeInput: (input) => ({ ...mesh.gateway.routeInput?.(input),
+      routeInput: (input) => {
+        const contract = input.cost.launchRoutingContract!;
+        const effort = input.canonical.request.reasoning?.effort;
+        if (effort && ((contract.effortPolicy.allowedEfforts && !contract.effortPolicy.allowedEfforts.includes(effort))
+          || launchTargets(contract, input.request.model)?.some((target) => target.effort && target.effort !== effort))) {
+          throw new GatewayError('bad-request', 'session policy cannot preserve reasoning effort', undefined, undefined, 'unsupported_parameter', 'reasoning.effort');
+        }
+        return { ...mesh.gateway.routeInput?.(input),
         workspaceId: input.cost.workspaceId, affinityKey: input.cost.gatewayClientSessionRef,
-        launchRoutingContract: input.cost.launchRoutingContract }),
+        launchRoutingContract: contract };
+      },
       config: { ...mesh.gateway.config, callerAuth: createSessionAuth({ service, ownerScopeRef,
         ready: async () => (await readiness()).ready, resolveOwner: (caller, context) => mesh.resolveOwner(caller, context) }) },
       readiness: { isReady: async () => (await readiness()).ready },

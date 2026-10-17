@@ -73,7 +73,7 @@ describe('classifyClientRuntime', () => {
   });
 
   it('refuses unknown runtimes on the owner machine until distribution inspection proves them', () => {
-    expect(classifyClientRuntime(manifest.clients.vibe, 'owner-machine')).toEqual({
+    expect(classifyClientRuntime(manifest.clients.agy, 'owner-machine')).toEqual({
       admitted: false,
       reason: 'unknown-runtime, job-excluded-until-proven',
     });
@@ -84,7 +84,7 @@ describe('classifyClientRuntime', () => {
   });
 
   it('keeps python runtimes owner-machine-only with an explicit job-excluded reason', () => {
-    for (const id of ['aider', 'hermes'] as const) {
+    for (const id of ['aider', 'hermes', 'vibe'] as const) {
       expect(classifyClientRuntime(manifest.clients[id], 'private-job')).toEqual({
         admitted: false,
         reason: 'unqualified (python-runtime, job-excluded)',
@@ -112,7 +112,7 @@ describe('classifyClientRuntime', () => {
 
   it('never admits a resolved row whose runtime is still unknown', () => {
     const resolvedUnknown = {
-      ...manifest.clients.vibe,
+      ...manifest.clients.agy,
       digest: `sha256:${'0'.repeat(64)}`,
       status: 'resolved',
     };
