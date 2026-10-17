@@ -212,6 +212,7 @@
   - [ ] RED `tests/storage/projection-roots.spec.ts`: relationship changes prepare on an owned successor and nested delta buffers cannot mutate captured projection membership.
     - [x] Projection state forks immutable indexed relationship/delta roots; successive changes validate on the successor, descriptor/delta inputs are owned, and delta reads use a bounded window. Projection root probes pass 2/2; publication integration remains pending.
   - [ ] One atomic visibility point: data, barriers, projections, receipt and journal segment switch together under the scope gate with base compare.
+    - [ ] `root-publication.spec.ts` interleaves readers at the actual publication wait, then revokes authority or rotates the fence; another case replaces equal-digest command results after sealing and requires CAS refusal with the rival preserved.
     - [ ] RED receipt probes require ordinary and staged `moduleResult` to survive caller mutation and idempotent recovery. The first integrated lint run found two single-assignment declarations; they now use `const` without exposing wiring.
   - [ ] Projection preparation on the prepared overlay (two removals of one link fail with no effects); evolving-head validation across fragments (h0 then h1).
     - [ ] `src/storage/staged-effects.ts` prepares module effects, verified purge authorizers, projections, audit and one scoped journal event on the owned root before publication; shared purge fixtures will be aligned with verified principals.
