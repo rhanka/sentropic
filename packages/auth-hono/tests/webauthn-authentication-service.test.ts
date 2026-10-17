@@ -97,7 +97,41 @@ describe('createAuthWebAuthnAuthenticationService', () => {
     expect(options.challenge).toBe('authentication-challenge');
     expect(options.rpId).toBe('app.example.com');
     expect(options.allowCredentials).toBeUndefined();
+    // F3: discoverable (no user) fails closed to 'required' even when the host
+    // resolver prefers otherwise — there is no user to scope a policy to.
+    expect(options.userVerification).toBe('required');
+  });
+
+  it('honors an explicit host resolver for a known user', async () => {
+    const service = createAuthWebAuthnAuthenticationService({
+      ports: createPorts(),
+      rp: {
+        expectedOrigins: ['https://app.example.com'],
+        id: 'app.example.com',
+        name: 'Example App',
+      },
+    });
+
+    const options = await service.generateAuthenticationOptions({ userId: user.id });
+
     expect(options.userVerification).toBe('preferred');
+  });
+
+  it('fails closed to required without a host resolver', async () => {
+    const ports = createPorts();
+    delete ports.accountPolicy.resolveUserVerification;
+    const service = createAuthWebAuthnAuthenticationService({
+      ports,
+      rp: {
+        expectedOrigins: ['https://app.example.com'],
+        id: 'app.example.com',
+        name: 'Example App',
+      },
+    });
+
+    const options = await service.generateAuthenticationOptions({ userId: user.id });
+
+    expect(options.userVerification).toBe('required');
   });
 
   it('generates user-scoped authentication options with allowed credentials', async () => {
@@ -174,6 +208,7 @@ describe('createAuthWebAuthnAuthenticationService', () => {
     expect(result).toEqual({
       credentialId: 'credential-id',
       userId: user.id,
+      userVerified: true,
       verified: true,
     });
     expect(counterUpdate).toEqual({
@@ -182,5 +217,83 @@ describe('createAuthWebAuthnAuthenticationService', () => {
       lastUsedAt: now,
     });
     expect(markedChallenge).toBe('authentication-challenge');
+  });
+
+  it('rejects UV-less assertions without a host resolver (F3 fail-closed default)', async () => {
+    const ports = createPorts();
+    delete ports.accountPolicy.resolveUserVerification;
+    const service = createAuthWebAuthnAuthenticationService({
+      ports,
+      rp: {
+        expectedOrigins: ['https://app.example.com'],
+        id: 'app.example.com',
+        name: 'Example App',
+      },
+      verifyAuthenticationResponse: async () => ({
+        authenticationInfo: {
+          newCounter: 6,
+          userVerified: false,
+        },
+        verified: true,
+      }),
+    });
+
+    const result = await service.verifyAuthentication({
+      credential: {
+        id: 'credential-id',
+        rawId: 'credential-id',
+        response: {
+          authenticatorData: 'authenticator-data',
+          clientDataJSON: 'client-data',
+          signature: 'signature',
+        },
+        type: 'public-key',
+      },
+      expectedChallenge: 'authentication-challenge',
+    });
+
+    expect(result).toEqual({
+      error: expect.objectContaining({ code: 'user_verification_required' }),
+      verified: false,
+    });
+  });
+
+  it('propagates userVerified=false when the host explicitly prefers (override honored)', async () => {
+    const service = createAuthWebAuthnAuthenticationService({
+      ports: createPorts(),
+      rp: {
+        expectedOrigins: ['https://app.example.com'],
+        id: 'app.example.com',
+        name: 'Example App',
+      },
+      verifyAuthenticationResponse: async () => ({
+        authenticationInfo: {
+          newCounter: 6,
+          userVerified: false,
+        },
+        verified: true,
+      }),
+    });
+
+    const result = await service.verifyAuthentication({
+      credential: {
+        id: 'credential-id',
+        rawId: 'credential-id',
+        response: {
+          authenticatorData: 'authenticator-data',
+          clientDataJSON: 'client-data',
+          signature: 'signature',
+        },
+        type: 'public-key',
+      },
+      expectedChallenge: 'authentication-challenge',
+    });
+
+    expect(result).toEqual({
+      credentialId: 'credential-id',
+      userId: user.id,
+      userVerified: false,
+      verified: true,
+    });
   });
 });

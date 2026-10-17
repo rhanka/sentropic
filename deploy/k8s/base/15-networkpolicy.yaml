@@ -126,6 +126,35 @@ spec:
         - protocol: TCP
           port: 5432
 ---
+# BR45 — the one-off oauth-register-client Job (36-*) runs the api image and
+# must reach postgres:5432. The baseline is default-deny-ingress and
+# allow-api-to-postgres only admits the api pod, so a separate policy admits
+# the Job pod (component oauth-register-client). Without it the registration
+# fails closed at connect time.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-oauth-register-client-to-postgres
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentropic
+              app.kubernetes.io/component: oauth-register-client
+      ports:
+        - protocol: TCP
+          port: 5432
+---
 # BR-39 deploy — the IdP is public (auth.sent-tech.ca), so the cluster-wide
 # Traefik ingress controller (ns `traefik`) hits the auth-idp pod DIRECTLY on
 # 8787 (unlike the ui, which proxies /api internally). Without this the

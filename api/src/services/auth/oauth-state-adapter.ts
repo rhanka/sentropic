@@ -182,6 +182,7 @@ export const createOauthStateStoreAdapter = (
 
 const toOauthClientRecord = (row: typeof oauthClients.$inferSelect): OauthClientRecord => ({
   allowedScopes: row.allowedScopes,
+  allowedUserIds: row.allowedUserIds ?? [],
   clientId: row.clientId,
   clientSecretHash: row.clientSecretHash,
   createdAt: row.createdAt,
@@ -192,6 +193,7 @@ const toOauthClientRecord = (row: typeof oauthClients.$inferSelect): OauthClient
   ownerUserId: row.ownerUserId,
   redirectUris: row.redirectUris,
   requirePkce: row.requirePkce,
+  requiredAcr: row.requiredAcr ?? null,
   resourceIndicators: row.resourceIndicators,
   responseTypes: row.responseTypes,
   tenantId: row.tenantId,
@@ -216,8 +218,12 @@ const toServiceClientRecord = (row: typeof serviceClients.$inferSelect): Service
 const toAuthCodePayload = (row: typeof authorizationCodes.$inferSelect): AuthCodePayload => {
   const payload = row.payload as Partial<AuthCodePayload> | null;
 
+  // F7: fail closed — a code payload without an ACR is treated as a
+  // single-factor bearer session, never as passkey-fresh.
+  const acr = typeof payload?.acr === 'string' ? payload.acr : 'urn:sentropic:loa:bearer';
   return {
-    acr: typeof payload?.acr === 'string' ? payload.acr : 'urn:sentropic:loa:passkey-fresh',
+    acr,
+    amr: Array.isArray(payload?.amr) ? payload.amr : (acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
     authTime: toDate(payload?.authTime) ?? row.createdAt,
     clientId: row.clientId,
     codeChallenge: row.codeChallenge,

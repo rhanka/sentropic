@@ -397,9 +397,11 @@ const issueTokens = async (
   // it from the mounted token path keeps reusable composition roots distinct. The id_token `aud`
   // (client_id) is untouched.
   const accessAudience = codePayload.resource ?? userinfoAudience;
+  const amr = codePayload.amr ?? (codePayload.acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']);
   const accessToken = await jwks.signJwt(
     {
       acr: codePayload.acr,
+      amr,
       auth_time: toEpochSeconds(codePayload.authTime),
       client_id: client.clientId,
       ...(cnf ? { cnf } : {}),
@@ -442,6 +444,7 @@ const issueTokens = async (
     const idToken = await jwks.signJwt(
       {
         acr: codePayload.acr,
+        amr,
         auth_time: toEpochSeconds(codePayload.authTime),
         ...(cnf ? { cnf } : {}),
         ...(scopes.includes('email') ? { email: user.email, email_verified: user.emailVerified } : {}),
@@ -491,6 +494,8 @@ const tokenMeta = (input: {
   jti: string;
   tokenType: 'access_token' | 'id_token';
 }): TokenMeta => ({
+  acr: input.codePayload.acr,
+  amr: input.codePayload.amr ?? (input.codePayload.acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
   audience: input.audience,
   clientId: input.client.clientId,
   createdAt: input.codePayload.createdAt,
