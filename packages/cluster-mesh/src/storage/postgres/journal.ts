@@ -6,6 +6,15 @@ import type { PgCore } from './core.js';
 import type { PgJournalDraft, PgSession } from './protocol.js';
 import { decodePgCounter, decodePgJson, decodePgText } from './codec.js';
 import { PostgresStorageError } from './errors.js';
+import { createHash } from 'node:crypto';
+export const currentPgJournalFence = async (core: PgCore, grant: ScopeGrant<unknown>): Promise<JournalFence> => core.tx.run(false, async (session) => {
+  await core.check(session, grant, 'maintain', true);
+  const lane = `journal:${createHash('sha256').update(grant.principalId, 'utf8').digest('hex')}`;
+  await session.execute({ text: `INSERT INTO ${core.roots.schema}.fences(scope_key,lane,owner,incarnation,epoch) VALUES($1,$2,$3,$4,1) ON CONFLICT(scope_key,lane) DO NOTHING`, values: [core.roots.key(grant.scope), lane, grant.principalId, core.incarnation] });
+  const result = await session.execute({ text: `SELECT epoch::text FROM ${core.roots.schema}.fences WHERE scope_key=$1 AND lane=$2`, values: [core.roots.key(grant.scope), lane] });
+  const fence = { fenceId: lane, epoch: decodePgCounter(result.rows[0]?.epoch), incarnation: core.incarnation, ownerId: grant.principalId };
+  await core.fence(session, grant, fence); return fence;
+});
 export const pgSafeCounter = (value: unknown): number => {
   const counter = decodePgCounter(value); const number = Number(counter);
   if (!Number.isSafeInteger(number)) throw new StorageCapacityExceededError('counter exceeds the negotiated numeric API');
