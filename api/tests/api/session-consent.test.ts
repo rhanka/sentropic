@@ -1551,6 +1551,124 @@ describe('session consent durable lifecycle', () => {
     expect(usage.reservedBytes).toBeLessThanOrEqual(24);
   });
 
+  it('should keep purge pending with no second staged row on PUT failure (N5)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const failing = makeService({
+      publishHooks: {
+        beforePut: async () => {
+          throw new Error('injected PUT failure');
+        },
+      },
+    });
+    const body = new TextEncoder().encode('put-failure-n5');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: body.length, encoded: body.length }, 'k-n5', ctx,
+    );
+    await expectContentError(() => failing.publishAfterUpload(
+      reserved.reservationId, body, ctx,
+    ), 'unknown_outcome');
+    await expectContentError(() => service.publishAfterUpload(
+      reserved.reservationId, body, ctx,
+    ), 'unknown_outcome');
+    const objects = await db
+      .select()
+      .from(sessionContentObjects)
+      .where(eq(sessionContentObjects.sessionId, 'sess-content-s1'));
+    expect(objects).toHaveLength(1);
+    expect(objects[0]!.state).toBe('purge_pending');
+    const duplicate = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: body.length, encoded: body.length }, 'k-n5', ctx,
+    );
+    expect(duplicate.duplicate).toBe(true);
+    expect(duplicate.outcome).toBe('outcome_unknown');
+    const attempts = await db
+      .select()
+      .from(sessionContentAttempts)
+      .where(eq(sessionContentAttempts.sessionId, 'sess-content-s1'));
+    expect(attempts[0]!.outcome).toBe('outcome_unknown');
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.pendingDeletionBytes).toBe(body.length);
+    const jobs = await db
+      .select()
+      .from(sessionContentPurgeJobs)
+      .where(eq(sessionContentPurgeJobs.bindingId, bindingId));
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]!.scope).toBe('object');
+    const purged = await service.runPurge(jobs[0]!.purgeJobId);
+    expect(purged.remainingObjects).toBe(0);
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+    void bindingId;
+  });
+
+  it('should derive future eligibility from the server D1 binding time (n4)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    const derived = await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: 1,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const grants = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(grants[0]!.lastFreshnessAckAt).toBe(bindings[0]!.createdAt.getTime());
+    expect(grants[0]!.lastFreshnessAckAt).toBeGreaterThan(1);
+    expect(derived.version).toBe(1);
+    void bindingId;
+  });
+
+  it('should resolve the D1 content-hook issuer from configuration (n6)', async () => {
+    const { resolveSessionContentIssuer } = await import(
+      '../../src/services/cluster-mesh/session-workspace'
+    );
+    const previous = process.env.SESSION_CONTENT_AUTHORITY_ISSUER;
+    try {
+      expect(resolveSessionContentIssuer('explicit-issuer')).toBe('explicit-issuer');
+      process.env.SESSION_CONTENT_AUTHORITY_ISSUER = 'env-issuer';
+      expect(resolveSessionContentIssuer()).toBe('env-issuer');
+      delete process.env.SESSION_CONTENT_AUTHORITY_ISSUER;
+      expect(resolveSessionContentIssuer()).toBe('sentropic-product');
+    } finally {
+      if (previous === undefined) delete process.env.SESSION_CONTENT_AUTHORITY_ISSUER;
+      else process.env.SESSION_CONTENT_AUTHORITY_ISSUER = previous;
+    }
+  });
+
   it('should increment on accept-at-N so a replayed accept conflicts (M4)', async () => {
     await acceptProject();
     await service.amendProject(
