@@ -1271,7 +1271,9 @@ export const sessionContentAttempts = controlSchema.table(
  * control.session_content_purge_jobs — writer-settled physical purge work and
  * its evidence (D2 Lot 2). Revocation commits before readers/producers
  * close; deletion runs only after writers settle, then the final inventory
- * is verified and recorded in `evidence`.
+ * is verified and recorded in `evidence`. Scope `object` (with `object_id`)
+ * deletes one staged/`purge_pending` row only and never committed copies;
+ * `binding`/`namespace`/`history` remain the real purge-event scopes.
  */
 export const sessionContentPurgeJobs = controlSchema.table(
   'session_content_purge_jobs',
@@ -1279,6 +1281,7 @@ export const sessionContentPurgeJobs = controlSchema.table(
     purgeJobId: text('purge_job_id').primaryKey(),
     namespaceId: text('namespace_id').notNull(),
     bindingId: text('binding_id'),
+    objectId: text('object_id'),
     scope: text('scope').notNull(),
     state: text('state').notNull().default('pending'),
     evidence: jsonb('evidence'),
@@ -1294,7 +1297,7 @@ export const sessionContentPurgeJobs = controlSchema.table(
     ),
     scopeCheck: check(
       'session_content_purge_jobs_scope_check',
-      sql`${table.scope} IN ('binding', 'namespace', 'history')`,
+      sql`${table.scope} IN ('binding', 'namespace', 'history', 'object')`,
     ),
   }),
 );
