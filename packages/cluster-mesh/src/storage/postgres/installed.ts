@@ -39,7 +39,11 @@ export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<u
     beginStaged: (input) => { writable(); return beginPgStaged(core, grant, input); },
     stageFragment: (input) => { writable(); return stagePgFragment(core, grant, input); },
     inspectStaged: (operationKey) => { live(); return inspectPgStaged(core, grant, operationKey); },
-    readPage: (chain, limit, cursor, bytes) => { live(); return readPgPage(core, tx.session, grant, tx.root, chain, limit, cursor, bytes); },
+    readPage: (chain, limit, cursor, bytes) => {
+      live(); const limits = core.work();
+      if (limit > limits.maxRecords || bytes > limits.maxEncodedBytes) throw new StorageInvalidCommandError('installed page exceeds configured work limits');
+      return readPgPage(core, tx.session, grant, tx.root, chain, limit, cursor, bytes);
+    },
   });
   return { context, finish: async () => { try { live(); for (const check of checks) await check(); } finally { closed = true; } } };
 };
