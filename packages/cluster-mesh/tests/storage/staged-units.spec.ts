@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
-import { createStagedKernel } from '../../src/storage/staged-runtime.js';
+import { createStagedTestKernel as createStagedKernel } from './staged-client.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 import type { WriterFence } from '../../src/storage/contracts.js';
 import { runAtomicCorpus, expectCode } from './atomic-corpus.js';
@@ -61,6 +61,7 @@ describe('K4 runtime: shared K2b corpora', () => {
     );
     await runReplayCorpus(primary, foreign, {
       rebind: async () => kernel.bindNew(stagedGrant()),
+      bindWithoutMaintain: async () => kernel.bindNew(grantFor({ token: 'weak-replay', operations: ['read', 'write'] })),
     });
   });
 
@@ -74,6 +75,7 @@ describe('K4 runtime: shared K2b corpora', () => {
     const primary = kernel.bindNew(stagedGrant());
     await runLifecycleCorpus(primary, {
       rebind: async () => kernel.bindNew(stagedGrant()),
+      bindWithoutMaintain: async () => kernel.bindNew(grantFor({ token: 'weak-purge', operations: ['read', 'write'] })),
     });
   });
 
