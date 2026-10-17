@@ -21,7 +21,7 @@ import { readCommentsExportFragments, continueCommentsExport } from './export-pa
 import { COMMENTS_STORAGE_LIMITS, requireCommentsStorageLimits } from './limits.js';
 import { prepareCommentsAuthority } from './authority-projection.js';
 import { executeCommentsRevision } from './revision-command.js';
-import { executeCommentsRead } from './read-command.js';
+import { executeCommentsRead, executeCommentsTargets } from './read-command.js';
 export { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
@@ -37,6 +37,7 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
     'comments.lifecycle': { operation: 'write', execute: (input, context) => executeCommentsLifecycle(services, context, input) },
     'comments.revision': { operation: 'write', execute: (input, context) => executeCommentsRevision(services, context, input) },
     'comments.read': { operation: 'read', execute: (input, context) => executeCommentsRead(services, context, input) },
+    'comments.targets': { operation: 'read', execute: (input, context) => executeCommentsTargets(services, context, input) },
     'comments.import.prepare': { operation: 'write', execute: (input, context) => prepareCommentsImport(services, context, input) },
     'comments.import.inspect': { operation: 'write', execute: (input, context) => inspectCommentsImport(services, context, input) },
     'comments.import.progress': { operation: 'write', execute: (input, context) => inspectCommentsImportProgress(services, context, input) },
