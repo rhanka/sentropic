@@ -202,7 +202,7 @@ export interface SignalTarget {
  */
 export const handleShutdownSignals = (
   target: SignalTarget,
-  running: RunningHost,
+  running: { stop(): Promise<unknown> },
   exit: (code: number) => void,
 ): void => {
   let signalled = false;
