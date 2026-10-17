@@ -8,6 +8,7 @@ import { deriveStagedDependencies, stagedEffectDigest, stagedFragmentDigest } fr
 import { opaqueId, ownedCopy, type StagedCore } from './staged-core.js';
 import type { AuthenticatedStagedHandle, StagedOperation } from './staged-state.js';
 import { validateBeginInput, validateFragmentInput, type StagedBeginInput, type FragmentReceipt } from './staged-units.js';
+import { EFFECT_SECTIONS } from './staged-preparation.js';
 
 const freeze = (value: unknown): void => {
   if (typeof value !== 'object' || value === null) return;
@@ -97,6 +98,7 @@ export const stageOperationFragment = (core: StagedCore, bound: ScopedRuntime, i
   assertOperationFence(core, bound, operation, input.fence);
   freeze(effects);
   operation.fragments.push(Object.freeze({ ordinal: input.ordinal, predecessorHash: input.predecessorHash, fragmentDigest: digest, effects,
+    itemCosts: EFFECT_SECTIONS.map((section) => Object.freeze(effects[section].map((item) => Buffer.byteLength(JSON.stringify(item), 'utf8')))),
     dependencyPart: Buffer.from(JSON.stringify([input.ordinal, deriveStagedDependencies(effects)]), 'utf8'),
     effectPart: Buffer.from(JSON.stringify([input.ordinal, stagedEffectDigest(effects)]), 'utf8'),
   }));
