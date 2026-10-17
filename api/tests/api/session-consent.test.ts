@@ -1813,4 +1813,112 @@ describe('session consent durable lifecycle', () => {
     expect(await db.select().from(sessionContentPurgeJobs)).toHaveLength(jobsBefore.length);
     expect(await db.select().from(sessionContentTombstones)).toHaveLength(tombsBefore.length);
   });
+
+  it('should pause capture after a retention amendment until refresh, then reserve and commit (N3)', async () => {
+    await acceptProject();
+    const deriveS = async (sessionId: string, projectId = 'sess-content-project-1') => {
+      const bindingId = await adoptSession(sessionId);
+      const rows = await db
+        .select()
+        .from(sessionWorkspaceBindings)
+        .where(eq(sessionWorkspaceBindings.sessionId, sessionId));
+      await service.deriveGrant({
+        projectId,
+        sessionId,
+        bindingId,
+        bindingVersion: rows[0]!.version,
+        d1Version: rows[0]!.version,
+        d1Incarnation: 1,
+        d1StartSeq: 0,
+        workspaceId,
+        sessionCreatedAt: now,
+        sourceGeneration: 'gen-1',
+        sourceTrustVersion: 'tv-1',
+        nativeStartSeq: 0,
+      }, ctx);
+      return { bindingId, bindingVersion: rows[0]!.version };
+    };
+    const s1 = await deriveS('sess-content-s1');
+    const s2 = await deriveS('sess-content-s2');
+    const pre = new TextEncoder().encode('pre-amend-n3');
+    const r0 = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: pre.length, encoded: pre.length }, 'k-n3-pre', ctx,
+    );
+    await service.publishAfterUpload(r0.reservationId, pre, ctx);
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({
+        ownerId: owner.id,
+        readers: [owner.id],
+        workspaceId,
+        projectRevision: 0,
+        retentionByChannel: {
+          'terminal.cache': { mode: 'duration', durationSeconds: 3600 },
+          'native.mirror': { mode: 'none' },
+        },
+      }),
+      ctx,
+    );
+    const resBefore = await db
+      .select()
+      .from(sessionContentReservations)
+      .where(eq(sessionContentReservations.sessionId, 'sess-content-s1'));
+    const attBefore = await db
+      .select()
+      .from(sessionContentAttempts)
+      .where(eq(sessionContentAttempts.sessionId, 'sess-content-s1'));
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-n3-paused', ctx,
+    ), 'project_revision_changed');
+    expect(await db
+      .select()
+      .from(sessionContentReservations)
+      .where(eq(sessionContentReservations.sessionId, 'sess-content-s1'))).toHaveLength(resBefore.length);
+    expect(await db
+      .select()
+      .from(sessionContentAttempts)
+      .where(eq(sessionContentAttempts.sessionId, 'sess-content-s1'))).toHaveLength(attBefore.length);
+    await acceptProject({ projectId: 'sess-content-project-2', workspaceId });
+    const o3 = await deriveS('sess-content-s3', 'sess-content-project-2');
+    await service.reserveBeforeUpload(
+      'sess-content-s3', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-n3-other', ctx,
+    );
+    const ack1 = await service.acknowledgeGrantRefresh('sess-content-s1', {
+      projectRevision: 1, bindingVersion: s1.bindingVersion, nativeBoundarySeq: 5,
+    }, ctx);
+    expect(ack1.projectRevision).toBe(1);
+    expect(ack1.version).toBe(2);
+    await service.acknowledgeGrantRefresh('sess-content-s2', {
+      projectRevision: 1, bindingVersion: s2.bindingVersion, nativeBoundarySeq: 5,
+    }, ctx);
+    await service.reserveBeforeUpload(
+      'sess-content-s2', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-n3-s2', ctx,
+    );
+    const post = new TextEncoder().encode('post-amend-n3');
+    const r1 = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: post.length, encoded: post.length }, 'k-n3-post', ctx,
+    );
+    const pub1 = await service.publishAfterUpload(r1.reservationId, post, ctx);
+    expect(pub1.expiresAt).toBe(now + 3_600_000);
+    const mir = new TextEncoder().encode('mirror-amend-n3');
+    const r2 = await service.reserveBeforeUpload(
+      'sess-content-s1', 'native.mirror',
+      { raw: mir.length, encoded: mir.length }, 'k-n3-mir', ctx,
+    );
+    const pub2 = await service.publishAfterUpload(r2.reservationId, mir, ctx);
+    expect(pub2.expiresAt).toBeNull();
+    const copies = await db
+      .select()
+      .from(sessionContentObjects)
+      .where(eq(sessionContentObjects.sessionId, 'sess-content-s1'));
+    expect(copies.filter((o) => o.state === 'committed')).toHaveLength(3);
+    const preRow = copies.find((o) => o.bytesEncoded === pre.length && o.channel === 'terminal.cache');
+    expect(preRow!.expiresAt).toBeNull();
+    const bytes = await service.readCommitted('sess-content-s1', 'terminal.cache', ctx);
+    expect(bytes.length).toBeGreaterThan(0);
+    expect(await fixture.listPhysical('')).toHaveLength(3);
+    void o3;
+  });
 });
