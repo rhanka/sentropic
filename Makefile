@@ -82,6 +82,9 @@ export SKILLS_NODE_IMAGE ?= node:24-bookworm
 
 .DEFAULT_GOAL := help
 
+# CISEAT-EX5: credential-free contract checks; live execution requires promoted control.
+include scripts/ci/seat-custody/Makefile
+
 .PHONY: help
 help:
 	@echo "Available targets:"

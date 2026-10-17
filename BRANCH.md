@@ -486,6 +486,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - [ ] C21: public D/N split, strict complete waiter/gate and zero-inference recheck; control tests seat-ci-plan, seat-ci-receipts and seat-workflow-contract.
   - [ ] Scoped control gate per slice: `make test-ci-seat-contract SCOPE=tests/<named-file>.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`; full gate at completion. UI new/updated files: none; existing `make test-ui` regression. Live calls stay disabled.
   - [ ] Implementation increments (each recorded with its own BRANCH update and commit of at most 150 changed lines).
+    - [x] C11a: container-only control runner and initial whole-case/protected-reserve refusal tests; expected red (admission module absent), no provider egress.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (splitted by sublist for each env)
