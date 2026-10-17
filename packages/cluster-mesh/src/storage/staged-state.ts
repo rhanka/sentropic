@@ -91,7 +91,7 @@ export interface RootConsumer {
   failedSeq: number | null; scanned: number; retryAuthorized: boolean; deliveredPoison: boolean;
   readonly actions: { readonly by: string; readonly eventId: string | null; readonly at: string }[];
 }
-export interface RootSnapshot { readonly root: BackendScopeState; readonly journalSeq: number; readonly consumer: string; consumed: number; }
+export interface RootSnapshot { readonly root: BackendScopeState; readonly journalSeq: number; readonly consumer: string; readonly ownerId: string; consumed: number; }
 export interface StagedControl {
   readonly units: Map<string, StagedOperation>; readonly byId: Map<string, StagedOperation>;
   readonly consumers: Map<string, RootConsumer>; readonly snapshots: Map<string, RootSnapshot>;
