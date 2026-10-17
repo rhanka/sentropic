@@ -64,7 +64,7 @@ interface KeyboardPorts {
   acquire: (proof: PreparedProof, assertion: unknown) => Promise<{ controllerEpoch: number; expiresAt: number }>;
   prepare: (input: { context: ControlContext; idempotencyKey: string; bytesBase64: string; byteLength: number }) => Promise<PreparedProof>;
   prove: (proof: PreparedProof, signal: AbortSignal) => Promise<unknown>;
-  submit: (input: { idempotencyKey: string; bytesBase64: string; proof: PreparedProof; assertion: unknown }) => Promise<KeyboardOutcome>;
+  submit: (input: { idempotencyKey: string; bytesBase64: string; proof: PreparedProof; assertion: unknown }, signal: AbortSignal) => Promise<KeyboardOutcome>;
   query: (key: string) => Promise<KeyboardOutcome>;
   newKey: () => string;
 }
@@ -138,10 +138,13 @@ export class KeyboardFlow {
       this.lastKey = prepared.key; this.status = 'outcome_unknown';
       try {
         const result = await this.ports.submit({ idempotencyKey: prepared.key,
-          bytesBase64: prepared.bytesBase64, proof: prepared.proof, assertion });
+          bytesBase64: prepared.bytesBase64, proof: prepared.proof, assertion }, this.abort.signal);
         if (revision === this.revision) this.status = result.status;
       } catch { /* Any lost response, including 429, leaves the effect unknown. */ }
       this.previousUnknown ||= this.status === 'outcome_unknown';
+    } catch (error) {
+      if (revision === this.revision) this.status = 'refused';
+      throw error;
     } finally {
       if (revision === this.revision) { this.text = ''; this.newline = false; this.pending = false; }
     }

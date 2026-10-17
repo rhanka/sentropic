@@ -28,17 +28,17 @@ export interface OutputPage {
   gaps: { from: number; to: number; reason: string }[];
 }
 
-async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+async function request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   if (getApiAuthToken()) throw new Error('first_party_required');
   return apiRequest<T>(`${ROOT}${path}`, {
-    method, cache: 'no-store', headers: { 'X-Session-Content': 'browser' },
+    method, cache: 'no-store', headers: { 'X-Session-Content': 'browser' }, ...(signal ? { signal } : {}),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
 const workspace = (workspaceId: string) => `/workspaces/${id(workspaceId)}`;
 const binding = (bindingId: string) => `/${id(bindingId)}`;
-async function outcome(path: string, method = 'GET', body?: unknown): Promise<KeyboardOutcome> {
-  const result = await request<KeyboardOutcome>(path, method, body);
+async function outcome(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<KeyboardOutcome> {
+  const result = await request<KeyboardOutcome>(path, method, body, signal);
   if (!['submitted', 'refused', 'outcome_unknown'].includes(result?.status)) throw new Error('unknown_outcome');
   return result;
 }
@@ -73,8 +73,8 @@ export const contentApi = {
         request<{ controllerEpoch: number; expiresAt: number }>(`${path}/lease`, 'POST', { challengeId: proof.challengeId, assertion }),
       prepare: (input: { context: ControlContext; idempotencyKey: string; bytesBase64: string; byteLength: number }) =>
         request<PreparedProof>(`${path}/prepare`, 'POST', input),
-      submit: (input: { idempotencyKey: string; bytesBase64: string; proof: PreparedProof; assertion: unknown }) =>
-        outcome(`${path}/submissions`, 'POST', input),
+      submit: (input: { idempotencyKey: string; bytesBase64: string; proof: PreparedProof; assertion: unknown }, signal: AbortSignal) =>
+        outcome(`${path}/submissions`, 'POST', input, signal),
       query: (key: string) => outcome(`${path}/submissions/${id(key)}`),
     };
   },

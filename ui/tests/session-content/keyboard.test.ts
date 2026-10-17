@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { canUseCredential, exactInput, KeyboardFlow } from '$lib/session-content/proof';
+import { browserAssertion, canUseCredential, exactInput, KeyboardFlow } from '$lib/session-content/proof';
+import { startAuthentication } from '@simplewebauthn/browser';
+vi.mock('@simplewebauthn/browser', () => ({ browserSupportsWebAuthn: vi.fn(() => true),
+  startAuthentication: vi.fn(async () => ({ id: 'key' })), WebAuthnAbortService: { cancelCeremony: vi.fn() } }));
 
 const context = {
   bindingId: 'binding', bindingVersion: 1, sourceGeneration: 'source', incarnation: 'incarnation',
@@ -58,6 +61,33 @@ describe('bounded browser-confirmed keyboard', () => {
     expect(api.submit).not.toHaveBeenCalled();
   });
 
+  it('should request required UV only for the exact enrolled RP, origin and key', async () => {
+    const key = { id: 'key', rpId: 'localhost', origins: [window.location.origin],
+      locallyEnrolled: true, awayUsable: true, revoked: false };
+    await browserAssertion(challenge(), [key], new AbortController().signal);
+    expect(startAuthentication).toHaveBeenCalledWith(expect.objectContaining({
+      optionsJSON: expect.objectContaining({ rpId: 'localhost', userVerification: 'required' }),
+    }));
+    vi.mocked(startAuthentication).mockClear();
+    await expect(browserAssertion({ ...challenge(), options: { ...challenge().options, rpId: 'elsewhere' } },
+      [key], new AbortController().signal)).rejects.toThrow('invalid_source_challenge');
+    expect(startAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('should discard an expired preparation and never dispatch a proof completed after editing', async () => {
+    const api = ports(); const flow = new KeyboardFlow(context, api);
+    const now = Date.now(); const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    await flow.acquire(); flow.edit('expire', false);
+    api.prepare.mockResolvedValueOnce({ ...challenge(), expiresAt: now + 1000 });
+    await flow.prepare(); clock.mockReturnValue(now + 2000); await flow.send();
+    expect(flow.text).toBe(''); expect(api.submit).not.toHaveBeenCalled();
+    flow.edit('first', false); await flow.prepare();
+    let resolve!: (value: { id: string }) => void;
+    api.prove.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    const pending = flow.send(); flow.edit('changed', false); resolve({ id: 'key' }); await pending;
+    expect(api.submit).not.toHaveBeenCalled(); expect(flow.text).toBe('changed');
+  });
+
   it('should submit once, discard transient bytes and reconcile a lost response without replay', async () => {
     const api = ports(); api.submit.mockRejectedValueOnce({ status: 429 });
     const flow = new KeyboardFlow(context, api);
@@ -79,6 +109,7 @@ describe('bounded browser-confirmed keyboard', () => {
     await flow.acquire(); flow.edit('second', false); await flow.prepare();
     api.prove.mockRejectedValueOnce(new DOMException('Cancelled', 'NotAllowedError'));
     await expect(flow.send()).rejects.toThrow();
+    expect(flow.status).toBe('refused');
     expect(api.submit).not.toHaveBeenCalled();
     flow.dispose(); expect(flow.text).toBe('');
     await flow.acquire(); expect(api.prepareLease).toHaveBeenCalledTimes(2);
