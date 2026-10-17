@@ -2,7 +2,7 @@ import type { ScopeGrant } from '../authority.js';
 import type { EncodedValue } from '../contracts.js';
 import type { IdempotencyEntry } from '../atomic.js';
 import type { PurgePolicy } from '../staged-state.js';
-import { StorageInvalidCommandError, UnsupportedProfileError } from '../errors.js';
+import { StorageDeniedError, StorageInvalidCommandError, UnsupportedProfileError } from '../errors.js';
 import type { PgCore, PgTx } from './core.js';
 import { chainRecordKey, type PgChain, type PgChainRef } from './effects.js';
 import { decodePgJson, decodePgUtf8 } from './codec.js';
@@ -13,10 +13,11 @@ export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<u
   const checks: (() => Promise<void>)[] = []; let closed = false;
   const live = () => { if (closed || tx.closed) throw new StorageInvalidCommandError('installed operation context is closed'); };
   const metadata = async (chain: string) => { live(); return core.roots.get<PgChain>(tx.session, tx.root, 'chain', chain); };
-  const context: PgInstalledContext = Object.freeze({
+  const context: PgInstalledContext = Object.freeze<PgInstalledContext>({
     session: tx.session, get root() { live(); return tx.root; }, grant, layout: core.options.layout,
     stream: Object.freeze({ moduleId: core.options.moduleId, scope: grant.scope, incarnation: core.incarnation, stream: core.incarnation }),
     policy: await core.roots.get<PurgePolicy>(tx.session, tx.root, 'policy', 'purge') ?? 'unconfigured',
+    available: async (target) => { live(); try { await core.visible(tx.session, tx.root, target); return true; } catch (error) { if (error instanceof StorageDeniedError) return false; throw error; } },
     headMetadata: metadata,
     head: async (chain: string) => {
       const head = await metadata(chain); if (!head) return null;
