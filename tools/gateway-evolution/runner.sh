@@ -15,7 +15,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-mounts=(-v "$PWD:/workspace")
+mounts=(-v "${GW_EVOL_WORKSPACE:-$PWD}:/workspace")
 if [ -n "${GW_EVOL_COMPANION:-}" ]; then mounts+=(-v "$GW_EVOL_COMPANION:/companion"); fi
 docker run --rm --init --name "$run_id" --label "gw-evolution-owned=$run_id" \
   --label "gw-evolution-env=$test_env" -u "$(id -u):$(id -g)" -e HOME=/tmp \

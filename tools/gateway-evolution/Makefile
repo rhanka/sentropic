@@ -45,7 +45,7 @@ gateway-harness-test:
 gateway-host-packed-test:
 	$(gw_manifest)
 	@test -n "$(SCOPE)" || { echo 'ERROR: SCOPE is required' >&2; exit 1; }
-	@$(GW_EVOL_RUN) node tools/gateway-evolution/run.mjs packed-gate --manifest "$(ARTIFACT_MANIFEST)" --scope "$(SCOPE)"
+	@bash tools/gateway-evolution/packed-test.sh "$(ENV)" "$(GW_EVOL_IMAGE)" "$(ARTIFACT_MANIFEST)" "$(SCOPE)"
 
 gateway-consumer-gate:
 	$(gw_manifest)
