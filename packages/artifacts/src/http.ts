@@ -21,7 +21,7 @@ import { createContentRuntime } from './server/runtime.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import type { ForkRecord, ForkService } from './server/fork.js';
 import { evaluateAccess, grantAccess, revokeAccess, type AclStore, type ArtifactAcl } from './server/access.js';
-import { attachSource, type SourceStore } from './server/sources.js';
+import { parseSourceRef, type SourceStore } from './server/sources.js';
 import { assertArtifactAccess } from './server/authorization.js';
 
 export interface HttpRequest {
@@ -159,7 +159,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
             };
           });
           const source = body['source'];
-          const attached = source === undefined ? undefined : attachSource(source as never);
+          const attached = source === undefined ? undefined : parseSourceRef(source);
           const result = await deps.publication.publish({
             ownerId: acl.ownerId,
             storageScopeId: acl.storageScopeId,
@@ -287,7 +287,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           const artifactId = needString(body['artifactId'], 'artifactId');
           const acl = await requireAcl(artifactId);
           assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
-          const attached = attachSource((body['source'] ?? {}) as never);
+          const attached = parseSourceRef(body['source'] ?? {});
           await deps.sources.putSource(artifactId, attached);
           return { status: 200, body: attached };
         }
