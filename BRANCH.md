@@ -28,6 +28,8 @@
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (BRCM2-EX6)
+  - `packages/cluster-mesh/README.md` (BRCM2-EX6)
   - `packages/cluster-mesh/src/storage/**`
   - `packages/cluster-mesh/tests/storage/**`
   - `packages/cluster-mesh/assets/storage/**`
@@ -65,6 +67,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] `attention` BRCM2-EX6 — packed qualification exposes a hard-coded inventory of eight foreign provider proxy leaves; the new local comments leaf requires an explicit ninth local-export assertion. Also document the delivered storage/comments exports in the shipped README. Impact: one packaging test and package documentation; no runtime contract changes. Rollback: revert these two file changes with the new comments export.
 - [ ] `attention` BRCM2-PORT17 — nested binding revalidation now joins the active same-scope PG session and remains attached to its final revalidation set. This removes a hidden second-connection requirement without weakening issuance, revocation, lifetime or scope checks; installed page reads also honor configured work maxima. Co-review pending.
 - [ ] `attention` BRCM2-PORT16 — installed modules can read bounded pages through the existing kernel reader/session; comments authorization and exact captured boundaries remain module-owned. No caller SQL or read-enforcement flag is accepted. Co-review pending.
 - [ ] `attention` BRCM2-PORT15 — trusted installed context separates actual committed root/version from pending state, preventing retained export of rolled-back writes. Co-review pending.
