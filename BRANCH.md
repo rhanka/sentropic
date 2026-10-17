@@ -100,7 +100,8 @@
   - [x] Budget contract tests written before implementation: exact-SCOPE opt-in, shared dollar/call limits, worst-input reservation, missing-usage/cancellation closure and long-tier pricing.
   - [x] Physical-fetch contracts written before implementation: exact endpoint/model/none/cap/Standard tier, no hosted paid tools or redirects, durable reservation before any send; API typecheck and lint pass.
   - [x] Evidence contracts written first: an exclusive, fsynced journal prevents a rerun from resetting spending; capture raw Chat Completions and Responses counters before mesh normalization.
-  - [ ] Add `api/tests/ai/nano-replacement-qualification.test.ts` and shared fixture/budget support; offline-test reservation, missing usage, cancellation and refusal before budget overflow.
+  - [x] Add `api/tests/ai/nano-replacement-qualification.test.ts` and shared fixture/budget support; offline-test reservation, missing usage, cancellation and refusal before budget overflow; real SDK tool/schema continuation passes with zero network egress.
+  - [x] Baseline gates: full API unit run passed 132 files / 1,304 tests (one skipped); scoped stream contracts passed 181 tests; API/UI typecheck and lint passed.
   - [x] Native qualification injection keeps real product/mesh dispatch, pins Standard API with SDK retries zero, records served model and raw usage, and aborts timed-out work without increasing test timeouts.
   - [ ] Exercise BOTH candidates on identical title, effort, compaction, JSON/tool continuation and history/document single/chunk fixtures through product helpers and llm-mesh; retain outputs and usage evidence.
   - [x] Freeze paired synthetic fixtures and short-call validity/fact checks; facts are absent from long-document questions; UI typecheck and lint pass.
