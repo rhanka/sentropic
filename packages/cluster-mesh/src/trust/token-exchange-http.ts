@@ -16,6 +16,12 @@ export const TOKEN_EXCHANGE_HTTP_TIMEOUT_MS = 10_000;
 export const TOKEN_EXCHANGE_HTTP_MAX_RESPONSE_BYTES = 64 * 1024;
 
 /** Minimal fetch surface consumed by the adapter (injectable for tests). */
+/** Minimal WHATWG reader surface consumed by the bounded body reader. */
+export interface TokenExchangeBodyReader {
+  read(): Promise<{ readonly done: boolean; readonly value?: Uint8Array }>;
+  releaseLock(): void;
+}
+
 export interface TokenExchangeFetch {
   (url: string, init: {
     readonly method: string;
@@ -26,6 +32,7 @@ export interface TokenExchangeFetch {
   }): Promise<{
     readonly status: number;
     readonly headers: { get(name: string): string | null };
+    readonly body?: { getReader(): TokenExchangeBodyReader } | null;
     text(): Promise<string>;
   }>;
 }
@@ -79,6 +86,36 @@ function claimAudience(payload: Record<string, unknown>): string[] {
   if (typeof value === 'string') return [value];
   if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string');
   return [];
+}
+
+/**
+ * Bounded issuer body read. Prefers the WHATWG stream so an oversized document
+ * is refused after a bounded prefix instead of being buffered by `text()`;
+ * falls back to `text()` when the fetch double exposes no stream. `tooLarge`
+ * maps the refusal to the caller error (mint vs JWKS) without token material.
+ */
+async function readBoundedBody(
+  response: Pick<Awaited<ReturnType<TokenExchangeFetch>>, 'text' | 'body'>,
+  maxBytes: number,
+  tooLarge: () => Error,
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (reader === undefined) return response.text();
+  const decoder = new TextDecoder();
+  let text = '';
+  let byteCount = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done || value === undefined) break;
+      byteCount += value.byteLength;
+      if (byteCount > maxBytes) throw tooLarge();
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return text + decoder.decode();
 }
 
 /**
@@ -136,7 +173,10 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
         if (length !== null && Number(length) > maxBytes) {
           throw new SubjectVerificationError('invalid_issuer', 'Issuer JWKS response is oversized.');
         }
-        const text = await response.text();
+        const text = await readBoundedBody(response, maxBytes, () => new SubjectVerificationError(
+          'invalid_issuer',
+          'Issuer JWKS response is oversized.',
+        ));
         if (text.length > maxBytes) {
           throw new SubjectVerificationError('invalid_issuer', 'Issuer JWKS response is oversized.');
         }
@@ -208,7 +248,8 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
       resource: input.audience,
       scope: [...input.scope].join(' '),
     });
-    const credentials = `${this.options.workloadClientId}:${this.options.clientSecret}`;
+    // RFC 6749 §2.3.1: user-id and password are form-encoded before the join.
+    const credentials = `${encodeURIComponent(this.options.workloadClientId)}:${encodeURIComponent(this.options.clientSecret)}`;
     let response;
     try {
       response = await this.fetchFn(this.options.tokenEndpoint, {
@@ -232,7 +273,10 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
     if (length !== null && Number(length) > maxBytes) {
       throw new TokenExchangeRefusedError('mint_failed', 'Token exchange failed: issuer response is oversized.');
     }
-    const text = await response.text();
+    const text = await readBoundedBody(response, maxBytes, () => new TokenExchangeRefusedError(
+      'mint_failed',
+      'Token exchange failed: issuer response is oversized.',
+    ));
     if (text.length > maxBytes) {
       throw new TokenExchangeRefusedError('mint_failed', 'Token exchange failed: issuer response is oversized.');
     }
@@ -289,6 +333,12 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
         }
       }
       throw new TokenExchangeRefusedError('minted_signature_invalid');
+    }
+    // Exact single-audience match: the crypto-audience check admits any superset,
+    // so a minted `aud` array wider than the requested audience is refused here.
+    const mintedAudience = claimAudience(payload);
+    if (mintedAudience.length !== 1 || mintedAudience[0] !== input.audience) {
+      throw new TokenExchangeRefusedError('minted_audience_invalid');
     }
     const act = payload.act as { sub?: unknown } | undefined;
     if (act == null || typeof act.sub !== 'string') throw new TokenExchangeRefusedError('minted_actor_invalid');
