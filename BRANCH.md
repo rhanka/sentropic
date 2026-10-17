@@ -118,7 +118,7 @@
   - [ ] Create `tools/gateway-evolution/Makefile` with seven targets (BR120-EX7): gateway-candidate-bundle, gateway-consumer-gate, gateway-client-fixtures, gateway-client-e2e, gateway-release-check, gateway-host-packed-test, gateway-harness-test
   - [ ] Create `tools/gateway-evolution/tests/run.test.mjs` + `make-contract.test.sh` + `runner-cleanup.test.sh`; sub-Makefile requires command-line ENV, includes root Makefile, rejects .env project override and port mismatch
   - [x] Create gateway `tests/client-runtime-admission.test.ts` + `src/client-runtime-admission.ts` (green 9/9, typecheck/lint clean)
-  - [ ] Create gateway `tests/evolution-contract.test.ts`; freeze shared GWRC-CI-V1 schemaVersion 1 with gateway/registry arms, none, contractSha256, profiles, programCoverage, releaseLockSha256, indexed candidate layout
+  - [x] Create gateway `tests/evolution-contract.test.ts` + `src/evolution-contract.ts` (green 6/6, typecheck/lint clean)
   - [ ] Implement GW6-M1/RC6-M1 context lock validation + `release bump accepted` + `@sentropic drift refused` (typed `external-row-unpinned`, zero installs) in helper/verifier/tests
   - [ ] Implement GW8-m1: classifier obtains both parents (fetch-depth 2 or fetch base+head), verifies merge parents equal base/head, fetch failure is unreadable base evidence; add `gateway-consumer-workflows.test.js` parent-resolution assertion (companion file, recorded here)
   - [ ] Inventory every PR-triggered h2a workflow incl `native-host-equipment.yml`; classify committed-lock host-test vs candidate; extend BR120-EX7 conditionally or record non-overlap evidence
