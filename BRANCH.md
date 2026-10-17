@@ -182,10 +182,11 @@
     - [ ] **E2E tests**
       - [ ] None in L1 (native client E2E in L4)
     - [ ] Package gates:
-      - [ ] `make test-llm-gateway SCOPE=tests/session-store.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/session-store.test.ts ENV=test-gw-durable-vibe-muse` (5/5)
       - [ ] `make test-llm-gateway SCOPE=tests/session-control-auth.test.ts ENV=test-gw-durable-vibe-muse`
       - [ ] `make test-llm-gateway SCOPE=tests/session-migration.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-llm-gateway SCOPE=tests/request-receipts.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/request-receipts.test.ts ENV=test-gw-durable-vibe-muse` (2/2)
+      - [x] `make test-llm-gateway SCOPE=tests/host-runtime.test.ts ENV=test-gw-durable-vibe-muse` (3/3 real HTTP/planner restart, revoke, second-writer and corruption)
       - [ ] `make gateway-host-packed-test SCOPE=tools/gateway-evolution/packed/host-exports.test.ts ENV=test-gw-durable-vibe-muse`
       - [ ] `make gateway-host-packed-test SCOPE=tools/gateway-evolution/packed/session-store-restart.test.ts ENV=test-gw-durable-vibe-muse`
       - [ ] `make test-llm-gateway-process SCOPE=tests/host-composition.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
