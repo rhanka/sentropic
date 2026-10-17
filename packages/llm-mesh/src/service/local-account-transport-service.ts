@@ -25,8 +25,16 @@ import {
   isDeviceFlowSeatAccount,
   isExternalSeatAccount,
   isExternalSeatUnavailable,
+  markExternalSeatAuthority,
+  readExternalSeatAuthority,
   throwExternalSeatUnavailable,
 } from './external-seat-authority.js';
+import {
+  classifyTransition,
+  validateSeatBundle,
+  type SeatBundleV1,
+  type SeatCli,
+} from '../enrollment/seat-bundle.js';
 import type { ProviderId } from '../providers.js';
 import type {
   AccountDirectoryPort, EligibleAccountDescriptor, PlannedRouteTarget,
@@ -502,6 +510,110 @@ export class LocalAccountTransportService {
       account,
     );
     return { accountId: credential.accountId, label };
+  }
+
+  /**
+   * L1 trusted seat-bundle entry: the single mesh path from a custodian
+   * consumer projection to a registered, externally marked account. It
+   * validates the projection (consumer authority, owner binding, usable
+   * access material, required provider expiry), applies the stored
+   * lineage transition (idempotent N, refused stale N-1 and new epochs),
+   * and persists through the canonical register/persist path so restart
+   * restores the same externally marked account. No second registry.
+   */
+  async importSeatBundle(input: {
+    bundle: unknown;
+    ownerScope: string;
+  }): Promise<{ accountId: string; seatRef: string; generation: number; idempotent: boolean }> {
+    const owner = this.requireOwnerScope(input.ownerScope);
+    await this.restorePersistedAccounts();
+    const validated = validateSeatBundle(input.bundle, { ownerScope: owner, trustedAuthority: 'consumer' });
+    if (!validated.ok) {
+      throw new Error(`Seat bundle refused: ${validated.code}; ${validated.detail}`);
+    }
+    const bundle: SeatBundleV1 = validated.bundle;
+    if (bundle.credentialClass !== 'access-only' && bundle.credentialClass !== 'static-key') {
+      throw new Error('Seat bundle must be access-only; the custodian holds every refresh grant');
+    }
+    if (bundle.lifecycle.refreshAuthority !== 'none') {
+      throw new Error('Seat bundle must not carry refresh authority into the mesh');
+    }
+    const meshUse = bundle.meshUse;
+    if ((meshUse.kind !== 'access' && meshUse.kind !== 'static-key') || !meshUse.accessRef) {
+      throw new Error('Seat bundle carries no usable access reference');
+    }
+    if (!bundle.lifecycle.providerExpiry) {
+      throw new Error('Seat bundle requires providerExpiry; unknown expiry is not infinite validity');
+    }
+    const pair: Record<SeatCli, readonly [string, string]> = {
+      agy: ['gemini', 'cloud-code'],
+      codex: ['openai', 'codex'],
+      vibe: ['mistral', 'mistral-vibe'],
+      muse: ['muse', 'muse'],
+      claude: ['anthropic', 'claude-code'],
+    };
+    const [targetProviderId, transportProviderId] = pair[bundle.identity.cli];
+    const seatRef = bundle.identity.seatRef;
+    const accountId = `seat-${bundle.identity.cli}-${seatRef}`;
+    const incoming = {
+      epoch: bundle.lifecycle.epoch,
+      generation: bundle.lifecycle.generation,
+      operationId: bundle.lifecycle.operationId,
+    };
+    const held = this.accountsMap.get(accountId);
+    const heldAuthority = held
+      ? readExternalSeatAuthority(held.metadata as Record<string, unknown> | undefined)
+      : null;
+    if (held && heldAuthority && heldAuthority.seatRef === seatRef) {
+      const transition = classifyTransition(
+        { epoch: heldAuthority.epoch, generation: heldAuthority.generation, operationId: heldAuthority.operationId },
+        incoming,
+      );
+      if (transition === 'idempotent') {
+        return { accountId, seatRef, generation: incoming.generation, idempotent: true };
+      }
+      // A forward transition falls through to registration below, which
+      // overwrites the same stable account (no duplicate registry).
+      if (transition === 'stale') {
+        throw new Error(`stale-generation: incoming N-${incoming.generation} is older than current`);
+      }
+      if (transition === 'conflict') {
+        throw new Error('conflicting reimport: same generation with a different lineage');
+      }
+      if (transition !== 'forward') {
+        throw new Error('epoch-replacement-required: a new epoch needs the controlled replacement operation');
+      }
+    }
+    const now = new Date().toISOString();
+    const account: AccountTransportAccount = {
+      accountId,
+      ownerScopeRef: owner,
+      accountLabel: `Seat ${bundle.identity.cli} (${seatRef})`,
+      targetProviderId,
+      transportProviderId,
+      accessToken: meshUse.accessRef,
+      expiresAt: bundle.lifecycle.providerExpiry ?? undefined,
+      status: 'active',
+      enrollmentCompletedAt: now,
+      metadata: markExternalSeatAuthority(
+        { productAccountSource: bundle.identity.packageProviderId },
+        { seatRef, ownerScope: owner, ...incoming },
+      ),
+    };
+    this.registerAccount(account, bundle.identity.credentialFormatVersion);
+    await this.persistCredential(
+      {
+        accountId,
+        accountLabel: account.accountLabel ?? accountId,
+        providerId: transportProviderId,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      { accountId, accessToken: meshUse.accessRef, expiresAt: bundle.lifecycle.providerExpiry ?? undefined },
+      account,
+    );
+    return { accountId, seatRef, generation: incoming.generation, idempotent: false };
   }
 
   private async hasClaudeGrant(credential: PreparedCredential, ownerScopeRef: string): Promise<boolean> {
