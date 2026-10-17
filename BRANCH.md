@@ -1,7 +1,7 @@
 # Feature: Fix artifact activation ticket binding (FL-ACT)
 
 ## Objective
-- [ ] Bind each activation ticket to one subject, artifact, release, channel and expiry; refuse activation of any other revision.
+- [x] Bind each activation ticket to one subject, artifact, release, channel and expiry; refuse activation of any other revision.
 
 ## Scope / Guardrails
 - [x] Baseline: `origin/main` at `1472d961e098908e64ef60b83835af357888d031` (#679).
@@ -46,17 +46,17 @@
   - [x] Query published npm version through container Make tooling (E404); bump `packages/artifacts/package.json` from 0.1.0 to 0.1.1 and synchronize only its lock workspace version.
   - [x] GREEN gate: `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act` (2 passed).
   - [x] Commit fix after `make scope-check ENV=test-artifacts-fl-act`.
-- [ ] **Lot 2 — Binding negatives and automated UAT**
-  - [ ] Update existing `packages/artifacts/tests/content-grants.test.ts`: wrong subject/artifact/release/channel, missing binding, exact expiry, retry after mismatch, replay and concurrent redemption.
-  - [ ] Update existing `packages/artifacts/tests/content.e2e.test.ts`: channel/release mismatch denies cookie; valid pinned r1 remains usable after stable republish; successful redemption remains single-use.
-  - [ ] API/package tests: only the two existing content test files above are updated; no new test file or API application tests.
+- [x] **Lot 2 — Binding negatives and automated UAT**
+  - [x] Update existing `packages/artifacts/tests/content-grants.test.ts`: wrong subject/artifact/release/channel, missing binding, exact expiry, retry after mismatch, replay and concurrent redemption.
+  - [x] Update existing `packages/artifacts/tests/content.e2e.test.ts`: channel/release mismatch denies cookie; valid pinned r1 remains usable after stable republish; successful redemption remains single-use.
+  - [x] API/package tests: only the two existing content test files above are updated; no new test file or API application tests.
   - [x] UI tests: existing/updated/new files: none; no UI change.
   - [x] Browser E2E tests: existing/updated/new files: none; content journey is in-memory through `test-artifacts SCOPE=tests/content.e2e.test.ts`.
-  - [ ] Scoped gate: `make test-artifacts SCOPE=tests/content-grants.test.ts ENV=test-artifacts-fl-act`.
-  - [ ] UAT: publish r1; issue its stable ticket; publish r2; redeem old ticket on stable; verify 401 and absent Set-Cookie.
-  - [ ] UAT: issue pinned r1 ticket; attempt stable/channel or r2 redemption; verify denial; retry pinned r1; verify activation and r1 bytes.
-  - [ ] UAT: change subject/artifact or advance clock to expiry; verify rejection; redeem valid ticket once and refuse replay.
-  - [ ] Commit regression coverage after `make scope-check ENV=test-artifacts-fl-act`.
+  - [x] Scoped gate: `make test-artifacts SCOPE=tests/content-grants.test.ts ENV=test-artifacts-fl-act` (22 passed); content journey scoped gate (5 passed).
+  - [x] UAT: publish r1; issue its stable ticket; publish r2; redeem old ticket on stable; verify 401 and absent Set-Cookie.
+  - [x] UAT: issue pinned r1 ticket; attempt stable/channel or r2 redemption; verify denial; retry pinned r1; verify activation and r1 bytes.
+  - [x] UAT: change subject/artifact or advance clock to expiry; verify rejection; redeem valid ticket once and refuse replay.
+  - [x] Commit regression coverage after `make scope-check ENV=test-artifacts-fl-act`.
 - [ ] **Lot 3 — Docs consolidation**
   - [ ] Update `packages/artifacts/README.md` to document explicit release/channel ticket binding and expiry; no temporary spec required for this bounded fix.
 - [ ] **Lot 4 — Final validation and delivery**
