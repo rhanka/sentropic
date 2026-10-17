@@ -1,6 +1,6 @@
-# Comments Generic Storage Port Compatibility & Extension Manifest (C0)
+# Comments Generic Storage Port Compatibility & Extension Manifest (C0 / M2)
 
-Date: 2026-10-12  
+Date: 2026-10-17  
 Specification: L3a v4.1 frozen §17.2 row C0, §17.4
 Deliverables:
 - Manifest: [`storage-module-v1.json`](storage-module-v1.json)
@@ -46,7 +46,7 @@ The division of responsibilities between `@sentropic/comments` and `@sentropic/c
 | Dimension | `@sentropic/comments` (Contract Authority) | `@sentropic/cluster-mesh` (Storage Port & Module) |
 |---|---|---|
 | **Identity & Scope** | Canonical entities, anchors, quantizer, revision hashing | Multi-tenant isolation, workspace bindings, `StorageScope` |
-| **Persistence Core** | 24-method command store interface | Generic storage SPI, SQLite & Postgres kernel drivers |
+| **Persistence Core** | 24-method command store interface | Generic storage SPI, shared memory kernel and injected Postgres module; SQLite qualification is separate |
 | **Transactions** | Logical transaction boundary declaration | ACID atomicity, commit-time CAS, authority fencing and root publication |
 | **Visibility & Barriers** | Lifecycle events (`tombstone`, `purge-intent`, `purge-outcome`) | Immediate read barriers (`visibility-barriers-v1`), default package journal; optional qualified app outbox binding |
 | **Large Units** | Unit manifest & payload DTOs | Staged units protocol (`staged-units-v1`), atomic root publication |
@@ -64,7 +64,7 @@ As defined in `packages/cluster-mesh/src/storage/profiles.ts`, comments declares
 - **`comments-c4`**: `comments-operational` + `staged-units-v1`
 - **`comments-purge`**: `comments-operational` + `purge-jobs-v1`, `fenced-writers-v1`
 
-### 4.2 Transport and Continuation Protocol (`transport-v1`, qualification `unverified`)
+### 4.2 Transport and Continuation Protocol (`comments-transport-v1`, candidate implementation)
 - **Staged Units**: Large units (threads exceeding 512 KiB or 1 MiB) are split into hash-chained sub-units. Staged sub-units remain invisible to all readers until an atomic linearization root publication point.
 - **Explicit Continuation**: Paged export and resync use an explicit continuation envelope. Transport continuation fields must **not** be smuggled into or overload frozen M1 DTO fields (`snapshotBoundary`, `exportId`, `idempotencyKey`).
 - **Transport Limits** (adopted CA values, frozen L3a v4.1 §11.3): fragment manifest or unit/group root 64 KiB canonical bytes; fragment payload 512 KiB canonical bytes; prepare/commit items per request 50; request batch manifest 256 KiB canonical bytes; complete encoded request 1 MiB; default page count 50; maximum page count 100; complete encoded page 1 MiB; time-based comments cursor TTL none.
@@ -74,7 +74,7 @@ As defined in `packages/cluster-mesh/src/storage/profiles.ts`, comments declares
 - **Transport Qualification Requirement** (§11.3): Transport qualification must include escaping and multibyte encoding.
 - **Module Admission Settings** (§11.3): 64 segments/body, 64 mentions/body, profile depth 8, 32 targets/annotation, 128 shapes/annotation. These declarations add no fields to frozen M1.
 - **Incompatibility Rule**: A smaller deployment limit must be advertised as incompatibility with this profile, not silently redefine it.
-- **Module Extension Operations** (§11.2, proposed — not additions to `CanonicalCommandStore`): `prepareImportFragment`, `inspectPreparedImport`, `commitPreparedImport`, `prepareExportBoundary`, `continueExport`, `readExportFragments`, `recoverBatchReceipts`.
+- **Module Extension Operations** (§11.2, delivered on `module.services`): `prepareImportFragment`, `inspectPreparedImport`, `commitPreparedImport`, `prepareExportBoundary`, `continueExport`, `readExportFragments`, `recoverBatchReceipts`. The 24-method `CanonicalCommandStore` remains unchanged.
 
 ### 4.3 Named Query Profiles (L3a §9.5)
 Three named projection queries are registered for module access:
@@ -87,10 +87,10 @@ These queries return module query DTOs and do not substitute for frozen full-rec
 ### 4.4 Capacity Descriptor Policy
 The frozen `CapacityDescriptor` in `@sentropic/comments` is not mutated. Supplemental module paging settings (`defaultRecords = 50`, `cursorTtlSeconds = null`) are declared as module configuration outside the canonical record.
 
-### 4.5 Packaging and Conformance Oracle (qualification `unverified`)
-- The test conformance runner and vectors are consumed as a digest-pinned packaged oracle artifact for installed qualification.
-- `@sentropic/comments/conformance` is not an existing export (frozen L3a v4.1 §9.6); its export location and executable packaging are `unverified` (§17.4). Any new comments-package export follows its change protocol separately.
-- Installed consumer proofs (`M4-I`) import the packaged oracle rather than local file checkouts, verifying isolation and dependency closure without modifying frozen M1 exports (`mutatesFrozenM1Exports: false`).
+### 4.5 Packaging and Conformance Oracle
+- The cluster-mesh archive includes `assets/storage/comments/oracle/{conformance.mjs,revision-hash-v1.json,manifest.json}`. The manifest pins the unchanged M1 corpus source, vector source and packaged artifact SHA-256 values.
+- `@sentropic/comments/conformance` is not an export. The optional peer remains `@sentropic/comments@0.3.0`; no M1 source/export change is required.
+- The installed qualification target executes those packaged oracle bytes against the public comments/Postgres leaves in a fresh consumer. It refuses checkout imports and records the installed production lock, audit, archive SHA-256 and SHA-512 integrity. See [installed evidence](../evidence/installed-module.md).
 
 ---
 
@@ -103,3 +103,13 @@ The [tracked source extract](../evidence/storage-alignment.md) pins the governin
 - **§17.2 C0**: Exit proof requires the compatibility manifest and unchanged M1 source hashes.
 - **§17.2 C1a**: K4/P2u visibility roots are active from C1a on the comments/Postgres root.
 - **§16.2 C4**: `comments-import.spec.ts` proves imported tombstone and immediate barrier publication in the same unit.
+
+## 6. Candidate delivery surface
+
+The consolidated `@sentropic/cluster-mesh@0.19.0` candidate exposes `./storage`, `./storage/postgres`, `./comments`, `./comments/hono`, `./loaders/comments` and `./compose/comments`. The optional comments peer evaluates only when selected; root, generic storage and disabled composition stay independent. Hosts inject PostgreSQL execution, own migration history/scheduling, issue scope grants and supply domain authority. The package neither opens a database connection nor runs migrations at startup.
+
+The comments adapter implements every frozen store method. Native operational services add server-owned revision registration, actual-resource authorization, lifecycle/barrier/purge policy and the seven transport methods above. The canonical Hono factory and full-runtime namespace derive scope through issued host grants. There is no raw HTTP append, arbitrary tombstone or physical-completion route.
+
+Import publication includes immutable data, unit/batch bindings and receipts, operation audit and kernel journal in one root. Preparation/fragment acknowledgements are private progress, never successful import receipts. An imported historical purge outcome creates no physical erasure job. Resource/personal/audit-audience checks remain active on operational export and receipt readback.
+
+The [host guide](../immo-host-guide.md) gives concrete composition and resumable import/readback calls. [Qualification evidence](../evidence/installed-module.md) distinguishes executed source/installed results from final CI and co-owner review. Dedicated review/submission/assignment operational APIs, CommonMark profile qualification, SQLite parity, application cutover and real-data delivery remain separate scopes; the raw M1 persistence capability does not claim those services.
