@@ -29,7 +29,7 @@ export const runStagedOwnershipCorpus = async (
   // Force the foreign token to collide with an existing local identifier;
   // use the recipient's digest so digest validation cannot mask the probe.
   await expectCode(() => foreign.stageFragment({
-    unit: { ...local, unitId: remote.unitId }, ordinal: '0', predecessorHash: null,
+    unit: { ...local, unitId: remote.unitId, ...('capability' in remote ? { capability: remote.capability } : {}) }, ordinal: '0', predecessorHash: null,
     fragmentDigest: stagedDigestOf(remote, '0', null, input), effects: input, fence: FENCE,
   }), 'invalid-command', 'C03: a colliding foreign handle cannot stage');
   assert.deepEqual(await foreign.inspectStaged('owned-unit'), { state: 'staging', acceptedFragments: '0' });
