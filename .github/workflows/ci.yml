@@ -555,6 +555,8 @@ jobs:
         run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-storage-deps-audit ENV=test-ci-cluster-mesh
       - name: Prepare and audit the optional frozen comments peer
         run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-deps-audit ENV=test-ci-cluster-mesh
+      - name: Build the unchanged workspace comments peer before root build prerequisites relink it
+        run: make build-comments ENV=test-ci-cluster-mesh
       - name: Qualify Cluster Mesh Postgres storage and server recovery
         run: |
           make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test ENV=test-ci-cluster-mesh-pg
