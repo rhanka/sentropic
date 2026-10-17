@@ -30,6 +30,7 @@ export const decodeNanoUsage = (response: unknown): { usage: NanoUsage; reasonin
   const reasoningReported = typeof outputDetails.reasoning_tokens === 'number';
   return {
     usage: { input, output, cached: typeof inputDetails.cached_tokens === 'number' ? inputDetails.cached_tokens : 0,
+      cacheWrite: typeof inputDetails.cache_write_tokens === 'number' ? inputDetails.cache_write_tokens : 0,
       reasoning: reasoningReported ? outputDetails.reasoning_tokens as number : 0 },
     reasoningReported,
   };
