@@ -86,8 +86,8 @@ export const createKernel = (options: KernelOptions): KernelRoot => {
   // No constant default: a restarted kernel with a lost backend must report
   // its cursors as an unknown boundary (§8.2), never resume silently under a
   // recycled incarnation (m2).
-  const incarnation = options.incarnation ?? `store-${randomBytes(8).toString('hex')}`;
   const backend = options.backend ?? new MemoryBackend();
+  const incarnation = backend.bindIdentity(moduleId, options.incarnation, () => `store-${randomBytes(8).toString('hex')}`);
   // Unique owning-kernel identity (Sol-2): two kernels never share a
   // transaction overlay even with equal module and scope.
   const kernelId = `kernel-${randomBytes(8).toString('hex')}`;
