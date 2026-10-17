@@ -15,7 +15,8 @@ import {
 import type { AtomicUnit, ChainExpectation, CommitOptions, CommitReceipt } from '../../src/storage/atomic.js';
 import { validateAtomicUnit } from '../../src/storage/atomic.js';
 import type { ScopeGrant } from '../../src/storage/authority.js';
-import type { StorageScope, WorkLimits, WriterFence } from '../../src/storage/contracts.js';
+import type { StorageModuleId, StorageScope, WorkLimits, WriterFence } from '../../src/storage/contracts.js';
+import { stagedCommitRoots, stagedFragmentDigest } from '../../src/storage/staged-codec.js';
 import { validateWriterFence } from '../../src/storage/contracts.js';
 import {
   nextStagedState,
@@ -40,6 +41,8 @@ export type PurgePolicy = 'unconfigured' | 'optional' | 'required';
 export interface StagedHandle {
   readonly unitId: string;
   readonly operationKey: string;
+  readonly moduleId: StorageModuleId;
+  readonly scope: StorageScope;
 }
 
 export interface StagedJournalSegment {
@@ -254,6 +257,39 @@ export class TestStagedStore {
     return this.inner.scope;
   }
 
+  // N3 closure: every append expectation resolves to the captured base or
+  // to an earlier prepared effect of the same unit (evolving heads).
+  verifyDependencyClosure(fragments: readonly { readonly effects: AtomicUnit }[]): void {
+    const heads = new Map<string, string | null>();
+    for (const fragment of fragments) {
+      for (const append of fragment.effects.appends) {
+        const current = heads.has(append.chainId) ? (heads.get(append.chainId) ?? null) : this.inner.readHead(append.chainId);
+        const resolved = append.expectation.kind === 'absent' ? current === null : current === append.expectation.hash;
+        if (!resolved) throw new StorageInvalidCommandError('unresolved dependency cannot seal');
+        heads.set(append.chainId, append.record.hash);
+      }
+    }
+  }
+
+  private handleFor(op: StagedOp): StagedHandle {
+    return { unitId: op.unitId, operationKey: op.operationKey, moduleId: this.inner.grant.moduleId as StorageModuleId, scope: { ...this.inner.scope } };
+  }
+
+  private fragmentDigestFor(op: StagedOp, ordinal: string, predecessorHash: string | null, effects: AtomicUnit): string {
+    return stagedFragmentDigest(
+      {
+        moduleId: this.inner.grant.moduleId as StorageModuleId,
+        scope: this.inner.scope,
+        operationId: op.operationKey,
+        contractDigest: op.beginContractDigest ?? '',
+        sourceBoundary: op.beginSourceBoundary ?? '',
+        ordinal,
+        predecessorHash,
+      },
+      effects,
+    );
+  }
+
   requireOperation(op: 'read' | 'write' | 'publish' | 'maintain'): void {
     this.inner.requireOperation(op);
   }
@@ -447,7 +483,7 @@ export class TestStagedStore {
       ) {
         throw new StorageIdempotencyConflictError('divergent begin conflicts');
       }
-      return { unitId: existing.unitId, operationKey: input.operationKey };
+      return this.handleFor(existing);
     }
     this.staged.unitSeq += 1;
     const op: StagedOp = {
@@ -461,7 +497,7 @@ export class TestStagedStore {
       beginSourceBoundary: input.sourceBoundary,
     };
     this.staged.units.set(input.operationKey, op);
-    return { unitId: op.unitId, operationKey: op.operationKey };
+    return this.handleFor(op);
   }
 
   stageFragment(input: {
@@ -489,15 +525,18 @@ export class TestStagedStore {
       input.limits,
     );
     if (!shape.ok) throw new StorageInvalidCommandError(shape.errors.join('; '));
+    // N1/N2: the digest is recomputed from the owned canonical input; a
+    // matching caller-supplied digest is never sufficient.
+    const recomputed = this.fragmentDigestFor(op, input.ordinal, input.predecessorHash, input.effects);
     const same = op.fragments.find((entry) => entry.ordinal === input.ordinal);
     if (same) {
-      if (
-        same.fragmentDigest === input.fragmentDigest &&
-        JSON.stringify(same.effects) === JSON.stringify(input.effects)
-      ) {
+      if (same.fragmentDigest === input.fragmentDigest && recomputed === same.fragmentDigest) {
         return { unitId: op.unitId, ordinal: input.ordinal, fragmentDigest: input.fragmentDigest };
       }
       throw new StorageIdempotencyConflictError('changed bytes at an accepted ordinal conflict');
+    }
+    if (recomputed !== input.fragmentDigest) {
+      throw new StorageInvalidCommandError('declared fragment digest does not match the recomputed commitment');
     }
     const sequence = validateFragmentSequence(
       op.fragments.map((entry) => ({ ordinal: entry.ordinal, fragmentDigest: entry.fragmentDigest })),
@@ -542,9 +581,11 @@ export class TestStagedStore {
     if (!last || input.root.finalFragmentHash !== last.fragmentDigest) {
       throw new StorageInvalidCommandError('truncated chains cannot seal');
     }
-    if (input.root.dependencyRoot !== 'dep-root-k2b' || input.root.effectRoot !== 'eff-root-k2b') {
+    const roots = stagedCommitRoots(op.fragments.map((entry) => ({ ordinal: entry.ordinal, effects: entry.effects })));
+    if (input.root.dependencyRoot !== roots.dependencyRoot || input.root.effectRoot !== roots.effectRoot) {
       throw new StorageInvalidCommandError('seal roots mismatch');
     }
+    this.verifyDependencyClosure(op.fragments);
     if (nextStagedState('staging', 'begin-seal') !== 'sealing' || nextStagedState('sealing', 'seal') !== 'sealed') {
       throw new StorageInvalidCommandError('seal transition closed');
     }
