@@ -19,10 +19,16 @@ make seat-inspect CLI=agy SEAT_PROFILE_LABEL=<lab-label> ENV=dev-ci-seat-import
 
 `CLI` is one of `agy|codex|vibe|muse|claude`. `SEAT_PROFILE_LABEL`
 selects the lab record; there are no default paths and no home
-probing. Direct node use:
+probing. `SEAT_SIDECAR=<path>` reads one explicit owner-exported
+sidecar file through `SeatSidecarFileBackend` (≤4096 bytes,
+categories only); without it the reader returns `unverified`.
+Direct node use enforces the same pins as the Makefile — the
+script itself refuses any node runtime other than the
+`node-runtime.json` pin and any sibling mesh build whose version
+does not match the seat-tools package:
 
 ```sh
-SEAT_CLI=agy SEAT_PROFILE_LABEL=<lab-label> node ./inspect.mjs
+SEAT_CLI=agy SEAT_PROFILE_LABEL=<lab-label> SEAT_SIDECAR=<sidecar-path> node ./inspect.mjs
 ```
 
 ## Trust notes
