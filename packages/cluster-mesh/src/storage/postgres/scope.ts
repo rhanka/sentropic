@@ -19,7 +19,7 @@ import type { AuthenticatedStagedHandle, AuthenticatedStagedSeal } from '../stag
 import type { WriterFence } from '../contracts.js';
 import { configurePgLifecycle, declarePgCoverage, holdPgTarget, completePgPurge } from './lifecycle.js';
 import type { PurgePolicy } from '../staged-state.js';
-import { readPgJournal, checkpointPgJournal, inspectPgConsumer, operatePgConsumer } from './journal.js';
+import { currentPgJournalFence, readPgJournal, checkpointPgJournal, inspectPgConsumer, operatePgConsumer } from './journal.js';
 import type { JournalFence } from '../staged-core.js';
 import { queryPgRoot, type PgQueryRequest } from './queries.js';
 import { capturePgSnapshot, readPgSnapshot } from './snapshots.js';
@@ -27,14 +27,18 @@ import { capturePgManifest, verifyPgManifest, readPgManifestPage } from './manif
 import type { RootManifestRequest } from '../root-manifest.js';
 import { readPgBlob, sharePgBlob } from './blobs.js';
 import { inspectPgPurge, readPgMaintenance, type PgMaintenanceRequest } from './maintenance-readers.js';
+import { pgCapability, pgProfileClaims, type PgCapability } from './profiles.js';
+import type { ProfileClaim, ProfileId } from '../profiles.js';
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export class PgScoped {
   readonly #core: PgCore;
   readonly #grant: ScopeGrant<unknown>;
   readonly scope: StorageScope;
   readonly moduleId: string;
+  readonly profiles: readonly ProfileClaim[];
   constructor(core: PgCore, supplied: ScopeGrant<unknown>) {
     this.#core = core; this.#grant = ownPgValue(supplied); freeze(this.#grant);
+    this.profiles = pgProfileClaims(core.options.moduleId, Boolean(core.options.descriptor?.queryNames.includes('scope-chain-index')));
     this.scope = this.#grant.scope; this.moduleId = core.options.moduleId; Object.freeze(this);
   }
   async #read<T>(operation: (view: PgView) => Promise<T>): Promise<T> {
@@ -83,6 +87,8 @@ export class PgScoped {
     return result.value;
   }
   readHead(chainId: string) { return this.#read((view) => view.readHead(chainId)); }
+  capability<P extends ProfileId>(profile: P): PgCapability<P> { return pgCapability(this, this.profiles, profile); }
+  journalFence() { return currentPgJournalFence(this.#core, this.#grant); }
   readRecord(key: string) { return this.#read((view) => view.readRecord(key)); }
   readAggregate(key: string) { return this.#read((view) => view.readAggregate(key)); }
   beginStaged(input: StagedBeginInput) { return beginPgStaged(this.#core, this.#grant, input); }
