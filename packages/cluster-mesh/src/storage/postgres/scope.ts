@@ -10,6 +10,7 @@ import { PgView } from './readers.js';
 import { pgJsonBytes } from './roots.js';
 import { decodePgJson, decodePgUtf8 } from './codec.js';
 import type { PgChain } from './effects.js';
+import type { KernelTransaction } from '../scope-runtime.js';
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export class PgScoped {
   readonly #core: PgCore;
@@ -37,7 +38,7 @@ export class PgScoped {
       readChain: view.readChain.bind(view), findIdempotency: view.findIdempotency.bind(view), readRecords: view.readRecords.bind(view),
     });
   }
-  async transact<T>(options: CommitOptions, operation: (tx: ReturnType<PgScoped['#transaction']>) => Promise<T>) {
+  async transact<T>(options: CommitOptions, operation: (tx: KernelTransaction) => Promise<T>) {
     return runPgTransaction(this.#core, this.#grant, options, (tx) => operation(this.#transaction(tx, options)));
   }
   async commitAtomic(input: AtomicUnit, options: CommitOptions = {}): Promise<CommitReceipt> {
@@ -118,3 +119,4 @@ export class PgScoped {
     });
   }
 }
+Object.freeze(PgScoped.prototype);

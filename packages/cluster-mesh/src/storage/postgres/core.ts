@@ -50,7 +50,7 @@ export class PgCore {
     if (!row || row.revoked !== false || decodePgUtf8(row.bytes) !== JSON.stringify(grant)) throw new StorageDeniedError('unknown, revoked or changed scope grant');
   }
   async issue(grant: ScopeGrant<unknown>): Promise<void> {
-    this.admit(grant, grant.operations[0]!);
+    this.admit(grant, Array.isArray(grant.operations) ? grant.operations[0]! : 'read');
     await this.tx.run(false, async (session) => {
       await session.execute({ text: `INSERT INTO ${this.roots.schema}.grants(module,token,bytes) VALUES($1,$2,$3) ON CONFLICT(module,token) DO NOTHING`, values: [this.options.moduleId, grant.token, pgJsonBytes(grant)] });
       await this.check(session, grant, grant.operations[0]!, true);
