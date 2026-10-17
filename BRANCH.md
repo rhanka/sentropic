@@ -101,6 +101,7 @@
 - `L1-receipt-recovery` (2026-10-17): receipt service checks active session/model grants, serializes admissions/settlements and reconciles interrupted pending requests as incomplete without replay; receipt tests 2/2.
 - `L1-private-socket` (2026-10-17): real authenticated Unix transport/client round trip passes; authenticator rotates at host start and the client reads it through the protected path, without another caller-key store. Windows ACL qualification remains unavailable and the Node host refuses it.
 - `L2-contract-freeze` (2026-10-17): immutable v1 launch contract binds owner, exact model set, authorized account set, independent rotation consent, preserved effort and optional mapping ID/revision/SHA-256 over exact targets. Tampered, absent, unknown or duplicated policy data refuses; mesh typecheck and scoped contract tests 3/3.
+- `L1-shared-host-proof` (2026-10-17): real HTTP + real planner + private control passes 3/3 host runtime tests; key/receipt restart, persistent revocation, second-writer refusal, wrong-key/corruption readiness. Audit tests 2/2 prove failed durable admission makes zero provider calls and one receipt reference reaches settlement. No timeout changed.
 
 ## AI Flaky tests
 - Acceptance rule:
