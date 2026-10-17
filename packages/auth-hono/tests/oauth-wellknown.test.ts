@@ -27,6 +27,7 @@ describe('OAuth well-known handlers', () => {
       token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
       userinfo_endpoint: 'http://localhost:9197/api/v1/auth/oauth/userinfo',
     });
+    expect(payload.claims_supported).toContain('amr');
     // RFC 9207: the AS advertises that it emits the authorization-response `iss` parameter.
     expect(payload.authorization_response_iss_parameter_supported).toBe(true);
     // DCR (RFC 7591) is deferred: never advertise a registration_endpoint (static clients only).

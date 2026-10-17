@@ -113,6 +113,17 @@ describe('createOauthStateStoreAdapter', () => {
     });
   });
 
+  it('fails closed to bearer when a stored code payload lacks an ACR (F7)', async () => {
+    const adapter = createAdapter();
+    const { acr: _dropped, amr: _droppedAmr, ...payloadWithoutAcr } = createPayload();
+
+    await adapter.saveAuthCode('code-no-acr', payloadWithoutAcr, 60);
+    const consumed = await adapter.consumeAuthCode('code-no-acr');
+
+    expect(consumed?.acr).toBe('urn:sentropic:loa:bearer');
+    expect(consumed?.amr).toEqual(['pwd']);
+  });
+
   it('stores token metadata and revokes by jti', async () => {
     const adapter = createAdapter();
 

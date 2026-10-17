@@ -998,6 +998,24 @@ verify-llm-mesh-cloud-code-oauth: build-llm-mesh ## Verify source and dist again
 		$(LLM_MESH_NODE_IMAGE) node scripts/cloud-code-oauth-credential.mjs \
 			--credential-file /run/cloud-code-oauth-client-secret --dist-dir dist
 
+# BR45-EX1 (feat/idp-client-mfa-policy D1): governed one-off OAuth client
+# registration Job. Reason: client registration needs a reproducible,
+# secret-safe path (envFrom temp Secret, never CLI literals). Impact: one
+# additive target; no existing target touched. Rollback: delete this target;
+# the versioned Job yaml stays valid for direct kubectl apply.
+# Usage: make oauth-register-client-job SECRET_FILE=<0600 OAUTH_CLIENT_* env file> [NAMESPACE=sentropic] ENV=<env>
+OAUTH_REGISTER_JOB_NAMESPACE ?= sentropic
+.PHONY: oauth-register-client-job
+oauth-register-client-job: ## Register one oauth_clients row via the versioned Job (SECRET_FILE required)
+	@set -eu; NS="$(OAUTH_REGISTER_JOB_NAMESPACE)"; \
+	trap 'kubectl -n "$$NS" delete job/oauth-register-client >/dev/null 2>&1 || true; kubectl -n "$$NS" delete secret/oauth-client-registration >/dev/null 2>&1 || true' EXIT; \
+	test -s "$(SECRET_FILE)" || { echo "ERROR: SECRET_FILE is missing or empty (0600 file with OAUTH_CLIENT_* vars)"; exit 1; }; \
+	kubectl -n "$$NS" delete job/oauth-register-client >/dev/null 2>&1 || true; \
+	kubectl -n "$$NS" create secret generic oauth-client-registration --from-env-file="$(SECRET_FILE)" --dry-run=client -o yaml | kubectl -n "$$NS" apply -f -; \
+	kubectl -n "$$NS" apply -f deploy/k8s/base/36-oauth-register-client-job.yaml; \
+	kubectl -n "$$NS" wait --for=condition=complete job/oauth-register-client --timeout=120s; \
+	kubectl -n "$$NS" logs job/oauth-register-client
+
 .PHONY: publish-llm-mesh
 publish-llm-mesh: check-llm-model-equivalences verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/llm-mesh from CI OIDC trusted publishing
 	@docker run --rm \

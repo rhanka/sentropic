@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { buildOAuthClientRegistration } from '../../src/scripts/oauth-register-client';
+import { buildOAuthClientRegistration, resolvePolicyUpdate } from '../../src/scripts/oauth-register-client';
 
 const baseEnv: NodeJS.ProcessEnv = {
   OAUTH_CLIENT_ID: 'immo-mcp',
@@ -97,5 +97,55 @@ describe('buildOAuthClientRegistration', () => {
     expect(() =>
       buildOAuthClientRegistration({ ...baseEnv, OAUTH_CLIENT_TOKEN_AUTH: 'private_key_jwt' }),
     ).toThrow(/OAUTH_CLIENT_TOKEN_AUTH/);
+  });
+
+  it('defaults required_acr to null and allowed_user_ids to [] (no policy, zero change)', () => {
+    const values = buildOAuthClientRegistration({ ...baseEnv });
+    expect(values.requiredAcr).toBeNull();
+    expect(values.allowedUserIds).toEqual([]);
+  });
+
+  it('parses OAUTH_CLIENT_REQUIRED_ACR + OAUTH_CLIENT_ALLOWED_USER_IDS for a 2FA owner client', () => {
+    const values = buildOAuthClientRegistration({
+      ...baseEnv,
+      OAUTH_CLIENT_ALLOWED_USER_IDS: 'owner-sub-1, owner-sub-2',
+      OAUTH_CLIENT_REQUIRED_ACR: 'urn:sentropic:loa:passkey-fresh',
+    });
+    expect(values.requiredAcr).toBe('urn:sentropic:loa:passkey-fresh');
+    expect(values.allowedUserIds).toEqual(['owner-sub-1', 'owner-sub-2']);
+  });
+
+  it('rejects an unsupported OAUTH_CLIENT_REQUIRED_ACR value', () => {
+    expect(() =>
+      buildOAuthClientRegistration({ ...baseEnv, OAUTH_CLIENT_REQUIRED_ACR: 'urn:example:gold' }),
+    ).toThrow(/OAUTH_CLIENT_REQUIRED_ACR/);
+  });
+});
+
+describe('resolvePolicyUpdate (F5: never wipe policy on rotation)', () => {
+  const stored = { allowedUserIds: ['owner-1'], requiredAcr: 'urn:sentropic:loa:passkey-fresh' };
+
+  it('takes incoming values as-is for a new client', () => {
+    expect(
+      resolvePolicyUpdate(null, { allowedUserIds: [], requiredAcr: null })
+    ).toEqual({ allowedUserIds: [], requiredAcr: null });
+  });
+
+  it('preserves stored policy when rotation omits both env vars', () => {
+    expect(
+      resolvePolicyUpdate(stored, { allowedUserIds: [], requiredAcr: null })
+    ).toEqual(stored);
+  });
+
+  it('replaces policy when rotation provides both env vars', () => {
+    expect(
+      resolvePolicyUpdate(stored, { allowedUserIds: ['owner-2'], requiredAcr: 'urn:sentropic:loa:bearer' })
+    ).toEqual({ allowedUserIds: ['owner-2'], requiredAcr: 'urn:sentropic:loa:bearer' });
+  });
+
+  it('merges per-field: provided ACR wins, omitted allowlist stays', () => {
+    expect(
+      resolvePolicyUpdate(stored, { allowedUserIds: [], requiredAcr: 'urn:sentropic:loa:bearer' })
+    ).toEqual({ allowedUserIds: ['owner-1'], requiredAcr: 'urn:sentropic:loa:bearer' });
   });
 });

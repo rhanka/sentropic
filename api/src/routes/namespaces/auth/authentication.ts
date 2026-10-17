@@ -16,7 +16,7 @@ import { ensureWorkspaceForUser } from '../../../services/workspace-service';
 
 
 export const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
-  finalizeAuthentication: async ({ credentialId, request, userId }, c) => {
+  finalizeAuthentication: async ({ credentialId, request, userId, userVerified }, c) => {
     const [user] = await db
       .select({
         accountStatus: users.accountStatus,
@@ -81,11 +81,12 @@ export const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
     if (status === 'approval_expired_readonly') effectiveRole = 'guest';
     if (status === 'pending_admin_approval' && due && now > due) effectiveRole = 'guest';
 
+    // B1: only a passkey ceremony with user verification mints an MFA session.
     const { expiresAt, refreshToken, sessionToken } = await createSession(user.id, effectiveRole, {
       ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
       name: request.deviceName,
       userAgent: c.req.header('user-agent'),
-    });
+    }, { mfaVerified: userVerified === true });
 
     const isProduction = process.env.NODE_ENV === 'production';
     const origin = c.req.header('origin');

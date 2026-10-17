@@ -86,6 +86,19 @@ Idempotent upsert on `client_id`; `tenant_id` defaults to `sentropic`. Check the
 `kubectl -n <ns> exec <api-pod> -- ls dist/scripts/`. Older images have neither the compiled script
 nor `tsx` (pruned by `npm prune --omit=dev`), and need the SQL upsert instead.
 
+Governed path (D1): the versioned one-off Job
+`deploy/k8s/base/36-oauth-register-client-job.yaml` via
+`make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`
+(BR45-EX1). The secret travels only via the temporary
+`oauth-client-registration` Secret (`envFrom`), never CLI literals.
+
+Per-client MFA policy (B3/C1): a 2FA-only client sets
+`OAUTH_CLIENT_REQUIRED_ACR=urn:sentropic:loa:passkey-fresh` (bearer sessions
+refused at authorize with `access_denied`) and optionally
+`OAUTH_CLIENT_ALLOWED_USER_IDS=<owner-sub,...>` (non-listed subjects refused
+before consent). Absent both, the client keeps the legacy behavior. Rotation:
+`docs/oauth-client-rotation.md` (90-day cycle, immediate cutover).
+
 Hashing the secret by hand: `printf '%s' "$SECRET" | sha256sum`, **never** `echo` — a trailing
 newline yields a different hash, and the symptom is an `invalid_client` indistinguishable from a
 wrong client id.

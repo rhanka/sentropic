@@ -32,12 +32,16 @@ describe('OAuth token handler', () => {
     expect(body.token_type).toBe('Bearer');
     expect(body.expires_in).toBe(3600);
     expect(decodeJwt(body.access_token)).toMatchObject({
+      acr: 'urn:sentropic:loa:passkey-fresh',
+      amr: ['hwk', 'user', 'mfa'],
       aud: 'http://localhost:9197/oauth/userinfo',
       client_id: 'example-rp',
       scope: 'openid profile email',
       sub: oauthUser.id,
     });
     expect(decodeJwt(body.id_token)).toMatchObject({
+      acr: 'urn:sentropic:loa:passkey-fresh',
+      amr: ['hwk', 'user', 'mfa'],
       aud: 'example-rp',
       nonce: 'nonce-1',
       sub: oauthUser.id,
@@ -107,6 +111,29 @@ describe('OAuth token handler', () => {
     expect(body.token_type).toBe('DPoP');
     expect(decodeJwt(body.access_token)).toMatchObject({ cnf: { jkt } });
     expect(decodeJwt(body.id_token)).toMatchObject({ cnf: { jkt } });
+  });
+
+  it('B2: emits single-factor amr for bearer sessions', async () => {
+    const { ports, store } = await createOauthPorts({ authenticated: true });
+    const { router } = createOauthRouterForTest({ ports });
+    await saveCode(store, 'code-bearer', {
+      acr: 'urn:sentropic:loa:bearer',
+      amr: ['pwd'],
+      scope: 'openid profile email',
+    });
+
+    const response = await tokenRequest(router, { code: 'code-bearer' });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { access_token: string; id_token: string };
+    expect(decodeJwt(body.access_token)).toMatchObject({
+      acr: 'urn:sentropic:loa:bearer',
+      amr: ['pwd'],
+    });
+    expect(decodeJwt(body.id_token)).toMatchObject({
+      acr: 'urn:sentropic:loa:bearer',
+      amr: ['pwd'],
+    });
   });
 
   it('BR-39e: emits the `tid` claim from the auth-code tenant, re-validated at token time', async () => {

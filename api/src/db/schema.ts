@@ -319,6 +319,13 @@ export const oauthClients = pgTable('oauth_clients', {
   // public `sentropic` tenant; ON DELETE set null so removing a tenant orphans (not deletes) clients.
   tenantId: text('tenant_id').references(() => tenants.id, { onDelete: 'set null' }).default('sentropic'),
   ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  // B3: per-client minimum ACR (NULL = no policy, zero change for existing clients).
+  // When set to `urn:sentropic:loa:passkey-fresh`, authorize forces re-auth and
+  // refuses bearer sessions (magic-link/federation) with `access_denied`.
+  requiredAcr: text('required_acr'),
+  // C1: per-client subject allowlist (empty = no restriction, zero change for
+  // existing clients). Enforced at authorize before consent with `access_denied`.
+  allowedUserIds: text('allowed_user_ids').array().notNull().default(sql`'{}'`),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
