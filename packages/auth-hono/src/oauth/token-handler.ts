@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 
 import type { AuthHonoPorts, AuthHonoUserRecord } from '../ports.js';
+import { resolveConfidentialClient } from './confidential-client.js';
 import { createJwksService } from './jwks-service.js';
 import { oauthJsonError } from './http-utils.js';
 import { sha256Base64url } from './crypto-utils.js';
@@ -272,13 +273,14 @@ const authenticateServiceClient = async (
     return oauthJsonError(c, 401, 'invalid_client', 'Client authentication is required.');
   }
 
-  const client = await findServiceClient(credentials.clientId);
+  // m4: shared confidential-client core (lookup + constant-time secret check).
+  const client = await resolveConfidentialClient({
+    ports,
+    clientId: credentials.clientId,
+    secret: credentials.secret,
+    findServiceClient,
+  });
   if (!client) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
-
-  const secretHash = await ports.tokens.hashSecret(credentials.secret);
-  if (secretHash !== client.clientSecretHash) {
-    return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
-  }
 
   return { client, secret: credentials.secret };
 };

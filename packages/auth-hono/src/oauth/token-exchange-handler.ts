@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 
 import type { AuthHonoPorts } from '../ports.js';
+import { resolveConfidentialClient } from './confidential-client.js';
 import { createJwksService } from './jwks-service.js';
 import { oauthJsonError } from './http-utils.js';
 import {
@@ -146,12 +147,10 @@ const authenticateWorkload = async (
   if (await ports.oauthStateStore.findClient(clientId)) {
     return oauthJsonError(c, 401, 'invalid_client', 'Public clients cannot perform token exchange.');
   }
-  const client = await findServiceClient(clientId);
+  // m4: shared confidential-client core (lookup + constant-time secret check).
+  const client = await resolveConfidentialClient({ ports, clientId, secret, findServiceClient });
   if (!client) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
   if (client.revokedAt) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
-  if ((await ports.tokens.hashSecret(secret)) !== client.clientSecretHash) {
-    return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
-  }
   return client;
 };
 
@@ -260,7 +259,12 @@ const verifySubject = async (
   void workload;
   const tid = payload.tid;
   if (typeof tid === 'string' && tid) {
-    if (options.ports.tenant && !(await options.ports.tenant.isApprovedMember(subject, tid))) {
+    // m4 fail-closed: a tenant claim without a tenant port cannot be verified
+    // against an approved membership, so it refuses instead of passing through.
+    if (!options.ports.tenant) {
+      return oauthJsonError(c, 400, 'invalid_grant', 'Subject membership cannot be verified.');
+    }
+    if (!(await options.ports.tenant.isApprovedMember(subject, tid))) {
       return oauthJsonError(c, 400, 'invalid_grant', 'Subject membership is not approved.');
     }
     return { subject, subjectExp, subjectScopes, tenantId: tid };
