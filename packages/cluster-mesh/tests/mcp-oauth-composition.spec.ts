@@ -7,6 +7,32 @@ const live: McpOAuthNamespace[] = [];
 afterEach(async () => { await Promise.all(live.splice(0).map((secured) => secured.close())); });
 
 describe('MCP OAuth composition', () => {
+  it('should fail closed on configured human assurance and accept the matching signed ACR', async () => {
+    const { modules, options, token } = await fixture();
+    const requiredAcr = 'urn:sentropic:loa:passkey-fresh';
+    const secured = await createMcpOAuthNamespace(modules, { ...options, requiredAcr }); live.push(secured);
+    const app = new Hono().route('/mcp', secured.mcpRoutes);
+    for (const acr of [undefined, 'urn:sentropic:loa:bearer']) {
+      const response = await app.request('/mcp', post(initialize(), await token({ acr })));
+      expect(response.status).toBe(401);
+      expect(response.headers.get('www-authenticate')).toContain('insufficient_user_authentication');
+    }
+    expect((await app.request('/mcp', post(initialize(), await token({ acr: requiredAcr })))).status).toBe(200);
+  });
+
+  it('should retain optional-client ingress and refuse conflicting signed clients', async () => {
+    const { modules, options, token } = await fixture();
+    const secured = await createMcpOAuthNamespace(modules, options); live.push(secured);
+    const app = new Hono().route('/mcp', secured.mcpRoutes);
+    for (const claims of [{ client_id: undefined }, { client_id: 'other-registered-client' }, { azp: 'immo-mcp' }]) {
+      expect((await app.request('/mcp', post(initialize(), await token(claims)))).status).toBe(200);
+    }
+    expect((await app.request('/mcp', post(initialize(), await token({ azp: 'different' })))).status).toBe(401);
+    await expect(createMcpOAuthNamespace(modules, { ...options, resolveAccount: undefined as never })).rejects.toThrow();
+    await expect(createMcpOAuthNamespace(modules, { ...options, requiredAcr: '' })).rejects.toThrow();
+    await expect(createMcpOAuthNamespace(modules, { ...options, tools: [...options.tools, options.tools[0]!] })).rejects.toThrow();
+  });
+
   it('should expose public canonical metadata and both qualified aliases without verifying keys', async () => {
     const { modules, options } = await fixture();
     const resolveKey = vi.fn(async () => { throw new Error('must stay lazy'); });
