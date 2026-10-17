@@ -239,7 +239,8 @@ describe('session consent durable lifecycle', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     const body = await response.json();
     expect(body).toMatchObject({ ownerId: owner.id, workspaceId, sourceVerified: false,
-      credentials: [], eligibleSources: [], reason: 'unsupported_source' });
+      authenticationState: 'step_up_required', confirmationAvailable: false,
+      eligibleSources: [], reason: 'unsupported_source' });
     expect(body.items).toMatchObject([{ sessionId: 'product-content-owner', liveAuthorized: false }]);
     const foreign = await router.request(path, { headers: browserHeaders(other) });
     expect(foreign.status).toBe(403);
@@ -787,12 +788,25 @@ describe('session consent durable lifecycle', () => {
         ...(action === 'exclude' ? { body: JSON.stringify({ excluded: true }) } : {}) });
     expect(response.status).toBe(action === 'pending' ? 202 : 200);
     expect(await response.json()).toMatchObject({ complete: action !== 'pending' });
-    expect(await fixture.listPhysical('')).toHaveLength(action === 'pending' ? 1 : 0);
+    expect(await fixture.listPhysical('')).toHaveLength(action === 'purge' ? 0 : 1);
+    if (['exclude', 'revoke', 'project'].includes(action)) {
+      const [copy] = await db.select().from(sessionContentObjects)
+        .where(eq(sessionContentObjects.sessionId, 'product-content-purge'));
+      expect(copy).toMatchObject({ state: 'committed', expiresAt: now + 60000 });
+      expect(await db.select().from(sessionContentPurgeJobs)).toHaveLength(0);
+    }
     if (action === 'pending') expect((await service.listRetainedHandles(owner.id))[0]?.status).toBe('purge_pending');
     expect((await db.select().from(sessionContentGrants)
       .where(eq(sessionContentGrants.sessionId, 'product-content-purge')))[0]?.state).toBe(action === 'exclude' ? 'excluded' : 'revoked');
-    if (action === 'exclude') expect((await db.select().from(sessionContentProjects)
-      .where(eq(sessionContentProjects.projectId, 'sess-content-project-1')))[0]?.excludedSessionIds).toContain('product-content-purge');
+    if (action === 'exclude') {
+      expect((await db.select().from(sessionContentProjects)
+        .where(eq(sessionContentProjects.projectId, 'sess-content-project-1')))[0]?.excludedSessionIds).toContain('product-content-purge');
+      const read = await service.grantHistoryAuthorization('product-content-purge', ctx);
+      expect(new TextDecoder().decode(await service.readCommitted('product-content-purge', 'terminal.cache', ctx,
+        read.authorizationId))).toBe('origin-owned-route-copy');
+      await expectContentError(() => service.reserveBeforeUpload('product-content-purge', 'terminal.cache',
+        { raw: 1, encoded: 1 }, 'excluded-reservation', ctx), 'session_excluded');
+    }
     expect((await db.select().from(sessionWorkspaceBindings)
       .where(eq(sessionWorkspaceBindings.bindingId, bindingId)))[0]?.status).toBe('attached');
   });
@@ -862,7 +876,7 @@ describe('session consent durable lifecycle', () => {
     );
   });
 
-  it('should purge history scope on authorization revoke without viewer-close purge', async () => {
+  it('should deny one history-read authority without purging accepted copies', async () => {
     await acceptProject();
     await adoptSession('sess-content-s1');
     const bindings = await db
@@ -896,15 +910,10 @@ describe('session consent durable lifecycle', () => {
       () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx, first.authorizationId),
       'history_authorization_revoked',
     );
-    await expectContentError(
-      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx, second.authorizationId),
-      'not_found',
-    );
-    const jobs = await db.select().from(sessionContentPurgeJobs);
-    expect(jobs.length).toBeGreaterThan(0);
-    const purged = await service.runPurge(jobs[0]!.purgeJobId);
-    expect(purged.remainingObjects).toBe(0);
-    expect(await fixture.listPhysical('')).toHaveLength(0);
+    expect(new TextDecoder().decode(await service.readCommitted(
+      'sess-content-s1', 'terminal.cache', ctx, second.authorizationId))).toBe('history-bytes');
+    expect(await db.select().from(sessionContentPurgeJobs)).toHaveLength(0);
+    expect(await fixture.listPhysical('')).toHaveLength(1);
   });
 
   it('should fence and purge on tenant DELETE with surviving tombstones', async () => {
