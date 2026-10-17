@@ -48,7 +48,8 @@ export const preparePackedGate = async ({ manifestPath, scope, output }) => {
   for (const name of names.filter((name) => /\.(ts|mjs)$/.test(name))) {
     await fs.writeFile(join(output, 'packed', name), await readConfined(source, name), { flag: 'wx' });
   }
-  await fs.writeFile(join(output, 'package.json'), JSON.stringify({ name: 'gateway-packed-consumer', private: true, type: 'module', dependencies }), { flag: 'wx' });
+  await fs.writeFile(join(output, 'package.json'), JSON.stringify({ name: 'gateway-packed-consumer', private: true, type: 'module', dependencies,
+    devDependencies: { typescript: '5.9.3', '@types/node': '22.10.10' } }), { flag: 'wx' });
   await fs.writeFile(join(output, 'expected.json'), JSON.stringify(expected), { flag: 'wx' });
   await fs.writeFile(join(output, 'scopes.json'), JSON.stringify(tests.map((name) => `packed/${name}`)), { flag: 'wx' });
   await fs.writeFile(join(output, 'execute.mjs'), EXECUTE, { flag: 'wx' });

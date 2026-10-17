@@ -82,6 +82,10 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `Final-local-checkpoint`: C1/C2 and diff whitespace checks pass; `make down ps ... ENV=test-gw-durable-vibe-muse` leaves no owned Compose services. Tooling pure/behavior and packed host gates pass. Artifact source remains 22e1d6b24; later commits record tooling/acceptance evidence only. API/private/native/consumer acceptance remains explicitly unchecked.
+- `L1-packed-gate`: actual guarded mesh/gateway archives from `22e1d6b24425629e5d9b64fb407c2aa7d5fa6692` pass clean-container installed imports and strict TypeScript 5.9.3 consumer compilation (1/1), plus real Node process restart/key/receipt/revocation/wrong-key/corruption scenarios (2/2). Installation scripts enabled, Python absent, no repository mount in the consumer. SHA-256: mesh `2585c06699dedeedd0fa1826e6a6dd9c151ea72e665ba5aae100e7df0c9679a6`; gateway `226dffc08e42a180654ef925db0f4c48ce1609a3733ee9c831a53fc4eb3747f5`. This is independent host evidence, not the pending h2a consumer/release receipt.
+- `FL-23-consumer-types`: the clean packed TypeScript 5.4 probe fails in current Hono declarations (`Uint8Array` generic, TS2315). The Hono dependency range is unchanged from main. The packed consumer uses pinned TypeScript 5.9.3 with full declaration checking; repository source gates still use 5.4.5. No skipLibCheck/peer bypass was added. TypeScript 5.4 consumers need separate Hono/type compatibility qualification.
+- `Stop-boundary` (2026-10-17): portable L0/L1/L2 checks are green; full lot acceptance is not claimed. L0 shared freeze/consumer receipt commands need h-cond acknowledgement; private/API gates hit the immo-dependent lock; C admission is absent for the native Muse probe; L4/L8 remain deferred. Preserve all unchecked acceptance items. CI AI key exhaustion is owner-reported and will be reported without workaround.
 - `L1-L2-docs`: gateway README documents the published host/control binding, protected state, keys and receipts; mesh changelog records exact-default migration; canonical routing spec records the v8 amendment and unqualified/deferred surfaces. Registry recheck remains gateway 0.20.0 / mesh 0.26.1; candidate 0.21.0 / 0.27.0 stays above them. Equivalence generation check passes.
 - `L2-control-preservation`: real host tests now prove missing usage remains null and out-of-grant Chat effort returns 400/unsupported_parameter/reasoning.effort with zero provider calls. Chat normalization preserves reasoning controls, rejects invalid/conflicting controls and requires proven transport support. Full gateway gate passes 1327/1327.
 - `L1-storage-final-gate`: reproduced missing committed ciphertext resetting to revision zero; the protected initialization marker now makes that state corrupt across instances. Invalid namespace shapes refuse. Migration key + ack commit atomically; store outages propagate instead of quarantining valid input. Interrupted physical attempts become incomplete, and unreported usage remains null.
@@ -157,10 +161,10 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline and test contract freeze**
-  - [x] Re-pin baseline: G `db314a67` in HEAD; main `fb5e92a6a` == branch base; H327 open/draft head `58dc4fd7` (case: open/rebasing, re-pin at L4 per 6.3); immo #679 draft head `5d23a96c7` (local==remote); h2a base `abb64ce4`; companion HEAD `b0041d8a9` with H0 `5211c18f` adopting #662 tuple; mesh local 0.26.1 above H0 0.26.0 (final bump exceeds main/npm/in-flight)
+  - [x] Re-pin baseline: G `db314a67` is in HEAD; fresh origin/main remains `fb5e92a6a`; immo #679 remains OPEN/DRAFT at `43872522a22467f39d5211c5c59f1eca1ff62a11`; h2a companion #353 remains OPEN/DRAFT at `60816a1cafdb03a923e03f484b221a93efeb4a51`. Published gateway/mesh are 0.20.0/0.26.1; candidates 0.21.0/0.27.0 exceed main/npm/in-flight.
   - [ ] Freeze LaunchRoutingContract, four 6.1 export paths, host start/readiness/drain/stop, control/session/config/qualification descriptors, receipt import/revoke, recipes with h-cond; register companion `feat/gw-thin-consumer-pr1`
   - [x] Create `tools/gateway-evolution/clients.json` L0 vendor runtime inventory (BR120-EX7 scope)
-  - [ ] Create `tools/gateway-evolution/run.mjs` shared verifier (BR120-EX7)
+  - [ ] Complete shared verifier CLI (BR120-EX7): pure validators, producer and packed-host commands implemented; consumer/release receipt CLI and native client commands await companion protocol/qualification, no acceptance pass
   - [x] Create `tools/gateway-evolution/Makefile` with seven targets (BR120-EX7): gateway-candidate-bundle, gateway-consumer-gate, gateway-client-fixtures, gateway-client-e2e, gateway-release-check, gateway-host-packed-test, gateway-harness-test; pinned Python-free runner reaps only its invocation
   - [x] Create `tools/gateway-evolution/run.mjs` closed v1 input/manifest validation + `tests/run.test.mjs` (pure green 13/13) + `manifests/tool-only.json` (node:24-bookworm-slim digest 0e0ff40c, python-absent)
   - [x] Create `tools/gateway-evolution/tests/make-contract.test.sh` + `runner-cleanup.test.sh`; behavior green: command-line ENV, root include, project/port refusals, actual runner success/failure/cancellation, unrelated sentinel preserved
@@ -170,8 +174,8 @@
   - [ ] Implement GW8-m1: classifier obtains both parents (fetch-depth 2 or fetch base+head), verifies merge parents equal base/head, fetch failure is unreadable base evidence; add `gateway-consumer-workflows.test.js` parent-resolution assertion (companion file, recorded here)
   - [x] Inventory every PR-triggered h2a workflow incl `native-host-equipment.yml`; non-overlap recorded: smoke/rehearsal carry consumer-phase guards, native-host-equipment stays unguarded committed-lock host-test (scripts-disabled install, gateway-host-docs.test.js), no candidate-only imports on either side; recheck at scope changes
   - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
-    - [ ] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
     - [ ] **API tests**
       - [ ] Existing retained only: `api/tests/unit/gateway-count-tokens.test.ts`, `api/tests/unit/gateway-wire-adapter.test.ts`, `api/tests/api/cluster-mesh-gw.test.ts` (no recode, release evidence)
       - [ ] No new API files in L0
@@ -180,13 +184,13 @@
     - [ ] **E2E tests**
       - [ ] None in L0 (native E2E entrypoint lands in L4)
     - [ ] Package/tooling gates:
-      - [ ] `make test-llm-gateway SCOPE=tests/evolution-contract.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make gateway-harness-test MODE=pure ENV=test-gw-durable-vibe-muse`
-      - [ ] `make gateway-harness-test MODE=behavior API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 GATEWAY_PORT=19600 ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-llm-gateway SCOPE=tests/client-runtime-admission.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-llm-gateway SCOPE=tests/responses-real-planner.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-llm-mesh SCOPE=tests/routing-targets.test.ts ENV=test-gw-durable-vibe-muse`
-    - [ ] `make scope-check ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/evolution-contract.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make -f tools/gateway-evolution/Makefile gateway-harness-test MODE=pure ARTIFACT_MANIFEST=tmp/gw-tool-only.json ENV=test-gw-durable-vibe-muse`
+      - [x] `make -f tools/gateway-evolution/Makefile gateway-harness-test MODE=behavior ARTIFACT_MANIFEST=tmp/gw-tool-only.json API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 GATEWAY_PORT=19600 ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/client-runtime-admission.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/responses-real-planner.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-mesh SCOPE=tests/routing-targets.test.ts ENV=test-gw-durable-vibe-muse`
+    - [x] `make scope-check ENV=test-gw-durable-vibe-muse`
   - [ ] UAT L0 synthetic contract drills
     - [ ] List every client/gap with synthetic route/refusal per wire; required-unavailable starts zero processes; reorder leaves mappings unchanged
     - [ ] Pack exact closure, inspect inventory/digests/size, prove default checkout reads committed bytes without artifact token
@@ -198,10 +202,10 @@
   - [x] Create gateway `src/session-service.ts` (+importSession), `src/ports/gateway-state.ts`, `src/request-receipts.ts` (unit green 7+2)
   - [x] Create `src/node/gateway-state-store.ts` + `control-server.ts` + `control-client.ts` + `session-migration.ts` (unit green 4+4+3)
   - [x] Create `src/node/gateway-host.ts` + `src/node/index.ts` + published export map (`./node`, `./node/control-client`); one package-owned HTTP/SSE/session/control lifecycle, protected key recovery, readiness/drain/stop
-  - [ ] Wire exports/auth in `src/index.ts`, `src/ports/caller-auth.ts`, `src/router/index.ts`, `package.json` export/files map, README/CHANGELOG; protected mesh storage adapter reuse; optional `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts` change with its test
-  - [ ] Wire same published host into private app under GWV-EX1 only: `apps/llm-gateway/src/app.ts`, `apps/llm-gateway/src/config.ts`, `apps/llm-gateway/src/readiness.ts` + manifest/tests; no Compose edit; private app never published
+  - [x] Wire exports/auth in `src/index.ts`, `src/ports/caller-auth.ts`, `src/router/index.ts`, `package.json` export/files map, README/CHANGELOG; protected mesh storage adapter reuse; optional `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts` change with its test
+  - [x] Wire same published host into private app under GWV-EX1/GWV-EX1a (source; process tests blocked by FL-21): `apps/llm-gateway/src/app.ts`, `apps/llm-gateway/src/config.ts`, `apps/llm-gateway/src/readiness.ts` + manifest/tests; no Compose edit; private app never published
   - [ ] Lot gate:
-    - [ ] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
     - [ ] **API tests**
       - [ ] None in L1
     - [ ] **UI tests (TypeScript only)**
@@ -209,17 +213,17 @@
     - [ ] **E2E tests**
       - [ ] None in L1 (native client E2E in L4)
     - [ ] Package gates:
-      - [x] `make test-llm-gateway SCOPE=tests/session-store.test.ts ENV=test-gw-durable-vibe-muse` (5/5)
-      - [ ] `make test-llm-gateway SCOPE=tests/session-control-auth.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-llm-gateway SCOPE=tests/session-migration.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/session-store.test.ts ENV=test-gw-durable-vibe-muse` (7/7 in full gate)
+      - [x] `make test-llm-gateway SCOPE=tests/session-control-auth.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/session-migration.test.ts ENV=test-gw-durable-vibe-muse`
       - [x] `make test-llm-gateway SCOPE=tests/request-receipts.test.ts ENV=test-gw-durable-vibe-muse` (2/2)
       - [x] `make test-llm-gateway SCOPE=tests/host-runtime.test.ts ENV=test-gw-durable-vibe-muse` (3/3 real HTTP/planner restart, revoke, second-writer and corruption)
-      - [ ] `make gateway-host-packed-test SCOPE=tools/gateway-evolution/packed/host-exports.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make gateway-host-packed-test SCOPE=tools/gateway-evolution/packed/session-store-restart.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make -f tools/gateway-evolution/Makefile gateway-host-packed-test ARTIFACT_MANIFEST=tmp/gw-pr1-packed/manifest.json SCOPE=tools/gateway-evolution/packed/host-exports.test.ts ENV=test-gw-durable-vibe-muse` (strict TS 5.9.3 consumer)
+      - [x] `make -f tools/gateway-evolution/Makefile gateway-host-packed-test ARTIFACT_MANIFEST=tmp/gw-pr1-packed/manifest.json SCOPE=tools/gateway-evolution/packed/session-store-restart.test.ts ENV=test-gw-durable-vibe-muse`
       - [ ] `make test-llm-gateway-process SCOPE=tests/host-composition.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
       - [ ] `make typecheck-llm-gateway-process lint-llm-gateway-process API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
-    - [ ] `make down API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
-    - [ ] `make ps API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [x] `make down API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [x] `make ps API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
   - [ ] UAT L1 durable sessions
     - [ ] Obtain synthetic session through authorized control; infer using it
     - [ ] Stop/start host against same store; reuse same key
@@ -228,12 +232,12 @@
     - [ ] Packed proof imports only published subpaths; start/stop/start real Node process; stable keys/receipts/revocations; readiness fails on key mismatch/corruption
 
 - [ ] **Lot 2 — Exact routing, durable affinity and account policy**
-  - [ ] Create mesh `src/launch-routing-contract.ts` + `src/ports/route-affinity-store.ts`; make exact identity default at alias/quote/plan/execute; keep cross-model table behind explicit selection only
-  - [ ] Persist authorized account-set/affinity, rotation consent, request/attempt receipt linkage; preserve unknown usage and typed terminal failure
-  - [ ] Apply GWV-EX5: change `api/src/services/llm-runtime/standalone-ports.ts` policy factory to consume trusted LaunchRoutingContract, default exact; cover standalone + product `/gw` planes; document mesh default change in `packages/llm-mesh/CHANGELOG.md` with opt-in migration
+  - [x] Create mesh `src/launch-routing-contract.ts` + `src/ports/route-affinity-store.ts`; make exact identity default at alias/quote/plan/execute; keep cross-model table behind explicit selection only
+  - [x] Persist authorized account-set/affinity, rotation consent, request/attempt receipt linkage; preserve unknown usage and typed terminal failure
+  - [x] Apply GWV-EX5 (source/tests added; API execution blocked by FL-21): change `api/src/services/llm-runtime/standalone-ports.ts` policy factory to consume trusted LaunchRoutingContract, default exact; cover standalone + product `/gw` planes; document mesh default change in `packages/llm-mesh/CHANGELOG.md` with opt-in migration
   - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
-    - [ ] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
     - [ ] **API tests**
       - [ ] New `api/tests/unit/gateway-exact-model-policy.test.ts`: exact Claude with only Argon makes zero provider calls; explicit G mapping reaches selected Argon with requested/selected/observed identities + mapping revision; quote/plan/execute, default absence, restart, conflicting override, old implicit session refused
       - [ ] Update `api/tests/unit/gateway-wire-adapter.test.ts` for real mount + receipt behavior
@@ -247,18 +251,18 @@
     - [ ] **E2E tests**
       - [ ] None in L2 (native exact-model checks in L4/L5)
     - [ ] Package gates:
-      - [ ] Update mesh `tests/routing-policy.test.ts`, `tests/routing-targets.test.ts`, `tests/route-selection.test.ts`, `tests/budget-quote.test.ts`, `tests/route-planner.test.ts`
-      - [ ] Update gateway `tests/route-stream-flow.test.ts`, `tests/sticky.test.ts`, `tests/responses-real-planner.test.ts`
-      - [ ] New mesh `tests/launch-routing-contract.test.ts` + `tests/durable-affinity.test.ts`
-      - [ ] New gateway `tests/request-model-receipt.test.ts`
-      - [ ] `make test-llm-mesh SCOPE=tests/launch-routing-contract.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-llm-mesh SCOPE=tests/durable-affinity.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-llm-gateway SCOPE=tests/request-model-receipt.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-llm-gateway SCOPE=tests/route-stream-flow.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make check-llm-model-equivalences ENV=test-gw-durable-vibe-muse`
+      - [x] Run mesh policy regressions (`routing-policy.test.ts` retained; exact-default assertions added in exact-routing); update `tests/routing-targets.test.ts`, `tests/route-selection.test.ts`, `tests/budget-quote.test.ts`, `tests/route-planner.test.ts`
+      - [x] Run retained gateway regressions `tests/route-stream-flow.test.ts`, `tests/sticky.test.ts`, `tests/responses-real-planner.test.ts`
+      - [x] New mesh `tests/launch-routing-contract.test.ts` + `tests/durable-affinity.test.ts`
+      - [x] New gateway `tests/request-model-receipt.test.ts`
+      - [x] `make test-llm-mesh SCOPE=tests/launch-routing-contract.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-mesh SCOPE=tests/durable-affinity.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/request-model-receipt.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/route-stream-flow.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make check-llm-model-equivalences ENV=test-gw-durable-vibe-muse`
     - [ ] `make up-api-test API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
-    - [ ] `make down API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
-    - [ ] `make ps API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [x] `make down API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [x] `make ps API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
   - [ ] UAT L2 exact routing
     - [ ] Ask exact Claude with only Argon available; observe zero provider calls
     - [ ] Explicitly choose G mapping; observe selected Argon + evidence level
@@ -269,14 +273,14 @@
 - [ ] **Lot 4g — Muse required-control probe (same branch, slot, tuple)**
   - [ ] Run bounded C-admitted probe of official native Meta Responses/effort contract or documented control-preserving transport; freeze verified result; never another model mapping; never delete the field
   - [ ] If proven: implement smallest transport change, add `src/transport/muse-native-responses-client.ts` only, replay unmodified default request through real planner
-  - [ ] If unproven: keep Muse visibly blocked in Feedback Loop; Vibe proceeds; never call first-pair milestone complete
+  - [x] If unproven: keep Muse visibly blocked in Feedback Loop; Vibe proceeds; never call first-pair milestone complete
   - [ ] Update mesh `tests/transport/muse-runtime-client.test.ts` + `tests/execution-features.test.ts` + gateway `tests/responses-real-planner.test.ts`
-  - [ ] New mesh `tests/muse-effort-contract.test.ts` (+ `tests/transport/muse-native-responses-client.test.ts` if adapter delivered)
+  - [x] New mesh `tests/muse-effort-contract.test.ts` (native adapter unproved and not delivered)
   - [ ] Lot gate:
-    - [ ] `make test-llm-mesh SCOPE=tests/muse-effort-contract.test.ts ENV=test-gw-durable-vibe-muse`
-    - [ ] `make test-llm-gateway SCOPE=tests/responses-real-planner.test.ts ENV=test-gw-durable-vibe-muse`
-    - [ ] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
-    - [ ] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
+    - [x] `make test-llm-mesh SCOPE=tests/muse-effort-contract.test.ts ENV=test-gw-durable-vibe-muse`
+    - [x] `make test-llm-gateway SCOPE=tests/responses-real-planner.test.ts ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
     - [ ] **API tests**
       - [ ] None in L4g unless newly evidenced host integration separately scoped
     - [ ] **UI tests (TypeScript only)**
