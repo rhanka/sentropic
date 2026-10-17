@@ -68,6 +68,6 @@ export const applyPgEffects = async (core: PgCore, session: PgSession, grant: Sc
     root = await store.put(session, root, 'index', write.key, { digest: write.digest, resultIds: write.resultIds, resultHash: write.resultHash });
   }
   root = await applyPgModuleEffects(core, session, grant, root, unit, installed === REGISTERED_PG_EFFECTS);
-  await core.options.projection?.(unit, { session, root, layout: core.options.layout, grant, stream: { moduleId: core.options.moduleId, scope, incarnation: core.incarnation, stream: core.incarnation } });
+  await core.options.projection?.(unit, { session, root, coverageRoot, stagedUnitId: core.roots.preparationUnit(), layout: core.options.layout, grant, stream: { moduleId: core.options.moduleId, scope, incarnation: core.incarnation, stream: core.incarnation } });
   return { root, records, appends: unit.appends.length };
 };
