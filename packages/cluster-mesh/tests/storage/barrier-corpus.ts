@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { expectCode, type Awaitable } from './atomic-corpus.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
+import { isStorageError } from '../../src/storage/errors.js';
 import type { WorkLimits, WriterFence } from '../../src/storage/contracts.js';
 import { stagedDigestOf, stagedSealRoot, type StagedCorpusHandle, type StagedCorpusSeal } from './staged-corpus.js';
 import type { StagedCommitRoot } from '../../src/storage/staged-units.js';
@@ -46,6 +47,17 @@ const commentAppend = (n: number) => ({
   record: { id: `c${n}`, bytes: `{"comment":${n}}`, hash: `hash-comment-${n}` },
   expectation: { kind: 'absent', allocation: '0' } as const,
 });
+
+// Typed denial becomes an observable value so a read assertion, not the
+// backend message, reports an unexpected barrier (C19).
+const headOrDenied = async (bound: { readHead(chainId: string): Awaitable<string | null> }, chainId: string): Promise<string | null> => {
+  try {
+    return await bound.readHead(chainId);
+  } catch (error) {
+    if (isStorageError(error) && error.code === 'denied') return 'denied';
+    throw error;
+  }
+};
 
 const expectDenied = async (operation: () => unknown, message: string): Promise<void> => {
   await expectCode(operation, 'denied', message);
@@ -181,14 +193,14 @@ export const runBarrierCorpus = async (bound: BarrierCorpusStore): Promise<void>
     ...emptyUnit(),
     appends: [
       {
-        chainId: 'lifecycle-2',
-        record: { id: 'tombstone-2', bytes: '{"tombstone":"raw"}', hash: 'hash-tombstone-2' },
+        chainId: 'lifecycle-thread-2',
+        record: { id: 'tombstone-2', bytes: '{"tombstone":"thread-2"}', hash: 'hash-tombstone-2' },
         expectation: { kind: 'absent', allocation: '0' },
       },
     ],
   });
   assert.equal(
-    await bound.readHead('comment-orphan'),
+    await headOrDenied(bound, 'comment-orphan'),
     'hash-orphan',
     'K2b-RED barriers: coverage without a barrier ancestor plus a raw tombstone leaves reads unaffected',
   );

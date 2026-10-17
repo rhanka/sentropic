@@ -693,6 +693,27 @@ class ReparentOpenStore extends TestStagedReferenceStore {
   }
 }
 
+// K2b r3 MINEUR-4 mutant: a raw tombstone record installs an operational
+// barrier on the subject it names (raw persistence must install none, N6).
+class RawTombstoneBarrierStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.commitAtomic.bind(bound);
+    bound.commitAtomic = (unit, options) => {
+      const named = unit.appends.flatMap((append) => {
+        try {
+          const parsed = JSON.parse(append.record.bytes) as { tombstone?: unknown };
+          return typeof parsed.tombstone === 'string' ? [{ boundary: parsed.tombstone, reason: 'raw-tombstone' }] : [];
+        } catch {
+          return [];
+        }
+      });
+      return inner({ ...unit, barriers: [...unit.barriers, ...named] }, options);
+    };
+    return bound;
+  }
+}
+
 describe('K2b discriminating mutations: barrier', () => {
   it('B1-denial-blind-barrier is killed by the barrier corpus', async () => {
     const { bound } = bindStaged(new BarrierBlindStore('comments'));
@@ -707,6 +728,11 @@ describe('K2b discriminating mutations: barrier', () => {
   it('B4-reparent-open-barrier is killed by the barrier corpus', async () => {
     const { bound } = bindStaged(new ReparentOpenStore('comments'));
     await expect(runBarrierCorpus(bound)).rejects.toThrow(/a covered child cannot escape/);
+  });
+
+  it('B5-raw-tombstone-barrier is killed by the barrier corpus', async () => {
+    const { bound } = bindStaged(new RawTombstoneBarrierStore('comments'));
+    await expect(runBarrierCorpus(bound)).rejects.toThrow(/plus a raw tombstone leaves reads unaffected/);
   });
 });
 
@@ -890,6 +916,7 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'B1-denial-blind-barrier', brokenSemantic: 'covered reads bypass denial', corpus: 'barrier', verdict: 'killed' },
   { id: 'B2-escape-open-barrier', brokenSemantic: 'covered writes escape their barrier', corpus: 'barrier', verdict: 'killed' },
   { id: 'B4-reparent-open-barrier', brokenSemantic: 'covered children escape via reparenting', corpus: 'barrier', verdict: 'killed' },
+  { id: 'B5-raw-tombstone-barrier', brokenSemantic: 'a raw tombstone installs a barrier on the subject it names', corpus: 'barrier', verdict: 'killed' },
   { id: 'B3-disposal-blind-barrier', brokenSemantic: 'disposed content stays readable', corpus: 'barrier', verdict: 'killed' },
   { id: 'L1-hold-blind-lifecycle', brokenSemantic: 'holds never stall completion', corpus: 'lifecycle', verdict: 'killed' },
   { id: 'L2-divergent-share', brokenSemantic: 'divergent shared bytes merge silently', corpus: 'lifecycle', verdict: 'killed' },
@@ -928,6 +955,7 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
       'killed',
       'killed',
       'killed',
