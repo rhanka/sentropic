@@ -7,6 +7,7 @@ import { RootScopedRuntime } from './root-facade.js';
 import { StagedCore, type StagedCoreOptions } from './staged-core.js';
 import { prepareStagedRootNotice } from './staged-effects.js';
 import type { StagedControl } from './staged-state.js';
+import { StorageInvalidCommandError, UnsupportedProfileError } from './errors.js';
 
 export type StagedKernelOptions = StagedCoreOptions;
 export interface StagedKernelHandle {
@@ -22,12 +23,16 @@ export interface StagedKernelRoot extends StagedKernelHandle {
   armFailure(scope: StorageScope, point: StagedControl['failures'] extends Set<infer T> ? T : never): void;
 }
 export const createRootStagedKernel = (options: StagedKernelOptions): StagedKernelRoot => {
+  // The qualified codec retains SHA-256 commitments for comments. Private
+  // live storage requires its disposable/keyed policy before using K4.
+  if (options.moduleId !== 'comments') throw new UnsupportedProfileError('staged-units-v1:payload-commitment-policy');
+  if (options.descriptor?.queryNames.some((name) => !options.queries || !Object.hasOwn(options.queries, name))) throw new StorageInvalidCommandError('descriptor query has no registered implementation');
   const backend = options.backend ?? new MemoryBackend(createIndexedBackendScopeState);
   const coordinator = new RootMutationCoordinator(backend, {
     prepare: (...args) => prepareStagedRootNotice(core, ...args),
     accessible: (root, _kind, key) => core.accessible(root, key),
     fence: (grant, fence) => core.assertFence(grant, fence),
-  });
+  }, options.limits);
   const inner = createKernel({ ...options, backend, coordinator });
   const core: StagedCore = new StagedCore(inner, backend, coordinator, options);
   const bind = (grant: ScopeGrant<unknown>) => new RootScopedRuntime(core, inner.bind(grant));
