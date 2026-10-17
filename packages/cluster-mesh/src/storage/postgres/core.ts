@@ -63,7 +63,7 @@ export class PgCore {
     });
   }
   async revoke(token: string): Promise<void> {
-    await this.tx.run(false, (session) => session.execute({ text: `UPDATE ${this.roots.schema}.grants SET revoked=true WHERE module=$1 AND token=$2`, values: [this.options.moduleId, token] }));
+    await this.tx.run(false, (session) => session.execute({ text: `INSERT INTO ${this.roots.schema}.grants(module,token,bytes,revoked) VALUES($1,$2,$3,true) ON CONFLICT(module,token) DO UPDATE SET revoked=true`, values: [this.options.moduleId, token, Buffer.from('null')] }));
   }
   work(requested?: WorkLimits): WorkLimits {
     const limits = requested ?? this.limits;
