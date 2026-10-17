@@ -1373,8 +1373,12 @@ export class SessionContentService {
       .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
       .from(sessionContentObjects)
       .where(and(...objectConditions));
+    // P1: a stale reservation is always paired with a staged/purge_pending
+    // object row that carries the charge (queueStagedDeletion sets both
+    // atomically), so stale itself is never charged — no double count, no
+    // phantom hold after verified deletion.
     const reservedConditions = [
-      inArray(sessionContentReservations.state, ['reserved', 'stale']),
+      inArray(sessionContentReservations.state, ['reserved']),
     ];
     if (scope.namespaceId) {
       reservedConditions.push(eq(sessionContentReservations.namespaceId, scope.namespaceId));
@@ -1581,14 +1585,16 @@ export class SessionContentService {
       return { fenced: false as const, reservation: existing, grant };
     });
     if (admitted.fenced) {
+      // P1/m4: zero-PUT refusal is a known outcome — release the
+      // reservation instead of charging a phantom stale hold forever.
       await db.transaction(async (tx) => {
         await tx
           .update(sessionContentReservations)
-          .set({ state: 'stale', updatedAt: new Date(this.nowMs()) })
+          .set({ state: 'cancelled', updatedAt: new Date(this.nowMs()) })
           .where(eq(sessionContentReservations.reservationId, reservationId));
         await tx
           .update(sessionContentAttempts)
-          .set({ outcome: 'outcome_unknown' })
+          .set({ outcome: 'cancelled' })
           .where(eq(sessionContentAttempts.attemptId, reservationId));
       });
       if (admitted.inactive) {
@@ -1972,7 +1978,7 @@ export class SessionContentService {
       .from(sessionContentReservations)
       .where(
         and(
-          inArray(sessionContentReservations.state, ['reserved', 'stale']),
+          inArray(sessionContentReservations.state, ['reserved']),
           reservedInScope,
           scope.sessionId ? eq(sessionContentReservations.sessionId, scope.sessionId) : sql`TRUE`,
         ),
