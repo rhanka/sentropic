@@ -120,6 +120,20 @@ export interface SessionWorkspaceContentHooks {
   fenceSessionOnDetachEnd(sessionId: string, tenantId: string): Promise<unknown>;
 }
 
+/** Default product authority issuer for the D1 content hook. */
+export const DEFAULT_SESSION_CONTENT_ISSUER = 'sentropic-product';
+
+/** n6: resolve the D1 content-hook issuer from configuration — an explicit
+ * caller value, then `SESSION_CONTENT_AUTHORITY_ISSUER`, then the product
+ * default. The hook no longer hard-codes the issuer inline. */
+export const resolveSessionContentIssuer = (explicit?: string): string => {
+  const fromArg = explicit?.trim();
+  if (fromArg) return fromArg;
+  const fromEnv = process.env.SESSION_CONTENT_AUTHORITY_ISSUER?.trim();
+  if (fromEnv) return fromEnv;
+  return DEFAULT_SESSION_CONTENT_ISSUER;
+};
+
 export class SessionWorkspaceService {
   private readonly storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore;
   private readonly mesh: ReturnType<typeof createSessionWorkspaceBindingService>;
@@ -128,11 +142,12 @@ export class SessionWorkspaceService {
   constructor(
     storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore = createDrizzleBindingStore,
     contentHooks?: SessionWorkspaceContentHooks | null,
+    contentIssuer?: string,
   ) {
     this.storeFactory = storeFactory;
     this.mesh = createSessionWorkspaceBindingService(storeFactory(db));
     if (contentHooks === undefined) {
-      this.contentHooks = new SessionContentService({ issuer: 'sentropic-product' });
+      this.contentHooks = new SessionContentService({ issuer: resolveSessionContentIssuer(contentIssuer) });
     } else {
       this.contentHooks = contentHooks;
     }
