@@ -63,6 +63,13 @@
     catch { failed = true; }
     finally { busy = false; flow = flow; }
   }
+  async function revokeProject() {
+    if (!metadata || busy) return;
+    flow?.cancel(); busy = true; failed = false;
+    try { await contentApi.revokeProject(metadata.workspaceId); onchanged(); }
+    catch { failed = true; }
+    finally { busy = false; flow = flow; }
+  }
 
   async function loadRetained() {
     busy = true; failed = false;
@@ -146,6 +153,7 @@
       <Button variant="secondary" onclick={() => consentAction('prepare')} disabled={busy || !available || invalidRetention || !offer.offlineReadAccepted || !Object.values(offer.channels).some(Boolean) || (offer.channels['terminal.cache'] && !offer.channels['terminal.live'])}>{$_('sessionContent.prepare')}</Button>
       <Button variant="primary" onclick={() => consentAction('confirm')} disabled={busy || !available || !flow?.prepared}>{$_('sessionContent.confirm')}</Button>
       <Button variant="ghost" onclick={() => { flow?.cancel(); flow = flow; }}>{$_('sessionContent.cancel')}</Button>
+      {#if metadata?.projectState === 'active'}<Button variant="danger" onclick={revokeProject} disabled={busy}>{$_('sessionContent.revokeProject')}</Button>{/if}
     </div>
   {/if}
 </section>
