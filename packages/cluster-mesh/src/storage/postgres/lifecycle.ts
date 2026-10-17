@@ -48,7 +48,7 @@ export const completePgPurge = async (core: PgCore, grant: ScopeGrant<unknown>, 
     let work = 0; let bytes = 0;
     while (job.state !== 'held' && work < core.work().maxRecords) {
       const payload = job.phase === 'payload'; const table = payload ? 'payloads' : 'staged_items';
-      const result = await session.execute({ text: `SELECT id::text,target,octet_length(bytes) AS cost FROM ${store.schema}.${table} WHERE scope_key=$1 AND ($2::${payload ? 'text' : 'bigint'} IS NULL OR id>$2::${payload ? 'text' : 'bigint'}) ORDER BY id LIMIT 1`, values: [store.key(grant.scope), job.position] });
+      const result = await session.execute({ text: `SELECT candidate.id::text,candidate.target,octet_length(candidate.bytes) AS cost FROM ${store.schema}.${table} AS candidate WHERE candidate.scope_key=$1 AND ($2::${payload ? 'text' : 'bigint'} IS NULL OR candidate.id>$2::${payload ? 'text' : 'bigint'}) ORDER BY candidate.id LIMIT 1`, values: [store.key(grant.scope), job.position] });
       const row = result.rows[0];
       if (!row) {
         if (payload) { job.phase = 'staged'; job.position = null; continue; }
