@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createAnnotationRevision, createLifecycleEvent, hashRecord, commandIdempotencyKey, commandPayloadDigest } from '@sentropic/comments';
+import type { CanonicalChainRecord } from '@sentropic/comments';
 import { createPgFixture } from './storage/pg-fixture.js';
 import { pgEnabled } from './storage/pg-driver.js';
 import { grantFor } from './storage/authority-corpus.js';
@@ -7,18 +8,19 @@ import { createCommentsModule, createCommentsPostgresRegistration } from '../src
 import { createCommentsFragment, commentsUnitPayloadDigest } from '../src/comments/fragment-codec.js';
 import { commentsImportBindingDigest, commentsAdmissibleManifestDigest } from '../src/comments/binding-codec.js';
 import { conformanceCapacity, conformanceScope, conformanceTarget, conformanceResource, conformanceBody, conformanceProvenance } from '../assets/storage/comments/oracle/conformance.mjs';
-const scenario = async (tombstone = false) => {
+const scenario = async (tombstone = false, transform: (records: CanonicalChainRecord[]) => CanonicalChainRecord[] = (records) => records) => {
   const scope = conformanceScope(); const capacity = conformanceCapacity();
   const input = { scope, annotationId: 'a', primary: conformanceTarget(conformanceResource(scope)), secondary: [], visualAnchors: [], body: conformanceBody('first'), provenance: conformanceProvenance() };
   const first = createAnnotationRevision(null, input, capacity); const second = createAnnotationRevision(first, { ...input, body: conformanceBody('second') }, capacity);
-  const records = tombstone ? [first, createLifecycleEvent([], { scope, objectKind: 'annotation', objectId: 'a', action: 'tombstone', archiveKind: null, reason: null, actor: { principal: 'historical-admin' } }, capacity)] : [first, second];
+  const records = transform(tombstone ? [first, createLifecycleEvent([], { scope, objectKind: 'annotation', objectId: 'a', action: 'tombstone', archiveKind: null, reason: null, actor: { principal: 'historical-admin' } }, capacity)] : [first, second]);
   const unitId = 'source-unit'; const payloadDigest = commentsUnitPayloadDigest(unitId, records);
   const units = [{ unitId, unitKind: 'annotation' as const, dependsOnUnitIds: [], manifestDigest: commandPayloadDigest({ unitId }), payloadDigest }];
   const envelope = { scope, importId: 'manifest', sourceUnitCount: 1, admissibleManifestDigest: commentsAdmissibleManifestDigest(units), mappingVersion: 'mapping-v1' };
   const request = { scope, batchId: 'batch', manifest: { kind: 'import-manifest' as const, ...envelope, hash: hashRecord('import-manifest', envelope) }, units, expectedMappingVersion: 'mapping-v1', idempotencyKey: commandIdempotencyKey('batch') };
   const binding = { version: 'comments-transport-v1' as const, operationId: 'operation', request, unitIds: [unitId], sourceBoundary: 'frozen-source', targets: [conformanceResource(scope)], capabilities: ['revise' as const, 'tombstone' as const] };
   const bindingDigest = commentsImportBindingDigest(binding);
-  const services = { capacity, capabilities: { check: async () => true }, resolver: { resolve: async () => 'exact' as const }, clock: { now: () => 1717000000123 } };
+  const authority = { allowed: true };
+  const services = { capacity, capabilities: { check: async () => authority.allowed }, resolver: { resolve: async () => 'exact' as const }, clock: { now: () => 1717000000123 } };
   const fixture = await createPgFixture(await createCommentsPostgresRegistration({ services }));
   const root = await fixture.open(); const grant = grantFor({ scope, operations: ['read', 'write', 'maintain'] }); const bound = await root.bindNew(grant);
   const fence = { fenceId: 'import', epoch: '1' }; await root.provisionFence(grant, fence);
@@ -26,7 +28,19 @@ const scenario = async (tombstone = false) => {
   const fragment = (ordinal: number, predecessorHash: string | null, payload = records.slice(ordinal, ordinal + 1)) => createCommentsFragment({ scope, operationId: binding.operationId, bindingDigest, unitId, ordinal: String(ordinal), predecessorHash, terminal: null }, payload);
   const terminal = (ordinal: number, predecessorHash: string) => createCommentsFragment({ scope, operationId: binding.operationId, bindingDigest, unitId: null, ordinal: String(ordinal), predecessorHash,
     terminal: { fragmentCount: String(ordinal + 1), unitRoots: [{ unitId, records: String(records.length), payloadDigest }] } }, []);
-  return { fixture, root, grant, bound, module, scope, records, request, binding, bindingDigest, fence, fragment, terminal };
+  return { fixture, root, grant, bound, module, scope, records, request, binding, bindingDigest, fence, fragment, terminal, authority };
+};
+const prepareAll = async (s: Awaited<ReturnType<typeof scenario>>) => {
+  const first = s.fragment(0, null); await s.module.services.prepareImportFragment({ binding: s.binding, fragment: first, fence: s.fence });
+  const second = s.fragment(1, first.digest); await s.module.services.prepareImportFragment({ binding: s.binding, fragment: second, fence: s.fence });
+  return (await s.module.services.prepareImportFragment({ binding: s.binding, fragment: s.terminal(2, second.digest), fence: s.fence })).prepared!;
+};
+const commitAll = async (s: Awaited<ReturnType<typeof scenario>>, prepared: Awaited<ReturnType<typeof prepareAll>>) => {
+  for (let step = 0; step < 100; step++) {
+    const result = await s.module.services.commitPreparedImport({ request: s.request, prepared, fence: s.fence, limits: { maxRecords: 2, maxAppends: 1, maxEncodedBytes: 8192 } });
+    if (result.state === 'committed') return result.receipt;
+  }
+  throw new Error('bounded preparation did not advance');
 };
 describe.skipIf(!pgEnabled)('coherent comments import and complete receipt recovery', () => {
   it.each([false, true])('publishes history/receipts and imported tombstone coverage together (tombstone=%s)', async (tombstone) => {
@@ -63,6 +77,42 @@ describe.skipIf(!pgEnabled)('coherent comments import and complete receipt recov
       await s.module.withContext(s.grant, async () => {
         const first = s.fragment(0, null); await s.module.services.prepareImportFragment({ binding: s.binding, fragment: first, fence: s.fence });
         await expect(s.module.services.prepareImportFragment({ binding: s.binding, fragment: s.terminal(1, first.digest), fence: s.fence })).rejects.toThrow(/payload|terminal|complete/i);
+        expect(await s.module.store.getAnnotationHead(s.scope, 'a')).toBeNull();
+      });
+    } finally { await s.fixture.close(); }
+  });
+  it('refuses a self-consistent hash with a false canonical sequence before publication', async () => {
+    const s = await scenario(false, (records) => records.map((record, index) => {
+      if (index !== 0 || !('link' in record)) return record;
+      const { kind, hash: _hash, ...envelope } = record; const changed = { ...envelope, link: { ...record.link, sequence: 7 } };
+      return { kind, ...changed, hash: hashRecord(kind, changed) } as CanonicalChainRecord;
+    }));
+    try {
+      await s.module.withContext(s.grant, async () => {
+        const prepared = await prepareAll(s);
+        await expect(commitAll(s, prepared)).rejects.toThrow();
+        expect(await s.module.store.getAnnotationHead(s.scope, 'a')).toBeNull();
+      });
+    } finally { await s.fixture.close(); }
+  });
+  it('refuses records outside the authorized resource inventory', async () => {
+    const s = await scenario();
+    try {
+      await s.module.withContext(s.grant, async () => {
+        const binding = { ...s.binding, targets: [{ ...s.binding.targets[0], id: 'different-authorized-resource' }] };
+        const bindingDigest = commentsImportBindingDigest(binding);
+        const fragment = createCommentsFragment({ ...s.fragment(0, null).manifest, bindingDigest }, [s.records[0]]);
+        await expect(s.module.services.prepareImportFragment({ binding, fragment, fence: s.fence })).rejects.toThrow(/target|resource|denied/i);
+        expect(await s.module.store.getAnnotationHead(s.scope, 'a')).toBeNull();
+      });
+    } finally { await s.fixture.close(); }
+  });
+  it('rechecks domain authority after the terminal fragment and before every bounded step', async () => {
+    const s = await scenario();
+    try {
+      await s.module.withContext(s.grant, async () => {
+        const prepared = await prepareAll(s); s.authority.allowed = false;
+        await expect(commitAll(s, prepared)).rejects.toMatchObject({ code: 'denied' });
         expect(await s.module.store.getAnnotationHead(s.scope, 'a')).toBeNull();
       });
     } finally { await s.fixture.close(); }
