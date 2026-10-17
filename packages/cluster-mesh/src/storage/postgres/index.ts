@@ -12,7 +12,7 @@ export const createPostgresKernel = async (options: PostgresStorageOptions) => {
     await core.tx.run(true, (session) => core.check(session, grant, Array.isArray(grant.operations) ? grant.operations[0]! : 'read'));
     return new PgScoped(core, grant);
   };
-  const adapter = Object.freeze({ moduleId: options.moduleId, incarnation: core.incarnation, bind });
+  const adapter = Object.freeze({ moduleId: core.options.moduleId, incarnation: core.incarnation, bind });
   return Object.freeze({ ...adapter,
     bindNew: async (supplied: ScopeGrant<unknown>): Promise<PgScoped> => { const grant = ownPgValue(supplied); await core.issue(grant); return new PgScoped(core, grant); },
     revoke: (token: string) => core.revoke(token),
