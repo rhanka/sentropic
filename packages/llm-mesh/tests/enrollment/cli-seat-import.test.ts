@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   parseCliSeatProfile,
   parseTokenSeatEnvelope,
@@ -70,5 +70,20 @@ describe('cli-seat-import', () => {
     expect(() => parseTokenSeatEnvelope({ raw: '{not-json', ownerScope: 'owner-synth-01' })).toThrow(
       /not JSON-serializable|unexpected|parse/i,
     );
+  });
+
+  it('performs no provider exchange, mint, or store reread on either mode', () => {
+    const fetchSpy = vi.fn(async () => {
+      throw new Error('network must stay untouched');
+    });
+    const originalFetch = globalThis.fetch;
+    (globalThis as Record<string, unknown>)['fetch'] = fetchSpy;
+    try {
+      const fromCli = parseCliSeatProfile(profile('muse'));
+      parseTokenSeatEnvelope({ raw: JSON.stringify(fromCli), ownerScope: 'owner-synth-01' });
+    } finally {
+      (globalThis as Record<string, unknown>)['fetch'] = originalFetch;
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
