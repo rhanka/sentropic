@@ -44,6 +44,11 @@ export const stagePgFragment = async (core: PgCore, grant: ScopeGrant<unknown>, 
       return { unitId: unit.id, ordinal: input.ordinal, fragmentDigest: digest };
     }
     if (metadata.state !== 'staging' || input.ordinal !== String(metadata.count) || input.predecessorHash !== metadata.frontier || input.fragmentDigest !== digest) throw new StorageInvalidCommandError('fragment frontier or state mismatch');
+    const current = await core.roots.capture(session, grant.scope);
+    for (const target of [...effects.records.map((item) => item.key), ...effects.appends.map((item) => item.chainId), ...effects.updates.map((item) => item.key), ...effects.indexWrites.map((item) => item.key)]) {
+      try { await core.visible(session, current.root, target); }
+      catch (error) { if (error instanceof StorageDeniedError) throw new StorageInvalidCommandError('covered staged intake refused'); throw error; }
+    }
     const dependency = pgJsonBytes([input.ordinal, deriveStagedDependencies(effects)]); const effect = pgJsonBytes([input.ordinal, stagedEffectDigest(effects)]);
     const counts = [...EFFECT_SECTIONS.map((key) => effects[key].length), effects.moduleResult === undefined ? 0 : 1];
     await session.execute({ text: `INSERT INTO ${core.roots.schema}.fragments(unit_id,ordinal,digest,predecessor,effects,metadata,dependency_part,effect_part) VALUES($1,$2::bigint,$3,$4,NULL,$5::jsonb,$6,$7)`, values: [unit.id, input.ordinal, digest, input.predecessorHash, JSON.stringify({ counts, dependencyLength: dependency.length, effectLength: effect.length }), dependency, effect] });
