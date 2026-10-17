@@ -33,6 +33,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - `packages/llm-mesh/tests/**`
   - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
   - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/README.md`
   - `package-lock.json`
@@ -68,7 +69,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 - `CISEAT-EX2`: status active. Reason: scoped sentropic-seat-delivery receiver integration (new route `api/src/routes/namespaces/llm-seat-delivery.ts`, auth `api/src/middleware/llm-seat-delivery-auth.ts`, optional mount in `llm-mesh-router.ts` via `delivery.enabled`, service tuple/drain/reopen in `llm-account-transports.ts`). k8s mTLS manifests (`deploy/k8s/base/seat-delivery-mtls.yaml`, preprod overlay patch) are explicitly deferred to L3 P-DEPLOY, which owns TLS-termination design; no speculative infra is committed (delivery shares the api pod behind existing ingress). Impact: bounded to this integration; router behavior unchanged when `delivery` is unset. Rollback: delete the new route/middleware files, revert the router mount hunk and the service delivery functions.
 - `CISEAT-EX3`: status acknowledged (reserved downstream requirement from L0a). Reason: owner-machine native Node helper (`seat-inspect`) needs native session keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service D-Bus). Bounds: only reviewed Make entrypoints run the bounded local store reader/inspect helper natively; no host test campaign, server, second refresher or whole-home/keyring export. No `seat-reenroll` helper exists in L1 (re-enroll stays an L3 concern). Rollback: disable/remove owner targets, revoke helper GitHub session, remove private runtime dir, retire disposable lab profile only.
 - `R6-1`: status acknowledged. llm-gateway 0.20.0 accepts llm-mesh `^0.26.0`; L1 keeps mesh at 0.26.x (patch only) with single-copy lock assertion, or adds the named gateway bump step (not planned; gateway paths stay forbidden).
-- `CISEAT-EX4`: status active (conductor-approved under owner default authorization). Reason: L1's required mesh patch bump (0.26.1 to 0.26.2) necessarily evolves two installed-version pins in `packages/cluster-mesh/tests/integrations/{llm,gateway}-surface.spec.ts`. Impact: two assertion literals only; published-tarball fixtures stay at 0.26.1. Rollback: revert the two literals.
+- `CISEAT-EX4`: status active (conductor-approved under owner default authorization). Reason: L1's required mesh patch bump (0.26.1 to 0.26.2) necessarily evolves two installed-version pins in `packages/cluster-mesh/tests/integrations/{llm,gateway}-surface.spec.ts` plus the frozen `selected` fixture lock digest (`packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`: mesh entry to 0.26.2, registry URL, sibling-bytes integrity from the sanctioned `refresh-lazy-package-lock` flow). Impact: two assertion literals + one 3-line lock entry; the lock keeps the registry URL (provisional until 0.26.2 publishes, then the registry check compares). Rollback: revert the two literals and the lock entry.
 
 ## Opus review NO-GO rework (PR #681, test-first, red-then-green on spies)
 - `B1`: `CISEAT-EX4` declared above; the two cluster-mesh surface pin updates are committed.
@@ -83,9 +84,12 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 ## Scope notes
 - L1's required mesh patch bump (0.26.1 to 0.26.2, inside gateway `^0.26.0`)
   necessarily evolves two installed-version pins in cluster-mesh surface
-  tests (`llm-surface.spec.ts:62`, `gateway-surface.spec.ts:64`).
-  Published-tarball fixtures (`packaging/fixtures/selected/`) intentionally
-  stay at 0.26.1 until the release publishes 0.26.2.
+  tests (`llm-surface.spec.ts:62`, `gateway-surface.spec.ts:64`) plus the
+  frozen `selected` fixture lock digest (mesh entry to 0.26.2, registry
+  URL, sibling-bytes integrity via the sanctioned refresh flow —
+  red-then-green proven locally against the real `siblings` assertion).
+  Other `packaging/fixtures/selected/` content intentionally stays
+  unchanged until the release publishes 0.26.2.
 
 ## AI Flaky tests
 - Acceptance rule:
