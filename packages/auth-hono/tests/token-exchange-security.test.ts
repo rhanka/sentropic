@@ -579,6 +579,43 @@ describe('OAuth token exchange security', () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
   });
+
+  it('m4 refuses a tenant-claimed subject when no tenant port is configured', async () => {
+    const { ports, store } = await createOauthPorts({
+      clients: [publicImmoClient()],
+      serviceClients: [workloadClient()],
+    });
+    delete ports.tenant;
+    const { router } = createOauthRouterForTest({ ports });
+    const subject = await mintRawSubject(ports, store, { extra: { tid: 'tenant-a' } });
+    const response = await postExchange(router, {
+      audience: RADAR_AUDIENCE,
+      scope: 'immo:search',
+      subject,
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+  });
+
+  it('m4 honors a tenant claim when the tenant port approves the membership', async () => {
+    const { ports, store } = await createOauthPorts({
+      clients: [publicImmoClient()],
+      serviceClients: [workloadClient()],
+    });
+    ports.tenant = {
+      isApprovedMember: async (userId: string, tenantId: string) =>
+        userId === oauthUser.id && tenantId === 'tenant-a',
+      listApprovedTenantIds: async () => ['tenant-a'],
+    };
+    const { router } = createOauthRouterForTest({ ports });
+    const subject = await mintRawSubject(ports, store, { extra: { tid: 'tenant-a' } });
+    const response = await postExchange(router, {
+      audience: RADAR_AUDIENCE,
+      scope: 'immo:search',
+      subject,
+    });
+    expect(response.status).toBe(200);
+  });
 });
 
 const baseForm = (subject: string): URLSearchParams =>
