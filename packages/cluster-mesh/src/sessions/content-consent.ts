@@ -812,6 +812,10 @@ export const createContentConsentService = (
     if (existing.state === 'closed') throw new ContentConsentError('grant_closed', 'child grant is closed');
     if (existing.state === 'expired') throw new ContentConsentError('live_expired', 'child grant expired');
     if (existing.state !== 'active') throw new ContentConsentError('grant_revoked', 'child grant is not active');
+    // m1: an unreconciled local deny pauses capture — reconcile first.
+    if (existing.localDenyPending) {
+      throw new ContentConsentError('invalid_request', 'unreconciled local deny; reconcile first');
+    }
     if (input.expectedProjectRevision !== project.projectRevision) {
       throw new ContentConsentError('revision_conflict', 'acknowledged revision is not current; re-acknowledge');
     }
@@ -836,6 +840,10 @@ export const createContentConsentService = (
     }
     if (input.policyDigest !== project.retentionDigest) {
       throw new ContentConsentError('revision_conflict', 'acknowledged scope is not the accepted one');
+    }
+    // m1: resuming takes only post-boundary bytes.
+    if (input.nativeBoundarySeq < existing.nativeBoundarySeq) {
+      throw new ContentConsentError('invalid_request', 'acknowledged boundary moved backwards');
     }
     const selected = project.selectedSessionIds.includes(sessionId);
     const eligibleFuture = project.futureSessions && input.sessionCreatedAt >= project.activatedAt;
