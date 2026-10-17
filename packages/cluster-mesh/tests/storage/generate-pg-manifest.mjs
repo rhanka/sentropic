@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 const directory = new URL('../../assets/storage/postgres/', import.meta.url);
-const files = ['001-core.sql', '002-map.sql', '003-staged.sql'];
+const files = ['001-core.sql', '002-map.sql', '003-staged.sql', '004-queries.sql'];
 const assets = [];
 for (const [index, file] of files.entries()) {
   const sql = await readFile(new URL(file, directory));
