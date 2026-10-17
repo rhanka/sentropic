@@ -106,8 +106,11 @@ export const completePgPurge = async (
         const payload = job.phase === 'payload';
         const table = payload ? 'payloads' : 'staged_items';
         const result = await session.execute({
-          text: `SELECT candidate.id::text, candidate.target, candidate.${payload ? 'prepared_unit' : 'unit_id'} AS unit_id, octet_length(candidate.bytes) AS cost FROM ${store.schema}.${table} AS
-        candidate WHERE candidate.scope_key=$1 AND ($2::${payload ? 'text' : 'bigint'} IS NULL OR candidate.id>$2::${payload ? 'text' : 'bigint'}) ORDER BY candidate.id LIMIT 1`,
+          text: `SELECT candidate.id::text, candidate.target,
+        candidate.${payload ? 'prepared_unit' : 'unit_id'} AS unit_id,
+        octet_length(candidate.bytes) AS cost FROM ${store.schema}.${table} AS candidate
+        WHERE candidate.scope_key=$1 AND ($2::${payload ? 'text' : 'bigint'} IS NULL
+        OR candidate.id>$2::${payload ? 'text' : 'bigint'}) ORDER BY candidate.id LIMIT 1`,
           values: [store.key(grant.scope), job.position],
         });
         const row = result.rows[0];
