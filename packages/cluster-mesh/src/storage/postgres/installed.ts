@@ -16,7 +16,7 @@ export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<u
   const writable = () => { live(); if (readOnly) throw new StorageDeniedError('installed read operation cannot prepare canonical effects'); };
   const metadata = async (chain: string) => { live(); return core.roots.get<PgChain>(tx.session, tx.root, 'chain', chain); };
   const context: PgInstalledContext = Object.freeze<PgInstalledContext>({
-    session: tx.session, get root() { live(); return tx.root; }, grant, layout: core.options.layout,
+    session: tx.session, get root() { live(); return tx.root; }, committedRoot: tx.base.root, rootVersion: tx.base.version, grant, layout: core.options.layout,
     stream: Object.freeze({ moduleId: core.options.moduleId, scope: grant.scope, incarnation: core.incarnation, stream: core.incarnation }),
     policy: await core.roots.get<PurgePolicy>(tx.session, tx.root, 'policy', 'purge') ?? 'unconfigured',
     available: async (target) => { live(); try { await core.visible(tx.session, tx.root, target); return true; } catch (error) { if (error instanceof StorageDeniedError) return false; throw error; } },
@@ -51,9 +51,7 @@ export const runPgInstalled = async (core: PgCore, grant: ScopeGrant<unknown>, n
       await core.check(tx.session, grant, 'read');
       const scope = await createPgInstalledContext(core, grant, tx, true);
       const check = () => core.check(tx.session, grant, 'read'); tx.revalidators.add(check);
-      try {
-        const result = await definition.execute(input, scope.context); await scope.finish(); await check(); return ownPgValue(result);
-      } finally { tx.revalidators.delete(check); }
+      const result = await definition.execute(input, scope.context); await scope.finish(); await check(); return ownPgValue(result);
     };
     const ambient = core.ambient.getStore();
     if (ambient) {
