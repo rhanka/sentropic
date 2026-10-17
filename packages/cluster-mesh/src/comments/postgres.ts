@@ -23,7 +23,7 @@ import { prepareCommentsAuthority } from './authority-projection.js';
 export { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
-  schemaVersions: Object.freeze(['pg-core-6', 'comments-projections-1', 'comments-transport-1', 'comments-exports-1', 'comments-authority-1']),
+  schemaVersions: Object.freeze(['pg-core-6', 'comments-projections-1', 'comments-transport-1', 'comments-exports-1', 'comments-authority-1', 'comments-lifecycle-evidence-1']),
   requiredProfiles: Object.freeze(['atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1', 'staged-units-v1', 'visibility-barriers-v1', 'fenced-writers-v1', 'scope-outbox-v1']),
   optionalProfiles: Object.freeze(['purge-jobs-v1']), chainKinds: Object.freeze(Object.keys(COMMENTS_CHAIN_KINDS)),
   queryNames: Object.freeze(['by-resource', 'scope-chain-index', 'retained-headers']), boundaries: Object.freeze(['scope-root', 'exact-head']),
