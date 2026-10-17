@@ -7,6 +7,17 @@ import { runChainCorpus } from './chain-corpus.js';
 import { runReadCorpus } from './read-corpus.js';
 const append = (hash: string, previous: string | null = null) => ({ ...emptyEffects(), appends: [{ chainId: 'chain', record: { id: hash, hash, bytes: `🌍${hash}` }, expectation: previous === null ? { kind: 'absent' as const, allocation: '0' } : { kind: 'head' as const, hash: previous } }] });
 describe.skipIf(!pgEnabled)('Postgres ordinary root semantics', () => {
+  it('rolls back when a transaction swallows an invalid pending operation', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const bound = await (await fixture.open()).bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+      await expect(bound.transact({}, async (tx) => {
+        await tx.apply(append('pending'));
+        try { await tx.apply(emptyEffects()); } catch { /* the outer must remain rollback-only */ }
+      })).rejects.toMatchObject({ code: 'invalid-command' });
+      expect(await bound.readHead('chain')).toBeNull();
+    } finally { await fixture.close(); }
+  });
   it('retains frozen chain/read corpora on the real backend', async () => {
     const fixture = await createPgFixture();
     try {
