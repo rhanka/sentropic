@@ -92,6 +92,7 @@
 - `L1-key-recovery` (2026-10-17): reproduced three session failures, then fixed encrypted key recovery, same-key concurrent acquisition and durable revocation tombstones; scoped session service 8/8. No key appears in public session/receipt reads.
 - `L1-store-fencing` (2026-10-17): empty stores require the protected key; CAS operations serialize within one adapter and preserve other live writers regardless of age. Lifetime host-writer claim is available; scoped store 5/5 after reproducing missing-key and conflicting-write failures.
 - `L1-node-http` (2026-10-17): gateway-owned Node bridge preserves request/response bytes and propagates HTTP cancellation with stream backpressure; targeted tests pass. Owner-state resolver validates scope segments and absolute platform state roots.
+- `L1-control-owner` (2026-10-17): reproduced cross-owner issuance through authenticated control, then bound every operation to the host owner; owner refusal test green, zero mutations. Private socket client test also passes with 0600 socket/authenticator and inference-key refusal.
 
 ## AI Flaky tests
 - Acceptance rule:
