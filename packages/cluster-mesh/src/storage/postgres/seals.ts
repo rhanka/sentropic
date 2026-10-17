@@ -13,52 +13,118 @@ import { preparePgStep, type PgStepWork } from './preparation.js';
 import { checkPgStagedModule } from './staged-module.js';
 import type { PgSession } from './protocol.js';
 import { decodePgJson, decodePgUtf8 } from './codec.js';
-export interface PgSealRequest { readonly unit: AuthenticatedStagedHandle; readonly root: StagedCommitRoot; readonly fence: WriterFence; readonly limits: WorkLimits; }
-export interface PgSealResult { readonly state: string; readonly checked: number; readonly work: PgStepWork; readonly seal?: AuthenticatedStagedSeal; }
-export const sealPgStep = async (core: PgCore, grant: ScopeGrant<unknown>, supplied: PgSealRequest): Promise<PgSealResult> => {
-  const input = ownPgValue(supplied); const limits = core.work(input.limits);
+export interface PgSealRequest {
+  readonly unit: AuthenticatedStagedHandle;
+  readonly root: StagedCommitRoot;
+  readonly fence: WriterFence;
+  readonly limits: WorkLimits;
+}
+export interface PgSealResult {
+  readonly state: string;
+  readonly checked: number;
+  readonly work: PgStepWork;
+  readonly seal?: AuthenticatedStagedSeal;
+}
+export const sealPgStep = async (
+  core: PgCore,
+  grant: ScopeGrant<unknown>,
+  supplied: PgSealRequest,
+): Promise<PgSealResult> => {
+  const input = ownPgValue(supplied);
+  const limits = core.work(input.limits);
   if (!validateCommitRoot(input.root).ok) throw new StorageInvalidCommandError('invalid staged root');
-  await core.tx.run(false, async (session) => {
-    const unit = await resolvePgUnit(core, session, grant, input.unit, input.fence); const m = unit.metadata;
-    await checkPgStagedModule(core, session, grant, unit, 'seal', input.root);
-    if (m.state === 'aborted') throw new StorageInvalidCommandError('staged unit is aborted');
-    if (m.state !== 'staging') {
-      if (encodeStagedCommitRoot(m.seal?.commitRoot ?? m.progress!.root) !== encodeStagedCommitRoot(input.root)) throw new StorageInvalidCommandError('seal intent is frozen');
-      return;
-    }
-    if (input.root.operationId !== m.begin.operationKey || input.root.contractDigest !== m.begin.contractDigest || input.root.sourceBoundary !== m.begin.sourceBoundary || input.root.fragmentCount !== String(m.count) || input.root.finalFragmentHash !== m.frontier) throw new StorageInvalidCommandError('seal frontier mismatch');
-    const base = await core.roots.capture(session, grant.scope);
-    await checkPgStagedModule(core, session, grant, unit, 'seal', input.root, undefined, true);
-    m.state = 'sealing';
-    m.progress = { base, prepared: base.root, root: input.root, fragment: 0, section: 0, item: 0, phase: 0, offset: 0, checked: 0, records: 0, appends: 0,
-      dependency: updatePortableDigest(startPortableDigest(), Buffer.from('["staged-dependency-root","v1",[')),
-      effect: updatePortableDigest(startPortableDigest(), Buffer.from('["staged-effect-root","v1",[')) };
-    await savePgUnit(core, session, grant, unit);
-  }, true);
-  try {
-    return await core.tx.run(false, async (session) => {
-      const unit = await resolvePgUnit(core, session, grant, input.unit, input.fence); const m = unit.metadata;
-      if (m.state === 'sealed' || m.state === 'committed') return { state: m.state, checked: m.progress?.checked ?? 0, work: { items: 0, appends: 0, bytes: 0 }, seal: m.seal! };
-      if (m.state !== 'sealing' || m.reason) throw new StorageInvalidCommandError('preparation requires abort and a fresh operation');
-      const work = await core.roots.preparing(unit.id, () => preparePgStep(core, session, grant, unit, limits));
-      await core.check(session, grant, 'write', true); await core.fence(session, grant, input.fence);
+  await core.tx.run(
+    false,
+    async (session) => {
+      const unit = await resolvePgUnit(core, session, grant, input.unit, input.fence);
+      const m = unit.metadata;
       await checkPgStagedModule(core, session, grant, unit, 'seal', input.root);
+      if (m.state === 'aborted') throw new StorageInvalidCommandError('staged unit is aborted');
+      if (m.state !== 'staging') {
+        if (encodeStagedCommitRoot(m.seal?.commitRoot ?? m.progress!.root) !== encodeStagedCommitRoot(input.root))
+          throw new StorageInvalidCommandError('seal intent is frozen');
+        return;
+      }
+      if (
+        input.root.operationId !== m.begin.operationKey ||
+        input.root.contractDigest !== m.begin.contractDigest ||
+        input.root.sourceBoundary !== m.begin.sourceBoundary ||
+        input.root.fragmentCount !== String(m.count) ||
+        input.root.finalFragmentHash !== m.frontier
+      )
+        throw new StorageInvalidCommandError('seal frontier mismatch');
+      const base = await core.roots.capture(session, grant.scope);
+      await checkPgStagedModule(core, session, grant, unit, 'seal', input.root, undefined, true);
+      m.state = 'sealing';
+      m.progress = {
+        base,
+        prepared: base.root,
+        root: input.root,
+        fragment: 0,
+        section: 0,
+        item: 0,
+        phase: 0,
+        offset: 0,
+        checked: 0,
+        records: 0,
+        appends: 0,
+        dependency: updatePortableDigest(startPortableDigest(), Buffer.from('["staged-dependency-root","v1",[')),
+        effect: updatePortableDigest(startPortableDigest(), Buffer.from('["staged-effect-root","v1",[')),
+      };
       await savePgUnit(core, session, grant, unit);
-      return { state: m.state, checked: m.progress!.checked, work, ...(m.seal ? { seal: m.seal } : {}) };
-    }, true);
+    },
+    true,
+  );
+  try {
+    return await core.tx.run(
+      false,
+      async (session) => {
+        const unit = await resolvePgUnit(core, session, grant, input.unit, input.fence);
+        const m = unit.metadata;
+        if (m.state === 'sealed' || m.state === 'committed')
+          return {
+            state: m.state,
+            checked: m.progress?.checked ?? 0,
+            work: { items: 0, appends: 0, bytes: 0 },
+            seal: m.seal!,
+          };
+        if (m.state !== 'sealing' || m.reason)
+          throw new StorageInvalidCommandError('preparation requires abort and a fresh operation');
+        const work = await core.roots.preparing(unit.id, () => preparePgStep(core, session, grant, unit, limits));
+        await core.check(session, grant, 'write', true);
+        await core.fence(session, grant, input.fence);
+        await checkPgStagedModule(core, session, grant, unit, 'seal', input.root);
+        await savePgUnit(core, session, grant, unit);
+        return { state: m.state, checked: m.progress!.checked, work, ...(m.seal ? { seal: m.seal } : {}) };
+      },
+      true,
+    );
   } catch (error) {
     if (isStorageError(error) && ['invalid-command', 'cas-conflict', 'idempotency-conflict'].includes(error.code)) {
-      await core.tx.run(false, async (session) => {
-        const unit = await resolvePgUnit(core, session, grant, input.unit, input.fence);
-        if (unit.metadata.state === 'sealing') { unit.metadata.reason = `preparation-${error.code}`; await savePgUnit(core, session, grant, unit); }
-      }).catch(() => undefined);
+      await core.tx
+        .run(false, async (session) => {
+          const unit = await resolvePgUnit(core, session, grant, input.unit, input.fence);
+          if (unit.metadata.state === 'sealing') {
+            unit.metadata.reason = `preparation-${error.code}`;
+            await savePgUnit(core, session, grant, unit);
+          }
+        })
+        .catch(() => undefined);
     }
     throw error;
   }
 };
-const fullReceipt = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, unit: PgUnit, receipt: CommitReceipt): Promise<CommitReceipt> => {
+const fullReceipt = async (
+  core: PgCore,
+  session: PgSession,
+  grant: ScopeGrant<unknown>,
+  unit: PgUnit,
+  receipt: CommitReceipt,
+): Promise<CommitReceipt> => {
   if (!unit.metadata.moduleResultPayload) return ownPgValue(receipt);
-  const moduleResult = decodePgJson<EncodedValue>(decodePgUtf8(await core.roots.readPayload(session, grant.scope, unit.metadata.moduleResultPayload)));
+  const moduleResult = decodePgJson<EncodedValue>(
+    decodePgUtf8(await core.roots.readPayload(session, grant.scope, unit.metadata.moduleResultPayload)),
+  );
   return { ...ownPgValue(receipt), moduleResult };
 };
 export const commitPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, supplied: AuthenticatedStagedSeal, fence: WriterFence): Promise<CommitReceipt> => {
