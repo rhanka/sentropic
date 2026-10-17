@@ -1,0 +1,189 @@
+# Feature: Cluster-mesh comments M2 on the generic storage port (K1-K4 consolidated, Postgres injected driver, import/receipt/readback)
+
+## Objective
+- [ ] Consolidate the storage stack K1+K2a+K2b+K3 (#666, #669, #670), K4 (#671) and comments C0 (#667) onto ONE linear branch and ONE draft PR (owner rule against salami slicing).
+- [ ] Close the open K2b r3 findings (MAJEUR-N1, MINEUR-1..10) and the K4 findings (Opus B1, MAJ-1..9, m1..m13; engram Sol S4:1..12) by rebuilding K4 on this K3 per the integrity design note N1-N12 / C01-C19.
+- [ ] Deliver comments M2 for the Immo host (Radar PR #859): cluster-mesh comments module on the storage port, injected-driver Postgres module, import interface, typed complete receipts and authorized readback (Steve data migration).
+
+## Scope / Guardrails
+- Scope limited to `packages/cluster-mesh` storage kernel, comments module, Postgres module, M2-W wiring, their specs/docs, and the cluster-mesh version bump.
+- No migration in `api/drizzle/*.sql`; Postgres assets are package assets under `packages/cluster-mesh/assets/storage/postgres/`.
+- Make-only workflow, no direct Docker commands; one Docker build at a time (`make ps-all` first).
+- Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in worktree `tmp/worktrees/cm-comments-m2` on branch `feat/cluster-mesh-comments-m2`.
+- Automated test campaigns run on `ENV=test-cm-comments-m2`, never on root `dev`.
+- In every `make` command, `API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720` then `ENV=test-cm-comments-m2` passed as the last argument.
+- Linear history only: no merge commits; per-branch BRANCH.md commits of the source branches dropped.
+- Frozen comments M1 (`packages/comments/src/**`, `contract-v1.json`) and merged engram L6a stay unchanged.
+- Kernel and Postgres module stay neutral: no `pg`, no `drizzle`, no `engram`, no `api/` imports; hosts inject query/transaction execution.
+- Storage port co-owner gr-conductor (engram): validated K3 behaviour is preserved; every port change is recorded in `## Feedback Loop` for its co-review.
+- Test-first with discriminating mutations; commits under 150 lines with BRANCH.md updated in the same commit.
+- Never merge, never publish; all new text in English.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `package-lock.json`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/src/storage/**`
+  - `packages/cluster-mesh/tests/storage/**`
+  - `packages/cluster-mesh/assets/storage/**`
+  - `packages/cluster-mesh/src/comments/**`
+  - `packages/cluster-mesh/tests/comments-*.spec.ts`
+  - `packages/cluster-mesh/src/modules/contracts.ts`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/src/modules/registry.ts`
+  - `packages/cluster-mesh/src/compose/comments.ts`
+  - `packages/cluster-mesh/src/hono/comments-router.ts`
+  - `packages/cluster-mesh/src/loaders/comments/index.ts`
+  - `packages/cluster-mesh/src/integrations/comments/index.ts`
+  - `spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md`
+  - `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`
+  - `docs/comments-annotations/**`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/comments/src/**`
+  - `docs/comments-annotations/contract/contract-v1.json`
+  - `packages/cluster-mesh/src/live*/**`
+  - `api/**`
+  - `ui/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `packages/cluster-mesh/package.json` `exports` map changes (new public subpaths)
+  - `packages/cluster-mesh/tsconfig.json`
+- **Exception process**:
+  - Declare exception ID `BRCM2-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop`.
+
+## Feedback Loop
+- [ ] `attention` BRCM2-EX1 — initial BRANCH.md creation exceeds 150 lines (template-mandated detailed plan); doc-only commit; rollback: none needed.
+- [ ] `attention` BRCM2-EX2 — consolidation commits are carried as-is from #666/#669/#670/#671/#667 (authorship preserved, BRANCH.md stripped); historical commits above 150 lines (for example K4 `staged-runtime.ts`, 986 lines) are not rewritten; the K4 rebuild lots replace them with commits under 150 lines.
+- [ ] `attention` BRCM2-PORT — storage port changes for gr-conductor (engram) co-review are listed here as they land (none yet).
+- [ ] `attention` BRCM2-VER — version ordering: npm `@sentropic/cluster-mesh` 0.16.0 = main 0.16.0; PR #679 holds 0.18.0; this branch takes 0.19.0 so either merge order keeps both strictly above main. `@sentropic/comments` stays 0.3.0 unless `packages/comments/src/**` changes (forbidden here).
+- [ ] `attention` BRCM2-PG — real Postgres qualification needs a Postgres service reachable from `make test-cluster-mesh`; Makefile/docker-compose are forbidden here. Until a decision, Postgres lots are qualified against the injected structural driver port with an in-process executor; real-PG qualification stays an open gate.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+- No AI test is in scope for this branch (no `api/tests/ai/**`, no AI E2E spec touched).
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: owner rule « tu te rends compte qu'il va falloir rebase 50 fois avec 50 ci cd ? » — one branch, one PR, one CI cycle per push.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- This branch has no UI surface (package-only); no web app, Chrome plugin or VSCode plugin UAT applies. Host acceptance belongs to the Immo host (Radar PR #859).
+
+## Plan / Todo (lot-based)
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `plan/BRANCH_TEMPLATE.md`.
+  - [x] Read the integrity design note, K2b Opus r3, K4 Opus, engram Sol K4 co-review, frozen L3a v4.1 §17 and `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`.
+  - [x] Worktree `tmp/worktrees/cm-comments-m2` on `feat/cluster-mesh-comments-m2` from `origin/main` `fb5e92a6a`.
+  - [x] Make targets: `typecheck-cluster-mesh`, `lint-cluster-mesh`, `test-cluster-mesh`, `build-cluster-mesh`, `pack-cluster-mesh`, `test-packages SCOPE=...`, `scope-check`.
+  - [x] Environment: `ENV=test-cm-comments-m2`, `API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720`; command shape `make <target> <vars> ENV=test-cm-comments-m2`.
+  - [x] Consolidation K3: `origin/feat/cluster-mesh-storage-k3` `534922e70` (contains K1 #666 and K2b #669) filtered of BRANCH.md (40 BRANCH-only commits dropped) and rebased linearly on `fb5e92a6a`; storage tree byte-identical to `534922e70`.
+  - [x] Consolidation K4: 8 code commits of `origin/feat/cluster-mesh-storage-k4` `1c6249509` cherry-picked (BRANCH.md and report-only commits dropped); NO-GO code carried for rebuild in Lots 2-5.
+  - [x] Consolidation C0: 30 commits of `origin/feat/comments-cm-c0` `e19b394e2` and its `spec/comments-annotations-port` intake cherry-picked; C0 paths byte-identical to `e19b394e2`; obsolete K1 duplicates and already-merged M1 commits not replayed.
+  - [ ] Version bump `@sentropic/cluster-mesh` 0.16.0 -> 0.19.0 with lock and selected packaging fixture (BRCM2-VER).
+  - [ ] O4:B1(a) compile-only adaptation of carried K4 `staged-runtime.ts` to the K3 `KernelRoot` type (typecheck RED: `bindNew`/`revoke` missing on `KernelHandle`); B1(b)/(c) stay in Lot 2.
+  - [ ] Push, open ONE draft PR, comment-and-close #666, #669, #670, #671, #667 pointing to it.
+  - [ ] Lot gate: `make typecheck-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` + `make test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` (carried K4 runtime failures recorded, fixed by Lots 2-5).
+
+- [ ] **Lot 1 — K2b r3 findings (shared corpus and reference)**
+  - [ ] MAJEUR-N1: add a shared canonical staged codec (versioned, domain-separated, framed) deriving `fragmentDigest`, `dependencyRoot` and `effectRoot`; reference recomputes on every ordinal and on seal; corpora derive values from the codec instead of `dep-root-k2b` / `eff-root-k2b`.
+  - [ ] MAJEUR-N1: C01 case with a self-consistent but wrong digest on a NEW ordinal and a changed-dependency-only retry; mutant "trust caller digest on new ordinal" killed at its targeted assertion.
+  - [ ] MINEUR-1: read corpus accepts `null` or a fitting recovery cursor on empty `incomplete` pages; cross-validate missing-head, disposed-chain and empty pages through `validateReadPage`.
+  - [ ] MINEUR-2: M18 mutant measures the candidate cursor instead of the effective cursor (no budget inflation).
+  - [ ] MINEUR-3: mutant regexes pinned to one exact assertion each (M1-M16, S1, B1/E1).
+  - [ ] MINEUR-4: raw tombstone names `thread-2`; assertion "readable"; mutant "raw tombstone installs barrier".
+  - [ ] MINEUR-5: fence rotation hook (superseded fence cannot publish/abort), nested buffer alias via record bytes reader, hidden audit reader, deliberate `unitId` collision across scopes.
+  - [ ] MINEUR-6: replay ports gain `fence`, `pauseConsumer`, `maintain` authority; refusal cases for unauthorized principal, stale fence, wrong incarnation; `c-stall` consumes the snapshot then checks poison redelivery; mutant "resync clears stall".
+  - [ ] MINEUR-7: snapshot returns root state (heads/indexes) not journal events; captured roots authenticated; external journal scoped per stream.
+  - [ ] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
+  - [ ] MINEUR-9/10: fix contradictory `read-corpus.ts` header; corrections recorded here with post-rebase SHAs.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` + `make lint-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
+    - [ ] **Package tests (cluster-mesh, Vitest)**
+      - [ ] Updated: `packages/cluster-mesh/tests/storage/{staged-corpus,barrier-corpus,replay-corpus,lifecycle-corpus,read-corpus,reference-staged,reference-store}.ts`
+      - [ ] Updated: `packages/cluster-mesh/tests/storage/{reference,mutations,profile-mutations}.spec.ts`
+      - [ ] New: `packages/cluster-mesh/tests/storage/staged-codec.ts`, `packages/cluster-mesh/tests/storage/staged-codec.spec.ts`
+      - [ ] Scoped runs: `make test-packages SCOPE=packages/cluster-mesh/tests/storage/reference.spec.ts API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
+      - [ ] Sub-lot gate: `make test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
+    - [ ] **API tests**: not impacted (no `api/**` change).
+    - [ ] **UI tests**: not impacted (no `ui/**` change).
+    - [ ] **E2E tests**: not impacted (no app surface change).
+
+- [ ] **Lot 2 — K4 rebuild on K3 (O4:B1, O4:m7, O4:MAJ-9)**
+  - [ ] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
+  - [ ] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
+  - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
+  - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
+  - [ ] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.
+
+- [ ] **Lot 3 — K4 integrity (N1-N3; MAJ-1..3, m2, m3, S4:4, S4:10; C01-C04)**
+  - [ ] Kernel-computed fragment digests and roots from the shared codec; owned deep-frozen buffers; divergent begin refused; terminal states kept.
+  - [ ] Authenticated unforgeable handles/seals bound to module/tenant/workspace/incarnation/owner; current fence verified at begin/stage/seal/commit/abort and after the publication gate.
+  - [ ] Seal binds base B, ordered fragment set, recomputed roots; bounded sealing steps honoring limits; failure does not reopen staging; distinct staged/commit/command-index namespaces.
+  - [ ] Lot gate: copy of Lot 1 gate; tests `staged-units.spec.ts` + corpus cases C01-C04 with mutants.
+
+- [ ] **Lot 4 — K4 publication (N4-N6; MAJ-4..6, S4:1-3, S4:5-6, m13; C05-C09)**
+  - [ ] One atomic visibility point: data, barriers, projections, receipt and journal segment switch together under the scope gate with base compare.
+  - [ ] Projection preparation on the prepared overlay (two removals of one link fail with no effects); evolving-head validation across fragments (h0 then h1).
+  - [ ] Real versioned root over immutable indexed maps; every mutation path (commit/transact/append/genesis/index replace/coverage/disposal) advances it; reparenting cannot escape an active barrier.
+  - [ ] G5: imported content and its covering barrier publish in one unit (reference aligned).
+  - [ ] Lot gate: copy of Lot 1 gate; tests `visibility.spec.ts`, `staged-units.spec.ts` with interleaved readers.
+
+- [ ] **Lot 5 — K4 journal, manifests and ports (N7-N9, N11; MAJ-7..8, m1, m4-m6, S4:7-9, S4:11-12; C10-C18)**
+  - [ ] Scoped/incarnated journal streams; resync preserves poison; fenced checkpoints with maintain authority; pause/retry.
+  - [ ] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
+  - [ ] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with honest dispositions.
+  - [ ] Lot gate: copy of Lot 1 gate; tests `manifest.spec.ts`, `visibility.spec.ts`, `staged-units.spec.ts`.
+
+- [ ] **Lot 6 — Postgres injected-driver module (P1, P2a, P2u, P2b-J, P2b-M, P2c consumed by comments)**
+  - [ ] Structural driver port (parameterized query + transaction on one connection), serializable atomic ops, fences, error mapping in `src/storage/postgres/*.ts`; no `pg` import.
+  - [ ] Assets `assets/storage/postgres/00N-*.sql` and `manifest.json`; host-owned migration history attachment.
+  - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/storage/postgres-{core,readers,staged,replay,migrations,barriers}.spec.ts` (BRCM2-PG).
+
+- [ ] **Lot 7 — Comments module C1a/C1b/C2 (`src/comments/`)**
+  - [ ] Eleven-kind codecs, exact 24-method store mapping, request/transaction context, authority composition (C1a).
+  - [ ] Three named queries, projections, PG projection assets (C1b); lifecycle, coverage, purge, availability (C2).
+  - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{store,transactions,authority,queries,hashes,lifecycle,purge,coverage}.spec.ts`; frozen M1 corpus and hash vectors on the module.
+
+- [ ] **Lot 8 — Import, typed complete receipts and authorized readback for the Immo host (C4a/C4b/C4c)**
+  - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
+  - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
+  - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
+  - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{fragment-vectors,import,receipts,import-crashes,export,transfer,long-history}.spec.ts`.
+
+- [ ] **Lot 9 — M2-W registration and canonical Hono API**
+  - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
+  - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
+  - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
+
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Update `spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md` with K4 rebuild, Postgres module and port changes (BRCM2-PORT).
+  - [ ] Update `docs/comments-annotations/contract/storage-compatibility.md` and evidence index with M2 delivery and Immo import/receipt/readback API.
+
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint: `make typecheck-cluster-mesh ... ENV=test-cm-comments-m2`, `make lint-cluster-mesh ... ENV=test-cm-comments-m2`
+  - [ ] Retest package: `make test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
+  - [ ] Build and pack: `make build-cluster-mesh ... ENV=test-cm-comments-m2`, `make pack-cluster-mesh ... ENV=test-cm-comments-m2`
+  - [ ] Retest API/UI/E2E: not impacted (no app surface change); CI suites must stay green.
+  - [ ] Retest AI flaky tests: not applicable.
+  - [ ] Bumped `packages/cluster-mesh/package.json` 0.19.0, re-verified `> npm view @sentropic/cluster-mesh version` after every rebase.
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge (owner only).
