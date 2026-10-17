@@ -61,6 +61,7 @@
 ## Feedback Loop
 - [x] Root Track writer is not assigned to this worktree: maintain this mergeable branch artifact; do not append `.track` events concurrently.
 - [x] Packet's `.cursor/rules/*.mdc` sources resolve to canonical `rules/*.md`; source studies and model-update runbook read.
+- [x] Four helper-contract failures reproduced before changes: title/effort candidates, non-OpenAI compaction, and tool-follow-up bounds; two independent source reviews reconciled these issues.
 
 ## AI Flaky tests
 - [ ] Record every provider failure verbatim after secret sanitization; failed qualification remains failed, without rerunning for a pass or inflating timeouts.
