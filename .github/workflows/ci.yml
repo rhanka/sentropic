@@ -993,6 +993,12 @@ jobs:
         run: make typecheck-artifacts
       - name: Build Artifacts
         run: make build-artifacts
+      - name: Test Artifacts
+        run: make test-artifacts
+      - name: Test Artifacts integration
+        run: make test-artifacts-integration ENV=test-ci-artifacts
+      - name: Lint Artifacts
+        run: make lint-artifacts
       - name: Pack Artifacts
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
