@@ -7,7 +7,7 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
 ## Scope / Guardrails
 - Scope limited to Sentropic-side immo #861 lots: carried 1a/2-IdP/2a, then 1b-core, 3-policy/4a, 2b-MCP Sentropic support, 4b-leaves (incl. 1b-facade), 5a pages contracts.
 - Radar-side lots (861-a/861-b, 2b receiver, PRM) are i-cond owned: do not touch the Radar repo.
-- One migration max in `api/drizzle/*.sql`: `0042_immo_token_exchange.sql` only.
+- One migration max in `api/drizzle/*.sql`: `0043_immo_token_exchange.sql` only (main owns 0042).
 - Make-only workflow, no direct Docker commands.
 - Branch development in isolated worktree `tmp/worktrees/immo-861-mcp-registry`.
 - Automated test campaigns on `ENV=test-immo-861-mcp-registry`, never on root `dev`.
@@ -30,9 +30,10 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - `api/src/routes/auth/**`, `api/src/routes/namespaces/**`
   - `api/src/services/auth/**`, `api/src/db/schema.ts`
   - `api/src/scripts/oauth-provision-exchange-client.ts`
+  - `scripts/ci/pack-immo-exchange-issuer-fixture.sh` (migration path only, I861-EX19)
   - `api/tests/**`
   - `deploy/ci/idp-identity-sync/**`, `deploy/k8s/overlays/preprod/idp-identity-sync/**`
-  - `spec/DATA_MODEL.md` (0042 documentation only)
+  - `spec/DATA_MODEL.md` (0043 token-exchange documentation only)
   - `package-lock.json` (lockfile sync only)
   - `.h2a/build/**` (untracked reports only)
 - **Forbidden Paths (must not change in this branch)**:
@@ -46,8 +47,8 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - `scripts/ci/publishable-ci-wiring.test.mjs` (qualification peer regression only, I861-EX18)
   - `api/Dockerfile` (build-order lines only, I861-EX5 + I861-EX17)
   - `packages/artifacts/**` (new generic web-pages provider package, I861-EX6)
-  - `api/drizzle/*.sql` (max 1 file: 0042)
-  - `api/drizzle/meta/_journal.json` (0042 journal entry)
+  - `api/drizzle/*.sql` (max 1 file: 0043)
+  - `api/drizzle/meta/_journal.json` (0043 journal entry)
   - `api/package.json` (one additive script entry, I861-EX2)
   - `.github/workflows/**` (touched under I861-EX8/EX9 and pages I861-EX15; any further touch needs a new exception)
 - **Exception process**:
@@ -73,7 +74,10 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - `I861-EX17` (new, M3 bundle-build finding): `api/Dockerfile` — 2 lines: COPY `packages/artifacts/package.json` for the install layer + build `artifacts` before `cluster-mesh`. Reason: the B3 cherry-pick made mesh import `@sentropic/artifacts/mcp`, so the image build failed at mesh tsc (TS2307) — caught by the first M3 bundle run, which builds from a snapshot. Impact: install/build order only; no runtime, layer or registry change. Rollback: drop the 2 lines (image build breaks on any head with the mesh web-pages leaf).
   - `I861-EX18` (owner-requested CI repair): `.github/workflows/ci.yml` Cluster Mesh candidate, post-publication and bootstrap qualification `PEERS` lists + `scripts/ci/publishable-ci-wiring.test.mjs`. Reason: run `39041392016` passes the siblings lock gate and all 74 packaging tests, then fails the clean-consumer `mcp/web-pages` import because the optional artifacts peer is never requested. Impact: explicitly install `@sentropic/artifacts@0.1.0` in all three qualification paths; candidate mode uses its verified sibling receipt. Rollback: remove that peer from the three commands and restore the wiring expectation.
 
+  - `I861-EX19` (owner-requested post-#682/#683 rebase): retain main's `0042_oauth_clients_mfa_policy.sql`, renumber the branch's single token-exchange migration to `0043_immo_token_exchange.sql`, append its journal entry with a strictly later timestamp, and align its DATA_MODEL references, transfer parity fixture/digest and `scripts/ci/pack-immo-exchange-issuer-fixture.sh` path. Reason: both branches allocated 0042; rebase must preserve both policies and run the exchange migration after main's MFA policy. Impact: migration ordering and fixture/tool references only; SQL content unchanged. Rollback: restore 0042 only on a base that does not already own that number.
+
 ## Feedback Loop
+- `attention` I861-F13 (post-#682/#683 rebase, owner: branch): rebased all 300 commits from `ba5165c9e` onto origin/main `5202dd87c` without merge or squash; resolved journal, auth-hono version and transfer-fixture pin conflicts. Main's 0042 is retained; exchange is 0043 under EX19. Post-Rebase Gate found auth-ui 0.7.5 consumed by #682 and npm; candidate bumped to 0.7.6. Other candidates remain strictly above npm/main; artifacts 0.1.0 remains unpublished. Lock regeneration, scoped gates and final PR CI pending. BRANCH.md retained per owner instruction.
 - `attention` I861-F1 (recorded, sign-off batched with the final merge request per conductor decision): 2-IdP m10 e2e flake, non-systematic. Test `e2e/tests/05-usecase-detail.spec.ts:690`, command `test-e2e (group-e, 05 07)`, signature `expect(acquiredByA.status()).toBe(201)` got 409. Same job passed on run `38833429815` at identical product code; rerun `gh run rerun --job 116765363067` concluded success. No branch change touches locking/initiatives/UI; no test or timeout touched.
 - `attention` I861-F2 (open, owner: conductor): r4 review of carried 1a work bound to the consolidated head (was bound to `2829fbaa7` on PR #673). Not dispatched yet.
 - `acknowledge` I861-F3 (fixed 2026-10-16): run `38873705146` on head `84098e350` failed `test-smoke-restore` at `docker compose stop` with daemon `502 Bad Gateway` before any branch code ran (backup step itself succeeded; delta since the green run was 1 BRANCH.md line). Reran failed jobs with `gh run rerun 38873705146 --failed`: `test-smoke-restore` pass (7m15s), `ci-gate` pass. No branch change involved.
@@ -360,6 +364,7 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - [ ] Record r4 verdict, final CI run, owner sign-offs and PR numbers in this file before merge-prep. Status: r4 deferred per conductor I861-F2 (no r4 review now); I861-F1 sign-off PENDING batched with final merge (F1 reproduced once in run `38991513182` attempt 1 with identical signature, targeted-rerun GREEN); I861-F5 5a sign-off pending; final CI run `38991513182` (head `5d23a96c7`) GREEN 2026-10-17 — 58 success / 0 failed; PR #679 draft OPEN at that head.
 
 - [ ] **Lot N — Final validation**
+  - [x] Post-#682/#683 rebase onto `5202dd87c`: 300 replayed commits, zero merges; main MFA policy retained before exchange migration 0043, transfer fixture re-pinned; auth-ui bumped to 0.7.6 and root lock regenerated through `make lock-root`; all six npm/main version checks pass. Local platform 227/227 + API Extractor, auth-hono 239/239, auth-ui 54/54, typechecks and publishable-manifest regressions pass; scope PASS C2. Scoped API and full Cluster Mesh qualification still pending before push.
   - [x] Typecheck & Lint (touched packages + api: typecheck-mcp-platform/auth-hono/cluster-mesh/api exit 0; lint-cluster-mesh exit 0; lint-api 0 errors / 217 warnings).
   - [x] Typecheck & Lint re-run on the consolidated head: `typecheck-artifacts` clean, `lint-artifacts` 0 errors, `test-cluster-mesh` 534/0.
   - [x] Retest carried suites (Lots 1-3 gates: package gates + scoped API suites green on the consolidated head; `test-api` 111 passed / 0 failed).

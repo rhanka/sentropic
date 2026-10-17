@@ -268,7 +268,7 @@ erDiagram
 
 ### Service clients — token-exchange policy (2-IdP)
 
-`service_clients.exchange_policy` (`jsonb`, nullable, migration `0042`) carries the
+`service_clients.exchange_policy` (`jsonb`, nullable, migration `0043`) carries the
 issuer-side default-deny RFC 8693 policy for one confidential service client. `NULL`
 means the client cannot perform token exchange and existing `client_credentials`
 behavior is unchanged. The `immo-mcp-workload` exchange-only client stores an enabled
@@ -675,7 +675,7 @@ erDiagram
 
 ### Service clients — token-exchange policy (2-IdP)
 
-`service_clients.exchange_policy` (`jsonb`, nullable, migration `0042`) carries the
+`service_clients.exchange_policy` (`jsonb`, nullable, migration `0043`) carries the
 issuer-side default-deny RFC 8693 policy for one confidential service client. `NULL`
 means the client cannot perform token exchange and existing `client_credentials`
 behavior is unchanged. The `immo-mcp-workload` exchange-only client stores an enabled
@@ -1063,7 +1063,7 @@ erDiagram
 
 ### Service clients — token-exchange policy (2-IdP)
 
-`service_clients.exchange_policy` (`jsonb`, nullable, migration `0042`) carries the
+`service_clients.exchange_policy` (`jsonb`, nullable, migration `0043`) carries the
 issuer-side default-deny RFC 8693 policy for one confidential service client. `NULL`
 means the client cannot perform token exchange and existing `client_credentials`
 behavior is unchanged. The `immo-mcp-workload` exchange-only client stores an enabled
@@ -1451,7 +1451,7 @@ erDiagram
 
 ### Service clients — token-exchange policy (2-IdP)
 
-`service_clients.exchange_policy` (`jsonb`, nullable, migration `0042`) carries the
+`service_clients.exchange_policy` (`jsonb`, nullable, migration `0043`) carries the
 issuer-side default-deny RFC 8693 policy for one confidential service client. `NULL`
 means the client cannot perform token exchange and existing `client_credentials`
 behavior is unchanged. The `immo-mcp-workload` exchange-only client stores an enabled
@@ -1839,7 +1839,7 @@ erDiagram
 
 ### Service clients — token-exchange policy (2-IdP)
 
-`service_clients.exchange_policy` (`jsonb`, nullable, migration `0042`) carries the
+`service_clients.exchange_policy` (`jsonb`, nullable, migration `0043`) carries the
 issuer-side default-deny RFC 8693 policy for one confidential service client. `NULL`
 means the client cannot perform token exchange and existing `client_credentials`
 behavior is unchanged. The `immo-mcp-workload` exchange-only client stores an enabled
@@ -2226,7 +2226,7 @@ erDiagram
 
 ### Clients de service — politique d’échange de jetons (2-IdP)
 
-`service_clients.exchange_policy` (`jsonb`, nullable, migration `0042`) porte la
+`service_clients.exchange_policy` (`jsonb`, nullable, migration `0043`) porte la
 politique RFC 8693 par défaut-refusée du côté émetteur pour un client de service
 confidentiel. `NULL` signifie que le client ne peut pas effectuer d’échange de jetons
 et le comportement `client_credentials` existant est inchangé. Le client d’échange seul
