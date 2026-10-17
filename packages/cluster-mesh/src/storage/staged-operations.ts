@@ -113,6 +113,5 @@ export const stageOperationFragment = (core: StagedCore, bound: ScopedRuntime, i
   if (effects.moduleResult !== undefined) operation.moduleResult = effects.moduleResult;
   const receipt = Object.freeze({ unitId: operation.unitId, ordinal: input.ordinal, fragmentDigest: digest });
   operation.receipts.set(input.ordinal, receipt);
-  core.consumeFailure(bound.scope, 'stage-response');
   return ownedCopy(receipt);
 };

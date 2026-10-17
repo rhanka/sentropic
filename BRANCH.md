@@ -135,7 +135,7 @@
   - [x] MAJ-2: generic PG cursorSecret is required and rejects empty/missing keys; stable host key, replica continuity and rotation implications documented and qualified.
   - [x] m1/m4/m10: required #679-first ordering, historical CI/EX8 state and complete gr-conductor U1–U7 inventory recorded; final candidate CI remains pending below.
   - [ ] m2/m3: independent per-role migration order and ID-based chronological receipt verification PASS after RED; core 007 installs after comments with every original comments receipt unchanged. Host/port contracts updated; changelog follows.
-  - [ ] m4/m5: delete staged-runtime alias and move public test hooks into test helpers.
+  - [x] m4/m5: public-root hook assertion observed RED; armFailure/beforePublish/failure state and unused alias removed. Test-side publication/response wrappers and actual async-checkpoint probes PASS: root suites 13 files / 44 tests.
   - [ ] m6: dedicated formatting-only atomic commits for overlong storage/Postgres/comments lines.
   - [ ] m7: cold typecheck PASS; root targets and real PG runner now use disposable workspaces. Remaining dependency helper cleanup follows.
   - [ ] m8: discriminating binding/terminal/receipt-owner/export-root mutants and exact typed refusals.

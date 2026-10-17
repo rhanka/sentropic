@@ -47,6 +47,7 @@ describe('public staged storage ports', () => {
     const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
     const bound = root.bindNew(grant);
     const adapter = root.adapter();
+    expect((root as unknown as Record<string, unknown>).armFailure).toBeUndefined();
     expect(Object.keys(adapter).sort()).toEqual(['bind', 'incarnation', 'moduleId']);
     for (const name of ['core', 'inner', 'ctx', 'staged', 'projections', 'sealStaged', 'armExternalFailure']) expect((bound as unknown as Record<string, unknown>)[name]).toBeUndefined();
     expect(Object.isFrozen(bound)).toBe(true);
