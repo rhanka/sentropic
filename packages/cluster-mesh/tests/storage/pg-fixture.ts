@@ -19,7 +19,7 @@ export const createPgFixture = async (extra: Partial<PostgresStorageOptions> = {
   });
   const options = { moduleId: 'comments' as const, driver: connection.driver, layout, history, ...extra };
   return {
-    options, tx, name, open: () => createPostgresKernel(options),
+    options, tx, name, open: () => createPostgresKernel(options), disconnect: connection.close,
     close: async () => {
       await tx.run(false, (session) => session.execute({ text: `DROP SCHEMA "${name}" CASCADE`, values: [] }));
       await connection.close();
