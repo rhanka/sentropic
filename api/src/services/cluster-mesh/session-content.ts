@@ -355,6 +355,15 @@ export interface DeriveSessionGrantInput {
   readonly nativeStartSeq: number;
 }
 
+/** N3 child refresh acknowledgment: the source verifies the accepted
+ * parent policy/digest and local denials, fences its old exporter and
+ * acknowledges the exact N+1 scope with a new authenticated boundary. */
+export interface AcknowledgeGrantRefreshInput {
+  readonly projectRevision: number;
+  readonly bindingVersion: number;
+  readonly nativeBoundarySeq: number;
+}
+
 export interface SessionContentUsage {
   readonly committedBytes: number;
   readonly stagedBytes: number;
@@ -1005,6 +1014,142 @@ export class SessionContentService {
       };
       await tx.insert(sessionContentGrants).values(row);
       return { grantId: row.grantId, sessionId: row.sessionId, version: 1 };
+    });
+  }
+
+  /** N3 post-amendment child refresh: re-derive one eligible live child
+   * under the accepted amendment. Fenced children cannot revive;
+   * duplicate ACKs are idempotent, stale ACKs cannot overwrite. */
+  async acknowledgeGrantRefresh(
+    sessionId: string,
+    input: AcknowledgeGrantRefreshInput,
+    ctx: SessionContentContext,
+  ) {
+    requireContext(ctx);
+    if (!Number.isSafeInteger(input.projectRevision) || input.projectRevision < 0) {
+      throw new SessionContentError('invalid_request', 'acknowledged revision must be a safe integer');
+    }
+    if (!Number.isSafeInteger(input.bindingVersion) || input.bindingVersion < 0) {
+      throw new SessionContentError('invalid_request', 'acknowledged binding version must be a safe integer');
+    }
+    if (!Number.isSafeInteger(input.nativeBoundarySeq) || input.nativeBoundarySeq < 0) {
+      throw new SessionContentError('invalid_request', 'acknowledged boundary must be a safe integer');
+    }
+    await this.checkEpoch();
+    return db.transaction(async (tx) => {
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId))
+        .limit(1);
+      if (!grant) throw new SessionContentError('grant_not_found', 'unknown grant');
+      if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
+      }
+      if (grant.state !== 'active') {
+        if (grant.state === 'revoked') throw new SessionContentError('grant_revoked', 'grant is revoked');
+        if (grant.state === 'excluded') throw new SessionContentError('session_excluded', 'grant is excluded');
+        if (grant.state === 'closed') throw new SessionContentError('grant_closed', 'grant is closed');
+        throw new SessionContentError('grant_revoked', 'grant is not active');
+      }
+      const [project] = await tx
+        .select()
+        .from(sessionContentProjects)
+        .where(eq(sessionContentProjects.projectId, grant.projectId))
+        .limit(1);
+      if (!project || project.state !== 'active') {
+        throw new SessionContentError('project_not_active', 'project is not active');
+      }
+      if (input.projectRevision !== project.projectRevision) {
+        throw new SessionContentError('revision_conflict', 'acknowledged revision is not the current parent revision');
+      }
+      if (grant.projectRevision === project.projectRevision) {
+        return { sessionId, projectRevision: grant.projectRevision, version: grant.version, refreshed: false as const }; // idempotent
+      }
+      if ((project.excludedSessionIds as string[]).map(String).includes(sessionId)) {
+        throw new SessionContentError('session_excluded', 'session is excluded');
+      }
+      if (project.requiresFreshAmendment) {
+        throw new SessionContentError('suppressed_scope', 'a fresh amendment is required');
+      }
+      await this.checkTombstones(tx, [
+        { kind: 'tenant', id: ctx.tenantId },
+        { kind: 'user', id: ctx.ownerId },
+        { kind: 'workspace', id: grant.workspaceId },
+      ]);
+      const [binding] = await tx
+        .select()
+        .from(sessionWorkspaceBindings)
+        .where(eq(sessionWorkspaceBindings.sessionId, sessionId))
+        .limit(1);
+      if (!binding || binding.tenantId !== ctx.tenantId) {
+        throw new SessionContentError('ineligible_session', 'no eligible D1 binding');
+      }
+      if (binding.bindingId !== grant.bindingId || binding.workspaceId !== project.workspaceId) {
+        throw new SessionContentError('ineligible_session', 'binding changed; a new derivation is required');
+      }
+      if (binding.version !== input.bindingVersion) {
+        throw new SessionContentError('ineligible_session', 'binding version mismatch (ABA)');
+      }
+      if (binding.status !== 'attached') {
+        throw new SessionContentError('ineligible_session', 'binding is not attached');
+      }
+      if (binding.principalId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'binding principal is not the project owner');
+      }
+      const policy = project.acceptedPolicy as Record<string, unknown> & {
+        sourceTrustVersions: string[];
+        selectedSessionIds: string[];
+        futureSessions?: boolean;
+      };
+      const trustVersions = ((policy['sourceTrustVersions'] as string[] | undefined) ?? []).map(String);
+      if (!trustVersions.includes(grant.sourceTrustVersion)) {
+        throw new SessionContentError('source_reauthorization_required', 'source trust version is not covered');
+      }
+      const selected = ((policy['selectedSessionIds'] as string[] | undefined) ?? []).map(String);
+      const futureEligible =
+        (policy['futureSessions'] as boolean | undefined) === true &&
+        binding.createdAt.getTime() >= new Date(project.activatedAt ?? 0).getTime();
+      if (!selected.includes(sessionId) && !futureEligible) {
+        throw new SessionContentError('ineligible_session', 'session is outside the amended project scope');
+      }
+      await this.requireEpochScope(
+        tx,
+        grant.authorityEpoch,
+        namespaceIdFor(ctx.tenantId, ctx.ownerId, grant.authorityEpoch),
+      );
+      const [locked] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId))
+        .for('update')
+        .limit(1);
+      if (!locked || locked.version !== grant.version || locked.state !== 'active'
+        || locked.projectRevision !== grant.projectRevision) {
+        throw new SessionContentError('revision_conflict', 'concurrent grant change; re-acknowledge the refresh');
+      }
+      const refreshed = await tx
+        .update(sessionContentGrants)
+        .set({
+          projectRevision: project.projectRevision,
+          version: grant.version + 1,
+          channels: project.channels,
+          retentionSnapshot: project.retentionByChannel,
+          nativeBoundarySeq: input.nativeBoundarySeq,
+          updatedAt: new Date(this.nowMs()),
+        })
+        .where(
+          and(
+            eq(sessionContentGrants.sessionId, sessionId),
+            eq(sessionContentGrants.version, grant.version),
+          ),
+        )
+        .returning({ version: sessionContentGrants.version });
+      if (refreshed.length !== 1) {
+        throw new SessionContentError('revision_conflict', 'concurrent refresh; re-acknowledge');
+      }
+      return { sessionId, projectRevision: project.projectRevision, version: grant.version + 1, refreshed: true as const };
     });
   }
 
