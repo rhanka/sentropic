@@ -427,6 +427,7 @@
   - [ ] Terminal receipts now bind the batch command digest to the frozen request, use a root-CAS-protected bounded committed-unit inventory and refuse already committed units. Operation-specific staging identities remain separate; a new group advances the linked snapshot without changing the batch command's input digest.
   - [x] The two-independent-unit receipt probe passes, including original earlier receipt recovery and duplicate-unit refusal with exactly two publications.
   - [ ] Added real-PG long-history round trip through independent stores with multibyte/escaped bodies and fixed export fragments, plus runtime recreation between every preparation step and complete original response-loss recovery.
+  - [ ] The large-history round trip reached one complete import publication, then exposed a full-getter refusal on the kernel's byte-limited `incomplete` page. The getter now follows only nonempty advancing recovery pages and still refuses inaccessible, missing or non-advancing history; generic K3 page semantics are unchanged.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
