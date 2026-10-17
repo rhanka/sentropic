@@ -5,6 +5,7 @@ import { acquireClaudeCodeAccountTransport } from '../../src/services/llm-accoun
 import { cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 
 const SEAT_REF = 'seat-delivery-01';
+const TOKEN = 'delivery-token-seat-01';
 
 const projection = (ownerUserId: string, overrides = {}) => ({
   cli: 'claude' as const,
@@ -25,7 +26,7 @@ const projection = (ownerUserId: string, overrides = {}) => ({
   ...overrides,
 });
 
-const post = (app: ReturnType<typeof createSeatDeliveryRouter>, path: string, body: unknown, token = 'delivery-token') =>
+const post = (app: ReturnType<typeof createSeatDeliveryRouter>, path: string, body: unknown, token = TOKEN) =>
   app.request(path, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
@@ -37,10 +38,17 @@ describe('llm seat delivery', () => {
   let userId = '';
 
   beforeEach(async () => {
-    process.env['SEAT_DELIVERY_TRUSTED_HOP'] = '1';
-    process.env['SEAT_DELIVERY_TOKEN'] = 'delivery-token';
-    process.env['SEAT_DELIVERY_ALLOWLIST'] = SEAT_REF;
     userId = (await createAuthenticatedUser('admin_app')).id;
+    process.env['SEAT_DELIVERY_TRUSTED_HOP'] = '1';
+    process.env['SEAT_DELIVERY_SEATS_JSON'] = JSON.stringify({
+      [SEAT_REF]: {
+        ownerUserId: userId,
+        externalAccountId: 'claude-delivery-01',
+        ownerScope: 'owner-seat-01',
+        billingReceipt: 'receipt-synth-01',
+        token: TOKEN,
+      },
+    });
   });
 
   afterEach(async () => {
@@ -55,7 +63,7 @@ describe('llm seat delivery', () => {
     expect(await first.json()).toMatchObject({ acknowledged: true, idempotent: false });
 
     const ack = await app.request(`/ack?seatRef=${SEAT_REF}`, {
-      headers: { authorization: 'Bearer delivery-token' },
+      headers: { authorization: `Bearer ${TOKEN}` },
     });
     expect(ack.status).toBe(200);
     expect(await ack.json()).toMatchObject({ acknowledged: true });
@@ -79,6 +87,29 @@ describe('llm seat delivery', () => {
       }),
     });
     expect(stale.status).toBe(409);
+  });
+
+  it('derives identity from the registry and refuses disagreeing body values', async () => {
+    const app = createSeatDeliveryRouter();
+    const forgedOwner = await post(app, '/import', {
+      seatRef: SEAT_REF,
+      ...projection('user-other-01'),
+    });
+    expect(forgedOwner.status).toBe(409);
+
+    const forgedScope = await post(app, '/import', {
+      seatRef: SEAT_REF,
+      ...projection(userId, {
+        seatPolicy: { seatRef: SEAT_REF, ownerScope: 'owner-other-01', epoch: 1, generation: 1, operationId: 'op-x' },
+      }),
+    });
+    expect(forgedScope.status).toBe(409);
+
+    const deniedBilling = await post(app, '/import', {
+      seatRef: SEAT_REF,
+      ...projection(userId, { billingClear: false }),
+    });
+    expect(deniedBilling.status).toBe(409);
   });
 
   it('drains admission around maintenance and reopens after verification', async () => {
