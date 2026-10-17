@@ -20,6 +20,11 @@ export interface ReplayCorpusEvent {
   readonly segment?: { readonly operationKey: string; readonly from: number; readonly to: number };
 }
 
+export interface ReplayFence extends WriterFence {
+  readonly incarnation: string;
+  readonly ownerId: string;
+}
+
 export interface ReplayCorpusStore {
   appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
   readHead(chainId: string): Awaitable<string | null>;
@@ -31,11 +36,13 @@ export interface ReplayCorpusStore {
   armExternalFailure(): Awaitable<void>;
   abortStaged(input: { readonly unit: StagedCorpusHandle }): Awaitable<void>;
   journalRead(consumer: string, after: number, limit: number): Awaitable<{ readonly events: readonly ReplayCorpusEvent[]; readonly watermark: number }>;
-  journalCheckpoint(consumer: string, expected: number, next: number): Awaitable<void>;
-  journalInspect(consumer: string): Awaitable<{ readonly cursor: number; readonly status: 'running' | 'stalled'; readonly failedEvent: string | null; readonly lag: number }>;
+  journalFence(): Awaitable<ReplayFence>;
+  journalCheckpoint(consumer: string, expected: number, next: number, fence: ReplayFence): Awaitable<void>;
+  journalInspect(consumer: string): Awaitable<{ readonly cursor: number; readonly status: 'running' | 'stalled' | 'paused'; readonly failedEvent: string | null; readonly lag: number }>;
+  journalPause(consumer: string, fence: ReplayFence): Awaitable<void>;
   journalMarkPoison(consumer: string, eventId: string, reason: string): Awaitable<void>;
-  journalRetry(consumer: string, expectedFailure: string): Awaitable<void>;
-  journalResync(consumer: string): Awaitable<{ readonly snapshotRoot: string; readonly journalSeq: number }>;
+  journalRetry(consumer: string, expectedFailure: string | null, fence: ReplayFence): Awaitable<void>;
+  journalResync(consumer: string, fence: ReplayFence): Awaitable<{ readonly snapshotRoot: string; readonly journalSeq: number }>;
   snapshotRead(snapshotRoot: string, after: number, limit: number): Awaitable<{ readonly events: readonly ReplayCorpusEvent[]; readonly watermark: number }>;
   externalRead(after: number, limit: number): Awaitable<{ readonly events: readonly ReplayCorpusEvent[]; readonly watermark: number }>;
 }
@@ -48,6 +55,7 @@ export interface ReplayCorpusForeign {
 
 export interface ReplayCorpusHooks {
   rebind(): Awaitable<ReplayCorpusStore>;
+  bindWithoutMaintain(): Awaitable<ReplayCorpusStore>;
 }
 
 const FENCE: WriterFence = { fenceId: 'fence-k2b', epoch: '1' };
@@ -75,6 +83,7 @@ export const runReplayCorpus = async (
   foreign: ReplayCorpusForeign,
   hooks: ReplayCorpusHooks,
 ): Promise<void> => {
+  const fence = await bound.journalFence();
   await commitOne(bound, 'journal-a', 1);
   await commitOne(bound, 'journal-b', 2);
   await commitOne(bound, 'journal-c', 3);
@@ -93,20 +102,44 @@ export const runReplayCorpus = async (
   assert.equal(rest.events.length, 1);
   assert.equal(rest.watermark, 3);
 
-  await bound.journalCheckpoint('c1', 0, 2);
+  const weak = await hooks.bindWithoutMaintain();
+  for (const [name, action] of [
+    ['checkpoint', () => weak.journalCheckpoint('c1', 0, 2, fence)],
+    ['pause', () => weak.journalPause('c1', fence)],
+    ['retry', () => weak.journalRetry('c1', null, fence)],
+    ['resync', () => weak.journalResync('c1', fence)],
+  ] as const) {
+    await expectCode(action, 'denied', `C12: ${name} requires maintain authority`);
+  }
+  for (const [name, invalid] of [
+    ['stale', { ...fence, epoch: '0' }],
+    ['incarnation', { ...fence, incarnation: `${fence.incarnation}-foreign` }],
+    ['owner', { ...fence, ownerId: `${fence.ownerId}-foreign` }],
+  ] as const) {
+    await expectCode(() => bound.journalCheckpoint('c1', 0, 2, invalid), 'invalid-command', `C12: checkpoint rejects a wrong ${name} fence`);
+    assert.equal((await bound.journalInspect('c1')).cursor, 0);
+  }
+  await bound.journalPause('c-paused', fence);
+  await bound.journalResync('c-paused', fence);
+  assert.equal((await bound.journalInspect('c-paused')).status, 'paused', 'C12: resync preserves an operator pause');
+  assert.deepEqual((await bound.journalRead('c-paused', 0, 10)).events, [], 'C12: a paused consumer receives no delivery');
+  await bound.journalRetry('c-paused', null, fence);
+  assert.equal((await bound.journalInspect('c-paused')).status, 'running');
+
+  await bound.journalCheckpoint('c1', 0, 2, fence);
   assert.equal((await bound.journalInspect('c1')).cursor, 2);
   await expectCode(
-    async () => bound.journalCheckpoint('c1', 0, 3),
+    async () => bound.journalCheckpoint('c1', 0, 3, fence),
     'cas-conflict',
     'K2b-RED replay: a stale checkpoint expectation conflicts',
   );
   await expectCode(
-    async () => bound.journalCheckpoint('c1', 2, 1),
+    async () => bound.journalCheckpoint('c1', 2, 1, fence),
     'invalid-command',
     'K2b-RED replay: checkpoints are monotonic',
   );
   await expectCode(
-    async () => bound.journalCheckpoint('c1', 2, 99),
+    async () => bound.journalCheckpoint('c1', 2, 99, fence),
     'invalid-command',
     'K2b-RED replay: checkpoints cannot skip ahead of the log',
   );
@@ -132,7 +165,7 @@ export const runReplayCorpus = async (
     [1, 2, 3],
     'K2b-RED replay: a sibling consumer still receives delivery while one consumer is stalled',
   );
-  await bound.journalCheckpoint('c2', 0, 2);
+  await bound.journalCheckpoint('c2', 0, 2, fence);
   assert.equal(
     (await bound.journalInspect('c2')).cursor,
     2,
@@ -140,11 +173,11 @@ export const runReplayCorpus = async (
   );
   assert.equal(stalled.failedEvent, poisoned);
   await expectCode(
-    async () => bound.journalCheckpoint('c1', 2, 3),
+    async () => bound.journalCheckpoint('c1', 2, 3, fence),
     'invalid-command',
     'K2b-RED replay: a checkpoint cannot pass an undelivered poisoned event',
   );
-  await bound.journalRetry('c1', poisoned);
+  await bound.journalRetry('c1', poisoned, fence);
   assert.equal((await bound.journalInspect('c1')).status, 'running');
   const redelivered = await bound.journalRead('c1', 2, 10);
   assert.equal(
@@ -152,12 +185,12 @@ export const runReplayCorpus = async (
     poisoned,
     'K2b-RED replay: retry preserves the failed event identity and order',
   );
-  await bound.journalCheckpoint('c1', 2, 3);
+  await bound.journalCheckpoint('c1', 2, 3, fence);
 
   await commitOne(bound, 'journal-d', 4);
   await commitOne(bound, 'journal-e', 5);
   assert.equal((await bound.journalInspect('c1')).cursor, 3);
-  const boundary = await bound.journalResync('c1');
+  const boundary = await bound.journalResync('c1', fence);
   assert.equal(boundary.journalSeq, 5);
   assert.equal(
     (await bound.journalInspect('c1')).cursor,
@@ -169,7 +202,7 @@ export const runReplayCorpus = async (
     outstanding.events.map((event) => event.seq),
     [4, 5],
   );
-  await bound.journalCheckpoint('c1', 3, boundary.journalSeq);
+  await bound.journalCheckpoint('c1', 3, boundary.journalSeq, fence);
   assert.equal((await bound.journalInspect('c1')).lag, 0);
 
   await commitOne(bound, 'journal-f', 6);
@@ -180,7 +213,7 @@ export const runReplayCorpus = async (
   await bound.journalMarkPoison('c-stall', poison6, 'poison-stall');
   assert.equal((await bound.journalInspect('c-stall')).status, 'stalled');
   const stallCursor = (await bound.journalInspect('c-stall')).cursor;
-  const stallBoundary = await bound.journalResync('c-stall');
+  const stallBoundary = await bound.journalResync('c-stall', fence);
   assert.equal(
     (await bound.journalInspect('c-stall')).status,
     'stalled',
@@ -188,14 +221,17 @@ export const runReplayCorpus = async (
   );
   assert.equal((await bound.journalInspect('c-stall')).cursor, stallCursor);
   assert.equal((await bound.journalInspect('c-stall')).failedEvent, poison6);
+  await bound.snapshotRead(stallBoundary.snapshotRoot, 0, 100);
   await expectCode(
-    async () => bound.journalCheckpoint('c-stall', stallCursor, stallBoundary.journalSeq),
+    async () => bound.journalCheckpoint('c-stall', stallCursor, stallBoundary.journalSeq, fence),
     'invalid-command',
     'K2b-RED replay: a checkpoint still cannot pass an undelivered poisoned event after resync',
   );
-  await bound.journalRetry('c-stall', poison6);
+  await bound.journalRetry('c-stall', poison6, fence);
   assert.equal((await bound.journalInspect('c-stall')).status, 'running');
-  await bound.journalCheckpoint('c-stall', stallCursor, stallBoundary.journalSeq);
+  const deliveredAgain = await bound.journalRead('c-stall', 5, 100);
+  assert.equal(deliveredAgain.events[0].eventId, poison6, 'C12: snapshot consumption preserves poison redelivery');
+  await bound.journalCheckpoint('c-stall', stallCursor, stallBoundary.journalSeq, fence);
   assert.equal((await bound.journalInspect('c-stall')).lag, 0);
 
   const sealing = await bound.beginStaged({
@@ -412,7 +448,7 @@ export const runReplayCorpus = async (
   assert.ok(failExternal.segment);
   assert.deepEqual(failExternal.segment, failJournal.segment);
 
-  const snapBoundary = await bound.journalResync('c-snap');
+  const snapBoundary = await bound.journalResync('c-snap', fence);
   const snapCursorBefore = (await bound.journalInspect('c-snap')).cursor;
   await commitOne(bound, 'journal-snap-later', 8);
   const snapPage = await bound.snapshotRead(snapBoundary.snapshotRoot, 0, 100);
@@ -427,7 +463,7 @@ export const runReplayCorpus = async (
     'K2b-RED replay: a snapshot excludes records committed after its boundary',
   );
   assert.equal((await bound.journalInspect('c-snap')).cursor, snapCursorBefore);
-  await bound.journalCheckpoint('c-snap', snapCursorBefore, snapBoundary.journalSeq);
+  await bound.journalCheckpoint('c-snap', snapCursorBefore, snapBoundary.journalSeq, fence);
   assert.equal((await bound.journalInspect('c-snap')).lag, 1);
   for (const badRoot of ['', 'root-foreign', snapBoundary.snapshotRoot.replace(/^root:/, 'root:x:')]) {
     await expectCode(
