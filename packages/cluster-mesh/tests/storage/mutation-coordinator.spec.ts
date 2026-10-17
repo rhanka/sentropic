@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MemoryBackend, createIndexedBackendScopeState } from '../../src/storage/backend.js';
 import { RootMutationCoordinator, type RootMutationHooks } from '../../src/storage/mutation-coordinator.js';
 import { createKernel } from '../../src/storage/kernel.js';
-import { StorageCasConflictError, StorageDeniedError, StorageInvalidCommandError } from '../../src/storage/errors.js';
+import { StorageCasConflictError, StorageDeniedError, StorageInvalidCommandError, UnsupportedProfileError } from '../../src/storage/errors.js';
 import { grantFor } from './authority-corpus.js';
 
 const setup = (hooks: RootMutationHooks = {}) => {
@@ -18,6 +18,12 @@ const unit = (chainId: string) => ({
 });
 
 describe('root-aware ordinary mutations', () => {
+  it('should refuse unsupported module effects before publishing their carriers', async () => {
+    const { bound } = setup();
+    await expect(bound.commitAtomic({ ...unit('unsupported'), relationships: [{ kind: 'add', relation: 'r', from: 'a', to: 'b' }] }))
+      .rejects.toThrow(UnsupportedProfileError);
+    expect(await bound.readHead('unsupported')).toBeNull();
+  });
   it('should advance one root for every effective ordinary mutation and preserve captured heads', async () => {
     const { coordinator, bound } = setup();
     const initial = coordinator.capture(bound.scope);
