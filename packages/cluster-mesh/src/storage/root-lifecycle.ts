@@ -14,6 +14,7 @@ export const changeModuleRoot = <T>(core: StagedCore, bound: ScopedRuntime, auth
   const root = core.coordinator.prepare(base);
   const data = forkStagedRootData(core.data(base));
   const result = operation(root, data);
+  core.consumeFailure(bound.scope, 'external');
   const commitId = opaqueId('maintenance');
   appendRootEvent(core, base, data, bound.grant, { commitId, moduleId: core.kernel.moduleId, scope: { ...bound.scope },
     committedAt: core.clock(), effectiveRecords: 0, effectiveAppends: 0, journalCursor: `cursor-${commitId}` });
