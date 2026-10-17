@@ -551,6 +551,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Prepare and audit Cluster Mesh storage dependencies
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-storage-deps-audit ENV=test-ci-cluster-mesh
       - name: Lint Cluster Mesh
         run: make lint-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Typecheck Cluster Mesh
