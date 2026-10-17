@@ -30,6 +30,7 @@ describe('request receipts', () => {
       ownerScopeRef: 'owner-a',
       workspaceRef: 'w',
       clientSessionRef: 'c',
+      models: ['muse-spark-1.3', 'm'],
     });
     const first = await service.recordAttempt({
       ownerScopeRef: 'owner-a',
@@ -66,6 +67,7 @@ describe('request receipts', () => {
       ownerScopeRef: 'owner-a',
       workspaceRef: 'w',
       clientSessionRef: 'c',
+      models: ['m'],
     });
     const receipt = await service.recordAttempt({
       ownerScopeRef: 'owner-a',
@@ -80,5 +82,7 @@ describe('request receipts', () => {
     const read = await restarted.readReceipt({ ownerScopeRef: 'owner-a', receiptId: receipt.receiptId });
     expect(read.requestId).toBe('req-1');
     expect(read.settlement).toBe('pending');
+    await restarted.reconcilePending();
+    expect((await restarted.readReceipt({ ownerScopeRef: 'owner-a', receiptId: receipt.receiptId })).settlement).toBe('incomplete');
   });
 });

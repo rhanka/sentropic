@@ -7,6 +7,8 @@
  * (never replayed as new tool calls).
  */
 export const TERMINAL_SETTLEMENTS = [
+  'cancelled',
+  'incomplete',
   'stop',
   'length',
   'tool_calls',
