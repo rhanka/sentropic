@@ -26,7 +26,7 @@ import {
   sessionContentTombstones,
   sessionWorkspaceBindings,
 } from '../../db/control-schema';
-import { tenantMemberships, tenants, workspaceMemberships } from '../../db/schema';
+import { tenantMemberships, tenants, workspaces, workspaceMemberships } from '../../db/schema';
 
 export type SessionContentErrorCode =
   | 'storage_unavailable'
@@ -2397,14 +2397,14 @@ export class SessionContentService {
   /** Membership-free denial-only retained handles: the still-active origin
    * owner lists opaque handles/status without membership or source contact.
    * No handle grants reading or control. */
-  async listRetainedHandles(ownerId: string, tenantId: string) {
+  async listRetainedHandles(ownerId: string, tenantId?: string) {
     const namespaces = await db
       .select()
       .from(sessionContentNamespaces)
       .where(
         and(
           eq(sessionContentNamespaces.ownerId, ownerId),
-          eq(sessionContentNamespaces.tenantId, tenantId),
+          tenantId ? eq(sessionContentNamespaces.tenantId, tenantId) : undefined,
         ),
       );
     const handles: Array<{
@@ -2437,6 +2437,45 @@ export class SessionContentService {
       }
     }
     return handles;
+  }
+
+  /** D1 proves attachment only. No source capability or read/control authority
+   * is inferred while CM2-F2/F7 and the source contract remain unqualified. */
+  async discoverWorkspace(workspaceId: string, ownerId: string) {
+    await this.checkWorkspaceMembership(db, workspaceId, ownerId);
+    const [workspace] = await db.select().from(workspaces)
+      .where(eq(workspaces.id, workspaceId)).limit(1);
+    if (!workspace || workspace.hiddenAt) throw new SessionContentError('not_found', 'workspace is unavailable');
+    await this.checkMembership(db, workspace.tenantId, ownerId);
+    const bindings = await db.select().from(sessionWorkspaceBindings).where(and(
+      eq(sessionWorkspaceBindings.workspaceId, workspaceId),
+      eq(sessionWorkspaceBindings.tenantId, workspace.tenantId),
+      eq(sessionWorkspaceBindings.principalId, ownerId),
+    ));
+    const grants = await db.select().from(sessionContentGrants).where(and(
+      eq(sessionContentGrants.workspaceId, workspaceId),
+      eq(sessionContentGrants.tenantId, workspace.tenantId), eq(sessionContentGrants.ownerId, ownerId),
+    ));
+    const [project] = await db.select().from(sessionContentProjects).where(and(
+      eq(sessionContentProjects.workspaceId, workspaceId),
+      eq(sessionContentProjects.tenantId, workspace.tenantId), eq(sessionContentProjects.ownerId, ownerId),
+    )).limit(1);
+    const scope = { workspaceId, ownerId, projectId: project?.projectId ?? workspaceId, sourceId: '' };
+    const sessionIds = new Set([...bindings.map((row) => row.sessionId), ...grants.map((row) => row.sessionId)]);
+    return { ...scope, projectRevision: project?.projectRevision ?? 0,
+      sourceVerified: false, reason: 'unsupported_source', credentials: [], namedHistories: [], eligibleSources: [],
+      items: [...sessionIds].map((sessionId) => {
+        const binding = bindings.find((row) => row.sessionId === sessionId);
+        const grant = grants.find((row) => row.sessionId === sessionId);
+        return { ...scope, sessionId, bindingId: grant?.bindingId ?? binding!.bindingId,
+          status: binding?.status ?? 'ended', sourceAvailable: false, liveAuthorized: false,
+          storedAuthorized: false, historyAuthorized: false, retained: grant?.retainedCopies ?? false,
+          excluded: grant?.state === 'excluded', revoked: grant?.state === 'revoked',
+          projectRevision: project?.projectRevision ?? 0, grantProjectRevision: grant?.projectRevision ?? 0,
+          expiresAt: null, pauseReason: 'unsupported_source',
+        };
+      }),
+    };
   }
 
   /** Denial-only purge request over an opaque retained scope: writer-settled
