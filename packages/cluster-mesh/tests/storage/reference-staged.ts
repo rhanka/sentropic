@@ -110,7 +110,7 @@ interface StagedOp {
   readonly operationKey: string;
   readonly ownerId: string;
   readonly fragments: StagedFragment[];
-  state: 'staging' | 'sealed' | 'committed' | 'aborted';
+  state: 'staging' | 'sealing' | 'sealed' | 'committed' | 'aborted';
   seal?: { readonly unitId: string; readonly commitRoot: StagedCommitRoot };
   base?: Map<string, { readonly head: string | null; readonly disposed: boolean }>;
   indexBase?: Map<string, { readonly digest: string; readonly resultIds: readonly string[] } | null>;
@@ -646,6 +646,7 @@ export class TestStagedStore {
     if (!last || input.root.finalFragmentHash !== last.fragmentDigest) {
       throw new StorageInvalidCommandError('truncated chains cannot seal');
     }
+    op.state = 'sealing';
     const roots = stagedCommitRoots(op.fragments.map((entry) => ({ ordinal: entry.ordinal, effects: entry.effects })));
     if (input.root.dependencyRoot !== roots.dependencyRoot || input.root.effectRoot !== roots.effectRoot) {
       throw new StorageInvalidCommandError('seal roots mismatch');
@@ -746,7 +747,7 @@ export class TestStagedStore {
     this.requireOperation('read');
     const op = this.staged.units.get(operationKey);
     if (!op) throw new StorageInvalidCommandError('unknown staged operation');
-    if (op.state === 'staging') return { state: 'staging', acceptedFragments: String(op.fragments.length) };
+    if (op.state === 'staging' || op.state === 'sealing') return { state: op.state, acceptedFragments: String(op.fragments.length) };
     if (op.state === 'sealed' && op.seal) return { state: 'sealed', seal: op.seal };
     if (op.state === 'committed' && op.receipt) return { state: 'committed', commitId: op.receipt.commitId };
     return { state: 'aborted', reason: op.abortReason ?? 'aborted' };
