@@ -56,18 +56,19 @@ describe.skipIf(!enabled)('packed declarations and bundlers', () => {
 
   it('should emit provider leaves as the guard import plus export-star only', () => {
     const leaves = files(join(packageDir('bare'), 'dist/integrations'));
-    expect(leaves.filter((file) => file.endsWith('.d.ts'))).toHaveLength(8);
+    expect(leaves.filter((file) => file.endsWith('.d.ts'))).toHaveLength(9);
     for (const file of leaves.filter((path) => /\.(d\.ts|js)$/u.test(path))) {
       const lines = read(file).split('\n').map((line) => line.trim())
         .filter((line) => line && !line.startsWith('//') && !line.startsWith('/*'));
       const exports = lines.filter((line) => line.startsWith('export'));
       expect(exports, file).toHaveLength(1);
-      expect(exports[0], file).toMatch(/^export \* from "(@sentropic\/llm-(mesh|gateway)[^"]*)";$|^export \* from '(@sentropic\/llm-(mesh|gateway)[^']*)';$/u);
+      if (file.includes('/comments/')) expect(exports[0], file).toMatch(/^export \* from ['"]\.\.\/\.\.\/comments\/index\.js['"];$/u);
+      else expect(exports[0], file).toMatch(/^export \* from "(@sentropic\/llm-(mesh|gateway)[^"]*)";$|^export \* from '(@sentropic\/llm-(mesh|gateway)[^']*)';$/u);
     }
   });
 
   it('should keep the emitted root declaration graph free of optional peers', () => {
-    const peer = /["'](@sentropic\/(llm-mesh|llm-gateway|mcp-auth|auth-hono|oauth-verify)|jose)(\/[^"']*)?["']/u;
+    const peer = /["'](@sentropic\/(comments|llm-mesh|llm-gateway|mcp-auth|auth-hono|oauth-verify)|jose)(\/[^"']*)?["']/u;
     const seen = new Set<string>();
     const visit = (file: string): void => {
       if (seen.has(file)) return;
