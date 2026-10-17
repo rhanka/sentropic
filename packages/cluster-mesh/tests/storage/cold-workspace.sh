@@ -1,0 +1,37 @@
+#!/bin/sh
+# Run inside Docker. Copy sources, never host dependencies, into disposable storage.
+set -eu
+workspace=$(mktemp -d)
+cd /source
+tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=tmp \
+  --exclude=.tmp --exclude=.h2a --exclude=.remote -cf - . | tar -xf - -C "$workspace"
+cd "$workspace"
+test ! -d node_modules
+mkdir /tmp/cm-tools
+npm_config_cache=/tmp/npm-cache npm install --prefix /tmp/cm-tools --no-save \
+  --ignore-scripts --no-audit --no-fund typescript@5.4.5 @types/node \
+  vitest@4.1.5 pg@8.16.3 @stablelib/sha256@2.0.1 $CM_PEER_TOOLS >/dev/null
+ln -s /tmp/cm-tools/node_modules node_modules
+mkdir -p node_modules/@sentropic
+for package in packages/*; do
+  [ -f "$package/package.json" ] || continue
+  ln -s "$workspace/$package" "node_modules/@sentropic/${package##*/}"
+done
+tsc=/tmp/cm-tools/node_modules/.bin/tsc
+for package in contracts events llm-mesh oauth-verify mcp-auth auth-hono llm-gateway comments; do
+  "$tsc" --typeRoots /tmp/cm-tools/node_modules/@types -p "packages/$package/tsconfig.json"
+done
+cd packages/cluster-mesh
+case "$CM_ACTION" in
+  typecheck)
+    "$tsc" --noEmit -p tsconfig.json
+    "$tsc" --noEmit -p tsconfig.test.json ;;
+  build)
+    "$tsc" -p tsconfig.json
+    rm -rf /source/packages/cluster-mesh/dist
+    cp -R dist /source/packages/cluster-mesh/dist ;;
+  test)
+    /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" \
+      --environment node --maxWorkers=1 ;;
+  *) echo 'Unknown cluster-mesh action' >&2; exit 1 ;;
+esac
