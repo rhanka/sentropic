@@ -68,6 +68,7 @@
 - [x] BRNANO-EX1: include chat-ui export-manifest metadata and its existing version assertions to synchronize the required package bump; metadata-only impact, rollback together with the bump.
 - [x] Selectable-retired-model assertion reproduced before catalog removal; mesh candidate bumped to 0.26.2 after npm registry precheck.
 - [x] Full llm-mesh regression gate passed: 42 files, 808 tests; client package gate passed after the server-default and version-contract updates.
+- [x] Full API unit run exposed 26 changed assumptions: domain-tool/prompt fixtures need independent classification stubs with A, and retired stream fixtures need migration; preserve the Gemini evaluator test.
 
 ## AI Flaky tests
 - [ ] Record every provider failure verbatim after secret sanitization; failed qualification remains failed, without rerunning for a pass or inflating timeouts.
