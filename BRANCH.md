@@ -306,6 +306,7 @@
     - [ ] Retained Postgres manifests derive real heads/allocation/sequence and committed unit roots, bind owner/incarnation/root version and reopen without TTL. Current coverage is checked separately before any retained payload page.
     - [ ] RED external-journal test requires same-session rollback and delivery/poison/checkpoint against the injected log itself, with zero package-log duplicates. The binding protocol now explicitly supplies bounded read and exact event lookup.
     - [ ] Journal replay/poison lookup now route through the selected external binding; append-only bindings are refused. Staged publications carry one explicit sealed segment and never copy history into the final outbox call.
+    - [ ] RED real-PG shared lifecycle corpus now requires actual erased dispositions plus independent SQL byte checks. The shared fixture parameter defaults to memory's retained disposition; memory mutation targets keep that exact expectation.
     - [x] Current Postgres gate: typecheck/lint pass; 8 files / 19 tests pass, including reopening between all seal steps and one bounded metadata publication (`16e25021b` code head).
   - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
     - [ ] Added an isolated test-only pinned Postgres service/network and a neutral one-client bridge; real tests require backend PID continuity, rollback and finite SQL cancellation. No host port or production driver dependency is introduced.
