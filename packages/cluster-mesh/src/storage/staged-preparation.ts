@@ -47,19 +47,20 @@ export const prepareNextEffect = (core: StagedCore, bound: ScopedRuntime, progre
     if (cost > byteBudget) throw new StorageCapacityExceededError('a seal item requires a larger declared byte budget');
     if (work.bytes + cost > byteBudget) return false;
     const effect = { ...emptyEffects(), [section]: [values[progress.item]] };
+    const createsRecord = section === 'records' && !progress.prepared.records.has(effect.records[0].key);
     if (section === 'appends' && effect.appends[0].expectation.kind === 'head' && !progress.prepared.chains.has(effect.appends[0].chainId)) {
       throw new StorageInvalidCommandError('staged append dependency is unresolved');
     }
     prepareUnitsInScope(progress.prepared, [effect], core.context(bound.grant, operation.commitId));
     applyRootModuleEffects(core, core.data(progress.base), progress.data, bound.grant, effect);
-    if (section !== 'guards') progress.data.projections.emitDelta({ cause: 'staged-publication',
+    if (section !== 'guards' && (section !== 'records' || createsRecord)) progress.data.projections.emitDelta({ cause: 'staged-publication',
       records: section === 'records' ? [effect.records[0].key] : section === 'appends' ? [effect.appends[0].chainId] : [],
       aggregates: section === 'updates' ? [effect.updates[0].key] : [],
       relationships: section === 'relationships' ? [effect.relationships[0].relation] : [],
       barriers: section === 'barriers' ? [effect.barriers[0].boundary] : [],
     });
     if (section === 'appends') { work.appends += 1; progress.effectiveAppends += 1; }
-    if (section === 'records' || section === 'appends' || section === 'updates') progress.effectiveRecords += 1;
+    if (createsRecord || section === 'appends' || section === 'updates') progress.effectiveRecords += 1;
     work.items += 1; work.bytes += cost; progress.checked += 1; progress.item += 1;
     return true;
   }

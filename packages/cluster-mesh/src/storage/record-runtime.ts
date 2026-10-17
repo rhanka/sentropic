@@ -246,6 +246,8 @@ export const mergeAtomicUnits = (units: readonly AtomicUnit[]): AtomicUnit => ({
 });
 
 type StagedCommit = Pick<BackendScopeState, 'chains' | 'index' | 'records' | 'aggregates'>;
+export const countNewImmutableRecords = (state: BackendScopeState, units: readonly AtomicUnit[]): number =>
+  new Set(units.flatMap((unit) => unit.records.map((record) => record.key)).filter((key) => !state.records.has(key))).size;
 
 const stagedView = (staged: StagedCommit): PredicateView => ({
   readHead: (chainId: string): string | null => staged.chains.get(chainId)?.head ?? null,
@@ -339,7 +341,10 @@ const stageEffects = (unit: AtomicUnit, staged: StagedCommit, state: BackendScop
   }
   for (const record of unit.records) {
     const stored = staged.records.get(record.key);
-    if (stored && stored.contentHash !== record.contentHash) throw new StorageIdempotencyConflictError('record hash conflict at commit');
+    if (stored) {
+      if (stored.contentHash !== record.contentHash || stored.bytes.format !== record.bytes.format || stored.bytes.data !== record.bytes.data) throw new StorageIdempotencyConflictError('immutable record representation conflict');
+      continue;
+    }
     staged.records.set(record.key, { bytes: { ...record.bytes }, contentHash: record.contentHash });
   }
   for (const update of unit.updates) {
@@ -423,8 +428,9 @@ export const commitUnitsToScope = (
   // against the state evolved by the previous units of the same commit, and
   // every append is CAS-checked while staging, never against the base alone.
   // The staging maps share canonical entries until the first touch (m6).
+  const newRecords = countNewImmutableRecords(state, units);
   prepareUnitsInScope(state, units, ctx);
-  const receipt: CommitReceipt = { commitId: ctx.commitId, moduleId: ctx.moduleId, scope: { ...ctx.scope }, committedAt: ctx.clock(), effectiveRecords: merged.appends.length + merged.records.length + merged.updates.length, effectiveAppends: merged.appends.length, journalCursor: `cursor-${ctx.commitId}` };
+  const receipt: CommitReceipt = { commitId: ctx.commitId, moduleId: ctx.moduleId, scope: { ...ctx.scope }, committedAt: ctx.clock(), effectiveRecords: merged.appends.length + newRecords + merged.updates.length, effectiveAppends: merged.appends.length, journalCursor: `cursor-${ctx.commitId}` };
   if (merged.moduleResult !== undefined) Object.assign(receipt, { moduleResult: { ...merged.moduleResult } });
   if (options.idempotencyKey) {
     state.commits.set(options.idempotencyKey, { receipt: JSON.parse(JSON.stringify(receipt)) as CommitReceipt, unitHash });
