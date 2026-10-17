@@ -243,6 +243,7 @@
   - [x] Documentary C0 assertions follow the executable packaged-oracle proof while preserving absent M1 public conformance export. Historical review provenance is unchanged.
 
 - [ ] **Lot N — Final validation**
+  - [x] Installed CI qualification takes the manifest guard's actual archive output rather than reconstructing a version-specific filename.
   - [ ] BRCM2-EX6 updates the packed integration inventory for its ninth local comments leaf and extends root-declaration isolation to the optional comments peer; the shipped README now documents candidate setup and delivery boundaries.
   - [ ] Fresh root build prerequisites relinked the optional peer to its unbuilt workspace package. CI now builds the unchanged peer first; moved the comments-specific single-session probe into the comments gate so neutral PG qualification requires no domain peer.
   - [x] BRCM2-EX5 CI now repeats the actual packed comments single-session/PG/full-runtime/long-history qualification and uploads its audit, lock and archive identity; isolated database cleanup remains unconditional.
