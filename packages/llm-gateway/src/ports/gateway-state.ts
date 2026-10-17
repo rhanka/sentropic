@@ -12,8 +12,9 @@ export interface StoredSession {
   readonly ownerScopeRef: string;
   readonly workspaceRef: string;
   readonly clientSessionRef: string;
-  /** Protected verifier (sha256 of the issued key); the raw key is never stored. */
+  /** Protected verifier; key material is encrypted by the bound state store. */
   readonly keyVerifier: string;
+  readonly keyMaterial: string;
   readonly keyId: string;
   readonly createdAt: string;
   readonly expiresAt: string;
