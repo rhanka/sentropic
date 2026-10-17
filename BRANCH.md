@@ -487,6 +487,8 @@
   - [ ] Update `docs/comments-annotations/contract/storage-compatibility.md` and evidence index with M2 delivery and Immo import/receipt/readback API.
 
 - [ ] **Lot N — Final validation**
+  - [ ] Added actual installed registry/full-runtime canonical HTTP qualification, original server registration, verified-scope refusal, forged lifecycle refusal and independent maintenance erasure through the injected host driver.
+  - [ ] Added installed independent-store long-history qualification above one MiB: bounded fragments/sealing with runtime reconstruction, terminal completeness, typed original receipts/read-only recovery, hidden intake and an ordinary measured command before publication, followed by authority/revocation refusal.
   - [ ] Added a Docker-only clean consumer gate for the real archive, missing-peer/disabled isolation, digest-pinned corpus and eleven-kind hash vectors, production dependency audit/lock capture and installed public APIs. No checkout runtime module may resolve.
   - [ ] Added an installed-only host fixture using public package leaves/assets, host-owned migration history and one injected PostgreSQL connection. Production imports remain independent of the host driver.
   - [ ] Typecheck & Lint: `make typecheck-cluster-mesh ... ENV=test-cm-comments-m2`, `make lint-cluster-mesh ... ENV=test-cm-comments-m2`
