@@ -730,7 +730,7 @@ describe('session consent durable lifecycle', () => {
     );
   });
 
-  it.each(['purge', 'revoke', 'exclude'] as const)('should apply product content %s without source contact and preserve D1', async (action) => {
+  it.each(['purge', 'revoke', 'exclude', 'project'] as const)('should apply product content %s without source contact and preserve D1', async (action) => {
     await acceptProject();
     const bindingId = await adoptSession('product-content-purge');
     const [binding] = await db.select().from(sessionWorkspaceBindings)
@@ -750,7 +750,8 @@ describe('session consent durable lifecycle', () => {
     const { items } = await inventory.json();
     const suffix = action === 'purge' ? `consent?retainedScopeId=${encodeURIComponent(items[0].retainedScopeId)}`
       : action === 'revoke' ? 'consent' : 'exclusion';
-    const response = await router.request(`/api/v1/auth/session/content/${bindingId}/${suffix}`,
+    const target = action === 'project' ? `workspaces/${workspaceId}/consent` : `${bindingId}/${suffix}`;
+    const response = await router.request(`/api/v1/auth/session/content/${target}`,
       { method: action === 'exclude' ? 'PUT' : 'DELETE',
         headers: { ...browserHeaders(), 'content-type': 'application/json' },
         ...(action === 'exclude' ? { body: JSON.stringify({ excluded: true }) } : {}) });

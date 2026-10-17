@@ -46,6 +46,7 @@
     "historyGrant": "Demander une autorisation de lecture historique distincte",
     "exclude": "Exclure cette session et purger ses copies",
     "revoke": "Révoquer le partage et purger ses copies",
+    "revokeProject": "Révoquer ce projet et purger ses copies",
     "keyboardTitle": "Clavier à distance",
     "noKey": "Aucune clé d'accès enregistrée utilisable dans ce navigateur.",
     "keyboardDisclosure": "La clé confirme votre geste, pas le texte : l'action confirmée est celle affichée par la page Sentropic.",

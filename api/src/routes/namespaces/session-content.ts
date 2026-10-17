@@ -42,6 +42,8 @@ export function createSessionContentRouter(options: { content?: SessionContentSe
     c.json({ items: await content.listRetainedHandles(c.get('sessionContentIdentity').ownerId) }));
   router.get('/workspaces/:workspaceId/sessions', async (c) =>
     c.json(await content.discoverWorkspace(c.req.param('workspaceId'), c.get('sessionContentIdentity').ownerId)));
+  router.delete('/workspaces/:workspaceId/consent', async (c) =>
+    c.json(await content.denyWorkspaceContent(c.req.param('workspaceId'), c.get('sessionContentIdentity').ownerId)));
   const unavailable = (c: Context) =>
     c.json({ error: 'unsupported_source', dispatch: 'not_attempted', blockers: ['CM2-F2', 'CM2-F7'] }, 503);
   router.delete('/:bindingId/consent', async (c) => {
@@ -71,7 +73,7 @@ export function createSessionContentRouter(options: { content?: SessionContentSe
     '/:bindingId/source/segments', '/:bindingId/source/snapshots', '/:bindingId/source/acks'], unavailable);
   router.on('GET', ['/:bindingId/frames', '/:bindingId/history', '/:bindingId/status',
     '/:bindingId/snapshots/:snapshotId', '/:bindingId/keyboard/submissions/:idempotencyKey', '/:bindingId/source/control'], unavailable);
-  router.on('DELETE', ['/workspaces/:workspaceId/consent', '/:bindingId/keyboard/lease',
+  router.on('DELETE', ['/:bindingId/keyboard/lease',
     '/:bindingId/history-authorizations/:authorizationId'], unavailable);
   router.put('/workspaces/:workspaceId/exclusion', unavailable);
   return router;
