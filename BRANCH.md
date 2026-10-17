@@ -60,26 +60,26 @@ Render the official multicolor Google "G" logo in AuthProviderGlyph for the goog
   - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read rules/MASTER.md, rules/workflow.md, rules/subagents.md, rules/testing.md, rules/security.md.
-  - [ ] Worktree tmp/worktrees/auth-google-logo on branch fix/auth-google-official-logo verified.
-  - [ ] Env mapping: API_PORT=9590 UI_PORT=5790 MAILDEV_UI_PORT=1690 ENV=test-auth-google-logo.
-  - [ ] Confirm command style: `make ... ENV=<env>` with `ENV` last.
-  - [ ] Confirm scope: AuthProviderGlyph google glyph + design-system sweep + version bump.
-  - [ ] Design-system sweep: no packages/*design-system* in repo; external @sentropic/design-system-svelte only; no other Google glyph found.
-- [ ] **Lot 1 — Official multicolor Google G**
-  - [ ] Replace monochrome google path in AuthProviderGlyph.svelte with official 4-color inline SVG (no currentColor, no external fetch).
-  - [ ] Keep other providers monochrome; keep accessible label and data-provider wiring.
-  - [ ] Add packages/auth-ui/tests/google-glyph.test.ts asserting 4 official fills and no currentColor on google svg.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-auth-ui ENV=test-auth-google-logo`
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read rules/MASTER.md, rules/workflow.md, rules/subagents.md, rules/testing.md, rules/security.md.
+  - [x] Worktree tmp/worktrees/auth-google-logo on branch fix/auth-google-official-logo verified.
+  - [x] Env mapping: API_PORT=9590 UI_PORT=5790 MAILDEV_UI_PORT=1690 ENV=test-auth-google-logo.
+  - [x] Confirm command style: `make ... ENV=<env>` with `ENV` last.
+  - [x] Confirm scope: AuthProviderGlyph google glyph + design-system sweep + version bump.
+  - [x] Design-system sweep: no packages/*design-system* in repo; external @sentropic/design-system-svelte only; no other Google glyph found.
+- [x] **Lot 1 — Official multicolor Google G**
+  - [x] Replace monochrome google path in AuthProviderGlyph.svelte with official 4-color inline SVG (no currentColor, no external fetch).
+  - [x] Keep other providers monochrome; keep accessible label and data-provider wiring.
+  - [x] Add packages/auth-ui/tests/google-glyph.test.ts asserting 4 official fills and no currentColor on google svg.
+  - [x] Lot gate:
+    - [x] `make typecheck-auth-ui ENV=test-auth-google-logo`
     - [ ] **API tests**
       - [ ] None (no API change).
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] Existing: packages/auth-ui/tests/federation.test.ts (unchanged).
-      - [ ] New: packages/auth-ui/tests/google-glyph.test.ts.
-      - [ ] Scoped runs: `make test-auth-ui SCOPE=tests/google-glyph.test.ts ENV=test-auth-google-logo`
-      - [ ] Sub-lot gate: `make test-auth-ui ENV=test-auth-google-logo`
+    - [x] **UI tests (TypeScript only)**
+      - [x] Existing: packages/auth-ui/tests/federation.test.ts (unchanged).
+      - [x] New: packages/auth-ui/tests/google-glyph.test.ts.
+      - [x] Scoped runs: `make test-auth-ui SCOPE=tests/google-glyph.test.ts ENV=test-auth-google-logo`
+      - [x] Sub-lot gate: `make test-auth-ui ENV=test-auth-google-logo`
     - [ ] **E2E tests**
       - [ ] None (static SVG asset change; no flow change).
     - [ ] UAT: open IdP login with google provider in light and dark themes, verify multicolor G on white/neutral button.
@@ -92,7 +92,7 @@ Render the official multicolor Google "G" logo in AuthProviderGlyph for the goog
   - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [x] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
