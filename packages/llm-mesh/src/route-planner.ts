@@ -93,13 +93,13 @@ export class InMemoryRoutePlanner implements RoutePlanner {
    */
   async describeAvailability(
     subject: VerifiedRoutingSubject,
-    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit'>,
+    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit' | 'launchRoutingContract' | 'policyOverride' | 'policyProfile'>,
   ): Promise<readonly RouteAvailabilityDiagnostic[]> {
     return this.matchingAvailabilityDiagnostics(subject, input);
   }
   private async matchingAvailabilityDiagnostics(
     subject: VerifiedRoutingSubject,
-    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit'>,
+    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit' | 'launchRoutingContract' | 'policyOverride' | 'policyProfile'>,
   ): Promise<readonly RouteAvailabilityDiagnostic[]> {
     // A diagnostic is only pertinent when it belongs to the requested
     // route's transports. Surfacing listDiagnostics[0] unfiltered once
@@ -107,7 +107,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     // The model-derived resolution ignores `explicit`, so an explicit
     // transport restriction wins over it here.
     const explicitTransport = input.explicit?.transportProviderId;
-    const resolution = resolveRequestedTargets(input);
+    const resolution = resolveRequestedTargets(input, resolveQuotePolicy(input, this.profiles).policy.allowEquivalentModels);
     const transports = new Set<string>(
       explicitTransport
         ? [explicitTransport]
