@@ -175,6 +175,7 @@
 - [ ] **Lot 3 — K4 integrity (N1-N3; MAJ-1..3, m2, m3, S4:4, S4:10; C01-C04)**
   - [ ] Kernel-computed fragment digests and roots from the shared codec; owned deep-frozen buffers; divergent begin refused; terminal states kept.
   - [ ] Authenticated unforgeable handles/seals bound to module/tenant/workspace/incarnation/owner; current fence verified at begin/stage/seal/commit/abort and after the publication gate.
+    - [ ] `src/storage/staged-state.ts` defines indexed canonical root attachments separately from backend-held hidden operation/consumer/snapshot progress; memory progress makes no durability claim.
   - [ ] Seal binds base B, ordered fragment set, recomputed roots; bounded sealing steps honoring limits; failure does not reopen staging; distinct staged/commit/command-index namespaces.
   - [ ] Lot gate: copy of Lot 1 gate; tests `staged-units.spec.ts` + corpus cases C01-C04 with mutants.
 
