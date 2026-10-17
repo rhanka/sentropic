@@ -2,9 +2,9 @@
   import { onDestroy, onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { Button } from '@sentropic/design-system-svelte';
-  import { contentApi, type PreparedConsent, type RetainedHandle, type SessionsMetadata } from '$lib/session-content/api';
+  import { browserStepUp, contentApi, type PreparedConsent, type RetainedHandle, type SessionsMetadata } from '$lib/session-content/api';
   import { ConsentFlow, createOffer, retentionChoice, type Channel, type RetainedChannel } from '$lib/session-content/state';
-  import { browserAssertion, browserKeyAvailable } from '$lib/session-content/proof';
+  import { proofExpiry } from '$lib/session-content/proof';
 
   export let cleanup = false;
   export let metadata: SessionsMetadata | null = null;
@@ -27,7 +27,7 @@
     { key: 'native.mirror', label: 'mirror' }, { key: 'keyboard.control', label: 'keyboard' },
   ];
   const retainedChannels: RetainedChannel[] = ['terminal.cache', 'native.mirror'];
-  $: available = mounted && !!metadata?.sourceVerified && browserKeyAvailable(metadata.credentials);
+  $: available = mounted && !!metadata?.sourceVerified && metadata.confirmationAvailable && metadata.authenticationState === 'step_up_required';
   $: if (metadata !== previousMetadata) {
     flow?.cancel(); previousMetadata = metadata;
     if (metadata) {
@@ -36,7 +36,7 @@
       modes = { 'terminal.cache': 'none', 'native.mirror': 'none' };
       flow = new ConsentFlow(offer, {
         prepare: contentApi.prepareOffer, accept: contentApi.acceptOffer,
-        prove: (prepared, signal) => browserAssertion(prepared, metadata?.credentials ?? [], signal),
+        prove: browserStepUp,
         available: () => available,
       });
     } else flow = null;
@@ -57,7 +57,7 @@
     offer.selectedSessionIds = checked ? [...offer.selectedSessionIds, sessionId] : offer.selectedSessionIds.filter((id) => id !== sessionId);
     edited();
   }
-  async function consentAction(action: 'prepare' | 'confirm') {
+  async function consentAction(action: 'prepare' | 'authenticate' | 'confirm') {
     busy = true; failed = false;
     try { await flow?.[action](); if (flow?.accepted) onchanged(); }
     catch { failed = true; }
@@ -92,7 +92,7 @@
     mounted = true;
     if (cleanup) { void loadRetained(); return; }
     const expiry = setInterval(() => {
-      if (flow?.prepared && flow.prepared.expiresAt <= Date.now()) { flow.cancel(); flow = flow; }
+      if (flow?.prepared && proofExpiry(flow.prepared) <= Date.now()) { flow.cancel(); flow = flow; }
     }, 500);
     return () => clearInterval(expiry);
   });
@@ -134,7 +134,7 @@
       {/each}
       <p class="font-medium">{$_('sessionContent.histories')}</p>
       {#each metadata?.namedHistories ?? [] as history}
-        <label class="flex min-h-9 items-center gap-2"><input type="checkbox" checked={offer.namedHistories.includes(history)} on:change={(e) => { offer.namedHistories = e.currentTarget.checked ? [...offer.namedHistories, history] : offer.namedHistories.filter((item) => item !== history); edited(); }} />{history.provider} · {history.conversationId} · {history.lineage} · {history.checkpoint} · {history.inventoryDigest}</label>
+        <label class="flex min-h-9 items-center gap-2"><input type="checkbox" checked={offer.namedHistories.includes(history)} on:change={(e) => { offer.namedHistories = e.currentTarget.checked ? [...offer.namedHistories, history] : offer.namedHistories.filter((item) => item !== history); edited(); }} />{history.lineageId} · {history.checkpointId ?? ''}</label>
       {:else}<p class="text-sm text-slate-700">{$_('sessionContent.noHistories')}</p>{/each}
       {#each retainedChannels as channel}
         {#if offer.channels[channel]}
@@ -152,13 +152,13 @@
       {/each}
       <p class="text-sm text-slate-700">{$_('sessionContent.futureOnly')}</p>
       {#each [0, 1, 2, 3, 4, 5, 6] as index}<p class="text-sm text-slate-700">{$_(`sessionContent.disclosures.${index}`)}</p>{/each}
-      <label class="flex min-h-9 items-start gap-2"><input type="checkbox" checked={offer.offlineReadAccepted} on:change={(e) => { offer.offlineReadAccepted = e.currentTarget.checked; edited(); }} />{$_('sessionContent.offlineAccept')}</label>
     </fieldset>
-    {#if !available}<p role="status">{$_('sessionContent.noKey')}</p>{/if}
+    {#if !available}<p role="status">{$_(`sessionContent.states.${metadata?.authenticationState === 'authentication_required' ? 'authentication_required' : metadata?.sourceVerified ? 'step_up_required' : 'source_unavailable'}`)}</p>{/if}
     {#if flow?.accepted}<p role="status">{$_('sessionContent.accepted')}</p>{/if}
     <div class="flex flex-wrap gap-2">
-      <Button variant="secondary" onclick={() => consentAction('prepare')} disabled={busy || !available || invalidRetention || !offer.offlineReadAccepted || !Object.values(offer.channels).some(Boolean) || (offer.channels['terminal.cache'] && !offer.channels['terminal.live'])}>{$_('sessionContent.prepare')}</Button>
-      <Button variant="primary" onclick={() => consentAction('confirm')} disabled={busy || !available || !flow?.prepared}>{$_('sessionContent.confirm')}</Button>
+      <Button variant="secondary" onclick={() => consentAction('prepare')} disabled={busy || !available || invalidRetention || !Object.values(offer.channels).some(Boolean) || (offer.channels['terminal.cache'] && !offer.channels['terminal.live'])}>{$_('sessionContent.prepare')}</Button>
+      <Button variant="secondary" onclick={() => consentAction('authenticate')} disabled={busy || !available || !flow?.prepared || !!flow?.confirmation}>{$_('sessionContent.stepUp')}</Button>
+      <Button variant="primary" onclick={() => consentAction('confirm')} disabled={busy || !available || !flow?.confirmation}>{$_('sessionContent.confirm')}</Button>
       <Button variant="ghost" onclick={() => { flow?.cancel(); flow = flow; }}>{$_('sessionContent.cancel')}</Button>
       {#if metadata?.projectState === 'active'}<Button variant="danger" onclick={revokeProject} disabled={busy}>{$_('sessionContent.revokeProject')}</Button>{/if}
     </div>

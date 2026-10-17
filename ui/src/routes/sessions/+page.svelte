@@ -59,8 +59,8 @@
         <Button variant="secondary" onclick={() => attach(source.sessionId, source.sourceId)} disabled={busy || !metadata?.sourceVerified}>{$_('sessionContent.attach')} · {source.sessionId}</Button>
       {/each}
       {#each metadata?.items ?? [] as row (row.bindingId)}
-        {#if metadata}<SessionViewer {row} scope={metadata} credentials={metadata.credentials} onchanged={() => void load()} />{/if}
-        <KeyboardPanel context={row.bindingId && metadata ? keyboardContext(row, metadata, metadata.controls?.[row.bindingId], metadata.sourceVerified) : null} credentials={metadata?.credentials ?? []} />
+        {#if metadata}<SessionViewer {row} scope={metadata} onchanged={() => void load()} />{/if}
+        <KeyboardPanel context={row.bindingId && metadata ? keyboardContext(row, metadata, metadata.controls?.[row.bindingId], metadata.sourceVerified) : null} />
       {:else}
         {#if !busy}<p>{$_('sessionContent.empty')}</p>{/if}
         <KeyboardPanel />

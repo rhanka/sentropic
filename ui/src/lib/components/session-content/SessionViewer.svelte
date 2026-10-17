@@ -4,10 +4,8 @@
   import { Button } from '@sentropic/design-system-svelte';
   import { contentApi, type OutputPage } from '$lib/session-content/api';
   import { canRequestHistory, viewAccess, type ContentScope, type SessionView } from '$lib/session-content/state';
-  import { browserAssertion, browserKeyAvailable, type EnrolledCredential } from '$lib/session-content/proof';
   export let row: SessionView;
   export let scope: ContentScope;
-  export let credentials: EnrolledCredential[] = [];
   export let onchanged: () => void = () => {};
   let output: OutputPage | null = null;
   let busy = false;
@@ -31,12 +29,9 @@
         if (page.frames.some((frame, index) => !Number.isSafeInteger(frame.seq) || frame.seq < 0
           || (index > 0 && frame.seq <= page.frames[index - 1].seq))) throw new Error('invalid_coverage');
         if (current === revision && (viewAccess(row, scope).live || viewAccess(row, scope).stored)) output = page;
-      } else if (kind === 'history' && canRequestHistory(row, scope) && browserKeyAvailable(credentials)) {
-        const proof = await contentApi.prepareHistory(row.bindingId);
-        if (current !== revision) return;
-        const assertion = await browserAssertion(proof, credentials, abort.signal);
-        if (current !== revision) return;
-        await contentApi.authorizeHistory(row.bindingId, proof, assertion); onchanged();
+      } else if (kind === 'history' && canRequestHistory(row, scope)) {
+        await contentApi.authorizeHistory(row.bindingId);
+        if (current === revision) onchanged();
       } else if (kind === 'revoke' || kind === 'exclude') {
         output = null; revision++;
         await contentApi[kind](row.bindingId); onchanged();
@@ -62,7 +57,7 @@
   {#if failed}<p role="alert" class="text-red-600">{$_('sessionContent.requestFailed')}</p>{/if}
   <div class="flex flex-wrap gap-2">
     <Button variant="secondary" onclick={() => action('read')} disabled={busy || (!access.live && !access.stored)}>{$_('sessionContent.read')}</Button>
-    <Button variant="secondary" onclick={() => action('history')} disabled={busy || !canRequestHistory(row, scope) || !browserKeyAvailable(credentials)}>{$_('sessionContent.historyGrant')}</Button>
+    <Button variant="secondary" onclick={() => action('history')} disabled={busy || !canRequestHistory(row, scope)}>{$_('sessionContent.historyGrant')}</Button>
     <Button variant="danger" onclick={() => action('exclude')} disabled={busy || row.excluded}>{$_('sessionContent.exclude')}</Button>
     <Button variant="danger" onclick={() => action('revoke')} disabled={busy || row.revoked}>{$_('sessionContent.revoke')}</Button>
   </div>
