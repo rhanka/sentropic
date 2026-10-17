@@ -25,6 +25,17 @@ export interface ReplayFence extends WriterFence {
   readonly ownerId: string;
 }
 
+export interface ReplaySnapshotRow {
+  readonly kind: 'chain' | 'index' | 'record' | 'aggregate' | 'genesis';
+  readonly key: string;
+  readonly value: unknown;
+}
+export interface ReplaySnapshotPage {
+  readonly rows: readonly ReplaySnapshotRow[];
+  readonly watermark: number;
+  readonly next: number | null;
+}
+
 export interface ReplayCorpusStore {
   appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
   readHead(chainId: string): Awaitable<string | null>;
@@ -43,7 +54,7 @@ export interface ReplayCorpusStore {
   journalMarkPoison(consumer: string, eventId: string, reason: string): Awaitable<void>;
   journalRetry(consumer: string, expectedFailure: string | null, fence: ReplayFence): Awaitable<void>;
   journalResync(consumer: string, fence: ReplayFence): Awaitable<{ readonly snapshotRoot: string; readonly journalSeq: number }>;
-  snapshotRead(snapshotRoot: string, after: number, limit: number): Awaitable<{ readonly events: readonly ReplayCorpusEvent[]; readonly watermark: number }>;
+  snapshotRead(snapshotRoot: string, after: number, limit: number): Awaitable<ReplaySnapshotPage>;
   externalRead(after: number, limit: number): Awaitable<{ readonly events: readonly ReplayCorpusEvent[]; readonly watermark: number }>;
 }
 
@@ -51,6 +62,8 @@ export interface ReplayCorpusForeign {
   appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
   readHead(chainId: string): Awaitable<string | null>;
   commitAtomic(unit: AtomicUnit): Awaitable<{ readonly commitId: string }>;
+  externalRead(after: number, limit: number): Awaitable<{ readonly events: readonly ReplayCorpusEvent[]; readonly watermark: number }>;
+  snapshotRead(snapshotRoot: string, after: number, limit: number): Awaitable<ReplaySnapshotPage>;
 }
 
 export interface ReplayCorpusHooks {
@@ -59,6 +72,19 @@ export interface ReplayCorpusHooks {
 }
 
 const FENCE: WriterFence = { fenceId: 'fence-k2b', epoch: '1' };
+
+const consumeSnapshot = async (bound: ReplayCorpusStore, root: string): Promise<readonly ReplaySnapshotRow[]> => {
+  const rows: ReplaySnapshotRow[] = [];
+  let after = 0;
+  for (;;) {
+    const page = await bound.snapshotRead(root, after, 2);
+    assert.ok(page.rows.length <= 2, 'C13: snapshot enumeration obeys its item bound');
+    rows.push(...page.rows);
+    if (page.next === null) return rows;
+    assert.ok(page.next > after, 'C13: snapshot enumeration advances its retained position');
+    after = page.next;
+  }
+};
 
 const commitOne = (bound: ReplayCorpusStore | ReplayCorpusForeign, chainId: string, n: number) =>
   bound.commitAtomic({
@@ -221,7 +247,8 @@ export const runReplayCorpus = async (
   );
   assert.equal((await bound.journalInspect('c-stall')).cursor, stallCursor);
   assert.equal((await bound.journalInspect('c-stall')).failedEvent, poison6);
-  await bound.snapshotRead(stallBoundary.snapshotRoot, 0, 100);
+  await consumeSnapshot(bound, stallBoundary.snapshotRoot);
+  assert.equal((await bound.journalInspect('c-stall')).status, 'stalled', 'C12: consuming a snapshot does not discharge poison');
   await expectCode(
     async () => bound.journalCheckpoint('c-stall', stallCursor, stallBoundary.journalSeq, fence),
     'invalid-command',
@@ -363,13 +390,9 @@ export const runReplayCorpus = async (
   assert.equal(await bound.readHead('shared-id'), 'hash-local-1');
   assert.equal(await foreign.readHead('shared-id'), 'hash-foreign-1');
   const interleaved = await bound.externalRead(0, 100);
-  const colliding = interleaved.events.slice(-2);
-  const scopes = colliding.map((event) => event.scope.workspaceId);
-  assert.equal(scopes.length, 2);
-  assert.ok(
-    scopes[0].length > 0 && scopes[1].length > 0 && scopes[0] !== scopes[1],
-    'K2b-RED replay: interleaved scopes with colliding ids stay separate on one log',
-  );
+  const foreignEvents = await foreign.externalRead(0, 100);
+  assert.ok(interleaved.events.every((event) => event.scope.workspaceId === first.events[0].scope.workspaceId), 'C11: an external stream reveals only its own scope');
+  assert.ok(foreignEvents.events.every((event) => event.scope.workspaceId !== first.events[0].scope.workspaceId), 'C11: the sibling stream reveals only its own scope');
   assert.equal(interleaved.watermark >= 2, true);
 
   const kernelEvents = await bound.journalRead('c1', 0, 100);
@@ -448,24 +471,30 @@ export const runReplayCorpus = async (
   assert.ok(failExternal.segment);
   assert.deepEqual(failExternal.segment, failJournal.segment);
 
+  await bound.commitAtomic({
+    guards: [], records: [], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [],
+    indexWrites: [{ key: 'snapshot-index', digest: 'snapshot-digest', resultIds: ['captured'], resultHash: null }],
+  });
   const snapBoundary = await bound.journalResync('c-snap', fence);
   const snapCursorBefore = (await bound.journalInspect('c-snap')).cursor;
   await commitOne(bound, 'journal-snap-later', 8);
   const snapPage = await bound.snapshotRead(snapBoundary.snapshotRoot, 0, 100);
   assert.equal(snapPage.watermark, snapBoundary.journalSeq);
   assert.equal(
-    snapPage.events.some((event) => event.commitId === failReceipt.commitId),
-    true,
+    snapPage.rows.some((row) => row.kind === 'chain' && row.key === 'journal-fail'), true,
+    'C13: snapshot consumption reads committed canonical heads',
   );
+  assert.deepEqual(snapPage.rows.find((row) => row.kind === 'index' && row.key === 'snapshot-index')?.value,
+    { digest: 'snapshot-digest', resultIds: ['captured'], resultHash: null }, 'C13: snapshot consumption reads captured command indexes');
   assert.equal(
-    snapPage.events.some((event) => event.seq > snapBoundary.journalSeq),
+    snapPage.rows.some((row) => row.key === 'journal-snap-later'),
     false,
     'K2b-RED replay: a snapshot excludes records committed after its boundary',
   );
   assert.equal((await bound.journalInspect('c-snap')).cursor, snapCursorBefore);
   await bound.journalCheckpoint('c-snap', snapCursorBefore, snapBoundary.journalSeq, fence);
   assert.equal((await bound.journalInspect('c-snap')).lag, 1);
-  for (const badRoot of ['', 'root-foreign', snapBoundary.snapshotRoot.replace(/^root:/, 'root:x:')]) {
+  for (const badRoot of ['', 'root-foreign', `${snapBoundary.snapshotRoot}:uncaptured`]) {
     await expectCode(
       async () => bound.snapshotRead(badRoot, 0, 10),
       'invalid-command',
@@ -473,8 +502,8 @@ export const runReplayCorpus = async (
     );
   }
   await expectCode(
-    async () => bound.snapshotRead(snapBoundary.snapshotRoot.replace(/:\d+$/, `:${snapBoundary.journalSeq + 1000}`), 0, 10),
+    async () => foreign.snapshotRead(snapBoundary.snapshotRoot, 0, 10),
     'invalid-command',
-    'K2b-RED replay: a future snapshot root fails',
+    'C13: a captured snapshot root cannot cross scopes',
   );
 };
