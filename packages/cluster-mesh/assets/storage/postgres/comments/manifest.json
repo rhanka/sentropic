@@ -42,6 +42,20 @@
       ],
       "schemaRole": "comments",
       "checksum": "3059a66a5f620eacb8f8f702fd68c9dcfd0aa13edfc8e9c0b7868b7455267ed2"
+    },
+    {
+      "id": "cluster-mesh-pg/comments/004-authority@1",
+      "file": "comments/004-authority.sql",
+      "order": 10,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 9,
+      "toVersion": 10,
+      "requires": [
+        "cluster-mesh-pg/comments/003-exports@1"
+      ],
+      "schemaRole": "comments",
+      "checksum": "4bc12c4aeb4f988fa30a1a5ff28d75059ea1a648c4d6e569fb61fca39842636b"
     }
   ]
 }
