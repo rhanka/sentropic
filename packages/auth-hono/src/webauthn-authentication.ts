@@ -190,11 +190,14 @@ const resolveUserVerification = (
   ports: AuthHonoPorts,
   user: Awaited<ReturnType<AuthHonoPorts['users']['findById']>>
 ): UserVerificationRequirement => {
+  // F3/B4: IdP passkeys are 2FA credentials. An explicit host policy is
+  // honored as-is; an absent user (discoverable login) or absent resolver
+  // fails closed to 'required'.
   if (!user) {
-    return 'preferred';
+    return 'required';
   }
 
-  return ports.accountPolicy.resolveUserVerification?.(user) ?? 'preferred';
+  return ports.accountPolicy.resolveUserVerification?.(user) ?? 'required';
 };
 
 const invalidAuthentication = (
