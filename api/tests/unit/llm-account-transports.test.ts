@@ -30,6 +30,20 @@ import {
   startMuseEnrollment,
 } from '../../src/services/provider-connections';
 import { cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
+import { decryptSecretOrNull } from '../../src/services/secret-crypto';
+
+const { refreshAntigravityAccessTokenMock, importAntigravityEnrollmentMock } = vi.hoisted(() => ({
+  refreshAntigravityAccessTokenMock: vi.fn(),
+  importAntigravityEnrollmentMock: vi.fn(),
+}));
+vi.mock('../../src/services/antigravity-provider-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/services/antigravity-provider-auth')>()),
+  refreshAntigravityAccessToken: refreshAntigravityAccessTokenMock,
+}));
+vi.mock('../../src/services/provider-connections', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/services/provider-connections')>()),
+  importAntigravityEnrollment: importAntigravityEnrollmentMock,
+}));
 
 const jwtWithPayload = (payload: Record<string, unknown>): string =>
   `header.${Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')}.signature`;
@@ -37,6 +51,8 @@ const jwtWithPayload = (payload: Record<string, unknown>): string =>
 describe('provider-owned llm account transports', () => {
   afterEach(async () => {
     vi.unstubAllGlobals();
+    refreshAntigravityAccessTokenMock.mockClear();
+    importAntigravityEnrollmentMock.mockClear();
     await db.run(sql`DELETE FROM settings WHERE key = 'provider_connection_mode:anthropic'`);
     await cleanupAuthData();
   });
@@ -593,5 +609,94 @@ describe('provider-owned llm account transports', () => {
     const dbRow = (await db.all(sql`SELECT status, last_error FROM llm_provider_accounts WHERE id = ${stored!.id}`)) as Array<{ status: string; last_error: string | null }>;
     expect(dbRow[0]?.status).toBe('reauth_required');
     expect(dbRow[0]?.last_error).toContain('Muse token refresh failed');
+  });
+
+  it('keeps a served external agy seat active on a 401 outcome with zero provider calls', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const fetchMock = vi.fn(async () => {
+      throw new Error('provider call forbidden for external seats');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const stored = await storeAntigravityAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'antigravity-external-401',
+      accountLabel: 'Agy external 401',
+      accessToken: 'ya29-external-401',
+      expiresAt,
+      project: 'proj-external-401',
+      seatPolicy: {
+        seatRef: 'seat-synth-agy-401',
+        ownerScope: 'owner-seat-01',
+        epoch: 1,
+        generation: 1,
+        operationId: 'op-agy-401',
+      },
+    });
+    expect(stored).not.toBeNull();
+
+    const acquired = await acquireAntigravityAccountTransport({
+      userId: user.id,
+      modelId: 'gemini-3-pro-high',
+      requestId: 'agy-external-401-req',
+    });
+    expect(acquired?.accessToken).toBe('ya29-external-401');
+    await acquired?.recordOutcome({ status: 'auth_failed', providerStatusCode: 401 });
+
+    const dbRow = (await db.all(
+      sql`SELECT status, last_error, token_secret FROM llm_provider_accounts WHERE id = ${stored!.id}`,
+    )) as Array<{ status: string; last_error: string | null; token_secret: string }>;
+    expect(dbRow[0]?.status).toBe('active');
+    expect(dbRow[0]?.last_error).toContain('access-unavailable');
+    const secret = await decryptSecretOrNull(dbRow[0]?.token_secret);
+    expect(secret && JSON.parse(secret).accessToken).toBe('ya29-external-401');
+    expect(refreshAntigravityAccessTokenMock).toHaveBeenCalledTimes(0);
+    expect(importAntigravityEnrollmentMock).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  it('refuses an expired external agy seat with zero provider calls and keeps the secret', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    const expiredAt = new Date(Date.now() - 60 * 1000).toISOString();
+    const fetchMock = vi.fn(async () => {
+      throw new Error('provider call forbidden for external seats');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const stored = await storeAntigravityAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'antigravity-external-expired',
+      accountLabel: 'Agy external expired',
+      accessToken: 'ya29-external-expired',
+      expiresAt: expiredAt,
+      project: 'proj-external-expired',
+      seatPolicy: {
+        seatRef: 'seat-synth-agy-expired',
+        ownerScope: 'owner-seat-01',
+        epoch: 1,
+        generation: 1,
+        operationId: 'op-agy-expired',
+      },
+    });
+    expect(stored).not.toBeNull();
+
+    const acquired = await acquireAntigravityAccountTransport({
+      userId: user.id,
+      modelId: 'gemini-3-pro-high',
+      requestId: 'agy-external-expired-req',
+    });
+    expect(acquired).toBeNull();
+
+    const dbRow = (await db.all(
+      sql`SELECT status, last_error, token_secret FROM llm_provider_accounts WHERE id = ${stored!.id}`,
+    )) as Array<{ status: string; last_error: string | null; token_secret: string }>;
+    expect(dbRow[0]?.status).toBe('active');
+    expect(dbRow[0]?.last_error).toContain('access-unavailable');
+    const secret = await decryptSecretOrNull(dbRow[0]?.token_secret);
+    expect(secret && JSON.parse(secret).accessToken).toBe('ya29-external-expired');
+    expect(refreshAntigravityAccessTokenMock).toHaveBeenCalledTimes(0);
+    expect(importAntigravityEnrollmentMock).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(0);
   });
 });
