@@ -197,6 +197,7 @@
 
 - [ ] **Lot 5 — K4 journal, manifests and ports (N7-N9, N11; MAJ-7..8, m1, m4-m6, S4:7-9, S4:11-12; C10-C18)**
   - [ ] Scoped/incarnated journal streams; resync preserves poison; fenced checkpoints with maintain authority; pause/retry.
+    - [ ] `root-journal.ts` reads the canonical root's indexed stream and retains consumer poison/pause state independently; checkpoints require delivered bounds, owner/incarnation/current fences and maintain authority. Snapshot capture retains an actual immutable root under an opaque scoped capability.
   - [ ] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
   - [ ] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with honest dispositions.
   - [ ] Lot gate: copy of Lot 1 gate; tests `manifest.spec.ts`, `visibility.spec.ts`, `staged-units.spec.ts`.
