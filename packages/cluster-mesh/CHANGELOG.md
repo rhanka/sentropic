@@ -20,6 +20,10 @@
   `capabilities.tokenExchange` is `'available'` only after the binding plus policy
   passes its local preflight, `'gated'` otherwise. `available` proves only this
   trust/egress port, not registry or module delivery.
+- Expose the MCP leaf entries `./mcp/registry`, `./mcp/stdio`, `./compose/mcp`
+  and `./loaders/mcp` (`createMcpNamespaceModule`, `loadMcpPlatform*` loaders)
+  against the optional `@sentropic/mcp-platform >=0.3.0 <0.4.0` peer (plus
+  `@modelcontextprotocol/sdk ^1.31.0` for stdio).
 
 ## 0.16.0
 
