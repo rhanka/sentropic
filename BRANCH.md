@@ -117,7 +117,8 @@
   - [x] MINEUR-1: read corpus accepts `null` or a fitting recovery cursor on empty `incomplete` pages; cross-validate missing-head, disposed-chain and empty pages through `validateReadPage`.
   - [x] MINEUR-2: M18 mutant measures the candidate cursor instead of the effective cursor (no budget inflation).
     - [x] Evidence: `assertEmptyIncomplete` (null or fitting cursor plus explicit recovery of the exact remaining records), `validateReadPage` on disposed/missing/floor pages, `RecoveryCursorStore` conformance test in `reference.spec.ts`; M18 now overrides `admissionCursor` and dies at "the exhausting record is admitted with its effective null cursor" (final E/E-1 envelope case); `reference.spec.ts` 36/36, `mutations.spec.ts` 19/19, `kernel.spec.ts` 56/56.
-  - [ ] MINEUR-3: mutant regexes pinned to one exact assertion each (M1-M16, S1, B1/E1).
+  - [x] MINEUR-3: mutant regexes pinned to one exact assertion each (M1-M16, S1, B1/E1); M4 gets a unique one-byte-budget assertion and B1/E1 target comment 0 head denial.
+    - [x] `make -o build-events -o build-llm-gateway test-cluster-mesh SCOPE=mutations.spec.ts API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`: 59/59; prerequisite artifacts reused after the first full Make build.
   - [x] MINEUR-4: raw tombstone names `thread-2`; its covered child remains readable; B5 installs a barrier from the raw tombstone and dies at that exact assertion.
     - [x] Relaunch evidence: `make test-cluster-mesh SCOPE=tests/storage/profile-mutations.spec.ts API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` passes 40/40, including B5.
   - [ ] MINEUR-5: fence rotation hook (superseded fence cannot publish/abort), nested buffer alias via record bytes reader, hidden audit reader, deliberate `unitId` collision across scopes.

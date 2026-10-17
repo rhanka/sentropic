@@ -479,7 +479,7 @@ const stagedHooks = (store: TestStagedReferenceStore, bound: TestStagedStore) =>
 describe('K2b discriminating mutations: staged', () => {
   it('S1-visible-staging is killed by the staged corpus', async () => {
     const { store, bound } = bindStaged(new VisibleStagingStore('comments'));
-    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(/stay invisible/);
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(/K2b-RED staged: staged effects stay invisible to head lookup/);
   });
 
   it('S2-gap-blind-staging is killed by the staged corpus', async () => {
@@ -717,7 +717,7 @@ class RawTombstoneBarrierStore extends TestStagedReferenceStore {
 describe('K2b discriminating mutations: barrier', () => {
   it('B1-denial-blind-barrier is killed by the barrier corpus', async () => {
     const { bound } = bindStaged(new BarrierBlindStore('comments'));
-    await expect(runBarrierCorpus(bound)).rejects.toThrow(/throws denied before purge/);
+    await expect(runBarrierCorpus(bound)).rejects.toThrow(/K2b-RED barriers G1: covered comment 0 head throws denied before purge/);
   });
 
   it('B2-escape-open-barrier is killed by the barrier corpus', async () => {
@@ -942,7 +942,7 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('E1-plain-error is killed by the barrier corpus', async () => {
     const { bound } = bindStaged(new PlainErrorStore('comments'));
-    await expect(runBarrierCorpus(bound)).rejects.toThrow(/throws denied before purge/);
+    await expect(runBarrierCorpus(bound)).rejects.toThrow(/K2b-RED barriers G1: covered comment 0 head throws denied before purge/);
   });
 
   it('E1-plain-error helper rejects an untyped denial', async () => {
