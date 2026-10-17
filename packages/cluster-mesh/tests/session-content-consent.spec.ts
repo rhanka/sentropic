@@ -744,8 +744,13 @@ describe('content consent refresh binds (P3/m1)', () => {
       () => service.refreshChild(refreshInput({ policyDigest: digest, d1Version: 2 })),
       'ineligible_session',
     );
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({ policyDigest: digest, bindingVersion: 2 })),
+      'ineligible_session',
+    );
     const grant = await service.readGrant('session-1');
     expect(grant?.sourceGeneration).toBe('gen-1');
+    expect(grant?.bindingVersion).toBe(first.bindingVersion);
     expect(grant?.d1Version).toBe(first.d1Version);
     expect(grant?.projectRevision).toBe(1);
   });
