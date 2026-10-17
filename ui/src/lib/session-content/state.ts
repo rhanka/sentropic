@@ -10,12 +10,10 @@ export interface ContentScope {
   sourceId: string;
 }
 export interface NamedHistory {
-  provider: string;
-  conversationId: string;
-  lineage: string;
-  checkpoint: string;
-  inventoryDigest: string;
-  sourceId: string;
+  lineageId: string;
+  checkpointId: string | null;
+  fromRecord: number | null;
+  toRecord: number | null;
 }
 export interface ProjectOffer extends ContentScope {
   expectedRevision: number;
