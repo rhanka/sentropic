@@ -29,6 +29,8 @@ import type { ForkRecord, ForkService } from './server/fork.js';
 import { evaluateAccess, grantAccess, revokeAccess, type AclStore, type ArtifactAcl } from './server/access.js';
 import { parseSourceRef, type SourceStore } from './server/sources.js';
 import { assertArtifactAccess } from './server/authorization.js';
+import type { StagingStore, UploadService } from './server/uploads.js';
+import type { TemplateCatalogPort } from './server/templates.js';
 
 export interface HttpRequest {
   method: string;
@@ -52,6 +54,11 @@ export interface HttpAppDeps {
   sources: SourceStore;
   blobs: PublicationBlobStore;
   isApprovedAccount?: (principalId: string) => boolean;
+  /** Bounded upload sessions (L-5e); upload routes refuse when unwired. */
+  uploads?: UploadService;
+  staging?: StagingStore;
+  /** Template kit + API guide catalog (L-5e); refuses when unwired. */
+  templates?: TemplateCatalogPort;
 }
 
 function errorStatus(message: string): number {
@@ -130,6 +137,32 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
    * owner always, everyone else only with a live read right. Unknown and
    * unreadable artifacts throw the identical error (no existence oracle).
    */
+  // Upload sessions are bound to their creating owner + artifact in-app
+  // (the upload service itself is actor-agnostic staging).
+  const uploadOwners = new Map<string, { artifactId: string; ownerId: string }>();
+
+  function requireUploads(): { uploads: UploadService; staging: StagingStore } {
+    if (deps.uploads === undefined || deps.staging === undefined) {
+      throw new Error('invalid request: uploads are not configured on this host');
+    }
+    return { uploads: deps.uploads, staging: deps.staging };
+  }
+
+  function requireTemplates(): TemplateCatalogPort {
+    if (deps.templates === undefined) {
+      throw new Error('invalid request: templates are not configured on this host');
+    }
+    return deps.templates;
+  }
+
+  function requireUploadOwner(uploadId: string, actorId: string): { artifactId: string } {
+    const binding = uploadOwners.get(uploadId);
+    if (binding === undefined || binding.ownerId !== actorId) {
+      throw new Error(`unknown upload: ${uploadId}`);
+    }
+    return binding;
+  }
+
   async function requireVisible(artifactId: string, actorId: string): Promise<ArtifactAcl> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
     if (acl === undefined) throw new Error(`unknown artifact: ${artifactId}`);
@@ -407,6 +440,98 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
               ...(request.actorId === acl.ownerId ? { grants: acl.grants } : {}),
             },
           };
+        }
+
+        if (request.method === 'POST' && request.path === '/uploads') {
+          const { uploads } = requireUploads();
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          const acl = await requireVisible(artifactId, request.actorId);
+          assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
+          const maxSize = body['maxSize'];
+          if (maxSize !== undefined && (!Number.isInteger(maxSize) || (maxSize as number) < 1)) {
+            throw new Error('invalid request: maxSize must be a positive integer');
+          }
+          const begun = await uploads.begin({
+            mimeType: needString(body['mimeType'], 'mimeType'),
+            maxSize: maxSize as number | undefined,
+          });
+          uploadOwners.set(begun.uploadId, { artifactId, ownerId: request.actorId });
+          return { status: 201, body: begun };
+        }
+
+        if (request.method === 'POST' && request.path === '/uploads/append') {
+          const { uploads } = requireUploads();
+          const uploadId = needString(body['uploadId'], 'uploadId');
+          requireUploadOwner(uploadId, request.actorId);
+          const offset = body['offset'];
+          if (!Number.isInteger(offset) || (offset as number) < 0) {
+            throw new Error('invalid request: offset must be a non-negative integer');
+          }
+          const appended = await uploads.append(uploadId, offset as number, needBytes(body['bytes']));
+          return { status: 200, body: appended };
+        }
+
+        if (request.method === 'POST' && request.path === '/uploads/commit') {
+          const { uploads, staging } = requireUploads();
+          const uploadId = needString(body['uploadId'], 'uploadId');
+          const binding = requireUploadOwner(uploadId, request.actorId);
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          if (artifactId !== binding.artifactId) {
+            throw new Error('invalid request: upload belongs to another artifact');
+          }
+          const acl = await requireVisible(artifactId, request.actorId);
+          assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
+          if (acl.storageScopeId === undefined) throw new Error('invalid request: missing storage scope');
+          const size = body['size'];
+          if (!Number.isInteger(size) || (size as number) < 0) {
+            throw new Error('invalid request: size must be a non-negative integer');
+          }
+          await uploads.commit(uploadId, {
+            digest: needString(body['digest'], 'digest'),
+            size: size as number,
+          });
+          const bytes = await staging.read(uploadId);
+          const result = await deps.publication.publish({
+            ownerId: acl.ownerId,
+            storageScopeId: acl.storageScopeId,
+            artifactId,
+            profile: (body['profile'] ?? {}) as Record<string, string | number | boolean | null | undefined>,
+            files: [{
+              path: needString(body['path'], 'path'),
+              mimeType: needString(body['mimeType'], 'mimeType'),
+              bytes,
+            }],
+            idempotencyKey: typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : undefined,
+            paramsHash: typeof body['paramsHash'] === 'string' ? body['paramsHash'] : undefined,
+          });
+          await deps.lifecycle.trackRelease(artifactId, result.releaseId);
+          await staging.discard(uploadId);
+          return { status: 201, body: result };
+        }
+
+        if (request.method === 'GET' && request.path.startsWith('/templates/')) {
+          const templateId = request.path.slice('/templates/'.length);
+          if (templateId.length === 0 || templateId.includes('/')) {
+            return { status: 404, body: errorBody(404) };
+          }
+          const template = await requireTemplates().getTemplate(templateId);
+          if (template === undefined) return { status: 404, body: errorBody(404) };
+          return { status: 200, body: template };
+        }
+
+        if (
+          request.method === 'GET' &&
+          (request.path === '/api-guide' || request.path.startsWith('/api-guide/'))
+        ) {
+          const version = request.path === '/api-guide'
+            ? undefined
+            : request.path.slice('/api-guide/'.length);
+          if (version !== undefined && (version.length === 0 || version.includes('/'))) {
+            return { status: 404, body: errorBody(404) };
+          }
+          const guide = await requireTemplates().getApiGuide(version);
+          if (guide === undefined) return { status: 404, body: errorBody(404) };
+          return { status: 200, body: guide };
         }
 
         if (request.method === 'POST' && request.path === '/access/public') {
