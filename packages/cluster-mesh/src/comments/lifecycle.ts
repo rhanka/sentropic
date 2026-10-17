@@ -8,6 +8,7 @@ import { authorizeComments } from './authority.js';
 import { installedLifecycleStore } from './installed-store.js';
 import { appendLifecycleAudit, lifecycleResources, readLifecycleControl, retainedHead, writeLifecycleControl } from './lifecycle-io.js';
 import { commandKey, commentsObjectKey, invalid, sameScope } from './storage-schema.js';
+import { retainedCommentsLifecycleBasis } from './lifecycle-evidence.js';
 export const executeCommentsLifecycle = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<CommentsLifecycleResult> => {
   const request = supplied as CanonicalLifecycleRequest;
   if (!request || !sameScope(request.scope, context.grant.scope) || !isLifecycleObjectKind(request.objectKind) || typeof request.objectId !== 'string' || !request.objectId ||
@@ -24,11 +25,13 @@ export const executeCommentsLifecycle = async (options: CommentsServiceOptions, 
   }
   if (request.action !== 'purge-intent' && !await context.available(target)) throw new CanonicalCommandError('denied', 'Lifecycle object is covered');
   if (control.value?.tombstoned && request.action !== 'purge-intent') throw new CanonicalCommandError('denied', 'A tombstone cannot be reversed');
-  if (request.action === 'purge-intent' && (!control.value?.tombstoned || control.value.intentId)) return invalid('purge intent requires an uncompleted tombstone');
   const selection = { kind: 'lifecycle-events' as const, objectKind: request.objectKind, objectId: request.objectId };
   const previous = await retainedHead<LifecycleEventRecord>(context, selection);
+  const basis = await retainedCommentsLifecycleBasis(context, selection, previous);
+  const tombstoned = Boolean(control.value?.tombstoned || basis.some((event) => event.action === 'tombstone'));
+  if (request.action === 'purge-intent' && (!tombstoned || control.value?.intentId)) return invalid('purge intent requires an uncompleted tombstone');
   const input = { scope: request.scope, objectKind: request.objectKind, objectId: request.objectId, action: request.action, archiveKind: request.archiveKind, reason: request.reason, actor: { principal: context.grant.principalId } };
-  const store = installedLifecycleStore(context); const record = createLifecycleEvent(previous ? [previous] : [], input, options.capacity);
+  const store = installedLifecycleStore(context); const record = createLifecycleEvent(basis, input, options.capacity);
   await store.appendLifecycleEvent(request.scope, request.objectKind, request.objectId, record, request.expected);
   await appendLifecycleAudit(context, options, target, request);
   let intent = request.action === 'purge-intent' ? record : null;
@@ -43,7 +46,7 @@ export const executeCommentsLifecycle = async (options: CommentsServiceOptions, 
   }
   if (intent && (context.policy === 'unconfigured' || !context.grant.operations.includes('maintain'))) throw new CanonicalCommandError('denied', 'Purge is not configured or authorized');
   const intentId = intent ? `comments-purge:${sha256Hex(`${context.stream.incarnation}:${intent.hash}`)}` : null;
-  const value: CommentsLifecycleControl = { targets, tombstoned: Boolean(control.value?.tombstoned || request.action === 'tombstone'), intentId,
+  const value: CommentsLifecycleControl = { targets, tombstoned: Boolean(tombstoned || request.action === 'tombstone'), intentId,
     ...(intent ? { candidate: createLifecycleEvent([intent], { ...input, action: 'purge-outcome', archiveKind: null, reason: null }, options.capacity) } : {}) };
   await writeLifecycleControl(context, target, control.version, value);
   await context.apply({ ...emptyEffects(), barriers: request.action === 'tombstone' ? [{ boundary: target, reason: 'comments-tombstone' }] : [],
