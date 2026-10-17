@@ -19,7 +19,7 @@ describe.skipIf(!pgEnabled)('captured registered Postgres queries and resync', (
     try {
       const root = await fixture.open(); const grant = grantFor({ operations: ['read', 'write', 'maintain'] }); const bound = await root.bindNew(grant);
       for (const id of ['a', 'b']) await bound.appendChain(id, { id, hash: id, bytes: '{}' }, { kind: 'absent', allocation: '0' });
-      const first = await bound.query('scope-chain-index', {}, { limit: 1 });
+      const first = await bound.capability('visibility-barriers-v1').port.query('scope-chain-index', {}, { limit: 1 });
       await bound.appendChain('c', { id: 'c', hash: 'c', bytes: '{}' }, { kind: 'absent', allocation: '0' });
       const next = await (await (await fixture.open()).bind(grant)).query('scope-chain-index', {}, { limit: 1, cursor: first.nextCursor });
       expect(next.records).toHaveLength(1); expect(next.nextCursor).toBeNull();
@@ -28,7 +28,7 @@ describe.skipIf(!pgEnabled)('captured registered Postgres queries and resync', (
       await expect(other.query('scope-chain-index', {}, { limit: 1, cursor: first.nextCursor })).rejects.toMatchObject({ code: 'denied' });
       const fence = { fenceId: 'consumer', epoch: '1', incarnation: root.incarnation, ownerId: grant.principalId }; await root.provisionFence(grant, fence);
       const delivery = await bound.journalRead(0, 3, 'resync'); await bound.journalPoison('resync', delivery.events[0]!.eventId, 'failure');
-      const snapshot = await bound.journalResync('resync', fence);
+      const snapshot = await bound.capability('scope-outbox-v1').port.resync('resync', fence);
       await expect(bound.journalCheckpoint('resync', 0, snapshot.journalSeq, fence)).rejects.toMatchObject({ code: 'invalid-command' });
       let after = 0;
       for (let count = 0; count < 10; count += 1) { const page = await bound.snapshotRead(snapshot.snapshotRoot, after, 1); if (page.next === null) break; after = page.next; }
