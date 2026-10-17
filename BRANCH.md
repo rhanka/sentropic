@@ -65,6 +65,7 @@
 ## Feedback Loop
 - [ ] `attention` BRCM2-EX1 — initial BRANCH.md creation exceeds 150 lines (template-mandated detailed plan); doc-only commit; rollback: none needed.
 - [ ] `attention` BRCM2-EX2 — consolidation commits are carried as-is from #666/#669/#670/#671/#667 (authorship preserved, BRANCH.md stripped); historical commits above 150 lines (for example K4 `staged-runtime.ts`, 986 lines) are not rewritten; the K4 rebuild lots replace them with commits under 150 lines.
+- [ ] `attention` BRCM2-EX3 — MAJEUR-N1 corpus re-derivation touches the reference and four corpora (~690 changed lines); the reference rejects every non-codec digest, so the corpora and reference land as three file-grouped commits (corpora RED first, reference GREEN last) above 150 lines each; rollback: revert the three commits together.
 - [ ] `attention` BRCM2-PORT — storage port changes for gr-conductor (engram) co-review:
   - [ ] PORT-1 additive: `src/storage/staged-codec.ts` shared canonical staged codec (effects, derived dependencies, fragment digest, dependency/effect roots, v1); K3 validated behaviour unchanged.
 - [ ] `attention` BRCM2-VER — version ordering: npm `@sentropic/cluster-mesh` 0.16.0 = main 0.16.0; PR #679 holds 0.18.0; this branch takes 0.19.0 so either merge order keeps both strictly above main. `@sentropic/comments` stays 0.3.0 unless `packages/comments/src/**` changes (forbidden here).
@@ -109,6 +110,9 @@
   - [ ] MAJEUR-N1: add a shared canonical staged codec (versioned, domain-separated, framed) deriving `fragmentDigest`, `dependencyRoot` and `effectRoot`; reference recomputes on every ordinal and on seal; corpora derive values from the codec instead of `dep-root-k2b` / `eff-root-k2b`.
     - [x] RED spec `packages/cluster-mesh/tests/storage/staged-codec.spec.ts` (independent literal vectors + discrimination).
     - [x] Codec `packages/cluster-mesh/src/storage/staged-codec.ts`; mutants MC1 (dependencies dropped), MC2 (moduleResult always absent), MC3 (null predecessor encoded as empty) each killed at one targeted test.
+    - [ ] Corpora derive digests/roots via `stagedDigestOf` / `stagedSealRoot` (`staged-corpus.ts`, `barrier-corpus.ts`, `replay-corpus.ts`); new cases: changed-dependency retry, other-effects digest on a new ordinal, self-consistent foreign roots, unresolved dependency at seal; handle carries `moduleId`/`scope` (K1 `StagedUnitHandle` alignment).
+    - [ ] Reference recomputes digests on every ordinal, roots at seal, and dependency closure over base plus earlier fragments; mutants S14 (new-ordinal digest trust) and S15 (closure blind) killed at their targeted assertions; S2/S7 kept faithful (gap mutant recomputes its digest; buffer mutation moved after seal so roots do not mask it).
+    - [ ] Evidence: `make test-cluster-mesh ... ENV=test-cm-comments-m2` 62 files pass, 3 fail (the 9 carried K4 tests, unchanged, Lot 2).
   - [ ] MAJEUR-N1: C01 case with a self-consistent but wrong digest on a NEW ordinal and a changed-dependency-only retry; mutant "trust caller digest on new ordinal" killed at its targeted assertion.
   - [ ] MINEUR-1: read corpus accepts `null` or a fitting recovery cursor on empty `incomplete` pages; cross-validate missing-head, disposed-chain and empty pages through `validateReadPage`.
   - [ ] MINEUR-2: M18 mutant measures the candidate cursor instead of the effective cursor (no budget inflation).
