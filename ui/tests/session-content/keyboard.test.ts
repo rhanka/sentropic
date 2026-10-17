@@ -23,6 +23,24 @@ const ports = () => ({
 });
 
 describe('bounded browser-confirmed keyboard', () => {
+  it('should return from each fresh IdP ceremony without automatically acquiring or sending', async () => {
+    const api = ports(); const flow = new KeyboardFlow(context, api);
+    await flow.acquire();
+    expect(api.acquire).not.toHaveBeenCalled();
+    expect(api.prove).toHaveBeenCalledTimes(1);
+    await flow.send();
+    expect(api.acquire).toHaveBeenCalledTimes(1);
+    flow.edit('first', false); await flow.prepare();
+    expect(api.prove).toHaveBeenCalledTimes(2);
+    expect(api.submit).not.toHaveBeenCalled();
+    await flow.send();
+    flow.edit('second', true); await flow.prepare();
+    expect(api.prove).toHaveBeenCalledTimes(3);
+    expect(api.submit).toHaveBeenCalledTimes(1);
+    await flow.send(); await flow.send();
+    expect(api.submit).toHaveBeenCalledTimes(2);
+  });
+
   it('should preview exact UTF-8 bytes and escaped controls without adding a newline', () => {
     expect(exactInput('é\u001b', false)).toMatchObject({ text: 'é\u001b', byteLength: 3, preview: '"é\\u001b"' });
     expect(exactInput('echo ok', true).text).toBe('echo ok\n');
