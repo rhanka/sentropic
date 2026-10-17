@@ -147,13 +147,13 @@
     concurrency: 10,
     publishingConcurrency: 5,
     defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere',
-    defaultModel: 'gpt-5.5',
+    defaultModel: '',
     processingInterval: 1000
   };
   let modelCatalog: ModelCatalogPayload = {
     providers: [],
     models: [],
-    defaults: { provider_id: 'openai', model_id: 'gpt-4.1-nano' }
+    defaults: { provider_id: 'openai', model_id: '' }
   };
   let modelCatalogGroups: ModelCatalogGroup[] = [];
   let isLoadingAISettings = false;
@@ -161,7 +161,7 @@
   let isSavingAISettings = false;
   let userAISettings = {
     defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere',
-    defaultModel: 'gpt-4.1-nano',
+    defaultModel: '',
   };
   let isLoadingUserAISettings = false;
   let isSavingUserAISettings = false;
@@ -835,6 +835,7 @@
       );
       if (!exactMatch) {
         const providerFallback =
+          modelCatalog.models.find((entry) => entry.provider_id === modelCatalog.defaults.provider_id && entry.model_id === modelCatalog.defaults.model_id) ??
           modelCatalog.models.find((entry) => entry.provider_id === aiSettings.defaultProviderId) ??
           modelCatalog.models[0];
         aiSettings.defaultProviderId = providerFallback.provider_id;
@@ -852,6 +853,7 @@
       );
       if (!exactMatch) {
         const providerFallback =
+          modelCatalog.models.find((entry) => entry.provider_id === modelCatalog.defaults.provider_id && entry.model_id === modelCatalog.defaults.model_id) ??
           modelCatalog.models.find(
             (entry) => entry.provider_id === userAISettings.defaultProviderId
           ) ?? modelCatalog.models[0];
