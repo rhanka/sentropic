@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { applyPgMigrations, loadPgAssets, verifyPgInstallation, type PgAsset } from '../../src/storage/postgres/migrations.js';
 import { createPgFixture } from './pg-fixture.js';
 import { pgEnabled } from './pg-driver.js';
+import { createPostgresKernel } from '../../src/storage/postgres/index.js';
 
 describe.skipIf(!pgEnabled)('independent module migration chains', () => {
   it('installs comments once and appends core 007 without renumbering comments receipts', async () => {
@@ -28,7 +29,7 @@ describe.skipIf(!pgEnabled)('independent module migration chains', () => {
       expect(after).toHaveLength(13);
       expect(after.filter((row) => row.schemaRole === 'comments')).toEqual(before.filter((row) => row.schemaRole === 'comments'));
       expect(after.at(-1)?.id).toBe(next.id);
-      await f.open();
+      await createPostgresKernel({ ...f.options, assets: upgraded });
     } finally { await f.close(); }
   });
 });

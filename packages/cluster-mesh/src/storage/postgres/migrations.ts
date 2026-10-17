@@ -29,6 +29,21 @@ export interface PgSchemaAttestation {
 }
 const digest = (bytes: string): string => createHash('sha256').update(bytes, 'utf8').digest('hex');
 const refuse = (): never => { throw new PostgresStorageError('configuration'); };
+const validateChains = (assets: readonly PgAsset[]): void => {
+  const chains = new Map<string, PgAsset[]>();
+  const seen = new Set<string>();
+  for (const asset of assets) {
+    const role = asset.schemaRole ?? 'core';
+    const chain = chains.get(role) ?? [];
+    const previous = chain.at(-1);
+    if (seen.has(asset.id) || asset.order !== chain.length + 1 || asset.fromVersion !== chain.length ||
+      asset.toVersion !== chain.length + 1 || asset.dialect !== 'postgresql' || asset.mode !== 'transactional' ||
+      digest(asset.sql) !== asset.checksum || asset.requires.some((id) => !seen.has(id))) refuse();
+    const required = previous ? [previous.id] : role === 'core' ? [] : ['cluster-mesh-pg/006-staged-coverage@1'];
+    if (JSON.stringify(asset.requires) !== JSON.stringify(required)) refuse();
+    chain.push(asset); chains.set(role, chain); seen.add(asset.id);
+  }
+};
 export const loadPgAssets = async (selected: { readonly comments?: boolean } = {}): Promise<readonly PgAsset[]> => {
   const directory = new URL('../../../assets/storage/postgres/', import.meta.url);
   const manifest = JSON.parse(await readFile(new URL('manifest.json', directory), 'utf8')) as { version: number; assets: Omit<PgAsset, 'sql'>[] };
@@ -39,13 +54,13 @@ export const loadPgAssets = async (selected: { readonly comments?: boolean } = {
     manifest.assets.push(...module.assets);
   }
   const assets: PgAsset[] = [];
-  for (const [index, asset] of manifest.assets.entries()) {
-    if (!/^(comments\/)?\d{3}-[a-z-]+\.sql$/.test(asset.file) || asset.order !== index + 1 || asset.dialect !== 'postgresql' || asset.mode !== 'transactional' || asset.fromVersion !== index || asset.toVersion !== index + 1 ||
-      JSON.stringify(asset.requires) !== JSON.stringify(index === 0 ? [] : [assets[index - 1]!.id])) refuse();
+  for (const asset of manifest.assets) {
+    if (!/^(comments\/)?\d{3}-[a-z-]+\.sql$/.test(asset.file)) refuse();
     const sql = await readFile(new URL(asset.file, directory), 'utf8');
     if (digest(sql) !== asset.checksum) refuse();
     assets.push(Object.freeze({ ...asset, requires: Object.freeze([...asset.requires]), sql }));
   }
+  validateChains(assets);
   return Object.freeze(assets);
 };
 const fingerprint = async (session: PgSession, layout: PgLayout, assets: readonly PgAsset[]): Promise<string> => {
@@ -64,12 +79,19 @@ const fingerprint = async (session: PgSession, layout: PgLayout, assets: readonl
   return digest(decodePgText(result.rows[0]?.objects));
 };
 const checkReceipts = (assets: readonly PgAsset[], rows: readonly PgMigrationReceipt[]): void => {
+  validateChains(assets);
   if (rows.length !== assets.length) refuse();
-  for (const [index, asset] of assets.entries()) {
-    if (asset.order !== index + 1 || asset.fromVersion !== index || asset.toVersion !== index + 1 || digest(asset.sql) !== asset.checksum || JSON.stringify(asset.requires) !== JSON.stringify(index ? [assets[index - 1]!.id] : [])) refuse();
-    const row = rows[index];
+  const installed = new Map(rows.map((row) => [row.id, row]));
+  if (installed.size !== rows.length) refuse();
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (row.requires.some((id) => !seen.has(id))) refuse();
+    seen.add(row.id);
+  }
+  for (const asset of assets) {
+    const row = installed.get(asset.id);
     if (!row || row.id !== asset.id || row.order !== asset.order || row.checksum !== asset.checksum || row.appliedChecksum !== asset.checksum || row.status !== 'complete' || row.conversionState !== 'not-required' ||
-      row.dialect !== asset.dialect || row.mode !== asset.mode || row.fromVersion !== asset.fromVersion || row.toVersion !== asset.toVersion || !row.hostMigrationId || !/^[a-f0-9]{64}$/.test(row.hostChecksum) || JSON.stringify(row.requires) !== JSON.stringify(asset.requires)) refuse();
+      row.schemaRole !== asset.schemaRole || row.dialect !== asset.dialect || row.mode !== asset.mode || row.fromVersion !== asset.fromVersion || row.toVersion !== asset.toVersion || !row.hostMigrationId || !/^[a-f0-9]{64}$/.test(row.hostChecksum) || JSON.stringify(row.requires) !== JSON.stringify(asset.requires)) refuse();
   }
 };
 export const verifyPgInstallation = async (session: PgSession, configured: PgLayout, assets: readonly PgAsset[], history: PgHostHistory): Promise<void> => {
@@ -100,17 +122,21 @@ export const reattestPgInstallation = async (
 };
 export const applyPgMigrations = async (session: PgSession, configured: PgLayout, assets: readonly PgAsset[], history: PgHostHistory, host: { readonly id: string; readonly checksum: string }): Promise<void> => {
   const layout = validatePgLayout(configured);
+  validateChains(assets);
   if (!host.id || !/^[a-f0-9]{64}$/.test(host.checksum)) refuse();
   const applied = await history.read(session);
   if (applied.length > assets.length) refuse();
-  if (applied.length > 0) await verifyPgInstallation(session, layout, assets.slice(0, applied.length), history);
+  const installed = new Set(applied.map((row) => row.id));
+  if (applied.length > 0) await verifyPgInstallation(session, layout, assets.filter((asset) => installed.has(asset.id)), history);
   const schema = quotePgIdentifier(layout.dataSchema);
-  for (const asset of assets.slice(applied.length)) {
+  for (const asset of assets.filter((candidate) => !installed.has(candidate.id))) {
     if (digest(asset.sql) !== asset.checksum) refuse();
+    if (asset.requires.some((id) => !installed.has(id))) refuse();
     if (asset.schemaRole === 'comments' && !layout.projectionSchemas.comments) refuse();
     await session.execute({ text: asset.sql.replaceAll('__DATA_SCHEMA__', schema).replaceAll('__COMMENTS_SCHEMA__', quotePgIdentifier(layout.projectionSchemas.comments ?? layout.dataSchema)), values: [] });
     const { sql: _sql, file: _file, ...identity } = asset;
+    installed.add(asset.id);
     await history.complete(session, { ...identity, hostMigrationId: host.id, hostChecksum: host.checksum, appliedChecksum: asset.checksum,
-      schemaFingerprint: await fingerprint(session, layout, assets), status: 'complete', conversionState: 'not-required' });
+      schemaFingerprint: await fingerprint(session, layout, assets.filter((candidate) => installed.has(candidate.id))), status: 'complete', conversionState: 'not-required' });
   }
 };

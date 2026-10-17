@@ -4,11 +4,11 @@
     {
       "id": "cluster-mesh-pg/comments/001-projections@1",
       "file": "comments/001-projections.sql",
-      "order": 7,
+      "order": 1,
       "dialect": "postgresql",
       "mode": "transactional",
-      "fromVersion": 6,
-      "toVersion": 7,
+      "fromVersion": 0,
+      "toVersion": 1,
       "requires": [
         "cluster-mesh-pg/006-staged-coverage@1"
       ],
@@ -18,11 +18,11 @@
     {
       "id": "cluster-mesh-pg/comments/002-transport@1",
       "file": "comments/002-transport.sql",
-      "order": 8,
+      "order": 2,
       "dialect": "postgresql",
       "mode": "transactional",
-      "fromVersion": 7,
-      "toVersion": 8,
+      "fromVersion": 1,
+      "toVersion": 2,
       "requires": [
         "cluster-mesh-pg/comments/001-projections@1"
       ],
@@ -32,11 +32,11 @@
     {
       "id": "cluster-mesh-pg/comments/003-exports@1",
       "file": "comments/003-exports.sql",
-      "order": 9,
+      "order": 3,
       "dialect": "postgresql",
       "mode": "transactional",
-      "fromVersion": 8,
-      "toVersion": 9,
+      "fromVersion": 2,
+      "toVersion": 3,
       "requires": [
         "cluster-mesh-pg/comments/002-transport@1"
       ],
@@ -46,11 +46,11 @@
     {
       "id": "cluster-mesh-pg/comments/004-authority@1",
       "file": "comments/004-authority.sql",
-      "order": 10,
+      "order": 4,
       "dialect": "postgresql",
       "mode": "transactional",
-      "fromVersion": 9,
-      "toVersion": 10,
+      "fromVersion": 3,
+      "toVersion": 4,
       "requires": [
         "cluster-mesh-pg/comments/003-exports@1"
       ],
@@ -60,11 +60,11 @@
     {
       "id": "cluster-mesh-pg/comments/005-lifecycle-evidence@1",
       "file": "comments/005-lifecycle-evidence.sql",
-      "order": 11,
+      "order": 5,
       "dialect": "postgresql",
       "mode": "transactional",
-      "fromVersion": 10,
-      "toVersion": 11,
+      "fromVersion": 4,
+      "toVersion": 5,
       "requires": [
         "cluster-mesh-pg/comments/004-authority@1"
       ],
@@ -74,11 +74,11 @@
     {
       "id": "cluster-mesh-pg/comments/006-review-evidence@1",
       "file": "comments/006-review-evidence.sql",
-      "order": 12,
+      "order": 6,
       "dialect": "postgresql",
       "mode": "transactional",
-      "fromVersion": 11,
-      "toVersion": 12,
+      "fromVersion": 5,
+      "toVersion": 6,
       "requires": [
         "cluster-mesh-pg/comments/005-lifecycle-evidence@1"
       ],
