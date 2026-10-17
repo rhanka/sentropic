@@ -590,7 +590,7 @@ describe('session consent durable lifecycle', () => {
     ), 'unknown_outcome');
   });
 
-  it('should expire finite copies at their capture deadline without extension', async () => {
+  it('should expire finite copies at first durable admission despite a delayed PUT', async () => {
     await acceptProject({
       retentionByChannel: {
         'terminal.cache': { mode: 'duration', durationSeconds: 3600 },
@@ -620,9 +620,11 @@ describe('session consent durable lifecycle', () => {
     const reserved = await service.reserveBeforeUpload(
       'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-fin', ctx,
     );
-    const published = await service.publishAfterUpload(reserved.reservationId, body, ctx);
-    expect(published.expiresAt).toBe(now + 3_600_000);
-    now += 3_600_000 + 1;
+    const firstAdmission = now;
+    const delayed = makeService({ publishHooks: { beforePut: async () => { now += 5000; } } });
+    const published = await delayed.publishAfterUpload(reserved.reservationId, body, ctx);
+    expect(published.expiresAt).toBe(firstAdmission + 3_600_000);
+    now = firstAdmission + 3_600_000 + 1;
     await expectContentError(
       () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx),
       'object_expired',
