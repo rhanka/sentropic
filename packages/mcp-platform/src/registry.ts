@@ -295,20 +295,35 @@ function deepFreeze(value: unknown): void {
   }
 }
 
+function refuseUnsupportedDefinitionKind(detail: string): never {
+  const error = new Error(
+    `register refuses remote-bound definition: unsupported_definition_kind (${detail})`,
+  ) as Error & { code?: string };
+  error.code = 'unsupported_definition_kind';
+  throw error;
+}
+
 function checkDefinitionShape(definition: RegistryDefinition): void {
-  // Contract-v6 R1 boundary: a remote-bound definition kind is refused before
-  // any other validation or mutation, even when the input also carries
-  // local-looking fields or a lazy loader payload. Remote-bound providers
-  // register only post-merge (R2); this registry stays local-only.
+  // Contract-v8 §3.1 R1 boundary: a remote-bound definition kind is refused
+  // before any other validation or mutation, even when the input also
+  // carries local-looking fields or a lazy loader payload. Remote-bound
+  // providers register only post-merge (R2); this registry stays local-only.
   if (
     isRecord(definition) &&
     (definition as unknown as Record<string, unknown>).kind === 'remote-bound'
   ) {
-    const error = new Error(
-      'register refuses remote-bound definition: unsupported_definition_kind',
-    ) as Error & { code?: string };
-    error.code = 'unsupported_definition_kind';
-    throw error;
+    refuseUnsupportedDefinitionKind('definition kind');
+  }
+  // Contract-v8 §3.1 M6.3: an adapter record claiming the remote kind is
+  // refused the same way, even on a local-kind definition. Checked before
+  // any other validation or mutation, with zero state change.
+  if (
+    isRecord(definition) &&
+    isRecord((definition as unknown as Record<string, unknown>).adapter) &&
+    ((definition as unknown as Record<string, unknown>).adapter as Record<string, unknown>).kind ===
+      'remote-bound'
+  ) {
+    refuseUnsupportedDefinitionKind('adapter kind');
   }
   if (!isRecord(definition) || !isRecord(definition.manifest)) {
     throw new Error('register requires a definition with a manifest object');
@@ -396,6 +411,13 @@ export function createProviderRegistry(): ProviderRegistry {
       }
       if (!isRecord(payload) || !isRecord(payload.toolValues)) {
         return { diagnostics: [{ code: 'load_failure' as never, path: prefix, message: 'lazy loader returned a malformed payload' }] };
+      }
+      // Contract-v8 §3.1 M6.3: a lazy payload tunneling a remote-claiming
+      // adapter is refused before anything is published (`current`
+      // untouched). The `as never` follows the file convention; m5 declares
+      // the code in the diagnostic union.
+      if (isRecord(payload.adapter as unknown) && (payload.adapter as unknown as Record<string, unknown>).kind === 'remote-bound') {
+        return { diagnostics: [{ code: 'unsupported_definition_kind' as never, path: prefix, message: 'lazy loader returned a remote-claiming adapter' }] };
       }
       toolValues = payload.toolValues as Record<string, LocalToolValues>;
       handlers = payload.handlers;
