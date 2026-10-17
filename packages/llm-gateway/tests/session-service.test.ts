@@ -71,7 +71,8 @@ describe('GatewaySessionService', () => {
     ]);
     expect(first.sessionRef).toBe(second.sessionRef);
     const keys = [first.key, second.key].filter(Boolean);
-    expect(keys).toHaveLength(1);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
   });
 
   it('refuses unauthenticated acquisition and cross-owner key use without an oracle', async () => {
@@ -112,6 +113,15 @@ describe('GatewaySessionService', () => {
     ).rejects.toMatchObject({ code: 'REVOKED' });
     const listed = await restarted.listSessions({ ownerScopeRef: 'owner-a' });
     expect(listed[0].expiresAt).toBe(issued.expiresAt);
+    await expect(restarted.acquireSession(acquireInput())).rejects.toMatchObject({ code: 'REVOKED' });
+  });
+
+  it('reacquires the identical protected key and original expiry after restart', async () => {
+    const store = memoryStore();
+    const first = await new GatewaySessionService(store).acquireSession(acquireInput());
+    const second = await new GatewaySessionService(store).acquireSession(acquireInput());
+    expect(second).toMatchObject({ key: first.key, expiresAt: first.expiresAt, sessionRef: first.sessionRef, reacquired: true });
+    expect(store.commits()).toBe(1);
   });
 
   it('issues no key when the durable commit fails, and refuses on corrupt stores', async () => {
