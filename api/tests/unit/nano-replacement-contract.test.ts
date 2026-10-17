@@ -23,6 +23,10 @@ const runtime = providerRegistry.requireProvider('openai');
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe('nano replacement through the product mesh boundary', () => {
+  it('should exclude retired nano from selectable provider models', () => {
+    expect(providerRegistry.listModels().some((entry) => entry.modelId.startsWith('gpt-4.1-nano'))).toBe(false);
+  });
+
   it.each(['', ' gpt-4.1-nano ', 'GPT-4.1-NANO-2025-04-14'])(
     'should repair stale configuration %s', (configured) => {
       expect(getDefaultOpenAIModel(configured)).toBe('gpt-6-luna');
