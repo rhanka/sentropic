@@ -10,6 +10,8 @@ import { readRootSnapshot } from './root-snapshot.js';
 import { completeRootPurge, configureRootLifecycle, declareRootCoverage, holdRootTarget, shareRootBlob } from './root-lifecycle.js';
 import type { PurgePolicy } from './staged-state.js';
 import { stagedLimits } from './staged-operations.js';
+import { rootCapability, STAGED_PROFILES } from './root-profiles.js';
+import type { ProfileId } from './profiles.js';
 
 /** Adapter-facing scope: all runtime state stays in true private slots. */
 export class RootScopedRuntime {
@@ -19,6 +21,8 @@ export class RootScopedRuntime {
   get grant(): ScopeGrant<unknown> { return this.#inner.grant; }
   get scope() { return this.#inner.scope; }
   get moduleId() { return this.#inner.moduleId; }
+  get profiles() { return STAGED_PROFILES; }
+  capability(profile: ProfileId) { this.#core.kernel.bind(this.grant); return rootCapability(this, profile); }
   requireOperation(...args: Parameters<ScopedRuntime['requireOperation']>) { return this.#inner.requireOperation(...args); }
   appendChain(...args: Parameters<ScopedRuntime['appendChain']>) { return this.#inner.appendChain(...args); }
   genesis(...args: Parameters<ScopedRuntime['genesis']>) { return this.#inner.genesis(...args); }
