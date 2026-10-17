@@ -73,6 +73,21 @@ export const createOAuthAuthorizeHandler =
       }
     }
 
+    // B3: per-client minimum ACR. A live session below the required level is
+    // treated like `prompt=login`: redirect to login for a forced re-auth. If
+    // the resumed session is still insufficient (magic-link/federation bearer),
+    // the resume path refuses with `access_denied`.
+    if (session && !meetsRequiredAcr(resolveOAuthAcr(session.sessionRecord), validation.client.requiredAcr)) {
+      forceReauth = true;
+    }
+
+    // C1: per-client subject allowlist, enforced before consent. A live session
+    // for a non-listed subject is refused immediately (`access_denied`); without
+    // a session the flow proceeds to login (the owner can still authenticate).
+    if (session && !isSubjectAllowed(session.user.id, validation.client.allowedUserIds)) {
+      return redirectWithOAuthError(validation.redirectUri, 'access_denied', validation.state, c.req.url, options.issuer);
+    }
+
     if (!session || forceReauth) {
       if (prompts.has('none')) {
         // `prompt=none` cannot be satisfied without re-auth: surface the precise OIDC error.
@@ -228,6 +243,17 @@ const resumeLoginContinuation = async (
     return c.redirect(appendParams(options.loginUrl, { continue: continuation }, c.req.url), 302);
   }
 
+  // B3+C1 (resume): the post-login session must satisfy the client policy. A
+  // still-insufficient level (magic-link/federation bearer after a forced
+  // re-auth) or a non-allowlisted subject is refused with `access_denied`
+  // rather than looping back to login.
+  if (!isSubjectAllowed(session.user.id, client.allowedUserIds)) {
+    return redirectWithOAuthError(payload.redirectUri, 'access_denied', payload.state, c.req.url, options.issuer);
+  }
+  if (!meetsRequiredAcr(resolveOAuthAcr(session.sessionRecord), client.requiredAcr)) {
+    return redirectWithOAuthError(payload.redirectUri, 'access_denied', payload.state, c.req.url, options.issuer);
+  }
+
   // ARCH-11 §4.2.4: the continuation was sealed BEFORE login, so `deriveAuthorizeTenantId` ran with
   // no `userId` and necessarily returned null (`if (!userId) return null`). Re-derive it HERE, now
   // that the session identifies the principal, and seal THAT value. Spreading `...payload` alone
@@ -362,6 +388,27 @@ const validateScope = (
     return redirectWithOAuthError(redirectUri, 'invalid_scope', state, baseUrl, issuer);
   }
   return requestedScopes.join(' ');
+};
+
+/**
+ * B3: minimum-ACR check. No policy (null/undefined/empty) allows any session
+ * (zero change for existing clients). `passkey-fresh` requires exactly that
+ * level; `bearer` allows any session. Unknown required values fail closed.
+ */
+export const meetsRequiredAcr = (sessionAcr: string, requiredAcr?: string | null): boolean => {
+  if (!requiredAcr) return true;
+  if (requiredAcr === 'urn:sentropic:loa:passkey-fresh') return sessionAcr === requiredAcr;
+  if (requiredAcr === 'urn:sentropic:loa:bearer') return true;
+  return false;
+};
+
+/**
+ * C1: subject-allowlist check. An empty/absent list allows every subject (zero
+ * change for existing clients); otherwise the session user id must be listed.
+ */
+export const isSubjectAllowed = (userId: string, allowedUserIds?: string[] | null): boolean => {
+  if (!allowedUserIds || allowedUserIds.length === 0) return true;
+  return allowedUserIds.includes(userId);
 };
 
 /**
