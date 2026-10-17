@@ -106,6 +106,20 @@ async function activate(world: World, host: string, actorId: string, artifactId:
 const get = (world: World, input: ContentRequest) => world.handler.handle(input);
 
 describe('content serving e2e', () => {
+  it('should refuse an r1 activation ticket when the stable origin now serves r2', async () => {
+    const world = makeWorld();
+    const v1 = await publish(world, V1, 'p-1');
+    const issued = await world.tickets.issue({
+      subjectId: FARID, artifactId: v1.id, releaseId: v1.releaseId, channel: 'stable',
+    });
+    await publish(world, V2, 'p-2');
+    const response = await get(world, {
+      method: 'GET', host: `${v1.id}.${BASE}`, path: '/', actorId: FARID, ticket: issued.ticketId,
+    });
+    expect(response.status).toBe(401);
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
+
   it('activates, serves raw bytes, pins releases and cuts off on withdrawal', async () => {
     const world = makeWorld();
     const v1 = await publish(world, V1, 'p-1');
