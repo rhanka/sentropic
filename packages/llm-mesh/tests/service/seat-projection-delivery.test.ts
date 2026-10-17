@@ -27,6 +27,7 @@ describe('seat-projection-delivery', () => {
       generation: 4,
       operationId: 'op-delivery-01',
       accessRef: 'access-delivery-01',
+      issuedAt: '2026-09-01T00:00:00.000Z',
     });
     return parseTokenSeatEnvelope({ raw: JSON.stringify(fromCli), ownerScope: 'owner-seat-01' });
   };
