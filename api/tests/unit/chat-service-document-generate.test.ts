@@ -39,6 +39,7 @@ vi.mock('../../src/services/storage-s3', () => {
 import { callLLMStream } from '../../src/services/llm-runtime';
 import { generateFreeformDocx } from '../../src/services/docx-generation';
 import { chatService } from '../../src/services/chat-service';
+import { mockDefaultModelEffort } from '../utils/mock-default-model-effort';
 
 type StreamEvent = { type: string; data: unknown };
 
@@ -59,6 +60,7 @@ describe('ChatService - document_generate tool (unit, mocked OpenAI)', () => {
   let folderId: string;
 
   beforeEach(async () => {
+    mockDefaultModelEffort(chatService);
     userId = createId();
     await db.insert(users).values({
       id: userId,
@@ -97,6 +99,7 @@ describe('ChatService - document_generate tool (unit, mocked OpenAI)', () => {
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
