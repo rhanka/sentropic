@@ -9,21 +9,51 @@ import type { PgStagedModule } from './staged-module.js';
 import type { ScopeGrant } from '../authority.js';
 
 export type SqlValue = string | number | boolean | bigint | Uint8Array | null | readonly SqlValue[];
-export interface SqlStatement { readonly text: string; readonly values: readonly SqlValue[]; }
-export interface SqlResult { readonly rows: readonly Readonly<Record<string, unknown>>[]; readonly rowCount?: number | null; }
-export interface PgSession { execute(statement: SqlStatement): Promise<SqlResult>; }
-export interface PgTransactionOptions { readonly isolation: 'serializable'; readonly readOnly: boolean; readonly deadlineMs: number; }
+export interface SqlStatement {
+  readonly text: string;
+  readonly values: readonly SqlValue[];
+}
+export interface SqlResult {
+  readonly rows: readonly Readonly<Record<string, unknown>>[];
+  readonly rowCount?: number | null;
+}
+export interface PgSession {
+  execute(statement: SqlStatement): Promise<SqlResult>;
+}
+export interface PgTransactionOptions {
+  readonly isolation: 'serializable';
+  readonly readOnly: boolean;
+  readonly deadlineMs: number;
+}
 export interface InjectedPgDriver {
   transaction<T>(options: PgTransactionOptions, operation: (session: PgSession) => Promise<T>): Promise<T>;
 }
 export interface PgLayout {
-  readonly dataSchema: string; readonly projectionSchemas: Readonly<Partial<Record<StorageModuleId, string>>>; readonly outboxSchema: string;
+  readonly dataSchema: string;
+  readonly projectionSchemas: Readonly<Partial<Record<StorageModuleId, string>>>;
+  readonly outboxSchema: string;
 }
 export interface PgBudgets {
-  readonly lockWaitMs: number; readonly statementMs: number; readonly idleMs: number; readonly flushMs: number; readonly attempts: number;
+  readonly lockWaitMs: number;
+  readonly statementMs: number;
+  readonly idleMs: number;
+  readonly flushMs: number;
+  readonly attempts: number;
 }
-export interface PgStreamIdentity { readonly moduleId: StorageModuleId; readonly scope: StorageScope; readonly incarnation: string; readonly stream: string; }
-export interface PgJournalDraft { readonly eventId: string; readonly seq: string; readonly commitId: string; readonly rootVersion: string; readonly operationKey?: string; readonly segment?: { readonly operationKey: string; readonly from: string; readonly to: string }; }
+export interface PgStreamIdentity {
+  readonly moduleId: StorageModuleId;
+  readonly scope: StorageScope;
+  readonly incarnation: string;
+  readonly stream: string;
+}
+export interface PgJournalDraft {
+  readonly eventId: string;
+  readonly seq: string;
+  readonly commitId: string;
+  readonly rootVersion: string;
+  readonly operationKey?: string;
+  readonly segment?: { readonly operationKey: string; readonly from: string; readonly to: string };
+}
 export interface PgOutboxBinding {
   // The host writes through this exact transaction session. Hidden staged
   // units publish one sealed segment, never a history-sized append loop.
@@ -32,21 +62,39 @@ export interface PgOutboxBinding {
   find(session: PgSession, stream: PgStreamIdentity, eventId: string): Promise<PgJournalDraft | null>;
 }
 export interface PgQueryContext {
-  readonly layout: PgLayout; readonly currentRoot: string | null; readonly grant: ScopeGrant<unknown>;
-  readonly session: PgSession; readonly stream: PgStreamIdentity; readonly root: string | null;
-  readonly cursor: unknown; readonly limit: number; readonly maxEncodedBytes: number;
+  readonly layout: PgLayout;
+  readonly currentRoot: string | null;
+  readonly grant: ScopeGrant<unknown>;
+  readonly session: PgSession;
+  readonly stream: PgStreamIdentity;
+  readonly root: string | null;
+  readonly cursor: unknown;
+  readonly limit: number;
+  readonly maxEncodedBytes: number;
 }
-export interface PgQueryPage { readonly records: readonly unknown[]; readonly nextCursor: unknown; }
+export interface PgQueryPage {
+  readonly records: readonly unknown[];
+  readonly nextCursor: unknown;
+}
 export type PgRegisteredQuery = (input: unknown, context: PgQueryContext) => Promise<PgQueryPage>;
-export type PgProjectionContext = Pick<PgQueryContext, 'session' | 'root' | 'stream' | 'layout' | 'grant'> & { readonly stagedUnitId?: string; readonly coverageRoot?: string | null };
+export type PgProjectionContext = Pick<PgQueryContext, 'session' | 'root' | 'stream' | 'layout' | 'grant'> & {
+  readonly stagedUnitId?: string;
+  readonly coverageRoot?: string | null;
+};
 export type PgRegisteredProjection = (effects: AtomicUnit, context: PgProjectionContext) => Promise<void>;
 export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 'coordinator' | 'predicates'> {
   /** Stable host-managed key, shared by every runtime/replica of this store. */
   readonly cursorSecret: string;
-  readonly moduleId: StorageModuleId; readonly driver: InjectedPgDriver; readonly layout: PgLayout;
-  readonly ids?: { next(kind: string): string }; readonly domainClock?: { now(): string };
-  readonly outbox?: PgOutboxBinding; readonly budgets?: Partial<PgBudgets>; readonly limits?: WorkLimits;
-  readonly descriptor?: ModuleDescriptor; readonly queries?: Readonly<Record<string, PgRegisteredQuery>>;
+  readonly moduleId: StorageModuleId;
+  readonly driver: InjectedPgDriver;
+  readonly layout: PgLayout;
+  readonly ids?: { next(kind: string): string };
+  readonly domainClock?: { now(): string };
+  readonly outbox?: PgOutboxBinding;
+  readonly budgets?: Partial<PgBudgets>;
+  readonly limits?: WorkLimits;
+  readonly descriptor?: ModuleDescriptor;
+  readonly queries?: Readonly<Record<string, PgRegisteredQuery>>;
   readonly history: PgHostHistory;
   readonly assets?: readonly PgAsset[];
   readonly projection?: PgRegisteredProjection;
@@ -56,15 +104,23 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
   readonly purgeFinalizer?: PgPurgeFinalizer;
   readonly purgeAuthorize?: PgPurgeFinalizer;
   readonly stagedModules?: Readonly<Record<string, PgStagedModule>>;
-  readonly pgPredicates?: Readonly<Record<string, (dependency: string, context: Pick<PgQueryContext, 'session' | 'stream' | 'root'>) => Promise<boolean>>>;
+  readonly pgPredicates?: Readonly<
+    Record<
+      string,
+      (dependency: string, context: Pick<PgQueryContext, 'session' | 'stream' | 'root'>) => Promise<boolean>
+    >
+  >;
 }
 export const quotePgIdentifier = (value: string): string => {
-  if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(value)) throw new StorageInvalidCommandError('invalid Postgres layout identifier');
+  if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(value))
+    throw new StorageInvalidCommandError('invalid Postgres layout identifier');
   return `"${value}"`;
 };
 export const validatePgLayout = (layout: PgLayout): PgLayout => {
-  if (!layout || !layout.projectionSchemas || typeof layout.projectionSchemas !== 'object') throw new StorageInvalidCommandError('invalid Postgres layout');
-  quotePgIdentifier(layout.dataSchema); quotePgIdentifier(layout.outboxSchema);
+  if (!layout || !layout.projectionSchemas || typeof layout.projectionSchemas !== 'object')
+    throw new StorageInvalidCommandError('invalid Postgres layout');
+  quotePgIdentifier(layout.dataSchema);
+  quotePgIdentifier(layout.outboxSchema);
   for (const [moduleId, schema] of Object.entries(layout.projectionSchemas)) {
     if (!isStorageModuleId(moduleId)) throw new StorageInvalidCommandError('unknown projection module');
     quotePgIdentifier(schema);
