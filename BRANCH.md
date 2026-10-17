@@ -101,10 +101,10 @@
     - [x] RED identity probes observed; backend pins identity and exposes trusted scoped control storage for resumable hidden preparation. All eight coordinator/identity probes pass.
 - [x] `acknowledge` BRCM2-VER — required order: merge #679 (0.18.0) first, then rebase #684, resolve overlapping Makefile/CI/Dockerfile/lock edits and re-bump above both main and npm before publication. Current candidate is 0.19.0; it is not cleared for either merge order. `@sentropic/comments` remains frozen at 0.3.0. Never merge from this builder.
 - [ ] `attention` BRCM2-U1 — gr-conductor co-review: validateAtomicUnit now rejects malformed arrays, records, guards, relations, barriers, purge intents and index results, including default K3 callers.
-- [ ] `attention` BRCM2-U2 — gr-conductor co-review: indexed page reads use records.at(seq); adapters must preserve records[i].seq === i.
-- [ ] `attention` BRCM2-U3 — gr-conductor co-review: public KernelOptions.backend/coordinator permit trusted shared-backend composition.
+- [ ] `attention` BRCM2-U2 — gr-conductor re-pass: dense records[i].seq === i is an explicit memory-only representation contract, checked on restored arrays/indexed histories at composition; unrelated to DAG ordering/SQL layout.
+- [ ] `attention` BRCM2-U3 — gr-conductor re-pass: trusted composition rejects a coordinator unless its exact backend is explicitly supplied.
 - [ ] `attention` BRCM2-U4 — gr-conductor co-review: indexed disposeChainInScope retains bytes and reports retained disposition.
-- [ ] `attention` BRCM2-U5 — gr-conductor co-review: coordinated readPage/readChain return inaccessible before validating arguments.
+- [ ] `attention` BRCM2-U5 — gr-conductor re-pass: coordinated readPage/transaction readChain validate limit, byte budget and cursor after authority but before inaccessible results.
 - [ ] `attention` BRCM2-U6 — gr-conductor co-review: storage/Postgres leaves and staged root/profile exports extend the public port; unused legacy alias will be deleted.
 - [ ] `attention` BRCM2-U7 — gr-conductor co-review: remove armFailure/beforePublish from the shipped root; preserve interruption/interleaving evidence through test helpers.
 - [x] `acknowledge` BRCM2-PG — resolved through the branch-local Make include: real pinned PostgreSQL, all source/installed gates and actual server-SIGKILL recovery pass. No root Makefile/Compose change or infrastructure decision remains.
@@ -129,6 +129,7 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Opus corrections — PR #684 NO-GO (2026-10-17)**
+  - [x] Engram U2/U3/U5: all four representation/composition/argument probes observed RED then PASS, including malformed cursors; memory contracts/spec and restored-state checks align. Existing K3 suites unchanged.
   - [x] Engram MAJ-1/2: effective-record and cursor regressions observed RED; postgres-effective-records.spec.ts 2/2 and comments-cursor.spec.ts restart/replica/key-mismatch 1/1 PASS.
   - [x] MAJ-1: owned-object fingerprints and typed PgSchemaDriftError; host-DDL regression and operator re-attestation PASS. postgres-reattest.spec.ts simulates PostgreSQL catalog-rendering changes, rejects stale approvals/actual drift and reopens after audited host approval.
   - [x] MAJ-2: generic PG cursorSecret is required and rejects empty/missing keys; stable host key, replica continuity and rotation implications documented and qualified.
