@@ -42,6 +42,13 @@ describe('session content authorization', () => {
     expect(offer.offlineReadAccepted).toBe(false);
   });
 
+  it('should project only scope fields from metadata into a consent policy or access comparison', () => {
+    const metadata = { ...scope, items: [session], credentials: ['not-a-policy-field'] };
+    expect(createOffer(metadata)).not.toHaveProperty('items');
+    expect(createOffer(metadata)).not.toHaveProperty('credentials');
+    expect(viewAccess(session, metadata)).toMatchObject({ live: true, stored: true });
+  });
+
   it('should cancel an offer without activation and invalidate an in-flight preparation', async () => {
     let resolve!: (value: unknown) => void;
     const accept = vi.fn();
