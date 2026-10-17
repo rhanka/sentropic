@@ -6,7 +6,6 @@ import { RootMutationCoordinator } from './mutation-coordinator.js';
 import { RootScopedRuntime } from './root-facade.js';
 import { StagedCore, type StagedCoreOptions } from './staged-core.js';
 import { prepareStagedRootNotice } from './staged-effects.js';
-import type { StagedControl } from './staged-state.js';
 import { StorageInvalidCommandError, UnsupportedProfileError } from './errors.js';
 import { recoverStagedOperation, readRecoveryEvidence, type OperationRecovery, type RecoveryEvidence } from './staged-recovery.js';
 
@@ -21,7 +20,6 @@ export interface StagedKernelRoot extends StagedKernelHandle {
   adapter(): StagedKernelHandle;
   provisionFence(scope: StorageScope, ownerId: string, fence: WriterFence, expiresAt?: string | null): void;
   rotateFence(scope: StorageScope, fence: WriterFence, ownerId?: string, expiresAt?: string | null): void;
-  armFailure(scope: StorageScope, point: StagedControl['failures'] extends Set<infer T> ? T : never): void;
   recoverOperation(operator: ScopeGrant<unknown>, request: OperationRecovery): ReturnType<typeof recoverStagedOperation>;
   recoveryEvidence(operator: ScopeGrant<unknown>, operationKey: string, after?: number, limit?: number): readonly RecoveryEvidence[];
 }
@@ -46,7 +44,6 @@ export const createRootStagedKernel = (options: StagedKernelOptions): StagedKern
     revoke: (token: string) => inner.revoke(token), adapter: () => adapter,
     provisionFence: (scope: StorageScope, ownerId: string, fence: WriterFence, expiresAt?: string | null) => core.provisionFence(scope, ownerId, fence, expiresAt),
     rotateFence: (scope: StorageScope, fence: WriterFence, ownerId?: string, expiresAt?: string | null) => core.rotateFence(scope, fence, ownerId, expiresAt),
-    armFailure: (scope: StorageScope, point: StagedControl['failures'] extends Set<infer T> ? T : never) => { core.control(scope).failures.add(point); },
     recoverOperation: (operator: ScopeGrant<unknown>, request: OperationRecovery) => recoverStagedOperation(core, operator, request),
     recoveryEvidence: (operator: ScopeGrant<unknown>, key: string, after?: number, limit?: number) => readRecoveryEvidence(core, operator, key, after, limit),
   });
