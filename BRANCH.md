@@ -425,6 +425,8 @@
   - [ ] BRCM2-PORT-15: trusted installed context exposes committed root/version separately from pending root, so retained export cannot capture rolled-back transaction state. The comments factory declares measured internal encoding budgets and refuses a smaller host profile instead of silently shrinking wire capacity.
   - [ ] RED `comments-receipts.spec.ts` requires independent coherent units to share one frozen batch request, cumulative linked snapshots, stable earlier receipt recovery and duplicate-unit refusal without an extra journal publication.
   - [ ] Terminal receipts now bind the batch command digest to the frozen request, use a root-CAS-protected bounded committed-unit inventory and refuse already committed units. Operation-specific staging identities remain separate; a new group advances the linked snapshot without changing the batch command's input digest.
+  - [x] The two-independent-unit receipt probe passes, including original earlier receipt recovery and duplicate-unit refusal with exactly two publications.
+  - [ ] Added real-PG long-history round trip through independent stores with multibyte/escaped bodies and fixed export fragments, plus runtime recreation between every preparation step and complete original response-loss recovery.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
