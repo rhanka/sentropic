@@ -31,6 +31,15 @@ export class StagedCore {
     readonly coordinator: RootMutationCoordinator, readonly options: StagedCoreOptions) {
     this.clock = options.now ?? (() => new Date().toISOString());
     this.boundaryProvider = options.boundaryProvider ?? new HmacExactHeadBoundaryProvider(options.cursorSecret);
+    const descriptor = options.descriptor ? ownedCopy(options.descriptor) : undefined;
+    if (descriptor) {
+      for (const value of Object.values(descriptor)) if (Array.isArray(value)) Object.freeze(value);
+      Object.freeze(descriptor.pageLimits); Object.freeze(descriptor);
+    }
+    this.options = Object.freeze({ ...options, ...(descriptor ? { descriptor } : {}),
+      ...(options.limits ? { limits: Object.freeze({ ...options.limits }) } : {}),
+      ...(options.queries ? { queries: Object.freeze({ ...options.queries }) } : {}),
+    });
     this.empty = lockStagedRootData(createStagedRootData(options.descriptor));
   }
   control(scope: StorageScope): StagedControl {

@@ -2,7 +2,7 @@ import type { AtomicUnit, CommitOptions, CommitReceipt } from './atomic.js';
 import { validateAtomicUnit, validateCommitOptions } from './atomic.js';
 import type { ScopeGrant } from './authority.js';
 import { backendScopeKey, forkBackendScope, lockBackendScope, type BackendScopeState, type MemoryBackend } from './backend.js';
-import { DEFAULT_WORK_LIMITS, type StorageScope, type WriterFence } from './contracts.js';
+import { DEFAULT_WORK_LIMITS, validateWorkLimits, type StorageScope, type WriterFence, type WorkLimits } from './contracts.js';
 import { StorageCasConflictError, StorageIdempotencyConflictError, StorageInvalidCommandError, UnsupportedProfileError } from './errors.js';
 import { mergeAtomicUnits, prepareUnitsInScope, type CommitContext } from './record-runtime.js';
 
@@ -29,7 +29,11 @@ const receiptFor = (ctx: CommitContext, records = 0, appends = 0): CommitReceipt
 /** Trusted composition machinery. Adapter handles never expose this object.
  * All data and module effects are prepared before one conditional root swap. */
 export class RootMutationCoordinator {
-  constructor(readonly backend: MemoryBackend, readonly hooks: RootMutationHooks = {}) {}
+  private readonly maximum: WorkLimits;
+  constructor(readonly backend: MemoryBackend, readonly hooks: RootMutationHooks = {}, maximum: WorkLimits = DEFAULT_WORK_LIMITS) {
+    if (!validateWorkLimits(maximum).ok) throw new StorageInvalidCommandError('invalid coordinator work ceiling');
+    this.maximum = Object.freeze({ ...maximum });
+  }
 
   capture(scope: StorageScope): BackendScopeState { return lockBackendScope(this.backend.scopeState(scope)); }
   prepare(base: BackendScopeState): BackendScopeState { return forkBackendScope(base); }
@@ -63,7 +67,10 @@ export class RootMutationCoordinator {
 
   commit(grant: ScopeGrant<unknown>, units: readonly AtomicUnit[], options: CommitOptions, ctx: CommitContext,
     revalidate: () => void): CommitReceipt {
-    const limits = { ...(options.limits ?? DEFAULT_WORK_LIMITS) };
+    const limits = { ...(options.limits ?? this.maximum) };
+    if (!validateWorkLimits(limits).ok || Object.keys(this.maximum).some((key) => limits[key as keyof WorkLimits] > this.maximum[key as keyof WorkLimits])) {
+      throw new StorageInvalidCommandError('requested work limits exceed the configured ceiling');
+    }
     const owned = copy(units);
     for (const unit of owned) {
       if (!unit || !['guards', 'records', 'appends', 'updates', 'relationships', 'barriers', 'purgeIntents', 'indexWrites']
