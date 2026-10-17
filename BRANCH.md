@@ -82,6 +82,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `L2-regression-migration-2`: explicit mapping/health tests pass again; availability diagnostics now resolve the same selected policy as planning. Four former stale-model/explicit-account/withdrawn-model success cases now assert no-route and zero additional preparation (44/52 planner cases pass; remaining eight legacy expectations are being migrated).
 - `L2-product-exact-source`: GWV-EX5 shared standalone/product factory now defaults exact, validates frozen mappings/owner/account authorization/quoted target, binds execution to the selected model and preserves selected effort. Added factory, real namespace and dispatch refusal cases. API execution is blocked by FL-21 (service cannot start); these tests are not reported green.
 - `L2-regression-migration-1`: legacy table/council tests now select equivalence explicitly; the default resolver separately asserts exact identity. Scoped targets 68/68, selection 26/26 and budget quotes 30/30 pass. Quotes no longer let a stale pin serve a different requested model; account rotation in attempt-cap fixtures is explicitly enabled.
 - `FL-22-scope-syntax`: harness C2 does not expand brace paths. C2 reported the unrelated unstaged app paths before receipt commit 3e4c019ff, but the commit was started before inspecting that output. Expanded the already-declared paths; rerun C2 before further commits. No forbidden file was changed.
