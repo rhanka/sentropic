@@ -133,16 +133,17 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - No Sentropic UI changes in carried lots; hosted-client continuity UAT is owner-executed in 2b.
 
 ## Plan / Todo (lot-based)
-- [ ] **Owner naming correction — artifacts (2026-10-17, before first publication)**
+- [x] **Owner naming correction — artifacts (2026-10-17, before first publication)**
   - [x] Release documentation and packed artifact probe use `sentropic.artifacts`, `./mcp/artifacts` and the Artifacts API names; the probe rejects the old ID and exported API aliases.
   - [x] Packaging fixtures and tests renamed to artifacts; native packed-consumer UAT covers the new leaf and refusal of the old provider/module/export (execution follows sibling refresh).
   - [x] Artifact MCP identity, exported constants/types/factories, default display/provenance names and unit/pilot consumers renamed to artifacts without aliases; single unpublished `0.1.0` retained.
   - [x] Mesh builtin, loader, catalog/module ID and package export renamed to `mcp/artifacts`; obsolete source paths removed, with no aliases.
   - [x] Test first: `packages/artifacts/tests/mcp.test.ts` and `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` assert new-ID selection/configuration and unknown-old-ID refusal; baseline RED: artifacts 3 failed / 6 passed, mesh 2 failed / 5 passed (old surface filename). Scoped `make test-artifacts SCOPE=tests/mcp.test.ts` and `make test-cluster-mesh SCOPE=tests/integrations/artifacts-surface.spec.ts`, all with assigned ports and `ENV=test-immo-861-mcp-registry` last.
   - [x] Rename provider/API symbols, mesh leaf/loader/catalog/exports, fixtures, packed tests/probe and release documentation to artifacts; retain `@sentropic/artifacts`, version `0.1.0` and the 15 `artifacts_*` tool names; no aliases.
-  - [ ] Gates: artifact and mesh typechecks/lint/full suites, packed artifact probe, sibling integrity refresh and guarded mesh packed qualification; no UI/browser test changes.
-  - [ ] UAT: packed consumer imports `@sentropic/cluster-mesh/mcp/artifacts`, selects/configures `sentropic.artifacts`, lists the same 15 tools and refuses the previous provider/module/export names.
-  - [ ] Close I861-F5 with owner quote, push PR #679, watch final-head CI to completion and record `.h2a/build/immo_861_rename_report.md`; never merge or publish.
+  - [x] Gates: artifacts typecheck/lint, 112 unit + 24 integration tests; mesh typecheck/lint, 560 passed / 44 skipped; artifact packed probe `tools=15`, `manifestDigest=9c8b2e91…`, `fetchCalls=0`; guarded artifacts/mesh packs PASS. No UI/browser test changes.
+  - [x] Refreshed four guarded sibling receipts and the selected lock through `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`: 14 files / 75 packed tests PASS, four integrity matches; only the artifacts integrity line changes.
+  - [x] UAT: native packed consumer imports `@sentropic/cluster-mesh/mcp/artifacts`, selects/configures `sentropic.artifacts`, resolves all 15 tools and refuses the previous provider/module/export names (`artifacts-tuple.spec.ts` 5/5).
+  - [x] I861-F5 closed with owner quote; final pushed-head SHA/CI result and exact identifier relay are recorded after completion in `.h2a/build/immo_861_rename_report.md` (live PR #679 checks linked below). BRANCH.md retained; never merge or publish.
 - [ ] **Lot 0 — Baseline, consolidation and constraints (gate pending: Exchange/negatives/metadata rows unchecked)**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`.
   - [x] Read spec-v6 (`/home/antoinefa/src/sentropic/.tmp/immo-mcp-enablers/spec-v6.md`) §§1-13 and the three fix reports (`.h2a/build/immo_1a_fix3_report.md`, `immo_2idp_fix_report.md`, `immo_2a_fix_report.md`).
