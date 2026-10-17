@@ -54,7 +54,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
   - `Makefile` (D1 make target only, via BRMFA-EX1)
-  - `deploy/k8s/**` (D1 Job only)
+  - `deploy/k8s/**` (D1 Job only, plus sync-shape compat via BRMFA-EX2)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -62,6 +62,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
 
 ## Feedback Loop
 - `BRMFA-EX1` (Makefile D1 target): reason: D1 requires a versioned root make target driving the client-registration Job; impact: one additive `oauth-register-client-job` target only, no other target touched; rollback: delete target, Job yaml remains unused.
+- `BRMFA-EX2` (sync-shape compat): reason: `client-postcondition.sql` asserts exact `oauth_clients` row shape, so the B3/C1 columns break the idp-sync gate; impact: two column names added to the existing exclusion arrays (same treatment as tier-local `client_secret_hash`, policy stays per-tier and is never synced); rollback: revert one file (gate fails closed until then).
 - E1/E2 gated on kvm-session incompatibility report; absent report means skip with `attention` note, no code.
 
 ## AI Flaky tests
