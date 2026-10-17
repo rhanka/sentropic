@@ -1,5 +1,5 @@
 import { CanonicalCommandError, canonicalJson, hashRecord } from '@sentropic/comments';
-import type { CanonicalChainRecord, CanonicalReadSelection, CanonicalStoreScope, RecordKind } from '@sentropic/comments';
+import type { CanonicalChainRecord, CanonicalReadSelection, CanonicalStoreScope, RecordKind, ResourceRef } from '@sentropic/comments';
 export const COMMENTS_CHAIN_KINDS = Object.freeze({
   'annotation-revisions': ['annotation-revision', 'annotationId'],
   'thread-structure-revisions': ['thread-structure-revision', 'threadId'],
@@ -29,6 +29,7 @@ export const chainIdentity = (selection: CanonicalReadSelection) => {
 export const canonicalRecordKey = (chain: string, hash: string): string => JSON.stringify(['comments-record-v1', chain, hash]);
 export const commentsObjectKey = (kind: string, id: string): string => JSON.stringify(['comments-object-v1', kind, id]);
 export const commandKey = (key: string): string => JSON.stringify(['comments-command-v1', key]);
+export const commentsResourceKey = (resource: ResourceRef): string => JSON.stringify([resource.scope.tenantId, resource.scope.workspaceId, resource.namespace, resource.kind, resource.id]);
 export const validateRecordIdentity = (scope: CanonicalStoreScope, selection: CanonicalReadSelection, record: CanonicalChainRecord): void => {
   const identity = chainIdentity(selection);
   if (!record || record.kind !== identity.kind || !sameScope(record.scope, scope) || identity.fields.some((field, index) => (record as unknown as Record<string, unknown>)[field] !== identity.values[index])) invalid('record identity does not match its typed chain');

@@ -1,9 +1,9 @@
-import { isResourceRef, resourceKey } from '@sentropic/comments';
+import { isResourceRef } from '@sentropic/comments';
 import type { CanonicalReadSelection } from '@sentropic/comments';
 import { StorageCapacityExceededError } from '../storage/errors.js';
 import { quotePgIdentifier, type PgQueryContext, type PgRegisteredQuery } from '../storage/postgres/protocol.js';
 import { decodePgJson, decodePgText, decodePgUtf8 } from '../storage/postgres/codec.js';
-import { chainIdentity, invalid, sameScope } from './storage-schema.js';
+import { chainIdentity, commentsResourceKey, invalid, sameScope } from './storage-schema.js';
 const mapValue = async <T>(context: PgQueryContext, kind: string, id: string): Promise<T | null> => {
   const schema = quotePgIdentifier(context.layout.dataSchema);
   const value = (await context.session.execute({ text: `SELECT ${schema}.map_get($1::bigint,$2) AS value`, values: [context.currentRoot, JSON.stringify([kind, id])] })).rows[0]?.value;
@@ -21,7 +21,7 @@ export const commentsPgQuery = (name: 'by-resource' | 'scope-chain-index' | 'ret
   let resource: string | null = null; let selection: string | null = null;
   if (name === 'by-resource') {
     if (!isResourceRef(input?.resource) || !sameScope(input.resource.scope, context.grant.scope)) return invalid('resource query scope mismatch');
-    resource = resourceKey(input.resource);
+    resource = commentsResourceKey(input.resource);
   }
   if (name === 'retained-headers') selection = chainIdentity(input?.selection as CanonicalReadSelection).key;
   if (context.cursor !== null && typeof context.cursor !== 'string') return invalid('invalid comments query continuation');

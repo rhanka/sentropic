@@ -23,7 +23,11 @@ export const applyPgTransaction = async (core: PgCore, grant: ScopeGrant<unknown
     tx.barriers += unit.barriers.length; tx.purges += unit.purgeIntents.length;
     if (unit.moduleResult !== undefined) tx.moduleResult = unit.moduleResult;
     tx.digests.push(pgUnitDigest(unit)); tx.contributors.set(grant.token, grant);
-  } catch (error) { tx.failed = classifyPgFailure(error); throw tx.failed; }
+  } catch (error) {
+    tx.failed = classifyPgFailure(error);
+    if (tx.failed !== error) Object.defineProperty(tx.failed, 'cause', { value: error });
+    throw tx.failed;
+  }
 };
 export const runPgTransaction = async <T>(core: PgCore, grant: ScopeGrant<unknown>, supplied: CommitOptions,
   operation: (tx: PgTx) => Promise<T>, immutableFlush = false): Promise<{ readonly value: T; readonly receipt: CommitReceipt }> => {
