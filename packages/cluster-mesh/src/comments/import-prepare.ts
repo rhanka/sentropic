@@ -27,7 +27,7 @@ export const prepareCommentsImport = async (options: CommentsServiceOptions, con
     if (manifest.ordinal !== '0') throw new CommentsTransportError('conflict', 'First fragment ordinal must be zero');
     const begin = { operationKey: `comments-import-v1:${sha256Hex(binding.operationId)}`, inputDigest: bindingDigest, contractDigest: COMMENTS_IMPORT_CONTRACT_DIGEST, sourceBoundary: binding.sourceBoundary, fence: input.fence };
     state = { version: 'comments-preparation-v1', binding, bindingDigest, begin, unit: null, issuedAt: options.clock.now(), rootReference: randomUUID(),
-      nextOrdinal: '0', frontier: null, kernelFrontier: null, ...startCommentsImportDigests(binding), root: null, canonical: null, roots: [] } satisfies CommentsImportState;
+      nextOrdinal: '0', frontier: null, kernelFrontier: null, ...startCommentsImportDigests(binding), root: null, canonical: null, roots: [], terminalHashes: [] } satisfies CommentsImportState;
     if (!Number.isSafeInteger(state.issuedAt) || state.issuedAt < 0) throw new CommentsTransportError('unavailable', 'Import clock is invalid');
     await insertCommentsImport(context, state);
     state.unit = await context.beginStaged(begin);
@@ -42,7 +42,8 @@ export const prepareCommentsImport = async (options: CommentsServiceOptions, con
   let effects;
   if (manifest.terminal) {
     state.roots = verifyCommentsTerminal(state, fragment);
-    effects = await commentsImportReceiptEffects(state, context);
+    effects = await commentsImportReceiptEffects(state, context, options);
+    state.terminalHashes = effects.appends.map((append) => append.record.hash);
   } else {
     for (const record of fragment.payload) assertCommentsImportRecord(binding, record);
     appendCommentsUnitPayload(state, fragment); effects = commentsImportDataEffects(fragment.payload);
