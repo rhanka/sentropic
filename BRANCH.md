@@ -106,7 +106,7 @@
 - [ ] `attention` BRCM2-U4 — gr-conductor co-review: indexed disposeChainInScope retains bytes and reports retained disposition.
 - [ ] `attention` BRCM2-U5 — gr-conductor re-pass: coordinated readPage/transaction readChain validate limit, byte budget and cursor after authority but before inaccessible results.
 - [ ] `attention` BRCM2-U6 — gr-conductor co-review: storage/Postgres leaves and staged root/profile exports extend the public port; unused legacy alias will be deleted.
-- [ ] `attention` BRCM2-U7 — gr-conductor co-review: remove armFailure/beforePublish from the shipped root; preserve interruption/interleaving evidence through test helpers.
+- [ ] `attention` BRCM2-U7 — gr-conductor re-pass: armFailure/beforePublish and failure state removed from shipped code/types; interruptions are test-side backend/response wrappers, with real async-checkpoint authority/fence probes PASS.
 - [x] `acknowledge` BRCM2-PG — resolved through the branch-local Make include: real pinned PostgreSQL, all source/installed gates and actual server-SIGKILL recovery pass. No root Makefile/Compose change or infrastructure decision remains.
 
 ## AI Flaky tests
@@ -134,12 +134,12 @@
   - [x] MAJ-1: owned-object fingerprints and typed PgSchemaDriftError; host-DDL regression and operator re-attestation PASS. postgres-reattest.spec.ts simulates PostgreSQL catalog-rendering changes, rejects stale approvals/actual drift and reopens after audited host approval.
   - [x] MAJ-2: generic PG cursorSecret is required and rejects empty/missing keys; stable host key, replica continuity and rotation implications documented and qualified.
   - [x] m1/m4/m10: required #679-first ordering, historical CI/EX8 state and complete gr-conductor U1–U7 inventory recorded; final candidate CI remains pending below.
-  - [ ] m2/m3: independent per-role migration order and ID-based chronological receipt verification PASS after RED; core 007 installs after comments with every original comments receipt unchanged. Host/port contracts updated; changelog follows.
+  - [x] m2/m3: independent migration chains and core-007 upgrade PASS, original comments receipts unchanged; 0.19.0 changelog covers leaves/assets/digest/peer and required merge order.
   - [x] m4/m5: public-root hook assertion observed RED; armFailure/beforePublish/failure state and unused alias removed. Test-side publication/response wrappers and actual async-checkpoint probes PASS: root suites 13 files / 44 tests.
   - [ ] m6: dedicated formatting-only atomic commits for overlong storage/Postgres/comments lines.
-  - [ ] m7: cold typecheck PASS; root targets and real PG runner now use disposable workspaces. Remaining dependency helper cleanup follows.
+  - [x] m7: source/PG/dependency helpers use disposable container dependencies; accepted include documented. Interrupted-run node_modules artifacts removed; self-contained cold typecheck PASS without host dependencies.
   - [x] m8: binding-derivation, terminal-root, receipt-owner SQL and captured-export-root mutants PASS with assertion-specific kill markers; import/receipt refusals assert exact typed conditions. Evidence: comments-transport-mutations.spec.ts 3/3 and comments-export-mutations.spec.ts 1/1.
-  - [ ] m9: host receipts table, bounded 40001 callback retry and 50-operation recovery cap documented and qualified.
+  - [x] m9: host-owned full-receipt table/audit, finite host 40001 callback retry versus immutable module flush retry, and separate 50-operation recovery cap documented with concrete Immo migration guidance.
   - [ ] Final: source/PG/crash/installed gates, mutation record, push #684, fresh CI with restored OpenAI credit, report and stop without merging.
 
 - [x] **Lot 0 — Baseline & constraints**
