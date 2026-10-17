@@ -28,6 +28,18 @@ import {
 } from '../../db/control-schema';
 import { tenantMemberships, tenants, workspaces, workspaceMemberships } from '../../db/schema';
 
+/** Default product authority issuer for D2 and the D1 content hook. */
+export const DEFAULT_SESSION_CONTENT_ISSUER = 'sentropic-product';
+
+/** Resolve an explicit content issuer before environment and product defaults. */
+export const resolveSessionContentIssuer = (explicit?: string): string => {
+  const fromArg = explicit?.trim();
+  if (fromArg) return fromArg;
+  const fromEnv = process.env.SESSION_CONTENT_AUTHORITY_ISSUER?.trim();
+  if (fromEnv) return fromEnv;
+  return DEFAULT_SESSION_CONTENT_ISSUER;
+};
+
 export type SessionContentErrorCode =
   | 'storage_unavailable'
   | 'control_unavailable'

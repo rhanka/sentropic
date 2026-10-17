@@ -10,7 +10,7 @@ import { sessionWorkspaceBindings } from '../../db/control-schema';
 import { tenantMemberships, users, workspaces } from '../../db/schema';
 import { hasRole } from '../../middleware/rbac';
 import { hasWorkspaceRole, type WorkspaceType } from '../workspace-access';
-import { SessionContentService } from './session-content';
+import { resolveSessionContentIssuer, SessionContentService } from './session-content';
 import { notifyWorkspaceCreated, provisionWorkspace, seedWorkspaceTypeResources } from '../workspace-provisioning';
 
 export type AdoptedSessionWorkspaceStatus = 'attached' | 'detached' | 'ended';
@@ -119,20 +119,6 @@ export const createDrizzleBindingStore = (
 export interface SessionWorkspaceContentHooks {
   fenceSessionOnDetachEnd(sessionId: string, tenantId: string): Promise<unknown>;
 }
-
-/** Default product authority issuer for the D1 content hook. */
-export const DEFAULT_SESSION_CONTENT_ISSUER = 'sentropic-product';
-
-/** n6: resolve the D1 content-hook issuer from configuration — an explicit
- * caller value, then `SESSION_CONTENT_AUTHORITY_ISSUER`, then the product
- * default. The hook no longer hard-codes the issuer inline. */
-export const resolveSessionContentIssuer = (explicit?: string): string => {
-  const fromArg = explicit?.trim();
-  if (fromArg) return fromArg;
-  const fromEnv = process.env.SESSION_CONTENT_AUTHORITY_ISSUER?.trim();
-  if (fromEnv) return fromEnv;
-  return DEFAULT_SESSION_CONTENT_ISSUER;
-};
 
 export class SessionWorkspaceService {
   private readonly storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore;
