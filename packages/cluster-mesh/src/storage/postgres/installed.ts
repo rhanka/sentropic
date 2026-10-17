@@ -10,6 +10,7 @@ import { applyPgTransaction, ownPgValue, pgReceipt, runPgTransaction } from './o
 import type { PgInstalledContext } from './installed-contracts.js';
 import { REGISTERED_PG_EFFECTS } from './registered-effects.js';
 import { beginPgStaged, stagePgFragment, inspectPgStaged } from './staged.js';
+import { readPgPage } from './readers.js';
 export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<unknown>, tx: PgTx, readOnly = false) => {
   const checks: (() => Promise<void>)[] = []; let closed = false;
   const live = () => { if (closed || tx.closed) throw new StorageInvalidCommandError('installed operation context is closed'); };
@@ -38,6 +39,7 @@ export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<u
     beginStaged: (input) => { writable(); return beginPgStaged(core, grant, input); },
     stageFragment: (input) => { writable(); return stagePgFragment(core, grant, input); },
     inspectStaged: (operationKey) => { live(); return inspectPgStaged(core, grant, operationKey); },
+    readPage: (chain, limit, cursor, bytes) => { live(); return readPgPage(core, tx.session, grant, tx.root, chain, limit, cursor, bytes); },
   });
   return { context, finish: async () => { try { live(); for (const check of checks) await check(); } finally { closed = true; } } };
 };

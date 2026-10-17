@@ -5,9 +5,11 @@ import type { CommentsContext } from './context.js';
 import type { CommentsLifecycleResult } from './lifecycle-contracts.js';
 import { createCommentsImportServices } from './import-services.js';
 import { createCommentsExportServices } from './export-services.js';
+import { createCommentsCommandServices } from './command-services.js';
 export const createCommentsServices = (context: CommentsContext) => Object.freeze({
   ...createCommentsImportServices(context),
   ...createCommentsExportServices(context),
+  ...createCommentsCommandServices(context),
   lifecycle: (request: CanonicalLifecycleRequest): Promise<CommentsLifecycleResult> => context.invoke(request.scope, async ({ storage }) => {
     if (!storage.invoke) throw new UnsupportedProfileError('comments-operational-v1');
     return await storage.invoke('comments.lifecycle', request) as CommentsLifecycleResult;

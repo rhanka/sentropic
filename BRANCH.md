@@ -448,6 +448,7 @@
   - [x] All three local-module discovery/preflight/isolation probes pass.
   - [ ] RED `comments-router.spec.ts` requires the frozen factory signature, an issued context, service-owned registration, idempotent original results, CAS/scope/size refusal and no raw lifecycle or forged physical-completion bypass.
   - [ ] Added reusable native revision commands for annotation/thread/comment content using frozen constructors, actual root-member references, current old/new target authorization, server-owned registration, CAS and original-result idempotency.
+  - [ ] BRCM2-PORT-16: installed services reuse the kernel's bounded same-session page reader. Authorized read/revision services and an internal store-identity router binding preserve the exact M1 persistence port and canonical factory argument shape.
   - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
   - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
