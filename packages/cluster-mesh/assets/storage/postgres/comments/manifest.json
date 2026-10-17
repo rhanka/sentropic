@@ -14,6 +14,20 @@
       ],
       "schemaRole": "comments",
       "checksum": "de0689eec0c3c172bc36e4a4a54b6b800fc9f291efcfecd121e9663f9d5cd60b"
+    },
+    {
+      "id": "cluster-mesh-pg/comments/002-transport@1",
+      "file": "comments/002-transport.sql",
+      "order": 8,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 7,
+      "toVersion": 8,
+      "requires": [
+        "cluster-mesh-pg/comments/001-projections@1"
+      ],
+      "schemaRole": "comments",
+      "checksum": "140b56c54aae928937c0214959deec74c4b9acf7d73a9c082f6f17e1e2f91c8e"
     }
   ]
 }
