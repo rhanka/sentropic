@@ -163,6 +163,7 @@
     - [ ] Shared `prepareUnitsInScope` separates owned sequential preparation from publication, preserving the K3 guard/predicate/effect implementation for the root coordinator.
     - [ ] `RootMutationCoordinator` captures indexed roots, prepares owned core/module effects, revalidates and switches the root conditionally; ordinary kernel wiring follows.
     - [ ] Kernel root options now accept the trusted backend/coordinator; scoped adapters retain private wiring and frozen binding surfaces. Mutation/read paths are being routed through it.
+    - [ ] Append/genesis/index/dispose/commit and ordinary reads now participate in the configured root coordinator; transaction routing and its contributor checks follow.
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
   - [ ] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.
