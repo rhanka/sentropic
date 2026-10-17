@@ -31,6 +31,8 @@
   - `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (BRCM2-EX6)
   - `packages/cluster-mesh/README.md` (BRCM2-EX6)
   - `scripts/ci/publishable-ci-wiring.test.mjs` (BRCM2-EX7)
+  - `Makefile` (BRCM2-EX8: comments build prerequisites only)
+  - `api/Dockerfile` (BRCM2-EX8: unchanged peer build ordering only)
   - `packages/cluster-mesh/src/storage/**`
   - `packages/cluster-mesh/tests/storage/**`
   - `packages/cluster-mesh/assets/storage/**`
@@ -48,14 +50,15 @@
   - `docs/comments-annotations/**`
   - `.github/workflows/ci.yml` (BRCM2-EX5: storage qualification only)
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
   - `packages/comments/src/**`
   - `docs/comments-annotations/contract/contract-v1.json`
   - `packages/cluster-mesh/src/live*/**`
-  - `api/**`
+  - `api/src/**`
+  - `api/tests/**`
+  - `api/drizzle/**`
   - `ui/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
@@ -68,6 +71,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] `attention` BRCM2-EX8 — fresh CI API typecheck/image/toolbox builds compile cluster-mesh before the unchanged optional workspace comments peer, producing TS2307. Add comments as a prerequisite for cluster-mesh build/typecheck/test and move its existing Docker build step before cluster-mesh. Impact: build ordering only in root Makefile and api/Dockerfile; no app source/route/schema, Compose or M1 change. Rollback: restore the prior prerequisite/build order with the comments module removal.
 - [x] `acknowledge` BRCM2-EX7 — CI's exact Cluster Mesh candidate/post-publication tuple assertion omitted the newly required optional comments peer. Updated its expected tuple to the already qualified comments@0.3.0 configuration. Impact: one workflow wiring regression test; production manifests/guard policy unchanged. Rollback: revert the assertion with the corresponding CI tuple change.
 - [x] `acknowledge` BRCM2-EX6 — packed qualification exposes a hard-coded inventory of eight foreign provider proxy leaves; the new local comments leaf requires an explicit ninth local-export assertion. Also document the delivered storage/comments exports in the shipped README. Impact: one packaging test and package documentation; no runtime contract changes. Rollback: revert these two file changes with the new comments export.
 - [ ] `attention` BRCM2-PORT17 — nested binding revalidation now joins the active same-scope PG session and remains attached to its final revalidation set. This removes a hidden second-connection requirement without weakening issuance, revocation, lifetime or scope checks; installed page reads also honor configured work maxima. Co-review pending.
@@ -245,6 +249,7 @@
   - [x] Documentary C0 assertions follow the executable packaged-oracle proof while preserving absent M1 public conformance export. Historical review provenance is unchanged.
 
 - [ ] **Lot N — Final validation**
+  - [ ] CI logs independently reproduce the cold workspace peer-order failure in API typecheck, image and toolbox builds. BRCM2-EX8 narrowly scopes the two build-definition corrections; no application runtime code changes.
   - [x] CI run 39023730235 exposed the stale exact peer-tuple assertion in `publishable-ci-wiring.test.mjs`; reproduced locally and updated its shared candidate/post-publication/bootstrap expectation with comments@0.3.0. Both `test-publishable-manifests` and `test-qualify-published-install` now PASS (BRCM2-EX7; RTK `10f2a27c5493`).
   - [x] Typecheck/lint PASS; source package suite 93 files / 805 tests PASS, 48 files / 106 explicit PG/crash/installed tests skipped only here and qualified separately below (RTK `24fdf710d026`).
   - [x] Real neutral PG 26 files / 47 tests PASS; real comments PG 25 files / 104 tests PASS; both independent server-SIGKILL phases PASS (RTK `e23b89c8a2b4`).
