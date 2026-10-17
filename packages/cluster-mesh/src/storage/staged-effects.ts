@@ -46,7 +46,6 @@ export const applyRootModuleEffects = (core: StagedCore, base: StagedRootData, d
 
 export const appendRootEvent = (core: StagedCore, base: BackendScopeState, data: StagedRootData,
   grant: ScopeGrant<unknown>, receipt: CommitReceipt, operationKey?: string, staged = false): void => {
-  core.consumeFailure(grant.scope, 'external');
   const seq = data.journal.length + 1;
   const eventId = JSON.stringify([core.kernel.moduleId, grant.scope.tenantId, grant.scope.workspaceId, core.kernel.incarnation, 'scope-journal', seq]);
   data.journal.push(Object.freeze({ seq, eventId, scope: Object.freeze({ ...grant.scope }), commitId: receipt.commitId,
@@ -58,6 +57,7 @@ export const appendRootEvent = (core: StagedCore, base: BackendScopeState, data:
 
 export const prepareStagedRootNotice = (core: StagedCore, base: BackendScopeState, prepared: BackendScopeState,
   grant: ScopeGrant<unknown>, notice: RootMutationNotice): void => {
+  core.consumeFailure(grant.scope, 'external');
   const before = core.data(base);
   const data = prepared.attachment === base.attachment ? forkStagedRootData(before) : core.data(prepared);
   validateRootPolicy(core, data, grant,
