@@ -445,6 +445,8 @@
   - [x] Imported post-tombstone history and independently authorized subsequent physical purge pass both real-PG probes; no historical purge claim creates a kernel job.
   - [ ] RED `comments-module.spec.ts` requires metadata-only local discovery, optional-peer range refusal before evaluation and disabled-leaf isolation before namespace startup.
   - [ ] Added delivered local comments metadata and optional-peer preflight through the existing registry, with separate static integration, typed lazy loader and `/comments` composition leaves. Root import still has no runtime comments/driver edge.
+  - [x] All three local-module discovery/preflight/isolation probes pass.
+  - [ ] RED `comments-router.spec.ts` requires the frozen factory signature, an issued context, service-owned registration, idempotent original results, CAS/scope/size refusal and no raw lifecycle or forged physical-completion bypass.
   - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
   - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
