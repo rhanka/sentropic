@@ -2,6 +2,7 @@ import { isStorageModuleId, type StorageModuleId, type StorageScope, type WorkLi
 import type { KernelOptions } from '../kernel.js';
 import type { ModuleDescriptor } from '../descriptor.js';
 import { StorageInvalidCommandError } from '../errors.js';
+import type { PgHostHistory } from './migrations.js';
 
 export type SqlValue = string | number | boolean | bigint | Uint8Array | null | readonly SqlValue[];
 export interface SqlStatement { readonly text: string; readonly values: readonly SqlValue[]; }
@@ -35,6 +36,8 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
   readonly ids?: { next(kind: string): string }; readonly domainClock?: { now(): string };
   readonly outbox?: PgOutboxBinding; readonly budgets?: Partial<PgBudgets>; readonly limits?: WorkLimits;
   readonly descriptor?: ModuleDescriptor; readonly queries?: Readonly<Record<string, PgRegisteredQuery>>;
+  readonly history: PgHostHistory;
+  readonly pgPredicates?: Readonly<Record<string, (dependency: string, context: Omit<PgQueryContext, 'cursor' | 'limit' | 'maxEncodedBytes'>) => Promise<boolean>>>;
 }
 export const quotePgIdentifier = (value: string): string => {
   if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(value)) throw new StorageInvalidCommandError('invalid Postgres layout identifier');
