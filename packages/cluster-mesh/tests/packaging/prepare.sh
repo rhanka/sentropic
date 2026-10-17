@@ -83,7 +83,7 @@ fixture() {
 
 tuple() {
   for name in @sentropic/cluster-mesh @sentropic/llm-mesh @sentropic/llm-gateway @sentropic/mcp-auth \
-    @sentropic/oauth-verify @sentropic/auth-hono @sentropic/mcp-platform jose hono; do
+    @sentropic/oauth-verify @sentropic/auth-hono @sentropic/mcp-platform @sentropic/artifacts jose hono; do
     version="$(node -p "require('$work/$1/node_modules/$name/package.json').version" 2>/dev/null || echo absent)"
     echo "$name@$version"
   done > "$work/$1/tuple.txt"
@@ -156,6 +156,16 @@ consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mc
 (cd "$work/mcp-consumer" && npm install $quiet >/dev/null)
 tuple mcp-consumer
 
+# Web-pages consumer: the MCP consumer tuple plus the locally-packed artifacts sibling
+# (unpublished 0.1.0 candidate; dist built by the packaging.mk prerequisite). The leaf must
+# load only when selected; the installed artifacts version must satisfy the declared range.
+(cd ../artifacts && npm pack --silent --pack-destination "$work/src" >/dev/null)
+artifacts_tgz="$(ls "$work"/src/sentropic-artifacts-*.tgz)"
+consumer "$work/web-pages-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz" "@sentropic/artifacts=file:$artifacts_tgz"
+sources "$work/web-pages-consumer"
+(cd "$work/web-pages-consumer" && npm install $quiet >/dev/null)
+tuple web-pages-consumer
+
 # installed DIR: installed versions of the candidate and both train packages in DIR.
 installed() {
   for name in @sentropic/cluster-mesh @sentropic/llm-mesh @sentropic/llm-gateway; do
@@ -181,7 +191,7 @@ node -e 'const fs = require("fs"); const cm = JSON.parse(fs.readFileSync(process
   pkg.dependencies = { "@sentropic/cluster-mesh": "file:" + process.argv[3], ...cm.peerDependencies, hono: cm.dependencies.hono };
   fs.writeFileSync(dir + "/package.json", JSON.stringify(pkg, null, 2));' "$(pwd)" "$work/latest" "$tgz"
 latest_overrides=""
-for sib in llm-mesh llm-gateway auth-hono mcp-platform mcp-auth oauth-verify contracts events; do
+for sib in llm-mesh llm-gateway auth-hono mcp-platform mcp-auth oauth-verify contracts events artifacts; do
   sib_ver="$(train_version "$sib")"
   sib_spec="$(src @sentropic/"$sib" "$sib_ver")"
   case "$sib_spec" in file:*) latest_overrides="$latest_overrides @sentropic/$sib=$sib_spec" ;; esac
