@@ -335,3 +335,17 @@ only then publishes through npm OIDC provenance. The workflow never writes the v
 
 Published versions are immutable. Keep the previous and replacement clients valid for an agreed
 grace period, or explicitly accept that revocation breaks enrollment for older package versions.
+
+## CI seat envelope (L0a, synthetic)
+
+`SeatBundleV1` (`src/enrollment/seat-bundle.ts`, re-exported from
+`@sentropic/llm-mesh/node`) is the frozen five-CLI seat envelope shared by the
+central custody store, h2a native tests and mesh import. It carries identity,
+`cli` provenance, custodian/consumer authority, lifecycle epoch/generation and
+refresh-less consumer projections; validation rejects oversize bundles,
+owner/client mismatches, unknown fields, hidden refresh material, channel
+authority escalation and lineage conflicts. Package enrollment keeps existing identifiers: agy enrolls as
+`cloud-code`; the application receiver maps agy to `antigravity` transport,
+`cloudcode-pa` target and `productAccountSource: antigravity`, and refuses the
+`gemini` route. Native profile variants stay unverified until observed; see
+`spec/SPEC_EVOL_CI_SEATS.md` and `tests/enrollment/seat-bundle.test.ts`.
