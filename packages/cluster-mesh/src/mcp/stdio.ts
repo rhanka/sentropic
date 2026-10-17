@@ -12,7 +12,7 @@ import type { Readable, Writable } from 'node:stream';
 import { Server as SdkServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { ClusterMeshModules } from '../modules/contracts.js';
-import { createGuardedRunner, type McpInvocationGuard } from '../compose/mcp.js';
+import { createGuardedRunner, createRegistryPolicy, type McpInvocationGuard } from '../compose/mcp.js';
 import { loadMcpPlatformBridge } from '../loaders/mcp/bridge.js';
 import { loadMcpPlatformStdio } from '../loaders/mcp/stdio.js';
 import type { CompiledMcpRegistry } from '@sentropic/mcp-platform/registry';
@@ -59,7 +59,7 @@ export async function createMcpStdioLeaf(
     }
   }
   const identity = stdio.extractStdioRequestIdentity(options.env ?? (process.env as Record<string, string | undefined>));
-  const guardedRunner = createGuardedRunner(options);
+  const guardedRunner = createGuardedRunner({ ...options, policy: createRegistryPolicy(options.registry) });
   const server = new SdkServer(
     { name: '@sentropic/cluster-mesh/mcp', version: '0.18.0' },
     { capabilities: { tools: {} } },
