@@ -403,6 +403,7 @@
   - [ ] RED `postgres-module-policy.spec.ts` requires installed domain authority at fragment intake, final root publication and committed receipt recovery, with the storage grant otherwise unchanged and valid.
   - [x] The module-authority probe accepted unauthorized intake. Installed contract handlers now revalidate every phase, including terminal receipt recovery; prepared roots still require the same root CAS, grant and current database fence.
   - [ ] Unit commitments stream verified typed M1 hashes so saved contexts retain no body suffixes. Private chain/object keys now hash framed typed identities to bound escaping amplification; canonical IDs/hashes stay unchanged and new audit subjects use logical identities.
+  - [ ] Added shared-history transport assets for bounded private preparation/acknowledgement metadata. Canonical payloads remain in the kernel. Portable contexts accumulate the existing generic v1 roots and per-unit typed-hash inventories without retaining history-sized arrays.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
