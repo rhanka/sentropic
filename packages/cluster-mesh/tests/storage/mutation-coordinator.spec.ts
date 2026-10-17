@@ -18,6 +18,16 @@ const unit = (chainId: string) => ({
 });
 
 describe('root-aware ordinary mutations', () => {
+  it('should recover an owned module result in the ordinary receipt', async () => {
+    const { bound } = setup();
+    const result = { format: 'utf8' as const, data: 'module-result' };
+    const input = { ...unit('receipt-result'), moduleResult: result };
+    const receipt = await bound.commitAtomic(input, { idempotencyKey: 'receipt' });
+    result.data = 'caller mutation';
+    expect(receipt.moduleResult?.data).toBe('module-result');
+    const retry = await bound.commitAtomic({ ...unit('receipt-result'), moduleResult: { format: 'utf8', data: 'module-result' } }, { idempotencyKey: 'receipt' });
+    expect(retry.moduleResult).toEqual({ format: 'utf8', data: 'module-result' });
+  });
   it('should page pending histories without enumerating the captured scope or chain', async () => {
     const { coordinator, bound } = setup();
     await bound.appendChain('long', { id: 'old', hash: 'old', bytes: '{}' }, { kind: 'absent', allocation: '0' });

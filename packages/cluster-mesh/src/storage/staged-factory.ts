@@ -23,14 +23,13 @@ export interface StagedKernelRoot extends StagedKernelHandle {
 }
 export const createRootStagedKernel = (options: StagedKernelOptions): StagedKernelRoot => {
   const backend = options.backend ?? new MemoryBackend(createIndexedBackendScopeState);
-  let core: StagedCore;
   const coordinator = new RootMutationCoordinator(backend, {
     prepare: (...args) => prepareStagedRootNotice(core, ...args),
     accessible: (root, _kind, key) => core.accessible(root, key),
     fence: (grant, fence) => core.assertFence(grant, fence),
   });
   const inner = createKernel({ ...options, backend, coordinator });
-  core = new StagedCore(inner, backend, coordinator, options);
+  const core: StagedCore = new StagedCore(inner, backend, coordinator, options);
   const bind = (grant: ScopeGrant<unknown>) => new RootScopedRuntime(core, inner.bind(grant));
   const adapter: StagedKernelHandle = Object.freeze({ moduleId: inner.moduleId, incarnation: inner.incarnation, bind });
   return Object.freeze({
