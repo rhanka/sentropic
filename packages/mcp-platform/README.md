@@ -23,6 +23,10 @@ The `exports` map (not discipline) enforces the tiers; only the root `.` carries
 - **`./testing` — `@internal`, NOT frozen**: mocks/fixtures/reference (mock OIDC, in-memory
   MCP transport, fake connector, in-memory audit/secret/tenant/consent/durable stores) that
   a real host replaces.
+- **`./tool-configuration` — `@public`, additive in `0.3.0`**: the generic approved
+  tool-configuration codec/compiler (Lot 1a). It compiles a versioned approved snapshot
+  against a provider manifest and a local handler table into an immutable configuration
+  or typed diagnostics before activation. Synthetic providers only; no Immo fixture.
 
 _The internal composition below (build slices 1/2/3/7) describes what lives in each tier._
 
@@ -34,6 +38,37 @@ security-critical isolation properties — with **no real network, no production
 credentials, no real Claude.ai dependency, no DB, and no `mcp-wave` coupling**.
 
 Wave / immo are consumers/examples only; nothing domain-specific is baked in.
+
+### Tool-configuration compiler (`src/tool-configuration.ts`, `./tool-configuration`)
+
+Strict, pure, zero-I/O compiler for an approved per-tool configuration snapshot:
+
+- Inputs: versioned snapshot (`schemaVersion: "v1"`), provider manifest, local handler table and the
+  consumer-supplied compatibility digest (generic helper `computeCompatibilityDigest` covers the
+  public schemas/result codec; the compiler compares it, never derives it).
+- Checks: mandatory qualified versions (`providerVersion` equals the manifest version,
+  `platformVersion` equals the package version), manifest digest, consumer compatibility digest,
+  snapshot-carried handler-table shape digest (`handlersDigest`, compared to the local table with
+  `handlers_digest_mismatch`), mandatory payload digest (binds manifest + compatibility + handler
+  digests), exact tool coverage (no rename, remove, add or param/result change), handler allowlist
+  (table keys equal `handlerId`), closed-schema typed per-tool values (mistyped keywords rejected),
+  manifest policy merged field by field with no weakening, closed provenance keys (`approvalRef`,
+  `revision`, `manifestDigest`, `payloadDigest`, `reviewedBy`) with inspected strings as bounded
+  heuristics (role/review identifiers expected; opaque `sub`/UUID undetectable by value; known
+  credential/bearer/JWT/email and dangerous/`scheme://`/`mailto:`/`ssh:` patterns rejected without
+  claiming universal secret/PII detection, including overlays).
+- Output: deep-cloned then deeply frozen `CompiledToolConfiguration` (exposes `payloadDigest`,
+  `approvalRef`, versions and `handlersDigest`) or typed diagnostics; invalid candidates retain
+  the active generation, `activate` accepts compiler-branded configurations only, and cold starts
+  fail closed. See `tests/tool-configuration.test.ts` (discriminating tests per control;
+  the separate-process test loads `dist/` and the clean-consumer probe installs the packed
+  tarball via `make probe-mcp-platform-clean-consumer`, comparing frozen digests with zero fetch).
+- Provenance and registry contract (spec-v5 §5/§11): `approvalRef`/`reviewedBy` are
+  consumer-local opaque review references (no Sentropic approver, no cross-repo equality);
+  the compiler is a subordinate validator of the future `@sentropic/mcp-platform/registry`
+  (§3.1), not the product registry; a digest proves integrity, not authorization;
+  `handlersDigest` is a shape digest, not code attestation (code bound via package/image
+  receipts); `platformVersion` strictly equals the package version.
 
 ### Slice 1 — manifest & adapter schemas (`src/manifest.ts`, `src/runtime.ts`)
 
@@ -172,21 +207,15 @@ the frozen surface before publish.
 
 ## Running the gates (mock, in-memory)
 
-There is no Makefile target for this private package by design. Run the package's
-own tooling inside the repo's Docker node image, mirroring the other packages:
+Run the package gates through the repo Makefile (Docker node image, `ENV` last):
 
 ```sh
-# typecheck
-docker run --rm -v "$PWD:/workspace" -w /workspace/packages/mcp-platform \
-  node:24-bookworm-slim sh -lc 'tool_dir="$(mktemp -d)"; \
-  npm install --prefix "$tool_dir" --no-save typescript@5.4.5 @types/node >/dev/null; \
-  "$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
-
-# tests
-docker run --rm -v "$PWD:/workspace" -w /workspace/packages/mcp-platform \
-  node:24-bookworm-slim sh -lc 'tool_dir="$(mktemp -d)"; \
-  npm install --prefix "$tool_dir" --no-save vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; \
-  NODE_PATH="$tool_dir/node_modules" "$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+make typecheck-mcp-platform ENV=test-mcp-registry-codec
+make test-mcp-platform SCOPE=tests/tool-configuration.test.ts ENV=test-mcp-registry-codec
+make test-mcp-platform ENV=test-mcp-registry-codec # builds dist first: the separate-process test loads dist/
+make pack-mcp-platform ENV=test-mcp-registry-codec
+make probe-mcp-platform-clean-consumer ENV=test-mcp-registry-codec # clean-container install + subpath import (BR1a-EX3)
+make api-extract-mcp-platform ENV=test-mcp-registry-codec
 ```
 
 Real validation against Claude.ai or another external MCP client is UAT, not a CI

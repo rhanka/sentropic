@@ -28,6 +28,8 @@ LAZY_PACKAGE_RUN = docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp 
 test-lazy-package:
 	$(LAZY_SIBLING_CHECK)
 	@$(MAKE) --no-print-directory -f Makefile build-cluster-mesh ENV=$(ENV)
+	@$(MAKE) --no-print-directory -f Makefile build-mcp-platform ENV=$(ENV)
+	@$(MAKE) --no-print-directory -f Makefile build-artifacts ENV=$(ENV)
 	@$(LAZY_PACKAGE_RUN) sh -lc 'set -eu; work=/tmp/lazy-package; sh tests/packaging/prepare.sh "$$work"; \
 		CLUSTER_MESH_PACKAGING_DIR="$$work" NODE_PATH="$$work/tools/node_modules" \
 		"$$work/tools/node_modules/.bin/vitest" run tests/packaging --environment node'

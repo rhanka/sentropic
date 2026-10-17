@@ -32,6 +32,7 @@ on:
           - llm-gateway
           - cluster-mesh
           - cited-source-viewer
+          - artifacts
 
 env:
   REGISTRY: ${{ secrets.REGISTRY }}
@@ -121,6 +122,7 @@ jobs:
       events: ${{ steps.filter.outputs.events }}
       contracts: ${{ steps.filter.outputs.contracts }}
       flow: ${{ steps.filter.outputs.flow }}
+      artifacts: ${{ steps.filter.outputs.artifacts }}
       llm_mesh_publish: ${{ steps.filter.outputs.llm_mesh_publish }}
       llm_gateway_publish: ${{ steps.filter.outputs.llm_gateway_publish }}
       chat_ui_publish: ${{ steps.filter.outputs.chat_ui_publish }}
@@ -137,6 +139,7 @@ jobs:
       events_publish: ${{ steps.filter.outputs.events_publish }}
       contracts_publish: ${{ steps.filter.outputs.contracts_publish }}
       flow_publish: ${{ steps.filter.outputs.flow_publish }}
+      artifacts_publish: ${{ steps.filter.outputs.artifacts_publish }}
       harness: ${{ steps.filter.outputs.harness }}
       harness_publish: ${{ steps.filter.outputs.harness_publish }}
       manifest_guard: ${{ steps.filter.outputs.manifest_guard }}
@@ -374,6 +377,14 @@ jobs:
               - '.github/workflows/ci.yml'
             flow_publish:
               - 'packages/flow/**'
+            artifacts:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/artifacts/**'
+              - '.github/workflows/ci.yml'
+            artifacts_publish:
+              - 'packages/artifacts/**'
             harness:
               - 'Makefile'
               - 'package.json'
@@ -579,7 +590,7 @@ jobs:
         if: steps.pack.outputs.manifest_mode == 'block'
         env:
           CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/mcp-platform@0.3.0,@sentropic/artifacts@0.1.0,jose@5.10.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh candidate qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -970,6 +981,31 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-flow ENV=test-ci-flow
+
+  validate-artifacts:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Artifacts
+        run: make typecheck-artifacts
+      - name: Build Artifacts
+        run: make build-artifacts
+      - name: Test Artifacts
+        run: make test-artifacts
+      - name: Test Artifacts integration
+        run: make test-artifacts-integration ENV=test-ci-artifacts
+      - name: Lint Artifacts
+        run: make lint-artifacts
+      - name: Pack Artifacts
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-artifacts ENV=test-ci-artifacts
 
   validate-harness:
     runs-on: ubuntu-latest
@@ -1800,6 +1836,20 @@ jobs:
       - name: Publish MCP Platform
         run: make publish-mcp-platform
 
+  publish-artifacts:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-artifacts]
+    if: needs.changes.outputs.artifacts_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Artifacts
+        run: make publish-artifacts
+
   publish-auth-hono:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-hono]
@@ -1959,7 +2009,7 @@ jobs:
   # publisher counts as skipped only when its own `*_publish` filter is false.
   publish-cluster-mesh:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts]
+    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts, publish-mcp-platform]
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
@@ -1971,7 +2021,8 @@ jobs:
       (needs.publish-llm-mesh.result == 'success' || (needs.publish-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh_publish != 'true')) &&
       (needs.publish-llm-gateway.result == 'success' || (needs.publish-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway_publish != 'true')) &&
       (needs.publish-events.result == 'success' || (needs.publish-events.result == 'skipped' && needs.changes.outputs.events_publish != 'true')) &&
-      (needs.publish-contracts.result == 'success' || (needs.publish-contracts.result == 'skipped' && needs.changes.outputs.contracts_publish != 'true'))
+      (needs.publish-contracts.result == 'success' || (needs.publish-contracts.result == 'skipped' && needs.changes.outputs.contracts_publish != 'true')) &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true'))
     concurrency:
       group: npm-publish-train
       cancel-in-progress: false
@@ -2012,7 +2063,7 @@ jobs:
               fi ;;
             *) echo "::error title=Publication qualification::cluster-mesh status=${status}: unexpected publication outcome"; exit 1 ;;
           esac
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/mcp-platform@0.3.0,@sentropic/artifacts@0.1.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -2061,7 +2112,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
-            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer) ;;
+            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac
       - uses: actions/checkout@v6
@@ -2139,6 +2190,9 @@ jobs:
       - name: Bootstrap publish cluster-mesh
         if: inputs.bootstrap_publish_target == 'cluster-mesh'
         run: make publish-cluster-mesh-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish artifacts
+        if: inputs.bootstrap_publish_target == 'artifacts'
+        run: make publish-artifacts-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Qualify bootstrap-published cluster-mesh
         if: inputs.bootstrap_publish_target == 'cluster-mesh'
         run: |
@@ -2149,7 +2203,7 @@ jobs:
           if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
           if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/mcp-platform@0.3.0,@sentropic/artifacts@0.1.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload bootstrap publication receipts and qualification reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -2249,6 +2303,7 @@ jobs:
       - validate-chat-server
       - validate-comments
       - validate-flow
+      - validate-artifacts
       - validate-harness
       - build-api-image
       - build-api-tool-image

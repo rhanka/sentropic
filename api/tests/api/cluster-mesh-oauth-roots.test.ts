@@ -58,6 +58,12 @@ describe('cluster mesh OAuth roots', () => {
     await expect(metadata.json()).resolves.toMatchObject({
       authorization_endpoint: `http://localhost:9197${oauthPath}/authorize`,
       token_endpoint: `http://localhost:9197${oauthPath}/token`,
+      grant_types_supported: expect.arrayContaining([
+        'authorization_code',
+        'client_credentials',
+        'urn:ietf:params:oauth:grant-type:token-exchange',
+      ]),
+      scopes_supported: expect.arrayContaining(['immo:read', 'immo:search', 'immo:documents:read']),
     });
     expect((await app.request(`${oauthPath}/end_session`)).status).toBe(200);
 

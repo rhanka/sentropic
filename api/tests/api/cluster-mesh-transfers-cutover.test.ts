@@ -46,7 +46,7 @@ import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh
 import {
   exportsRouter as legacyExportsRouter,
   importsRouter as legacyImportsRouter,
-} from '../fixtures/historical/transfers-be37d69f6/api/src/routes/api/import-export';
+} from '../fixtures/historical/transfers-0c5aef04/api/src/routes/api/import-export';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -155,13 +155,13 @@ describe('cluster mesh transfers cutover', () => {
   });
 
   it('executes the pinned authenticated manifest and storage read parity', async () => {
-    const fixtureRoot = '../fixtures/historical/transfers-be37d69f6/api';
+    const fixtureRoot = '../fixtures/historical/transfers-0c5aef04/api';
     const source = readFileSync(new URL(`${fixtureRoot}/src/routes/api/import-export.ts`, import.meta.url));
     expect(createHash('sha1').update(`blob ${source.byteLength}\0`).update(source).digest('hex'))
       .toBe('07102840c30953ce293db51fd85adc85bb2e08c7');
     const journal = readFileSync(new URL(`${fixtureRoot}/drizzle/meta/_journal.json`, import.meta.url));
     expect(createHash('sha1').update(`blob ${journal.byteLength}\0`).update(journal).digest('hex'))
-      .toBe('4faa9e279d71d698d87ebfc5eb32c7939d593fde');
+      .toBe('5e84040a187727f35c13f89c4759986c9eff504e');
     for (const [path, digest] of bridges) {
       const bridge = readFileSync(new URL(`${fixtureRoot}/src/${path}`, import.meta.url));
       expect(createHash('sha256').update(bridge).digest('hex'), path).toBe(digest);
