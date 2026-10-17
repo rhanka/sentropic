@@ -32,7 +32,7 @@ describe.skipIf(!pgEnabled)('registered comments queries and shared host migrati
       expect(JSON.stringify(headers)).not.toContain('private body');
       await fixture.tx.run(true, async (session) => {
         const receipts = await fixture.options.history.read(session);
-        expect(receipts.at(-1)?.id).toContain('comments/001-projections');
+        expect(receipts.map((receipt) => receipt.id)).toEqual(fixture.options.assets!.map((asset) => asset.id));
         expect(receipts.every((receipt) => receipt.hostMigrationId === 'neutral-host/001')).toBe(true);
       });
       await fixture.open();
