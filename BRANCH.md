@@ -433,6 +433,7 @@
   - [ ] RED `comments-admission.spec.ts` requires the five separate module count/depth bounds before recursive canonicalization while leaving frozen M1 capacity fields unchanged.
   - [ ] Added separate module admission settings and iterative pre-canonicalization depth checks for both ordinary appends and transport records; no frozen capacity field or hash representation changes.
   - [ ] Replaced the arbitrary single-record reserve with the actual framed payload-array measurement; the complete import request receives its independent 1-MiB check. Iterative depth bounds reject cycles through depth exhaustion while allowing valid shared object aliases.
+  - [ ] Combined comments gate: 84 tests pass, one history-attachment assertion expects projections to be the last asset. Updated it to compare the complete installed inventory; added imported post-tombstone history and later actual-purge probes before closing C4.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
