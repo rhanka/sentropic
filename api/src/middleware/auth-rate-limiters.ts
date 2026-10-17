@@ -3,6 +3,7 @@ import { rateLimiter } from 'hono-rate-limiter';
 
 import { env } from '../config/env';
 import { resolveClientIp } from '../utils/client-ip';
+import { isSessionContentPath } from './session-content-rate-limiters';
 
 /**
  * Auth rate limiters, shared by every app that mounts a router from `createAuthRouter`.
@@ -97,7 +98,8 @@ export const applyAuthRateLimiters = (app: Hono): void => {
     }
     return authRateLimiter(c, next);
   });
-  app.use('/api/v1/auth/session*', authSessionRateLimiter);
+  app.use('/api/v1/auth/session*', (c, next) =>
+    isSessionContentPath(c.req.path) ? next() : authSessionRateLimiter(c, next));
   app.use('/api/v1/auth/login/*', authLoginRateLimiter);
   app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
   app.use('/api/v1/auth/magic-link/*', magicLinkRateLimiter);
@@ -108,5 +110,6 @@ export const applyAuthRateLimiters = (app: Hono): void => {
   // in the device-code store.
   app.use('/api/v1/auth/device/*', authSessionRateLimiter);
   // General identity routes last; their baseline overlap with dedicated auth limiters is unchanged.
-  app.use('/api/v1/auth/*', authRateLimiter);
+  app.use('/api/v1/auth/*', (c, next) =>
+    isSessionContentPath(c.req.path) ? next() : authRateLimiter(c, next));
 };
