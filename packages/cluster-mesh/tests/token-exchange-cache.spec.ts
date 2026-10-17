@@ -274,6 +274,106 @@ describe('token exchange cache', () => {
     expect(fake.mintCalls).toBe(2);
   });
 
+  it('O2: should refuse an in-flight mint invalidated by subject and admit only the retry', async () => {
+    const gated = new GatedIssuer({ issuer: ISSUER });
+    gated.gateMint = true;
+    const { client } = setup(gated);
+    const subjectToken = await gated.issueSubject({ subject: 'user-1', scope: ['workspace:read'] });
+    const request = baseRequest(subjectToken);
+
+    const pending = client.exchange(request);
+    const refusal = expect(pending).rejects.toMatchObject({
+      code: 'token_exchange_refused',
+      reason: 'exchange_invalidated',
+    });
+    await gated.waitForMintEntry(0);
+    expect(client.invalidateTokenExchangeCache({ subject: 'user-1' })).toBe(0);
+    // New work started after the invalidation must not join the doomed flight.
+    const retry = client.exchange(request);
+    const retryOk = expect(retry).resolves.toMatchObject({ tokenType: 'Bearer' });
+    await gated.waitForMintEntry(1);
+    gated.releaseMint(0);
+    gated.releaseMint(1);
+    await refusal;
+    await retryOk;
+    expect(gated.mintCalls).toBe(2);
+    expect(client.readTokenExchangeCacheStats().entries).toBe(1);
+  });
+
+  it('O2: should refuse an in-flight mint invalidated by tenant with zero admission', async () => {
+    const gated = new GatedIssuer({ issuer: ISSUER });
+    gated.gateMint = true;
+    const { client } = setup(gated);
+    const subjectToken = await gated.issueSubject({
+      subject: 'user-1',
+      scope: ['workspace:read'],
+      tenantId: 'tenant-a',
+    });
+    const request = baseRequest(subjectToken);
+
+    const pending = client.exchange(request);
+    const refusal = expect(pending).rejects.toMatchObject({
+      code: 'token_exchange_refused',
+      reason: 'exchange_invalidated',
+    });
+    await gated.waitForMintEntry(0);
+    expect(client.invalidateTokenExchangeCache({ tenantId: 'tenant-a' })).toBe(0);
+    gated.releaseMint(0);
+    await refusal;
+    expect(gated.mintCalls).toBe(1);
+    expect(client.readTokenExchangeCacheStats().entries).toBe(0);
+    // A retry after the invalidation mints and admits fresh.
+    gated.gateMint = false;
+    const retry = await client.exchange(request);
+    expect(retry.tokenType).toBe('Bearer');
+    expect(gated.mintCalls).toBe(2);
+  });
+
+  it('O2: should refuse the flight and its waiters on global invalidation during mint', async () => {
+    const gated = new GatedIssuer({ issuer: ISSUER });
+    gated.gateMint = true;
+    const { client } = setup(gated);
+    const subjectToken = await gated.issueSubject({ subject: 'user-1', scope: ['workspace:read'] });
+    const request = baseRequest(subjectToken);
+
+    const first = client.exchange(request);
+    const firstRefusal = expect(first).rejects.toMatchObject({
+      code: 'token_exchange_refused',
+      reason: 'exchange_invalidated',
+    });
+    const second = client.exchange(request);
+    const secondRefusal = expect(second).rejects.toMatchObject({
+      code: 'token_exchange_refused',
+      reason: 'exchange_invalidated',
+    });
+    await gated.waitForMintEntry(0);
+    expect(client.invalidateTokenExchangeCache('all')).toBe(1);
+    gated.releaseMint(0);
+    await firstRefusal;
+    await secondRefusal;
+    expect(gated.mintCalls).toBe(1);
+    expect(client.readTokenExchangeCacheStats().entries).toBe(0);
+  });
+
+  it('O2: should refuse when invalidated during subject verification without minting', async () => {
+    const gated = new GatedIssuer({ issuer: ISSUER });
+    gated.gateVerify = true;
+    const { client } = setup(gated);
+    const subjectToken = await gated.issueSubject({ subject: 'user-1', scope: ['workspace:read'] });
+
+    const pending = client.exchange(baseRequest(subjectToken));
+    const refusal = expect(pending).rejects.toMatchObject({
+      code: 'token_exchange_refused',
+      reason: 'exchange_invalidated',
+    });
+    await gated.waitForVerifyEntry(0);
+    expect(client.invalidateTokenExchangeCache({ subject: 'user-1' })).toBe(0);
+    gated.releaseVerify(0);
+    await refusal;
+    expect(gated.mintCalls).toBe(0);
+    expect(client.readTokenExchangeCacheStats().entries).toBe(0);
+  });
+
   it('should resolve residency as min(minted exp, subject exp, insertedAt + 60s) minus margin', () => {
     expect(
       resolveTokenExchangeCacheTtlMs({ mintedExpiresAtSec: 1_700_010_000, subjectExpiresAtSec: 1_700_010_000, insertedAtMs: 1_700_000_000_000 }),
