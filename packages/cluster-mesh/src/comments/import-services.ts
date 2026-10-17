@@ -4,7 +4,13 @@ import type { CommentsContext } from './context.js';
 import type { CommentsImportState } from './import-state.js';
 import { completeCommentsReceipt } from './import-recovery.js';
 import type { CommentsCommitImportRequest, CommentsPrepareImportRequest, CommentsFragmentAcknowledgement, CommentsCompleteReceipt } from './transport-contracts.js';
+import type { StagedUnitStatus } from '../storage/staged-units.js';
+import type { CommentsPreparedReference } from './transport-contracts.js';
 export const createCommentsImportServices = (context: CommentsContext) => ({
+  inspectPreparedImport: (input: { readonly scope: CanonicalStoreScope; readonly operationId: string; readonly bindingDigest: string }) => context.invoke(input.scope, async ({ storage }) => {
+    if (!storage.invoke) throw new UnsupportedProfileError('comments-import-v1');
+    return await storage.invoke('comments.import.progress', input) as { readonly status: StagedUnitStatus; readonly acceptedFragments: string; readonly prepared: CommentsPreparedReference | null };
+  }),
   prepareImportFragment: (input: CommentsPrepareImportRequest): Promise<CommentsFragmentAcknowledgement> => context.invoke(input.binding.request.scope, async ({ storage }) => {
     if (!storage.invoke) throw new UnsupportedProfileError('comments-import-v1');
     return await storage.invoke('comments.import.prepare', input) as CommentsFragmentAcknowledgement;

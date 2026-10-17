@@ -3,7 +3,7 @@ import type { CanonicalChainRecord, CanonicalReadSelection, ResourceRef } from '
 import type { AtomicUnit } from '../storage/atomic.js';
 import type { PgProjectionContext } from '../storage/postgres/protocol.js';
 import type { PgChain } from '../storage/postgres/effects.js';
-import { decodePgJson, decodePgText, decodePgUtf8 } from '../storage/postgres/codec.js';
+import { decodePgJson, decodePgUtf8 } from '../storage/postgres/codec.js';
 import { commentsControlAddress } from './import-control.js';
 import { commentsPgValue } from './postgres-records.js';
 import { chainIdentity, decodeRecord, selectionForRecord } from './storage-schema.js';
