@@ -159,42 +159,44 @@
     - [x] **UI tests**: not impacted (no `ui/**` change).
     - [x] **E2E tests**: not impacted (no app surface change).
 
-- [ ] **Lot 2 — K4 rebuild on K3 (O4:B1, O4:m7, O4:MAJ-9)**
-  - [ ] Indexed successors: `tests/storage/indexed-state.spec.ts` qualifies version preservation and capture without historical enumeration before coordinator integration.
-    - [x] `src/storage/indexed-{tree,map}.ts`: immutable balanced search paths and lockable forked maps; indexed-state probes pass 2/2. Coordinator integration follows.
+- [x] **Lot 2 — K4 rebuild on K3 (O4:B1, O4:m7, O4:MAJ-9)**
+  - [x] Indexed successors: `tests/storage/indexed-state.spec.ts` qualifies version preservation and capture without historical enumeration before coordinator integration.
+    - [x] `src/storage/indexed-{tree,map}.ts`: immutable balanced search paths and lockable forked maps; indexed-state probes pass 2/2. Coordinator integration is qualified below.
     - [x] Indexed history RED probe prevents successor creation from copying historical records; all three indexed-state probes pass.
     - [x] Backend adds opt-in indexed maps/histories and constant-metadata forks; K3 default state remains unchanged.
     - [x] Ordinary record preparation uses indexed forks when supplied, clones only touched history paths, and installs successor map pointers without replaying every scope entry; exact cursor sequence uses indexed lookup. Typecheck passes; K3 kernel suite stays 56/56.
-  - [ ] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
-    - [ ] `root-facade.ts` delegates ordinary/transaction operations to the coordinated K3 runtime and exposes staged, journal, snapshot and lifecycle methods through frozen handles with private slots. Factory replacement follows.
-    - [ ] `staged-factory.ts` composes the coordinated K3 kernel and separates trusted issuance/fence/failure controls from its binding-only adapter; all K3 options are forwarded.
-    - [x] Factory/facade helpers typecheck; indexed ordinal probes pass 4/4. Public replacement and shared corpora are still pending.
-  - [ ] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
+  - [x] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
+    - [x] `root-facade.ts` delegates ordinary/transaction operations to the coordinated K3 runtime and exposes staged, journal, snapshot and lifecycle methods through frozen handles with private slots. The public factory uses this facade.
+    - [x] `staged-factory.ts` composes the coordinated K3 kernel and separates trusted issuance/fence/failure controls from its binding-only adapter; all K3 options are forwarded.
+    - [x] Factory/facade helpers typecheck; indexed ordinal probes pass 4/4. Public replacement and shared corpora are qualified below.
+  - [x] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
     - [x] RED `tests/storage/mutation-coordinator.spec.ts`: ordinary mutations, stale-root CAS, preparation failure, authority revalidation, transaction coverage and unsupported-effect refusal; all 6 cases pass after wiring.
     - [x] Shared `prepareUnitsInScope` separates owned sequential preparation from publication, preserving the K3 guard/predicate/effect implementation for the root coordinator.
     - [x] `RootMutationCoordinator` captures indexed roots, prepares owned core/module effects, revalidates and switches the root conditionally.
     - [x] Kernel root options accept the trusted backend/coordinator; scoped adapters retain private wiring and frozen binding surfaces.
     - [x] Append/genesis/index/dispose/commit and ordinary reads participate in the configured root coordinator.
-    - [x] Transactions publish through that coordinator and revalidate every contributing grant after preparation; transactional getters honor current coverage. K4 runtime composition remains the next step.
+    - [x] Transactions publish through that coordinator and revalidate every contributing grant after preparation; transactional getters honor current coverage. K4 runtime uses this coordinator.
     - [x] Additional RED probes exercise transactional paging without scope/history enumeration and authority revalidation on an equal-result index replacement; both paths use indexed forks and fresh authority checks. Coordinator probes pass 10/10; typecheck passes.
-  - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
-    - [ ] RED `root-query.spec.ts` exercises registered bounded query dispatch, retained-root continuation, fresh authority/barriers and sequential projection rollback with independent carrier/journal/relationship reads.
-    - [ ] Registered query dispatch uses an owned root-bound continuation, bounded indexed relationship windows and fresh read/coverage checks; raw registries and descriptor mutation remain inaccessible through adapters.
-    - [ ] New RED probes reject descriptor alias escalation, request-side work-ceiling weakening and unqualified private-live staging commitments.
-    - [ ] Trusted descriptor/query/limit registration is owned and frozen; ordinary request limits cannot exceed the configured coordinator ceiling. K4 SHA-256 staging is qualified for comments only; private-live staging fails explicitly pending its required keyed/disposable commitment policy. K3 remains generic.
-    - [ ] RED `root-public.spec.ts` exercises the package's public storage entry point, semantic profile digests, callable frozen ports, private adapter state and forwarded authority.
-    - [ ] Public storage exports now expose the rebuilt factory and K1-compatible types. Memory claims have semantic SHA-256 digests and working protected ports; physical purge/generations/leased snapshots remain unadvertised.
-    - [ ] Literal profile acquisition now preserves its specific public port type, so hosts can call staged/outbox/boundary methods without unsafe casts.
-    - [ ] Public qualification now invokes every advertised profile's real port, including captured manifests, verified checkpoints and a staged commit/terminal abort refusal; it goes beyond checking that methods merely exist.
+  - [x] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
+    - [x] RED `root-query.spec.ts` exercises registered bounded query dispatch, retained-root continuation, fresh authority/barriers and sequential projection rollback with independent carrier/journal/relationship reads.
+    - [x] Registered query dispatch uses an owned root-bound continuation, bounded indexed relationship windows and fresh read/coverage checks; raw registries and descriptor mutation remain inaccessible through adapters.
+    - [x] New RED probes reject descriptor alias escalation, request-side work-ceiling weakening and unqualified private-live staging commitments.
+    - [x] Trusted descriptor/query/limit registration is owned and frozen; ordinary request limits cannot exceed the configured coordinator ceiling. K4 SHA-256 staging is qualified for comments only; private-live staging fails explicitly pending its required keyed/disposable commitment policy. K3 remains generic.
+    - [x] RED `root-public.spec.ts` exercises the package's public storage entry point, semantic profile digests, callable frozen ports, private adapter state and forwarded authority.
+    - [x] Public storage exports now expose the rebuilt factory and K1-compatible types. Memory claims have semantic SHA-256 digests and working protected ports; physical purge/generations/leased snapshots remain unadvertised.
+    - [x] Literal profile acquisition now preserves its specific public port type, so hosts can call staged/outbox/boundary methods without unsafe casts.
+    - [x] Public qualification now invokes every advertised profile's real port, including captured manifests, verified checkpoints and a staged commit/terminal abort refusal; it goes beyond checking that methods merely exist.
     - [x] The legacy `staged-runtime.ts` implementation is fully removed; the entry point only re-exports the coordinated factory and shared protocol types. Removal commits stayed under 150 lines.
     - [x] Removed the obsolete syntax-only seal validator; bounded state-dependent preparation and its progress are exclusively handled by `staged-preparation.ts` / `staged-seal.ts`.
-  - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
-    - [ ] `root-integrity.spec.ts` reuses the K2b nested-byte/audit/current-fence probes on K4. The collision probe carries the recipient's valid capability when supported, ensuring capability validation cannot mask a missing scope-binding check.
-    - [ ] A bounded, maintain-authorized audit metadata reader exposes independent canonical membership without returning moduleResult payloads. The immutable-boundaries profile exposes actual captured manifest ports.
-    - [ ] `root-ordinary.spec.ts` reuses K3 chain/read/cursor-budget/authority corpora through the public K4 export and checks nested rollback, sequential pending heads, a genuine same-chain rival and scope-aware registered predicates.
-    - [ ] K4 corpus adapters now use the replacement factory. Unbounded seal-driving loops and failure injection live only in `tests/storage/staged-client.ts`; production provides bounded `sealStep` and trusted root controls separately.
-    - [ ] G5 and seal-step fixtures use canonical computed commitments. The large-step case explicitly requests eight items instead of relying on an undocumented internal constant; no timeout or budget inflation.
-  - [ ] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.
+  - [x] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
+    - [x] `root-integrity.spec.ts` reuses the K2b nested-byte/audit/current-fence probes on K4. The collision probe carries the recipient's valid capability when supported, ensuring capability validation cannot mask a missing scope-binding check.
+    - [x] A bounded, maintain-authorized audit metadata reader exposes independent canonical membership without returning moduleResult payloads. The immutable-boundaries profile exposes actual captured manifest ports.
+    - [x] `root-ordinary.spec.ts` reuses K3 chain/read/cursor-budget/authority corpora through the public K4 export and checks nested rollback, sequential pending heads, a genuine same-chain rival and scope-aware registered predicates.
+    - [x] K4 corpus adapters now use the replacement factory. Unbounded seal-driving loops and failure injection live only in `tests/storage/staged-client.ts`; production provides bounded `sealStep` and trusted root controls separately.
+    - [x] G5 and seal-step fixtures use canonical computed commitments. The large-step case explicitly requests eight items instead of relying on an undocumented internal constant; no timeout or budget inflation.
+  - [x] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.
+
+  - [x] Current memory gate: typecheck/lint pass; 85 files and 777 tests pass, 5 packaging files / 34 tests skip. Command: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; code head `497d40838`, gate launch `a14161d66`, RTK evidence `5537ba475ece`. Durable Postgres remains Lot 6.
 
 - [ ] **Lot 3 — K4 integrity (N1-N3; MAJ-1..3, m2, m3, S4:4, S4:10; C01-C04)**
   - [ ] Kernel-computed fragment digests and roots from the shared codec; owned deep-frozen buffers; divergent begin refused; terminal states kept.
