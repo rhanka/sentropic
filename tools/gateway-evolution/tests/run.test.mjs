@@ -133,13 +133,13 @@ describe('closed v1 input validation', () => {
         candidateInput({
           program: 'registry',
           phase: 'r5-candidate',
-          profiles: ['gateway-messaging', 'gateway-runtime', 'registry-runtime'],
+          profiles: ['gateway-messaging', 'gateway-runtime', 'registry-focus', 'registry-runtime'],
           programCoverage: [
             {
               program: 'registry',
               phase: 'r5-candidate',
               contractSha256: hex('gateway-contract-v1'),
-              profiles: ['gateway-messaging', 'gateway-runtime', 'registry-runtime'],
+              profiles: ['gateway-messaging', 'gateway-runtime', 'registry-focus', 'registry-runtime'],
             },
           ],
         }),
@@ -408,6 +408,9 @@ describe('external closure and receipts (GW6-M1/GW7-M1)', () => {
   });
 
   it('verifies a companion-own receipt and refuses stale or incomplete evidence', () => {
+    failsWith(() => verifyConsumerReceipt(receipt({ jobs: [] }), expectedOwn()), 'incomplete-evidence');
+    failsWith(() => verifyConsumerReceipt(receipt({ baseSha: undefined }), expectedOwn()), 'stale-base');
+    failsWith(() => verifyConsumerReceipt(receipt({ mergeSha: undefined }), expectedOwn()), 'unrelated-merge');
     assert.deepEqual(verifyConsumerReceipt(receipt(), expectedOwn()).verified, true);
     failsWith(() => verifyConsumerReceipt(null, expectedOwn()), 'ci-receipt-unavailable');
     failsWith(
@@ -428,13 +431,13 @@ describe('external closure and receipts (GW6-M1/GW7-M1)', () => {
     const declared = assertPinnedProjection(externalProjection([lockRows()[0]], []));
     const ok = verifyConsumerReceipt(
       receipt({ releaseLockSha256: 'n'.repeat(64), declaredReleaseLockSha256: 'l'.repeat(64) }),
-      { ...expectedOwn(), allowLockChange: true, actualProjection: declared, declaredProjection: declared },
+      { ...expectedOwn(), allowLockChange: true, actualReleaseLockSha256: 'n'.repeat(64), actualProjection: declared, declaredProjection: declared },
     );
     assert.equal(ok.verified, true);
     failsWith(
       () => verifyConsumerReceipt(
         receipt({ releaseLockSha256: 'n'.repeat(64) }),
-        { ...expectedOwn(), allowLockChange: true, actualProjection: [], declaredProjection: declared },
+        { ...expectedOwn(), allowLockChange: true, actualReleaseLockSha256: 'n'.repeat(64), actualProjection: [], declaredProjection: declared },
       ),
       'external-drift',
     );
