@@ -237,4 +237,29 @@ describe('LlmMeshFacade', () => {
       .resolves.toEqual({ accountId: 'acct-owner-a', removed: true });
     await expect(restarted.listAccounts({ ownerScope: 'owner-a' })).resolves.toEqual([]);
   });
+
+  it('exposes the seat-bundle import entry and delegates canonical registration', async () => {
+    const facade = createLlmMeshFacade({ mode: 'portal', configResolver: { async resolveConfig() { return {}; } } });
+    const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
+    const imported = await facade.importSeatBundle({
+      bundle: parseCliSeatProfile({
+        cli: 'claude',
+        seatRef: 'seat-facade-01',
+        refreshFamilyRef: 'family-facade-01',
+        ownerScope: 'owner-seat-01',
+        issuingClientRef: 'client-facade-01',
+        endpointFamily: 'endpoint-facade-01',
+        accountBinding: 'binding-facade-01',
+        entitlementClass: 'lab-seat',
+        epoch: 1,
+        generation: 1,
+        operationId: 'op-facade-01',
+        issuedAt: '2026-10-17T00:00:00Z',
+        providerExpiry: '2099-01-01T00:00:00Z',
+        accessRef: 'access-facade-01',
+      }),
+      ownerScope: 'owner-seat-01',
+    });
+    expect(imported).toMatchObject({ accountId: 'seat-claude-seat-facade-01', idempotent: false });
+  });
 });

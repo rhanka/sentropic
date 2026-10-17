@@ -465,4 +465,30 @@ describe('Claude service enrollment', () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(await keyring.getSecret(`sentropic-llm-mesh:${completion.accountId}:public`)).toContain('user:inference');
   });
+
+  it('lists a single seat account after forward generations', async () => {
+    const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
+    const keyring = new InMemoryKeyring();
+    const service = new LocalAccountTransportService(keyring, new Map(), { async resolveConfig() { return {}; } });
+    const profile = (generation: number) => ({
+      cli: 'claude' as const,
+      seatRef: 'seat-claude-list-01',
+      refreshFamilyRef: 'family-claude-list-01',
+      ownerScope: 'owner-seat-01',
+      issuingClientRef: 'client-claude-list-01',
+      endpointFamily: 'endpoint-claude-list-01',
+      accountBinding: 'binding-claude-list-01',
+      entitlementClass: 'lab-seat',
+      epoch: 1,
+      generation,
+      operationId: `op-claude-list-0${generation}`,
+      issuedAt: '2026-10-17T00:00:00Z',
+      providerExpiry: '2099-01-01T00:00:00Z',
+      accessRef: `access-claude-list-0${generation}`,
+    });
+    await service.importSeatBundle({ bundle: parseCliSeatProfile(profile(1)), ownerScope: 'owner-seat-01' });
+    await service.importSeatBundle({ bundle: parseCliSeatProfile(profile(2)), ownerScope: 'owner-seat-01' });
+    const accounts = await service.listAccounts('owner-seat-01');
+    expect(accounts.map((account) => account.accountId)).toEqual(['seat-claude-seat-claude-list-01']);
+  });
 });
