@@ -3,6 +3,14 @@ import { IndexedMap } from '../../src/storage/indexed-map.js';
 import { IndexedHistory } from '../../src/storage/indexed-history.js';
 
 describe('indexed storage roots', () => {
+  it('should retrieve a bounded ordinal window without visiting earlier keys', () => {
+    const map = new IndexedMap<number>();
+    for (let n = 0; n < 1000; n += 1) map.set(String(n).padStart(4, '0'), n);
+    map.entries = () => { throw new Error('historical enumeration'); };
+    expect(map.entryAt(998)).toEqual(['0998', 998]);
+    expect(map.entryAt(1000)).toBeUndefined();
+    expect(map.entryAt(-1)).toBeUndefined();
+  });
   it('should append to a long captured history without copying its records', () => {
     const history = new IndexedHistory<number>();
     for (let n = 0; n < 10000; n += 1) history.push(n);
