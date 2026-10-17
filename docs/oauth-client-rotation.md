@@ -42,7 +42,7 @@ locations convention. The IdP stores only the sha256 (`printf '%s'`, never `echo
    `OAUTH_CLIENT_SECRET`, plus `OAUTH_CLIENT_REQUIRED_ACR` /
    `OAUTH_CLIENT_ALLOWED_USER_IDS` when the client carries a policy).
 2. Run `make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`
-   (BRMFA-EX1) against the tier cluster. It creates the temporary
+   (BR45-EX1) against the tier cluster. It creates the temporary
    `oauth-client-registration` Secret from the file, applies the versioned Job
    (`deploy/k8s/base/36-oauth-register-client-job.yaml`), waits for completion,
    prints the Job logs, then deletes the Job and the temporary Secret.
