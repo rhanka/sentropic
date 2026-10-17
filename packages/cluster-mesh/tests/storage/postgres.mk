@@ -22,3 +22,8 @@ cluster-mesh-storage-deps:
 cluster-mesh-storage-deps-audit: cluster-mesh-storage-deps
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc \
 		'npm_config_cache=/tmp/npm-cache npm audit --prefix .h2a/storage-deps --omit=dev --audit-level=high'
+
+.PHONY: cluster-mesh-storage-lock-import
+cluster-mesh-storage-lock-import:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		node packages/cluster-mesh/tests/storage/import-digest-lock.mjs
