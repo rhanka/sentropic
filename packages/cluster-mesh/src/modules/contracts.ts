@@ -11,6 +11,7 @@ export const CLUSTER_MESH_PROVIDER_MODULE_IDS = [
   'gateway',
   'gateway/auth',
   'gateway/auth-hono',
+  'comments',
 ] as const;
 
 /** Catalogued capabilities not delivered by this release; always gated `source_unavailable`. */
@@ -25,7 +26,6 @@ export const CLUSTER_MESH_GATED_MODULE_IDS = [
   'auth-hono',
   'chat-server',
   'flow',
-  'comments',
   'connector-host',
   'harness',
   'memory',
