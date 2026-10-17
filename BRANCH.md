@@ -192,6 +192,7 @@
 - [ ] **Lot 3 — K4 integrity (N1-N3; MAJ-1..3, m2, m3, S4:4, S4:10; C01-C04)**
   - [ ] Kernel-computed fragment digests and roots from the shared codec; owned deep-frozen buffers; divergent begin refused; terminal states kept.
     - [ ] RED `root-intake.spec.ts` refuses malformed canonical records, excess guard/effect items and forged purge authorizers before advancing the accepted ordinal or journal.
+    - [ ] Shared atomic structural validation now covers record bytes, guard variants, relationship/barrier/intent fields and index results. Staged intake additionally bounds all guard/effect items and verifies purge authority/authorizer before acceptance.
     - [ ] `src/storage/staged-operations.ts` authenticates backend-held capabilities and current fences, owns canonical fragment bytes, recomputes every ordinal digest, indexes retry receipts and separates operation identities from ordinary commit indexes.
   - [ ] Authenticated unforgeable handles/seals bound to module/tenant/workspace/incarnation/owner; current fence verified at begin/stage/seal/commit/abort and after the publication gate.
     - [ ] RED `root-recovery.spec.ts` injects lost fragment/commit responses, recreates the runtime on its backend and checks exactly one journal event. Explicit operator ownership recovery must retain frozen intent, record its action and invalidate old handles/seals.

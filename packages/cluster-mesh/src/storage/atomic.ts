@@ -127,6 +127,7 @@ export interface IdempotencyEntry {
 }
 
 const validateAppend = (append: ChainAppend): string | null => {
+  if (typeof append !== 'object' || append === null) return 'append must be an object';
   if (!isNonEmptyString(append.chainId)) return 'append requires a chainId';
   if (typeof append.record !== 'object' || append.record === null) return 'append requires a record';
   if (!isNonEmptyString(append.record.id)) return 'append record requires an id';
@@ -138,6 +139,8 @@ const validateAppend = (append: ChainAppend): string | null => {
 };
 
 export const validateAtomicUnit = (unit: AtomicUnit, limits?: WorkLimits): ValidationResult => {
+  if (typeof unit !== 'object' || unit === null || !['guards', 'records', 'appends', 'updates', 'relationships', 'barriers', 'purgeIntents', 'indexWrites']
+    .every((key) => Array.isArray((unit as unknown as Record<string, unknown>)[key]))) return errResult('invalid atomic unit shape');
   const errors: string[] = [];
   const effectCount =
     unit.records.length +
@@ -158,15 +161,42 @@ export const validateAtomicUnit = (unit: AtomicUnit, limits?: WorkLimits): Valid
     const failure = validateAppend(append);
     if (failure) errors.push(failure);
   }
+  for (const record of unit.records) {
+    if (!isNonEmptyString(record?.key) || !isNonEmptyString(record?.contentHash) || !validateEncodedValue(record?.bytes).ok) errors.push('record requires a key, content hash and encoded bytes');
+  }
+  for (const guard of unit.guards) {
+    if (typeof guard !== 'object' || guard === null) { errors.push('guard must be an object'); continue; }
+    if (guard.kind === 'head') {
+      if (!isNonEmptyString(guard.chainId) || (guard.hash !== null && !isNonEmptyString(guard.hash))) errors.push('invalid head guard');
+    } else if (guard.kind === 'absent') {
+      if (!isNonEmptyString(guard.chainId)) errors.push('invalid absent guard');
+    } else if (guard.kind === 'aggregate-version') {
+      if (!isNonEmptyString(guard.key) || !isSafeInteger(guard.version) || guard.version < 0) errors.push('invalid aggregate guard');
+    } else if (guard.kind === 'predicate') {
+      if (!isNonEmptyString(guard.predicateId) || !isNonEmptyString(guard.dependency)) errors.push('invalid predicate guard');
+    } else errors.push('unknown guard kind');
+  }
+  for (const change of unit.relationships) {
+    if (!change || (change.kind !== 'add' && change.kind !== 'remove') || !isNonEmptyString(change.relation) || !isNonEmptyString(change.from) || !isNonEmptyString(change.to)) errors.push('invalid relationship');
+  }
+  for (const barrier of unit.barriers) {
+    if (!isNonEmptyString(barrier?.boundary) || !isNonEmptyString(barrier?.reason)) errors.push('invalid barrier');
+  }
+  for (const intent of unit.purgeIntents) {
+    if (!isNonEmptyString(intent?.target) || !isNonEmptyString(intent?.intentId) || !isNonEmptyString(intent?.authorizedBy)) errors.push('invalid purge intent');
+  }
   for (const update of unit.updates) {
+    if (!update) { errors.push('update must be an object'); continue; }
     if (!isNonEmptyString(update.key)) errors.push('update requires a key');
     if (!isSafeInteger(update.version) || update.version < 0) errors.push('update requires a version >= 0');
     const value = validateEncodedValue(update.value);
     if (!value.ok) errors.push(value.errors.join('; '));
   }
   for (const write of unit.indexWrites) {
+    if (!write) { errors.push('index write must be an object'); continue; }
     if (!isNonEmptyString(write.key)) errors.push('index write requires a key');
     if (!isNonEmptyString(write.digest)) errors.push('index write requires a digest');
+    if (!Array.isArray(write.resultIds) || !write.resultIds.every(isNonEmptyString) || (write.resultHash !== null && !isNonEmptyString(write.resultHash))) errors.push('invalid index result');
   }
   if (unit.moduleResult) {
     const result = validateEncodedValue(unit.moduleResult);
