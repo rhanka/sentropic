@@ -337,7 +337,9 @@ export const validateConsumerInput = (input) => {
   return input;
 };
 
-const MANIFEST_KEYS = new Set(['kind', 'image', 'pythonFree', 'createdBy', 'notes']);
+const MANIFEST_KEYS = new Set(['kind', 'image', 'pythonFree', 'createdBy', 'notes',
+  'sourceSha', 'contractSha256', 'releaseLockSha256', 'packages', 'artifacts',
+  'profiles', 'programCoverage', 'scopes']);
 
 /** Closed run-manifest validation. Pure mode accepts tool-only manifests. */
 export const checkManifest = (manifest, { kind, expectImageReference, expectImageDigest } = {}) => {
@@ -352,6 +354,9 @@ export const checkManifest = (manifest, { kind, expectImageReference, expectImag
     throw new GatewayInputError(`manifest kind must be ${kind}, got ${manifest.kind}`, 'bad-manifest');
   }
   if (!isRecord(manifest.image)) throw new GatewayInputError('manifest image must be an object', 'bad-manifest');
+  if (manifest.pythonFree !== true || Object.keys(manifest.image).sort().join(',') !== 'digest,reference') {
+    throw new GatewayInputError('manifest requires a closed image and pythonFree=true', 'bad-manifest');
+  }
   if (typeof manifest.image.reference !== 'string' || !manifest.image.reference) {
     throw new GatewayInputError('manifest image.reference must be nonempty', 'bad-manifest');
   }
