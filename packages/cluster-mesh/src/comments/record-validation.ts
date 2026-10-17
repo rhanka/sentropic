@@ -4,7 +4,7 @@ import { invalid, validateRecordHash } from './storage-schema.js';
 export type LookupCommentsRecord = (selection: CanonicalReadSelection, hash?: string) => Promise<CanonicalChainRecord | null>;
 export const validateCommentsRecord = async (record: CanonicalChainRecord, previous: CanonicalChainRecord | null, capacity: CapacityDescriptor, lookup: LookupCommentsRecord): Promise<void> => {
   validateRecordHash(record);
-  if (Buffer.byteLength(canonicalJson(record), 'utf8') > 524288 - 4096) invalid('canonical record exceeds fragment representation');
+  if (Buffer.byteLength(canonicalJson([record]), 'utf8') > 524288) invalid('canonical record exceeds complete fragment payload representation');
   if (record.kind === 'annotation-revision') {
     const { kind: _kind, hash: _hash, link: _link, ...input } = record;
     if (createAnnotationRevision(previous as AnnotationRevisionRecord | null, input, capacity).hash !== record.hash) invalid('annotation envelope mismatch');
