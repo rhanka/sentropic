@@ -15,6 +15,15 @@ const append = (chainId: string, hash: string, head: string | null = null) => ({
 });
 
 describe('ordinary K3 contracts through K4', () => {
+  it('should treat an identical immutable representation as a no-op and reject changed bytes under its identity', async () => {
+    const { bound } = setup();
+    const record = { key: 'immutable', contentHash: 'same-hash', bytes: { format: 'utf8' as const, data: 'original' } };
+    const input = { ...emptyEffects(), records: [record] };
+    expect((await bound.commitAtomic(input)).effectiveRecords).toBe(1);
+    expect((await bound.commitAtomic(input)).effectiveRecords).toBe(0);
+    await expect(bound.commitAtomic({ ...input, records: [{ ...record, bytes: { ...record.bytes, data: 'different bytes' } }] })).rejects.toMatchObject({ code: 'idempotency-conflict' });
+    expect((await bound.readRecord('immutable'))?.bytes.data).toBe('original');
+  });
   it('should retain the shared chain corpus', async () => { await runChainCorpus(setup().bound); });
   it('should retain the shared read corpus', async () => { await runReadCorpus(setup().bound); });
   it('should retain exact cursor byte envelopes', async () => { await runReadCursorBudgetCorpus(setup().bound); });
