@@ -56,7 +56,7 @@
   {#if !usable}<p role="status">{$_('sessionContent.noKey')}</p>{/if}
   {#if !flow?.available}<p>{$_('sessionContent.states.source_unavailable')}</p>{/if}
   <label class="block space-y-1"><span>{$_('sessionContent.input')}</span>
-    <textarea class="min-h-24 w-full rounded border border-slate-300 p-3 font-mono focus:ring-2 focus:ring-primary/30" value={text} disabled={busy || !flow?.available} on:input={(e) => { text = e.currentTarget.value; edit(); }}></textarea>
+    <textarea class="min-h-24 w-full rounded border border-slate-300 p-3 font-mono focus:ring-2 focus:ring-primary/30" autocomplete="off" spellcheck={false} value={text} disabled={busy || !flow?.available} on:input={(e) => { text = e.currentTarget.value; edit(); }}></textarea>
   </label>
   <label class="flex min-h-9 items-center gap-2"><input type="checkbox" checked={newline} disabled={busy || !flow?.available} on:change={(e) => { newline = e.currentTarget.checked; edit(); }} />{$_('sessionContent.newline')}</label>
   <p class="text-sm text-slate-700">{$_('sessionContent.preview')}</p>
