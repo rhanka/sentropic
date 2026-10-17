@@ -10,7 +10,7 @@ for (const [index, file] of files.entries()) {
 }
 await writeFile(new URL('manifest.json', directory), `${JSON.stringify({ version: 1, assets }, null, 2)}\n`);
 const modules = [];
-for (const file of ['comments/001-projections.sql', 'comments/002-transport.sql', 'comments/003-exports.sql', 'comments/004-authority.sql']) {
+for (const file of ['comments/001-projections.sql', 'comments/002-transport.sql', 'comments/003-exports.sql', 'comments/004-authority.sql', 'comments/005-lifecycle-evidence.sql']) {
   const sql = await readFile(new URL(file, directory)); const version = assets.length + modules.length;
   modules.push({ id: `cluster-mesh-pg/${file.slice(0, -4)}@1`, file, order: version + 1, dialect: 'postgresql', mode: 'transactional',
     fromVersion: version, toVersion: version + 1, requires: [(modules.at(-1) ?? assets.at(-1)).id], schemaRole: 'comments', checksum: createHash('sha256').update(sql).digest('hex') });
