@@ -14,6 +14,7 @@ import {
 import { AUTH_AUTHOR, type AuthCompositionRoot } from '../../src/routes/namespaces/auth-cutover';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
+import { isSessionContentPath } from '../../src/middleware/session-content-rate-limiters';
 
 const store = new PostgresClusterMeshCutoverStore();
 const key = (compositionRoot: AuthCompositionRoot) => ({
@@ -62,6 +63,14 @@ const buildCandidate = (compositionRoot: AuthCompositionRoot): Hono => {
 afterEach(async () => Promise.all([clear('product'), clear('auth-idp')]));
 
 describe('cluster mesh auth roots', () => {
+  it.each([
+    ['/api/v1/auth/session/content', true], ['/api/v1/auth/session/content/x/status', true],
+    ['/api/v1/auth/session/contentious', false], ['/api/v1/auth/session/content%2fx', false],
+    ['/api/v1/auth/session/content/x%2fy', false], ['/api/v1/auth/session/content/x%255cy', false],
+    ['/api/v1/auth/session/refresh', false], ['/api/v1/auth/login/options', false],
+  ] as const)('should isolate only the literal content subtree: %s', (path, expected) => {
+    expect(isSessionContentPath(path)).toBe(expected);
+  });
   it('exposes one final identity projection in each application root', async () => {
     await Promise.all([clear('product'), clear('auth-idp')]);
     const idp = createIdpApp();
@@ -73,6 +82,8 @@ describe('cluster mesh auth roots', () => {
     expect((await productApp.request('/api/v1/me')).status).toBe(401);
     expect((await idp.request('/api/v1/auth/me')).status).toBe(401);
     expect((await idp.request('/api/v1/auth/me', { method: 'DELETE' })).status).toBe(401);
+    expect((await productApp.request('/api/v1/auth/session/content/retained-content')).status).toBe(401);
+    expect((await idp.request('/api/v1/auth/session/content/retained-content')).status).toBe(404);
   });
 
   it.each(['product', 'auth-idp'] as const)(

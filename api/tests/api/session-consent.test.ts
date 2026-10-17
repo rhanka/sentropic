@@ -273,6 +273,26 @@ describe('session consent durable lifecycle', () => {
     expect(csrf.status).toBe(403);
   });
 
+  it('should keep product content cleanup available after failed-auth and action floods on the same IP', async () => {
+    const router = productContent();
+    for (let i = 0; i < 40; i++) {
+      const response = await router.request('/api/v1/auth/session/content/unknown/status');
+      expect(response.status).toBe(i < 32 ? 401 : 429);
+      expect((await response.json()).error).toBe(i < 32 ? 'first_party_required' : 'd2_authentication_throttled');
+    }
+    for (let i = 0; i < 33; i++) {
+      const response = await router.request('/api/v1/auth/session/content/unknown/keyboard/prepare',
+        { method: 'POST', headers: browserHeaders() });
+      expect(response.status).toBe(i < 32 ? 503 : 429);
+      expect((await response.json()).error).toBe(i < 32 ? 'unsupported_source' : 'd2_action_throttled');
+    }
+    const metadata = await router.request(`/api/v1/auth/session/content/workspaces/${workspaceId}/sessions`,
+      { headers: browserHeaders() });
+    expect(metadata.status).toBe(200);
+    expect((await router.request('/api/v1/auth/session/content/unknown/consent',
+      { method: 'DELETE', headers: browserHeaders() })).status).toBe(404);
+  });
+
   it('should persist consent and survive service reinstantiation', async () => {
     const accepted = await acceptProject();
     expect(accepted.digest).toHaveLength(64);
@@ -730,7 +750,7 @@ describe('session consent durable lifecycle', () => {
     );
   });
 
-  it.each(['purge', 'revoke', 'exclude', 'project'] as const)('should apply product content %s without source contact and preserve D1', async (action) => {
+  it.each(['purge', 'revoke', 'exclude', 'project', 'pending'] as const)('should apply product content %s without source contact and preserve D1', async (action) => {
     await acceptProject({ retentionByChannel: { 'terminal.cache': { mode: 'duration', durationSeconds: 60 },
       'native.mirror': { mode: 'none' } } });
     const bindingId = await adoptSession('product-content-purge');
@@ -749,21 +769,25 @@ describe('session consent durable lifecycle', () => {
     expect((await discovered.json()).items[0].copies).toMatchObject([
       { channel: 'terminal.cache', expiresAt: now + 60000 },
     ]);
-    if (action === 'purge') await db.delete(workspaceMemberships).where(and(
+    if (action === 'purge' || action === 'pending') await db.delete(workspaceMemberships).where(and(
       eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, owner.id)));
-    const router = productContent();
+    const router = action === 'pending' ? new Hono().route('/api/v1/auth/session/content', createSessionContentRouter({
+      websiteOrigin: 'http://localhost:5581', content: new SessionContentService({ issuer: 'test-issuer',
+        storage: { endpoint: '', region: '', bucket: '', accessKeyId: '', secretAccessKey: '' } }),
+    })) : productContent();
     const inventory = await router.request('/api/v1/auth/session/content/retained-content', { headers: browserHeaders() });
     const { items } = await inventory.json();
-    const suffix = action === 'purge' ? `consent?retainedScopeId=${encodeURIComponent(items[0].retainedScopeId)}`
+    const suffix = action === 'purge' || action === 'pending' ? `consent?retainedScopeId=${encodeURIComponent(items[0].retainedScopeId)}`
       : action === 'revoke' ? 'consent' : 'exclusion';
     const target = action === 'project' ? `workspaces/${workspaceId}/consent` : `${bindingId}/${suffix}`;
     const response = await router.request(`/api/v1/auth/session/content/${target}`,
       { method: action === 'exclude' ? 'PUT' : 'DELETE',
         headers: { ...browserHeaders(), 'content-type': 'application/json' },
         ...(action === 'exclude' ? { body: JSON.stringify({ excluded: true }) } : {}) });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ complete: true });
-    expect(await fixture.listPhysical('')).toHaveLength(0);
+    expect(response.status).toBe(action === 'pending' ? 202 : 200);
+    expect(await response.json()).toMatchObject({ complete: action !== 'pending' });
+    expect(await fixture.listPhysical('')).toHaveLength(action === 'pending' ? 1 : 0);
+    if (action === 'pending') expect((await service.listRetainedHandles(owner.id))[0]?.status).toBe('purge_pending');
     expect((await db.select().from(sessionContentGrants)
       .where(eq(sessionContentGrants.sessionId, 'product-content-purge')))[0]?.state).toBe(action === 'exclude' ? 'excluded' : 'revoked');
     if (action === 'exclude') expect((await db.select().from(sessionContentProjects)
