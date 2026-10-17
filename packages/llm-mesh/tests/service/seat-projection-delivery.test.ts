@@ -5,6 +5,8 @@ import {
   sameSeatLineage,
 } from '../../src/enrollment/cli-seat-import.js';
 import { validateSeatBundle } from '../../src/enrollment/seat-bundle.js';
+import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
+import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
 // Mesh-side projection delivery: the custodian hands a consumer projection
 // to the mesh importer. Lineage and owner survive the handoff; refresh
@@ -68,5 +70,96 @@ describe('seat-projection-delivery', () => {
     expect(() =>
       parseTokenSeatEnvelope({ raw: JSON.stringify(projection), ownerScope: 'owner-other-01' }),
     ).toThrow(/owner/);
+  });
+});
+
+describe('seat-bundle canonical registration', () => {
+  const consumerBundle = (overrides = {}) => ({
+    cli: 'claude' as const,
+    seatRef: 'seat-reg-01',
+    refreshFamilyRef: 'family-reg-01',
+    ownerScope: 'owner-seat-01',
+    issuingClientRef: 'client-reg-01',
+    endpointFamily: 'endpoint-reg-01',
+    accountBinding: 'binding-reg-01',
+    entitlementClass: 'lab-seat',
+    epoch: 1,
+    generation: 1,
+    operationId: 'op-reg-01',
+    issuedAt: '2026-10-17T00:00:00Z',
+    providerExpiry: '2099-01-01T00:00:00Z',
+    accessRef: 'access-reg-01',
+    ...overrides,
+  });
+  const serviceOn = (keyring = new InMemoryKeyring()) =>
+    new LocalAccountTransportService(keyring, new Map(), { async resolveConfig() { return {}; } });
+
+  it('registers a consumer projection and serves it without a second registry', async () => {
+    const keyring = new InMemoryKeyring();
+    const service = serviceOn(keyring);
+    const bundle = parseCliSeatProfile(consumerBundle());
+    const imported = await service.importSeatBundle({ bundle, ownerScope: 'owner-seat-01' });
+    expect(imported.idempotent).toBe(false);
+    const acquisition = await service.acquire({
+      targetProviderId: 'anthropic',
+      transportProviderId: 'claude-code',
+      ownerScopeRef: 'owner-seat-01',
+    });
+    expect(acquisition.material.accessToken).toBe('access-reg-01');
+  });
+
+  it('survives a restart and classifies expiry after reload', async () => {
+    const keyring = new InMemoryKeyring();
+    await serviceOn(keyring).importSeatBundle({ bundle: parseCliSeatProfile(consumerBundle()), ownerScope: 'owner-seat-01' });
+    const restored = serviceOn(keyring);
+    const acquisition = await restored.acquire({
+      targetProviderId: 'anthropic',
+      transportProviderId: 'claude-code',
+      ownerScopeRef: 'owner-seat-01',
+    });
+    expect(acquisition.material.accessToken).toBe('access-reg-01');
+    await serviceOn(keyring).importSeatBundle({
+      bundle: parseCliSeatProfile(consumerBundle({ generation: 2, operationId: 'op-reg-02', accessRef: 'access-reg-02', providerExpiry: '2000-01-01T00:00:00Z' })),
+      ownerScope: 'owner-seat-01',
+    });
+    await expect(
+      serviceOn(keyring).acquire({
+        targetProviderId: 'anthropic',
+        transportProviderId: 'claude-code',
+        ownerScopeRef: 'owner-seat-01',
+      }),
+    ).rejects.toMatchObject({ code: 'access-unavailable' });
+  });
+
+  it('reimports N idempotently and refuses N-1 and new epochs', async () => {
+    const service = serviceOn();
+    const bundle = parseCliSeatProfile(consumerBundle());
+    await service.importSeatBundle({ bundle, ownerScope: 'owner-seat-01' });
+    const replay = await service.importSeatBundle({ bundle, ownerScope: 'owner-seat-01' });
+    expect(replay.idempotent).toBe(true);
+    await expect(
+      service.importSeatBundle({
+        bundle: parseCliSeatProfile(consumerBundle({ generation: 0, operationId: 'op-reg-00' })),
+        ownerScope: 'owner-seat-01',
+      }),
+    ).rejects.toThrow(/stale-generation/);
+    await expect(
+      service.importSeatBundle({
+        bundle: parseCliSeatProfile(consumerBundle({ epoch: 2, operationId: 'op-reg-epoch-2' })),
+        ownerScope: 'owner-seat-01',
+      }),
+    ).rejects.toThrow(/epoch-replacement-required/);
+  });
+
+  it('refuses wrong-owner, refresh-bearing, and dateless bundles', async () => {
+    const service = serviceOn();
+    const bundle = parseCliSeatProfile(consumerBundle());
+    await expect(service.importSeatBundle({ bundle, ownerScope: 'owner-other-01' })).rejects.toThrow(/owner/);
+    const renewable = { ...bundle, credentialClass: 'renewable' };
+    await expect(service.importSeatBundle({ bundle: renewable, ownerScope: 'owner-seat-01' })).rejects.toThrow();
+    const dateless = parseCliSeatProfile(consumerBundle({ providerExpiry: undefined }));
+    await expect(
+      service.importSeatBundle({ bundle: dateless, ownerScope: 'owner-seat-01' }),
+    ).rejects.toThrow(/expiry/);
   });
 });
