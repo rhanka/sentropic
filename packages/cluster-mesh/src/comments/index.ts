@@ -26,3 +26,4 @@ export { COMMENTS_STORAGE_LIMITS } from './limits.js';
 export { COMMENTS_ADMISSION } from './admission.js';
 export type { CommentsRevisionRequest, CommentsRevisionRecord } from './command-contracts.js';
 export type { CommentsReadRequest } from './read-command.js';
+export { createCanonicalCommentsRouter } from '../hono/comments-router.js';
