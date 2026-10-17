@@ -62,6 +62,32 @@ describe('OAuth authorize per-client policy API (B3+C1)', () => {
     expect(location.origin + location.pathname).toBe('http://localhost:5397/auth/oauth/consent');
   });
 
+  it('refuses a still-bearer session after login with access_denied (resume, F6)', async () => {
+    // No session: authorize redirects to login with a sealed continuation.
+    const initial = await app.request(buildAuthorizeUrl());
+    expect(initial.status).toBe(302);
+    const continuation = new URL(initial.headers.get('location') ?? '').searchParams.get('continue') ?? '';
+    expect(continuation).toBeTruthy();
+
+    // Post-login session is still bearer (e.g. magic-link): resume refuses.
+    const user = await createTestUser({
+      displayName: 'Resume Bearer',
+      email: 'policy-resume@example.com',
+      role: 'editor',
+      withSession: true,
+    });
+
+    const res = await app.request(
+      `http://localhost:9197/api/v1/oauth/authorize?continue=${encodeURIComponent(continuation)}`,
+      { headers: { Cookie: `session=${user.sessionToken}` } }
+    );
+
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get('location') ?? '');
+    expect(location.origin + location.pathname).toBe(REDIRECT_URI);
+    expect(location.searchParams.get('error')).toBe('access_denied');
+  });
+
   it('refuses a non-allowlisted subject with access_denied before consent', async () => {
     await seedPolicyClient({ allowedUserIds: ['owner-sub-1'], requiredAcr: null });
     const user = await createTestUser({
