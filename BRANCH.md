@@ -324,6 +324,8 @@
     - [ ] Added unchanged shared replay corpus execution through registered canonical-index queries and actual same-session publication rollback. Both readers address the package's selected canonical log; the optional host-log binding has separate real-table qualification.
     - [ ] Shared replay exposed a sequence-order failure at ten. Lossless `::text` output aliases shadowed numeric columns in `ORDER BY`; added an independent twelve-item staged-byte erasure probe for the same ordering risk in purge traversal.
     - [x] The twelve-item probe found eight retained staged items behind an erased result. Both journal and purge SQL now order by qualified native columns, preserving numeric ordering while retaining exact text decoding at the driver boundary.
+    - [x] Superseding real-PG gate at `b89e506de`: 21 files / 42 tests pass, including the unchanged shared replay corpus and twelve-item numeric purge probe; the two server-crash phases remain a separate target.
+    - [ ] RED `postgres-cleanup.spec.ts` requires bounded terminal cleanup across reopenings, removal of aborted prepared bytes, retained terminal identity and untouched published records.
     - [x] Current Postgres gate: typecheck/lint pass; 8 files / 19 tests pass, including reopening between all seal steps and one bounded metadata publication (`16e25021b` code head).
   - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
     - [ ] Added an isolated test-only pinned Postgres service/network and a neutral one-client bridge; real tests require backend PID continuity, rollback and finite SQL cancellation. No host port or production driver dependency is introduced.
