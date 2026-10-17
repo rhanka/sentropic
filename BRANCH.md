@@ -64,6 +64,7 @@
   - [ ] Read feasibility v4 and owner decisions; snapshot exports/catalog/ranges and main/npm versions; check ports before listeners; record #684 rebase dependency.
   - [ ] Prepare manifest-context.json from real branch diff/CI filters before manifest gates. API/UI/E2E test edits: none.
 - [ ] **Lot 1 — Optional auth leaves and typed loaders**
+  - [x] Auth loader and actual provider-identity contract tests written before implementation; runtime verification pending.
   - [ ] Add static mcp/auth + mcp/auth/hono, typed loaders/barrel, selected-only >=0.2.2 <0.3.0 topology guard, explicit exports/sideEffects; preserve provider identity and gateway >=0.2.1 floor.
   - [ ] Package tests updated: modules/capabilities.spec.ts, registry.spec.ts, namespace-loading.spec.ts, topology-ranges.spec.ts; new loaders/mcp-auth.spec.ts and integrations/mcp-auth-surface.spec.ts. Cover disabled/missing/skew/export failures, shared loads and selected-only evaluation.
   - [ ] Scoped gates: `rtk make test-cluster-mesh SCOPE=tests/loaders/mcp-auth.spec.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; repeat for integrations/mcp-auth-surface.spec.ts and tests/modules.
