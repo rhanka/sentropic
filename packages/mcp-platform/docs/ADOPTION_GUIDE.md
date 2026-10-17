@@ -1,11 +1,10 @@
-# Domain provider adoption guide (MOCK-ONLY scaffold)
+# Domain provider adoption guide
 
-> **Status: PRIVATE, unpublished, reversible scaffold.** `@sentropic/mcp-platform`
-> is `"private": true`, is NOT wired into any publish filter / CI publish job /
-> Makefile target / trusted-publisher config, and MUST NOT be published. Everything
-> below describes the **mock** contract built in slices 1+2+3+7 of
+> **Status: published as `@sentropic/mcp-platform@0.3.0`** via the CI publish
+> train (`publish-mcp-platform` job + Makefile target, OIDC trusted publishing).
+> Everything below describes the contract built in slices 1+2+3+7 of
 > `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`).
-> Package activation, publication, and any production wiring are **owner/architect
+> Package activation and any production wiring stay **owner/architect
 > gated** — see [What stays owner/architect-gated](#what-stays-ownerarchitect-gated-before-production).
 
 This is the spec §12 "domain provider adoption guide": how a domain application
