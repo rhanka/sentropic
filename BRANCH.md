@@ -120,7 +120,7 @@
   - [ ] Create `tools/gateway-evolution/tests/make-contract.test.sh` + `runner-cleanup.test.sh`; sub-Makefile requires command-line ENV, includes root Makefile, rejects .env project override and port mismatch
   - [x] Create gateway `tests/client-runtime-admission.test.ts` + `src/client-runtime-admission.ts` (green 9/9, typecheck/lint clean)
   - [x] Create gateway `tests/evolution-contract.test.ts` + `src/evolution-contract.ts` (green 6/6, typecheck/lint clean)
-  - [ ] Implement GW6-M1/RC6-M1 context lock validation + `release bump accepted` + `@sentropic drift refused` (typed `external-row-unpinned`, zero installs) in helper/verifier/tests
+  - [x] Implement GW6-M1/RC6-M1 context lock validation + `release bump accepted` + `@sentropic drift refused` (typed `external-row-unpinned`, zero installs) in helper/verifier/tests (pure green 25/25)
   - [ ] Implement GW8-m1: classifier obtains both parents (fetch-depth 2 or fetch base+head), verifies merge parents equal base/head, fetch failure is unreadable base evidence; add `gateway-consumer-workflows.test.js` parent-resolution assertion (companion file, recorded here)
   - [ ] Inventory every PR-triggered h2a workflow incl `native-host-equipment.yml`; classify committed-lock host-test vs candidate; extend BR120-EX7 conditionally or record non-overlap evidence
   - [ ] Lot gate:
