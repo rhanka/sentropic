@@ -129,6 +129,7 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Opus corrections — PR #684 NO-GO (2026-10-17)**
+  - [ ] Engram MAJ-1/2: postgres-effective-records.spec.ts probes effective projection deltas/raw validation and mandatory durable cursor configuration before implementation; comments-cursor.spec.ts covers restart/replica/key mismatch.
   - [x] MAJ-1: owned-object fingerprints and typed PgSchemaDriftError; host-DDL regression and operator re-attestation PASS. postgres-reattest.spec.ts simulates PostgreSQL catalog-rendering changes, rejects stale approvals/actual drift and reopens after audited host approval.
   - [ ] MAJ-2: required stable comments cursor secret, restart/replica/key-mismatch page tests and host documentation.
   - [x] m1/m4/m10: required #679-first ordering, historical CI/EX8 state and complete gr-conductor U1–U7 inventory recorded; final candidate CI remains pending below.
