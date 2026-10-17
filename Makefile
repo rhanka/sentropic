@@ -1358,8 +1358,10 @@ pack-artifacts: build-artifacts ## Pack @sentropic/artifacts tarball without pub
 
 .PHONY: probe-artifacts-packed-consumer
 probe-artifacts-packed-consumer: ## Second-host packed-consumer proof of the @sentropic/artifacts tarball (L-5e proof)
-	@rm -f tmp/artifacts-pack/*.tgz
+	@rm -f tmp/artifacts-pack/*.tgz tmp/artifacts-platform-pack/*.tgz
+	@$(MAKE) pack-mcp-platform PACK_DESTINATION=tmp/artifacts-platform-pack ENV=$(ENV)
 	@$(MAKE) pack-artifacts PACK_DESTINATION=tmp/artifacts-pack ENV=$(ENV)
+	@cp tmp/artifacts-platform-pack/*.tgz tmp/artifacts-pack/
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs ./packed-consumer.mjs; node ./packed-consumer.mjs'
 
 .PHONY: test-mcp-platform
