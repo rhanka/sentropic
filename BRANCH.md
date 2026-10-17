@@ -185,6 +185,7 @@
     - [x] Removed the obsolete syntax-only seal validator; bounded state-dependent preparation and its progress are exclusively handled by `staged-preparation.ts` / `staged-seal.ts`.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
     - [ ] `root-integrity.spec.ts` reuses the K2b nested-byte/audit/current-fence probes on K4. The collision probe carries the recipient's valid capability when supported, ensuring capability validation cannot mask a missing scope-binding check.
+    - [ ] A bounded, maintain-authorized audit metadata reader exposes independent canonical membership without returning moduleResult payloads. The immutable-boundaries profile exposes actual captured manifest ports.
     - [ ] `root-ordinary.spec.ts` reuses K3 chain/read/cursor-budget/authority corpora through the public K4 export and checks nested rollback, sequential pending heads, a genuine same-chain rival and scope-aware registered predicates.
     - [ ] K4 corpus adapters now use the replacement factory. Unbounded seal-driving loops and failure injection live only in `tests/storage/staged-client.ts`; production provides bounded `sealStep` and trusted root controls separately.
     - [ ] G5 and seal-step fixtures use canonical computed commitments. The large-step case explicitly requests eight items instead of relying on an undocumented internal constant; no timeout or budget inflation.
