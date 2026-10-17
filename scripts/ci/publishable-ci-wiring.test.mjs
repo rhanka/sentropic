@@ -217,7 +217,7 @@ test('lint wiring follows baseline evidence, independently per package, before t
 });
 
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
-const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0';
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0,@sentropic/comments@0.3.0';
 
 test('candidate and post-publication qualification for mcp-auth and cluster-mesh', () => {
   for (const [slug, peers] of [['mcp-auth', ' PEERS=hono@4.10.7'], ['cluster-mesh', CLUSTER_MESH_PEERS]]) {
