@@ -18,6 +18,14 @@ export interface PgMigrationReceipt extends Omit<PgAsset, 'sql' | 'file'> {
 export interface PgHostHistory {
   read(session: PgSession): Promise<readonly PgMigrationReceipt[]>;
   complete(session: PgSession, receipt: PgMigrationReceipt): Promise<void>;
+  reattest?(session: PgSession, attestation: PgSchemaAttestation): Promise<void>;
+}
+export interface PgSchemaAttestation {
+  readonly previousFingerprint: string;
+  readonly schemaFingerprint: string;
+  readonly hostMigrationId: string;
+  readonly hostChecksum: string;
+  readonly reason: string;
 }
 const digest = (bytes: string): string => createHash('sha256').update(bytes, 'utf8').digest('hex');
 const refuse = (): never => { throw new PostgresStorageError('configuration'); };
@@ -71,6 +79,24 @@ export const verifyPgInstallation = async (session: PgSession, configured: PgLay
   const expected = rows.at(-1)?.schemaFingerprint ?? '';
   const actual = await fingerprint(session, layout, assets);
   if (expected !== actual) throw new PgSchemaDriftError(expected, actual);
+};
+export const reattestPgInstallation = async (
+  session: PgSession, configured: PgLayout, assets: readonly PgAsset[], history: PgHostHistory,
+  approval: Omit<PgSchemaAttestation, 'schemaFingerprint'> & { readonly referenceFingerprint: string },
+): Promise<void> => {
+  const layout = validatePgLayout(configured);
+  const rows = await history.read(session);
+  checkReceipts(assets, rows);
+  if (!history.reattest || !approval.reason.trim() || !approval.hostMigrationId ||
+    !/^[a-f0-9]{64}$/.test(approval.hostChecksum) ||
+    rows.at(-1)?.schemaFingerprint !== approval.previousFingerprint) refuse();
+  const actual = await fingerprint(session, layout, assets);
+  if (actual !== approval.referenceFingerprint) throw new PgSchemaDriftError(approval.referenceFingerprint, actual);
+  await history.reattest!(session, {
+    previousFingerprint: approval.previousFingerprint, schemaFingerprint: actual,
+    hostMigrationId: approval.hostMigrationId, hostChecksum: approval.hostChecksum, reason: approval.reason,
+  });
+  await verifyPgInstallation(session, layout, assets, history);
 };
 export const applyPgMigrations = async (session: PgSession, configured: PgLayout, assets: readonly PgAsset[], history: PgHostHistory, host: { readonly id: string; readonly checksum: string }): Promise<void> => {
   const layout = validatePgLayout(configured);
