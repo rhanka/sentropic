@@ -19,10 +19,11 @@ import { validateCommentsImportProjection } from './import-projection.js';
 import { prepareCommentsExport } from './export-prepare.js';
 import { readCommentsExportFragments, continueCommentsExport } from './export-pages.js';
 import { COMMENTS_STORAGE_LIMITS, requireCommentsStorageLimits } from './limits.js';
+import { prepareCommentsAuthority } from './authority-projection.js';
 export { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
-  schemaVersions: Object.freeze(['pg-core-6', 'comments-projections-1', 'comments-transport-1', 'comments-exports-1']),
+  schemaVersions: Object.freeze(['pg-core-6', 'comments-projections-1', 'comments-transport-1', 'comments-exports-1', 'comments-authority-1']),
   requiredProfiles: Object.freeze(['atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1', 'staged-units-v1', 'visibility-barriers-v1', 'fenced-writers-v1', 'scope-outbox-v1']),
   optionalProfiles: Object.freeze(['purge-jobs-v1']), chainKinds: Object.freeze(Object.keys(COMMENTS_CHAIN_KINDS)),
   queryNames: Object.freeze(['by-resource', 'scope-chain-index', 'retained-headers']), boundaries: Object.freeze(['scope-root', 'exact-head']),
@@ -44,6 +45,7 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
   projection: async (effects: Parameters<typeof prepareCommentsProjection>[0], context: Parameters<typeof prepareCommentsProjection>[1]) => {
     if (services) await validateCommentsImportProjection(services, effects, context);
     await prepareCommentsProjection(effects, context);
+    await prepareCommentsAuthority(effects, context);
   },
   queries: Object.freeze({ 'by-resource': commentsPgQuery('by-resource'), 'scope-chain-index': commentsPgQuery('scope-chain-index'), 'retained-headers': commentsPgQuery('retained-headers') }),
   operations,
