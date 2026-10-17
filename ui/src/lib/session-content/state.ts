@@ -85,6 +85,15 @@ export function viewAccess(row: SessionView, scope: ContentScope, now = Date.now
   return { live: !closed && !reason && row.liveAuthorized, stored, reason };
 }
 
+export function canRequestHistory(row: SessionView, scope: ContentScope, now = Date.now()): boolean {
+  const copyAvailable = row.expiresAt === undefined
+    ? row.copies?.some((copy) => copy.expiresAt === null || now < copy.expiresAt) ?? false
+    : row.expiresAt === null || now < row.expiresAt;
+  return row.sourceAvailable && row.retained && !row.historyAuthorized && copyAvailable
+    && !row.excluded && !row.revoked && !row.purgeStatus && row.membershipActive !== false
+    && viewAccess(row, scope, now).reason !== 'scope_mismatch';
+}
+
 interface ConsentPorts<P> {
   prepare: (offer: ProjectOffer) => Promise<P>;
   accept: (offer: ProjectOffer, prepared: P, assertion: unknown) => Promise<unknown>;
