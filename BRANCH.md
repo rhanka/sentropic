@@ -72,6 +72,9 @@
 - [x] Paired qualification completed at `a50e1928516b199c399bed84ef2953e4f19f279c`: 30/30 valid cases, 38 requests, USD 0.6189614 reconciled usage-priced cost; conservative budget ledger USD 0.619189 / 15, no pending request.
 - [x] Sonnet review: reproduced the unrelated-model output-ceiling leak with one failing offline test; scope the Luna ceiling to Luna and reuse production input/output constants in qualification admission. Luna wire behavior and prices are unchanged from the measured commit.
 - [x] Independent Codex dossier review found nonzero raw cache writes omitted from derived costs. Three offline failures reproduced; retain original receipts, decode/price writes explicitly and reconcile costs offline (A USD 0.2062536, B USD 0.4127078). Reservation ledger already covered the premium; no paid rerun.
+- [x] Opus F1/F2: reproduced two offline failures; classifier failure now forwards medium to the main turn, and uncapped Luna turns use the full 128k model ceiling instead of 16k. Unrelated OpenAI calls retain their prior optional cap. The measured helpers' explicit caps/none are unchanged.
+- [x] Luna context admission uses the verified 922k input maximum, including B (formerly 1.05M); earlier B compaction is intentional to avoid exceeding provider input. Other model budgets are outside this retirement scope.
+- [x] Generated workspace dependencies were partly removed by a failed npm preparation; API boot exposed missing package entrypoints. Rebuild the isolated workspace dependencies before final gates; no source or shared dev data is removed.
 
 ## AI Flaky tests
 - [x] No provider failure in the paired campaign; 30/30 cases and all 38 requests completed without retry, repair, fallback or timeout inflation. Raw outputs/usage retained externally with no credentials.

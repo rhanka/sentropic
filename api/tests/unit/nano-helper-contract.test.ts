@@ -54,6 +54,15 @@ describe('former nano product helpers', () => {
     expect(result.compactedMessages).toHaveLength(9);
   });
 
+  it('should forward medium reasoning to the main turn when effort evaluation fails', async () => {
+    stream.mockImplementation(async function* () { throw new Error('Offline evaluator failure'); });
+    const result = await chat.evaluateReasoningEffortInternal({
+      selectedProviderId: 'openai', selectedModel: 'gpt-6-luna', userId: '', workspaceId: '',
+      conversation: [{ role: 'user', content: 'Compare these security architectures.' }],
+    });
+    expect(result).toMatchObject({ effortLabel: 'medium', effortForMessage: 'medium', evaluatedBy: 'fallback' });
+  });
+
   it('should retain the same cap on a tool follow-up after rejected extraction arguments', async () => {
     stream.mockImplementationOnce(async function* () {
       yield { type: 'tool_call_start', data: { tool_call_id: 'offline-call', name: 'web_extract', args: '{"urls":[]}' } };

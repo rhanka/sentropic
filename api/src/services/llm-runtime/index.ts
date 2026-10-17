@@ -1343,7 +1343,9 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     } as unknown as OpenAI.Chat.Completions.ChatCompletion;
   }
 
-  const boundedOutputTokens = maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+  const boundedOutputTokens = maxOutputTokens ?? (
+    selection.model === 'gpt-6-luna' || selection.model === 'gpt-5.6-luna' ? DEFAULT_MAX_OUTPUT_TOKENS : undefined
+  );
   const selectedReasoningEffort = reasoningEffort ?? (selection.model === getDefaultOpenAIModel() ? 'none' : undefined);
   const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
     model: selection.model,
@@ -2214,7 +2216,9 @@ export async function* callLLMStream(
   // The GPT-4.1 family does not support reasoning parameters.
   const supportsReasoningParams = !selectedModel.startsWith('gpt-4.1');
   const selectedReasoningEffort = reasoningEffort ?? (selectedModel === getDefaultOpenAIModel() ? 'none' : undefined);
-  const boundedOutputTokens = maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+  const boundedOutputTokens = maxOutputTokens ?? (
+    selectedModel === 'gpt-6-luna' || selectedModel === 'gpt-5.6-luna' ? DEFAULT_MAX_OUTPUT_TOKENS : undefined
+  );
 
   const mapReasoningEffort = (effort: CallLLMStreamOptions['reasoningEffort']): unknown => {
     if (!effort) return undefined;
