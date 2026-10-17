@@ -91,6 +91,14 @@ cluster-mesh-comments-lock-import:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
 		node packages/cluster-mesh/tests/storage/import-comments-lock.mjs
 
+.PHONY: cluster-mesh-comments-deps-audit cluster-mesh-comments-test
+cluster-mesh-comments-deps-audit: cluster-mesh-comments-deps
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc \
+		'npm_config_cache=/tmp/npm-cache npm audit --prefix .h2a/comments-deps --omit=dev --audit-level=high'
+
+cluster-mesh-comments-test: cluster-mesh-comments-deps
+	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=comments- API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+
 .PHONY: cluster-mesh-pg-crash cluster-mesh-pg-crash-test
 cluster-mesh-pg-crash:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) exit 1;; esac
