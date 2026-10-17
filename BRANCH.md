@@ -317,6 +317,7 @@
     - [x] The partial-purge test exposed an available head after the first erase step. The same root transaction now establishes the job target's barrier before erasing its first bytes, and outward job results omit internal scan positions.
     - [ ] RED real-driver flush test injects a serialization rollback after preparation: immutable atomic input must retry to one committed event, while an arbitrary transaction callback must execute once and roll back.
     - [x] Observed the intended immutable-plan contention failure. Only the owned `commitAtomic` plan now opts into bounded flush retries; public transaction callbacks keep their single-execution policy.
+    - [ ] RED capability tests invoke the actual PG atomic/chain/boundary/staged/fence/visibility/purge ports and registered-query resync. Profiles lacking registered resync or an implementation must refuse acquisition instead of exposing labels.
     - [x] Current Postgres gate: typecheck/lint pass; 8 files / 19 tests pass, including reopening between all seal steps and one bounded metadata publication (`16e25021b` code head).
   - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
     - [ ] Added an isolated test-only pinned Postgres service/network and a neutral one-client bridge; real tests require backend PID continuity, rollback and finite SQL cancellation. No host port or production driver dependency is introduced.
