@@ -357,6 +357,69 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           return { status: 200, body: source };
         }
 
+        if (request.method === 'POST' && request.path === '/list') {
+          const limit = body['limit'] === undefined ? 20 : body['limit'];
+          const offset = body['offset'] === undefined ? 0 : body['offset'];
+          if (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > 100) {
+            throw new Error('invalid request: limit must be an integer in 1..100');
+          }
+          if (!Number.isInteger(offset) || (offset as number) < 0) {
+            throw new Error('invalid request: offset must be a non-negative integer');
+          }
+          // ACL filtering precedes pagination: invisible artifacts neither
+          // appear nor shift the page window (spec-v8 5c).
+          const visible: Array<{ artifactId: string; ownerId: string; state: string; isPublic: boolean }> = [];
+          for (const artifactId of await deps.acls.listArtifactIds()) {
+            const acl = await deps.acls.getArtifactAcl(artifactId);
+            if (acl === undefined) continue;
+            const state = await deps.lifecycle.stateOf(artifactId);
+            if (!deps.lifecycle.canRead({ artifactId, state }, acl, request.actorId, 'read', isApproved)) {
+              continue;
+            }
+            visible.push({ artifactId, ownerId: acl.ownerId, state, isPublic: acl.isPublic });
+          }
+          return {
+            status: 200,
+            body: {
+              total: visible.length,
+              artifacts: visible.slice(offset as number, (offset as number) + (limit as number)),
+            },
+          };
+        }
+
+        if (request.method === 'GET' && request.path.startsWith('/meta/')) {
+          const artifactId = request.path.slice('/meta/'.length);
+          if (artifactId.length === 0) return { status: 404, body: errorBody(404) };
+          const acl = await requireVisible(artifactId, request.actorId);
+          const state = await deps.lifecycle.stateOf(artifactId);
+          const current = await deps.publication.getCurrent(artifactId);
+          return {
+            status: 200,
+            body: {
+              artifactId,
+              ownerId: acl.ownerId,
+              storageScopeId: acl.storageScopeId,
+              state,
+              isPublic: acl.isPublic,
+              withdrawn: state === 'withdrawn',
+              currentReleaseId: current?.releaseId,
+              // Grant rosters stay owner-visible; readers learn no principals.
+              ...(request.actorId === acl.ownerId ? { grants: acl.grants } : {}),
+            },
+          };
+        }
+
+        if (request.method === 'POST' && request.path === '/access/public') {
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          const acl = await requireVisible(artifactId, request.actorId);
+          assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
+          if (typeof body['isPublic'] !== 'boolean') {
+            throw new Error('invalid request: isPublic must be a boolean');
+          }
+          await deps.acls.putArtifactAcl(artifactId, { ...acl, isPublic: body['isPublic'] });
+          return { status: 200, body: { artifactId, isPublic: body['isPublic'] } };
+        }
+
         return { status: 404, body: errorBody(404) };
       } catch (error) {
         return fail(error);
