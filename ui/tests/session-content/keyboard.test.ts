@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { exactInput, KeyboardFlow } from '$lib/session-content/proof';
+import { browserStepUp } from '$lib/session-content/api';
+vi.mock('@sentropic/cowork-bridge/core', () => ({ getApiAuthToken: () => null }));
 
 const context = {
   bindingId: 'binding', bindingVersion: 1, sourceGeneration: 'source', incarnation: 'incarnation',
@@ -31,6 +33,38 @@ const ports = () => ({
 });
 
 describe('bounded browser-confirmed keyboard', () => {
+  it('should correlate IdP return to the live originating page without submitting', async () => {
+    const proof = challenge();
+    const url = new URL(proof.authorization.url);
+    for (const [key, value] of Object.entries({ client_id: 'confirmation', response_type: 'code',
+      scope: 'openid', prompt: 'login', state: proof.authorization.state, code_challenge: 'c'.repeat(43),
+      code_challenge_method: 'S256', redirect_uri: `${window.location.origin}/confirmation-return`,
+      nonce: btoa(String.fromCharCode(...new Uint8Array(32).fill(170))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_') })) {
+      url.searchParams.set(key, value);
+    }
+    proof.authorization.url = url.toString();
+    const popup = { close: vi.fn(), closed: false };
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+    const returned = browserStepUp(proof, new AbortController().signal);
+    const callback = (origin: string, source: unknown, state = proof.authorization.state) =>
+      window.dispatchEvent(new MessageEvent('message', { origin, source: source as Window,
+        data: { type: 'session-content-confirmation', state, proof: confirmation(proof) } }));
+    callback('https://wrong.example', popup); callback(window.location.origin, window);
+    expect(popup.close).not.toHaveBeenCalled();
+    callback(window.location.origin, popup);
+    await expect(returned).resolves.toEqual(confirmation(proof));
+    expect(popup.close).toHaveBeenCalledOnce();
+    const abort = new AbortController();
+    const cancelled = browserStepUp(proof, abort.signal); abort.abort();
+    await expect(cancelled).rejects.toThrow('confirmation_refused');
+    for (const mutation of ['prompt', 'nonce', 'state', 'code_challenge_method']) {
+      const invalid = structuredClone(proof); const changed = new URL(invalid.authorization.url);
+      changed.searchParams.delete(mutation); invalid.authorization.url = changed.toString();
+      await expect(browserStepUp(invalid, new AbortController().signal)).rejects.toThrow('confirmation_refused');
+    }
+    expect(open).toHaveBeenCalledTimes(2); open.mockRestore();
+  });
+
   it.each(['authentication_required', 'step_up_required', 'confirmation_refused', 'source_unavailable'])(
     'should expose %s after a missing, insufficient or failed IdP return with zero effects', async (state) => {
       const api = ports(); api.prove.mockRejectedValueOnce(new Error(state));
