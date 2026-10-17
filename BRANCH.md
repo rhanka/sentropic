@@ -430,6 +430,7 @@
   - [ ] The large-history round trip reached one complete import publication, then exposed a full-getter refusal on the kernel's byte-limited `incomplete` page. The getter now follows only nonempty advancing recovery pages and still refuses inaccessible, missing or non-advancing history; generic K3 page semantics are unchanged.
   - [ ] Added indexed immutable resource-authority metadata for actual canonical hashes, including module-generated receipts/audits. It carries no body/reason/actor copies, joins actual retained membership, and allows authorized receipt/export readback without inventing a resource from a request parameter.
   - [ ] Added explicit prepared-import inspection using actual kernel status. Every export preparation/recovery/page, including an empty terminal page, rechecks current authority through indexed actual-head resource metadata.
+  - [ ] RED `comments-admission.spec.ts` requires the five separate module count/depth bounds before recursive canonicalization while leaving frozen M1 capacity fields unchanged.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
