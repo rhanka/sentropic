@@ -540,14 +540,26 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Prepare and audit Cluster Mesh storage dependencies
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-storage-deps-audit ENV=test-ci-cluster-mesh
+      - name: Prepare and audit the optional frozen comments peer
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-deps-audit ENV=test-ci-cluster-mesh
+      - name: Qualify Cluster Mesh Postgres storage and server recovery
+        run: |
+          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test ENV=test-ci-cluster-mesh-pg
+          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-test ENV=test-ci-cluster-mesh-pg
+          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-crash-test ENV=test-ci-cluster-mesh-pg
+      - name: Remove isolated Cluster Mesh Postgres service and volume
+        if: always()
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-cluster-mesh-pg
       - name: Lint Cluster Mesh
         run: make lint-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Typecheck Cluster Mesh
-        run: make typecheck-cluster-mesh
+        run: make typecheck-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Test Cluster Mesh
-        run: make test-cluster-mesh
+        run: make test-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Build Cluster Mesh
-        run: make build-cluster-mesh
+        run: make build-cluster-mesh ENV=test-ci-cluster-mesh
       # Release train (BRDP-EX10): pack the candidate and its same-PR siblings first so the packed lazy
       # qualification resolves unpublished train siblings from their verified archives.
       - name: Pack Cluster Mesh
@@ -557,6 +569,17 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-cluster-mesh PACK_DESTINATION=tmp/ci-manifest-guard/candidate/cluster-mesh PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-cluster-mesh
+      - name: Qualify installed comments on an injected single-session Postgres host
+        env:
+          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-installed CM_COMMENTS_TARBALL="$CANDIDATE_TARBALL" CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/comments-installed ENV=test-ci-cluster-mesh-pg
+      - name: Qualify PostgreSQL major upgrade re-attestation and retained cursor
+        env:
+          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-major-upgrade CM_COMMENTS_TARBALL="$CANDIDATE_TARBALL" CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/major-upgrade ENV=test-ci-cluster-mesh-pg
+      - name: Remove installed comments qualification Postgres service and volume
+        if: always()
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-cluster-mesh-pg
       - name: Pack Cluster Mesh same-PR BLOCK siblings
         if: steps.pack.outputs.manifest_mode == 'block'
         env:
@@ -579,7 +602,7 @@ jobs:
         if: steps.pack.outputs.manifest_mode == 'block'
         env:
           CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0,@sentropic/comments@0.3.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh candidate qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -2012,7 +2035,7 @@ jobs:
               fi ;;
             *) echo "::error title=Publication qualification::cluster-mesh status=${status}: unexpected publication outcome"; exit 1 ;;
           esac
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0,@sentropic/comments@0.3.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -2149,7 +2172,7 @@ jobs:
           if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
           if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0,@sentropic/comments@0.3.0 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload bootstrap publication receipts and qualification reports
         if: always()
         uses: actions/upload-artifact@v4

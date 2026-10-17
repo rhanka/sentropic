@@ -14,6 +14,7 @@ export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
 /** Follows llm-gateway 0.19.0's declared optional peer range. */
 export const AUTH_HONO_RANGE = '^0.15.0';
+export const COMMENTS_RANGE = '^0.3.0';
 
 export interface PeerRequirement {
   readonly packageName: string;
@@ -69,6 +70,9 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   gateway: gateway('gateway', '.', ['createGatewayRouter'], [], '/gw'),
   'gateway/auth': gateway('gateway/auth', './auth', ['ServiceAuthVerifyToken'], SERVICE_AUTH_PEERS),
   'gateway/auth-hono': gateway('gateway/auth-hono', './auth-hono', ['AuthHonoVerifyToken'], SESSION_AUTH_PEERS),
+  comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.19.0 <0.20.0',
+    requiredMembers: ['createCommentsModule', 'createCommentsPostgresStorage'], namespace: '/comments', meshCoherence: false,
+    authPeers: [{ packageName: '@sentropic/comments', subpath: '.', range: COMMENTS_RANGE, requiredMembers: ['createAnnotationRevision', 'validateCapacityDescriptor', 'hashRecord'] }] },
 };
 
 const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; namespace?: ClusterMeshNamespace }>> = {
@@ -82,7 +86,6 @@ const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; n
   'auth-hono': { owner: 'auth-hono', namespace: '/auth' },
   'chat-server': { owner: 'chat-server', namespace: '/chat' },
   flow: { owner: 'flow', namespace: '/workflows' },
-  comments: { owner: 'comments', namespace: '/comments' },
   'connector-host': { owner: 'connector-host', namespace: '/connectors' },
   harness: { owner: 'harness' },
   memory: { owner: 'memory', namespace: '/memory' },

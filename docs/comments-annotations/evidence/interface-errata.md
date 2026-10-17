@@ -1,5 +1,7 @@
 # Interface commitments and treatment errata
 
+**Historical evidence.** Verdicts, pending conditions and hashes below describe their recorded revision. The [frozen storage alignment](storage-alignment.md) governs current work: M1 is owner-closed with carried reserves and unprovided handoff evidence; C0/module extensions and selected PG qualification remain separate. No historical proposal authorizes rewriting M1.
+
 Readable English selection of E2/TR2's generic commitments and their revision treatment. It is not a copy of private host requirements or a claim of bilateral, runtime or release acceptance.
 
 | Alias | Original SHA-256 |
