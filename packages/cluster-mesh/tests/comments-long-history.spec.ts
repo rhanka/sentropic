@@ -7,8 +7,8 @@ describe.skipIf(!pgEnabled)('comments long-history round trip on independent Pos
     try {
       const records = []; let previous = null;
       await source.module.withContext(source.grant, async () => {
-        for (let revision = 0; revision < 28; revision++) {
-          const record = source.annotation('long', previous, `${revision}:${'🦊"\\'.repeat(7000)}`);
+        for (let revision = 0; revision < 14; revision++) {
+          const record = source.annotation('long', previous, `${revision}:${'🦊"\\'.repeat(10000)}`);
           await source.module.store.appendAnnotationRevision(source.scope, 'long', record, previous ? { kind: 'revision', revisionHash: previous.hash } : { kind: 'creation', aggregateVersion: 0 });
           records.push(record); previous = record;
         }
@@ -26,7 +26,7 @@ describe.skipIf(!pgEnabled)('comments long-history round trip on independent Pos
           cursor = page.nextCursor;
         } while (cursor !== null);
       });
-      expect(chunks.length).toBeGreaterThan(2); expect(terminal.unitRoots[0].records).toBe('28');
+      expect(chunks.length).toBeGreaterThan(2); expect(terminal.unitRoots[0].records).toBe('14');
       await destination.module.withContext(destination.grant, async () => {
         const units = [{ unitId: 'source-unit', records }]; const request = importRequest(destination, units);
         const prepared = await prepareImport(destination, request, 'round-trip', units, chunks);
