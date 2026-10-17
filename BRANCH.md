@@ -70,6 +70,7 @@
   - [ ] Scoped gates: `rtk make test-cluster-mesh SCOPE=tests/loaders/mcp-auth.spec.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; repeat for integrations/mcp-auth-surface.spec.ts and tests/modules.
   - [ ] Gate: `rtk make typecheck-cluster-mesh lint-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`. UI/E2E files: none.
 - [ ] **Lot 2 — Metadata, request authority and sessions**
+  - [x] Platform bridge runner now enforces compiled policy and current account per tool, combines SDK/request cancellation, and redacts thrown host errors; no provider interface changes.
   - [x] Process-local sessions now bind human/client/tenant/resource/environment, enforce bounded capacity and idle/absolute deadlines, and abort/close owned transports on expiry/shutdown; integration pending.
   - [x] Added real twelve-tool Radar schema fixture and compiled host adapter; composition RED on missing factory; public readonly OAuth/egress/session types defined without bearer getters.
   - [ ] Implement oauth-contracts/context/sessions and compose/mcp-oauth; public canonical PRM plus aliases, 401/403 challenges, exact issuer/audience, requiredAcr, per-tool scope/current-account checks and preflight before listen.
@@ -79,7 +80,7 @@
 - [ ] **Lot 3 — Controlled exchange egress and service proof**
   - [x] Egress RED on missing implementation; frozen profile compiler now validates exact host/method/audience/path and canonical bounded parameters before effects.
   - [x] Egress contracts written before implementation: API-token-only HTTP, tool/scope/path restrictions, bounded outage reuse, retained/cancelled capability refusal.
-  - [x] Implemented existing bounded exchange cache + controlled egress: captured verified subject/client/tenant/issuer, tool-bound frozen profile, no redirects/token getter, bounded JSON response, close invalidation and retained/cancelled capability refusal; tests pending.
+  - [x] Implemented existing bounded exchange cache + controlled egress; three scoped tests GREEN (positive API token, restrictions, outage/retention/cancellation). No redirects/token getter; bounded JSON and close invalidation.
   - [ ] New tests/mcp-oauth-egress.spec.ts: positive exchanged API bearer, no passthrough, isolation, path attacks, outage/cache bounds, cancellation/redaction; retain all six tests/token-exchange*.spec.ts and O2 races.
   - [ ] New tests/mcp-oauth-http.spec.ts: loopback issuer/MCP/independent API verifier, real Basic RFC8693 + SDK, positive search, inverse audiences, same client automatic reinitialization after restart. Synthetic keys, port 0 inside container.
   - [ ] Scoped gates: Lot 1 command with SCOPE=tests/mcp-oauth-egress.spec.ts and SCOPE=tests/token-exchange; service gate uses SCOPE=tests/mcp-oauth-http.spec.ts and ENV=e2e-feat-cluster-mesh-oauth-o1. No UI tests.
