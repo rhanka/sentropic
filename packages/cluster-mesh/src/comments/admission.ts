@@ -10,11 +10,10 @@ export const validateCommentsAdmission = (supplied: unknown): void => {
     if (Array.isArray(body.segments) && body.segments.length > COMMENTS_ADMISSION.segmentsPerBody) fail('segments');
     if (Array.isArray(body.mentions) && body.mentions.length > COMMENTS_ADMISSION.mentionsPerBody) fail('mentions');
     const fields = (body.profile as { fields?: unknown } | undefined)?.fields;
-    const pending = fields && typeof fields === 'object' ? [{ value: fields, depth: 1 }] : []; const seen = new WeakSet<object>();
+    const pending = fields && typeof fields === 'object' ? [{ value: fields, depth: 1 }] : [];
     while (pending.length) {
       const item = pending.pop()!;
-      if (item.depth > COMMENTS_ADMISSION.profileDepth || seen.has(item.value)) fail('profile depth');
-      seen.add(item.value);
+      if (item.depth > COMMENTS_ADMISSION.profileDepth) fail('profile depth');
       for (const value of Object.values(item.value)) if (value && typeof value === 'object') pending.push({ value, depth: item.depth + 1 });
     }
   }
