@@ -68,6 +68,7 @@
 - [ ] `attention` BRCM2-EX3 — MAJEUR-N1 corpus re-derivation touches the reference and four corpora (~690 changed lines); the reference rejects every non-codec digest, so the corpora and reference land as three file-grouped commits (corpora RED first, reference GREEN last) above 150 lines each; rollback: revert the three commits together.
 - [ ] `attention` BRCM2-PORT — storage port changes for gr-conductor (engram) co-review:
   - [ ] PORT-1 additive: `src/storage/staged-codec.ts` shared canonical staged codec (effects, derived dependencies, fragment digest, dependency/effect roots, v1); K3 validated behaviour unchanged.
+  - [ ] PORT-2 root composition: opt-in indexed backend state and a trusted mutation coordinator will cover ordinary writes, transactions and current-coverage reads; adapter handles keep binding only. Existing default K3 behavior is qualified by its 56-test suite; co-review required for the additive root options and backend record-history type.
 - [ ] `attention` BRCM2-VER — version ordering: npm `@sentropic/cluster-mesh` 0.16.0 = main 0.16.0; PR #679 holds 0.18.0; this branch takes 0.19.0 so either merge order keeps both strictly above main. `@sentropic/comments` stays 0.3.0 unless `packages/comments/src/**` changes (forbidden here).
 - [ ] `attention` BRCM2-PG — real Postgres qualification needs a Postgres service reachable from `make test-cluster-mesh`; Makefile/docker-compose are forbidden here. Until a decision, Postgres lots are qualified against the injected structural driver port with an in-process executor; real-PG qualification stays an open gate.
 
@@ -158,6 +159,7 @@
     - [x] Ordinary record preparation uses indexed forks when supplied, clones only touched history paths, and installs successor map pointers without replaying every scope entry; exact cursor sequence uses indexed lookup. Typecheck passes; K3 kernel suite stays 56/56.
   - [ ] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
   - [ ] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
+    - [ ] RED `tests/storage/mutation-coordinator.spec.ts`: all ordinary mutation paths, stale-root CAS, failing preparation, authority revalidation and transaction read coverage.
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
   - [ ] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.
