@@ -167,6 +167,7 @@
     - [x] Kernel root options accept the trusted backend/coordinator; scoped adapters retain private wiring and frozen binding surfaces.
     - [x] Append/genesis/index/dispose/commit and ordinary reads participate in the configured root coordinator.
     - [x] Transactions publish through that coordinator and revalidate every contributing grant after preparation; transactional getters honor current coverage. K4 runtime composition remains the next step.
+    - [x] Additional RED probes exercise transactional paging without scope/history enumeration and authority revalidation on an equal-result index replacement; both paths use indexed forks and fresh authority checks. Coordinator probes pass 10/10; typecheck passes.
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
   - [ ] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.

@@ -48,9 +48,14 @@ export class RootMutationCoordinator {
     const base = this.capture(grant.scope);
     const prepared = this.prepare(base);
     const result = operation(prepared);
-    if (typeof result === 'object' && result !== null && 'replayed' in result && result.replayed === true) return result;
-    if (kind === 'index' && JSON.stringify(base.index.get(keys[0])) === JSON.stringify(prepared.index.get(keys[0]))) return result;
-    if (kind === 'dispose' && base.chains.get(keys[0])?.disposed === prepared.chains.get(keys[0])?.disposed) return result;
+    const unchanged = () => {
+      revalidate();
+      if (this.backend.scopeState(grant.scope) !== base) throw new StorageCasConflictError('captured visibility root changed');
+      return result;
+    };
+    if (typeof result === 'object' && result !== null && 'replayed' in result && result.replayed === true) return unchanged();
+    if (kind === 'index' && JSON.stringify(base.index.get(keys[0])) === JSON.stringify(prepared.index.get(keys[0]))) return unchanged();
+    if (kind === 'dispose' && base.chains.get(keys[0])?.disposed === prepared.chains.get(keys[0])?.disposed) return unchanged();
     this.hooks.prepare?.(base, prepared, grant, { kind, keys, receipt: receiptFor(ctx), units: [], options: {} });
     this.publish(grant.scope, base, prepared, revalidate);
     return result;
