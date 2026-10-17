@@ -87,6 +87,7 @@
 - `GW8-m1-done`: base/head tree objects under default depth-1 merge-ref checkout unspecified. `verifyMergeParents` obtains both parents, verifies `mergeSha^1 == baseSha` and `mergeSha^2 == headSha`, treats fetch failure as unreadable base evidence; pure tests pin accept/refuse/unreadable. h2a-side `gateway-consumer-workflows.test.js` parent assertion is h-cond companion scope (FL-14).
 - `FL-20-attention` (2026-10-17): companion is draft h2a #353 at `60816a1c`, clean worktree. Sentropic package rows now use companion v1 `tarballSha256`/`sourceIdentity`; 27/27 pure tests include escaped duplicate keys and closed nested fields. Consumer acknowledgement/read-path CI remains h-cond-owned; no agreement or pass inferred.
 - `L0-producer-progress` (2026-10-17): all seven gateway/registry deliveries construct digest-indexed bundles with exact manifest/file identity and typed path/missing/extra/altered refusals (29/29 pure tests). Mesh/gateway typecheck and lint pass; transfer/read-path acceptance remains pending.
+- `L0-archive-check` (2026-10-17): bounded gzip/tar inspection rejects traversal, links, sensitive paths, bad checksums/truncation and invalid package identity before installation; pure suite 31/31.
 
 ## AI Flaky tests
 - Acceptance rule:
