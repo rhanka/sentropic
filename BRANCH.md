@@ -45,15 +45,47 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - `api/tests/unit/llm-seat-projection-import.test.ts`
   - `api/tests/unit/llm-seat-delivery-auth.test.ts`
   - `api/tests/api/llm-seat-delivery.test.ts`
-- **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
-  - `docker-compose*.yml`
+  - `.github/workflows/ci.yml`
+  - `docker-compose.ci-seat.yml`
+  - `docker-compose.ci.yml`
+  - `docker-compose.test.yml`
+  - `rules/testing.md`
+  - `rules/workflow.md`
+  - `scripts/ci/seat-custody/**`
+  - `api/src/config/env.ts`
+  - `api/src/services/ci-seat-runtime.ts`
+  - `api/src/services/llm-runtime/index.ts`
+  - `api/src/services/llm-runtime/mesh-dispatch.ts`
+  - `api/src/services/provider-credentials.ts`
+  - `api/src/services/queue-manager.ts`
+  - `api/tests/providers/**`
+  - `api/tests/utils/test-helpers.ts`
+  - `api/tests/utils/seed-test-data.ts`
+  - `api/tests/unit/ci-*.test.ts`
+  - `api/tests/unit/provider-credentials.test.ts`
+  - `api/tests/unit/llm-runtime-stream.test.ts`
+  - `api/tests/api/ci-*.test.ts`
+  - `api/tests/smoke/restore-validation.test.ts`
+  - `api/tests/ai/document-summary-live.test.ts`
+  - `e2e/helpers/ci-seat-model.ts`
+  - `e2e/helpers/ci-provider-profile.ts`
+  - `e2e/playwright.config.ts`
+  - `e2e/scripts/check-spec-lanes.sh`
+  - `e2e/tests/00-ci-seat-mode.spec.ts`
+  - `e2e/tests/03-chat.spec.ts`
+  - `e2e/tests/09-chat-multitool-demo.spec.ts`
+  - `packages/llm-mesh/src/transport/codex-runtime-wire.ts`
+  - `packages/llm-mesh/src/transport/codex-usage-reader.ts`
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose.yml`
+  - `docker-compose.dev.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
   - `packages/llm-gateway/**`
-  - `api/**` (except `api/src/services/llm-account-transports.ts` and the four listed test files)
+  - `api/drizzle/**`
   - `ui/**`
-  - `e2e/**`
+  - `e2e/tests/dev/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
@@ -74,6 +106,8 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 - `CISEAT-EX5`: status done in a53a64c4b (merge-only exception authorized by the owner). Reason: incorporate origin/main without rebase. Impact: incoming main paths are retained verbatim except the six named merge conflicts and L1 release pins; no unrelated authored changes. Rollback: revert the integration merge, preserving the original PR and local Lot 8 refs. Integration-only grants removed immediately afterward; incoming changes do not extend future implementation scope. The inherited Track files equal main byte-for-byte.
 - `R6-1-UPDATE`: status implemented, qualification pending. Main already supplies gateway 0.21.0 with mesh ^0.27.0; registry latest checked on 2026-10-23: mesh 0.27.0, gateway 0.21.0. L1 uses mesh 0.27.1, aligns seat-tools and installed fixture pins, and refreshes the packed sibling digest through the sanctioned Make flow. The selected manifest and lock root also pin 0.27.1. Preview mesh archive SHA-256: 0e236784a76bb543ec355e92455adc30cc3a6dee04a168d87c369d82a3a96139; this dirty-workspace preview is not an immutable acceptance receipt. No gateway source change is needed.
 - `CISEAT-BUILD`: status active. Owner packet `.tmp/packets/ci-seat-mode-build.md` authorizes C11-C21, commits and pushes, but no merge, publication, owner configuration/credential action or ungated provider call. Await addendum v6 plus checksum until 2026-10-17 19:25 UTC; use v5 only if that deadline expires. Owner model/exposure/transition answers and live receipts remain pending.
+- `CISEAT-BUILD`: status active. Owner packet `.tmp/packets/ci-seat-mode-build.md` authorizes C11-C21, commits and pushes, but no merge, publication, owner configuration/credential action or ungated provider call. Addendum v6 arrived before the wait deadline; verified SHA-256 `e5c0c64cb617a29d995ae63366d24f0994c730cbffd09b1ff6c1a9e0ef449463`. Owner model/exposure/transition answers and live receipts remain pending. Baseline diff before implementation: 52 changed paths, 4071 insertions, 32 deletions.
+- `CISEAT-EX5`: status active, authorized by the implementation packet and binding owner CI decisions. Reason: C11-C21 seat-first, bounded-credit CI with strict complete coverage. Impact: only the named CI/control/test-routing/queue/model-wire seams and their discriminating tests; minimum executable test/control foundations are prerequisites, while five-CLI L2/L3 stays deferred. Rollback: disable admission, preserve pending custody/reservations, leave required AI unavailable; never restore direct model-key injection. Existing EX3 extends only to reviewed owner lab/stdin/refresh helpers; no owner action is executed here.
 - `CISEAT-REBASE`: status done. Rebased 47 commits onto `origin/main` `5202dd87c6f16d37b8bcdc188acd92c32f5e0492`, without merge/squash/conflict; resulting baseline `7105c1850cee610ecd7a63dadeb35781b9a05f57`. Post-Rebase Gate: `make audit-llm-routing-package-versions API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import` reports mesh local 0.26.2 > registry 0.26.1; gateway local/registry 0.20.0. Harness branch PASS C1; clean tree before documentation.
 - `CISEAT-EX2`: status active. Reason: scoped sentropic-seat-delivery receiver integration (new route `api/src/routes/namespaces/llm-seat-delivery.ts`, auth `api/src/middleware/llm-seat-delivery-auth.ts`, optional mount in `llm-mesh-router.ts` via `delivery.enabled`, service tuple/drain/reopen in `llm-account-transports.ts`). k8s mTLS manifests (`deploy/k8s/base/seat-delivery-mtls.yaml`, preprod overlay patch) are explicitly deferred to L3 P-DEPLOY, which owns TLS-termination design; no speculative infra is committed (delivery shares the api pod behind existing ingress). Impact: bounded to this integration; router behavior unchanged when `delivery` is unset. Rollback: delete the new route/middleware files, revert the router mount hunk and the service delivery functions.
 - `CISEAT-EX3`: status acknowledged (reserved downstream requirement from L0a). Reason: owner-machine native Node helper (`seat-inspect`) needs native session keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service D-Bus). Bounds: only reviewed Make entrypoints run the bounded local store reader/inspect helper natively; no host test campaign, server, second refresher or whole-home/keyring export. No `seat-reenroll` helper exists in L1 (re-enroll stays an L3 concern). Rollback: disable/remove owner targets, revoke helper GitHub session, remove private runtime dir, retire disposable lab profile only.
@@ -283,8 +317,8 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 
 - [ ] **Lot 8 — CI seat mode (owner packet C11-C21)**
   - [x] Rebase onto current origin/main and pass the Post-Rebase Gate; retain completed L1/Lot 7 work.
-  - [ ] Read and verify addendum v6 and its SHA-256 sidecar, or record the packet's timed v5 fallback.
-  - [ ] Declare CISEAT-EX5 and exact C11-C21 file/test/gate scope before implementation.
+  - [x] Read and verify addendum v6 and its SHA-256 sidecar; v5 fallback unused.
+  - [x] Declare CISEAT-EX5 before implementation; detailed executable checklist follows in bounded documentation commits.
   - [ ] Keep owner actions and unqualified live gates unchecked; never merge or publish.
 
 - [ ] **Lot N-2** UAT
