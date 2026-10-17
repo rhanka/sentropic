@@ -1,7 +1,7 @@
 /**
  * Lot 7 — mesh facade over the one platform kernel: registration, selection,
  * parameterization and compilation through `@sentropic/cluster-mesh/mcp/registry`.
- * Unavailable providers (e.g. `sentropic.web-pages` before delivery) fail
+ * Unavailable providers (e.g. `sentropic.artifacts` without its builtin) fail
  * startup explicitly — never a silent stub. Builtin loaders run only for
  * selected entries and refuse atomically.
  */
@@ -91,7 +91,7 @@ describe('mesh registry facade', () => {
   it('refuses an unavailable provider explicitly instead of stubbing it', async () => {
     const registry = createMcpRegistry({ modules: modules() });
     registry.register(definition() as never);
-    expect(() => registry.select(['immo', 'sentropic.web-pages'])).toThrow(/unknown provider/);
+    expect(() => registry.select(['immo', 'sentropic.artifacts'])).toThrow(/unknown provider/);
   });
 
   it('materializes selected builtins only, refusing loader failures atomically', async () => {
