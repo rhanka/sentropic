@@ -5,6 +5,18 @@ import { grantFor } from './authority-corpus.js';
 import { emptyEffects } from '../../src/storage/staged-preparation.js';
 import { stagedFragmentDigest } from '../../src/storage/staged-codec.js';
 describe.skipIf(!pgEnabled)('Postgres dependent barriers and actual purge', () => {
+  it('denies full and paged reads while physical erasure is still pending', async () => {
+    const fixture = await createPgFixture({ limits: { maxRecords: 1, maxAppends: 1, maxEncodedBytes: 524288 } });
+    try {
+      const grant = grantFor({ operations: ['read', 'write', 'maintain'] }); const bound = await (await fixture.open()).bindNew(grant);
+      await bound.configureLifecycle('optional');
+      for (let n = 0; n < 3; n += 1) await bound.appendChain('partial', { id: `r${n}`, hash: `h${n}`, bytes: `private${n}` }, n === 0 ? { kind: 'absent', allocation: '0' } : { kind: 'head', hash: `h${n - 1}` });
+      await bound.commitAtomic({ ...emptyEffects(), purgeIntents: [{ target: 'partial', intentId: 'partial', authorizedBy: grant.principalId }] });
+      expect(await bound.completePurge('partial')).toMatchObject({ state: 'pending', outcomeId: null });
+      await expect(bound.readHead('partial')).rejects.toMatchObject({ code: 'denied' });
+      expect(await bound.readPage('partial', 1, null, 4096)).toMatchObject({ outcome: 'inaccessible', records: [] });
+    } finally { await fixture.close(); }
+  });
   it('hides children immediately, respects holds and erases bytes before one terminal outcome', async () => {
     const fixture = await createPgFixture();
     try {
