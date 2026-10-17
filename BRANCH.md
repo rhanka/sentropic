@@ -66,6 +66,8 @@
 - [x] Helper/wire correction gate: 31 tests passed across nano helper/wire, chat summary, document analysis and history analysis suites.
 - [x] Client default regression reproduced before fix; registry prechecks: llm-mesh 0.26.1, chat-ui 0.34.1; chat-ui candidate bumped to 0.34.2.
 - [x] BRNANO-EX1: include chat-ui export-manifest metadata and its existing version assertions to synchronize the required package bump; metadata-only impact, rollback together with the bump.
+- [x] Selectable-retired-model assertion reproduced before catalog removal; mesh candidate bumped to 0.26.2 after npm registry precheck.
+- [x] Full llm-mesh regression gate passed: 42 files, 808 tests; client package gate passed after the server-default and version-contract updates.
 
 ## AI Flaky tests
 - [ ] Record every provider failure verbatim after secret sanitization; failed qualification remains failed, without rerunning for a pass or inflating timeouts.

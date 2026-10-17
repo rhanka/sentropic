@@ -365,14 +365,6 @@ export const modelProfiles = [
     capabilities: modelCapabilities('openai', 'standard', { vision: true }),
   },
   {
-    providerId: 'openai',
-    modelId: 'gpt-4.1-nano',
-    label: 'GPT-4.1 Nano',
-    reasoningTier: 'none',
-    defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('openai', 'none'),
-  },
-  {
     providerId: 'gemini',
     modelId: 'gemini-3.7-flash',
     label: 'Gemini 3.7 Flash',

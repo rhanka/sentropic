@@ -84,7 +84,7 @@ describe('model equivalence council', () => {
     const council = {
       ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       exclusions: DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.filter(
-        (entry) => entry.modelId !== 'gpt-4.1-nano',
+        (entry) => entry.modelId !== 'command-a-03-2025',
       ),
       groups: [{
         id: 'reasoning-fixture', intent: 'reasoning' as const,
@@ -94,13 +94,16 @@ describe('model equivalence council', () => {
           dimensions: { quality: 'equivalent' },
         }],
         members: [{
-          providerId: 'openai', modelId: 'gpt-4.1-nano', rank: 1,
+          providerId: 'cohere', modelId: 'command-a-03-2025', rank: 1,
           requiredCapabilities: ['reasoning' as const],
         }],
       }],
     };
 
-    expect(() => validateEquivalenceCouncil(council, modelProfiles, now))
-      .toThrow(/missing capability reasoning: openai:gpt-4.1-nano/);
+    const unsupportedModels = modelProfiles.map((model) => model.modelId === 'command-a-03-2025'
+      ? { ...model, capabilities: { ...model.capabilities, reasoning: { support: 'unsupported' as const } } }
+      : model);
+    expect(() => validateEquivalenceCouncil(council, unsupportedModels, now))
+      .toThrow(/missing capability reasoning: cohere:command-a-03-2025/);
   });
 });
