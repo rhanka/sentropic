@@ -151,9 +151,11 @@ export const createMcpPlatformHono = (options: McpHonoOptions): Hono => {
   app.post('/resources/read', handle('read'));
 
   if (options.mcp) {
-    // Real-SDK Streamable HTTP mount. Auth stays on the host's middleware;
-    // per-request identity flows through the SDK handler extra.
+    // Real-SDK Streamable HTTP mount. B1: authentication is enforced at this
+    // mount (invoke scope); per-request identity stays host-owned through its
+    // registered server and mount identity — never client headers.
     const mount = options.mcp;
+    app.use('/mcp', options.auth.require([options.auth.scopes.invoke]));
     if (mount.stateful) {
       const transport = mount.createTransport();
       const ready = mount.server.connect(transport);
