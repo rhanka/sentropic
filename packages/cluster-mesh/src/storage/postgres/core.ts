@@ -18,6 +18,7 @@ export interface PgTx {
   root: string | null; closed: boolean; failed: unknown; count: number;
   records: number; appends: number; encodedBytes: number; readonly receipt: CommitReceipt;
   barriers: number; purges: number; moduleResult?: EncodedValue; readonly digests: string[];
+  noop?: boolean;
   readonly contributors: Map<string, ScopeGrant<unknown>>;
 }
 export class PgCore {
