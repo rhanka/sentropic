@@ -135,6 +135,12 @@ export interface LlmMeshFacade {
     ownerScopeRef: string,
     maxAttempts?: number,
   ): Promise<EnrollmentCompletion>;
+  // L1 trusted seat-bundle entry: canonical registration of a custodian
+  // consumer projection as an externally marked account.
+  importSeatBundle(input: {
+    bundle: unknown;
+    ownerScope: string;
+  }): Promise<{ accountId: string; seatRef: string; generation: number; idempotent: boolean }>;
   cancel(enrollmentId: string): Promise<void>;
 
   // Runtime gateway (Q3A — acquire per request, 0 token in SessionEntry)
@@ -207,6 +213,9 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     },
     async completeMuseDeviceImport(enrollmentId, ownerScopeRef, maxAttempts) {
       return service.completeMuseDeviceImport(enrollmentId, ownerScopeRef, maxAttempts);
+    },
+    async importSeatBundle(input) {
+      return service.importSeatBundle(input);
     },
     async cancel(enrollmentId) {
       return service.cancel(enrollmentId);
