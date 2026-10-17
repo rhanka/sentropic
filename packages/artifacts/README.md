@@ -1,8 +1,8 @@
 # @sentropic/artifacts — generic artifact contracts (L-5a)
 
 Generic, host-independent artifact domain state for the Sentropic artifacts
-provider (`sentropic.artifacts`, spec-v8 §9). Single unreleased `0.1.0`
-candidate covering L-5a–5e; no publication before the final merge.
+provider (`sentropic.artifacts`, spec-v8 §9), covering L-5a–5e. Version
+`0.1.1` fixes activation ticket release and channel binding (FL-ACT).
 
 ## What's here (L-5a)
 
@@ -51,7 +51,8 @@ No Immo defaults, URLs or bindings in generic source.
 ## What's here (L-5d–5e)
 
 - `src/content/grants.ts` — 55s HMAC content grants (60s cutoff budget) and
-  single-use bound activation tickets; secrets and clocks are injected.
+  single-use activation tickets bound to subject, artifact, exact release
+  and channel (`stable` or `pinned`); secrets and clocks are injected.
 - `src/content/routing.ts` — stable (`<artifactId>.<base>`) and pinned
   (`<releaseId>.pinned.<base>`) single-UUID origins; safe path resolution.
 - `src/content/headers.ts` — no-store/nosniff/frame-denial/CSP headers and
@@ -68,11 +69,19 @@ No Immo defaults, URLs or bindings in generic source.
   `@sentropic/mcp-platform` kernel registry definition (the platform is
   an optional peer, required only by the `./mcp` subpath).
 
+Ticket issuance and redemption both require `subjectId`, `artifactId`,
+`releaseId` and `channel`. The handler checks the release resolved from the
+requested origin and its channel before minting a grant. A stable ticket
+issued for r1 cannot activate r2 after republish, and a stable ticket cannot
+activate a pinned origin (or vice versa). Mismatches return 401 without a
+grant cookie and preserve the ticket for a matching request. Tickets expire
+at `expiresAt` (120 seconds by default) and can be redeemed only once.
+
 ## First publish (bootstrap)
 
-`0.1.0` is the single candidate covering L-5a–5e; it is not on npm yet,
-so the steady-state OIDC job cannot publish before an npm trusted
-publisher exists. Bootstrap sequence (owner-run, never automated here):
+The steady-state OIDC job requires an npm trusted publisher. For the first
+publication, use the current package version and this bootstrap sequence
+(owner-run, never automated here):
 
 1. Trigger the `bootstrap-publish` workflow manually with
    `bootstrap_publish_target=artifacts` (runs
