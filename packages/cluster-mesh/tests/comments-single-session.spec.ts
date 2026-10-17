@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createCommentsModule, createCommentsPostgresRegistration } from '../../src/comments/index.js';
-import { createPostgresKernel } from '../../src/storage/postgres/index.js';
-import { conformanceCapacity, conformanceScope } from '../../assets/storage/comments/oracle/conformance.mjs';
-import { createPgFixture } from './pg-fixture.js';
-import { pgEnabled } from './pg-driver.js';
-import { grantFor } from './authority-corpus.js';
+import { createCommentsModule, createCommentsPostgresRegistration } from '../src/comments/index.js';
+import { createPostgresKernel } from '../src/storage/postgres/index.js';
+import { conformanceCapacity, conformanceScope } from '../assets/storage/comments/oracle/conformance.mjs';
+import { createPgFixture } from './storage/pg-fixture.js';
+import { pgEnabled } from './storage/pg-driver.js';
+import { grantFor } from './storage/authority-corpus.js';
 describe.skipIf(!pgEnabled)('installed comments binding on a single transaction session', () => {
   it('revalidates nested store bindings on the existing session without acquiring another transaction', async () => {
     const fixture = await createPgFixture(await createCommentsPostgresRegistration()); let active = false;

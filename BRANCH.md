@@ -474,7 +474,7 @@
   - [ ] Strengthened the review-evidence probe with a self-consistent final validation after a different contest was resolved: an older unresolved contest must still refuse the complete unit with zero canonical publication.
   - [ ] Added operational readback/export probes for another principal's personal lifecycle preference and a restricted audit audience; ordinary content remains available and personal preference grants no global visibility change.
   - [ ] Both audience probes were RED. Operational reads/exports now enforce personal actor and explicit audit audience after current resource authorization. C4 domain validation errors retain their explicit neutral/transport classification through bounded PG sealing, rather than becoming generic storage unavailability.
-  - [ ] RED `postgres-single-session.spec.ts` refuses any nested external driver transaction during an active M1 transaction, requiring binding revalidation to reuse its existing canonical session before installed single-client qualification.
+  - [ ] RED `comments-single-session.spec.ts` refuses any nested external driver transaction during an active M1 transaction, requiring binding revalidation to reuse its existing canonical session before installed single-client qualification.
   - [ ] The single-session probe was RED on nested binding. Binding now uses the active same-scope session and final grant checks; no extra connection is acquired while the canonical transaction is active.
   - [ ] Added a fragment-acknowledgement retry probe after a superseding database fence: identical bytes cannot retain writer authority merely because their acknowledgement was persisted earlier.
   - [ ] The retry probe was RED. Every intake now re-enters the kernel's bound staged operation before returning an acknowledgement, revalidating the current database fence; oversized ordinal gaps refuse before a bigint SQL parameter is issued.
@@ -491,6 +491,7 @@
   - [ ] Update `docs/comments-annotations/contract/storage-compatibility.md` and evidence index with M2 delivery and Immo import/receipt/readback API.
 
 - [ ] **Lot N — Final validation**
+  - [ ] Fresh root build prerequisites relinked the optional peer to its unbuilt workspace package. CI now builds the unchanged peer first; moved the comments-specific single-session probe into the comments gate so neutral PG qualification requires no domain peer.
   - [x] BRCM2-EX5 CI now repeats the actual packed comments single-session/PG/full-runtime/long-history qualification and uploads its audit, lock and archive identity; isolated database cleanup remains unconditional.
   - [ ] The installed unchanged M1 corpus, all-kind vectors, single-session rollback and bare isolation passed before a fixture used a nonexistent export-boundary field. Corrected it to the public `boundaryDigest`; installed transport/HTTP qualification continues.
   - [ ] Added actual installed registry/full-runtime canonical HTTP qualification, original server registration, verified-scope refusal, forged lifecycle refusal and independent maintenance erasure through the injected host driver.
