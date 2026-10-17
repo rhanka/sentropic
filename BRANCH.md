@@ -111,8 +111,8 @@
     - [x] RED spec `packages/cluster-mesh/tests/storage/staged-codec.spec.ts` (independent literal vectors + discrimination).
     - [x] Codec `packages/cluster-mesh/src/storage/staged-codec.ts`; mutants MC1 (dependencies dropped), MC2 (moduleResult always absent), MC3 (null predecessor encoded as empty) each killed at one targeted test.
     - [x] Corpora derive digests/roots via `stagedDigestOf` / `stagedSealRoot` (`staged-corpus.ts`, `barrier-corpus.ts`, `replay-corpus.ts`); new cases: changed-dependency retry, other-effects digest on a new ordinal, self-consistent foreign roots, unresolved dependency at seal; handle carries `moduleId`/`scope` (K1 `StagedUnitHandle` alignment).
-    - [ ] Reference recomputes digests on every ordinal, roots at seal, and dependency closure over base plus earlier fragments; mutants S14 (new-ordinal digest trust) and S15 (closure blind) killed at their targeted assertions; S2/S7 kept faithful (gap mutant recomputes its digest; buffer mutation moved after seal so roots do not mask it).
-    - [ ] Evidence: `make test-cluster-mesh ... ENV=test-cm-comments-m2` 62 files pass, 3 fail (the 9 carried K4 tests, unchanged, Lot 2).
+    - [x] Reference recomputes digests on every ordinal, roots at seal, and dependency closure over base plus earlier fragments; mutants S14 (new-ordinal digest trust) and S15 (closure blind) killed at their targeted assertions; S2/S7 kept faithful (gap mutant recomputes its digest; buffer mutation moved after seal so roots do not mask it).
+    - [x] Evidence: `make test-cluster-mesh ... ENV=test-cm-comments-m2` 62 files pass, 3 fail (the 9 carried K4 tests, unchanged, Lot 2).
   - [ ] MAJEUR-N1: C01 case with a self-consistent but wrong digest on a NEW ordinal and a changed-dependency-only retry; mutant "trust caller digest on new ordinal" killed at its targeted assertion.
   - [ ] MINEUR-1: read corpus accepts `null` or a fitting recovery cursor on empty `incomplete` pages; cross-validate missing-head, disposed-chain and empty pages through `validateReadPage`.
   - [ ] MINEUR-2: M18 mutant measures the candidate cursor instead of the effective cursor (no budget inflation).
