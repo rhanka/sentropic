@@ -395,6 +395,7 @@
   - [ ] Added separately versioned transport DTOs, framed fragment/unit-payload digests and explicit terminal declarations. Manifest/payload/full envelope budgets remain distinct; frozen M1 types/fields and its wire error vocabulary are unchanged.
   - [x] Independent fragment framing/budget tests pass 2/2. Hidden descendant purge now passes with the complete 45-test real-PG gate; no unpublished descendant bytes remain behind completion.
   - [ ] RED `comments-import.spec.ts` requires durable identical-fragment acknowledgement, hidden canonical/query state through bounded preparation, complete original receipts after reopen, one publication and same-unit imported tombstone/barrier; truncated terminal payloads must fail without visibility.
+  - [ ] RED `postgres-installed-staging.spec.ts` requires the installed module's hidden metadata and accepted kernel fragments to share one caller session/rollback, with no canonical event or payload visibility.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
