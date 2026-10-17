@@ -137,9 +137,33 @@ export const executeCommentsLifecycle = async (
   };
   await writeLifecycleControl(context, target, control.version, value);
   await context.apply({
-    ...emptyEffects(), barriers: request.action === 'tombstone' ? [{ boundary: target, reason: 'comments-tombstone' }] : [],
+    ...emptyEffects(),
+    barriers: request.action === 'tombstone' ? [{ boundary: target, reason: 'comments-tombstone' }] : [],
     purgeIntents: intentId ? [{ target, intentId, authorizedBy: context.grant.principalId }] : [],
-    indexWrites: [{ key: commandKey(request.idempotencyKey), digest, resultIds: [request.objectId, ...(intentId ? [intentId] : [])], resultHash: record.hash },
-      ...(intentId ? [{ key: purgeControlKey(intentId), digest: intent!.hash, resultIds: [lifecycleControlKey(target)], resultHash: value.candidate!.hash }] : [])] });
-  return { hash: record.hash, objectKind: request.objectKind, objectId: request.objectId, action: request.action, intentId };
+    indexWrites: [
+      {
+        key: commandKey(request.idempotencyKey),
+        digest,
+        resultIds: [request.objectId, ...(intentId ? [intentId] : [])],
+        resultHash: record.hash,
+      },
+      ...(intentId
+        ? [
+            {
+              key: purgeControlKey(intentId),
+              digest: intent!.hash,
+              resultIds: [lifecycleControlKey(target)],
+              resultHash: value.candidate!.hash,
+            },
+          ]
+        : []),
+    ],
+  });
+  return {
+    hash: record.hash,
+    objectKind: request.objectKind,
+    objectId: request.objectId,
+    action: request.action,
+    intentId,
+  };
 };
