@@ -204,6 +204,7 @@
     - [x] Shared replay staging reuses the actual maintenance fence issued by its backend, allowing opaque lane ids without a hard-coded reference fence; profile mutations stay 40/40.
   - [ ] Seal binds base B, ordered fragment set, recomputed roots; bounded sealing steps honoring limits; failure does not reopen staging; distinct staged/commit/command-index namespaces.
     - [ ] New RED probes require semantic root equality across JSON property ordering and reject asynchronous final preparation hooks before canonical publication.
+    - [ ] Commit-root equality/digests share a framed field-order-independent encoding. The coordinator owns/freezes accepted options/effects and refuses asynchronous final hooks so their carriers cannot publish early.
     - [x] RED `tests/storage/root-seal.spec.ts`: bounded preparation with evolving heads, one root/event at commit, stable receipt retry and a failed seal that cannot reopen staging; 2/2 pass, typecheck passes.
     - [ ] Shared divergent-root cases use independent operations, preserving the frozen `sealing` state on semantic failure; returned seal capabilities survive tampered-root checks instead of being silently stripped by fixtures. Reference state transitions align with N3.
     - [ ] Rebuilt K4 passes 7/8 original staged-unit tests after fixture alignment. The remaining typed closure mismatch is addressed by explicitly refusing a missing staged dependency before ordinary CAS preparation; K3 missing-head semantics stay unchanged.
