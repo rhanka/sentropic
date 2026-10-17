@@ -2480,7 +2480,19 @@ export class SessionContentService {
 
   /** Denial-only purge request over an opaque retained scope: writer-settled
    * physical deletion with no read/grant/control elevation. */
-  async requestRetainedPurge(retainedScopeId: string, ownerId: string) {
+  async denyBindingContent(bindingId: string, ownerId: string, intent: 'revoke' | 'exclude') {
+    const [grant] = await db.select().from(sessionContentGrants).where(and(
+      eq(sessionContentGrants.bindingId, bindingId), eq(sessionContentGrants.ownerId, ownerId),
+    )).limit(1);
+    if (!grant) throw new SessionContentError('not_found', 'content binding is unavailable');
+    await this.checkMembership(db, grant.tenantId, ownerId);
+    await this.checkWorkspaceMembership(db, grant.workspaceId, ownerId);
+    return this.requestRetainedPurge(
+      `retained:${namespaceIdFor(grant.tenantId, ownerId, grant.authorityEpoch)}:${bindingId}`, ownerId, intent,
+    );
+  }
+
+  async requestRetainedPurge(retainedScopeId: string, ownerId: string, intent: 'revoke' | 'exclude' = 'revoke') {
     const match = /^retained:(.+):([^:]+)$/.exec(retainedScopeId);
     if (!match) throw new SessionContentError('invalid_request', 'malformed retained scope');
     const [, namespaceId, bindingId] = match;
@@ -2502,10 +2514,18 @@ export class SessionContentService {
         eq(sessionContentGrants.ownerId, ownerId), eq(sessionContentGrants.authorityEpoch, namespace.epoch),
       ));
       const projects = [...new Set(grants.map((grant) => grant.projectId))].sort();
-      for (const projectId of projects) await tx.select().from(sessionContentProjects)
-        .where(eq(sessionContentProjects.projectId, projectId)).limit(1).for('update');
+      for (const projectId of projects) {
+        const [project] = await tx.select().from(sessionContentProjects)
+          .where(eq(sessionContentProjects.projectId, projectId)).limit(1).for('update');
+        if (project && intent === 'exclude') await tx.update(sessionContentProjects).set({
+          excludedSessionIds: [...new Set([...(project.excludedSessionIds as string[]),
+            ...grants.filter((grant) => grant.projectId === projectId).map((grant) => grant.sessionId)])],
+          exclusionRevision: project.exclusionRevision + 1, updatedAt: new Date(this.nowMs()),
+        }).where(eq(sessionContentProjects.projectId, projectId));
+      }
       await tx.update(sessionContentGrants)
-        .set({ state: 'revoked', version: sql`${sessionContentGrants.version} + 1`, updatedAt: new Date(this.nowMs()) })
+        .set({ state: intent === 'exclude' ? 'excluded' : 'revoked',
+          version: sql`${sessionContentGrants.version} + 1`, updatedAt: new Date(this.nowMs()) })
         .where(and(eq(sessionContentGrants.bindingId, bindingId as string),
           eq(sessionContentGrants.tenantId, namespace.tenantId), eq(sessionContentGrants.ownerId, ownerId),
           eq(sessionContentGrants.authorityEpoch, namespace.epoch)));
