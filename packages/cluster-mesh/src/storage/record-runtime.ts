@@ -409,7 +409,7 @@ export const commitUnitsToScope = (
     if (stored) {
       // The stored receipt is copied: the caller can never mutate canonical
       // idempotency state through a returned receipt (Sol-3).
-      if (stored.unitHash === unitHash) return { ...stored.receipt, scope: { ...stored.receipt.scope } };
+      if (stored.unitHash === unitHash) return JSON.parse(JSON.stringify(stored.receipt)) as CommitReceipt;
       throw new StorageIdempotencyConflictError('idempotency key reused with a divergent unit');
     }
   }
@@ -425,8 +425,9 @@ export const commitUnitsToScope = (
   // The staging maps share canonical entries until the first touch (m6).
   prepareUnitsInScope(state, units, ctx);
   const receipt: CommitReceipt = { commitId: ctx.commitId, moduleId: ctx.moduleId, scope: { ...ctx.scope }, committedAt: ctx.clock(), effectiveRecords: merged.appends.length + merged.records.length + merged.updates.length, effectiveAppends: merged.appends.length, journalCursor: `cursor-${ctx.commitId}` };
+  if (merged.moduleResult !== undefined) Object.assign(receipt, { moduleResult: { ...merged.moduleResult } });
   if (options.idempotencyKey) {
-    state.commits.set(options.idempotencyKey, { receipt: { ...receipt, scope: { ...receipt.scope } }, unitHash });
+    state.commits.set(options.idempotencyKey, { receipt: JSON.parse(JSON.stringify(receipt)) as CommitReceipt, unitHash });
   }
   return receipt;
 };
