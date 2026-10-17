@@ -2390,7 +2390,9 @@ Notes :
 Source of truth: `api/src/db/control-schema.ts` (control stream) + migration
 `api/drizzle/control/0012_session_content_consent.sql` (hand-written triggers;
 `db-generate-control` cannot emit or track them) + Lot 2b `0013` (epoch pins)
-+ Lot 3a `0014` (object purge scope) / `0015` (reservation tuple).
++ Lot 3a `0014` (object purge scope) / `0015` (reservation tuple) / `0016`
+  (object writer link). Child refresh binds generation, D1 version, policy
+  digest and a forward boundary; unreconciled local denials pause capture.
 
 Tables (`control` schema, soft references only, no cross-namespace FK):
 - `session_content_projects` (PK `project_id`): durable owner-confirmed
@@ -2415,6 +2417,11 @@ Tables (`control` schema, soft references only, no cross-namespace FK):
   inventory evidence. Scope `object` (with `object_id`, `0014`) deletes one
   staged/`purge_pending` row only and never committed copies;
   `binding`/`namespace`/`history` remain the real purge-event scopes.
+  Objects carry the writer link (`reservation_id`, `0016`, nullable) so an
+  object purge settles exactly its attempt and releases its stale
+  reservation; a completed job re-run settles nothing. Zero-PUT admission
+  refusals release to `cancelled` (known outcome). Stale reservations stay
+  charged only while no object row carries their bytes.
   `session_content_tombstones`: surviving offboarding markers blocking
   grant reuse by recreated textual IDs.
 - `session_content_admissions` (Lot 3a writers) / `session_content_offline_receipts` (O2=B).
