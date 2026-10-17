@@ -285,4 +285,26 @@ describe('Claude renewable enrollment', () => {
     await safeFailure(provider.importCredential(JSON.stringify(document({ padding: 'é'.repeat(33_000) }))));
     await safeFailure(provider.importCredential(JSON.stringify({ claudeAiOauth: [] })));
   });
+
+  it('parses a claude consumer profile under the claude-code package id', async () => {
+    const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
+    const seat = parseCliSeatProfile({
+      cli: 'claude',
+      seatRef: 'seat-claude-01',
+      refreshFamilyRef: 'family-claude-01',
+      ownerScope: 'owner-seat-01',
+      issuingClientRef: 'client-claude-01',
+      endpointFamily: 'endpoint-claude-01',
+      accountBinding: 'binding-claude-01',
+      entitlementClass: 'lab-seat',
+      epoch: 1,
+      generation: 1,
+      operationId: 'op-claude-01',
+      issuedAt: '2026-10-17T00:00:00Z',
+      providerExpiry: '2099-01-01T00:00:00Z',
+      accessRef: 'access-claude-01',
+    });
+    expect(seat.identity.packageProviderId).toBe('claude-code');
+    expect(seat.authority).toBe('consumer');
+  });
 });

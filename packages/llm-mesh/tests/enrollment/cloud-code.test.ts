@@ -322,3 +322,27 @@ describe('CloudCodeEnrollmentProvider', () => {
     ).rejects.toThrow('cancelled');
   });
 });
+
+describe('Cloud Code seat consumer mapping', () => {
+  it('parses an agy consumer profile under the cloud-code package id', async () => {
+    const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
+    const bundle = parseCliSeatProfile({
+      cli: 'agy',
+      seatRef: 'seat-agy-01',
+      refreshFamilyRef: 'family-agy-01',
+      ownerScope: 'owner-seat-01',
+      issuingClientRef: 'client-agy-01',
+      endpointFamily: 'endpoint-agy-01',
+      accountBinding: 'binding-agy-01',
+      entitlementClass: 'lab-seat',
+      epoch: 1,
+      generation: 1,
+      operationId: 'op-agy-01',
+      issuedAt: '2026-10-17T00:00:00Z',
+      providerExpiry: '2099-01-01T00:00:00Z',
+      accessRef: 'access-agy-01',
+    });
+    expect(bundle.identity.packageProviderId).toBe('cloud-code');
+    expect(bundle.authority).toBe('consumer');
+  });
+});

@@ -473,3 +473,27 @@ describe('MuseCodeEnrollmentProvider native device flow (S5)', () => {
     expect(tokenCall?.contentType).toContain('application/x-www-form-urlencoded');
   });
 });
+
+describe('Muse seat consumer mapping', () => {
+  it('parses a muse consumer profile under the muse package id', async () => {
+    const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
+    const bundle = parseCliSeatProfile({
+      cli: 'muse',
+      seatRef: 'seat-muse-01',
+      refreshFamilyRef: 'family-muse-01',
+      ownerScope: 'owner-seat-01',
+      issuingClientRef: 'client-muse-01',
+      endpointFamily: 'endpoint-muse-01',
+      accountBinding: 'binding-muse-01',
+      entitlementClass: 'lab-seat',
+      epoch: 1,
+      generation: 1,
+      operationId: 'op-muse-01',
+      issuedAt: '2026-10-17T00:00:00Z',
+      providerExpiry: '2099-01-01T00:00:00Z',
+      accessRef: 'access-muse-01',
+    });
+    expect(bundle.identity.packageProviderId).toBe('muse');
+    expect(bundle.authority).toBe('consumer');
+  });
+});
