@@ -18,6 +18,29 @@ const unit = (chainId: string) => ({
 });
 
 describe('root-aware ordinary mutations', () => {
+  it('should page pending histories without enumerating the captured scope or chain', async () => {
+    const { coordinator, bound } = setup();
+    await bound.appendChain('long', { id: 'old', hash: 'old', bytes: '{}' }, { kind: 'absent', allocation: '0' });
+    const root = coordinator.capture(bound.scope);
+    root.chains[Symbol.iterator] = () => { throw new Error('scope enumeration'); };
+    root.chains.get('long')!.records.map = () => { throw new Error('history enumeration'); };
+    await bound.transact({}, async (tx) => {
+      const page = await tx.readChain({ chainId: 'long', limit: 1, maxEncodedBytes: 4096 });
+      expect(page.records.map((row) => row.hash)).toEqual(['old']);
+      await tx.apply(unit('pending'));
+    });
+    expect(await bound.readHead('pending')).toBe('hash-pending');
+  });
+
+  it('should refuse even an equal-result replacement if authority changes during preparation', async () => {
+    const { coordinator, kernel, bound } = setup();
+    await bound.indexPut('i', { digest: 'd', resultIds: ['r'], resultHash: null });
+    const base = coordinator.capture(bound.scope);
+    const ids = ['r'];
+    ids[Symbol.iterator] = function* () { void kernel.revoke(bound.grant.token); yield 'r'; };
+    await expect(bound.indexPut('i', { digest: 'd', resultIds: ids, resultHash: null })).rejects.toThrow(StorageDeniedError);
+    expect(coordinator.capture(bound.scope)).toBe(base);
+  });
   it('should reject sharing one backend between different owning modules', () => {
     const { backend } = setup();
     expect(() => createKernel({ moduleId: 'engram-live', backend })).toThrow(StorageInvalidCommandError);
