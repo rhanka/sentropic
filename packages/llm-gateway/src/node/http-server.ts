@@ -6,7 +6,9 @@ import { once } from 'node:events';
 export const createNodeGatewayServer = (
   fetch: (request: Request) => Response | Promise<Response>,
   origin: () => string,
+  onActive?: (delta: number) => void,
 ): Server => createServer(async (req, res) => {
+  onActive?.(1);
   const abort = new AbortController();
   const disconnect = () => { if (!res.writableEnded) abort.abort(); };
   res.once('close', disconnect);
@@ -22,11 +24,13 @@ export const createNodeGatewayServer = (
     const request = new Request(new URL(req.url, origin()), {
       method: req.method, headers, signal: abort.signal,
       ...(!['GET', 'HEAD'].includes(req.method ?? 'GET')
-        ? { body: Readable.toWeb(req) as ReadableStream<Uint8Array>, duplex: 'half' } : {}),
+        ? { body: Readable.toWeb(req as unknown as Parameters<typeof Readable.toWeb>[0]) as ReadableStream<Uint8Array>, duplex: 'half' } : {}),
     });
     const response = await fetch(request);
     if (abort.signal.aborted) { await response.body?.cancel(); return; }
-    res.writeHead(response.status, Object.fromEntries(response.headers));
+    const outgoing: Record<string, string> = {};
+    response.headers.forEach((value, name) => { outgoing[name] = value; });
+    res.writeHead(response.status, outgoing);
     reader = response.body?.getReader();
     while (reader && !abort.signal.aborted) {
       const chunk = await reader.read();
@@ -44,6 +48,7 @@ export const createNodeGatewayServer = (
     res.removeListener('close', disconnect);
     abort.signal.removeEventListener('abort', cancel);
     reader?.releaseLock();
+    onActive?.(-1);
   }
 });
 
