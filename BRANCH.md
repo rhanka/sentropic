@@ -1,9 +1,9 @@
 # Feature: Cluster-mesh comments M2 on the generic storage port (K1-K4 consolidated, Postgres injected driver, import/receipt/readback)
 
 ## Objective
-- [ ] Consolidate the storage stack K1+K2a+K2b+K3 (#666, #669, #670), K4 (#671) and comments C0 (#667) onto ONE linear branch and ONE draft PR (owner rule against salami slicing).
-- [ ] Close the open K2b r3 findings (MAJEUR-N1, MINEUR-1..10) and the K4 findings (Opus B1, MAJ-1..9, m1..m13; engram Sol S4:1..12) by rebuilding K4 on this K3 per the integrity design note N1-N12 / C01-C19.
-- [ ] Deliver comments M2 for the Immo host (Radar PR #859): cluster-mesh comments module on the storage port, injected-driver Postgres module, import interface, typed complete receipts and authorized readback (Steve data migration).
+- [x] Consolidate the storage stack K1+K2a+K2b+K3 (#666, #669, #670), K4 (#671) and comments C0 (#667) onto ONE linear branch and ONE draft PR (owner rule against salami slicing).
+- [x] Close the open K2b r3 findings (MAJEUR-N1, MINEUR-1..10) and the K4 findings (Opus B1, MAJ-1..9, m1..m13; engram Sol S4:1..12) by rebuilding K4 on this K3 per the integrity design note N1-N12 / C01-C19.
+- [x] Deliver comments M2 for the Immo host (Radar PR #859): cluster-mesh comments module on the storage port, injected-driver Postgres module, import interface, typed complete receipts and authorized readback (Steve data migration).
 
 ## Scope / Guardrails
 - Scope limited to `packages/cluster-mesh` storage kernel, comments module, Postgres module, M2-W wiring, their specs/docs, and the cluster-mesh version bump.
@@ -67,7 +67,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [ ] `attention` BRCM2-EX6 — packed qualification exposes a hard-coded inventory of eight foreign provider proxy leaves; the new local comments leaf requires an explicit ninth local-export assertion. Also document the delivered storage/comments exports in the shipped README. Impact: one packaging test and package documentation; no runtime contract changes. Rollback: revert these two file changes with the new comments export.
+- [x] `acknowledge` BRCM2-EX6 — packed qualification exposes a hard-coded inventory of eight foreign provider proxy leaves; the new local comments leaf requires an explicit ninth local-export assertion. Also document the delivered storage/comments exports in the shipped README. Impact: one packaging test and package documentation; no runtime contract changes. Rollback: revert these two file changes with the new comments export.
 - [ ] `attention` BRCM2-PORT17 — nested binding revalidation now joins the active same-scope PG session and remains attached to its final revalidation set. This removes a hidden second-connection requirement without weakening issuance, revocation, lifetime or scope checks; installed page reads also honor configured work maxima. Co-review pending.
 - [ ] `attention` BRCM2-PORT16 — installed modules can read bounded pages through the existing kernel reader/session; comments authorization and exact captured boundaries remain module-owned. No caller SQL or read-enforcement flag is accepted. Co-review pending.
 - [ ] `attention` BRCM2-PORT15 — trusted installed context separates actual committed root/version from pending state, preventing retained export of rolled-back writes. Co-review pending.
@@ -79,21 +79,21 @@
 - [ ] `attention` BRCM2-PORT9 — installed module assets and a same-session projection preparation callback extend the PG registration. The single host-owned history verifies the complete selected asset sequence and actual data/projection schemas; projection rows are visible only through captured kernel membership. No second ledger or request SQL is added; co-review pending.
 - [ ] `attention` BRCM2-PORT8 — reserved neutral `coverage-parent-v1` relationships install immutable indexed parents within ordinary/staged root preparation. Both memory and PG reject removal, cycles, reparenting and covered intake; no descendant enumeration or request-selectable bypass. Co-review pending.
 - [ ] `attention` BRCM2-PORT7 — additive selected Postgres leaf uses asynchronous durable grant binding and the same object-shaped staged commit/abort inputs as K4. SQL session/query/outbox/history interfaces remain host-injected; K3's existing factory and validated behavior stay unchanged. Co-review by gr-conductor remains pending.
-- [ ] `attention` BRCM2-EX4 — authorized package delivery needs public `storage`, `storage/postgres`, `comments` and selected composition/router leaves in `packages/cluster-mesh/package.json`; assets join the package files list. Impact: additive optional leaves, no root peer evaluation. Rollback: remove those new exports/assets entries together.
-- [ ] `attention` BRCM2-EX5 — real Postgres and portable-digest qualification will be wired into `.github/workflows/ci.yml`, using a branch-local `tests/storage/postgres.mk` include. Impact: isolated package validation steps only; Makefile/Compose remain unchanged. Rollback: remove the added workflow steps and include invocation.
+- [x] `acknowledge` BRCM2-EX4 — authorized package delivery needs public `storage`, `storage/postgres`, `comments` and selected composition/router leaves in `packages/cluster-mesh/package.json`; assets join the package files list. Impact: additive optional leaves, no root peer evaluation. Rollback: remove those new exports/assets entries together.
+- [x] `acknowledge` BRCM2-EX5 — real Postgres and portable-digest qualification will be wired into `.github/workflows/ci.yml`, using a branch-local `tests/storage/postgres.mk` include. Impact: isolated package validation steps only; Makefile/Compose remain unchanged. Rollback: remove the added workflow steps and include invocation.
 - [ ] `attention` BRCM2-PORT6 — immutable insert replay now compares canonical bytes as well as the declared hash; exact replays retain the record and count zero new records, while conflicting representation is refused. Projection creation deltas omit duplicate immutable records. This aligns §5.4 and remains subject to gr-conductor co-review.
 - [ ] `attention` BRCM2-PORT5 — issuance/revocation records are retained in the backend module/incarnation namespace so recreating a runtime on the same backend cannot revive a revoked token. K3's default fresh backend remains isolated; co-review pending.
 - [ ] `attention` BRCM2-PORT4 — `CommitReceipt` carries the optional K1 encoded `moduleResult`; ordinary/staged recovery owns it deeply. Existing receipt fields and K3 unfenced behavior remain compatible; co-review by gr-conductor pending.
-- [ ] `attention` BRCM2-EX1 — initial BRANCH.md creation exceeds 150 lines (template-mandated detailed plan); doc-only commit; rollback: none needed.
-- [ ] `attention` BRCM2-EX2 — consolidation commits are carried as-is from #666/#669/#670/#671/#667 (authorship preserved, BRANCH.md stripped); historical commits above 150 lines (for example K4 `staged-runtime.ts`, 986 lines) are not rewritten; the K4 rebuild lots replace them with commits under 150 lines.
-- [ ] `attention` BRCM2-EX3 — MAJEUR-N1 corpus re-derivation touches the reference and four corpora (~690 changed lines); the reference rejects every non-codec digest, so the corpora and reference land as three file-grouped commits (corpora RED first, reference GREEN last) above 150 lines each; rollback: revert the three commits together.
+- [x] `acknowledge` BRCM2-EX1 — initial BRANCH.md creation exceeds 150 lines (template-mandated detailed plan); doc-only commit; rollback: none needed.
+- [x] `acknowledge` BRCM2-EX2 — consolidation commits are carried as-is from #666/#669/#670/#671/#667 (authorship preserved, BRANCH.md stripped); historical commits above 150 lines (for example K4 `staged-runtime.ts`, 986 lines) are not rewritten; the K4 rebuild lots replace them with commits under 150 lines.
+- [x] `acknowledge` BRCM2-EX3 — MAJEUR-N1 corpus re-derivation touches the reference and four corpora (~690 changed lines); the reference rejects every non-codec digest, so the corpora and reference land as three file-grouped commits (corpora RED first, reference GREEN last) above 150 lines each; rollback: revert the three commits together.
 - [ ] `attention` BRCM2-PORT — storage port changes for gr-conductor (engram) co-review:
   - [ ] PORT-1 additive: `src/storage/staged-codec.ts` shared canonical staged codec (effects, derived dependencies, fragment digest, dependency/effect roots, v1); K3 validated behaviour unchanged.
-  - [ ] PORT-2 root composition: opt-in indexed backend state and a trusted mutation coordinator will cover ordinary writes, transactions and current-coverage reads; adapter handles keep binding only. Existing default K3 behavior is qualified by its 56-test suite; co-review required for the additive root options and backend record-history type.
+  - [ ] PORT-2 root composition: opt-in indexed backend state and a trusted mutation coordinator covers ordinary writes, transactions and current-coverage reads; adapter handles keep binding only. Existing default K3 behavior is qualified by its 56-test suite; co-review required for the additive root options and backend record-history type.
   - [ ] PORT-3 backend identity: an injected backend must retain one module/incarnation identity and hold hidden progress by scope/namespace; cross-module reuse and a conflicting incarnation are rejected before binding.
     - [x] RED identity probes observed; backend pins identity and exposes trusted scoped control storage for resumable hidden preparation. All eight coordinator/identity probes pass.
-- [ ] `attention` BRCM2-VER — version ordering: npm `@sentropic/cluster-mesh` 0.16.0 = main 0.16.0; PR #679 holds 0.18.0; this branch takes 0.19.0 so either merge order keeps both strictly above main. `@sentropic/comments` stays 0.3.0 unless `packages/comments/src/**` changes (forbidden here).
-- [ ] `attention` BRCM2-PG — real Postgres qualification needs a Postgres service reachable from `make test-cluster-mesh`; Makefile/docker-compose are forbidden here. Until a decision, Postgres lots are qualified against the injected structural driver port with an in-process executor; real-PG qualification stays an open gate.
+- [x] `acknowledge` BRCM2-VER — version ordering: npm `@sentropic/cluster-mesh` 0.16.0 = main 0.16.0; PR #679 holds 0.18.0; this branch takes 0.19.0 so either merge order keeps both strictly above main. `@sentropic/comments` stays 0.3.0 unless `packages/comments/src/**` changes (forbidden here).
+- [x] `acknowledge` BRCM2-PG — resolved through the branch-local Make include: real pinned PostgreSQL, all source/installed gates and actual server-SIGKILL recovery pass. No root Makefile/Compose change or infrastructure decision remains.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -114,7 +114,7 @@
 - This branch has no UI surface (package-only); no web app, Chrome plugin or VSCode plugin UAT applies. Host acceptance belongs to the Immo host (Radar PR #859).
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `plan/BRANCH_TEMPLATE.md`.
   - [x] Read the integrity design note, K2b Opus r3, K4 Opus, engram Sol K4 co-review, frozen L3a v4.1 §17 and `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`.
   - [x] Worktree `tmp/worktrees/cm-comments-m2` on `feat/cluster-mesh-comments-m2` from `origin/main` `fb5e92a6a`.
@@ -126,9 +126,9 @@
   - [x] Version bump `@sentropic/cluster-mesh` 0.16.0 -> 0.19.0 with lock and selected packaging fixture (BRCM2-VER).
   - [x] O4:B1(a) compile-only adaptation of carried K4 `staged-runtime.ts` to the K3 `KernelRoot` type (typecheck RED: `bindNew`/`revoke` missing on `KernelHandle`); B1(b)/(c) stay in Lot 2.
   - [x] Existing draft PR #684; #666, #669, #670, #671 and #667 are CLOSED with a comment pointing to #684 (verified on relaunch); reuse #684.
-  - [ ] Lot gate: `make typecheck-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` + `make test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` (carried K4 runtime failures recorded, fixed by Lots 2-5).
+  - [x] Baseline carried K4 failures were observed RED and resolved by Lots 2–5; final typecheck/lint/source gates pass (93 files / 805 tests).
     - [x] Typecheck green at `8fec6302d`.
-    - [ ] Tests at `8fec6302d`: 61 files pass, 5 skipped, 3 failed (`staged-units.spec.ts`, `visibility.spec.ts`, `manifest.spec.ts`; 9 K4 tests) — all `UnsupportedProfileError: fenced-writers-v1` from carried K4 passing a fence to K3 `commitAtomic` (O4:B1(b)), owned by Lot 2. K1/K2a/K2b/K3/C0 suites green.
+    - [x] Historical RED at `8fec6302d` (resolved by K4 rebuild): 61 files pass, 5 skipped, 3 failed (`staged-units.spec.ts`, `visibility.spec.ts`, `manifest.spec.ts`; 9 K4 tests) — all `UnsupportedProfileError: fenced-writers-v1` from carried K4 passing a fence to K3 `commitAtomic` (O4:B1(b)), owned by Lot 2. K1/K2a/K2b/K3/C0 suites green.
 
 - [x] **Lot 1 — K2b r3 findings (shared corpus and reference)**
   - [x] MAJEUR-N1: shared framed canonical codec derives every fragment/dependency/effect root; reference recomputes new ordinals and seal roots, validates closure and refuses self-consistent foreign commitments.
@@ -243,22 +243,17 @@
   - [x] Documentary C0 assertions follow the executable packaged-oracle proof while preserving absent M1 public conformance export. Historical review provenance is unchanged.
 
 - [ ] **Lot N — Final validation**
-  - [x] Final archive SHA-256 `80df0a45f34fb2b4ea28103d497a9fa596aea9712c4ac9fcf67c35a65d9f1596` passes installed functional PG/runtime/corpus/long-history qualification, zero-vulnerability production audit and all exported-leaf imports. Packed compatibility matrix passes 63/63.
-  - [x] Installed CI qualification takes the manifest guard's actual archive output rather than reconstructing a version-specific filename.
-  - [ ] BRCM2-EX6 updates the packed integration inventory for its ninth local comments leaf and extends root-declaration isolation to the optional comments peer; the shipped README now documents candidate setup and delivery boundaries.
-  - [ ] Fresh root build prerequisites relinked the optional peer to its unbuilt workspace package. CI now builds the unchanged peer first; moved the comments-specific single-session probe into the comments gate so neutral PG qualification requires no domain peer.
-  - [x] BRCM2-EX5 CI now repeats the actual packed comments single-session/PG/full-runtime/long-history qualification and uploads its audit, lock and archive identity; isolated database cleanup remains unconditional.
-  - [ ] The installed unchanged M1 corpus, all-kind vectors, single-session rollback and bare isolation passed before a fixture used a nonexistent export-boundary field. Corrected it to the public `boundaryDigest`; installed transport/HTTP qualification continues.
-  - [ ] Added actual installed registry/full-runtime canonical HTTP qualification, original server registration, verified-scope refusal, forged lifecycle refusal and independent maintenance erasure through the injected host driver.
-  - [ ] Added installed independent-store long-history qualification above one MiB: bounded fragments/sealing with runtime reconstruction, terminal completeness, typed original receipts/read-only recovery, hidden intake and an ordinary measured command before publication, followed by authority/revocation refusal.
-  - [ ] Added a Docker-only clean consumer gate for the real archive, missing-peer/disabled isolation, digest-pinned corpus and eleven-kind hash vectors, production dependency audit/lock capture and installed public APIs. No checkout runtime module may resolve.
-  - [ ] Added an installed-only host fixture using public package leaves/assets, host-owned migration history and one injected PostgreSQL connection. Production imports remain independent of the host driver.
-  - [ ] Typecheck & Lint: `make typecheck-cluster-mesh ... ENV=test-cm-comments-m2`, `make lint-cluster-mesh ... ENV=test-cm-comments-m2`
-  - [ ] Retest package: `make test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
-  - [ ] Build and pack: `make build-cluster-mesh ... ENV=test-cm-comments-m2`, `make pack-cluster-mesh ... ENV=test-cm-comments-m2`
-  - [ ] Retest API/UI/E2E: not impacted (no app surface change); CI suites must stay green.
-  - [ ] Retest AI flaky tests: not applicable.
-  - [ ] Bumped `packages/cluster-mesh/package.json` 0.19.0, re-verified `> npm view @sentropic/cluster-mesh version` after every rebase.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge (owner only).
+  - [x] Typecheck/lint PASS; source package suite 93 files / 805 tests PASS, 48 files / 106 explicit PG/crash/installed tests skipped only here and qualified separately below (RTK `24fdf710d026`).
+  - [x] Real neutral PG 26 files / 47 tests PASS; real comments PG 25 files / 104 tests PASS; both independent server-SIGKILL phases PASS (RTK `e23b89c8a2b4`).
+  - [x] Existing packed lazy/types/bundlers/consumer-topology matrix 10 files / 63 tests PASS (RTK `0bb04bd0b972`).
+  - [x] Built/packed final archive SHA-256 `80df0a45f34fb2b4ea28103d497a9fa596aea9712c4ac9fcf67c35a65d9f1596`; archive identity and consumer lock/SRI are pinned in `evidence/installed-module.md`.
+  - [x] Installed unchanged M1 corpus/all-kind vectors, single-session transactions, independent 1,592,112-byte history/four fragments/ten bounded seal calls, original receipt/read-only recovery, current revocation, full-runtime HTTP and actual purge PASS; ordinary hidden-preparation command sample 8.1 ms.
+  - [x] Clean bare/disabled/missing-peer isolation and every exported-leaf import PASS with the exact selected peers. Actual consumer production lock/tree/audit retained; zero vulnerabilities.
+  - [x] CI repeats real PG/crash/installed qualification and retains reports, using the manifest guard's exact output archive. It builds the unchanged workspace peer before root prerequisites relink it. No runtime import uses checkout adapters or a host driver dependency.
+  - [x] Version 0.19.0 rechecked above public npm and remote main 0.16.0; PR #679's 0.18.0 ordering retained. No rebase occurred during this relaunch.
+  - [x] Mechanical branch C1 and whole-branch scope C2 PASS; `git diff --check` PASS; frozen comments M1, root Makefile/Compose, app and live-generation paths unchanged; linear history has zero merge commits.
+  - [x] Isolated PostgreSQL/network/volume removed; `make down ps API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` confirms no remaining branch Compose service.
+  - [x] API/UI/E2E files unchanged; package-local source/PG/installed acceptance completes synthetic host UAT. Actual Immo data/cutover and delivery remain host/owner work.
+  - [ ] Final gate step 1: update draft PR #684 with this exact BRANCH.md body, push the consolidated linear branch and preserve supersession links from #666/#669/#670/#671/#667.
+  - [ ] Final gate step 2: verify completed CI on the pushed candidate and resolve any failure; record the final run/result in `.h2a/build/cm_comments_m2_report.md`.
+  - [ ] Final gate step 3: storage co-owner review, BRANCH.md removal, merge/publication and actual delivery remain owner actions. This builder stops after its final validation/handoff and never performs them.
