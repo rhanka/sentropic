@@ -90,5 +90,6 @@ export const operatePgConsumer = async (core: PgCore, grant: ScopeGrant<unknown>
       state.actions.push({ by: grant.principalId, eventId, at: core.now() }); if (state.actions.length > 32) state.actions.shift();
     }
     await savePgConsumer(core, session, grant, consumer, state);
+    await session.execute({ text: `INSERT INTO ${core.roots.schema}.consumer_actions(scope_key,consumer,operation,owner,event_id) VALUES($1,$2,$3,$4,$5)`, values: [core.roots.key(grant.scope), consumer, operation, grant.principalId, eventId] });
   });
 };

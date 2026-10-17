@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { validateScopeGrant, type ScopeGrant } from '../authority.js';
 import { DEFAULT_WORK_LIMITS, validateWorkLimits, validateWriterFence, type EncodedValue, type StorageOperation, type StorageScope, type WorkLimits, type WriterFence } from '../contracts.js';
@@ -12,6 +12,8 @@ import { decodePgText, decodePgUtf8 } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { loadPgAssets, verifyPgInstallation } from './migrations.js';
 import type { PgSession, PostgresStorageOptions } from './protocol.js';
+import { validateModuleDescriptor } from '../descriptor.js';
+const freezeRegistration = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freezeRegistration); Object.freeze(value); } };
 
 export interface PgTx {
   readonly session: PgSession; readonly scope: StorageScope; readonly base: PgRoot;
@@ -29,6 +31,9 @@ export class PgCore {
   readonly limits: WorkLimits;
   readonly authority;
   constructor(readonly options: PostgresStorageOptions, readonly incarnation: string) {
+    const descriptor = options.descriptor ? JSON.parse(JSON.stringify(options.descriptor)) as typeof options.descriptor : undefined;
+    if (descriptor) { if (!validateModuleDescriptor(descriptor).ok || descriptor.queryNames.some((name) => typeof options.queries?.[name] !== 'function')) throw new StorageInvalidCommandError('invalid registered Postgres descriptor'); freezeRegistration(descriptor); }
+    this.options = Object.freeze({ ...options, descriptor, queries: Object.freeze({ ...options.queries }), pgPredicates: Object.freeze({ ...options.pgPredicates }) });
     this.tx = new PgTransactions(options.driver, options.budgets);
     this.roots = new PgRoots(options, incarnation);
     this.provider = options.boundaryProvider ?? new HmacExactHeadBoundaryProvider(options.cursorSecret);
@@ -95,9 +100,16 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
   const incarnation = await provisional.tx.run(false, async (session) => {
     await verifyPgInstallation(session, options.layout, assets, options.history);
     await session.execute({ text: `INSERT INTO ${provisional.roots.schema}.modules(module,incarnation) VALUES($1,$2) ON CONFLICT(module) DO NOTHING`, values: [options.moduleId, provisional.incarnation] });
-    const result = await session.execute({ text: `SELECT incarnation FROM ${provisional.roots.schema}.modules WHERE module=$1`, values: [options.moduleId] });
+    const result = await session.execute({ text: `SELECT incarnation,descriptor_digest FROM ${provisional.roots.schema}.modules WHERE module=$1`, values: [options.moduleId] });
     const stored = decodePgText(result.rows[0]?.incarnation);
     if (options.incarnation !== undefined && options.incarnation !== stored) throw new PostgresStorageError('configuration');
+    const wanted = provisional.options.descriptor ? createHash('sha256').update(JSON.stringify(provisional.options.descriptor), 'utf8').digest('hex') : null;
+    const registered = result.rows[0]?.descriptor_digest;
+    if (registered !== null && registered !== wanted) throw new PostgresStorageError('configuration');
+    if (wanted && registered === null) {
+      const pinned = await session.execute({ text: `UPDATE ${provisional.roots.schema}.modules SET descriptor_digest=$1 WHERE module=$2 AND descriptor_digest IS NULL AND NOT EXISTS(SELECT 1 FROM ${provisional.roots.schema}.scopes WHERE module=$2 AND version>0) RETURNING module`, values: [wanted, options.moduleId] });
+      if (pinned.rows.length !== 1) throw new PostgresStorageError('configuration');
+    }
     return stored;
   });
   return new PgCore(options, incarnation);
