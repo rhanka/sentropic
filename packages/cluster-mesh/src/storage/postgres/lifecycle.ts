@@ -6,14 +6,8 @@ import { runPgTransaction } from './ordinary-transactions.js';
 import { decodePgCounter, decodePgText } from './codec.js';
 import type { PgSession } from './protocol.js';
 import { createPgInstalledContext } from './installed.js';
+import { visitPgCoverage as ancestors } from './hidden-coverage.js';
 interface PgPurgeJob extends RootPurgeJob { readonly phase: 'payload' | 'staged'; readonly position: string | null; readonly found: boolean; }
-const ancestors = async (core: PgCore, session: PgSession, root: string | null, target: string, match: (id: string) => Promise<boolean>, seen = new Set<string>()): Promise<boolean> => {
-  if (seen.has(target)) return false;
-  if (seen.size >= 128) throw new StorageInvalidCommandError('coverage path exceeds registered depth');
-  seen.add(target); if (await match(target)) return true;
-  for (const parent of await core.roots.get<readonly string[]>(session, root, 'parents', target) ?? []) if (await ancestors(core, session, root, parent, match, seen)) return true;
-  return false;
-};
 const name = (value: string): void => { if (typeof value !== 'string' || !value || value.length > 4096) throw new StorageInvalidCommandError('invalid lifecycle identity'); };
 export const configurePgLifecycle = async (core: PgCore, grant: ScopeGrant<unknown>, policy: PurgePolicy): Promise<void> => {
   if (!['unconfigured', 'optional', 'required'].includes(policy)) throw new StorageInvalidCommandError('unknown purge policy');
@@ -51,17 +45,18 @@ export const completePgPurge = async (core: PgCore, grant: ScopeGrant<unknown>, 
     let work = 0; let bytes = 0;
     while (job.state !== 'held' && work < core.work().maxRecords) {
       const payload = job.phase === 'payload'; const table = payload ? 'payloads' : 'staged_items';
-      const result = await session.execute({ text: `SELECT candidate.id::text,candidate.target,octet_length(candidate.bytes) AS cost FROM ${store.schema}.${table} AS candidate WHERE candidate.scope_key=$1 AND ($2::${payload ? 'text' : 'bigint'} IS NULL OR candidate.id>$2::${payload ? 'text' : 'bigint'}) ORDER BY candidate.id LIMIT 1`, values: [store.key(grant.scope), job.position] });
+      const result = await session.execute({ text: `SELECT candidate.id::text,candidate.target,candidate.${payload ? 'prepared_unit' : 'unit_id'} AS unit_id,octet_length(candidate.bytes) AS cost FROM ${store.schema}.${table} AS candidate WHERE candidate.scope_key=$1 AND ($2::${payload ? 'text' : 'bigint'} IS NULL OR candidate.id>$2::${payload ? 'text' : 'bigint'}) ORDER BY candidate.id LIMIT 1`, values: [store.key(grant.scope), job.position] });
       const row = result.rows[0];
       if (!row) {
         if (payload) { job.phase = 'staged'; job.position = null; continue; }
         job.state = job.found ? 'complete' : 'failed'; break;
       }
       const id = payload ? decodePgText(row.id) : decodePgCounter(row.id); const target = row.target === null ? null : decodePgText(row.target);
-      const covered = target !== null && await ancestors(core, session, tx.root, target, async (value) => value === job.target);
+      const hidden = row.unit_id === null ? undefined : { scopeKey: store.key(grant.scope), unitId: decodePgText(row.unit_id) };
+      const covered = target !== null && await ancestors(core, session, tx.root, target, async (value) => value === job.target, hidden);
       if (covered) {
         job.found = true;
-        const held = await ancestors(core, session, tx.root, target!, async (value) => Boolean(await store.get(session, tx.root, 'hold', value)) || ((await store.get<{ count: number }>(session, tx.root, 'blob', value))?.count ?? 0) > 0);
+        const held = await ancestors(core, session, tx.root, target!, async (value) => Boolean(await store.get(session, tx.root, 'hold', value)) || ((await store.get<{ count: number }>(session, tx.root, 'blob', value))?.count ?? 0) > 0, hidden);
         if (held) { job.state = 'held'; break; }
         const cost = row.cost === null ? 0 : Number(row.cost);
         if (!Number.isSafeInteger(cost) || cost < 0 || cost > core.work().maxEncodedBytes) throw new StorageInvalidCommandError('purge item exceeds installed work budget');
