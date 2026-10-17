@@ -4,7 +4,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { and, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, notExists, or, sql } from 'drizzle-orm';
 import {
   computePolicyDigest,
   ContentConsentError,
@@ -1393,6 +1393,30 @@ export class SessionContentService {
     });
   }
 
+  /** P1 charge rule shared by quota gating and usage reads: reserved rows
+   * are always charged; stale rows only while no object row carries their
+   * bytes (unknown outcome without PUT). The correlated anti-join makes the
+   * staged/purge_pending object charge the single one. */
+  private reservationChargeCondition() {
+    return or(
+      eq(sessionContentReservations.state, 'reserved'),
+      and(
+        eq(sessionContentReservations.state, 'stale'),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(sessionContentObjects)
+            .where(
+              eq(
+                sessionContentObjects.reservationId,
+                sessionContentReservations.reservationId,
+              ),
+            ),
+        ),
+      ),
+    );
+  }
+
   private async chargedBytes(
     client: DbClient,
     scope: { namespaceId?: string; sessionId?: string; tenantId?: string },
@@ -1414,13 +1438,12 @@ export class SessionContentService {
       .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
       .from(sessionContentObjects)
       .where(and(...objectConditions));
-    // P1: a stale reservation is always paired with a staged/purge_pending
-    // object row that carries the charge (queueStagedDeletion sets both
-    // atomically), so stale itself is never charged — no double count, no
-    // phantom hold after verified deletion.
-    const reservedConditions = [
-      inArray(sessionContentReservations.state, ['reserved']),
-    ];
+    // P1: a stale reservation is charged only while no object row carries
+    // its bytes (markAttemptUnknown without PUT stays charged — the outcome
+    // is unknown and no object exists). Once the staged row exists, the
+    // object charge is the single one: no double count, and no phantom hold
+    // after verified deletion.
+    const reservedConditions = [this.reservationChargeCondition()];
     if (scope.namespaceId) {
       reservedConditions.push(eq(sessionContentReservations.namespaceId, scope.namespaceId));
     }
@@ -2024,7 +2047,7 @@ export class SessionContentService {
       .from(sessionContentReservations)
       .where(
         and(
-          inArray(sessionContentReservations.state, ['reserved']),
+          this.reservationChargeCondition(),
           reservedInScope,
           scope.sessionId ? eq(sessionContentReservations.sessionId, scope.sessionId) : sql`TRUE`,
         ),
