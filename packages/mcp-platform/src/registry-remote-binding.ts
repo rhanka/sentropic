@@ -1,13 +1,15 @@
 /**
- * Remote-bound seam (contract-v3 remote side, RC-6 Lot 4).
+ * Internal remote-bound seam (contract-v6 R1 boundary, RC-6 Lot 4).
  *
  * A `remote-bound` definition names tools served by another stack behind a
- * versioned injected client port. This module is pure: it never imports a
- * transport, never touches the network, fetch, the filesystem or the clock.
- * Unknown tools, unselected providers, schema mismatches and missing or
- * mis-versioned ports are all rejected BEFORE the client port is touched, so
- * invalid candidates acquire zero resources. Actual shared transport guards
- * close in Lot 5; no h2a import.
+ * versioned injected client port. This module is pure and INTERNAL: it is not
+ * part of the public RegistryDefinition, `register` refuses remote-bound-shaped
+ * input with unsupported_definition_kind, and no transport imports this module.
+ * It never touches the network, fetch, the filesystem or the clock. Unknown
+ * tools, unselected providers, schema mismatches and missing or mis-versioned
+ * ports are all rejected BEFORE the client port is touched, so invalid
+ * candidates acquire zero resources. Shared transport guards and routing
+ * belong to post-merge R2; no h2a import.
  */
 import { canonicalizeRegistryRequest } from './registry-entry.js';
 import {
