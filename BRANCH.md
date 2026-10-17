@@ -84,7 +84,7 @@
 - `FL-11/FL-13-attention`: cluster-mesh peer widening + bump (GWV-EX4) waits for immo #679 single merge/publication, then PR1 rebase. L8 waits likewise.
 - `FL-14-attention`: h-cond owns draft `feat/gw-thin-consumer-pr1` (`/home/antoinefa/src/h2a/tmp/gw-thin-consumer-pr1`); H0 adopts #662 pins first. No branch created here.
 - `FL-18-attention`: candidate producer/read path await L0 proof; missing bytes are typed blocked.
-- `GW8-m1-attention`: base/head tree objects under default depth-1 merge-ref checkout unspecified. L0 obtains both parents (fetch-depth 2 or fetch base+head), verifies `mergeSha^1 == baseSha` and `mergeSha^2 == headSha`, treats fetch failure as unreadable base evidence, adds classifier assertion.
+- `GW8-m1-done`: base/head tree objects under default depth-1 merge-ref checkout unspecified. `verifyMergeParents` obtains both parents, verifies `mergeSha^1 == baseSha` and `mergeSha^2 == headSha`, treats fetch failure as unreadable base evidence; pure tests pin accept/refuse/unreadable. h2a-side `gateway-consumer-workflows.test.js` parent assertion is h-cond companion scope (FL-14).
 
 ## AI Flaky tests
 - Acceptance rule:
