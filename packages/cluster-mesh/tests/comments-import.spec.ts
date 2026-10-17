@@ -76,7 +76,8 @@ describe.skipIf(!pgEnabled)('coherent comments import and complete receipt recov
     try {
       await s.module.withContext(s.grant, async () => {
         const first = s.fragment(0, null); await s.module.services.prepareImportFragment({ binding: s.binding, fragment: first, fence: s.fence });
-        await expect(s.module.services.prepareImportFragment({ binding: s.binding, fragment: s.terminal(1, first.digest), fence: s.fence })).rejects.toThrow(/payload|terminal|complete/i);
+        await expect(s.module.services.prepareImportFragment({ binding: s.binding, fragment: s.terminal(1, first.digest), fence: s.fence }))
+          .rejects.toMatchObject({ condition: 'incomplete', code: 'unavailable' });
         expect(await s.module.store.getAnnotationHead(s.scope, 'a')).toBeNull();
       });
     } finally { await s.fixture.close(); }
@@ -94,7 +95,7 @@ describe.skipIf(!pgEnabled)('coherent comments import and complete receipt recov
     try {
       await s.module.withContext(s.grant, async () => {
         const prepared = await prepareAll(s);
-        await expect(commitAll(s, prepared)).rejects.toThrow();
+        await expect(commitAll(s, prepared)).rejects.toMatchObject({ condition: 'conflict', code: 'idempotency-conflict' });
         expect(await s.module.store.getAnnotationHead(s.scope, 'a')).toBeNull();
       });
     } finally { await s.fixture.close(); }
@@ -106,7 +107,8 @@ describe.skipIf(!pgEnabled)('coherent comments import and complete receipt recov
         const binding = { ...s.binding, targets: [{ ...s.binding.targets[0], id: 'different-authorized-resource' }] };
         const bindingDigest = commentsImportBindingDigest(binding);
         const fragment = createCommentsFragment({ ...s.fragment(0, null).manifest, bindingDigest }, [s.records[0]]);
-        await expect(s.module.services.prepareImportFragment({ binding, fragment, fence: s.fence })).rejects.toThrow(/target|resource|denied/i);
+        await expect(s.module.services.prepareImportFragment({ binding, fragment, fence: s.fence }))
+          .rejects.toMatchObject({ condition: 'denied', code: 'denied' });
         expect(await s.module.store.getAnnotationHead(s.scope, 'a')).toBeNull();
       });
     } finally { await s.fixture.close(); }

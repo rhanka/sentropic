@@ -138,7 +138,7 @@
   - [x] m4/m5: public-root hook assertion observed RED; armFailure/beforePublish/failure state and unused alias removed. Test-side publication/response wrappers and actual async-checkpoint probes PASS: root suites 13 files / 44 tests.
   - [ ] m6: dedicated formatting-only atomic commits for overlong storage/Postgres/comments lines.
   - [ ] m7: cold typecheck PASS; root targets and real PG runner now use disposable workspaces. Remaining dependency helper cleanup follows.
-  - [ ] m8: discriminating binding/terminal/receipt-owner/export-root mutants and exact typed refusals.
+  - [x] m8: binding-derivation, terminal-root, receipt-owner SQL and captured-export-root mutants PASS with assertion-specific kill markers; import/receipt refusals assert exact typed conditions. Evidence: comments-transport-mutations.spec.ts 3/3 and comments-export-mutations.spec.ts 1/1.
   - [ ] m9: host receipts table, bounded 40001 callback retry and 50-operation recovery cap documented and qualified.
   - [ ] Final: source/PG/crash/installed gates, mutation record, push #684, fresh CI with restored OpenAI credit, report and stop without merging.
 
