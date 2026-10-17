@@ -2,6 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConsentFlow, createOffer, retentionChoice, viewAccess } from '$lib/session-content/state';
 import fr from '../../src/locales/fr.json';
 
+const challenge = () => ({ native: { protocol: 'h2a.session-content' as const, protocolVersion: 2 as const,
+  kind: 'confirmation-challenge' as const, challengeDigest: 'a'.repeat(64), challenge: {
+    id: crypto.randomUUID(), owner: { issuer: 'https://idp.example', subject: 'owner' },
+    project: { tenantId: 'tenant', workspaceId: 'workspace', workspaceIncarnation: 'wi', projectId: 'project' },
+    source: { workstationId: 'ws', bindingId: 'binding', bindingVersion: 1, sourceId: 'source',
+      sourceGeneration: 'source', sourceBootId: 'boot' }, clientId: 'confirmation',
+    purpose: 'share' as 'share' | 'amend', target: { kind: 'policy' as const, policyDigest: 'b'.repeat(64) },
+    random: 'r'.repeat(43), issuedAt: Date.now(), expiresAt: Date.now() + 60000,
+  } }, authorization: { url: 'https://idp.example/authorize', state: 's'.repeat(43) } });
+
 const scope = { ownerId: 'owner', workspaceId: 'workspace', projectId: 'project', sourceId: 'source' };
 
 describe('owner-controlled retention', () => {
@@ -21,7 +31,7 @@ describe('owner-controlled retention', () => {
   );
 
   it('should invalidate the exact prepared policy when a retention choice changes', async () => {
-    const prepare = vi.fn(async (offer) => ({ offer, expiresAt: Date.now() + 1000 }));
+    const prepare = vi.fn(async (offer) => ({ ...challenge(), offer }));
     const accept = vi.fn();
     const flow = new ConsentFlow(createOffer(scope), {
       prepare, accept, prove: vi.fn(), available: () => true,
