@@ -96,9 +96,7 @@ async function publish(world: World, html: string, key: string): Promise<{ id: s
 
 async function activate(world: World, host: string, actorId: string, artifactId: string) {
   const issued = await world.tickets.issue({ subjectId: actorId, artifactId });
-  const res = await world.handler.handle({
-    method: 'GET', host, path: '/', actorId, ticket: issued.ticketId,
-  });
+  const res = await world.handler.handle({ method: 'GET', host, path: '/', actorId, ticket: issued.ticketId });
   expect(res.status).toBe(200);
   const cookie = res.headers['set-cookie'];
   expect(cookie).toContain('__Host-artifacts_grant=');
