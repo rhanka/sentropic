@@ -1210,6 +1210,9 @@ export const sessionContentObjects = controlSchema.table(
  * control.session_content_reservations — quota reservations held before
  * upload and conditionally published after it (D2 Lot 2). Stale completions
  * become purge work; staging and pending-deletion bytes stay charged.
+ * N3: each reservation freezes its capture authorization tuple T
+ * (`project_revision`, `grant_version`, `retention_snapshot`); the commit
+ * rechecks T instead of reconstructing authority from the latest grant.
  */
 export const sessionContentReservations = controlSchema.table(
   'session_content_reservations',
@@ -1217,6 +1220,9 @@ export const sessionContentReservations = controlSchema.table(
     reservationId: text('reservation_id').primaryKey(),
     namespaceId: text('namespace_id').notNull(),
     sessionId: text('session_id').notNull(),
+    projectRevision: integer('project_revision').notNull(),
+    grantVersion: integer('grant_version').notNull(),
+    retentionSnapshot: jsonb('retention_snapshot').notNull(),
     channel: text('channel').notNull(),
     bytesRaw: bigint('bytes_raw', { mode: 'number' }).notNull().default(0),
     bytesEncoded: bigint('bytes_encoded', { mode: 'number' }).notNull().default(0),
