@@ -104,7 +104,7 @@ export interface AccountTransportCoordinator {
 export class AccountTransportAcquireError extends Error {
   constructor(
     message: string,
-    readonly code: 'no_account' | 'no_active_account',
+    readonly code: 'no_account' | 'no_active_account' | 'access-unavailable',
   ) {
     super(message);
     this.name = 'AccountTransportAcquireError';
