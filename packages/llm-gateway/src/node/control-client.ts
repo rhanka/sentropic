@@ -7,6 +7,8 @@
  * and qualification operations arrive in L4 on this same client.
  */
 import type { ControlTransport } from './control-server.js';
+import { readFile } from 'node:fs/promises';
+import { createSocketControlTransport } from './socket-control-transport.js';
 import type {
   AcquireSessionInput,
   IssuedSession,
@@ -30,12 +32,14 @@ export interface GatewayControlClient {
 }
 
 export const createGatewayControlClient = (options: {
-  transport: ControlTransport;
-  token: string;
+  transport?: ControlTransport;
+  token?: string;
   controlSocket?: string;
 }): GatewayControlClient => {
+  if (!options.transport && !options.controlSocket) throw new Error('private controlSocket or trusted transport required');
+  const transport = options.transport ?? createSocketControlTransport(options.controlSocket!);
   const call = async <T>(op: string, args: unknown): Promise<T> =>
-    (await options.transport.invoke(op, args, options.token)) as T;
+    (await transport.invoke(op, args, options.token ?? await readFile(`${options.controlSocket}.auth`, 'utf8'))) as T;
   return {
     acquireSession: (input) => call('acquireSession', input),
     revokeSession: (input) => call('revokeSession', input),
