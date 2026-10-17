@@ -120,35 +120,78 @@ export const completePgPurge = async (
           job.state = job.found ? 'complete' : 'failed';
           break;
         }
-      const id = payload ? decodePgText(row.id) : decodePgCounter(row.id); const target = row.target === null ? null : decodePgText(row.target);
-      const hidden = row.unit_id === null ? undefined : { scopeKey: store.key(grant.scope), unitId: decodePgText(row.unit_id) };
-      const covered = target !== null && await ancestors(core, session, tx.root, target, async (value) => value === job.target, hidden);
-      if (covered) {
-        job.found = true;
-        const held = await ancestors(core, session, tx.root, target!, async (value) => Boolean(await store.get(session, tx.root, 'hold', value)) || ((await store.get<{ count: number }>(session, tx.root, 'blob', value))?.count ?? 0) > 0, hidden);
-        if (held) { job.state = 'held'; break; }
-        const cost = row.cost === null ? 0 : Number(row.cost);
-        if (!Number.isSafeInteger(cost) || cost < 0 || cost > core.work().maxEncodedBytes) throw new StorageInvalidCommandError('purge item exceeds installed work budget');
-        if (cost + bytes > core.work().maxEncodedBytes) break;
-        if (!await store.get(session, tx.root, 'barrier', job.target)) tx.root = await store.put(session, tx.root, 'barrier', job.target, { reason: `purge:${intentId}`, createdAt: core.now() });
-        await session.execute({ text: `UPDATE ${store.schema}.${table} SET bytes=NULL${payload ? ',erased=true' : ''} WHERE scope_key=$1 AND id=$2::${payload ? 'text' : 'bigint'}`, values: [store.key(grant.scope), id] });
-        bytes += cost;
+        const id = payload ? decodePgText(row.id) : decodePgCounter(row.id);
+        const target = row.target === null ? null : decodePgText(row.target);
+        const hidden =
+          row.unit_id === null ? undefined : { scopeKey: store.key(grant.scope), unitId: decodePgText(row.unit_id) };
+        const covered =
+          target !== null &&
+          (await ancestors(core, session, tx.root, target, async (value) => value === job.target, hidden));
+        if (covered) {
+          job.found = true;
+          const held = await ancestors(
+            core,
+            session,
+            tx.root,
+            target!,
+            async (value) =>
+              Boolean(await store.get(session, tx.root, 'hold', value)) ||
+              ((await store.get<{ count: number }>(session, tx.root, 'blob', value))?.count ?? 0) > 0,
+            hidden,
+          );
+          if (held) {
+            job.state = 'held';
+            break;
+          }
+          const cost = row.cost === null ? 0 : Number(row.cost);
+          if (!Number.isSafeInteger(cost) || cost < 0 || cost > core.work().maxEncodedBytes)
+            throw new StorageInvalidCommandError('purge item exceeds installed work budget');
+          if (cost + bytes > core.work().maxEncodedBytes) break;
+          if (!(await store.get(session, tx.root, 'barrier', job.target)))
+            tx.root = await store.put(session, tx.root, 'barrier', job.target, {
+              reason: `purge:${intentId}`,
+              createdAt: core.now(),
+            });
+          await session.execute({
+            text: `UPDATE ${store.schema}.${table} SET bytes=NULL${payload ? ',erased=true' : ''} WHERE scope_key=$1 AND id=$2::${payload ? 'text' : 'bigint'}`,
+            values: [store.key(grant.scope), id],
+          });
+          bytes += cost;
+        }
+        job.position = id;
+        work += 1;
       }
-      job.position = id; work += 1;
-    }
-    if (job.state === 'complete') {
-      if (core.options.purgeFinalizer) {
-        const installed = await createPgInstalledContext(core, grant, tx);
-        await core.options.purgeFinalizer({ ...job, payloadDisposition: 'erased' }, installed.context); await installed.finish();
+      if (job.state === 'complete') {
+        if (core.options.purgeFinalizer) {
+          const installed = await createPgInstalledContext(core, grant, tx);
+          await core.options.purgeFinalizer({ ...job, payloadDisposition: 'erased' }, installed.context);
+          await installed.finish();
+        }
+        job = { ...job, outcomeId: core.id('purge-outcome'), payloadDisposition: 'erased' };
+        tx.root = await store.put(session, tx.root, 'disposed', job.target, true);
+        tx.root = await store.put(session, tx.root, 'purge-outcome', intentId, {
+          intentId,
+          outcomeId: job.outcomeId,
+          target: job.target,
+          disposition: 'erased',
+        });
+        tx.root = await store.put(session, tx.root, 'purge-notification', intentId, {
+          intentId,
+          outcomeId: job.outcomeId,
+        });
       }
-      job = { ...job, outcomeId: core.id('purge-outcome'), payloadDisposition: 'erased' };
-      tx.root = await store.put(session, tx.root, 'disposed', job.target, true);
-      tx.root = await store.put(session, tx.root, 'purge-outcome', intentId, { intentId, outcomeId: job.outcomeId, target: job.target, disposition: 'erased' });
-      tx.root = await store.put(session, tx.root, 'purge-notification', intentId, { intentId, outcomeId: job.outcomeId });
-    }
-    await authorization?.finish();
-    tx.root = await store.put(session, tx.root, 'purge-job', intentId, job); tx.count += 1;
-    return job;
-  })).value;
-  return { target: result.target, intentId: result.intentId, authorizedBy: result.authorizedBy, state: result.state, outcomeId: result.outcomeId, payloadDisposition: result.payloadDisposition };
+      await authorization?.finish();
+      tx.root = await store.put(session, tx.root, 'purge-job', intentId, job);
+      tx.count += 1;
+      return job;
+    })
+  ).value;
+  return {
+    target: result.target,
+    intentId: result.intentId,
+    authorizedBy: result.authorizedBy,
+    state: result.state,
+    outcomeId: result.outcomeId,
+    payloadDisposition: result.payloadDisposition,
+  };
 };
