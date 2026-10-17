@@ -8,6 +8,15 @@ import { expectCode, type Awaitable } from './atomic-corpus.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 
 export type LifecyclePurgePolicy = 'unconfigured' | 'optional' | 'required';
+export interface LifecyclePurgeView {
+  readonly state: 'pending' | 'held' | 'complete' | 'failed';
+  readonly outcomeId: string | null;
+  readonly payloadDisposition: 'retained' | 'erased' | null;
+}
+export interface LifecyclePurgeEvidence {
+  readonly outcomes: readonly { readonly intentId: string; readonly outcomeId: string }[];
+  readonly notifications: readonly { readonly intentId: string; readonly outcomeId: string }[];
+}
 
 export interface LifecycleCorpusStore {
   appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
@@ -17,12 +26,14 @@ export interface LifecycleCorpusStore {
   commitAtomic(unit: AtomicUnit): Awaitable<{ readonly commitId: string }>;
   configureLifecycle(policy: LifecyclePurgePolicy): Awaitable<void>;
   declareCoverage(parent: string, child: string): Awaitable<void>;
-  purgeProgress(intentId: string): Awaitable<{ readonly state: 'pending' | 'held' | 'complete' | 'failed'; readonly outcomeId: string | null }>;
+  purgeProgress(intentId: string): Awaitable<LifecyclePurgeView>;
   purgeJobIds(): Awaitable<readonly string[]>;
   holdTarget(target: string, reason: string): Awaitable<void>;
   releaseHold(target: string): Awaitable<void>;
-  completePurge(intentId: string): Awaitable<{ readonly state: 'pending' | 'held' | 'complete' | 'failed'; readonly outcomeId: string | null }>;
+  completePurge(intentId: string): Awaitable<LifecyclePurgeView>;
+  purgeEvidence(): Awaitable<LifecyclePurgeEvidence>;
   armPurgeFailure(): Awaitable<void>;
+  armPurgeResponseFailure(): Awaitable<void>;
   shareBlob(blobId: string, owner: string, bytes: string): Awaitable<void>;
   releaseBlob(blobId: string, owner: string): Awaitable<void>;
   readBlob(blobId: string): Awaitable<string | null>;
@@ -222,7 +233,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   await bound.commitAtomic({
     ...emptyUnit(),
     records: [{ key: 'rec-purge-1', bytes: { format: 'utf8', data: 'gone' }, contentHash: 'h-rec-1' }],
-    updates: [{ key: 'agg-purge-1', value: 1, baseVersion: null }],
+    updates: [{ key: 'agg-purge-1', version: 1, value: { format: 'utf8', data: 'aggregate-bytes' } }],
   });
   await bound.commitAtomic({
     ...emptyUnit(),
@@ -235,6 +246,8 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   const recJobsBefore = (await bound.purgeJobIds()).length;
   assert.equal((await bound.completePurge('intent-rec-1')).state, 'complete');
   assert.equal((await bound.completePurge('intent-agg-1')).state, 'complete');
+  assert.equal((await bound.purgeProgress('intent-rec-1')).payloadDisposition, 'retained', 'C14: a hidden retained record cannot claim physical erasure');
+  assert.equal((await bound.purgeProgress('intent-agg-1')).payloadDisposition, 'retained', 'C14: a hidden retained aggregate cannot claim physical erasure');
   await expectCode(async () => bound.readRecord('rec-purge-1'), 'denied', 'K2b-RED lifecycle: purged records deny reads');
   await expectCode(async () => bound.readAggregate('agg-purge-1'), 'denied', 'K2b-RED lifecycle: purged aggregates deny reads');
   assert.equal((await bound.purgeJobIds()).length, recJobsBefore);
@@ -257,4 +270,18 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   const resumedAgain = await bound.completePurge('intent-int-1');
   assert.equal(resumedAgain.outcomeId, resumed.outcomeId);
   await expectCode(async () => bound.readHead('interrupt-target'), 'denied', 'K2b-RED lifecycle: resumed completion disposes exactly once');
+
+  await bound.appendChain('response-target', { id: 'response', bytes: '{}', hash: 'response-hash' }, { kind: 'absent', allocation: '0' });
+  await bound.commitAtomic({ ...emptyUnit(), appends: [lifecycleAppend('life-response', 'response-tomb', 'response-tomb-hash')], purgeIntents: [{ target: 'response-target', intentId: 'intent-response', authorizedBy: 'owner-1' }] });
+  await bound.armPurgeResponseFailure();
+  await expectCode(() => bound.completePurge('intent-response'), 'invalid-command', 'C14: completion can commit before its response is interrupted');
+  const responseRebound = await hooks.rebind();
+  const committed = await responseRebound.purgeProgress('intent-response');
+  assert.equal(committed.state, 'complete', 'C14: response interruption preserves committed completion');
+  assert.equal((await responseRebound.completePurge('intent-response')).outcomeId, committed.outcomeId);
+  const evidence = await responseRebound.purgeEvidence();
+  for (const intentId of ['intent-held-1', 'intent-crash-1', 'intent-rec-1', 'intent-agg-1', 'intent-int-1', 'intent-response']) {
+    assert.equal(evidence.outcomes.filter((entry) => entry.intentId === intentId).length, 1, `C14: ${intentId} has exactly one canonical outcome`);
+    assert.equal(evidence.notifications.filter((entry) => entry.intentId === intentId).length, 1, `C14: ${intentId} has exactly one effective notification`);
+  }
 };
