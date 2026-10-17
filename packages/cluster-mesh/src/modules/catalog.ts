@@ -17,6 +17,8 @@ export const ARTIFACTS_RANGE = '>=0.1.0 <0.2.0';
 export const LLM_MESH_RANGE = '>=0.22.0 <0.28.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.22.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
+/** Human MCP OAuth selects the corrected scope/challenge and PRM contract. */
+export const MCP_OAUTH_AUTH_RANGE = '>=0.2.2 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
 /** Follows llm-gateway 0.19.6's declared optional peer range (parity with #674: admits auth-hono 0.16.0).
  * Spelled as a bounded interval: the minimal release-range parser has no `||`. */
@@ -76,7 +78,19 @@ const artifacts = (id: ClusterMeshProviderModuleId, subpath: string, requiredMem
   meshCoherence: false, authPeers: [],
 });
 
+const mcpAuth = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembers: readonly string[]): ProviderDescriptor => ({
+  id, owner: 'mcp-auth', packageName: '@sentropic/mcp-auth', subpath, range: MCP_OAUTH_AUTH_RANGE,
+  requiredMembers, namespace: '/mcp', meshCoherence: false,
+  authPeers: [
+    { packageName: '@sentropic/oauth-verify', subpath: '.', range: '>=0.1.0 <0.2.0', requiredMembers: ['verifyAccessToken'] },
+    { packageName: 'jose', subpath: '.', range: JOSE_RANGE, requiredMembers: ['jwtVerify'], resolveFrom: '@sentropic/oauth-verify' },
+    ...(subpath === './hono' ? [{ packageName: 'hono', subpath: '.', range: '^4.10.7', requiredMembers: ['Hono'] }] : []),
+  ],
+});
+
 export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, ProviderDescriptor>> = {
+  'mcp/auth': mcpAuth('mcp/auth', '.', ['createMcpAuth', 'McpAuthError', 'buildWwwAuthenticate']),
+  'mcp/auth/hono': mcpAuth('mcp/auth/hono', './hono', ['mcpAuthRoutes', 'requireMcpAuth', 'getMcpAuthContext']),
   'llm-mesh': mesh('llm-mesh', '.', ['createLlmMesh', 'createProviderRegistry'], '/llm-mesh'),
   'llm-mesh/facade': mesh('llm-mesh/facade', './facade', ['createLlmMeshFacade']),
   'llm-mesh/enrollment': mesh('llm-mesh/enrollment', './enrollment', []),
@@ -100,8 +114,6 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
 };
 
 const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; namespace?: ClusterMeshNamespace }>> = {
-  'mcp/auth': { owner: 'mcp-auth', namespace: '/mcp' },
-  'mcp/auth/hono': { owner: 'mcp-auth', namespace: '/mcp' },
   'mcp/platform': { owner: 'mcp-platform', namespace: '/mcp' },
   'mcp/platform/hono': { owner: 'mcp-platform', namespace: '/mcp' },
   'mcp/platform/experimental': { owner: 'mcp-platform' },
