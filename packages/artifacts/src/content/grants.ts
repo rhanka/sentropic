@@ -108,3 +108,82 @@ export function createHmacGrantSigner(options: {
     },
   };
 }
+
+export interface TicketRecord {
+  ticketId: string;
+  subjectId: string;
+  artifactId: string;
+  releaseId?: string;
+  expiresAt: number;
+}
+
+export interface TicketStore {
+  put(record: TicketRecord): Promise<void>;
+  peek(ticketId: string): Promise<TicketRecord | undefined>;
+  /** Atomically remove and return the record (single-use consumption). */
+  take(ticketId: string): Promise<TicketRecord | undefined>;
+  remove(ticketId: string): Promise<void>;
+}
+
+/** In-memory TicketStore double for unit tests. */
+export function createMemoryTicketStore(): TicketStore {
+  const tickets = new Map<string, TicketRecord>();
+  return {
+    put(record) { tickets.set(record.ticketId, record); return Promise.resolve(); },
+    peek(ticketId) { return Promise.resolve(tickets.get(ticketId)); },
+    take(ticketId) {
+      const record = tickets.get(ticketId);
+      tickets.delete(ticketId);
+      return Promise.resolve(record);
+    },
+    remove(ticketId) { tickets.delete(ticketId); return Promise.resolve(); },
+  };
+}
+
+export interface TicketService {
+  issue(input: GrantIssueInput): Promise<{ ticketId: string; expiresAt: number }>;
+  redeem(
+    ticketId: string,
+    expected: { subjectId: string; artifactId: string },
+  ): Promise<TicketRecord>;
+}
+
+/** Single-use bound tickets; mismatched attempts do not consume the ticket. */
+export function createTicketService(options: {
+  store: TicketStore;
+  clock?: () => number;
+  ids?: () => string;
+  ttlSeconds?: number;
+}): TicketService {
+  const clock = options.clock ?? (() => Date.now());
+  const ids = options.ids ?? (() => crypto.randomUUID());
+  const ttlMs = (options.ttlSeconds ?? CONTENT_TICKET_TTL_SECONDS) * 1000;
+  return {
+    async issue(input) {
+      const ticketId = ids();
+      const expiresAt = clock() + ttlMs;
+      await options.store.put({
+        ticketId,
+        subjectId: input.subjectId,
+        artifactId: input.artifactId,
+        ...(input.releaseId === undefined ? {} : { releaseId: input.releaseId }),
+        expiresAt,
+      });
+      return { ticketId, expiresAt };
+    },
+    async redeem(ticketId, expected) {
+      const record = await options.store.peek(ticketId);
+      if (record === undefined) throw new Error('invalid ticket');
+      if (clock() > record.expiresAt) {
+        await options.store.remove(ticketId);
+        throw new Error('ticket expired');
+      }
+      if (record.subjectId !== expected.subjectId || record.artifactId !== expected.artifactId) {
+        throw new Error('invalid ticket: binding mismatch');
+      }
+      const taken = await options.store.take(ticketId);
+      if (taken === undefined) throw new Error('invalid ticket');
+      return taken;
+    },
+  };
+}
