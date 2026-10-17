@@ -10,6 +10,7 @@ import {
   createHmacGrantSigner,
   createMemoryTicketStore,
   createTicketService,
+  type TicketBinding,
 } from '../src/content/grants.js';
 
 const T0 = Date.parse('2026-01-01T00:00:00.000Z');
@@ -89,7 +90,42 @@ describe('content grants', () => {
       .rejects.toThrow(/invalid ticket/);
   });
 
-  it('refuses expired tickets', async () => {
+  it.each([
+    { subjectId: 'mallory' }, { artifactId: 'other-artifact' },
+    { releaseId: 'other-release' }, { channel: 'pinned' as const },
+  ])('should refuse a mismatched binding without consuming the ticket: %j', async (mismatch) => {
+    const tickets = createTicketService({ store: createMemoryTicketStore() });
+    const issued = await tickets.issue(BINDING);
+    await expect(tickets.redeem(issued.ticketId, { ...BINDING, ...mismatch }))
+      .rejects.toThrow(/binding mismatch/);
+    await expect(tickets.redeem(issued.ticketId, BINDING)).resolves.toMatchObject(BINDING);
+  });
+
+  it.each([
+    { subjectId: '' }, { artifactId: '' }, { releaseId: undefined }, { releaseId: '' },
+    { channel: undefined }, { channel: 'other' },
+  ])('should refuse to issue a ticket with an incomplete binding: %j', async (invalid) => {
+    const tickets = createTicketService({ store: createMemoryTicketStore() });
+    await expect(tickets.issue({ ...BINDING, ...invalid } as unknown as TicketBinding))
+      .rejects.toThrow(/invalid ticket: binding/);
+  });
+
+  it.each([0, -1, NaN, Infinity])('should refuse a non-expiring ticket lifetime: %s', (ttlSeconds) => {
+    expect(() => createTicketService({ store: createMemoryTicketStore(), ttlSeconds }))
+      .toThrow(/invalid ticket: lifetime/);
+  });
+
+  it('should redeem a ticket only once when requests race', async () => {
+    const tickets = createTicketService({ store: createMemoryTicketStore() });
+    const issued = await tickets.issue(BINDING);
+    const results = await Promise.allSettled([
+      tickets.redeem(issued.ticketId, BINDING), tickets.redeem(issued.ticketId, BINDING),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+  });
+
+  it.each([0, 1])('should refuse expired tickets at expiry plus %s ms', async (offset) => {
     const now = { t: T0 };
     const tickets = createTicketService({
       store: createMemoryTicketStore(),
@@ -97,8 +133,11 @@ describe('content grants', () => {
       ids: () => 'ticket-x',
     });
     const issued = await tickets.issue(BINDING);
-    now.t = issued.expiresAt + 1;
+    expect(issued.expiresAt).toBe(T0 + 120_000);
+    now.t = issued.expiresAt + offset;
     await expect(tickets.redeem(issued.ticketId, BINDING))
       .rejects.toThrow(/ticket expired/);
+    now.t = T0;
+    await expect(tickets.redeem(issued.ticketId, BINDING)).rejects.toThrow(/invalid ticket/);
   });
 });

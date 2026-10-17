@@ -109,6 +109,44 @@ async function activate(
 const get = (world: World, input: ContentRequest) => world.handler.handle(input);
 
 describe('content serving e2e', () => {
+  it.each(['stable', 'pinned'] as const)('should refuse a %s ticket on the other channel', async (channel) => {
+    const world = makeWorld();
+    const v1 = await publish(world, V1, 'p-1');
+    const stable = `${v1.id}.${BASE}`;
+    const pinned = `${v1.releaseId}.pinned.${BASE}`;
+    const issued = await world.tickets.issue({
+      subjectId: FARID, artifactId: v1.id, releaseId: v1.releaseId, channel,
+    });
+    const request = { method: 'GET', path: '/', actorId: FARID, ticket: issued.ticketId };
+    const refused = await get(world, { ...request, host: channel === 'stable' ? pinned : stable });
+    expect(refused.status).toBe(401);
+    expect(refused.headers['set-cookie']).toBeUndefined();
+    const correct = { ...request, host: channel === 'stable' ? stable : pinned };
+    const activated = await get(world, correct);
+    expect(activated.status).toBe(200);
+    expect(activated.headers['set-cookie']).toContain('__Host-artifacts_grant=');
+    expect((await get(world, correct)).status).toBe(401);
+  });
+
+  it('should refuse another pinned release without consuming the r1 ticket', async () => {
+    const world = makeWorld();
+    const v1 = await publish(world, V1, 'p-1');
+    const issued = await world.tickets.issue({
+      subjectId: FARID, artifactId: v1.id, releaseId: v1.releaseId, channel: 'pinned',
+    });
+    const v2 = await publish(world, V2, 'p-2');
+    const request = { method: 'GET', path: '/', actorId: FARID, ticket: issued.ticketId };
+    const refused = await get(world, { ...request, host: `${v2.releaseId}.pinned.${BASE}` });
+    expect(refused.status).toBe(401);
+    expect(refused.headers['set-cookie']).toBeUndefined();
+    const host = `${v1.releaseId}.pinned.${BASE}`;
+    const activated = await get(world, { ...request, host });
+    expect(activated.status).toBe(200);
+    const served = await get(world, { method: 'GET', path: '/', host, cookie: activated.headers['set-cookie'] });
+    expect(served.status).toBe(200);
+    expect(text(served.bytes)).toBe(V1);
+  });
+
   it('should refuse an r1 activation ticket when the stable origin now serves r2', async () => {
     const world = makeWorld();
     const v1 = await publish(world, V1, 'p-1');
