@@ -68,7 +68,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [ ] `attention` BRCM2-EX7 — CI's exact Cluster Mesh candidate/post-publication tuple assertion omits the newly required optional comments peer. Update its expected tuple to the already qualified comments@0.3.0 configuration. Impact: one workflow wiring regression test; production manifests/guard policy unchanged. Rollback: revert the assertion with the corresponding CI tuple change.
+- [x] `acknowledge` BRCM2-EX7 — CI's exact Cluster Mesh candidate/post-publication tuple assertion omitted the newly required optional comments peer. Updated its expected tuple to the already qualified comments@0.3.0 configuration. Impact: one workflow wiring regression test; production manifests/guard policy unchanged. Rollback: revert the assertion with the corresponding CI tuple change.
 - [x] `acknowledge` BRCM2-EX6 — packed qualification exposes a hard-coded inventory of eight foreign provider proxy leaves; the new local comments leaf requires an explicit ninth local-export assertion. Also document the delivered storage/comments exports in the shipped README. Impact: one packaging test and package documentation; no runtime contract changes. Rollback: revert these two file changes with the new comments export.
 - [ ] `attention` BRCM2-PORT17 — nested binding revalidation now joins the active same-scope PG session and remains attached to its final revalidation set. This removes a hidden second-connection requirement without weakening issuance, revocation, lifetime or scope checks; installed page reads also honor configured work maxima. Co-review pending.
 - [ ] `attention` BRCM2-PORT16 — installed modules can read bounded pages through the existing kernel reader/session; comments authorization and exact captured boundaries remain module-owned. No caller SQL or read-enforcement flag is accepted. Co-review pending.
@@ -245,7 +245,7 @@
   - [x] Documentary C0 assertions follow the executable packaged-oracle proof while preserving absent M1 public conformance export. Historical review provenance is unchanged.
 
 - [ ] **Lot N — Final validation**
-  - [ ] CI run 39023730235 exposed the stale exact peer-tuple assertion in `publishable-ci-wiring.test.mjs`; reproduced locally and updated its shared candidate/post-publication/bootstrap expectation with comments@0.3.0 (BRCM2-EX7).
+  - [x] CI run 39023730235 exposed the stale exact peer-tuple assertion in `publishable-ci-wiring.test.mjs`; reproduced locally and updated its shared candidate/post-publication/bootstrap expectation with comments@0.3.0. Both `test-publishable-manifests` and `test-qualify-published-install` now PASS (BRCM2-EX7; RTK `10f2a27c5493`).
   - [x] Typecheck/lint PASS; source package suite 93 files / 805 tests PASS, 48 files / 106 explicit PG/crash/installed tests skipped only here and qualified separately below (RTK `24fdf710d026`).
   - [x] Real neutral PG 26 files / 47 tests PASS; real comments PG 25 files / 104 tests PASS; both independent server-SIGKILL phases PASS (RTK `e23b89c8a2b4`).
   - [x] Existing packed lazy/types/bundlers/consumer-topology matrix 10 files / 63 tests PASS (RTK `0bb04bd0b972`).
@@ -257,6 +257,6 @@
   - [x] Mechanical branch C1 and whole-branch scope C2 PASS; `git diff --check` PASS; frozen comments M1, root Makefile/Compose, app and live-generation paths unchanged; linear history has zero merge commits.
   - [x] Isolated PostgreSQL/network/volume removed; `make down ps API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` confirms no remaining branch Compose service.
   - [x] API/UI/E2E files unchanged; package-local source/PG/installed acceptance completes synthetic host UAT. Actual Immo data/cutover and delivery remain host/owner work.
-  - [ ] Final gate step 1: update draft PR #684 with this exact BRANCH.md body, push the consolidated linear branch and preserve supersession links from #666/#669/#670/#671/#667.
+  - [x] Final gate step 1: draft PR #684 uses this exact BRANCH.md body; the consolidated linear branch is pushed and supersession links from #666/#669/#670/#671/#667 are preserved. Subsequent corrections refresh the same PR/body.
   - [ ] Final gate step 2: verify completed CI on the pushed candidate and resolve any failure; record the final run/result in `.h2a/build/cm_comments_m2_report.md`.
   - [ ] Final gate step 3: storage co-owner review, BRANCH.md removal, merge/publication and actual delivery remain owner actions. This builder stops after its final validation/handoff and never performs them.
