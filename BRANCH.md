@@ -122,7 +122,8 @@
   - [x] MINEUR-4: raw tombstone names `thread-2`; its covered child remains readable; B5 installs a barrier from the raw tombstone and dies at that exact assertion.
     - [x] Relaunch evidence: `make test-cluster-mesh SCOPE=tests/storage/profile-mutations.spec.ts API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` passes 40/40, including B5.
   - [ ] MINEUR-5: fence rotation hook (superseded fence cannot publish/abort), nested buffer alias via record bytes reader, hidden audit reader, deliberate `unitId` collision across scopes.
-    - [ ] RED shared probes: `tests/storage/staged-integrity-corpus.ts` and `staged-integrity.spec.ts` force a colliding recipient id with its valid digest, inspect hidden audit membership, mutate nested bytes and rotate the current fence.
+    - [x] RED shared probes: `tests/storage/staged-integrity-corpus.ts` and `staged-integrity.spec.ts` force a colliding recipient id with its valid digest, inspect hidden audit membership, mutate nested bytes and rotate the current fence.
+    - [x] Reference checks full-scope/owner handles and the current scope fence at every staged mutation; audit membership is copied and published with canonical effects. The two shared probes now pass; discriminating mutants follow.
   - [ ] MINEUR-6: replay ports gain `fence`, `pauseConsumer`, `maintain` authority; refusal cases for unauthorized principal, stale fence, wrong incarnation; `c-stall` consumes the snapshot then checks poison redelivery; mutant "resync clears stall".
   - [ ] MINEUR-7: snapshot returns root state (heads/indexes) not journal events; captured roots authenticated; external journal scoped per stream.
   - [ ] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
