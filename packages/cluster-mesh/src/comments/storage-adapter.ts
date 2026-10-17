@@ -51,7 +51,8 @@ export class CommentsAdapter {
       const records: T[] = []; let cursor: string | null = null;
       do {
         const page = await this.page(scope, selection, { limit: 100, cursor });
-        if (page.outcome !== 'page') throw new CanonicalCommandError('denied', 'Complete canonical chain is unavailable');
+        const advancing = page.records.length > 0 && page.nextCursor !== null && page.nextCursor !== cursor;
+        if (page.outcome === 'inaccessible' || (page.outcome === 'incomplete' && !advancing)) throw new CanonicalCommandError('denied', 'Complete canonical chain is unavailable');
         records.push(...page.records as T[]); cursor = page.nextCursor;
       } while (cursor !== null);
       return records;
