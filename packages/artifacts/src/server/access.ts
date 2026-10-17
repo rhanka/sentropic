@@ -29,6 +29,8 @@ export interface ArtifactAcl {
 export interface AclStore {
   getArtifactAcl(artifactId: string): Promise<ArtifactAcl | undefined>;
   putArtifactAcl(artifactId: string, acl: ArtifactAcl): Promise<void>;
+  /** All known artifact IDs (stable creation order); filter by ACL first. */
+  listArtifactIds(): Promise<string[]>;
 }
 
 /** In-memory AclStore double for unit tests. */
@@ -46,6 +48,9 @@ export function createMemoryAclStore(): AclStore {
     putArtifactAcl(artifactId: string, acl: ArtifactAcl): Promise<void> {
       acls.set(artifactId, { ...acl, grants: acl.grants.map((g) => ({ ...g })) });
       return Promise.resolve();
+    },
+    listArtifactIds(): Promise<string[]> {
+      return Promise.resolve([...acls.keys()]);
     },
   };
 }
