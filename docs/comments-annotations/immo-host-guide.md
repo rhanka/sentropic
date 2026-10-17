@@ -2,6 +2,38 @@
 
 The candidate pair is `@sentropic/cluster-mesh@0.19.0` and the unchanged optional peer `@sentropic/comments@0.3.0`. Keep the exact archive and installed lock with the [qualification evidence](evidence/installed-module.md). Publication and real-data delivery are separate owner actions.
 
+## Schema verification and operator re-attestation
+
+Fingerprints cover tables and functions created by the selected package assets, including their columns,
+constraints and indexes. Shared host schemas are supported: unrelated host tables/functions are excluded.
+Changes to module-owned objects must come from reviewed package assets. Startup verifies receipts and DDL;
+it never runs migrations or re-attests automatically. A mismatch raises exported `PgSchemaDriftError`
+with `condition: 'schema-drift'`, `expectedFingerprint` and `actualFingerprint`.
+
+After every host migration, run `verifyPgInstallation` before reopening application traffic. Unrelated
+DDL requires no receipt change. Restore unexpected module drift or apply a reviewed package migration.
+
+For a PostgreSQL major upgrade, keep a backup of the database and host receipts, stop writers, acquire
+the host migration lock, and verify on the source server before upgrading. Verify again on the target
+major: PostgreSQL may change the textual rendering of catalog definitions. If verification differs:
+
+1. Install the exact same package assets and layout names into a clean reference database on the target
+   PostgreSQL major, through `applyPgMigrations`. Its final receipt supplies the `referenceFingerprint`.
+2. Compare the upgraded module DDL with that reference. Resolve actual drift before proceeding. Never
+   copy the failing database's `actualFingerprint` into the approval as a substitute for this reference.
+3. In one host-owned serializable transaction under the migration lock, call `reattestPgInstallation`
+   with `previousFingerprint` from the saved latest receipt, the independently obtained
+   `referenceFingerprint`, `hostMigrationId`, 64-character SHA-256 `hostChecksum`, and an audit `reason`.
+4. Implement optional `PgHostHistory.reattest(session, attestation)` to compare-and-swap the latest
+   receipt fingerprint and append the full `PgSchemaAttestation` to the host's append-only operator audit
+   in that same session. Preserve every original migration identity, checksum and version. A failed CAS
+   must throw. The module re-verifies the persisted result before the transaction can commit.
+5. Reopen the module and exercise a saved M1 page cursor using the existing host secret before traffic.
+   On failure, roll back the host transaction; use the database backup for an upgrade rollback.
+
+`postgres-reattest.spec.ts` exercises changed historical fingerprints, wrong previous approvals,
+successful target-reference attestation, unrelated host DDL and refusal of actual module table drift.
+
 ## Inject execution and migrate through the host
 
 Import `createCommentsModule` and `createCommentsPostgresStorage` from `@sentropic/cluster-mesh/comments`, and `loadPgAssets`, `applyPgMigrations` from `@sentropic/cluster-mesh/storage/postgres`.
