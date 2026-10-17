@@ -63,6 +63,19 @@
         "cluster-mesh-pg/004-queries@1"
       ],
       "checksum": "f8fda33a8f9c167f53be412977418da063c1e14c0ed7f3d8a96a9feeba01fa5f"
+    },
+    {
+      "id": "cluster-mesh-pg/006-staged-coverage@1",
+      "file": "006-staged-coverage.sql",
+      "order": 6,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 5,
+      "toVersion": 6,
+      "requires": [
+        "cluster-mesh-pg/005-cleanup@1"
+      ],
+      "checksum": "82b4f485399fd195eaf5178144e23f6d6b26dd36010d78b05816b8e96079d75f"
     }
   ]
 }
