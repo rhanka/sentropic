@@ -9,6 +9,7 @@
 - [x] Make-only container tooling; no image rebuild unless required by the existing target; never merge or publish.
 - [x] Dedicated `ENV=test-artifacts-fl-act`, always last; no application services or exposed ports required by unit/content tests.
 - [x] Preserve root dev/UAT and unrelated work; English source/docs; selective staging and `make commit`; commits at most 150 lines.
+- [x] Preserve consumer ranges and locks: no rebase or Post-Rebase Gate required; the existing `npm ci` target accepts the manifest-only version bump.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**: `packages/artifacts/**`, `BRANCH.md`, `package-lock.json` (only the required artifacts workspace version update).
@@ -22,6 +23,7 @@
 - [x] FL-ACT-NPM: `acknowledge` — container `npm view @sentropic/artifacts version` returned public-registry E404; retain packet's explicit 0.1.1 candidate; owner: branch agent, 2026-10-17.
 - [x] FL-ACT-REVIEW: `attention` — consensus selection failed because exact author model/effort are unattested; no peers dispatched or consensus claimed; dossier: `.h2a/build/artifacts_fl_act_review.md`; owner: branch agent, 2026-10-17; requires author metadata before independent consensus review.
 - [x] FL-ACT-CHECK: `acknowledge` — concurrent package install and harness compilation caused TS2688 during one scope check; serialized retry passed; owner: branch agent, 2026-10-17.
+- [x] FL-ACT-LOCK: `acknowledge` — restored the unnecessary lock workspace-version edit after rechecking the packet; existing `make test-artifacts ENV=test-artifacts-fl-act` passed with the original lock (128 tests); final diff leaves all locks unchanged; owner: branch agent, 2026-10-17.
 
 ## AI Flaky tests
 - [x] No AI tests or timeout changes; deterministic in-memory tests only for the affected activation surface.
@@ -45,7 +47,7 @@
   - [x] Update `packages/artifacts/src/content/grants.ts`: mandatory release/channel binding at issuance and redemption; subject/artifact checks and single-use semantics preserved; expiry refused at its boundary.
   - [x] Update `packages/artifacts/src/content/handler.ts`: redeem against resolved release and origin channel.
   - [x] Update existing `packages/artifacts/tests/content.e2e.test.ts` activation helper to issue explicit release/channel tickets.
-  - [x] Query published npm version through container Make tooling (E404); bump `packages/artifacts/package.json` from 0.1.0 to 0.1.1 and synchronize only its lock workspace version.
+  - [x] Query published npm version through container Make tooling (E404); bump `packages/artifacts/package.json` from 0.1.0 to 0.1.1; no consumer range or lock change required (FL-ACT-LOCK).
   - [x] GREEN gate: `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act` (2 passed).
   - [x] Commit fix after `make scope-check ENV=test-artifacts-fl-act`.
 - [x] **Lot 2 — Binding negatives and automated UAT**
@@ -66,7 +68,7 @@
   - [x] `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act` passed (5 content journey tests).
   - [x] Database/S3 integration and application/browser suites are outside the unchanged storage/UI surfaces; CI runs required selected gates.
   - [x] Review exact diff, package version and scope; record review evidence or any unavailable review prerequisites (FL-ACT-REVIEW); mechanical scope passed, no exceptions.
-  - [ ] Push `fix/artifacts-activation-binding` without merging/publishing; create PR using this file as body; post a 3–6 step plan comment.
+  - [x] Push `fix/artifacts-activation-binding` without merging/publishing; create PR #688 using this file as body; post a 3–6 step plan comment.
   - [ ] Watch branch CI to completion and resolve failures within authorized scope.
   - [x] `make down ps ENV=test-artifacts-fl-act` passed with no remaining services; retain BRANCH.md because merging is forbidden.
   - [ ] Write `.h2a/build/artifacts_fl_act_report.md`: changes, RED/GREEN, checks/CI, feedback, risks, scope and read set.
