@@ -11,7 +11,7 @@ import { pgJsonBytes } from './roots.js';
 import { decodePgJson, decodePgUtf8 } from './codec.js';
 import type { PgChain } from './effects.js';
 import type { KernelTransaction } from '../scope-runtime.js';
-import { beginPgStaged, stagePgFragment } from './staged.js';
+import { beginPgStaged, stagePgFragment, inspectPgStaged } from './staged.js';
 import { abortPgStaged, commitPgStaged, sealPgStep, type PgSealRequest } from './seals.js';
 import type { RootStageInput } from '../staged-operations.js';
 import type { StagedBeginInput } from '../staged-units.js';
@@ -82,6 +82,7 @@ export class PgScoped {
   readRecord(key: string) { return this.#read((view) => view.readRecord(key)); }
   readAggregate(key: string) { return this.#read((view) => view.readAggregate(key)); }
   beginStaged(input: StagedBeginInput) { return beginPgStaged(this.#core, this.#grant, input); }
+  inspectStaged(key: string) { return inspectPgStaged(this.#core, this.#grant, key); }
   configureLifecycle(policy: PurgePolicy) { return configurePgLifecycle(this.#core, this.#grant, policy); }
   declareCoverage(parent: string, child: string) { return declarePgCoverage(this.#core, this.#grant, parent, child); }
   holdTarget(target: string, reason: string | null) { return holdPgTarget(this.#core, this.#grant, target, reason); }
