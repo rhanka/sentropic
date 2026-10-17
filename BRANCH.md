@@ -114,15 +114,16 @@
     - [x] Reference recomputes digests on every ordinal, roots at seal, and dependency closure over base plus earlier fragments; mutants S14 (new-ordinal digest trust) and S15 (closure blind) killed at their targeted assertions; S2/S7 kept faithful (gap mutant recomputes its digest; buffer mutation moved after seal so roots do not mask it).
     - [x] Evidence: `make test-cluster-mesh ... ENV=test-cm-comments-m2` 62 files pass, 3 fail (the 9 carried K4 tests, unchanged, Lot 2).
   - [x] MAJEUR-N1: C01 case with a self-consistent but wrong digest on a NEW ordinal and a changed-dependency-only retry; mutant "trust caller digest on new ordinal" killed at its targeted assertion.
-  - [ ] MINEUR-1: read corpus accepts `null` or a fitting recovery cursor on empty `incomplete` pages; cross-validate missing-head, disposed-chain and empty pages through `validateReadPage`.
-  - [ ] MINEUR-2: M18 mutant measures the candidate cursor instead of the effective cursor (no budget inflation).
+  - [x] MINEUR-1: read corpus accepts `null` or a fitting recovery cursor on empty `incomplete` pages; cross-validate missing-head, disposed-chain and empty pages through `validateReadPage`.
+  - [x] MINEUR-2: M18 mutant measures the candidate cursor instead of the effective cursor (no budget inflation).
+    - [x] Evidence: `assertEmptyIncomplete` (null or fitting cursor plus explicit recovery of the exact remaining records), `validateReadPage` on disposed/missing/floor pages, `RecoveryCursorStore` conformance test in `reference.spec.ts`; M18 now overrides `admissionCursor` and dies at "the exhausting record is admitted with its effective null cursor" (final E/E-1 envelope case); `reference.spec.ts` 36/36, `mutations.spec.ts` 19/19, `kernel.spec.ts` 56/56.
   - [ ] MINEUR-3: mutant regexes pinned to one exact assertion each (M1-M16, S1, B1/E1).
   - [ ] MINEUR-4: raw tombstone names `thread-2`; assertion "readable"; mutant "raw tombstone installs barrier".
   - [ ] MINEUR-5: fence rotation hook (superseded fence cannot publish/abort), nested buffer alias via record bytes reader, hidden audit reader, deliberate `unitId` collision across scopes.
   - [ ] MINEUR-6: replay ports gain `fence`, `pauseConsumer`, `maintain` authority; refusal cases for unauthorized principal, stale fence, wrong incarnation; `c-stall` consumes the snapshot then checks poison redelivery; mutant "resync clears stall".
   - [ ] MINEUR-7: snapshot returns root state (heads/indexes) not journal events; captured roots authenticated; external journal scoped per stream.
   - [ ] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
-  - [ ] MINEUR-9/10: fix contradictory `read-corpus.ts` header; corrections recorded here with post-rebase SHAs.
+  - [ ] MINEUR-9/10: fix contradictory `read-corpus.ts` header (done with MINEUR-1); corrections recorded here with post-rebase SHAs.
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` + `make lint-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
     - [ ] **Package tests (cluster-mesh, Vitest)**

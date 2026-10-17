@@ -277,12 +277,10 @@ class FrozenResumeCursorStore extends TestReferenceStore {
 class CandidateCursorBudgetStore extends TestReferenceStore {
   override bind(grant: Parameters<TestReferenceStore['bind']>[0]): TestBoundStore {
     const bound = super.bind(grant);
-    const inner = bound.readPage.bind(bound);
-    bound.readPage = async (chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) => {
-      // MIN-1 mutant: measure admission as a 'page' (6 bytes smaller than
-      // 'incomplete'), restoring the pre-R3 candidate-cursor accounting.
-      return inner(chainId, limit, cursor, maxEncodedBytes + 6);
-    };
+    // M18 (K2b r3 MINEUR-2): admission measures the candidate cursor
+    // {position: seq} instead of the effective null cursor of the exhausting
+    // record; no budget inflation.
+    bound.admissionCursor = (_isLast, seq, boundHead) => (boundHead === null ? null : { position: seq, head: boundHead });
     return bound;
   }
 }
@@ -370,7 +368,7 @@ export const MUTATION_RECORDS: readonly MutationRecord[] = [
   { id: 'M15-drop-unsupported-effects', brokenSemantic: 'atomic commits silently drop unsupported effects', corpus: 'atomic', verdict: 'killed' },
   { id: 'M16-accept-stale-update', brokenSemantic: 'atomic commits accept stale aggregate versions', corpus: 'atomic', verdict: 'killed' },
   { id: 'M17-frozen-resume-cursor', brokenSemantic: 'over-budget pages freeze the resume cursor past the first undelivered record', corpus: 'read', verdict: 'killed' },
-  { id: 'M18-candidate-cursor-budget', brokenSemantic: "read pages measure admission as 'page' (6 bytes smaller than 'incomplete')", corpus: 'read', verdict: 'killed' },
+  { id: 'M18-candidate-cursor-budget', brokenSemantic: 'read pages admit the exhausting record with the candidate cursor instead of its effective null cursor', corpus: 'read', verdict: 'killed' },
 ];
 
 describe('K2a discriminating mutations', () => {
@@ -496,7 +494,7 @@ describe('K2a discriminating mutations', () => {
   it('M18-candidate-cursor-budget is killed by the read budget corpus', async () => {
     const { bound } = bindFresh(new CandidateCursorBudgetStore('comments'));
     await expect(runReadCursorBudgetCorpus(bound)).rejects.toThrow(
-      /one byte under the observed encoding refuses the page/,
+      /the exhausting record is admitted with its effective null cursor/,
     );
   });
 

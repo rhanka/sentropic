@@ -1,6 +1,5 @@
-// Shared read corpus (L3a v4.1 frozen §8): immutable boundaries without
-// clock-only expiry, stable exact heads, page bounds and explicit
-// unavailability. Backend-agnostic: cursors are opaque values minted by the
+// Shared read corpus (L3a v4.1 frozen §8): retained head boundaries, page
+// bounds and explicit unavailability. Backend-agnostic: cursors are opaque values minted by the
 // backend and never inspected or forged here; every refusal asserts a typed
 // code or page outcome, never a reference message (§5.2).
 // Cursor integrity binding (module/scope/incarnation/selection binding,
@@ -10,6 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { expectCode, type Awaitable } from './atomic-corpus.js';
+import { validateReadPage, type ReadPage } from '../../src/storage/readers.js';
 
 export type ReadCursor = unknown;
 
@@ -27,6 +27,36 @@ export interface ReadCorpusStore {
 }
 
 const hashes = (records: readonly ReadCorpusRecord[]): readonly string[] => records.map((entry) => entry.hash);
+
+// N10: every response, including empty ones, validates against the shared
+// page validator for its own budget.
+const assertValidPage = (page: unknown, maxEncodedBytes: number, label: string): void => {
+  const verdict = validateReadPage(page as ReadPage, { maxRecords: 1000, maxEncodedBytes });
+  assert.ok(verdict.ok, `${label}: ${verdict.errors.join("; ")}`);
+};
+
+// K2b r3 MINEUR-1 (N10): an empty incomplete page may carry null or a fitting
+// recovery cursor; a carried cursor must explicitly recover the exact
+// remaining records from its retained position.
+const assertEmptyIncomplete = async (
+  bound: ReadCorpusStore,
+  chainId: string,
+  page: { readonly outcome: string; readonly records: readonly ReadCorpusRecord[]; readonly nextCursor: ReadCursor },
+  maxEncodedBytes: number,
+  remaining: readonly string[],
+  label: string,
+): Promise<void> => {
+  assert.equal(page.outcome, 'incomplete', `${label}: an empty truncated page is incomplete`);
+  assert.equal(page.records.length, 0);
+  assertValidPage(page, maxEncodedBytes, label);
+  if (page.nextCursor === null) return;
+  const recovered = await bound.readPage(chainId, 1000, page.nextCursor, 1 << 20);
+  assert.deepEqual(
+    recovered.records.map((entry) => entry.id),
+    remaining,
+    `${label}: an explicit recovery from the retained position delivers the exact remaining records`,
+  );
+};
 
 export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
   for (let n = 1; n <= 5; n += 1) {
@@ -127,6 +157,15 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
   assert.equal(missing.outcome, 'page');
   assert.equal(missing.records.length, 0);
   assert.equal(missing.nextCursor, null);
+  for (const [label, page] of [
+    ['disposed with a held cursor', unavailable],
+    ['disposed fresh', fresh],
+    ['missing chain', missing],
+    ['budget floor', exhausted],
+    ['tiny', encodedTiny],
+  ] as const) {
+    assertValidPage(page, label === 'budget floor' ? 1 : label === 'tiny' ? 2 : 4096, `K2b-RED reads: ${label} page validates`);
+  }
 };
 
 // R3 remainder (§8.4, L3a v4.1 frozen): the returned cursor is part of the
@@ -165,12 +204,7 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
     'incomplete',
     'K2b-RED reads: one byte under the observed encoding refuses the page',
   );
-  assert.equal(tight.records.length, 0);
-  assert.equal(
-    tight.nextCursor,
-    null,
-    'K2b-RED reads: an empty incomplete page carries no retained cursor',
-  );
+  await assertEmptyIncomplete(bound, chainId, tight, exact - 1, ['r9', 'r10'], 'K2b-RED reads: E-1 empty incomplete page');
 
   const resumed = await bound.readPage(chainId, 1, first.nextCursor, exact);
   assert.equal(resumed.outcome, 'page');
@@ -192,6 +226,18 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
     ['r10'],
   );
   assert.equal(tail.nextCursor, null);
+
+  // M18 target (K2b r3 MINEUR-2): the exhausting record is measured with its
+  // actual null cursor, so its observed final envelope E is admitted.
+  const finalExact = Buffer.byteLength(JSON.stringify({ outcome: tail.outcome, records: tail.records, nextCursor: tail.nextCursor }), 'utf8');
+  const finalFit = await bound.readPage(chainId, 1, resumed.nextCursor, finalExact);
+  assert.deepEqual(
+    { outcome: finalFit.outcome, ids: finalFit.records.map((entry) => entry.id), nextCursor: finalFit.nextCursor },
+    { outcome: 'page', ids: ['r10'], nextCursor: null },
+    'K2b-RED reads: the exhausting record is admitted with its effective null cursor',
+  );
+  const finalTight = await bound.readPage(chainId, 1, resumed.nextCursor, finalExact - 1);
+  await assertEmptyIncomplete(bound, chainId, finalTight, finalExact - 1, ['r10'], 'K2b-RED reads: final E-1 empty incomplete page');
 
   await runReadResumeCorpus(bound);
 };
@@ -233,16 +279,7 @@ export const runReadResumeCorpus = async (bound: ReadCorpusStore): Promise<void>
         `K2b-RED reads: budget ${budget} limit ${limit} yields a typed page`,
       );
       if (first.records.length === 0) {
-        assert.equal(
-          first.outcome,
-          'incomplete',
-          `K2b-RED reads: budget ${budget} limit ${limit} with no records is incomplete`,
-        );
-        assert.equal(
-          first.nextCursor,
-          null,
-          'K2b-RED reads: an empty incomplete page carries no retained cursor',
-        );
+        await assertEmptyIncomplete(bound, chainId, first, budget, ids, `K2b-RED reads: budget ${budget} limit ${limit} with no records`);
         continue;
       }
       if (first.records.length >= 3) continue;

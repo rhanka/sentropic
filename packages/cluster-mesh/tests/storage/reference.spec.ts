@@ -18,6 +18,24 @@ import { TestReferenceStore } from './reference-store.js';
 
 const scope = { tenantId: 'tenant-a', workspaceId: 'workspace-a' };
 
+class RecoveryCursorStore extends TestReferenceStore {
+  carried = 0;
+
+  override bind(grant: Parameters<TestReferenceStore['bind']>[0]): ReturnType<TestReferenceStore['bind']> {
+    const bound = super.bind(grant);
+    const inner = bound.readPage.bind(bound);
+    bound.readPage = (chainId, limit, cursor, maxEncodedBytes) => {
+      const page = inner(chainId, limit, cursor, maxEncodedBytes);
+      if (page.outcome !== 'incomplete' || page.records.length > 0 || page.nextCursor !== null || cursor === null) return page;
+      const carried = { ...page, nextCursor: cursor as typeof page.nextCursor };
+      if (Buffer.byteLength(JSON.stringify(carried), 'utf8') > maxEncodedBytes) return page;
+      this.carried += 1;
+      return carried;
+    };
+    return bound;
+  }
+}
+
 describe('K2a reference: atomic corpus', () => {
   it('K2a-RED commits, guards, replay and idempotency hold', async () => {
     const store = new TestReferenceStore('comments');
@@ -60,6 +78,16 @@ describe('K2a R3 returned-cursor budget', () => {
   it('K2b-RED resumed page measured with its returned cursor fits the budget', async () => {
     const store = new TestReferenceStore('comments');
     await runReadCursorBudgetCorpus(store.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] })));
+  });
+
+  // K2b r3 MINEUR-1 (N10): a backend that carries a fitting recovery cursor on
+  // empty incomplete pages is conformant; the corpora must not mandate null.
+  it('K2b-R3 read corpora accept a fitting recovery cursor on empty incomplete pages', async () => {
+    const store = new RecoveryCursorStore('comments');
+    const bound = store.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+    await runReadCorpus(bound);
+    await runReadCursorBudgetCorpus(store.bindNew(grantFor({ token: 'token-recovery-2', operations: ['read', 'write', 'maintain'] })));
+    expect(store.carried).toBeGreaterThan(0);
   });
 });
 

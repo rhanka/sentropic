@@ -91,6 +91,12 @@ const fitIncomplete = (
 
 export class TestBoundStore {
   readonly grant: ScopeGrant<unknown>;
+  // Effective cursor used to admit a record (§8.4): the exhausting record is
+  // measured with its actual null cursor. Overridable only by registered
+  // mutants (M18 measures the candidate cursor instead).
+  admissionCursor(isLast: boolean, seq: number, boundHead: string | null): ChainPageCursor | null {
+    return isLast || boundHead === null ? null : { position: seq, head: boundHead };
+  }
   private readonly boundScope: { readonly tenantId: string; readonly workspaceId: string };
   private commitSeq = 0;
 
@@ -243,8 +249,7 @@ export class TestBoundStore {
       // cursor is null, so admission measures it with null instead of the
       // candidate {position} that would overestimate the envelope (§8.4:
       // `incomplete` is reserved for a record that cannot fit).
-      const candidate: ChainPageCursor | null =
-        isLast || boundHead === null ? null : { position: record.seq, head: boundHead };
+      const candidate = this.admissionCursor(isLast, record.seq, boundHead);
       const next: ChainPageCursor = { position: record.seq, head: boundHead as string };
       if (page.length >= limit) {
         if (encodedPageBytes('page', page, next) > maxEncodedBytes) {
