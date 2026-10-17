@@ -58,6 +58,13 @@ undisclosed external-source completeness. Terminal processing compares
 measured unit roots/counts before deriving canonical import/unit/batch
 receipts and their complete recoverable module result.
 
+The unit payload commitment streams ordered `[record kind, M1 hash]`
+entries; every M1 hash is independently checked against its complete bytes.
+Saved digest remainders therefore contain identifiers/hashes, not body text.
+Physical comments chain/object addresses hash framed typed identities to
+bound storage-key expansion. Canonical record identities and bytes remain
+unchanged; operational audit subject IDs use logical typed identities.
+
 Installed module authorization binds the current issued grant, complete
 resource tuples, declared domain capabilities and the frozen mapping/source
 identity. Final staged publication repeats those checks. A historical

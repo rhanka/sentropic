@@ -8,7 +8,7 @@ const fail = (message: string): never => { throw new CommentsTransportError('inv
 const id = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 256 && !value.includes('\0');
 const hash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 export const commentsFragmentDigest = (manifest: CommentsFragmentManifest, payload: readonly CanonicalChainRecord[]): string => sha256Hex(canonicalJson(['comments-fragment', 'v1', manifest, payload]));
-export const commentsUnitPayloadDigest = (unitId: string, records: readonly CanonicalChainRecord[]): string => sha256Hex(canonicalJson(['comments-unit-payload', 'v1', unitId, records]));
+export const commentsUnitPayloadDigest = (unitId: string, records: readonly CanonicalChainRecord[]): string => sha256Hex(canonicalJson(['comments-unit-payload', 'v1', unitId, records.map((record) => [record.kind, record.hash])]));
 export const validateCommentsFragment = (fragment: CommentsFragment): void => {
   if (!fragment || fragment.version !== COMMENTS_TRANSPORT_VERSION || !fragment.manifest || !Array.isArray(fragment.payload)) fail('invalid comments fragment envelope');
   const manifest = fragment.manifest;
@@ -22,6 +22,7 @@ export const validateCommentsFragment = (fragment: CommentsFragment): void => {
     if (!id(manifest.unitId) || fragment.payload.length === 0) fail('data fragment requires a unit and complete records');
   } else {
     const terminal = manifest.terminal;
+    if (!terminal || typeof terminal !== 'object') return fail('invalid terminal fragment declaration');
     if (manifest.unitId !== null || fragment.payload.length !== 0 || terminal.fragmentCount !== String(BigInt(manifest.ordinal) + 1n) || !Array.isArray(terminal.unitRoots) ||
       terminal.unitRoots.length < 1 || terminal.unitRoots.length > limits.requestItems || new Set(terminal.unitRoots.map((unit) => unit.unitId)).size !== terminal.unitRoots.length ||
       terminal.unitRoots.some((unit) => !id(unit.unitId) || !isDecimalCounter(unit.records) || !hash(unit.payloadDigest))) fail('invalid terminal fragment declaration');

@@ -11,7 +11,7 @@ describe('comments transport-v1 fragment framing', () => {
     const fragment = createCommentsFragment(manifest, [record]);
     const sha = (value: unknown) => createHash('sha256').update(canonicalJson(value), 'utf8').digest('hex');
     expect(fragment.digest).toBe(sha(['comments-fragment', 'v1', manifest, [record]]));
-    expect(commentsUnitPayloadDigest('unit', [record])).toBe(sha(['comments-unit-payload', 'v1', 'unit', [record]]));
+    expect(commentsUnitPayloadDigest('unit', [record])).toBe(sha(['comments-unit-payload', 'v1', 'unit', [[record.kind, record.hash]]]));
     record.body.text = 'caller mutation';
     expect(fragment.payload[0].body.text).toContain('🦊'); validateCommentsFragment(fragment);
     expect(() => validateCommentsFragment({ ...fragment, manifest: { ...fragment.manifest, ordinal: '01' } })).toThrow();
