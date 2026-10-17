@@ -8,6 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
 import type { ClusterMeshModules } from '../../src/modules/contracts.js';
+import { createClusterMeshModules } from '../../src/modules/registry.js';
+import { loadWebPagesMcp } from '../../src/loaders/mcp/web-pages.js';
 import { createMcpRegistry } from '../../src/mcp/registry.js';
 import { createWebPagesBuiltin } from '../../src/integrations/mcp/web-pages.js';
 
@@ -181,5 +183,29 @@ describe('web-pages mesh leaf', () => {
       },
     });
     expect(compiled.ok).toBe(false);
+  });
+
+  it('resolves the leaf through the real module registry and catalog', async () => {
+    const modules = createClusterMeshModules();
+    const mcp = await loadWebPagesMcp(modules);
+    expect(mcp.WEB_PAGES_PROVIDER_ID).toBe('sentropic.web-pages');
+    expect([...mcp.ARTIFACTS_TOOL_NAMES]).toEqual(SPEC_TOOLS);
+    expect(typeof mcp.createWebPagesRegistryDefinition).toBe('function');
+    const facade = createMcpRegistry({
+      modules,
+      builtins: [createWebPagesBuiltin({ modules, definition: { app: fakeApp } })],
+    });
+    facade.select(['sentropic.web-pages']);
+    const compiled = await facade.compile({
+      bindings: {},
+      compatibility: {
+        'sentropic.web-pages': {
+          manifestDigest: computeManifestDigest(mcp.createWebPagesManifest()),
+        },
+      },
+    });
+    if (!compiled.ok) throw new Error(`compile refused: ${JSON.stringify(compiled.diagnostics)}`);
+    expect(compiled.registry.resolveTool('artifacts_restore')?.providerId)
+      .toBe('sentropic.web-pages');
   });
 });
