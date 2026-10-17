@@ -35,7 +35,7 @@ export const holdPgTarget = async (core: PgCore, grant: ScopeGrant<unknown>, tar
 };
 export const completePgPurge = async (core: PgCore, grant: ScopeGrant<unknown>, intentId: string): Promise<RootPurgeJob> => {
   name(intentId);
-  return (await runPgTransaction(core, grant, {}, async (tx) => {
+  const result = (await runPgTransaction(core, grant, {}, async (tx) => {
     await core.check(tx.session, grant, 'maintain');
     const store = core.roots; const session = tx.session;
     const policy = await store.get<string>(session, tx.root, 'policy', 'purge');
@@ -63,6 +63,7 @@ export const completePgPurge = async (core: PgCore, grant: ScopeGrant<unknown>, 
         const cost = row.cost === null ? 0 : Number(row.cost);
         if (!Number.isSafeInteger(cost) || cost < 0 || cost > core.work().maxEncodedBytes) throw new StorageInvalidCommandError('purge item exceeds installed work budget');
         if (cost + bytes > core.work().maxEncodedBytes) break;
+        if (!await store.get(session, tx.root, 'barrier', job.target)) tx.root = await store.put(session, tx.root, 'barrier', job.target, { reason: `purge:${intentId}`, createdAt: core.now() });
         await session.execute({ text: `UPDATE ${store.schema}.${table} SET bytes=NULL${payload ? ',erased=true' : ''} WHERE scope_key=$1 AND id=$2::${payload ? 'text' : 'bigint'}`, values: [store.key(grant.scope), id] });
         bytes += cost;
       }
@@ -77,4 +78,5 @@ export const completePgPurge = async (core: PgCore, grant: ScopeGrant<unknown>, 
     tx.root = await store.put(session, tx.root, 'purge-job', intentId, job); tx.count += 1;
     return job;
   })).value;
+  return { target: result.target, intentId: result.intentId, authorizedBy: result.authorizedBy, state: result.state, outcomeId: result.outcomeId, payloadDisposition: result.payloadDisposition };
 };
