@@ -2822,6 +2822,56 @@ describe('session consent durable lifecycle', () => {
     void bindingId;
   });
 
+  it.each(['deny', 'offboard', 'rotation'] as const)(
+    'should refuse capture when %s lands during refresh (m2 race)', async (fence) => {
+      await acceptProject();
+      const bindingId = await adoptSession('sess-content-s1');
+      const [binding] = await db.select().from(sessionWorkspaceBindings)
+        .where(eq(sessionWorkspaceBindings.bindingId, bindingId));
+      await service.deriveGrant({
+        projectId: 'sess-content-project-1', sessionId: 'sess-content-s1', bindingId,
+        bindingVersion: binding!.version, d1Version: binding!.version,
+        d1Incarnation: 1, d1StartSeq: 0, workspaceId, sessionCreatedAt: now,
+        sourceGeneration: 'gen-1', sourceTrustVersion: 'tv-1', nativeStartSeq: 0,
+      }, ctx);
+      await service.amendProject('sess-content-project-1', basePolicy({
+        ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0,
+      }), ctx);
+      const readEpoch = fakeEpoch.readCurrent.bind(fakeEpoch);
+      let reads = 0;
+      // The second epoch read follows the initial grant/binding reads and
+      // precedes the locked grant recheck: land the fence at that barrier.
+      fakeEpoch.readCurrent = async (issuer) => {
+        reads += 1;
+        if (reads === 2) {
+          if (fence === 'deny') await service.recordLocalDeny('sess-content-s1', ctx);
+          if (fence === 'offboard') await db.update(tenants).set({ status: 'offboarded' })
+            .where(eq(tenants.id, TENANT_A));
+          if (fence === 'rotation') fakeEpoch.rotate('epoch-test-2');
+        }
+        return readEpoch(issuer);
+      };
+      try {
+        await expectContentError(
+          () => refreshAck('sess-content-s1', 1, binding!.version),
+          fence === 'deny' ? 'revision_conflict' : 'epoch_mismatch',
+        );
+      } finally {
+        fakeEpoch.readCurrent = readEpoch;
+      }
+      expect(reads).toBe(2);
+      const [grant] = await db.select().from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+      expect(grant!.projectRevision).toBe(0);
+      await expectContentError(() => service.reserveBeforeUpload(
+        'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, `k-m2-${fence}`, ctx,
+      ), fence === 'deny' ? 'invalid_request'
+        : fence === 'offboard' ? 'membership_required' : 'project_revision_changed');
+      expect(await db.select().from(sessionContentReservations)).toHaveLength(0);
+      expect(await fixture.listPhysical('')).toHaveLength(0);
+    },
+  );
+
   it('should keep later fences effective after a refresh (m2)', async () => {
     await acceptProject();
     const bindingId = await adoptSession('sess-content-s1');
