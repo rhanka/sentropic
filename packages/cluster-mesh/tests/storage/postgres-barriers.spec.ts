@@ -3,6 +3,7 @@ import { pgEnabled } from './pg-driver.js';
 import { createPgFixture } from './pg-fixture.js';
 import { grantFor } from './authority-corpus.js';
 import { emptyEffects } from '../../src/storage/staged-preparation.js';
+import { stagedFragmentDigest } from '../../src/storage/staged-codec.js';
 describe.skipIf(!pgEnabled)('Postgres dependent barriers and actual purge', () => {
   it('hides children immediately, respects holds and erases bytes before one terminal outcome', async () => {
     const fixture = await createPgFixture();
@@ -21,6 +22,12 @@ describe.skipIf(!pgEnabled)('Postgres dependent barriers and actual purge', () =
       for (let n = 0; result.state !== 'complete' && n < 10; n += 1) result = await bound.completePurge('purge');
       expect(result).toMatchObject({ state: 'complete', payloadDisposition: 'erased' });
       expect(await bound.completePurge('purge')).toEqual(result);
+      const root = await fixture.open(); const fence = { fenceId: 'late', epoch: '1' }; await root.provisionFence(grant, fence);
+      const begin = { operationKey: 'late', inputDigest: 'late', contractDigest: 'contract', sourceBoundary: 'source', fence };
+      const unit = await bound.beginStaged(begin);
+      const effects = { ...emptyEffects(), appends: [{ chainId: 'child', record: { id: 'late', hash: 'late', bytes: 'reintroduced' }, expectation: { kind: 'head' as const, hash: 'h' } }] };
+      const fragmentDigest = stagedFragmentDigest({ ...begin, moduleId: 'comments', scope: grant.scope, operationId: 'late', ordinal: '0', predecessorHash: null }, effects);
+      await expect(bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest, effects, fence })).rejects.toMatchObject({ code: 'invalid-command' });
       await fixture.tx.run(true, async (session) => {
         const rows = await session.execute({ text: `SELECT bytes,erased FROM "${fixture.name}".payloads WHERE target=$1`, values: ['child'] });
         expect(rows.rows).toEqual([{ bytes: null, erased: true }]);
