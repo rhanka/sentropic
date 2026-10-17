@@ -156,7 +156,7 @@ export class ManifestRegistry {
 
   /** Reject a manifest that no longer matches its digest (changed mapping). */
   verifyAgainst(manifest: ExportManifest, digest: string): void {
-    if (digestManifest(manifest) !== digest) {
+    if (manifest.version !== EXPORT_MANIFEST_VERSION || digestManifest(buildManifest(manifest)) !== digest) {
       throw new StorageInvalidCommandError('manifest digest mismatch');
     }
     if (!this.retained.has(digest)) throw new StorageInvalidCommandError('unknown manifest digest');
