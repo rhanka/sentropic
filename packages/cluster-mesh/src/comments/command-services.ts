@@ -1,10 +1,14 @@
-import type { CanonicalChainRecord, CanonicalReadPage } from '@sentropic/comments';
+import type { CanonicalChainRecord, CanonicalReadPage, ResourceRef } from '@sentropic/comments';
 import { UnsupportedProfileError } from '../storage/errors.js';
 import type { CommentsContext } from './context.js';
-import type { CommentsReadRequest } from './read-command.js';
+import type { CommentsReadRequest, CommentsTargetsRequest } from './read-command.js';
 import type { CommentsRevisionRequest, CommentsRevisionRecord } from './command-contracts.js';
 import { validateCommentsAdmission } from './admission.js';
 export const createCommentsCommandServices = (context: CommentsContext) => ({
+  targets: (input: CommentsTargetsRequest): Promise<readonly ResourceRef[]> => context.invoke(input.scope, async ({ storage }) => {
+    if (!storage.invoke) throw new UnsupportedProfileError('comments-operational-v1');
+    return await storage.invoke('comments.targets', input) as readonly ResourceRef[];
+  }),
   revise: (input: CommentsRevisionRequest): Promise<CommentsRevisionRecord> => context.invoke(input.scope, async ({ storage }) => {
     if (!storage.invoke) throw new UnsupportedProfileError('comments-operational-v1');
     validateCommentsAdmission({ ...input.content, kind: `${input.kind}-revision` });

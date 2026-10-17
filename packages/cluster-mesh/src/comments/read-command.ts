@@ -1,4 +1,4 @@
-import { CanonicalCommandError } from '@sentropic/comments';
+import { CanonicalCommandError, isCommandCapability } from '@sentropic/comments';
 import type { CanonicalReadSelection, CanonicalStoreScope, CanonicalPageRequest, CanonicalReadPage, CanonicalChainRecord } from '@sentropic/comments';
 import type { PgInstalledContext } from '../storage/postgres/installed-contracts.js';
 import type { CommentsServiceOptions } from './lifecycle-contracts.js';
@@ -7,7 +7,21 @@ import { chainIdentity, decodeRecord, invalid, sameScope } from './storage-schem
 import { readCommentsAuthorityTargets } from './authority-projection.js';
 import { commentsRecordResources } from './export-readers.js';
 import { readCommentsPgRecord } from './postgres-records.js';
+import { commentsPgValue } from './postgres-records.js';
+import { canonicalRecordKey } from './storage-schema.js';
+import type { CommandCapability, ResourceRef } from '@sentropic/comments';
 export interface CommentsReadRequest { readonly scope: CanonicalStoreScope; readonly selection: CanonicalReadSelection; readonly page?: CanonicalPageRequest; }
+export interface CommentsTargetsRequest { readonly scope: CanonicalStoreScope; readonly selection: CanonicalReadSelection; readonly capability: CommandCapability; readonly hash?: string; }
+export const executeCommentsTargets = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<readonly ResourceRef[]> => {
+  const request = supplied as CommentsTargetsRequest;
+  if (!request || !sameScope(request.scope, context.grant.scope)) throw new CanonicalCommandError('denied', 'Comments target scope is unavailable');
+  if (!isCommandCapability(request.capability)) return invalid('invalid comments target capability');
+  const chain = chainIdentity(request.selection).key; const metadata = await context.headMetadata(chain);
+  if (!metadata) { context.replayed(); return []; }
+  if (request.hash && !await commentsPgValue(context, 'record', canonicalRecordKey(chain, request.hash))) throw new CanonicalCommandError('not-found', 'Comments reference is unavailable');
+  const targets = await readCommentsAuthorityTargets(context, request.selection, request.hash ?? metadata.head);
+  await authorizeComments(options, context, request.capability, targets); context.replayed(); return targets;
+};
 export const executeCommentsRead = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<CanonicalChainRecord | CanonicalReadPage | null> => {
   const request = supplied as CommentsReadRequest;
   if (!request || !sameScope(request.scope, context.grant.scope)) throw new CanonicalCommandError('denied', 'Comments read scope is unavailable');
