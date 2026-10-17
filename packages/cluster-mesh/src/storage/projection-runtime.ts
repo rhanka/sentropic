@@ -86,6 +86,8 @@ export class ProjectionRuntime {
   hasRelationship(relation: string, from: string, to: string): boolean {
     return this.relations.get(JSON.stringify([relation, from]))?.has(to) ?? false;
   }
+  relationshipCount(relation: string, from: string): number { return this.relations.get(JSON.stringify([relation, from]))?.size ?? 0; }
+  relationshipAt(relation: string, from: string, ordinal: number): string | undefined { return this.relations.get(JSON.stringify([relation, from]))?.entryAt(ordinal)?.[0]; }
 
   /**
    * Emit a cause-tagged projection delta at publication (§6.2). Hidden-stage
