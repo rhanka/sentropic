@@ -349,6 +349,31 @@ const stageEffects = (unit: AtomicUnit, staged: StagedCommit, state: BackendScop
   }
 };
 
+/** Prepare sequential core effects on an owned successor without publishing
+ * it. Both ordinary transactions and bounded staged steps use this path. */
+export const prepareUnitsInScope = (state: BackendScopeState, units: readonly AtomicUnit[], ctx: CommitContext): void => {
+  const staged: StagedCommit = {
+    chains: forkIndexedMap(state.chains), index: forkIndexedMap(state.index),
+    records: forkIndexedMap(state.records), aggregates: forkIndexedMap(state.aggregates),
+  };
+  for (const unit of units) {
+    for (const record of unit.records) {
+      if (!nonEmpty(record.key) || !nonEmpty(record.contentHash) || !validateEncodedValue(record.bytes).ok) {
+        throw new StorageInvalidCommandError('record write requires a key, content hash and encoded bytes');
+      }
+    }
+    for (const update of unit.updates) {
+      if (!validateEncodedValue(update.value).ok) throw new StorageInvalidCommandError('aggregate update requires encoded bytes');
+    }
+    checkGuards(unit.guards, staged, ctx);
+    stageEffects(unit, staged, state);
+  }
+  state.chains = staged.chains;
+  state.index = staged.index;
+  state.records = staged.records;
+  state.aggregates = staged.aggregates;
+};
+
 export const commitUnitsToScope = (
   state: BackendScopeState,
   units: readonly AtomicUnit[],
@@ -398,20 +423,7 @@ export const commitUnitsToScope = (
   // against the state evolved by the previous units of the same commit, and
   // every append is CAS-checked while staging, never against the base alone.
   // The staging maps share canonical entries until the first touch (m6).
-  const staged: StagedCommit = {
-    chains: forkIndexedMap(state.chains),
-    index: forkIndexedMap(state.index),
-    records: forkIndexedMap(state.records),
-    aggregates: forkIndexedMap(state.aggregates),
-  };
-  for (const unit of units) {
-    checkGuards(unit.guards, staged, ctx);
-    stageEffects(unit, staged, state);
-  }
-  state.chains = staged.chains;
-  state.index = staged.index;
-  state.records = staged.records;
-  state.aggregates = staged.aggregates;
+  prepareUnitsInScope(state, units, ctx);
   const receipt: CommitReceipt = { commitId: ctx.commitId, moduleId: ctx.moduleId, scope: { ...ctx.scope }, committedAt: ctx.clock(), effectiveRecords: merged.appends.length + merged.records.length + merged.updates.length, effectiveAppends: merged.appends.length, journalCursor: `cursor-${ctx.commitId}` };
   if (options.idempotencyKey) {
     state.commits.set(options.idempotencyKey, { receipt: { ...receipt, scope: { ...receipt.scope } }, unitHash });
