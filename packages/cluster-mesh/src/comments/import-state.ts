@@ -16,6 +16,7 @@ export interface CommentsImportState {
   dependency: PortableDigestState; effect: PortableDigestState;
   readonly units: { readonly unitId: string; records: string; digest: PortableDigestState }[];
   root: StagedCommitRoot | null; canonical: CanonicalBatchImportResponse | null; roots: readonly CommentsUnitRoot[];
+  terminalHashes: readonly string[];
 }
 export const startCommentsImportDigests = (binding: CommentsImportBinding) => ({
   dependency: updatePortableDigest(startPortableDigest(), Buffer.from('["staged-dependency-root","v1",[')),
