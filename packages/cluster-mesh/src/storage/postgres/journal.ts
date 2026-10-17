@@ -50,7 +50,7 @@ export const readPgJournal = async (core: PgCore, grant: ScopeGrant<unknown>, af
     const events: RootJournalEvent[] = [];
     if (!state || state.status === 'running') {
       const result = core.options.outbox ? { rows: (await core.options.outbox.read(session, stream(core, grant), String(after), limit)).map((event) => ({ sequence: event.seq, event: JSON.stringify(event) })) }
-        : await session.execute({ text: `SELECT sequence::text,event::text FROM ${core.roots.schema}.journal WHERE scope_key=$1 AND sequence>$2::bigint ORDER BY sequence LIMIT $3`, values: [core.roots.key(grant.scope), String(after), limit] });
+        : await session.execute({ text: `SELECT j.sequence::text,j.event::text FROM ${core.roots.schema}.journal AS j WHERE j.scope_key=$1 AND j.sequence>$2::bigint ORDER BY j.sequence LIMIT $3`, values: [core.roots.key(grant.scope), String(after), limit] });
       for (const row of result.rows) {
         const seq = pgSafeCounter(row.sequence); const event = decodePgJson<PgJournalDraft>(decodePgText(row.event));
         if (seq !== after + events.length + 1 || String(seq) !== event.seq || typeof event.eventId !== 'string') throw new PostgresStorageError('corruption');
