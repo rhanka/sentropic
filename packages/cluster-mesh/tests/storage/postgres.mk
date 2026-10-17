@@ -9,7 +9,7 @@ cluster-mesh-pg-package-info:
 		tar -xzf stablelib-sha256-2.0.1.tgz; \
 		sed -n "1,180p" package/lib/sha256.d.ts'
 
-.PHONY: cluster-mesh-storage-deps cluster-mesh-storage-deps-audit
+.PHONY: cluster-mesh-storage-deps cluster-mesh-storage-deps-audit cluster-mesh-cold-cleanup
 cluster-mesh-cold-cleanup:
 	@rm -rf node_modules packages/cluster-mesh/node_modules .h2a/storage-deps/node_modules .h2a/comments-deps/node_modules
 
@@ -125,3 +125,31 @@ cluster-mesh-pg-crash-test:
 	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=postgres-crashes.spec.ts CM_PG_CRASH_PHASE=seed API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-crash API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=postgres-crashes.spec.ts CM_PG_CRASH_PHASE=verify API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+
+CM_PG_NEXT_IMAGE := postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+.PHONY: cluster-mesh-pg-major-phase cluster-mesh-pg-major-upgrade
+cluster-mesh-pg-major-phase:
+	@docker run --rm --init --network "$(CM_PG_NAME)" -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+		-e CM_MAJOR_PHASE="$(CM_MAJOR_PHASE)" -e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
+		-e CM_PG_UPGRADE_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME)-next:5432/storage_test" \
+		-e CM_PG_REFERENCE_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME)-next:5432/reference_test" \
+		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
+		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		mkdir /tmp/cm-major; cd /tmp/cm-major; cp /probe/installed-major-upgrade.mjs .; \
+		npm_config_cache=/tmp/npm-cache npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz pg@8.16.3 >/dev/null; \
+		node installed-major-upgrade.mjs'
+
+cluster-mesh-pg-major-upgrade: cluster-mesh-pg-up
+	@test -f "$(CM_COMMENTS_TARBALL)"
+	@mkdir -p "$(CM_COMMENTS_REPORT)"
+	@set -eu; next="$(CM_PG_NAME)-next"; \
+		docker run -d --name "$$next" --network "$(CM_PG_NAME)" --label sentropic.storage-test="$(ENV)" \
+		  -e POSTGRES_PASSWORD=qualification-only -e POSTGRES_DB=storage_test "$(CM_PG_NEXT_IMAGE)" >/dev/null; \
+		trap 'docker rm -fv "'"$$next"'" >/dev/null' EXIT; \
+		attempt=0; until docker exec "$$next" pg_isready -U postgres -d storage_test >/dev/null; do \
+		  attempt=$$((attempt+1)); [ "$$attempt" -lt 30 ] || exit 1; sleep 1; done; \
+		docker exec "$$next" createdb -U postgres reference_test; \
+		$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-major-phase CM_MAJOR_PHASE=seed ENV=$(ENV); \
+		docker exec "$(CM_PG_NAME)" pg_dump -U postgres --no-owner --no-privileges storage_test | \
+		  docker exec -i "$$next" psql -U postgres -d storage_test --set ON_ERROR_STOP=on >/dev/null; \
+		$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-major-phase CM_MAJOR_PHASE=verify ENV=$(ENV)

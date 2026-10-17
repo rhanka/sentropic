@@ -33,6 +33,9 @@ major: PostgreSQL may change the textual rendering of catalog definitions. If ve
 
 `postgres-reattest.spec.ts` exercises changed historical fingerprints, wrong previous approvals,
 successful target-reference attestation, unrelated host DDL and refusal of actual module table drift.
+The installed `cluster-mesh-pg-major-upgrade` qualification also dumps a real PostgreSQL 17 store,
+restores it on pinned PostgreSQL 18, compares a clean same-layout reference database, re-attests through
+host receipt CAS/audit and resumes a saved exact-head cursor. CI retains its `major-upgrade.json` report.
 
 ## Inject execution and migrate through the host
 
