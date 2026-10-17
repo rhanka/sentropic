@@ -123,3 +123,27 @@ describe('enrollment contracts', () => {
     expect(meta.cloudaicompanionProject).toBe('project_acct_mock');
   });
 });
+
+describe('enrollment seat import entry', () => {
+  it('re-exports the seat CLI import parsers through the enrollment entry', async () => {
+    const { parseCliSeatProfile } = await import('../../src/enrollment/index.js');
+    const bundle = parseCliSeatProfile({
+      cli: 'codex',
+      seatRef: 'seat-contracts-01',
+      refreshFamilyRef: 'family-contracts-01',
+      ownerScope: 'owner-seat-01',
+      issuingClientRef: 'client-contracts-01',
+      endpointFamily: 'endpoint-contracts-01',
+      accountBinding: 'binding-contracts-01',
+      entitlementClass: 'lab-seat',
+      epoch: 1,
+      generation: 1,
+      operationId: 'op-contracts-01',
+      issuedAt: '2026-10-17T00:00:00Z',
+      providerExpiry: '2099-01-01T00:00:00Z',
+      accessRef: 'access-contracts-01',
+    });
+    expect(bundle.identity.packageProviderId).toBe('codex');
+    expect(bundle.authority).toBe('consumer');
+  });
+});
