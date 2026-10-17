@@ -15,7 +15,6 @@ export interface StagedCoreOptions extends Omit<KernelOptions, 'coordinator'> {
   readonly limits?: WorkLimits;
   readonly descriptor?: ModuleDescriptor;
   readonly queries?: Readonly<Record<string, RegisteredRootQuery>>;
-  readonly beforePublish?: (scope: StorageScope, unitId: string) => void | Promise<void>;
 }
 export interface JournalFence extends WriterFence { readonly incarnation: string; readonly ownerId: string; }
 export const ownedCopy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -111,9 +110,6 @@ export class StagedCore {
     this.kernel.bind(grant).requireOperation('maintain');
     if (!fence || fence.incarnation !== this.kernel.incarnation || fence.ownerId !== grant.principalId) throw new StorageInvalidCommandError('journal fence binding mismatch');
     this.assertFence(grant, fence);
-  }
-  consumeFailure(scope: StorageScope, point: StagedControl['failures'] extends Set<infer T> ? T : never): void {
-    if (this.control(scope).failures.delete(point)) throw new StorageInvalidCommandError(`injected ${point} interruption`);
   }
   requireMaintain(grant: ScopeGrant<unknown>): void { this.kernel.bind(grant).requireOperation('maintain'); }
 }

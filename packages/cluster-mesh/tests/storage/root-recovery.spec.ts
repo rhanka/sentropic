@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createStagedKernel, MemoryBackend } from '../../src/storage/index.js';
+import { MemoryBackend } from '../../src/storage/index.js';
+import { createStagedTestKernel as createStagedKernel } from './staged-client.js';
 import { createIndexedBackendScopeState } from '../../src/storage/backend.js';
 import { emptyEffects } from '../../src/storage/staged-preparation.js';
 import { grantFor } from './authority-corpus.js';
