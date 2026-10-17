@@ -4,7 +4,7 @@
  * Durable caller keys with a 30-day default lifetime: the issuer publishes a
  * new cryptographically random 256-bit key only after durable commit, a
  * crash before commit leaves no issued key, and authenticated idempotent
- * reacquisition returns the same session without reissuing key material.
+ * reacquisition returns the same committed key over authenticated control.
  * Only the dedicated authenticated acquisition channel returns keys; every
  * public result carries opaque references, never secrets.
  */
@@ -54,7 +54,7 @@ export interface AcquireSessionInput {
 
 export interface IssuedSession {
   readonly sessionRef: string;
-  /** Present only on first issuance; reacquisition never reissues key material. */
+  /** Returned exclusively over authenticated acquisition, including recovery. */
   readonly key?: string;
   readonly reacquired: boolean;
   readonly expiresAt: string;
@@ -104,6 +104,7 @@ const publicSession = (session: StoredSession) => ({
 
 export class GatewaySessionService {
   private readonly defaultTtlDays: number;
+  private acquisition: Promise<unknown> = Promise.resolve();
   constructor(
     private readonly store: GatewayStateStore,
     options: { defaultTtlDays?: number } = {},
@@ -112,17 +113,29 @@ export class GatewaySessionService {
   }
 
   async acquireSession(input: AcquireSessionInput): Promise<IssuedSession> {
+    const result = this.acquisition.then(() => this.acquireCommitted(input));
+    this.acquisition = result.catch(() => undefined);
+    return result;
+  }
+
+  private async acquireCommitted(input: AcquireSessionInput): Promise<IssuedSession> {
     if (!input.ownerScopeRef || !input.workspaceRef || !input.clientSessionRef) {
       throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
     }
     const loaded = await this.store.load();
     const now = Date.now();
     const existing = Object.values(loaded.sessions).find(
-      (session) => sameTriple(session, input) && live(session, now),
+      (session) => sameTriple(session, input),
     );
     if (existing) {
+      if (existing.revokedAt) throw new GatewaySessionError('session revoked', 'REVOKED');
+      if (!live(existing, now)) throw new GatewaySessionError('session expired', 'EXPIRED');
+      if (!existing.keyMaterial || !validKey(existing.keyMaterial, existing.keyVerifier)) {
+        throw new GatewaySessionError('protected session key unavailable', 'CORRUPT');
+      }
       return {
         sessionRef: existing.sessionRef,
+        key: existing.keyMaterial,
         reacquired: true,
         expiresAt: existing.expiresAt,
         policyRevision: existing.policyRevision,
@@ -131,6 +144,9 @@ export class GatewaySessionService {
     const key = randomBytes(32).toString('base64url');
     const created = new Date(now).toISOString();
     const ttlDays = input.ttlDays ?? this.defaultTtlDays;
+    if (!Number.isFinite(ttlDays) || ttlDays <= 0 || ttlDays > 365) {
+      throw new GatewaySessionError('invalid session lifetime', 'AMBIGUOUS');
+    }
     const session: StoredSession = {
       schemaVersion: SCHEMA_VERSION,
       sessionRef: randomBytes(16).toString('base64url'),
@@ -138,6 +154,7 @@ export class GatewaySessionService {
       workspaceRef: input.workspaceRef,
       clientSessionRef: input.clientSessionRef,
       keyVerifier: verifierOf(key).toString('hex'),
+      keyMaterial: key,
       keyId: randomBytes(8).toString('hex'),
       createdAt: created,
       expiresAt: new Date(now + ttlDays * 86_400_000).toISOString(),
@@ -163,6 +180,7 @@ export class GatewaySessionService {
         if (winner) {
           return {
             sessionRef: winner.sessionRef,
+            key: winner.keyMaterial,
             reacquired: true,
             expiresAt: winner.expiresAt,
             policyRevision: winner.policyRevision,
@@ -201,17 +219,15 @@ export class GatewaySessionService {
     if (typeof input.keyMaterial !== 'string' || input.keyMaterial.length < 43) {
       throw new GatewaySessionError('imported key is too short', 'AMBIGUOUS');
     }
-    if (!input.expiresAt || Date.parse(input.expiresAt) <= Date.now()) {
+    if (!Number.isFinite(Date.parse(input.expiresAt)) || Date.parse(input.expiresAt) <= Date.now()) {
       throw new GatewaySessionError('imported session is expired', 'AMBIGUOUS');
     }
     const loaded = await this.store.load();
-    const now = Date.now();
     const duplicate = Object.values(loaded.sessions).find(
       (session) =>
         session.ownerScopeRef === input.ownerScopeRef
         && session.workspaceRef === input.workspaceRef
-        && session.clientSessionRef === input.clientSessionRef
-        && live(session, now),
+        && session.clientSessionRef === input.clientSessionRef,
     );
     if (duplicate) {
       throw new GatewaySessionError('ambiguous duplicate session', 'AMBIGUOUS');
@@ -223,6 +239,7 @@ export class GatewaySessionService {
       workspaceRef: input.workspaceRef,
       clientSessionRef: input.clientSessionRef,
       keyVerifier: verifierOf(input.keyMaterial).toString('hex'),
+      keyMaterial: input.keyMaterial,
       keyId: randomBytes(8).toString('hex'),
       createdAt: new Date(now).toISOString(),
       expiresAt: input.expiresAt,
