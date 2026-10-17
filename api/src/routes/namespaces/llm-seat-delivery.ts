@@ -10,6 +10,7 @@ import {
 import {
   requireSeatDeliveryAuth,
   type SeatDeliveryRegistryEntry,
+  type SeatDeliveryTrust,
 } from '../../middleware/llm-seat-delivery-auth';
 
 /**
@@ -44,14 +45,33 @@ export interface SeatDeliveryProjectionBody {
 }
 
 export const createSeatDeliveryRouter = (): Hono<{
-  Variables: { seatRef: string; seat: SeatDeliveryRegistryEntry };
+  Variables: { seatRef: string; seat: SeatDeliveryRegistryEntry; deliveryTrust: SeatDeliveryTrust };
 }> => {
-  const router = new Hono<{ Variables: { seatRef: string; seat: SeatDeliveryRegistryEntry } }>();
+  const router = new Hono<{
+    Variables: { seatRef: string; seat: SeatDeliveryRegistryEntry; deliveryTrust: SeatDeliveryTrust };
+  }>();
   router.use('/*', requireSeatDeliveryAuth);
+
+  // The per-request trust attestation must be present: handlers never serve
+  // a request the middleware did not authenticate, even if mounted directly.
+  const requireDeliveryTrust = (context: {
+    get(key: 'seatRef'): string;
+    get(key: 'deliveryTrust'): SeatDeliveryTrust | undefined;
+    json(message: unknown, status: number): Response;
+  }): string | Response => {
+    const seatRef = context.get('seatRef');
+    const trust = context.get('deliveryTrust');
+    if (!trust || trust.seatRef !== seatRef) {
+      return context.json({ message: 'Seat delivery request was not authenticated' }, 503);
+    }
+    return seatRef;
+  };
 
   router.post('/import', async (context) => {
     const body = (await context.req.json()) as SeatDeliveryProjectionBody;
-    const seatRef = context.get('seatRef');
+    const trusted = requireDeliveryTrust(context);
+    if (trusted instanceof Response) return trusted;
+    const seatRef = trusted;
     const seat = context.get('seat');
     if (!body.seatPolicy || body.seatPolicy.seatRef !== seatRef) {
       return context.json({ message: 'Projection seatRef does not match the admitted seat' }, 409);
@@ -80,6 +100,11 @@ export const createSeatDeliveryRouter = (): Hono<{
       ) {
         return context.json({ acknowledged: true, idempotent: true, tuple: current });
       }
+      // Same generation with a different operationId is a lineage conflict,
+      // refused like the mesh (no silent upsert over a competing lineage).
+      if (body.seatPolicy.generation === current.generation) {
+        return context.json({ message: 'Same generation with a different operationId is a lineage conflict' }, 409);
+      }
     }
     const stored = await importSeatProjection({
       cli: body.cli,
@@ -107,21 +132,24 @@ export const createSeatDeliveryRouter = (): Hono<{
   });
 
   router.get('/ack', async (context) => {
-    const seatRef = context.get('seatRef');
-    const tuple = await readSeatDeliveryTuple(seatRef);
+    const trusted = requireDeliveryTrust(context);
+    if (trusted instanceof Response) return trusted;
+    const tuple = await readSeatDeliveryTuple(trusted);
     if (!tuple) return context.json({ message: 'No delivered tuple for this seat' }, 404);
     return context.json({ acknowledged: true, tuple });
   });
 
   router.post('/drain', async (context) => {
-    const seatRef = context.get('seatRef');
-    await drainSeatDelivery(seatRef);
-    return context.json({ drained: true, seatRef });
+    const trusted = requireDeliveryTrust(context);
+    if (trusted instanceof Response) return trusted;
+    await drainSeatDelivery(trusted);
+    return context.json({ drained: true, seatRef: trusted });
   });
 
   router.post('/reopen', async (context) => {
-    const seatRef = context.get('seatRef');
-    const tuple = await reopenSeatDelivery(seatRef);
+    const trusted = requireDeliveryTrust(context);
+    if (trusted instanceof Response) return trusted;
+    const tuple = await reopenSeatDelivery(trusted);
     if (!tuple) return context.json({ message: 'No delivered tuple for this seat' }, 404);
     return context.json({ reopened: true, tuple });
   });
