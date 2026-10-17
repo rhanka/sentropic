@@ -63,7 +63,8 @@ export const commitSealedOperation = async (core: StagedCore, bound: ScopedRunti
   if (operation.state !== 'sealed' || !operation.progress?.receipt) throw new StorageInvalidCommandError('operation has no prepared seal');
   await core.options.beforePublish?.(bound.scope, operation.unitId);
   bound.requireOperation('write'); assertOperationFence(core, bound, operation, input.fence);
-  if (operation.state === 'committed' && operation.receipt) return ownedCopy(operation.receipt);
+  const afterHook = core.control(bound.scope).byId.get(operation.unitId)!;
+  if (afterHook.state === 'committed' && afterHook.receipt) return ownedCopy(afterHook.receipt);
   core.consumeFailure(bound.scope, 'external');
   // The scheduling point can revoke authority, rotate a lane or publish a
   // rival root. All checks are repeated synchronously at the single switch.
