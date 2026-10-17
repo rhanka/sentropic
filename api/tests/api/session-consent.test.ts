@@ -144,6 +144,32 @@ describe('session consent durable lifecycle', () => {
     return binding.bindingId;
   };
 
+  const refreshAck = async (
+    sessionId: string,
+    projectRevision: number,
+    bindingVersion: number,
+    nativeBoundarySeq = 0,
+    overrides: Record<string, unknown> = {},
+  ) => {
+    const [grant] = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, sessionId));
+    const [project] = await db
+      .select()
+      .from(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, grant!.projectId));
+    return service.acknowledgeGrantRefresh(sessionId, {
+      projectRevision,
+      bindingVersion,
+      nativeBoundarySeq,
+      sourceGeneration: grant!.sourceGeneration,
+      d1Version: grant!.d1Version,
+      policyDigest: project!.retentionDigest as string,
+      ...overrides,
+    }, ctx);
+  };
+
   beforeEach(async () => {
     now = 1_700_000_000_000;
     fixture = createSessionContentFixture();
@@ -1884,14 +1910,10 @@ describe('session consent durable lifecycle', () => {
     await service.reserveBeforeUpload(
       'sess-content-s3', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-n3-other', ctx,
     );
-    const ack1 = await service.acknowledgeGrantRefresh('sess-content-s1', {
-      projectRevision: 1, bindingVersion: s1.bindingVersion, nativeBoundarySeq: 5,
-    }, ctx);
+    const ack1 = await refreshAck('sess-content-s1', 1, s1.bindingVersion, 5);
     expect(ack1.projectRevision).toBe(1);
     expect(ack1.version).toBe(2);
-    await service.acknowledgeGrantRefresh('sess-content-s2', {
-      projectRevision: 1, bindingVersion: s2.bindingVersion, nativeBoundarySeq: 5,
-    }, ctx);
+    await refreshAck('sess-content-s2', 1, s2.bindingVersion, 5);
     await service.reserveBeforeUpload(
       'sess-content-s2', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-n3-s2', ctx,
     );
@@ -2021,9 +2043,7 @@ describe('session consent durable lifecycle', () => {
             basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
             ctx,
           );
-          await service.acknowledgeGrantRefresh('sess-content-s1', {
-            projectRevision: 1, bindingVersion: rows[0]!.version, nativeBoundarySeq: 3,
-          }, ctx);
+          await refreshAck('sess-content-s1', 1, rows[0]!.version, 3);
         },
       },
     });
@@ -2098,20 +2118,14 @@ describe('session consent durable lifecycle', () => {
     await expectContentError(() => restarted.reserveBeforeUpload(
       'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-n3-restart', ctx,
     ), 'project_revision_changed');
-    const ack = await service.acknowledgeGrantRefresh('sess-content-s1', {
-      projectRevision: 1, bindingVersion: s1.bindingVersion, nativeBoundarySeq: 0,
-    }, ctx);
+    const ack = await refreshAck('sess-content-s1', 1, s1.bindingVersion);
     expect(ack.version).toBe(2);
     await service.reserveBeforeUpload(
       'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-n3-resumed', ctx,
     );
     await service.closeGrant('sess-content-s2', ctx);
-    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-s2', {
-      projectRevision: 1, bindingVersion: s2.bindingVersion, nativeBoundarySeq: 0,
-    }, ctx), 'grant_closed');
-    const dup = await service.acknowledgeGrantRefresh('sess-content-s1', {
-      projectRevision: 1, bindingVersion: s1.bindingVersion, nativeBoundarySeq: 0,
-    }, ctx);
+    await expectContentError(() => refreshAck('sess-content-s2', 1, s2.bindingVersion), 'grant_closed');
+    const dup = await refreshAck('sess-content-s1', 1, s1.bindingVersion);
     expect(dup.projectRevision).toBe(1);
     expect(dup.version).toBe(2);
     void restarted;
@@ -2153,19 +2167,11 @@ describe('session consent durable lifecycle', () => {
       basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
       ctx,
     );
-    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-se', {
-      projectRevision: 1, bindingVersion: se.bindingVersion, nativeBoundarySeq: 0,
-    }, ctx), 'session_excluded');
-    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-sr', {
-      projectRevision: 1, bindingVersion: sr.bindingVersion, nativeBoundarySeq: 0,
-    }, ctx), 'grant_revoked');
-    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-sd', {
-      projectRevision: 1, bindingVersion: sd.bindingVersion, nativeBoundarySeq: 0,
-    }, ctx), 'grant_closed');
+    await expectContentError(() => refreshAck('sess-content-se', 1, se.bindingVersion), 'session_excluded');
+    await expectContentError(() => refreshAck('sess-content-sr', 1, sr.bindingVersion), 'grant_revoked');
+    await expectContentError(() => refreshAck('sess-content-sd', 1, sd.bindingVersion), 'grant_closed');
     fakeEpoch.rotate('epoch-test-2');
-    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-sp', {
-      projectRevision: 1, bindingVersion: sp.bindingVersion, nativeBoundarySeq: 0,
-    }, ctx), 'epoch_mismatch');
+    await expectContentError(() => refreshAck('sess-content-sp', 1, sp.bindingVersion), 'epoch_mismatch');
   });
 
   it('should not exhaust a small session quota over amend-and-refresh cycles (P1)', async () => {
@@ -2190,10 +2196,6 @@ describe('session consent durable lifecycle', () => {
       sourceTrustVersion: 'tv-1',
       nativeStartSeq: 0,
     }, ctx);
-    const digestOf = async () => (await db
-      .select()
-      .from(sessionContentProjects)
-      .where(eq(sessionContentProjects.projectId, 'sess-content-project-1')))[0]!.retentionDigest as string;
     for (let i = 1; i <= 8; i += 1) {
       const body = new TextEncoder().encode(`p1c${i}`);
       const r1 = await service.reserveBeforeUpload(
@@ -2208,14 +2210,7 @@ describe('session consent durable lifecycle', () => {
       await expectContentError(() => service.publishAfterUpload(
         r1.reservationId, body, ctx,
       ), 'project_revision_changed');
-      await service.acknowledgeGrantRefresh('sess-content-s1', {
-        projectRevision: i,
-        bindingVersion: rows[0]!.version,
-        nativeBoundarySeq: i,
-        sourceGeneration: 'gen-1',
-        d1Version: 1,
-        policyDigest: await digestOf(),
-      }, ctx);
+      await refreshAck('sess-content-s1', i, rows[0]!.version, i);
       const r2 = await service.reserveBeforeUpload(
         'sess-content-s1', 'terminal.cache',
         { raw: body.length, encoded: body.length }, `k-p1-${i}-b`, ctx,
@@ -2359,6 +2354,50 @@ describe('session consent durable lifecycle', () => {
       .where(eq(sessionContentAttempts.attemptId, reservationId)))[0]!.outcome;
     expect(await attemptOf(r3.reservationId)).toBe('cancelled');
     expect(await attemptOf(r4.reservationId)).toBe('attempted');
+    void bindingId;
+  });
+
+  it('should refuse refresh on replaced source generation or changed D1 version (P3)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+      ctx,
+    );
+    await expectContentError(() => refreshAck('sess-content-s1', 1, rows[0]!.version, 0, {
+      sourceGeneration: 'gen-2',
+    }), 'source_reauthorization_required');
+    const grants = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(grants[0]!.sourceGeneration).toBe('gen-1');
+    await expectContentError(() => refreshAck('sess-content-s1', 1, rows[0]!.version, 0, {
+      d1Version: 2,
+    }), 'ineligible_session');
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-p3', ctx,
+    ), 'project_revision_changed');
+    expect(await fixture.listPhysical('')).toHaveLength(0);
     void bindingId;
   });
 });
