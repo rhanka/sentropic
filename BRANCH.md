@@ -62,6 +62,7 @@
 - [x] Root Track writer is not assigned to this worktree: maintain this mergeable branch artifact; do not append `.track` events concurrently.
 - [x] Packet's `.cursor/rules/*.mdc` sources resolve to canonical `rules/*.md`; source studies and model-update runbook read.
 - [x] Four helper-contract failures reproduced before changes: title/effort candidates, non-OpenAI compaction, and tool-follow-up bounds; two independent source reviews reconciled these issues.
+- [x] Helper/wire correction gate: 31 tests passed across nano helper/wire, chat summary, document analysis and history analysis suites.
 
 ## AI Flaky tests
 - [ ] Record every provider failure verbatim after secret sanitization; failed qualification remains failed, without rerunning for a pass or inflating timeouts.
@@ -82,7 +83,7 @@
 - [ ] **Lot 1 — Regression tests first and configurable cutover**
   - [x] Update `api/tests/unit/model-selection-legacy.test.ts`; add `api/tests/unit/nano-replacement-contract.test.ts` for aliases, dated snapshot, whitespace/case, provider repair and synchronous none/output cap; context-budget coverage follows with helper contracts.
   - [x] Observe failures with `make test-api-unit SCOPE="tests/unit/model-selection-legacy.test.ts tests/unit/nano-replacement-contract.test.ts" API_PORT=9450 UI_PORT=5650 MAILDEV_UI_PORT=1550 ENV=test-model-retirement`: six expected failures, twelve passes; nano cutovers and synchronous none/caps are missing.
-  - [ ] Implement one configuration point, defaults and helper selection; preserve unrelated legacy mappings and explicit user reasoning. Configuration and exact alias cutovers implemented; helper/wire work follows.
+  - [x] Implement one configuration point, defaults and helper selection; preserve unrelated legacy mappings and explicit user reasoning; fix provider pairing, follow-up caps and in-memory compaction continuation.
   - [ ] Update `api/tests/unit/llm-runtime-stream.test.ts`, `chat-summary-runtime.test.ts`, `provider-mesh-contract-proof.test.ts` and `llm-metering-usage-normalizer.test.ts` only where behavior changes.
 - [ ] **Lot 2 — Retire selectable/default references and preserve large-context paths**
   - [ ] Remove retired catalog/provider entries, regenerate council, update frontend loading defaults and affected seeds/fixtures; bump touched public packages after registry precheck and regenerate locks through Make.

@@ -18,6 +18,7 @@ import {
   workspaceMemberships
 } from '../db/schema';
 import { createId } from '../utils/id';
+import { getDefaultOpenAIModel } from '../config/models';
 import type { TenantContext } from '@sentropic/contracts';
 import { targetFromLive, type Comment } from '@sentropic/comments';
 import {
@@ -1954,6 +1955,7 @@ export class ToolService {
       const response = await callLLM({
         messages: [{ role: 'user', content: userPrompt }],
         model: options.model,
+        reasoningEffort: 'none',
         maxOutputTokens: 25_000,
         signal: options.signal,
       });
@@ -1987,6 +1989,7 @@ export class ToolService {
       const response = await callLLM({
         messages: [{ role: 'user', content: userPrompt }],
         model: options.model,
+        reasoningEffort: 'none',
         maxOutputTokens: 6_000,
         signal: options.signal,
       });
@@ -2009,6 +2012,7 @@ export class ToolService {
     const merged = await callLLM({
       messages: [{ role: 'user', content: mergedPrompt }],
       model: options.model,
+      reasoningEffort: 'none',
       maxOutputTokens: 20_000,
       signal: options.signal,
     });
@@ -2501,9 +2505,7 @@ export class ToolService {
     clipped: boolean;
     summary: string | null;
   }> {
-    // IMPORTANT (temporary): force a dedicated model for document analysis sub-agent.
-    // We intentionally ignore the admin default model until prompts/models are versioned per prompt in DB.
-    const model = 'gpt-4.1-nano';
+    const model = getDefaultOpenAIModel();
     const p = (opts.prompt || '').trim();
     if (!p) throw new Error('documents.analyze: prompt is required');
     const maxWords = Math.max(500, Math.min(10_000, Math.floor(opts.maxWords ?? 10_000)));
@@ -2742,7 +2744,7 @@ export class ToolService {
     }
 
     const analyzed = await this.runChunkedPromptAnalysis({
-      model: 'gpt-4.1-nano',
+      model: getDefaultOpenAIModel(),
       text: historyText,
       instruction: question,
       maxWords,
