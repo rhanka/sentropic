@@ -1,0 +1,8 @@
+{
+  "name": "@sentropic/llm-mesh-seat-tools",
+  "version": "0.26.1",
+  "private": true,
+  "description": "Owner-machine seat helpers (inspect only). No runtime dependencies.",
+  "type": "module",
+  "license": "MIT"
+}
