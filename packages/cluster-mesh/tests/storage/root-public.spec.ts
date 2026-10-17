@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createStagedKernel } from '../../src/storage/index.js';
+import { createStagedKernel, MemoryBackend } from '../../src/storage/index.js';
+import { createIndexedBackendScopeState } from '../../src/storage/backend.js';
+import { StorageDeniedError } from '../../src/storage/errors.js';
 import { grantFor } from './authority-corpus.js';
 
 describe('public staged storage ports', () => {
@@ -23,11 +25,20 @@ describe('public staged storage ports', () => {
     expect(() => bound.capability('staged-units-v1')).toThrow();
   });
 
-  it('should relay authority pins and preserve revocation across backend recreation', async () => {
+  it('should relay authority pins', async () => {
     let allowed = true;
-    const root = createStagedKernel({ moduleId: 'comments', authority: { attest: () => { if (!allowed) throw new Error('host denied'); } } });
+    const root = createStagedKernel({ moduleId: 'comments', authority: { attest: () => { if (!allowed) throw new StorageDeniedError('host denied'); } } });
     const bound = root.bindNew(grantFor());
     allowed = false;
-    await expect(bound.readHead('x')).rejects.toThrow('host denied');
+    await expect(bound.readHead('x')).rejects.toMatchObject({ code: 'denied' });
+  });
+  it('should preserve revocation across runtime recreation on one backend', () => {
+    const backend = new MemoryBackend(createIndexedBackendScopeState);
+    const root = createStagedKernel({ moduleId: 'comments', backend });
+    const grant = grantFor();
+    root.bindNew(grant);
+    root.revoke(grant.token);
+    const recreated = createStagedKernel({ moduleId: 'comments', backend });
+    expect(() => recreated.bindNew(grant)).toThrow(StorageDeniedError);
   });
 });
