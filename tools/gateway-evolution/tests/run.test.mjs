@@ -9,13 +9,17 @@ import { createHash } from 'node:crypto';
 
 import {
   GatewayInputError,
+  assertPinnedProjection,
   buildBundleIndex,
   checkManifest,
   classifyPhase,
+  compareExternalProjection,
+  externalProjection,
   main,
   parseConsumerInput,
   validateConsumerInput,
   verifyBundleIndex,
+  verifyConsumerReceipt,
   verifyMergeParents,
 } from '../run.mjs';
 
@@ -317,6 +321,108 @@ describe('phase classifier and merge parents (GW8-m1)', () => {
     await assert.rejects(
       verifyMergeParents({ mergeSha: 'merge', baseSha: 'base', headSha: 'head' }, failing),
       (error) => error instanceof GatewayInputError && error.code === 'unreadable-base-evidence',
+    );
+  });
+});
+
+describe('external closure and receipts (GW6-M1/GW7-M1)', () => {
+  const workspaces = ['@sentropic/track', '@sentropic/h2a'];
+  const lockRows = () => [
+    { location: 'node_modules/@sentropic/llm-mesh', name: '@sentropic/llm-mesh', version: '0.27.0', resolved: 'https://r/m.tgz', integrity: 'sha512-mm' },
+    { location: 'packages/focus/node_modules/@sentropic/track', name: '@sentropic/track', version: '0.86.0', resolved: '', integrity: '' },
+    { location: 'node_modules/lodash', name: 'lodash', version: '4.17.21', resolved: 'https://r/l.tgz', integrity: 'sha512-ll' },
+  ];
+
+  it('excludes every workspace-name copy by identity, never by path or pins', () => {
+    const projection = externalProjection(lockRows(), workspaces);
+    assert.deepEqual(
+      projection.map((row) => row.name),
+      ['@sentropic/llm-mesh'],
+    );
+  });
+
+  it('fails unpinned external rows with external-row-unpinned before drift', () => {
+    const projection = externalProjection(
+      [{ location: 'x', name: '@sentropic/llm-mesh', version: '1.0.0', resolved: 'https://r', integrity: '' }],
+      [],
+    );
+    failsWith(() => assertPinnedProjection(projection), 'external-row-unpinned');
+  });
+
+  it('refuses missing, extra, or changed external rows (drift)', () => {
+    const declared = assertPinnedProjection(externalProjection([lockRows()[0]], []));
+    failsWith(() => compareExternalProjection([], declared), 'external-drift');
+    failsWith(
+      () => compareExternalProjection([...declared, { ...declared[0], location: 'other', resolved: 'https://r/o.tgz', integrity: 'sha512-oo' }], declared),
+      'external-drift',
+    );
+    failsWith(
+      () => compareExternalProjection([{ ...declared[0], version: '0.99.0' }], declared),
+      'external-drift',
+    );
+    assert.deepEqual(compareExternalProjection(declared, declared), declared);
+  });
+
+  const receipt = (overrides = {}) => ({
+    program: 'gateway',
+    phase: 'pr1-candidate',
+    conclusion: 'success',
+    jobs: [{ name: 'tests', conclusion: 'success' }],
+    runId: 42,
+    attempt: 1,
+    headSha: 'head',
+    baseSha: 'base',
+    mergeSha: 'merge',
+    inputSha256: 'i'.repeat(64),
+    manifestSha256: 'm'.repeat(64),
+    releaseLockSha256: 'l'.repeat(64),
+    declaredReleaseLockSha256: 'l'.repeat(64),
+    ...overrides,
+  });
+
+  const expectedOwn = () => ({
+    program: 'gateway',
+    phase: 'pr1-candidate',
+    runId: 42,
+    attempt: 1,
+    headSha: 'head',
+    baseSha: 'base',
+    mergeSha: 'merge',
+    inputSha256: 'i'.repeat(64),
+    manifestSha256: 'm'.repeat(64),
+    releaseLockSha256: 'l'.repeat(64),
+  });
+
+  it('verifies a companion-own receipt and refuses stale or incomplete evidence', () => {
+    assert.deepEqual(verifyConsumerReceipt(receipt(), expectedOwn()).verified, true);
+    failsWith(() => verifyConsumerReceipt(null, expectedOwn()), 'ci-receipt-unavailable');
+    failsWith(
+      () => verifyConsumerReceipt(receipt({ headSha: 'old' }), expectedOwn()),
+      'stale-head',
+    );
+    failsWith(
+      () => verifyConsumerReceipt(receipt({ conclusion: 'failure' }), expectedOwn()),
+      'incomplete-evidence',
+    );
+    failsWith(
+      () => verifyConsumerReceipt(receipt({ releaseLockSha256: 'x'.repeat(64) }), expectedOwn()),
+      'lock-mismatch',
+    );
+  });
+
+  it('accepts a release bump with an unchanged external projection (inherited)', () => {
+    const declared = assertPinnedProjection(externalProjection([lockRows()[0]], []));
+    const ok = verifyConsumerReceipt(
+      receipt({ releaseLockSha256: 'n'.repeat(64), declaredReleaseLockSha256: 'l'.repeat(64) }),
+      { ...expectedOwn(), allowLockChange: true, actualProjection: declared, declaredProjection: declared },
+    );
+    assert.equal(ok.verified, true);
+    failsWith(
+      () => verifyConsumerReceipt(
+        receipt({ releaseLockSha256: 'n'.repeat(64) }),
+        { ...expectedOwn(), allowLockChange: true, actualProjection: [], declaredProjection: declared },
+      ),
+      'external-drift',
     );
   });
 });
