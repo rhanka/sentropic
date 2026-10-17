@@ -13,7 +13,8 @@ describe.skipIf(!pgEnabled)('comments coherent groups and cumulative batch recei
         expect(first.canonical.snapshot.hash).not.toBe(second.canonical.snapshot.hash);
         expect(await commitImport(h, request, a)).toEqual(first);
         expect(await h.module.services.recoverBatchReceipts({ scope: h.scope, batchId: request.batchId, manifestHash: request.manifest.hash })).toEqual([first, second]);
-        await expect(prepareImport(h, request, 'operation-duplicate', [units[0]])).rejects.toThrow(/committed|conflict/i);
+        await expect(prepareImport(h, request, 'operation-duplicate', [units[0]]))
+          .rejects.toMatchObject({ condition: 'conflict', code: 'idempotency-conflict' });
         expect((await h.bound.journalRead(0, 100)).events).toHaveLength(2);
       });
     } finally { await h.fixture.close(); }
