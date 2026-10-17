@@ -296,6 +296,20 @@ function deepFreeze(value: unknown): void {
 }
 
 function checkDefinitionShape(definition: RegistryDefinition): void {
+  // Contract-v6 R1 boundary: a remote-bound definition kind is refused before
+  // any other validation or mutation, even when the input also carries
+  // local-looking fields or a lazy loader payload. Remote-bound providers
+  // register only post-merge (R2); this registry stays local-only.
+  if (
+    isRecord(definition) &&
+    (definition as unknown as Record<string, unknown>).kind === 'remote-bound'
+  ) {
+    const error = new Error(
+      'register refuses remote-bound definition: unsupported_definition_kind',
+    ) as Error & { code?: string };
+    error.code = 'unsupported_definition_kind';
+    throw error;
+  }
   if (!isRecord(definition) || !isRecord(definition.manifest)) {
     throw new Error('register requires a definition with a manifest object');
   }
