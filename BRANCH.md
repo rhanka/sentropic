@@ -483,6 +483,7 @@
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
 
 - [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Updated compatibility documentation to the delivered candidate exports, injected PG/host-history ownership, seven module transport methods, packaged frozen oracle and exact remaining service/SQLite/application boundaries.
   - [ ] Update `spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md` with K4 rebuild, Postgres module and port changes (BRCM2-PORT).
   - [ ] Update `docs/comments-annotations/contract/storage-compatibility.md` and evidence index with M2 delivery and Immo import/receipt/readback API.
 
