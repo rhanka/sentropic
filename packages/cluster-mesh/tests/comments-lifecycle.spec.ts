@@ -11,7 +11,7 @@ describe.skipIf(!pgEnabled)('operational comments lifecycle', () => {
     const services = { capacity: conformanceCapacity(), capabilities: { check: async (_principal, capability, targets) => { calls++; expect(targets).toHaveLength(2); return allowed && capability !== 'purge'; } }, resolver: { resolve: async () => 'exact' as const }, clock: { now: () => 1234 } };
     const fixture = await createPgFixture(await createCommentsPostgresRegistration({ services }));
     try {
-      const root = await fixture.open(); const grant = grantFor({ scope }); const bound = await root.bindNew(grant);
+      const root = await fixture.open(); const grant = grantFor({ scope }); await root.bindNew(grant);
       const module = createCommentsModule({ storage: root.adapter(), capacity: conformanceCapacity() });
       const annotation = createAnnotationRevision(null, { scope, annotationId: 'a', primary: conformanceTarget(conformanceResource(scope)), secondary: [conformanceTarget(conformanceResource(scope, 'secondary'))], visualAnchors: [], body: conformanceBody('sensitive'), provenance: conformanceProvenance() }, conformanceCapacity());
       await module.withContext(grant, async () => {
@@ -24,7 +24,8 @@ describe.skipIf(!pgEnabled)('operational comments lifecycle', () => {
         await expect(module.store.getAnnotationHead(scope, 'a')).rejects.toMatchObject({ code: 'denied' });
         expect(await module.services.lifecycle(request)).toEqual(result);
       });
-      expect((await bound.purgeRead('jobs', { limit: 100 })).records).toHaveLength(0);
+      const maintenance = await root.bindNew(grantFor({ scope, token: 'maintenance', operations: ['read', 'write', 'maintain'] }));
+      expect((await maintenance.purgeRead('jobs', { limit: 100 })).records).toHaveLength(0);
     } finally { await fixture.close(); }
   });
   it('creates one canonical completion only after actual erasure, under the verified maintenance principal', async () => {
