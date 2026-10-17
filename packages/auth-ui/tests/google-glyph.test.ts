@@ -36,6 +36,14 @@ describe('google provider glyph (official multicolor G)', () => {
     expect(googleBlock).not.toContain('currentColor');
   });
 
+  it('paints the fills in official order blue, green, yellow, red (order is load-bearing)', () => {
+    const positions = OFFICIAL_FILLS.map((fill) => googleBlock.indexOf(`fill="${fill}"`));
+    for (const position of positions) {
+      expect(position).toBeGreaterThan(-1);
+    }
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  });
+
   it('is a static inline SVG with no external fetch', () => {
     expect(googleBlock).toContain('<svg viewBox="0 0 24 24"');
     expect(googleBlock).not.toMatch(/<image|href\s*=|http/);
