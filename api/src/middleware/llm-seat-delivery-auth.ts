@@ -3,12 +3,13 @@ import type { Context, Next } from 'hono';
 
 /**
  * L1 seat-delivery authentication (conditional CISEAT-EX2). The delivery
- * principal is a dedicated control job reaching the application through the
- * restricted trusted hop only. Real mTLS termination lives at ingress (L3
- * P-DEPLOY owns the listener design). At the application layer this
- * middleware requires all three of:
- * - the trusted-hop marker (`SEAT_DELIVERY_TRUSTED_HOP=1`), set only on the
- *   restricted listener and never on public routes; absent means closed;
+ * principal is a dedicated control job. At the application layer this
+ * middleware decides trust per request from authentication material only:
+ * no process-wide flag is consulted. A request is admitted only with a
+ * per-request trust attestation recorded on the context after the seat
+ * credential verifies. Restricting the route to a dedicated listener
+ * (mTLS termination at ingress) stays an open L3 P-DEPLOY limit; at this
+ * layer the mount flag plus the per-seat credential are the boundary;
  * - a per-seat bearer token from the server-side seat registry
  *   (`SEAT_DELIVERY_SEATS_JSON`), compared in constant time; the registry
  *   also binds owner, account, scope, and billing receipt per seatRef;
@@ -63,11 +64,13 @@ export const verifySeatDeliveryBearer = (presented: string | null, expected: str
   return actual.length === wanted.length && timingSafeEqual(actual, wanted);
 };
 
+export interface SeatDeliveryTrust {
+  seatRef: string;
+  verifiedAt: string;
+}
+
 /** Hono middleware enforcing the delivery contract above. */
 export const requireSeatDeliveryAuth = async (context: Context, next: Next): Promise<Response | void> => {
-  if (process.env['SEAT_DELIVERY_TRUSTED_HOP'] !== '1') {
-    return context.json({ message: 'Seat delivery is closed on this listener' }, 503);
-  }
   let seatRef = '';
   if (context.req.method !== 'GET') {
     try {
@@ -90,5 +93,6 @@ export const requireSeatDeliveryAuth = async (context: Context, next: Next): Pro
   }
   context.set('seatRef', seatRef);
   context.set('seat', entry);
+  context.set('deliveryTrust', { seatRef, verifiedAt: new Date().toISOString() } satisfies SeatDeliveryTrust);
   await next();
 };
