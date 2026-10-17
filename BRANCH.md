@@ -72,7 +72,7 @@
 - [ ] **Lot 2 — Metadata, request authority and sessions**
   - [x] Added real twelve-tool Radar schema fixture and compiled host adapter; composition RED on missing factory; public readonly OAuth/egress/session types defined without bearer getters.
   - [ ] Implement oauth-contracts/context/sessions and compose/mcp-oauth; public canonical PRM plus aliases, 401/403 challenges, exact issuer/audience, requiredAcr, per-tool scope/current-account checks and preflight before listen.
-  - [ ] Preserve existing compose/mcp. Reuse registry policy/bridge/result codec. Bind immutable request authority with leaf-local AsyncLocalStorage; no trusted headers or captured/shared bearer; defaults idle 30 min/absolute 8 h.
+  - [x] Private leaf-local AsyncLocalStorage authority and exact verified subject/audience/client/ACR checks implemented; public contexts exclude bearer material. Existing compose/mcp unchanged; integration pending.
   - [ ] New tests/mcp-oauth-composition.spec.ts and mcp-oauth-sessions.spec.ts: positive/negative ACR, mounts, live scopes/account, owner POST/GET/DELETE uniform 404, overlap, cancellation/SSE, expiry/restart/close. Existing unchanged: mcp-composition.spec.ts and mcp-registry.spec.ts.
   - [ ] Scoped gate: Lot 1 test command with SCOPE=tests/mcp-oauth-composition.spec.ts, then sessions, existing composition and registry; same typecheck/lint gate. UI files: none.
 - [ ] **Lot 3 — Controlled exchange egress and service proof**
