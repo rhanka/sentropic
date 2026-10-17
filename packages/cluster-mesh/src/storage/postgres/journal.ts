@@ -12,7 +12,8 @@ export const currentPgJournalFence = async (core: PgCore, grant: ScopeGrant<unkn
     await core.check(session, grant, 'maintain', true);
     const lane = `journal:${createHash('sha256').update(grant.principalId, 'utf8').digest('hex')}`;
     await session.execute({
-      text: `INSERT INTO ${core.roots.schema}.fences(scope_key, lane, owner, incarnation, epoch) VALUES($1, $2, $3, $4, 1) ON CONFLICT(scope_key, lane) DO NOTHING`,
+      text: `INSERT INTO ${core.roots.schema}.fences(scope_key, lane, owner, incarnation, epoch)
+        VALUES($1, $2, $3, $4, 1) ON CONFLICT(scope_key, lane) DO NOTHING`,
       values: [core.roots.key(grant.scope), lane, grant.principalId, core.incarnation],
     });
     const result = await session.execute({
@@ -138,7 +139,8 @@ export const readPgJournal = async (
             })),
           }
         : await session.execute({
-            text: `SELECT j.sequence::text, j.event::text FROM ${core.roots.schema}.journal AS j WHERE j.scope_key=$1 AND j.sequence>$2::bigint ORDER BY j.sequence
+            text: `SELECT j.sequence::text, j.event::text FROM ${core.roots.schema}.journal AS j
+        WHERE j.scope_key=$1 AND j.sequence>$2::bigint ORDER BY j.sequence
         LIMIT $3`,
             values: [core.roots.key(grant.scope), String(after), limit],
           });

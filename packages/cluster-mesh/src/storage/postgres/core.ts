@@ -155,7 +155,8 @@ export class PgCore {
   async revoke(token: string): Promise<void> {
     await this.tx.run(false, (session) =>
       session.execute({
-        text: `INSERT INTO ${this.roots.schema}.grants(module, token, bytes, revoked) VALUES($1, $2, $3, true) ON CONFLICT(module, token) DO UPDATE SET revoked=true`,
+        text: `INSERT INTO ${this.roots.schema}.grants(module, token, bytes, revoked)
+          VALUES($1, $2, $3, true) ON CONFLICT(module, token) DO UPDATE SET revoked=true`,
         values: [this.options.moduleId, token, Buffer.from('null')],
       }),
     );
@@ -183,9 +184,12 @@ export class PgCore {
     await this.tx.run(false, async (session) => {
       await this.check(session, grant, 'write', true);
       const result = await session.execute({
-        text: `INSERT INTO ${this.roots.schema}.fences(scope_key, lane, owner, incarnation, epoch, lease_until) VALUES($1, $2, $3, $4, $5::bigint, $6::timestamptz)
+        text: `INSERT INTO ${this.roots.schema}.fences(scope_key, lane, owner, incarnation, epoch, lease_until)
+        VALUES($1, $2, $3, $4, $5::bigint, $6::timestamptz)
         ON CONFLICT(scope_key, lane) DO UPDATE SET owner=excluded.owner, epoch=excluded.epoch, lease_until=excluded.lease_until WHERE
-        ${this.roots.schema}.fences.epoch<excluded.epoch OR (${this.roots.schema}.fences.epoch=excluded.epoch AND ${this.roots.schema}.fences.owner=excluded.owner AND ${this.roots.schema}.fences.lease_until
+        ${this.roots.schema}.fences.epoch<excluded.epoch OR
+        (${this.roots.schema}.fences.epoch=excluded.epoch AND ${this.roots.schema}.fences.owner=excluded.owner
+        AND ${this.roots.schema}.fences.lease_until
         IS NOT DISTINCT FROM excluded.lease_until) RETURNING epoch::text`,
         values: [
           this.roots.key(grant.scope),
@@ -237,7 +241,9 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
     if (registered !== null && registered !== wanted) throw new PostgresStorageError('configuration');
     if (wanted && registered === null) {
       const pinned = await session.execute({
-        text: `UPDATE ${provisional.roots.schema}.modules SET descriptor_digest=$1 WHERE module=$2 AND descriptor_digest IS NULL AND NOT EXISTS(SELECT 1 FROM ${provisional.roots.schema}.scopes
+        text: `UPDATE ${provisional.roots.schema}.modules SET descriptor_digest=$1
+        WHERE module=$2 AND descriptor_digest IS NULL
+        AND NOT EXISTS(SELECT 1 FROM ${provisional.roots.schema}.scopes
         WHERE module=$2 AND version>0) RETURNING module`,
         values: [wanted, options.moduleId],
       });
