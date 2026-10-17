@@ -18,6 +18,11 @@ const unit = (chainId: string) => ({
 });
 
 describe('root-aware ordinary mutations', () => {
+  it('should refuse an asynchronous final preparation hook before publication', async () => {
+    const { bound } = setup({ prepare: async () => undefined });
+    await expect(bound.commitAtomic(unit('async-hook'))).rejects.toMatchObject({ code: 'invalid-command' });
+    expect(await bound.readHead('async-hook')).toBeNull();
+  });
   it('should not let a request weaken the coordinator work ceiling', async () => {
     const { bound } = setup();
     await expect(bound.commitAtomic(unit('oversized-limits'), { limits: { maxRecords: 129, maxAppends: 128, maxEncodedBytes: 524288 } })).rejects.toMatchObject({ code: 'invalid-command' });

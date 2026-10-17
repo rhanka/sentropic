@@ -44,6 +44,8 @@ describe('bounded root sealing', () => {
     }
     expect(await bound.readHead('chain')).toBeNull();
     if (result.state !== 'sealed') throw new Error('expected seal');
+    const reordered = Object.fromEntries(Object.entries(input.root).reverse()) as typeof input.root;
+    expect(sealOperationStep(core, bound, { ...input, root: reordered, fence: FENCE })).toMatchObject({ state: 'sealed', seal: result.seal });
     const receipt = await commitSealedOperation(core, bound, { seal: result.seal, fence: FENCE });
     expect(receipt.moduleResult).toEqual({ format: 'utf8', data: 'complete-result' });
     expect(await bound.readHead('chain')).toBe('h-5');
