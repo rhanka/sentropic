@@ -74,7 +74,7 @@ export const initiatives = pgTable('initiatives', {
     .references(() => folders.id, { onDelete: 'cascade' }),
   organizationId: text('organization_id').references(() => organizations.id),
   status: text('status').default('completed'), // 'draft', 'generating', 'detailing', 'completed'
-  model: text('model'), // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano') - nullable, uses default from settings
+  model: text('model'), // Model used for generation; nullable to use the configured default.
   // BR-04: initiative lifecycle columns
   antecedentId: text('antecedent_id'), // self-FK for lineage (parent initiative)
   maturityStage: text('maturity_stage'), // e.g. 'G0', 'G2', 'G5', 'G7'. Nullable (null = no gating)

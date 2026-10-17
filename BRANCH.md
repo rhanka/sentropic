@@ -36,6 +36,7 @@
   - `ui/tests/**`
   - `packages/chat-ui/src/state/chatLoopController.ts`
   - `packages/chat-ui/package.json`
+  - `packages/chat-ui/export-manifest.json`
   - `packages/chat-ui/tests/**`
   - `packages/llm-mesh/src/catalog.ts`
   - `packages/llm-mesh/src/providers.ts`
@@ -63,6 +64,8 @@
 - [x] Packet's `.cursor/rules/*.mdc` sources resolve to canonical `rules/*.md`; source studies and model-update runbook read.
 - [x] Four helper-contract failures reproduced before changes: title/effort candidates, non-OpenAI compaction, and tool-follow-up bounds; two independent source reviews reconciled these issues.
 - [x] Helper/wire correction gate: 31 tests passed across nano helper/wire, chat summary, document analysis and history analysis suites.
+- [x] Client default regression reproduced before fix; registry prechecks: llm-mesh 0.26.1, chat-ui 0.34.1; chat-ui candidate bumped to 0.34.2.
+- [x] BRNANO-EX1: include chat-ui export-manifest metadata and its existing version assertions to synchronize the required package bump; metadata-only impact, rollback together with the bump.
 
 ## AI Flaky tests
 - [ ] Record every provider failure verbatim after secret sanitization; failed qualification remains failed, without rerunning for a pass or inflating timeouts.

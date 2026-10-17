@@ -1069,9 +1069,9 @@ export function createChatLoopController<
   let mcModels: ModelCatalogModel[] = [];
   let mcGroups: ModelCatalogGroup[] = [];
   let mcSelectedProviderId: ModelProviderId = 'openai';
-  let mcSelectedModelId = 'gpt-4.1-nano';
+  let mcSelectedModelId = '';
   let mcDefaultProviderId: ModelProviderId = 'openai';
-  let mcDefaultModelId = 'gpt-4.1-nano';
+  let mcDefaultModelId = '';
 
   // -------------------------------------------------------------------------
   // Snapshot construction — always returns a new object reference

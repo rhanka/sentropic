@@ -2163,6 +2163,16 @@ const fakeCatalog = {
 
 describe('chat-loop-controller: model catalog (slice 1F)', () => {
   // 13a. Providers + models + groups populated
+  it('should defer model selection until the server catalog default is known', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    expect(ctrl.getSnapshot().selectedModelId).toBe('');
+    expect(ctrl.getSnapshot().defaultModelIdForNewSession).toBe('');
+    await ctrl.loadModelCatalog(async () => ({ ...fakeCatalog,
+      defaults: { provider_id: 'gemini', model_id: 'gemini-pro' },
+    }));
+    expect(ctrl.getSnapshot().selectedModelId).toBe('gemini-pro');
+  });
+
   it('13a: loadModelCatalog populates providers, models, and groups', async () => {
     const ctrl = createChatLoopController<Msg>();
     await ctrl.loadModelCatalog(async () => fakeCatalog);
