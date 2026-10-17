@@ -15,9 +15,11 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+mounts=(-v "$PWD:/workspace")
+if [ -n "${GW_EVOL_COMPANION:-}" ]; then mounts+=(-v "$GW_EVOL_COMPANION:/companion"); fi
 docker run --rm --init --name "$run_id" --label "gw-evolution-owned=$run_id" \
   --label "gw-evolution-env=$test_env" -u "$(id -u):$(id -g)" -e HOME=/tmp \
-  -v "$PWD:/workspace" -w /workspace "$image" sh -ec \
+  "${mounts[@]}" -w /workspace "$image" sh -ec \
   'if command -v python >/dev/null || command -v python3 >/dev/null; then echo "ERROR: Python in runner" >&2; exit 2; fi; exec "$@"' sh "$@" &
 runner_pid=$!
 wait "$runner_pid"
