@@ -11,14 +11,15 @@
 - [x] Preserve root dev/UAT and unrelated work; English source/docs; selective staging and `make commit`; commits at most 150 lines.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [x] **Allowed Paths (implementation scope)**: `packages/artifacts/**`, `BRANCH.md`.
+- [x] **Allowed Paths (implementation scope)**: `packages/artifacts/**`, `BRANCH.md`, `package-lock.json` (only the required artifacts workspace version update).
 - [x] **Forbidden Paths (must not change in this branch)**: `Makefile`, `docker-compose*`, `.github/**`, `.cursor/rules/**`, consumers and unrelated packages.
-- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**: `package-lock.json` only for the required version update.
+- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**: none beyond the packet's allowed paths.
 - [x] **Exception process**: record `BRxx-EXn` reason, impact and rollback before any scope expansion; none authorized.
 
 ## Feedback Loop
 - [x] FL-ACT-READ: `acknowledge` — packet's `.cursor/rules/*.mdc` paths are absent; loaded consolidated equivalents in `rules/`; owner: branch agent, 2026-10-17.
 - [x] Requested delivery report is an ignored runtime artifact at `.h2a/build/artifacts_fl_act_report.md`, outside the committed implementation diff.
+- [x] FL-ACT-NPM: `acknowledge` — container `npm view @sentropic/artifacts version` returned public-registry E404; retain packet's explicit 0.1.1 candidate; owner: branch agent, 2026-10-17.
 
 ## AI Flaky tests
 - [x] No AI tests or timeout changes; deterministic in-memory tests only for the affected activation surface.
@@ -38,13 +39,13 @@
   - [x] Update existing `packages/artifacts/tests/content.e2e.test.ts`: issue for r1, republish r2, attempt activation on the stable origin; assert 401 and no cookie.
   - [x] RED gate: `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act`; confirmed 200 instead of 401 before changing source (1 failed, 1 passed).
   - [x] Commit RED test and detailed plan after `make scope-check ENV=test-artifacts-fl-act`.
-- [ ] **Lot 1 — Exact activation binding and patch version**
-  - [ ] Update `packages/artifacts/src/content/grants.ts`: mandatory release/channel binding at issuance and redemption; subject/artifact checks and single-use semantics preserved; expiry refused at its boundary.
-  - [ ] Update `packages/artifacts/src/content/handler.ts`: redeem against resolved release and origin channel.
-  - [ ] Update existing `packages/artifacts/tests/content.e2e.test.ts` activation helper to issue explicit release/channel tickets.
-  - [ ] Query published npm version through container Make tooling; bump `packages/artifacts/package.json` from 0.1.0 to 0.1.1; update lock workspace version only if needed.
-  - [ ] GREEN gate: `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act`.
-  - [ ] Commit fix after `make scope-check ENV=test-artifacts-fl-act`.
+- [x] **Lot 1 — Exact activation binding and patch version**
+  - [x] Update `packages/artifacts/src/content/grants.ts`: mandatory release/channel binding at issuance and redemption; subject/artifact checks and single-use semantics preserved; expiry refused at its boundary.
+  - [x] Update `packages/artifacts/src/content/handler.ts`: redeem against resolved release and origin channel.
+  - [x] Update existing `packages/artifacts/tests/content.e2e.test.ts` activation helper to issue explicit release/channel tickets.
+  - [x] Query published npm version through container Make tooling (E404); bump `packages/artifacts/package.json` from 0.1.0 to 0.1.1 and synchronize only its lock workspace version.
+  - [x] GREEN gate: `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act` (2 passed).
+  - [x] Commit fix after `make scope-check ENV=test-artifacts-fl-act`.
 - [ ] **Lot 2 — Binding negatives and automated UAT**
   - [ ] Update existing `packages/artifacts/tests/content-grants.test.ts`: wrong subject/artifact/release/channel, missing binding, exact expiry, retry after mismatch, replay and concurrent redemption.
   - [ ] Update existing `packages/artifacts/tests/content.e2e.test.ts`: channel/release mismatch denies cookie; valid pinned r1 remains usable after stable republish; successful redemption remains single-use.

@@ -94,8 +94,11 @@ async function publish(world: World, html: string, key: string): Promise<{ id: s
   return { id, releaseId: (published.body as { releaseId: string }).releaseId };
 }
 
-async function activate(world: World, host: string, actorId: string, artifactId: string) {
-  const issued = await world.tickets.issue({ subjectId: actorId, artifactId });
+async function activate(
+  world: World, host: string, actorId: string, artifactId: string,
+  releaseId: string, channel: 'stable' | 'pinned',
+) {
+  const issued = await world.tickets.issue({ subjectId: actorId, artifactId, releaseId, channel });
   const res = await world.handler.handle({ method: 'GET', host, path: '/', actorId, ticket: issued.ticketId });
   expect(res.status).toBe(200);
   const cookie = res.headers['set-cookie'];
@@ -132,7 +135,7 @@ describe('content serving e2e', () => {
     expect(anonymous.status).toBe(401);
     const bogusHost = await get(world, { method: 'GET', host: `www.${BASE}`, path: '/' });
     expect(bogusHost.status).toBe(404);
-    const cookie = await activate(world, stable, STEVE, v1.id);
+    const cookie = await activate(world, stable, STEVE, v1.id, v1.releaseId, 'stable');
     const served = await get(world, { method: 'GET', host: stable, path: '/', cookie });
     expect(served.status).toBe(200);
     expect(text(served.bytes)).toBe(V1);
@@ -148,7 +151,7 @@ describe('content serving e2e', () => {
     const staleGrant = await get(world, { method: 'GET', host: stable, path: '/', cookie });
     expect(staleGrant.status).toBe(401);
     // The pinned v1 origin still serves v1 after its own activation.
-    const pinnedCookie = await activate(world, pinnedV1, STEVE, v1.id);
+    const pinnedCookie = await activate(world, pinnedV1, STEVE, v1.id, v1.releaseId, 'pinned');
     const pinnedServed = await get(world, { method: 'GET', host: pinnedV1, path: '/', cookie: pinnedCookie });
     expect(text(pinnedServed.bytes)).toBe(V1);
     // Withdrawal cuts readers off at the next request despite a live grant.

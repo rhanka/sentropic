@@ -15,6 +15,7 @@ import {
 const T0 = Date.parse('2026-01-01T00:00:00.000Z');
 const ARTIFACT = '11111111-1111-4111-8111-111111111111';
 const RELEASE = '22222222-2222-4222-8222-222222222222';
+const BINDING = { subjectId: 'steve', artifactId: ARTIFACT, releaseId: RELEASE, channel: 'stable' } as const;
 
 function makeSigner(now = { t: T0 }) {
   return {
@@ -76,15 +77,15 @@ describe('content grants', () => {
       clock: () => now.t,
       ids: () => `ticket-${(seq += 1)}`,
     });
-    const issued = await tickets.issue({ subjectId: 'steve', artifactId: ARTIFACT, releaseId: RELEASE });
+    const issued = await tickets.issue(BINDING);
     expect(issued.ticketId).toBe('ticket-1');
-    await expect(tickets.redeem(issued.ticketId, { subjectId: 'mallory', artifactId: ARTIFACT }))
+    await expect(tickets.redeem(issued.ticketId, { ...BINDING, subjectId: 'mallory' }))
       .rejects.toThrow(/invalid ticket/);
-    const redeemed = await tickets.redeem(issued.ticketId, { subjectId: 'steve', artifactId: ARTIFACT });
+    const redeemed = await tickets.redeem(issued.ticketId, BINDING);
     expect(redeemed).toMatchObject({ subjectId: 'steve', artifactId: ARTIFACT, releaseId: RELEASE });
-    await expect(tickets.redeem(issued.ticketId, { subjectId: 'steve', artifactId: ARTIFACT }))
+    await expect(tickets.redeem(issued.ticketId, BINDING))
       .rejects.toThrow(/invalid ticket/);
-    await expect(tickets.redeem('ticket-404', { subjectId: 'steve', artifactId: ARTIFACT }))
+    await expect(tickets.redeem('ticket-404', BINDING))
       .rejects.toThrow(/invalid ticket/);
   });
 
@@ -95,9 +96,9 @@ describe('content grants', () => {
       clock: () => now.t,
       ids: () => 'ticket-x',
     });
-    const issued = await tickets.issue({ subjectId: 'steve', artifactId: ARTIFACT });
+    const issued = await tickets.issue(BINDING);
     now.t = issued.expiresAt + 1;
-    await expect(tickets.redeem(issued.ticketId, { subjectId: 'steve', artifactId: ARTIFACT }))
+    await expect(tickets.redeem(issued.ticketId, BINDING))
       .rejects.toThrow(/ticket expired/);
   });
 });
