@@ -1515,11 +1515,22 @@ describe('session consent durable lifecycle', () => {
       nativeStartSeq: 0,
     }, ctx);
     const stagedS2 = new TextEncoder().encode('staged-s2');
-    await service.reserveBeforeUpload(
+    const rS2 = await service.reserveBeforeUpload(
       'sess-content-s2', 'terminal.cache',
       { raw: stagedS2.length, encoded: stagedS2.length }, 'k-n1-3', ctx,
     );
-    await service.fenceSessionOnDetachEnd('sess-content-s2', TENANT_A);
+    const detaching = makeService({
+      publishHooks: {
+        afterUpload: async () => {
+          const adopting = new SessionWorkspaceService(undefined, null);
+          await adopting.detach('sess-content-s2', TENANT_A, owner.id);
+          await service.fenceSessionOnDetachEnd('sess-content-s2', TENANT_A);
+        },
+      },
+    });
+    await expectContentError(() => detaching.publishAfterUpload(
+      rS2.reservationId, stagedS2, ctx,
+    ), 'grant_revoked');
     const jobs = await db.select().from(sessionContentPurgeJobs);
     expect(jobs.length).toBeGreaterThan(0);
     for (const job of jobs) {
@@ -2520,6 +2531,117 @@ describe('session consent durable lifecycle', () => {
     await service.reserveBeforeUpload(
       'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-m2-acceptn-2', ctx,
     );
+    void bindingId;
+  });
+
+  it('should let exactly one concurrent refresh win (m2)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+      ctx,
+    );
+    const outcomes = await Promise.allSettled([
+      refreshAck('sess-content-s1', 1, rows[0]!.version, 1),
+      refreshAck('sess-content-s1', 1, rows[0]!.version, 1),
+    ]);
+    const won = outcomes.filter((o) => o.status === 'fulfilled');
+    expect(won).toHaveLength(1);
+    expect((won[0] as PromiseFulfilledResult<{ refreshed: boolean }>).value.refreshed).toBe(true);
+    const lost = outcomes.filter((o) => o.status === 'rejected');
+    expect(lost).toHaveLength(1);
+    expect((((lost[0] as PromiseRejectedResult).reason) as SessionContentError).code).toBe('revision_conflict');
+    const grants = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(grants[0]!.projectRevision).toBe(1);
+    expect(grants[0]!.version).toBe(2);
+    void bindingId;
+  });
+
+  it('should keep later fences effective after a refresh (m2)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+      ctx,
+    );
+    await refreshAck('sess-content-s1', 1, rows[0]!.version);
+    await service.fenceSessionOnDetachEnd('sess-content-s1', TENANT_A);
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-m2-fenced', ctx,
+    ), 'grant_revoked');
+    await expectContentError(
+      () => refreshAck('sess-content-s1', 1, rows[0]!.version),
+      'grant_closed',
+    );
+    void bindingId;
+  });
+
+  it('should refuse future-only derivation when the server binding predates activation (m2/n4)', async () => {
+    await acceptProject({ futureSessions: true, selectedSessionIds: [] });
+    const bindingId = await adoptSession('sess-content-s1');
+    await db
+      .update(sessionWorkspaceBindings)
+      .set({ createdAt: new Date(1) })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await expectContentError(() => service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx), 'ineligible_session');
     void bindingId;
   });
 });
