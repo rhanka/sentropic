@@ -101,6 +101,7 @@
   - [x] Physical-fetch contracts written before implementation: exact endpoint/model/none/cap/Standard tier, no hosted paid tools or redirects, durable reservation before any send; API typecheck and lint pass.
   - [x] Evidence contracts written first: an exclusive, fsynced journal prevents a rerun from resetting spending; capture raw Chat Completions and Responses counters before mesh normalization.
   - [ ] Add `api/tests/ai/nano-replacement-qualification.test.ts` and shared fixture/budget support; offline-test reservation, missing usage, cancellation and refusal before budget overflow.
+  - [x] Native qualification injection keeps real product/mesh dispatch, pins Standard API with SDK retries zero, records served model and raw usage, and aborts timed-out work without increasing test timeouts.
   - [ ] Exercise BOTH candidates on identical title, effort, compaction, JSON/tool continuation and history/document single/chunk fixtures through product helpers and llm-mesh; retain outputs and usage evidence.
   - [ ] Run `make test-api-ai SCOPE=tests/ai/nano-replacement-qualification.test.ts API_TEST_ARGS="--no-file-parallelism" API_PORT=9450 UI_PORT=5650 MAILDEV_UI_PORT=1550 ENV=test-model-retirement`; record validity, fact retention, latency p50/p95, input/output/reasoning tokens and measured costs per class, with sample sizes.
 - [ ] **Lot 4 — UAT and documentation consolidation**
