@@ -414,6 +414,8 @@
   - [ ] The unrelated-resource probe is RED. Tightened the sequence probe to recompute every successor hash/predecessor so a generic missing dependency cannot hide absent M1 sequence validation; corrected TypeScript inference when merging heterogeneous neutral effect sections.
   - [ ] Import intake now derives required capabilities from actual record kinds/actions and compares direct resource tuples with the authorized inventory. BRCM2-PORT-13: trusted projection context adds the backend-derived staged unit identity and captured coverage root for module validation; neither comes from scoped request flags.
   - [ ] The strengthened sequence mutant is RED. Hidden projection preparation now checks actual chain allocation/link sequence, frozen content constructors, exact root-member references and indirect object resource targets before any publication.
+  - [x] All six strengthened real-PG import tests pass, including both formerly accepted forged-sequence and unrelated-resource cases.
+  - [ ] RED `comments-export.spec.ts` creates a 28-revision history above 1 MiB, captures exact heads through bounded preparation, requires whole advancing fragments and a terminal typed payload root, stable request replay, canonical record pages and current-authority refusal after capture.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
