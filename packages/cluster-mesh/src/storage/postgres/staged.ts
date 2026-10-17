@@ -1,6 +1,6 @@
 import type { ScopeGrant } from '../authority.js';
 import { StorageDeniedError, StorageIdempotencyConflictError, StorageInvalidCommandError } from '../errors.js';
-import { validateBeginInput, validateFragmentInput, type StagedBeginInput, type FragmentReceipt } from '../staged-units.js';
+import { validateBeginInput, validateFragmentInput, type StagedBeginInput, type FragmentReceipt, type StagedUnitStatus } from '../staged-units.js';
 import { deriveStagedDependencies, stagedEffectDigest, stagedFragmentDigest } from '../staged-codec.js';
 import { EFFECT_SECTIONS } from '../staged-preparation.js';
 import type { RootStageInput } from '../staged-operations.js';
@@ -67,3 +67,13 @@ export const readPgFragmentMetadata = async (core: PgCore, session: import('./pr
   const result = await session.execute({ text: `SELECT metadata::text FROM ${core.roots.schema}.fragments WHERE unit_id=$1 AND ordinal=$2::bigint`, values: [unit.id, String(ordinal)] });
   return decodePgJson<{ counts: number[]; dependencyLength: number; effectLength: number }>(decodePgText(result.rows[0]?.metadata));
 };
+export const inspectPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, operationKey: string): Promise<StagedUnitStatus> => core.tx.run(false, async (session) => {
+  await core.check(session, grant, 'write');
+  const result = await session.execute({ text: `SELECT id FROM ${core.roots.schema}.units WHERE scope_key=$1 AND operation=$2`, values: [core.roots.key(grant.scope), operationKey] });
+  if (!result.rows[0]) throw new StorageInvalidCommandError('unknown staged operation');
+  const unit = await readPgUnit(core, session, grant, decodePgText(result.rows[0].id)); const m = unit.metadata;
+  if (m.state === 'staging' || m.state === 'sealing') return { state: m.state, acceptedFragments: String(m.count) };
+  if (m.state === 'sealed') return { state: 'sealed', seal: ownPgValue(m.seal!) };
+  if (m.state === 'committed') return { state: 'committed', commitId: m.receipt!.commitId };
+  return { state: 'aborted', reason: m.reason! };
+});
