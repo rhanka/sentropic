@@ -32,7 +32,10 @@ export const executeCommentsLifecycle = async (options: CommentsServiceOptions, 
   await store.appendLifecycleEvent(request.scope, request.objectKind, request.objectId, record, request.expected);
   await appendLifecycleAudit(context, options, target, request);
   let intent = request.action === 'purge-intent' ? record : null;
-  if (request.action === 'tombstone' && context.policy === 'required') {
+  const requiredIntent = async () => context.policy === 'required' && context.grant.operations.includes('maintain') && await options.capabilities.check(context.grant.principalId, 'purge', targets);
+  const createIntent = request.action === 'tombstone' && await requiredIntent();
+  if (request.action === 'tombstone') context.revalidate(async () => { if (await requiredIntent() !== createIntent) throw new CanonicalCommandError('denied', 'Purge authority changed before tombstone publication'); });
+  if (createIntent) {
     await authorizeComments(options, context, 'purge', targets);
     if (!context.grant.operations.includes('maintain')) throw new CanonicalCommandError('denied', 'Purge requires maintenance authority');
     intent = createLifecycleEvent([record], { ...input, action: 'purge-intent', archiveKind: null, reason: null }, options.capacity);
