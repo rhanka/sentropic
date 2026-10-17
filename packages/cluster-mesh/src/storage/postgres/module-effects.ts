@@ -3,6 +3,7 @@ import type { ScopeGrant } from '../authority.js';
 import { StorageDeniedError, StorageIdempotencyConflictError, StorageInvalidCommandError } from '../errors.js';
 import type { PgCore } from './core.js';
 import type { PgSession } from './protocol.js';
+import { linkPgCoverage } from './coverage.js';
 export const validatePgPurgePolicy = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, root: string | null, barriers: number, purges: number): Promise<void> => {
   const policy = await core.roots.get<string>(session, root, 'policy', 'purge') ?? 'unconfigured';
   if (purges > 0) {
@@ -14,6 +15,10 @@ export const validatePgPurgePolicy = async (core: PgCore, session: PgSession, gr
 export const applyPgModuleEffects = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, initial: string | null, unit: AtomicUnit): Promise<string | null> => {
   const store = core.roots; let root = initial;
   for (const change of unit.relationships) {
+    if (change.relation === 'coverage-parent-v1') {
+      if (change.kind !== 'add') throw new StorageInvalidCommandError('coverage removal is not supported');
+      root = await linkPgCoverage(core, session, root, change.from, change.to);
+    }
     const id = JSON.stringify([change.relation, change.from]);
     const relation = await store.get<{ root: string | null; count: number }>(session, root, 'relation', id) ?? { root: null, count: 0 };
     const previous = await store.get<boolean>(session, relation.root, 'target', change.to);

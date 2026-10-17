@@ -5,6 +5,7 @@ import { emptyEffects } from '../storage/staged-preparation.js';
 import { CommentsContext, StoredGenesisReplay, type CommentsRequest } from './context.js';
 import { canonicalRecordKey, chainIdentity, commandKey, decodeRecord, invalid, own, validateRecordIdentity } from './storage-schema.js';
 import { validateCommentsRecord } from './record-validation.js';
+import { commentsRelationships } from './relationships.js';
 export class CommentsAdapter {
   constructor(readonly context: CommentsContext, readonly capacity: CapacityDescriptor) {}
   async lookup(request: CommentsRequest, tx: KernelTransaction | null, selection: CanonicalReadSelection, hash?: string): Promise<CanonicalChainRecord | null> {
@@ -35,6 +36,7 @@ export class CommentsAdapter {
       await validateCommentsRecord(record, previous, this.capacity, (selected, hash) => this.lookup(request, tx, selected, hash));
       const bytes = canonicalJson(record);
       await tx.apply({ ...emptyEffects(),
+        relationships: commentsRelationships(record, identity.key, canonicalRecordKey(identity.key, record.hash)),
         records: [{ key: canonicalRecordKey(identity.key, record.hash), contentHash: record.hash, bytes: { format: 'utf8', data: bytes } }],
         appends: [{ chainId: identity.key, record: { id: record.hash, hash: record.hash, bytes }, expectation: previous ? { kind: 'head', hash: previous.hash } : { kind: 'absent', allocation: '0' } }],
       });
