@@ -731,7 +731,8 @@ describe('session consent durable lifecycle', () => {
   });
 
   it.each(['purge', 'revoke', 'exclude', 'project'] as const)('should apply product content %s without source contact and preserve D1', async (action) => {
-    await acceptProject();
+    await acceptProject({ retentionByChannel: { 'terminal.cache': { mode: 'duration', durationSeconds: 60 },
+      'native.mirror': { mode: 'none' } } });
     const bindingId = await adoptSession('product-content-purge');
     const [binding] = await db.select().from(sessionWorkspaceBindings)
       .where(eq(sessionWorkspaceBindings.bindingId, bindingId));
@@ -743,6 +744,11 @@ describe('session consent durable lifecycle', () => {
     const reserved = await service.reserveBeforeUpload('product-content-purge', 'terminal.cache',
       { raw: bytes.length, encoded: bytes.length }, 'product-content-purge', ctx);
     await service.publishAfterUpload(reserved.reservationId, bytes, ctx);
+    const discovered = await productContent().request(`/api/v1/auth/session/content/workspaces/${workspaceId}/sessions`,
+      { headers: browserHeaders() });
+    expect((await discovered.json()).items[0].copies).toMatchObject([
+      { channel: 'terminal.cache', expiresAt: now + 60000 },
+    ]);
     if (action === 'purge') await db.delete(workspaceMemberships).where(and(
       eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, owner.id)));
     const router = productContent();

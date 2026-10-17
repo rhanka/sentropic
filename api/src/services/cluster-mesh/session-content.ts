@@ -2460,6 +2460,17 @@ export class SessionContentService {
       eq(sessionContentProjects.workspaceId, workspaceId),
       eq(sessionContentProjects.tenantId, workspace.tenantId), eq(sessionContentProjects.ownerId, ownerId),
     )).limit(1);
+    const copies = await db.select({ objectId: sessionContentObjects.objectId,
+      sessionId: sessionContentObjects.sessionId, channel: sessionContentObjects.channel,
+      expiresAt: sessionContentObjects.expiresAt, createdAt: sessionContentObjects.createdAt,
+      state: sessionContentObjects.state,
+    }).from(sessionContentObjects)
+      .innerJoin(sessionContentNamespaces, eq(sessionContentObjects.namespaceId, sessionContentNamespaces.namespaceId))
+      .innerJoin(sessionContentGrants, and(eq(sessionContentObjects.sessionId, sessionContentGrants.sessionId),
+        eq(sessionContentObjects.bindingId, sessionContentGrants.bindingId)))
+      .where(and(eq(sessionContentNamespaces.ownerId, ownerId), eq(sessionContentNamespaces.tenantId, workspace.tenantId),
+        eq(sessionContentGrants.workspaceId, workspaceId), eq(sessionContentGrants.ownerId, ownerId),
+        inArray(sessionContentObjects.state, ['committed', 'purge_pending'])));
     const scope = { workspaceId, ownerId, projectId: project?.projectId ?? workspaceId, sourceId: '' };
     const sessionIds = new Set([...bindings.map((row) => row.sessionId), ...grants.map((row) => row.sessionId)]);
     return { ...scope, projectRevision: project?.projectRevision ?? 0, projectState: project?.state ?? 'off',
@@ -2467,12 +2478,16 @@ export class SessionContentService {
       items: [...sessionIds].map((sessionId) => {
         const binding = bindings.find((row) => row.sessionId === sessionId);
         const grant = grants.find((row) => row.sessionId === sessionId);
+        const retained = copies.filter((copy) => copy.sessionId === sessionId);
         return { ...scope, sessionId, bindingId: grant?.bindingId ?? binding!.bindingId,
           status: binding?.status ?? 'ended', sourceAvailable: false, liveAuthorized: false,
-          storedAuthorized: false, historyAuthorized: false, retained: grant?.retainedCopies ?? false,
+          storedAuthorized: false, historyAuthorized: false, retained: retained.length > 0,
           excluded: grant?.state === 'excluded', revoked: grant?.state === 'revoked',
           projectRevision: project?.projectRevision ?? 0, grantProjectRevision: grant?.projectRevision ?? 0,
-          expiresAt: null, pauseReason: 'unsupported_source',
+          copies: retained.map(({ objectId, channel, expiresAt }) => ({ objectId, channel, expiresAt })),
+          lastReceivedAt: retained.length ? Math.max(...retained.map((copy) => copy.createdAt.getTime())) : undefined,
+          purgeStatus: retained.some((copy) => copy.state === 'purge_pending') ? 'pending' : undefined,
+          pauseReason: 'unsupported_source',
         };
       }),
     };
