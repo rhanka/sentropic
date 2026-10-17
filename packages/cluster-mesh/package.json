@@ -123,6 +123,7 @@
     "hono": "^4.10.7"
   },
   "peerDependencies": {
+    "@sentropic/comments": "^0.3.0",
     "@sentropic/llm-mesh": ">=0.22.0 <0.27.0",
     "@sentropic/llm-gateway": ">=0.19.0 <0.21.0",
     "@sentropic/mcp-auth": ">=0.2.1 <0.3.0",
@@ -130,6 +131,7 @@
     "jose": "^5.10.0"
   },
   "peerDependenciesMeta": {
+    "@sentropic/comments": { "optional": true },
     "@sentropic/llm-mesh": { "optional": true },
     "@sentropic/llm-gateway": { "optional": true },
     "@sentropic/mcp-auth": { "optional": true },
