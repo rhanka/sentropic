@@ -84,7 +84,7 @@ else
   make -C "$snap" build-api-tool-image API_TOOL_VERSION="$tool_version" $MAKE_ARGS
 fi
 tool_id="$(docker image inspect "$tool_ref" --format '{{.Id}}')"
-for f in api/drizzle/0042_immo_token_exchange.sql api/src/scripts/oauth-provision-exchange-client.ts; do
+for f in api/drizzle/0043_immo_token_exchange.sql api/src/scripts/oauth-provision-exchange-client.ts; do
   docker run --rm "$tool_ref" test -f "/workspace/$f" || fail "bootstrap image lacks $f"
 done
 docker save "$tool_ref" -o "$out/issuer-bootstrap-image.tar"
