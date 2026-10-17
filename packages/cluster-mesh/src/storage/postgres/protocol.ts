@@ -20,11 +20,13 @@ export interface PgBudgets {
   readonly lockWaitMs: number; readonly statementMs: number; readonly idleMs: number; readonly flushMs: number; readonly attempts: number;
 }
 export interface PgStreamIdentity { readonly moduleId: StorageModuleId; readonly scope: StorageScope; readonly incarnation: string; readonly stream: string; }
-export interface PgJournalDraft { readonly eventId: string; readonly seq: string; readonly commitId: string; readonly rootVersion: string; readonly operationKey?: string; }
+export interface PgJournalDraft { readonly eventId: string; readonly seq: string; readonly commitId: string; readonly rootVersion: string; readonly operationKey?: string; readonly segment?: { readonly operationKey: string; readonly from: string; readonly to: string }; }
 export interface PgOutboxBinding {
   // The host writes through this exact transaction session. Hidden staged
   // units publish one sealed segment, never a history-sized append loop.
   append(session: PgSession, stream: PgStreamIdentity, event: PgJournalDraft): Promise<void>;
+  read(session: PgSession, stream: PgStreamIdentity, after: string, limit: number): Promise<readonly PgJournalDraft[]>;
+  find(session: PgSession, stream: PgStreamIdentity, eventId: string): Promise<PgJournalDraft | null>;
 }
 export interface PgQueryContext {
   readonly layout: PgLayout; readonly currentRoot: string | null; readonly grant: ScopeGrant<unknown>;
