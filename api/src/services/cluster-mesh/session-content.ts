@@ -297,6 +297,8 @@ const requireContext = (ctx: SessionContentContext): void => {
 
 export interface SessionContentPublishHooks {
   readonly afterUpload?: (key: string) => Promise<void>;
+  /** Test-only PUT failure injection (N5). Never set in production. */
+  readonly beforePut?: (key: string) => Promise<void>;
 }
 
 export interface SessionContentOptions {
@@ -343,6 +345,9 @@ export interface DeriveSessionGrantInput {
   readonly d1Incarnation: number;
   readonly d1StartSeq: number;
   readonly workspaceId: string;
+  /** Caller claim, ignored for eligibility: the server derives creation
+   * time from the D1 binding row (n4). Kept for envelope compatibility
+   * until the Lot 3a routes bind the authenticated source timestamp. */
   readonly sessionCreatedAt: number;
   readonly sourceGeneration: string;
   readonly sourceTrustVersion: string;
@@ -940,9 +945,13 @@ export class SessionContentService {
         selectedSessionIds?: string[];
       };
       const selected = ((accepted['selectedSessionIds'] as string[] | undefined) ?? []).map(String);
+      // n4: future eligibility derives from the server-side D1 binding
+      // time, never from the caller's sessionCreatedAt claim (the Lot 3a
+      // routes take source/d1 sequences from authenticated authorities).
+      const serverSessionCreatedAt = binding.createdAt.getTime();
       const futureEligible =
         accepted['futureSessions'] === true &&
-        input.sessionCreatedAt >= new Date(project.activatedAt ?? 0).getTime();
+        serverSessionCreatedAt >= new Date(project.activatedAt ?? 0).getTime();
       if (!selected.includes(input.sessionId) && !futureEligible) {
         throw new SessionContentError('ineligible_session', 'session is outside the project scope');
       }
@@ -987,7 +996,7 @@ export class SessionContentService {
         retentionSnapshot: project.retentionByChannel,
         state: 'active',
         version: 1,
-        lastFreshnessAckAt: input.sessionCreatedAt,
+        lastFreshnessAckAt: serverSessionCreatedAt,
         localDenyPending: false,
         retainedCopies: false,
         createdAt: now,
@@ -1270,8 +1279,10 @@ export class SessionContentService {
         throw new SessionContentError('grant_revoked', 'grant is not active');
       }
       await this.requireEpochScope(tx, grant.authorityEpoch, namespaceId);
+      // N4: serialize on the tenant key so concurrent sessions of one
+      // tenant cannot oversubscribe the tenant quota (covers sessions too).
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext('scc-reserve'), hashtext(${sessionId}))`,
+        sql`SELECT pg_advisory_xact_lock(hashtext('scc-reserve'), hashtext(${ctx.tenantId}))`,
       );
       const [duplicate] = await tx
         .select()
@@ -1399,11 +1410,31 @@ export class SessionContentService {
       state: 'staged',
       version: 1,
     });
-    await client.send(
-      new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body }),
-    );
-    if (this.publishHooks?.afterUpload) {
-      await this.publishHooks.afterUpload(key);
+    // N5: a PUT/hook failure keeps purge pending and quota charged: the
+    // staged row becomes purge_pending with an object-scoped job, the
+    // reservation goes stale and the attempt unknown. Retrying the same
+    // reservation refuses (stale) instead of staging a second row.
+    try {
+      if (this.publishHooks?.beforePut) {
+        await this.publishHooks.beforePut(key);
+      }
+      await client.send(
+        new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body }),
+      );
+      if (this.publishHooks?.afterUpload) {
+        await this.publishHooks.afterUpload(key);
+      }
+    } catch (err) {
+      await this.queueStagedDeletion(
+        objectId,
+        reservation.reservation.namespaceId,
+        reservation.grant.bindingId,
+        reservationId,
+      );
+      throw new SessionContentError(
+        'unknown_outcome',
+        `upload outcome unknown, purge pending: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     const snapshot = reservation.grant.retentionSnapshot as RetentionByChannel;
     const channel = reservation.reservation.channel as 'terminal.cache' | 'native.mirror';
@@ -1448,7 +1479,9 @@ export class SessionContentService {
         if (!binding || binding.bindingId !== freshGrant.bindingId || binding.version !== freshGrant.bindingVersion) {
           throw new SessionContentError('ineligible_session', 'binding changed during upload (ABA)');
         }
-        await tx
+        // n1: assert exactly one staged row commits; a concurrent move
+        // refuses instead of consuming quota for nothing committed.
+        const committed = await tx
           .update(sessionContentObjects)
           .set({ state: 'committed', capturedAt, expiresAt, updatedAt: new Date(this.nowMs()) })
           .where(
@@ -1456,7 +1489,11 @@ export class SessionContentService {
               eq(sessionContentObjects.objectId, objectId),
               eq(sessionContentObjects.state, 'staged'),
             ),
-          );
+          )
+          .returning({ objectId: sessionContentObjects.objectId });
+        if (committed.length !== 1) {
+          throw new SessionContentError('unknown_outcome', 'staged row moved during upload');
+        }
         await tx
           .update(sessionContentReservations)
           .set({ state: 'consumed', updatedAt: new Date(this.nowMs()) })
@@ -1592,6 +1629,8 @@ export class SessionContentService {
       } else {
         throw new SessionContentError('grant_revoked', 'grant is not readable');
       }
+      // n2: reads are fenced to the grant's authority epoch so a
+      // re-derived session after restore cannot read the old epoch's copies.
       const objects = await tx
         .select()
         .from(sessionContentObjects)
@@ -1600,6 +1639,7 @@ export class SessionContentService {
             eq(sessionContentObjects.sessionId, sessionId),
             eq(sessionContentObjects.channel, channel),
             eq(sessionContentObjects.state, 'committed'),
+            eq(sessionContentObjects.authorityEpoch, grant.authorityEpoch),
           ),
         );
       if (objects.length === 0) throw new SessionContentError('not_found', 'no committed copy');
