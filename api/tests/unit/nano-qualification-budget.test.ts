@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 const loadBudget = () => import('../utils/nano-qualification-budget');
 
 describe('paired nano qualification admission', () => {
+  it('should pin the official provider ceilings independently of product token estimates', async () => {
+    const { LUNA_MAX_INPUT_TOKENS, LUNA_MAX_OUTPUT_TOKENS } = await import('../../src/config/models');
+    expect([LUNA_MAX_INPUT_TOKENS, LUNA_MAX_OUTPUT_TOKENS]).toEqual([922_000, 128_000]);
+  });
   it('should arm only the exact standalone qualification scope', async () => {
     const { qualificationSelected } = await loadBudget();
     expect(qualificationSelected(' tests/ai/nano-replacement-qualification.test.ts ')).toBe(true);

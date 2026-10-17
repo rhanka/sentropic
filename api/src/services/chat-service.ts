@@ -2444,7 +2444,8 @@ export class ChatService {
       return {
         shouldEvaluate: true,
         effortLabel: 'medium',
-        effortForMessage: 'medium',
+        ...(selectedProviderId === 'openai' && selectedModel === getDefaultOpenAIModel()
+          ? { effortForMessage: 'medium' as const } : {}),
         evaluatedBy: 'fallback',
         evaluatorModel,
         failure: { message: safeMsg },
