@@ -120,11 +120,11 @@ providers stay independent packages and never depend on cluster-mesh. They are
 | `/compose/llm-mesh`, `/compose/gateway` | `createLlmMeshNamespaceModule`, `createGatewayNamespaceModule` | as the loaders they call |
 | `/mcp/registry`, `/mcp/stdio` | `@sentropic/mcp-platform` MCP kernel entries | `@sentropic/mcp-platform >=0.3.0 <0.4.0` (plus `@modelcontextprotocol/sdk ^1.31.0` for the stdio transport) |
 | `/compose/mcp`, `/loaders/mcp` | `createMcpNamespaceModule`, `loadMcpPlatform{Registry,Stdio,Bridge,Entry,Hono}` | as its leaf, resolved on call |
-| `/mcp/web-pages` | `createWebPagesBuiltin` over `@sentropic/artifacts/mcp` | `@sentropic/artifacts >=0.1.0 <0.2.0`, `@sentropic/mcp-platform >=0.3.0 <0.4.0` |
+| `/mcp/artifacts` | `createArtifactsBuiltin` over `@sentropic/artifacts/mcp` | `@sentropic/artifacts >=0.1.0 <0.2.0`, `@sentropic/mcp-platform >=0.3.0 <0.4.0` |
 
-The `./mcp/web-pages` export provides the `sentropic.web-pages` builtin factory;
+The `./mcp/artifacts` export provides the `sentropic.artifacts` builtin factory;
 its optional `@sentropic/artifacts >=0.1.0 <0.2.0` peer must be installed when
-that leaf is imported. `loadWebPagesMcp` from `./loaders/mcp` acquires the same
+that leaf is imported. `loadArtifactsMcp` from `./loaders/mcp` acquires the same
 provider through the module registry. The root entry remains usable without it.
 
 Static provider re-export leaves use `export *`: same values,

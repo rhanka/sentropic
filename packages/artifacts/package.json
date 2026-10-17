@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/artifacts",
   "version": "0.1.0",
-  "description": "Generic configurable web-pages MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9). Single 0.1.0 candidate for L-5a–5e; unpublished.",
+  "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9). Single 0.1.0 candidate for L-5a–5e; unpublished.",
   "type": "module",
   "license": "MIT",
   "repository": {

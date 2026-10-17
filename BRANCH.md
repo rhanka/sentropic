@@ -134,6 +134,7 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
 
 ## Plan / Todo (lot-based)
 - [ ] **Owner naming correction — artifacts (2026-10-17, before first publication)**
+  - [x] Release documentation and packed artifact probe use `sentropic.artifacts`, `./mcp/artifacts` and the Artifacts API names; the probe rejects the old ID and exported API aliases.
   - [ ] Test first: `packages/artifacts/tests/mcp.test.ts` and `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` assert new-ID selection/configuration and unknown-old-ID refusal; scoped `make test-artifacts SCOPE=tests/mcp.test.ts` and `make test-cluster-mesh SCOPE=tests/integrations/artifacts-surface.spec.ts`, all with assigned ports and `ENV=test-immo-861-mcp-registry` last.
   - [ ] Rename provider/API symbols, mesh leaf/loader/catalog/exports, fixtures, packed tests/probe and release documentation to artifacts; retain `@sentropic/artifacts`, version `0.1.0` and the 15 `artifacts_*` tool names; no aliases.
   - [ ] Gates: artifact and mesh typechecks/lint/full suites, packed artifact probe, sibling integrity refresh and guarded mesh packed qualification; no UI/browser test changes.

@@ -1,7 +1,7 @@
-# @sentropic/artifacts — generic web-pages artifact contracts (L-5a)
+# @sentropic/artifacts — generic artifact contracts (L-5a)
 
-Generic, host-independent artifact domain state for the Sentropic web-pages
-provider (`sentropic.web-pages`, spec-v8 §9). Single unreleased `0.1.0`
+Generic, host-independent artifact domain state for the Sentropic artifacts
+provider (`sentropic.artifacts`, spec-v8 §9). Single unreleased `0.1.0`
 candidate covering L-5a–5e; no publication before the final merge.
 
 ## What's here (L-5a)
@@ -62,7 +62,7 @@ No Immo defaults, URLs or bindings in generic source.
   method/route/binding checks plus Origin/CSRF evidence for writes.
 - `src/server/templates.ts` — generic template kit + versioned API guide
   catalog port (hosts inject approved local assets).
-- `src/mcp.ts` — the `sentropic.web-pages` MCP provider: 15 exact
+- `src/mcp.ts` — the `sentropic.artifacts` MCP provider: 15 exact
   `artifacts_*` tools with closed schemas, a host-bindable invocation
   scope, an executor over the same HTTP app, a platform adapter, and the
   `@sentropic/mcp-platform` kernel registry definition (the platform is
