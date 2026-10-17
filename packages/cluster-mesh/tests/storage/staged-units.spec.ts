@@ -10,7 +10,7 @@ import type { AtomicUnit } from '../../src/storage/atomic.js';
 import type { WriterFence } from '../../src/storage/contracts.js';
 import { runAtomicCorpus, expectCode } from './atomic-corpus.js';
 import { grantFor } from './authority-corpus.js';
-import { runStagedCorpus } from './staged-corpus.js';
+import { stagedDigestOf, stagedSealRoot, runStagedCorpus } from './staged-corpus.js';
 import { runReplayCorpus } from './replay-corpus.js';
 import { runBarrierCorpus } from './barrier-corpus.js';
 import { runLifecycleCorpus } from './lifecycle-corpus.js';
@@ -101,12 +101,7 @@ describe('K4 runtime: G5 same-unit tombstone and barrier publication', () => {
       sourceBoundary: 'boundary-g5',
       fence: FENCE,
     });
-    await bound.stageFragment({
-      unit,
-      ordinal: '0',
-      predecessorHash: null,
-      fragmentDigest: 'digest-g5-0',
-      effects: {
+    const effects: AtomicUnit = {
         ...emptyUnit(),
         appends: [
           {
@@ -117,20 +112,12 @@ describe('K4 runtime: G5 same-unit tombstone and barrier publication', () => {
         ],
         records: [{ key: 'rec-imported', bytes: { format: 'utf8', data: 'payload' }, contentHash: 'h-g5' }],
         barriers: [{ boundary: 'imported-1', reason: 'tombstone-import-1' }],
-      },
-      fence: FENCE,
-    });
+      };
+    const digest = stagedDigestOf(unit, '0', null, effects, 'contract-g5', 'boundary-g5');
+    await bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: digest, effects, fence: FENCE });
     const seal = await bound.sealStaged({
       unit,
-      root: {
-        operationId: 'op-g5-import',
-        contractDigest: 'contract-g5',
-        sourceBoundary: 'boundary-g5',
-        finalFragmentHash: 'digest-g5-0',
-        fragmentCount: '1',
-        dependencyRoot: 'dep-root-g5',
-        effectRoot: 'eff-root-g5',
-      },
+      root: stagedSealRoot(unit, [effects], 'contract-g5', 'boundary-g5'),
     });
     assert.equal(await bound.readHead('lifecycle-g5'), null);
     const receipt = await bound.commitStaged({ seal, fence: FENCE });
@@ -157,12 +144,7 @@ describe('K4 runtime: bounded seal validation steps', () => {
       sourceBoundary: 'boundary-g5',
       fence: FENCE,
     });
-    await bound.stageFragment({
-      unit,
-      ordinal: '0',
-      predecessorHash: null,
-      fragmentDigest: 'digest-small-0',
-      effects: {
+    const effects: AtomicUnit = {
         ...emptyUnit(),
         appends: [
           {
@@ -171,20 +153,12 @@ describe('K4 runtime: bounded seal validation steps', () => {
             expectation: { kind: 'absent', allocation: '0' },
           },
         ],
-      },
-      fence: FENCE,
-    });
+      };
+    const digest = stagedDigestOf(unit, '0', null, effects, 'contract-g5', 'boundary-g5');
+    await bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: digest, effects, fence: FENCE });
     const outcome = await bound.sealStep({
       unit,
-      root: {
-        operationId: 'op-sealstep-small',
-        contractDigest: 'contract-g5',
-        sourceBoundary: 'boundary-g5',
-        finalFragmentHash: 'digest-small-0',
-        fragmentCount: '1',
-        dependencyRoot: 'dep-root-g5',
-        effectRoot: 'eff-root-g5',
-      },
+      root: stagedSealRoot(unit, [effects], 'contract-g5', 'boundary-g5'),
       limits: { maxRecords: 128, maxAppends: 128, maxEncodedBytes: 524288 },
       fence: FENCE,
     });
@@ -204,15 +178,10 @@ describe('K4 runtime: bounded seal validation steps', () => {
       sourceBoundary: 'boundary-g5',
       fence: FENCE,
     });
+    const stagedEffects: AtomicUnit[] = [];
     let predecessor: string | null = null;
     for (let n = 0; n < 12; n += 1) {
-      const digest = `digest-large-${n}`;
-      await bound.stageFragment({
-        unit,
-        ordinal: String(n),
-        predecessorHash: predecessor,
-        fragmentDigest: digest,
-        effects: {
+      const effects: AtomicUnit = {
           ...emptyUnit(),
           appends: [
             {
@@ -221,21 +190,14 @@ describe('K4 runtime: bounded seal validation steps', () => {
               expectation: { kind: 'absent', allocation: '0' },
             },
           ],
-        },
-        fence: FENCE,
-      });
+        };
+      stagedEffects.push(effects);
+      const digest = stagedDigestOf(unit, String(n), predecessor, effects, 'contract-g5', 'boundary-g5');
+      await bound.stageFragment({ unit, ordinal: String(n), predecessorHash: predecessor, fragmentDigest: digest, effects, fence: FENCE });
       predecessor = digest;
     }
-    const root = {
-      operationId: 'op-sealstep-large',
-      contractDigest: 'contract-g5',
-      sourceBoundary: 'boundary-g5',
-      finalFragmentHash: 'digest-large-11',
-      fragmentCount: '12',
-      dependencyRoot: 'dep-root-g5',
-      effectRoot: 'eff-root-g5',
-    };
-    const limits = { maxRecords: 128, maxAppends: 128, maxEncodedBytes: 524288 };
+    const root = stagedSealRoot(unit, stagedEffects, 'contract-g5', 'boundary-g5');
+    const limits = { maxRecords: 8, maxAppends: 8, maxEncodedBytes: 524288 };
     const first = await bound.sealStep({ unit, root, limits, fence: FENCE });
     assert.equal(first.state, 'validating');
     if (first.state === 'validating') {
