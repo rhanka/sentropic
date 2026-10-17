@@ -131,87 +131,28 @@
     - [ ] Tests at `8fec6302d`: 61 files pass, 5 skipped, 3 failed (`staged-units.spec.ts`, `visibility.spec.ts`, `manifest.spec.ts`; 9 K4 tests) — all `UnsupportedProfileError: fenced-writers-v1` from carried K4 passing a fence to K3 `commitAtomic` (O4:B1(b)), owned by Lot 2. K1/K2a/K2b/K3/C0 suites green.
 
 - [x] **Lot 1 — K2b r3 findings (shared corpus and reference)**
-  - [x] MAJEUR-N1: add a shared canonical staged codec (versioned, domain-separated, framed) deriving `fragmentDigest`, `dependencyRoot` and `effectRoot`; reference recomputes on every ordinal and on seal; corpora derive values from the codec instead of `dep-root-k2b` / `eff-root-k2b`.
-    - [x] RED spec `packages/cluster-mesh/tests/storage/staged-codec.spec.ts` (independent literal vectors + discrimination).
-    - [x] Codec `packages/cluster-mesh/src/storage/staged-codec.ts`; mutants MC1 (dependencies dropped), MC2 (moduleResult always absent), MC3 (null predecessor encoded as empty) each killed at one targeted test.
-    - [x] Corpora derive digests/roots via `stagedDigestOf` / `stagedSealRoot` (`staged-corpus.ts`, `barrier-corpus.ts`, `replay-corpus.ts`); new cases: changed-dependency retry, other-effects digest on a new ordinal, self-consistent foreign roots, unresolved dependency at seal; handle carries `moduleId`/`scope` (K1 `StagedUnitHandle` alignment).
-    - [x] Reference recomputes digests on every ordinal, roots at seal, and dependency closure over base plus earlier fragments; mutants S14 (new-ordinal digest trust) and S15 (closure blind) killed at their targeted assertions; S2/S7 kept faithful (gap mutant recomputes its digest; buffer mutation moved after seal so roots do not mask it).
-    - [x] Evidence: `make test-cluster-mesh ... ENV=test-cm-comments-m2` 62 files pass, 3 fail (the 9 carried K4 tests, unchanged, Lot 2).
-  - [x] MAJEUR-N1: C01 case with a self-consistent but wrong digest on a NEW ordinal and a changed-dependency-only retry; mutant "trust caller digest on new ordinal" killed at its targeted assertion.
-  - [x] MINEUR-1: read corpus accepts `null` or a fitting recovery cursor on empty `incomplete` pages; cross-validate missing-head, disposed-chain and empty pages through `validateReadPage`.
-  - [x] MINEUR-2: M18 mutant measures the candidate cursor instead of the effective cursor (no budget inflation).
-    - [x] Evidence: `assertEmptyIncomplete` (null or fitting cursor plus explicit recovery of the exact remaining records), `validateReadPage` on disposed/missing/floor pages, `RecoveryCursorStore` conformance test in `reference.spec.ts`; M18 now overrides `admissionCursor` and dies at "the exhausting record is admitted with its effective null cursor" (final E/E-1 envelope case); `reference.spec.ts` 36/36, `mutations.spec.ts` 19/19, `kernel.spec.ts` 56/56.
-  - [x] MINEUR-3: mutant regexes pinned to one exact assertion each (M1-M16, S1, B1/E1); M4 gets a unique one-byte-budget assertion and B1/E1 target comment 0 head denial.
-    - [x] `make -o build-events -o build-llm-gateway test-cluster-mesh SCOPE=mutations.spec.ts API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`: 59/59; prerequisite artifacts reused after the first full Make build.
-  - [x] MINEUR-4: raw tombstone names `thread-2`; its covered child remains readable; B5 installs a barrier from the raw tombstone and dies at that exact assertion.
-    - [x] Relaunch evidence: `make test-cluster-mesh SCOPE=tests/storage/profile-mutations.spec.ts API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` passes 40/40, including B5.
-  - [x] MINEUR-5: fence rotation hook (superseded fence cannot publish/abort/stage), nested record and append aliases through exact byte readers, hidden audit reader, deliberate `unitId` collision across scopes.
-    - [x] RED shared probes: `tests/storage/staged-integrity-corpus.ts` and `staged-integrity.spec.ts` force a colliding recipient id with its valid digest, inspect hidden audit membership, mutate nested bytes and rotate the current fence.
-    - [x] Reference checks full-scope/owner handles and the current scope fence at every staged mutation; audit membership is copied and published with canonical effects. The two shared probes now pass; discriminating mutants follow.
-    - [x] Mutants: scope-blind colliding handle, nested record alias, nested append alias, premature audit publication and begin-fence-only validation, each killed at its exact assertion in `staged-integrity.spec.ts` (7/7).
-  - [x] MINEUR-6: replay ports gain `fence`, `pauseConsumer`, `maintain` authority; refusal cases for unauthorized principal, stale fence, wrong incarnation; `c-stall` consumes the snapshot then checks poison redelivery; mutant "resync clears stall".
-    - [x] Replay RED port: explicit incarnation/owner/current-fence binding, maintain-only checkpoint/pause/retry/resync, pause-preserving resync and poison redelivery after snapshot consumption.
-    - [x] Reference implements maintain/fence checks and pause/retry; replay mutation fixtures forward the original maintenance fence. `profile-mutations.spec.ts` passes 40/40.
-    - [x] `tests/storage/replay-integrity.spec.ts`: five exact-target mutants killed (5/5): resync clearing stall, write-only maintenance, stale epoch, wrong incarnation and wrong owner.
-  - [x] MINEUR-7: snapshot returns root state (heads/indexes) not journal events; captured roots authenticated; external journal scoped per stream.
-    - [x] Replay RED requires bounded canonical snapshot rows, captured heads/indexes, unissued/foreign-root refusal and one isolated external stream per scope; observed RED on the reference's journal-event response.
-    - [x] Reference captures owned canonical rows under opaque scope-held snapshot capabilities and pages them with current authorization/coverage; J5 substitutes live rows while retaining the captured watermark and dies at the content-boundary assertion. Profile mutations: 40/40.
-    - [x] External reference streams are keyed by full scope/incarnation and copy exact kernel events; the cross-scope exposure mutant targets C11.
-  - [x] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
-    - [x] Lifecycle RED probes require explicit payload dispositions, independent outcome/notification membership, and response-loss recovery after committed disposal; the aggregate fixture now uses the K1 encoded-value contract.
-    - [x] Reference records actual retained/erased dispositions and canonical completion/notification membership before simulating a lost response; pre-outcome failure leaves the local disposal uncommitted. Profile mutations pass 40/40; new lifecycle mutants follow.
-    - [x] `tests/storage/lifecycle-integrity.spec.ts`: five exact-target mutants killed (5/5): duplicate outcomes, duplicate notifications, false record/aggregate erasure and committed completion lost after response interruption.
-  - [x] MINEUR-9/10: `read-corpus.ts` header corrected at `655f13a46`. Historical K1 `R3-MUT1` overstated the evidence at its original date: actual targeted M6/M11 proofs are carried at `6d3d0f6aa`; exact assertion pins are at `a5ea9b226`. Stale source-branch reports are superseded by this branch/report, with current ancestry and version 0.19.0.
-  - [x] Lot gate (K2b passes; the carried K4 failures remain assigned to Lots 2–5):
-    - [x] `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`: typecheck/lint pass, 65 files pass, 3 K4 files fail (9 tests), 5 packaging files skip; 698 tests pass, 9 fail, 34 skip. Evidence `.h2a/build/lot1-gates.log` and RTK recall `12990cbff865`, code head `d85c394da`.
-    - [x] **Package tests (cluster-mesh, Vitest)**
-      - [x] Updated: `packages/cluster-mesh/tests/storage/{staged-corpus,barrier-corpus,replay-corpus,lifecycle-corpus,read-corpus,reference-staged,reference-store}.ts`
-      - [x] Updated: `packages/cluster-mesh/tests/storage/{reference,mutations,profile-mutations}.spec.ts`
-      - [x] New: `packages/cluster-mesh/src/storage/staged-codec.ts`, `packages/cluster-mesh/tests/storage/{staged-codec,staged-integrity,replay-integrity,lifecycle-integrity}.spec.ts`, `packages/cluster-mesh/tests/storage/staged-integrity-corpus.ts`.
-      - [x] Scoped runs: `make test-cluster-mesh SCOPE=<file-filter> API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; mutations 59/59, staged integrity 7/7, replay integrity 6/6, lifecycle integrity 5/5; reference 36/36 and K3 kernel 56/56 also pass in the package gate.
-      - [x] Sub-lot package gate executed above: K2b green; K4 adapters lack full-scope handles, replay maintenance and lifecycle hooks, and still pass fences into K3. These remain release blockers in Lots 2–5.
-    - [x] **API tests**: not impacted (no `api/**` change).
-    - [x] **UI tests**: not impacted (no `ui/**` change).
-    - [x] **E2E tests**: not impacted (no app surface change).
+  - [x] MAJEUR-N1: shared framed canonical codec derives every fragment/dependency/effect root; reference recomputes new ordinals and seal roots, validates closure and refuses self-consistent foreign commitments.
+  - [x] Literal vectors and discriminating mutants MC1–3, S14/S15, M6/M11 and assertion-specific M1–M18/S/B/E targets pass. Historical K1 evidence is corrected rather than backdated.
+  - [x] MINEUR-1/2: empty incomplete-page cursors and effective-cursor byte measurement match exact E/E-1 envelopes.
+  - [x] MINEUR-3/4: each mutant targets one exact assertion; raw thread tombstone leaves its dependent child readable unless an explicit barrier exists.
+  - [x] MINEUR-5: current fence rotation, deep record/append aliases, hidden audit membership and valid-capability cross-scope unit collision probes.
+  - [x] MINEUR-6/7: maintenance/current-fence/incarnation authority, real snapshot roots, scoped external journal and resync preserving poison/stall.
+  - [x] MINEUR-8: lifecycle commit-before-response, exact outcome/notification counts and actual retained/disposed classification.
+  - [x] MINEUR-9/10: corrected corpus header, current ancestry/report and version 0.19.0; supersedes stale source-branch reports.
+  - [x] Files: `tests/storage/{staged-codec,reference,mutations,profile-mutations,staged-integrity}.spec.ts`; shared `{staged,barrier,replay,read,lifecycle}-corpus.ts` and integrity helpers.
+  - [x] Recorded scoped gates: profile mutations 40/40, ordinary mutations 59/59, K3 kernel 56/56.
+  - [x] Shared source gate: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`.
+  - [x] Detailed RED/GREEN and per-mutant evidence retained at [execution anchor](https://github.com/rhanka/sentropic/blob/7ddb9c836/BRANCH.md); this final checklist consolidates those notes to fit the exact PR-body limit.
 
 - [x] **Lot 2 — K4 rebuild on K3 (O4:B1, O4:m7, O4:MAJ-9)**
-  - [x] Indexed successors: `tests/storage/indexed-state.spec.ts` qualifies version preservation and capture without historical enumeration before coordinator integration.
-    - [x] `src/storage/indexed-{tree,map}.ts`: immutable balanced search paths and lockable forked maps; indexed-state probes pass 2/2. Coordinator integration is qualified below.
-    - [x] Indexed history RED probe prevents successor creation from copying historical records; all three indexed-state probes pass.
-    - [x] Backend adds opt-in indexed maps/histories and constant-metadata forks; K3 default state remains unchanged.
-    - [x] Ordinary record preparation uses indexed forks when supplied, clones only touched history paths, and installs successor map pointers without replaying every scope entry; exact cursor sequence uses indexed lookup. Typecheck passes; K3 kernel suite stays 56/56.
-  - [x] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
-    - [x] `root-facade.ts` delegates ordinary/transaction operations to the coordinated K3 runtime and exposes staged, journal, snapshot and lifecycle methods through frozen handles with private slots. The public factory uses this facade.
-    - [x] `staged-factory.ts` composes the coordinated K3 kernel and separates trusted issuance/fence/failure controls from its binding-only adapter; all K3 options are forwarded.
-    - [x] Factory/facade helpers typecheck; indexed ordinal probes pass 4/4. Public replacement and shared corpora are qualified below.
-  - [x] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
-    - [x] RED `tests/storage/mutation-coordinator.spec.ts`: ordinary mutations, stale-root CAS, preparation failure, authority revalidation, transaction coverage and unsupported-effect refusal; all 6 cases pass after wiring.
-    - [x] Shared `prepareUnitsInScope` separates owned sequential preparation from publication, preserving the K3 guard/predicate/effect implementation for the root coordinator.
-    - [x] `RootMutationCoordinator` captures indexed roots, prepares owned core/module effects, revalidates and switches the root conditionally.
-    - [x] Kernel root options accept the trusted backend/coordinator; scoped adapters retain private wiring and frozen binding surfaces.
-    - [x] Append/genesis/index/dispose/commit and ordinary reads participate in the configured root coordinator.
-    - [x] Transactions publish through that coordinator and revalidate every contributing grant after preparation; transactional getters honor current coverage. K4 runtime uses this coordinator.
-    - [x] Additional RED probes exercise transactional paging without scope/history enumeration and authority revalidation on an equal-result index replacement; both paths use indexed forks and fresh authority checks. Coordinator probes pass 10/10; typecheck passes.
-  - [x] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
-    - [x] RED `root-query.spec.ts` exercises registered bounded query dispatch, retained-root continuation, fresh authority/barriers and sequential projection rollback with independent carrier/journal/relationship reads.
-    - [x] Registered query dispatch uses an owned root-bound continuation, bounded indexed relationship windows and fresh read/coverage checks; raw registries and descriptor mutation remain inaccessible through adapters.
-    - [x] New RED probes reject descriptor alias escalation, request-side work-ceiling weakening and unqualified private-live staging commitments.
-    - [x] Trusted descriptor/query/limit registration is owned and frozen; ordinary request limits cannot exceed the configured coordinator ceiling. K4 SHA-256 staging is qualified for comments only; private-live staging fails explicitly pending its required keyed/disposable commitment policy. K3 remains generic.
-    - [x] RED `root-public.spec.ts` exercises the package's public storage entry point, semantic profile digests, callable frozen ports, private adapter state and forwarded authority.
-    - [x] Public storage exports now expose the rebuilt factory and K1-compatible types. Memory claims have semantic SHA-256 digests and working protected ports; physical purge/generations/leased snapshots remain unadvertised.
-    - [x] Literal profile acquisition now preserves its specific public port type, so hosts can call staged/outbox/boundary methods without unsafe casts.
-    - [x] Public qualification now invokes every advertised profile's real port, including captured manifests, verified checkpoints and a staged commit/terminal abort refusal; it goes beyond checking that methods merely exist.
-    - [x] The legacy `staged-runtime.ts` implementation is fully removed; the entry point only re-exports the coordinated factory and shared protocol types. Removal commits stayed under 150 lines.
-    - [x] Removed the obsolete syntax-only seal validator; bounded state-dependent preparation and its progress are exclusively handled by `staged-preparation.ts` / `staged-seal.ts`.
-  - [x] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
-    - [x] `root-integrity.spec.ts` reuses the K2b nested-byte/audit/current-fence probes on K4. The collision probe carries the recipient's valid capability when supported, ensuring capability validation cannot mask a missing scope-binding check.
-    - [x] A bounded, maintain-authorized audit metadata reader exposes independent canonical membership without returning moduleResult payloads. The immutable-boundaries profile exposes actual captured manifest ports.
-    - [x] `root-ordinary.spec.ts` reuses K3 chain/read/cursor-budget/authority corpora through the public K4 export and checks nested rollback, sequential pending heads, a genuine same-chain rival and scope-aware registered predicates.
-    - [x] K4 corpus adapters now use the replacement factory. Unbounded seal-driving loops and failure injection live only in `tests/storage/staged-client.ts`; production provides bounded `sealStep` and trusted root controls separately.
-    - [x] G5 and seal-step fixtures use canonical computed commitments. The large-step case explicitly requests eight items instead of relying on an undocumented internal constant; no timeout or budget inflation.
-  - [x] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.
-
-  - [x] Current memory gate: typecheck/lint pass; 85 files and 777 tests pass, 5 packaging files / 34 tests skip. Command: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; code head `497d40838`, gate launch `a14161d66`, RTK evidence `5537ba475ece`. Durable Postgres remains Lot 6.
+  - [x] Replaced the obsolete staged runtime with indexed persistent maps/histories, one mutation coordinator, trusted root facade and binding-only adapter; K3 issuance/options and semantics remain intact.
+  - [x] Ordinary writes, nested transactions, current-coverage reads, predicates, indexed replacements and staged preparation share real root publication; no historical scope clone/replay at commit.
+  - [x] Owned/frozen descriptor, query and work-limit registration; bounded retained-root queries and protected callable profile ports. Unsupported private-live commitments and unimplemented profiles refuse explicitly.
+  - [x] Files: `tests/storage/{indexed-state,mutation-coordinator,root-query,root-public,root-integrity,root-ordinary,staged-units,visibility,manifest,kernel}.spec.ts`.
+  - [x] Every advertised profile is invoked through its actual public port; shared K2b/K3 corpora run through the replacement export.
+  - [x] Legacy `staged-runtime.ts` and syntax-only seal implementation removed; unbounded client driving/failure injection lives only in test helpers.
+  - [x] Historical integrated memory gate at `497d40838`: typecheck/lint pass, 85 files / 777 tests pass (RTK `5537ba475ece`); final source gate below supersedes it.
+  - [x] Lot gate: shared Lot 1 source command; K3 remains 56/56.
 
 - [x] **Lot 3 — K4 integrity (N1-N3; MAJ-1..3, m2, m3, S4:4, S4:10; C01-C04)**
   - [x] Kernel-computed fragment digests and roots from the shared codec; owned deep-frozen buffers; divergent begin refused; terminal states kept.
