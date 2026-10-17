@@ -53,9 +53,25 @@ its own `order` and `fromVersion`/`toVersion`; these numbers are not global host
 001 explicitly depends on core 006, and a later core 007 can install after comments without rewriting
 their receipts. Keep a separate host application ordinal if the host needs one.
 
+Immo's `drizzle.__drizzle_migrations(hash, created_at)` and `radar_migration_steps` cannot represent
+the full `PgMigrationReceipt`. Add a host-owned receipt table in the host migration, for example:
+
+```sql
+CREATE TABLE host_cluster_mesh_receipts (
+  application_ordinal bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  asset_id text UNIQUE NOT NULL,
+  receipt jsonb NOT NULL
+);
+```
+
+Implement `read` ordered by `application_ordinal`, and `complete` inserting the exact asset ID and
+full receipt JSON under the host lock/session. Preserve chain identity, checksums, status and schema
+fingerprint. Link `hostMigrationId`/`hostChecksum` to the host migration; this is a host receipt store,
+not another module-owned migration scheduler. Keep re-attestation's append-only operator audit too.
+
 ```ts
 const assets = await loadPgAssets({ comments: true });
-await driver.transaction({ readOnly: false, deadlineMs: 5000 }, session =>
+await driver.transaction({ isolation: 'serializable', readOnly: false, deadlineMs: 5000 }, session =>
   applyPgMigrations(session, layout, assets, hostHistory,
     { id: hostMigrationId, checksum: hostMigrationChecksum }));
 ```
@@ -86,6 +102,14 @@ await module.withContext(grant, async () => {
 
 All 24 frozen store methods remain available. The raw store is a trusted persistence port; expose operational services/HTTP to clients. M1 transactions use `module.store.transaction().run(async () => ...)`, with pending reads and rollback-only error propagation. Barrier-covered/disposed full getters throw `denied`.
 
+The module executes arbitrary `transaction().run` callbacks once. On PostgreSQL SQLSTATE `40001`,
+the host may retry the whole transaction with a finite bound, for example three attempts, using the
+original command/idempotency keys. The callback must contain replay-safe database work; perform
+external effects only after a known commit or through the transactional outbox. A classified error
+has `condition: 'contention'`, `retryable: true`, `sqlState: '40001'`. Do not retry an uncertain COMMIT
+as a new command; recover the original receipt instead. Only immutable internal flushes retry inside
+the module. `postgres-transactions.spec.ts` qualifies the once-only callback/finite flush policy.
+
 For HTTP, compose `createCanonicalCommentsNamespaceModule` from `@sentropic/cluster-mesh/compose/comments` using a real `createClusterMeshModules()`, full `createClusterMeshRuntime()` and `createClusterMeshPlugin()`. Supply `{enabled, generationId, module, ports, router: {capacity}, resolveGrant}`. `ports` is `{store: module.store, capabilities, resolver, decisions}`. `resolveGrant(verifiedInvocation)` resolves/issues host authority; the namespace checks principal, workspace, generation and invocation lifetime on every route. Disabled composition does not evaluate the optional peer. The installed fixture is an executable example: `packages/cluster-mesh/tests/storage/installed-namespace.mjs`.
 
 The exact frozen `createCanonicalCommentsRouter(ports, {capacity})` factory is also exported from `./comments` and `./comments/hono`. Its caller must establish an issued module context. It offers annotation/thread/comment revision/head/page routes and lifecycle commands, with server registration and full-envelope byte limits. There is no raw append or caller-supplied physical purge completion. Dedicated review/submission/assignment service APIs remain outside this delivery scope.
@@ -95,6 +119,11 @@ The exact frozen `createCanonicalCommentsRouter(ports, {capacity})` factory is a
 Freeze the source inventory and mapping before sending fragments. Build the unchanged M1 `CanonicalBatchImportRequest`: scope, batch ID, canonical import manifest/hash, admitted unit metadata/dependencies/payload digests, expected mapping version and stable command idempotency key. `commentsAdmissibleManifestDigest(units)` commits sorted declared unit identities/dependencies; `commentsUnitPayloadDigest(unitId, records)` commits ordered typed M1 hashes. Every full M1 record hash is checked independently. Source completeness remains the converter's responsibility.
 
 Bind `CommentsImportBinding` with version `comments-transport-v1`, stable operation ID, exact request, selected `unitIds`, immutable source boundary, actual target resource tuples and required capabilities. `commentsImportBindingDigest(binding)` binds all fields. One coherent group contains at most 50 selected units; dependencies outside it require previously committed receipts for this same frozen request. A history may span many fragments.
+
+Batch receipt recovery is capped at 50 committed operations/groups, independently of `capacity.batchUnits`.
+The query reads at most 51 rows and returns typed `capacity-exceeded` if the batch exceeds 50; there is
+no receipt-recovery pagination. Group units so each batch uses at most 50 operations, or partition into
+separate batch IDs before import. This operation cap is distinct from the per-group 50-unit limit.
 
 The trusted writer provisions a `WriterFence` through `storage.provisionFence(grant, fence)`. Persist this fence with the conversion operation; a superseded fence cannot accept even an identical fragment retry.
 

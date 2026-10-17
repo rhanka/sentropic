@@ -10,6 +10,9 @@ cluster-mesh-pg-package-info:
 		sed -n "1,180p" package/lib/sha256.d.ts'
 
 .PHONY: cluster-mesh-storage-deps cluster-mesh-storage-deps-audit
+cluster-mesh-cold-cleanup:
+	@rm -rf node_modules packages/cluster-mesh/node_modules .h2a/storage-deps/node_modules .h2a/comments-deps/node_modules
+
 cluster-mesh-storage-deps cluster-mesh-storage-deps-audit:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
 		task_dir=/tmp/storage-deps; mkdir -p "$$task_dir"; \
