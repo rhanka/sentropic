@@ -85,6 +85,7 @@
 - `FL-14-attention`: h-cond owns draft `feat/gw-thin-consumer-pr1` (`/home/antoinefa/src/h2a/tmp/gw-thin-consumer-pr1`); H0 adopts #662 pins first. No branch created here.
 - `FL-18-attention`: candidate producer/read path await L0 proof; missing bytes are typed blocked.
 - `GW8-m1-done`: base/head tree objects under default depth-1 merge-ref checkout unspecified. `verifyMergeParents` obtains both parents, verifies `mergeSha^1 == baseSha` and `mergeSha^2 == headSha`, treats fetch failure as unreadable base evidence; pure tests pin accept/refuse/unreadable. h2a-side `gateway-consumer-workflows.test.js` parent assertion is h-cond companion scope (FL-14).
+- `FL-20-attention` (2026-10-17): companion is draft h2a #353 at `60816a1c`, clean worktree. Sentropic package rows now use companion v1 `tarballSha256`/`sourceIdentity`; 27/27 pure tests include escaped duplicate keys and closed nested fields. Consumer acknowledgement/read-path CI remains h-cond-owned; no agreement or pass inferred.
 
 ## AI Flaky tests
 - Acceptance rule:
