@@ -35,6 +35,8 @@ export type {
   SeatStoreRecordDescriptor,
 } from './cli-seat-store-reader.js';
 export { inspectSeatStoreRecord, SeatStoreReadError } from './cli-seat-store-reader.js';
+export type { SeatSidecar } from './seat-sidecar-file-backend.js';
+export { SEAT_SIDECAR_MAX_BYTES, SeatSidecarFileBackend, parseSeatSidecar } from './seat-sidecar-file-backend.js';
 export type { SeatExternalAuthority } from '../service/external-seat-authority.js';
 export {
   SEAT_EXTERNAL_AUTHORITY_KEY,
