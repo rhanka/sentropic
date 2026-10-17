@@ -131,7 +131,8 @@ export type TokenExchangeRefusalReason =
   | 'minted_subject_invalid'
   | 'minted_actor_invalid'
   | 'minted_scope_invalid'
-  | 'minted_ttl_invalid';
+  | 'minted_ttl_invalid'
+  | 'exchange_invalidated';
 
 /** Fail-closed refusal: no token material is ever attached to this error. */
 export class TokenExchangeRefusedError extends Error {
@@ -313,6 +314,15 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
   const policyRevision = input.policyRevision ?? '';
   const cache = new Map<string, CachedExchange>();
   const inflight = new Map<string, Promise<CachedExchange>>();
+  // O2 invalidation generations: every invalidate() call bumps the global
+  // sequence and records its scope. In-flight exchanges capture their floor
+  // before verify/mint and refuse before admit when a matching invalidation
+  // landed mid-flight, so revoked work can neither insert nor return success.
+  let invalidationSequence = 0;
+  let allInvalidationSequence = 0;
+  const subjectInvalidationSequences = new Map<string, number>();
+  const tenantInvalidationSequences = new Map<string, number>();
+  const inflightIdentities = new Map<string, { subject: string; tenantId: string }>();
 
   function identityFor(request: TokenExchangeRequest, subject: VerifiedSubjectToken): TokenExchangeCacheIdentity {
     return {
@@ -325,7 +335,10 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
     };
   }
 
-  function matches(entry: CachedExchange, filter: TokenExchangeCacheInvalidation | 'all'): boolean {
+  function matches(
+    entry: { readonly subject: string; readonly tenantId: string },
+    filter: TokenExchangeCacheInvalidation | 'all',
+  ): boolean {
     if (filter === 'all') return true;
     if (filter.subject !== undefined && entry.subject !== filter.subject) return false;
     if (filter.tenantId !== undefined && entry.tenantId !== (filter.tenantId ?? '')) return false;
@@ -335,6 +348,7 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
   function evict(key: string): void {
     cache.delete(key);
     inflight.delete(key);
+    inflightIdentities.delete(key);
   }
 
   function admit(key: string, entry: CachedExchange): void {
@@ -379,6 +393,12 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
     }
     const ttlSec = Math.min(subject.expiresAtSec - nowSec, maxTtlSec);
     if (ttlSec <= 0) refuse('ttl_non_positive');
+    const tenantId = subject.tenantId ?? '';
+    const mintFloor = {
+      all: allInvalidationSequence,
+      subject: subjectInvalidationSequences.get(subject.subject) ?? 0,
+      tenant: tenantInvalidationSequences.get(tenantId) ?? 0,
+    };
     let minted: MintedToken;
     try {
       minted = await input.issuer.mint({
@@ -415,6 +435,16 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
       subject: subject.subject,
       tenantId: subject.tenantId ?? '',
     };
+    // O2: a matching invalidation landed during the in-flight mint/verify.
+    // Refuse before admit: the revoked result is neither inserted (no evict of
+    // a retry's entry either) nor returned to this flight's waiters.
+    if (
+      allInvalidationSequence !== mintFloor.all ||
+      (subjectInvalidationSequences.get(subject.subject) ?? 0) !== mintFloor.subject ||
+      (tenantInvalidationSequences.get(tenantId) ?? 0) !== mintFloor.tenant
+    ) {
+      refuse('exchange_invalidated');
+    }
     admit(key, entry);
     return entry;
   }
@@ -442,6 +472,7 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
       if ('actor' in (request as unknown as Record<string, unknown>)) refuse('actor_invalid');
       if (request.scope.length === 0) refuse('scope_empty');
 
+      const verifySequence = invalidationSequence;
       let subject: VerifiedSubjectToken;
       try {
         subject = await input.issuer.verify(request.subjectToken);
@@ -451,6 +482,8 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
         }
         refuse('subject_unverified');
       }
+      // O2: invalidated during subject verification — refuse before minting.
+      if (invalidationSequence !== verifySequence) refuse('exchange_invalidated');
       const nowSec = Math.floor(nowMs() / 1000);
       if (subject.expiresAtSec <= nowSec) refuse('subject_expired');
       if (subject.subject.length === 0) refuse('subject_unverified', 'Token exchange refused: verified subject is empty');
@@ -472,10 +505,14 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
       if (flight !== undefined) return toResponse(await flight);
       const pending = perform(request, subject, key);
       inflight.set(key, pending);
+      inflightIdentities.set(key, { subject: subject.subject, tenantId: subject.tenantId ?? '' });
       try {
         return toResponse(await pending);
       } finally {
-        if (inflight.get(key) === pending) inflight.delete(key);
+        if (inflight.get(key) === pending) {
+          inflight.delete(key);
+          inflightIdentities.delete(key);
+        }
       }
     },
 
@@ -487,9 +524,38 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
           evicted += 1;
         }
       }
+      invalidationSequence += 1;
       if (filter === 'all') {
+        allInvalidationSequence = invalidationSequence;
         evicted += inflight.size;
         inflight.clear();
+        inflightIdentities.clear();
+      } else {
+        if (filter.subject !== undefined) subjectInvalidationSequences.set(filter.subject, invalidationSequence);
+        if (filter.tenantId !== undefined) {
+          tenantInvalidationSequences.set(filter.tenantId ?? '', invalidationSequence);
+        }
+        // O2: detach matching flights so new work cannot join an invalidated
+        // request; the detached flight refuses at its own admit check.
+        for (const [key, identity] of inflightIdentities) {
+          if (matches(identity, filter)) {
+            inflight.delete(key);
+            inflightIdentities.delete(key);
+          }
+        }
+        if (
+          subjectInvalidationSequences.size >= maxEntries ||
+          tenantInvalidationSequences.size >= maxEntries
+        ) {
+          // Fail closed and bounded: collapse scoped history into a global
+          // invalidation instead of growing without bound.
+          subjectInvalidationSequences.clear();
+          tenantInvalidationSequences.clear();
+          allInvalidationSequence = invalidationSequence;
+          evicted += inflight.size;
+          inflight.clear();
+          inflightIdentities.clear();
+        }
       }
       return evicted;
     },
