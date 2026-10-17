@@ -21,6 +21,7 @@ MESH="$(train_version llm-mesh)"
 GATEWAY="$(train_version llm-gateway)"
 AHONO="$(train_version auth-hono)"
 MPLATFORM="$(train_version mcp-platform)"
+ARTIFACTS="$(train_version artifacts)"
 rm -rf "$work"
 mkdir -p "$work/tools" "$work/src"
 quiet="--no-audit --no-fund --loglevel=error"
@@ -119,7 +120,8 @@ cp "$fixtures/selected/package-lock.json" "$work/selected/committed-lock.json"
 consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
   "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" \
   "@sentropic/auth-hono=$(src @sentropic/auth-hono "$AHONO")" \
-  "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")"
+  "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")" \
+  "@sentropic/artifacts=$(src @sentropic/artifacts "$ARTIFACTS")"
 sources "$work/selected"
 if grep -q ' sibling ' "$work/selected/sources.txt"; then
   [ "${REFRESH_LOCK:-}" = 1 ] || cp "$fixtures/selected/package-lock.json" "$work/selected/"

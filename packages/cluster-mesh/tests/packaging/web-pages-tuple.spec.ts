@@ -9,13 +9,15 @@
  * lane; the installed proof needs the prepared fixture.
  */
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { satisfies } from '../../src/modules/resolution.js';
+import { satisfiesRange } from '../../src/modules/semver.js';
 import { ARTIFACTS_PACKAGE, ARTIFACTS_RANGE, MCP_PLATFORM_RANGE, PROVIDER_CATALOG } from '../../src/modules/catalog.js';
-import { enabled, fixture, trainVersion, tuple } from './helpers.js';
+import { enabled, fixtureDir, trainVersion } from './helpers.js';
 
 interface Pkg {
   version: string;
+  dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   exports?: Record<string, unknown>;
@@ -44,31 +46,32 @@ describe('web-pages source tuple coherence', () => {
 });
 
 describe.skipIf(!enabled)('installed web-pages tuple', () => {
+  // Installed manifest of a package inside the web-pages consumer tree.
+  const consumerManifest = (name: string): Pkg => manifest(join(
+    fixtureDir('web-pages-consumer'), 'node_modules', ...name.split('/'), 'package.json',
+  ));
+
   it('installs the artifacts candidate inside both declared ranges', () => {
-    const fixtureManifest = manifest(
-      fixture('web-pages-consumer', 'node_modules/@sentropic/cluster-mesh/package.json'),
-    );
-    expect(fixtureManifest.peerDependencies?.[ARTIFACTS_PACKAGE]).toBe(ARTIFACTS_RANGE);
-    const artifacts = manifest(
-      fixture('web-pages-consumer', 'node_modules/@sentropic/artifacts/package.json'),
-    );
+    // prepare.sh always installs this consumer from the packed tarballs: the
+    // dependency specs stay `file:` (never rewritten to the registry).
+    const deps = manifest(join(fixtureDir('web-pages-consumer'), 'package.json')).dependencies ?? {};
+    for (const name of ['@sentropic/cluster-mesh', '@sentropic/mcp-platform', ARTIFACTS_PACKAGE]) {
+      expect(deps[name], name).toMatch(/^file:/u);
+    }
+    const mesh = consumerManifest('@sentropic/cluster-mesh');
+    expect(mesh.peerDependencies?.[ARTIFACTS_PACKAGE]).toBe(ARTIFACTS_RANGE);
+    const artifacts = consumerManifest(ARTIFACTS_PACKAGE);
     expect(artifacts.version).toBe(trainVersion('artifacts'));
-    expect(satisfies(artifacts.version, ARTIFACTS_RANGE)).toBe(true);
+    expect(satisfiesRange(artifacts.version, ARTIFACTS_RANGE)).toBe(true);
     expect(artifacts.peerDependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
     expect(artifacts.peerDependenciesMeta?.['@sentropic/mcp-platform']).toEqual({ optional: true });
-    const platform = manifest(
-      fixture('web-pages-consumer', 'node_modules/@sentropic/mcp-platform/package.json'),
-    );
-    expect(satisfies(platform.version, MCP_PLATFORM_RANGE)).toBe(true);
-    const sources = tuple('web-pages-consumer');
-    expect(sources['@sentropic/cluster-mesh']).toBe('file');
-    expect(sources['@sentropic/mcp-platform']).toBe('file');
-    expect(sources['@sentropic/artifacts']).toBe('file');
+    const platform = consumerManifest('@sentropic/mcp-platform');
+    expect(satisfiesRange(platform.version, MCP_PLATFORM_RANGE)).toBe(true);
   });
 
   it('leaves artifacts uninstalled in the plain mcp consumer', () => {
     expect(() =>
-      manifest(fixture('mcp-consumer', 'node_modules/@sentropic/artifacts/package.json')),
+      manifest(join(fixtureDir('mcp-consumer'), 'node_modules', '@sentropic', 'artifacts', 'package.json')),
     ).toThrow();
   });
 });
