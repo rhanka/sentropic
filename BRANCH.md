@@ -71,26 +71,6 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 - `R6-1`: status acknowledged. llm-gateway 0.20.0 accepts llm-mesh `^0.26.0`; L1 keeps mesh at 0.26.x (patch only) with single-copy lock assertion, or adds the named gateway bump step (not planned; gateway paths stay forbidden).
 - `CISEAT-EX4`: status active (conductor-approved under owner default authorization). Reason: L1's required mesh patch bump (0.26.1 to 0.26.2) necessarily evolves two installed-version pins in `packages/cluster-mesh/tests/integrations/{llm,gateway}-surface.spec.ts` plus the frozen `selected` fixture lock digest (`packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`: mesh entry to 0.26.2, registry URL, sibling-bytes integrity from the sanctioned `refresh-lazy-package-lock` flow). Impact: two assertion literals + one 3-line lock entry; the lock keeps the registry URL (provisional until 0.26.2 publishes, then the registry check compares). Rollback: revert the two literals and the lock entry.
 
-## Opus review NO-GO rework (PR #681, test-first, red-then-green on spies)
-- `B1`: `CISEAT-EX4` declared above; the two cluster-mesh surface pin updates are committed.
-- `M1`: new modules exported through the package entry (`enrollment/index.ts`, `node/index.ts`); the external marker is applied in real code (`importSeatBundle` canonical `seat-<cli>-<seatRef>` registration, validate consumer authority/owner/expiry, idempotent/stale/conflict/epoch transitions, persist via canonical register/persist for restart); restart and 401 paths covered by tests.
-- `M2`: Muse device-flow refresh routes through `muse-code.refresh` (mesh-managed device accounts keep working; only CI external seats are non-refreshing; external device seats refused with zero provider calls).
-- `M3`: receiver derives identity (owner, scope, billing) from the authenticated server registry (`SEAT_DELIVERY_SEATS_JSON`), never the request body; constant-time bearer compare; trusted-hop marker is per-request, never process-wide env.
-- `M4`: discriminating refusal tests with spies (`refreshAntigravityAccessToken`, `readMuseCliEntry`, `importAntigravityEnrollment`, `fetch`); expired agy and Muse cases; controlled 401 pair (renewable refreshes, external records no-call); explicit-refresh and Muse paths; the 11 listed package test files updated.
-- `M5`: unknown expiry is not infinite validity — mesh `isExternalSeatUnavailable` (missing/empty/unparseable expiry → unavailable) and API-side unavailable outcome (last_error only, status stays `active`, secret retained).
-- Minors: expired seat = `access-unavailable`; inspect helper has an explicit sidecar file backend or returns `unverified` (`seat-tools/README.md` documents inspect-only use); receiver covers all five CLIs; no invented `issuedAt` (custodian-observed `issuedAt` required); commits kept small; automated single-copy lock assertion (`tests/node/mesh-release-invariants.test.ts`).
-- Status: all local gates green (mesh 49 files / 881 tests; API unit 127 / 1288; endpoints 126 / 1301; typechecks + lints clean; scope PASS C2). Pushed `e98d91093`, PR #681 draft refreshed. CI on that HEAD: everything deterministic green (`validate-cluster-mesh` incl. the fixture fix, `validate-llm-mesh`, typechecks, all unit/endpoints/smoke, e2e group-e); only live-provider suites fail on an external billing outage (CI OpenAI org out of credits — `insufficient_quota`, provider-verbatim). No merge: CI not green and merge stays conductor-owned.
-
-## Scope notes
-- L1's required mesh patch bump (0.26.1 to 0.26.2, inside gateway `^0.26.0`)
-  necessarily evolves two installed-version pins in cluster-mesh surface
-  tests (`llm-surface.spec.ts:62`, `gateway-surface.spec.ts:64`) plus the
-  frozen `selected` fixture lock digest (mesh entry to 0.26.2, registry
-  URL, sibling-bytes integrity via the sanctioned refresh flow —
-  red-then-green proven locally against the real `siblings` assertion).
-  Other `packaging/fixtures/selected/` content intentionally stays
-  unchanged until the release publishes 0.26.2.
-
 ## AI Flaky tests
 - Acceptance rule:
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
@@ -115,25 +95,25 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read rules (`MASTER`, `workflow`, `subagents`, `testing`, `security`) and `README.md`.
-  - [ ] Confirm worktree `tmp/worktrees/ci-seat-import` on branch `feat/ci-seat-import` from `fb5e92a6a` (L0a merged, mesh 0.26.1, SeatBundleV1).
-  - [ ] Capture Makefile targets (`test-llm-mesh`, `typecheck-llm-mesh`, `lint-llm-mesh`, `up-api-test`, `test-api-unit`, `test-api-endpoints`, `typecheck-api`, `lint-api`, `test-api`, `down`, `scope-check`, `commit`, `ps-all`).
-  - [ ] Define environment mapping (`ENV=test-ci-seat-import`; owner-only local inspect `ENV=dev-ci-seat-import` under CISEAT-EX3) and ports (API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680).
-  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
-  - [ ] Confirm scope and guardrails (no secret values, Q1=A caps, P-BILLING gates, R6-1 range rule).
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `CISEAT-EX2`/`CISEAT-EX3`/`R6-1` as above.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [ ] **API tests**
-      - [ ] No API test changes in Lot 0.
-      - [ ] Sub-lot gate: none (baseline only).
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] N/A (no UI changes in this branch).
-    - [ ] **E2E tests**
-      - [ ] N/A (no browser E2E in L1; P-DEPLOY gateway restart/delivery test stays in L3).
-    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [ ] None in Lot 0.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read rules (`MASTER`, `workflow`, `subagents`, `testing`, `security`) and `README.md`.
+  - [x] Confirm worktree `tmp/worktrees/ci-seat-import` on branch `feat/ci-seat-import` from `fb5e92a6a` (L0a merged, mesh 0.26.1, SeatBundleV1).
+  - [x] Capture Makefile targets (`test-llm-mesh`, `typecheck-llm-mesh`, `lint-llm-mesh`, `up-api-test`, `test-api-unit`, `test-api-endpoints`, `typecheck-api`, `lint-api`, `test-api`, `down`, `scope-check`, `commit`, `ps-all`).
+  - [x] Define environment mapping (`ENV=test-ci-seat-import`; owner-only local inspect `ENV=dev-ci-seat-import` under CISEAT-EX3) and ports (API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680).
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Confirm scope and guardrails (no secret values, Q1=A caps, P-BILLING gates, R6-1 range rule).
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `CISEAT-EX2`/`CISEAT-EX3`/`R6-1` as above.
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] No API test changes in Lot 0.
+      - [x] Sub-lot gate: none (baseline only).
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A (no UI changes in this branch).
+    - [x] **E2E tests**
+      - [x] N/A (no browser E2E in L1; P-DEPLOY gateway restart/delivery test stays in L3).
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None in Lot 0.
 
 - [x] **Lot 1 — Package CLI/token import adapters (five CLIs)**
   - [x] Add shared source-mode/authority contract: `--from cli` registrar path (selected lab profile via provider adapter, custody transfer explicit, original lab profile retired) and `--from token` bounded stdin/FD/SDK-stream path (argv never carries the value); consumer `--from cli` parses a private provider-shaped profile + trusted manifest (parse/validate only, no exchange/mint/reread/refresh).
@@ -141,58 +121,62 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - [x] Add `packages/llm-mesh/src/enrollment/agy-cli-import.ts` (agy explicit mapping: package `providerId: cloud-code`, `accountTransport: cloud-code`, adapter/client/entitlement match).
   - [x] Extend per-provider enrollment adapters without renaming global IDs (`codex`, `mistral-vibe`, `muse`, `claude-code` unchanged): canonical registration + consumer projection parsing, no second account registry.
   - [x] Enforce: unknown expiry is not infinite validity; reimport N idempotent, N-1/another owner fails, new epoch needs controlled replacement; registrar stable opaque seat/account mapping, no secret-derived public identifiers.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [ ] **API tests**
-      - [ ] Existing, unchanged in this lot: `api/tests/unit/llm-account-transports.test.ts`.
-      - [ ] New, none in this lot.
-      - [ ] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/enrollment/cli-seat-import.test.ts ENV=test-ci-seat-import`.
-      - [ ] Sub-lot gate: `make test-llm-mesh SCOPE=tests/enrollment/cli-seat-import.test.ts ENV=test-ci-seat-import`.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] N/A (no UI changes in this branch).
-    - [ ] **E2E tests**
-      - [ ] N/A (no browser E2E in L1).
-    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [ ] None (synthetic only).
+  - [x] r2 (M4/R2): codex consumer parse asserts zero provider calls via `fetch` spy.
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing, unchanged in this lot: `api/tests/unit/llm-account-transports.test.ts`.
+      - [x] New, none in this lot.
+      - [x] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/enrollment/cli-seat-import.test.ts ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: `make test-llm-mesh SCOPE=tests/enrollment/cli-seat-import.test.ts ENV=test-ci-seat-import`.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A (no UI changes in this branch).
+    - [x] **E2E tests**
+      - [x] N/A (no browser E2E in L1).
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None (synthetic only).
 
-- [ ] **Lot 2 — Package external refresh policy + Muse/agy corrections**
+- [x] **Lot 2 — Package external refresh policy + Muse/agy corrections**
   - [x] Persist and enforce external-refresh policy across token import, keyring storage, listing/reload, acquisition, explicit refresh APIs, fallback routing, application receiving store.
   - [x] Guard `local-account-transport-service.ts` (`refreshToken` + `acquire` expiry branch): on expiry an external account becomes `access-unavailable` (classified), waits for next imported projection; never erases owner claim, never derives refresh from missing token, never routes through metered key/different account/gateway.
   - [x] Remove consumer provider-renewal and Muse key-minting paths (including after restart and 401); Muse key preparation happens in custody before import, never in mesh consumer.
   - [x] Fix (a) `completeMuseDeviceImport` mis-route: device-flow grant no longer refreshes by re-reading the CLI login file; expired device access becomes `access-unavailable` with zero CLI-store reads, covered by a dedicated test.
   - [x] Check (b) shared refresh authority across consumers (`refreshInFlight` local map, `InMemoryAccountTransportCoordinator`): record coverage by spec 3.4/L3 (serialized-stream single temporal authority) in `.h2a/build/ci_seat_l1_report.md`.
   - [x] Keep `cloud-code-credential-rotation.test.ts` covering external consumers refusing rotation; cloud-code fixture never qualifies native agy.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [ ] **API tests**
-      - [ ] Existing, unchanged in this lot.
-      - [ ] New, none in this lot.
-      - [ ] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/service/external-seat-authority.test.ts ENV=test-ci-seat-import`.
-      - [ ] Sub-lot gate: `make test-llm-mesh SCOPE=tests/service/external-seat-authority.test.ts ENV=test-ci-seat-import`.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] N/A.
-    - [ ] **E2E tests**
-      - [ ] N/A.
-    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [ ] None (synthetic only).
+  - [x] r2 R1: mesh `applyOutcome` on an external-seat 401 keeps `active` + `lastError` diagnostic, secret/policy retained (served-external-seat 401 test, red-then-green).
+  - [x] r2 R2: expired cloud-code seat never refreshes (zero-refresh spy); held-account owner compare refuses takeover via same `seatRef`.
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing, unchanged in this lot.
+      - [x] New, none in this lot.
+      - [x] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/service/external-seat-authority.test.ts ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: `make test-llm-mesh SCOPE=tests/service/external-seat-authority.test.ts ENV=test-ci-seat-import`.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A.
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None (synthetic only).
 
 - [x] **Lot 3 — L1-local inspect helper + node export**
   - [x] Add `packages/llm-mesh/src/node/cli-seat-store-reader.ts` (bounded reader: explicitly selected lab record only; allowlisted schema/version/capability categories; no refresh/mint/provider call/GitHub write/transfer/activation; unsupported fields/backends return unverified/refused, never raw values).
   - [x] Add `packages/llm-mesh/seat-tools/Makefile` (`seat-helper-setup`, `seat-inspect`; no root Makefile edit), `packages/llm-mesh/seat-tools/inspect.mjs`, `packages/llm-mesh/seat-tools/package.json`, `packages/llm-mesh/seat-tools/package-lock.json`, `packages/llm-mesh/seat-tools/node-runtime.json` (pins exact reviewed Node patch/checksum + helper deps + built mesh artifact), plus `seat-tools/README.md` (inspect-only use).
   - [x] Expose bounded reader via `packages/llm-mesh/src/node/index.ts` for L3 reuse.
   - [x] Add `packages/llm-mesh/tests/node/cli-seat-store-reader.test.ts` (five synthetic backend adapters; selector isolation; no live-home fallback; no refresh/mint; no raw/encoded canary in stdout/stderr/errors).
+  - [x] r2 n4: sidecar wired via `SEAT_SIDECAR` (`SeatSidecarFileBackend`) else explicit `unverified`; reader-fixed refusal reasons; schemaVersion label charset; node+mesh pins enforced by the script itself.
   - [ ] Owner dry-run format inspection only after synthetic gates (under CISEAT-EX3, `ENV=dev-ci-seat-import`, never automated): `make seat-inspect -C packages/llm-mesh/seat-tools CLI=agy ENV=dev-ci-seat-import` (repeat `codex`, `vibe`, `muse`, `claude`).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [ ] **API tests**
-      - [ ] Existing, unchanged in this lot.
-      - [ ] New, none in this lot.
-      - [ ] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/node/cli-seat-store-reader.test.ts ENV=test-ci-seat-import`.
-      - [ ] Sub-lot gate: `make test-llm-mesh SCOPE=tests/node/cli-seat-store-reader.test.ts ENV=test-ci-seat-import`.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] N/A.
-    - [ ] **E2E tests**
-      - [ ] N/A.
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing, unchanged in this lot.
+      - [x] New, none in this lot.
+      - [x] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/node/cli-seat-store-reader.test.ts ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: `make test-llm-mesh SCOPE=tests/node/cli-seat-store-reader.test.ts ENV=test-ci-seat-import`.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A.
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [ ] Owner dry-run inspect walkthrough (manual, after gates): five CLI labels return categories only.
 
@@ -204,20 +188,22 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - [x] Update `api/tests/unit/llm-account-transports.test.ts` (positive agy + Claude Code fixtures with no refresh token at all; import/persist/parse-reload/acquire valid unexpired access via `acquireAntigravityAccountTransport`, `acquireClaudeCodeAccountTransport`, `acquireOpenAICodexAccountTransport`, `acquireMuseAccountTransport` through the real guard; valid/expired/401/explicit-refresh cases; zero `refreshAntigravityAccessToken`/`readMuseCliEntry`/import-hook/renewal/mint/billed-fallback; `token_secret` + owner/lineage/policy preserved; newer-projection recovery; Vibe non-destructive regression).
   - [x] Add `api/tests/unit/llm-seat-projection-import.test.ts` (agy package cloud-code to application antigravity/cloudcode-pa + productAccountSource; refuse gemini target, application cloud-code transport, mixed tuples, wrong clients with zero DB mutation/acquisition/provider calls and zero `importAntigravityEnrollment`; refuse refresh-bearing projections and live use lacking trusted billing clearance).
   - [x] Start isolated API stack first: `make up-api-test API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [ ] **API tests**
-      - [ ] Existing + updated: `api/tests/unit/llm-account-transports.test.ts`.
-      - [ ] New: `api/tests/unit/llm-seat-projection-import.test.ts`.
-      - [ ] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-account-transports.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-      - [ ] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-seat-projection-import.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-      - [ ] Sub-lot gate: both scoped runs above.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] N/A.
-    - [ ] **E2E tests**
-      - [ ] N/A.
-    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [ ] None (synthetic API only).
+  - [x] r2 R1: API `recordLlmAccountTransportOutcome` on an external-seat 401 records unavailable, status stays `active`, secret retained (served-external-seat 401 test, red-then-green).
+  - [x] r2 R2: expired agy seat never refreshes (zero `refreshAntigravityAccessToken` spy).
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing + updated: `api/tests/unit/llm-account-transports.test.ts`.
+      - [x] New: `api/tests/unit/llm-seat-projection-import.test.ts`.
+      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-account-transports.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-seat-projection-import.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: both scoped runs above.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A.
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None (synthetic API only).
 
 - [x] **Lot 5 — Seat-delivery receiver (conditional CISEAT-EX2)**
   - [x] Declare `CISEAT-EX2` before editing conditional paths (exact overlay files, rationale, impact, rollback).
@@ -225,18 +211,21 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - [ ] Add `deploy/k8s/base/seat-delivery-mtls.yaml` + `deploy/k8s/base/kustomization.yaml` + selected target overlay patch only (P-DEPLOY resolves target; no infra changes beyond selection).
   - [x] Implement: scoped identity, wrong-owner refusal, forged-header/direct-access refusal, drain/ack/reload, monotonic import/ack, seat drain/reopen, zero billed-key fallback.
   - [x] Add `api/tests/unit/llm-seat-delivery-auth.test.ts` + `api/tests/api/llm-seat-delivery.test.ts`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [ ] **API tests**
-      - [ ] Existing, unchanged in this lot (except receiver mount).
-      - [ ] New: `api/tests/unit/llm-seat-delivery-auth.test.ts`, `api/tests/api/llm-seat-delivery.test.ts`.
-      - [ ] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-seat-delivery-auth.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-      - [ ] Scoped runs while evolving tests: `make test-api-endpoints SCOPE=tests/api/llm-seat-delivery.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-      - [ ] Sub-lot gate: both scoped runs above.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] N/A.
-    - [ ] **E2E tests**
-      - [ ] N/A (L3 owns `tests/e2e/seat-persistent-delivery.test.ts` with real TLS/revocation on a non-production target).
+  - [x] r2 n1: trusted-hop marker is per-request attestation (`deliveryTrust`), never process-wide env; all handlers require trust.
+  - [x] r2 n3: same generation + different `operationId` refused with 409 lineage conflict.
+  - [x] r2: stored-row asserts prove registry-derived owner/scope/policy; served-token identity proven through drain (M4).
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing, unchanged in this lot (except receiver mount).
+      - [x] New: `api/tests/unit/llm-seat-delivery-auth.test.ts`, `api/tests/api/llm-seat-delivery.test.ts`.
+      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-seat-delivery-auth.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+      - [x] Scoped runs while evolving tests: `make test-api-endpoints SCOPE=tests/api/llm-seat-delivery.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: both scoped runs above.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A (L3 owns `tests/e2e/seat-persistent-delivery.test.ts` with real TLS/revocation on a non-production target).
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [ ] Synthetic delivery walkthrough: import projection both modes, see one account; expire, see classified unavailable with zero refresh; deliver N+1, see recovery without duplication; wrong-owner and older-generation refusal.
 
@@ -245,19 +234,20 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - [x] Update existing package tests for all five adapters + authority/delivery (`contracts`, `codex`, `cloud-code`, `cloud-code-credential-rotation`, `claude-code`, `mistral-vibe`, `muse`, `facade`, `local-account-transport-service`, `local-account-transport-service-claude`, `local-account-transport-service-muse`) and retain/extend `seat-bundle.test.ts` (no duplicate creation).
   - [x] Add `packages/llm-mesh/tests/enrollment/cli-seat-import.test.ts`, `packages/llm-mesh/tests/enrollment/agy-cli-import.test.ts`, `packages/llm-mesh/tests/service/external-seat-authority.test.ts`, `packages/llm-mesh/tests/service/seat-projection-delivery.test.ts`.
   - [x] Sync `spec/SPEC_EVOL_CI_SEATS.md` (L1 interfaces, supported/unverified table deltas, gates) and `packages/llm-mesh/README.md`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [ ] **API tests**
-      - [ ] Existing + updated: `api/tests/unit/llm-account-transports.test.ts`.
-      - [ ] New: `api/tests/unit/llm-seat-projection-import.test.ts`, `api/tests/unit/llm-seat-delivery-auth.test.ts`, `api/tests/api/llm-seat-delivery.test.ts`.
-      - [ ] Scoped runs while evolving tests: per-file `make test-api-unit` / `make test-api-endpoints` runs with `API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+  - [x] r2 n5: rotation refusal discriminates (positive control + smuggled-block detection); codex parse under `fetch` spy; README enrollment re-export path corrected.
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing + updated: `api/tests/unit/llm-account-transports.test.ts`.
+      - [x] New: `api/tests/unit/llm-seat-projection-import.test.ts`, `api/tests/unit/llm-seat-delivery-auth.test.ts`, `api/tests/api/llm-seat-delivery.test.ts`.
+      - [x] Scoped runs while evolving tests: per-file `make test-api-unit` / `make test-api-endpoints` runs with `API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
       - [ ] Sub-lot gate: `make test-api API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] N/A.
-    - [ ] **E2E tests**
-      - [ ] N/A.
-    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [ ] None (packaging only).
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A.
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None (packaging only).
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (splitted by sublist for each env)
