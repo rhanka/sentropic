@@ -1,4 +1,4 @@
-import type { ControlContext } from './proof';
+import { matchesConfirmation, proofExpiry, type ConfirmationProof, type ControlContext, type PreparedProof } from './proof';
 
 export type RetainedChannel = 'terminal.cache' | 'native.mirror';
 export type Channel = RetainedChannel | 'terminal.live' | 'keyboard.control';
@@ -24,7 +24,6 @@ export interface ProjectOffer extends ContentScope {
   selectedSessionIds: string[];
   namedHistories: NamedHistory[];
   retentionByChannel: Record<RetainedChannel, Retention>;
-  offlineReadAccepted: boolean;
 }
 export const createOffer = (scope: ContentScope): ProjectOffer => ({
   ownerId: scope.ownerId, workspaceId: scope.workspaceId, projectId: scope.projectId,
@@ -32,7 +31,6 @@ export const createOffer = (scope: ContentScope): ProjectOffer => ({
   channels: { 'terminal.live': false, 'terminal.cache': false, 'native.mirror': false, 'keyboard.control': false },
   futureSessions: false, selectedSessionIds: [], namedHistories: [],
   retentionByChannel: { 'terminal.cache': { mode: 'none' }, 'native.mirror': { mode: 'none' } },
-  offlineReadAccepted: false,
 });
 
 export function retentionChoice(
@@ -72,7 +70,6 @@ export function viewAccess(row: SessionView, scope: ContentScope, now = Date.now
   if ((['ownerId', 'workspaceId', 'projectId', 'sourceId'] as const).some((key) => row[key] !== scope[key])) {
     return denied('scope_mismatch');
   }
-  if (row.excluded) return denied('session_excluded');
   if (row.membershipActive === false) return denied('membership_required');
   if (row.revoked) return denied('grant_revoked');
   if (row.purgeStatus) return denied(`purge_${row.purgeStatus}`);
@@ -81,18 +78,18 @@ export function viewAccess(row: SessionView, scope: ContentScope, now = Date.now
     ? row.copies?.some((copy) => copy.expiresAt === null || now < copy.expiresAt) ?? false
     : row.expiresAt === null || now < row.expiresAt;
   const stored = row.retained && row.storedAuthorized && (!closed || row.historyAuthorized) && deadlineAllows;
-  const reason = closed ? (row.historyAuthorized ? 'retained_closed' : 'history_authorization_required')
+  const reason = row.excluded ? 'session_excluded' : closed ? (row.historyAuthorized ? 'retained_closed' : 'history_authorization_required')
     : row.projectRevision !== row.grantProjectRevision ? 'project_revision_changed'
       : row.pauseReason || (!row.sourceAvailable ? 'source_unavailable' : '');
-  return { live: !closed && !reason && row.liveAuthorized, stored, reason };
+  return { live: !row.excluded && !closed && !reason && row.liveAuthorized, stored, reason };
 }
 
 export function canRequestHistory(row: SessionView, scope: ContentScope, now = Date.now()): boolean {
   const copyAvailable = row.expiresAt === undefined
     ? row.copies?.some((copy) => copy.expiresAt === null || now < copy.expiresAt) ?? false
     : row.expiresAt === null || now < row.expiresAt;
-  return row.sourceAvailable && row.retained && !row.historyAuthorized && copyAvailable
-    && !row.excluded && !row.revoked && !row.purgeStatus && row.membershipActive !== false
+  return row.retained && !row.historyAuthorized && copyAvailable
+    && !row.revoked && !row.purgeStatus && row.membershipActive !== false
     && viewAccess(row, scope, now).reason !== 'scope_mismatch';
 }
 
@@ -104,18 +101,20 @@ export function keyboardContext(row: SessionView, scope: ContentScope, control: 
   return control;
 }
 
-interface ConsentPorts<P> {
+interface ConsentPorts<P extends PreparedProof> {
   prepare: (offer: ProjectOffer) => Promise<P>;
-  accept: (offer: ProjectOffer, prepared: P, assertion: unknown) => Promise<unknown>;
-  prove: (prepared: P, signal: AbortSignal) => Promise<unknown>;
+  accept: (offer: ProjectOffer, prepared: P, confirmation: ConfirmationProof) => Promise<unknown>;
+  prove: (prepared: P, signal: AbortSignal) => Promise<ConfirmationProof>;
   available: () => boolean;
 }
 
 /** Transient only. Neither drafts nor proofs survive edits, logout or navigation. */
-export class ConsentFlow<P = unknown> {
+export class ConsentFlow<P extends PreparedProof = PreparedProof> {
   offer: ProjectOffer;
   prepared: P | null = null;
   accepted = false;
+  confirmation: ConfirmationProof | null = null;
+  status: 'idle' | 'step_up_required' | 'confirmation_returned' | 'confirmation_refused' | 'outcome_unknown' = 'idle';
   private revision = 0;
   private fingerprint = '';
   private pending = false;
@@ -134,7 +133,7 @@ export class ConsentFlow<P = unknown> {
     this.revision++;
     this.abort.abort();
     this.abort = new AbortController();
-    this.prepared = null;
+    this.prepared = null; this.confirmation = null; this.status = 'idle';
     this.fingerprint = '';
     this.accepted = false;
     this.pending = false;
@@ -158,25 +157,34 @@ export class ConsentFlow<P = unknown> {
     }
   }
 
-  async confirm() {
+  async authenticate() {
     const prepared = this.prepared;
-    if (!prepared || this.pending || !this.ports.available()
-      || this.fingerprint !== JSON.stringify(this.offer)
-      || !this.offer.offlineReadAccepted || !Object.values(this.offer.channels).some(Boolean)) return;
-    const expiresAt = (prepared as { expiresAt?: number }).expiresAt;
-    if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt!) { this.cancel(); return; }
-    this.pending = true;
-    const revision = this.revision;
-    const offer = structuredClone(this.offer);
+    if (!prepared || this.pending || !this.ports.available() || this.fingerprint !== JSON.stringify(this.offer)) return;
+    if (proofExpiry(prepared) <= Date.now() || proofExpiry(prepared) - prepared.native.challenge.issuedAt > 60000
+      || !['share', 'amend'].includes(prepared.native.challenge.purpose)
+      || prepared.native.challenge.target.kind !== 'policy') { this.cancel(); return; }
+    const revision = this.revision; this.pending = true; this.status = 'step_up_required';
     try {
-      const assertion = await this.ports.prove(prepared, this.abort.signal);
-      if (revision !== this.revision || !this.ports.available()
-        || this.fingerprint !== JSON.stringify(this.offer) || Date.now() >= expiresAt!) return;
-      this.prepared = null;
-      await this.ports.accept(offer, prepared, assertion);
-      if (revision === this.revision) this.accepted = true;
-    } finally {
-      if (revision === this.revision) { this.pending = false; this.prepared = null; }
-    }
+      const confirmation = await this.ports.prove(prepared, this.abort.signal);
+      if (revision !== this.revision || !this.ports.available() || this.fingerprint !== JSON.stringify(this.offer)) return;
+      if (proofExpiry(prepared) <= Date.now() || !matchesConfirmation(prepared, confirmation)) throw new Error('confirmation_refused');
+      this.confirmation = confirmation; this.status = 'confirmation_returned';
+    } catch (error) {
+      if (revision === this.revision) { this.prepared = null; this.confirmation = null; this.status = 'confirmation_refused'; }
+      throw error;
+    } finally { if (revision === this.revision) this.pending = false; }
+  }
+
+  async confirm() {
+    const prepared = this.prepared; const confirmation = this.confirmation;
+    if (!prepared || !confirmation || this.pending || !this.ports.available()
+      || this.fingerprint !== JSON.stringify(this.offer) || !Object.values(this.offer.channels).some(Boolean)) return;
+    if (proofExpiry(prepared) <= Date.now()) { this.cancel(); return; }
+    this.pending = true; this.prepared = null; this.confirmation = null; this.status = 'outcome_unknown';
+    const revision = this.revision; const offer = structuredClone(this.offer);
+    try {
+      await this.ports.accept(offer, prepared, confirmation);
+      if (revision === this.revision) { this.accepted = true; this.status = 'idle'; }
+    } finally { if (revision === this.revision) this.pending = false; }
   }
 }

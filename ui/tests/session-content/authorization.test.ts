@@ -13,7 +13,7 @@ const challenge = () => ({ native: { protocol: 'h2a.session-content' as const, p
     project: { tenantId: 'tenant', workspaceId: 'workspace', workspaceIncarnation: 'wi', projectId: 'project' },
     source: { workstationId: 'ws', bindingId: 'binding', bindingVersion: 1, sourceId: 'source',
       sourceGeneration: 'source', sourceBootId: 'boot' }, clientId: 'confirmation',
-    purpose: 'share' as const, target: { kind: 'policy' as const, policyDigest: 'b'.repeat(64) },
+    purpose: 'share' as 'share' | 'amend', target: { kind: 'policy' as const, policyDigest: 'b'.repeat(64) },
     random: 'r'.repeat(43), issuedAt: Date.now(), expiresAt: Date.now() + 60000,
   } }, authorization: { url: 'https://idp.example/authorize', state: 's'.repeat(43) } });
 
