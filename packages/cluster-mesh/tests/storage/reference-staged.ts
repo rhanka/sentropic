@@ -6,6 +6,8 @@
 // and purge-jobs-v1; predicates and relationships stay rejected (K3/K4 own
 // the positives). Barriers ride with carrier appends (§10.1).
 
+import { randomUUID } from 'node:crypto';
+import type { ReplayFence } from './replay-corpus.js';
 import {
   StorageCasConflictError,
   StorageDeniedError,
@@ -62,7 +64,7 @@ export interface StagedJournalEvent {
 
 export interface StagedConsumer {
   cursor: number;
-  status: 'running' | 'stalled';
+  status: 'running' | 'stalled' | 'paused';
   failedEvent: string | null;
   failedReason: string | null;
   failedSeq: number | null;
@@ -75,7 +77,7 @@ export interface JournalReadResult {
 
 export interface ConsumerView {
   readonly cursor: number;
-  readonly status: 'running' | 'stalled';
+  readonly status: 'running' | 'stalled' | 'paused';
   readonly failedEvent: string | null;
   readonly failedReason: string | null;
   readonly lag: number;
@@ -165,6 +167,7 @@ const createStagedScope = (): StagedScope => ({
 });
 
 export class TestStagedReferenceStore extends TestReferenceStore {
+  readonly incarnation = randomUUID();
   private readonly stagedScopes = new Map<string, StagedScope>();
   private readonly externalLog: StagedJournalEvent[] = [];
   private externalSeq = 0;
@@ -760,13 +763,35 @@ export class TestStagedStore {
       throw new StorageInvalidCommandError('journal reader requires a valid window');
     }
     return {
-      events: this.staged.journal.filter((event) => event.seq > after).slice(0, limit),
+      events: this.staged.consumers.get(consumer)?.status === 'paused' ? [] : this.staged.journal.filter((event) => event.seq > after).slice(0, limit),
       watermark: this.staged.journalSeq,
     };
   }
 
-  journalCheckpoint(consumer: string, expected: number, next: number): void {
-    this.requireOperation('write');
+  journalFence(): ReplayFence {
+    this.requireOperation('maintain');
+    const current = this.staged.currentFence ?? { fenceId: 'fence-k2b', epoch: '1' };
+    this.requireCurrentFence(current);
+    return { ...current, incarnation: this.store.incarnation, ownerId: this.grant.principalId };
+  }
+
+  requireJournalFence(fence: ReplayFence): void {
+    this.requireOperation('maintain');
+    if (!fence || fence.incarnation !== this.store.incarnation || fence.ownerId !== this.grant.principalId) {
+      throw new StorageInvalidCommandError('journal fence binding mismatch');
+    }
+    this.requireCurrentFence(fence);
+  }
+
+  journalPause(consumer: string, fence: ReplayFence): void {
+    this.requireJournalFence(fence);
+    const entry = this.staged.consumers.get(consumer) ?? { cursor: 0, status: 'running', failedEvent: null, failedReason: null, failedSeq: null };
+    entry.status = 'paused';
+    this.staged.consumers.set(consumer, entry);
+  }
+
+  journalCheckpoint(consumer: string, expected: number, next: number, fence: ReplayFence): void {
+    this.requireJournalFence(fence);
     if (!Number.isSafeInteger(expected) || expected < 0 || !Number.isSafeInteger(next) || next < 0) {
       throw new StorageInvalidCommandError('checkpoints require non-negative cursors');
     }
@@ -778,6 +803,7 @@ export class TestStagedStore {
     if (entry.cursor !== expected) throw new StorageCasConflictError('checkpoint expected mismatch');
     if (next < entry.cursor) throw new StorageInvalidCommandError('checkpoints are monotonic');
     if (next > this.staged.journalSeq) throw new StorageInvalidCommandError('checkpoint beyond the log');
+    if (entry.status === 'paused') throw new StorageInvalidCommandError('checkpoint cannot advance a paused consumer');
     if (entry.status === 'stalled' && entry.failedSeq !== null && next >= entry.failedSeq) {
       throw new StorageInvalidCommandError('checkpoint cannot pass an undelivered poisoned event');
     }
@@ -798,7 +824,7 @@ export class TestStagedStore {
   }
 
   journalMarkPoison(consumer: string, eventId: string, reason: string): void {
-    this.requireOperation('write');
+    this.requireOperation('maintain');
     const event = this.staged.journal.find((entry) => entry.eventId === eventId);
     if (!event) throw new StorageInvalidCommandError('unknown journal event');
     let entry = this.staged.consumers.get(consumer);
@@ -812,10 +838,10 @@ export class TestStagedStore {
     entry.failedSeq = event.seq;
   }
 
-  journalRetry(consumer: string, expectedFailure: string): void {
-    this.requireOperation('write');
+  journalRetry(consumer: string, expectedFailure: string | null, fence: ReplayFence): void {
+    this.requireJournalFence(fence);
     const entry = this.staged.consumers.get(consumer);
-    if (!entry || entry.status !== 'stalled' || entry.failedEvent !== expectedFailure) {
+    if (!entry || (entry.status !== 'stalled' && entry.status !== 'paused') || entry.failedEvent !== expectedFailure) {
       throw new StorageInvalidCommandError('nothing to retry');
     }
     entry.status = 'running';
@@ -828,8 +854,8 @@ export class TestStagedStore {
     this.store.armExternalFailure();
   }
 
-  journalResync(consumer: string): { readonly snapshotRoot: string; readonly journalSeq: number } {
-    this.requireOperation('write');
+  journalResync(consumer: string, fence: ReplayFence): { readonly snapshotRoot: string; readonly journalSeq: number } {
+    this.requireJournalFence(fence);
     let entry = this.staged.consumers.get(consumer);
     if (!entry) {
       entry = { cursor: 0, status: 'running', failedEvent: null, failedReason: null, failedSeq: null };
