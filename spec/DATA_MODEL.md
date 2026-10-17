@@ -2419,7 +2419,9 @@ Tables (`control` schema, soft references only, no cross-namespace FK):
   `binding`/`namespace`/`history` remain the real purge-event scopes.
   Objects carry the writer link (`reservation_id`, `0016`, nullable) so an
   object purge settles exactly its attempt and releases its stale
-  reservation; a completed job re-run settles nothing. Zero-PUT admission
+  reservation; `session_content_objects_reservation_idx` indexes that link
+  for stale-reservation accounting. A completed job re-run settles nothing.
+  Zero-PUT admission
   refusals release to `cancelled` (known outcome). Stale reservations stay
   charged only while no object row carries their bytes.
   `session_content_tombstones`: surviving offboarding markers blocking
