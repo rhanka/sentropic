@@ -124,7 +124,7 @@ export type MuseTokenSecretPayload = {
   tokenType: 'bearer';
   obtainedAt: string;
   expiresAt: string | null;
-  source: 'muse-import' | 'muse-cli' | 'muse-refresh';
+  source: 'muse-import' | 'muse-cli' | 'muse-refresh' | 'muse-external';
   apiBaseUrl: string | null;
   accountEmail: string | null;
   externalSeatPolicy?: SeatExternalPolicy | null;
@@ -138,7 +138,7 @@ export type MistralVibeTokenSecretPayload = {
   tokenType: 'bearer';
   obtainedAt: string;
   expiresAt: string | null;
-  source: 'vibe-sign-in';
+  source: 'vibe-sign-in' | 'vibe-external';
   externalSeatPolicy?: SeatExternalPolicy | null;
 };
 
@@ -326,6 +326,10 @@ export const inferTokenExpiresAt = (
   return exp && exp > 0 ? new Date(exp * 1000).toISOString() : null;
 };
 
+/** Infer a Codex external account id from token claims (pre-store validation). */
+export const inferCodexAccountId = (accessToken: string, idToken?: string | null): string | null =>
+  inferCodexAccountIdFromToken(accessToken, idToken ?? null);
+
 const parseCodexTokenSecret = (value: string | null | undefined): CodexTokenSecretPayload | null => {
   const decrypted = decryptSecretOrNull(value);
   if (!decrypted) return null;
@@ -511,6 +515,7 @@ const buildTokenPayload = (input: {
   idToken?: string | null;
   expiresAt?: string | null;
   source: CodexTokenSecretPayload['source'];
+  externalSeatPolicy?: SeatExternalPolicy | null;
 }): CodexTokenSecretPayload => ({
   accessToken: input.accessToken,
   refreshToken: input.refreshToken ?? null,
@@ -519,6 +524,7 @@ const buildTokenPayload = (input: {
   obtainedAt: new Date().toISOString(),
   expiresAt: input.expiresAt ?? inferTokenExpiresAt(input.accessToken, input.idToken),
   source: input.source,
+  externalSeatPolicy: input.externalSeatPolicy ?? null,
 });
 
 const buildClaudeCodeTokenPayload = (input: {
@@ -551,6 +557,7 @@ const buildMuseTokenPayload = (input: {
   source: MuseTokenSecretPayload['source'];
   apiBaseUrl?: string | null;
   accountEmail?: string | null;
+  externalSeatPolicy?: SeatExternalPolicy | null;
 }): MuseTokenSecretPayload => ({
   accessToken: input.accessToken,
   refreshToken: null,
@@ -560,6 +567,7 @@ const buildMuseTokenPayload = (input: {
   source: input.source,
   apiBaseUrl: normalizeOptionalText(input.apiBaseUrl),
   accountEmail: normalizeOptionalText(input.accountEmail),
+  externalSeatPolicy: input.externalSeatPolicy ?? null,
 });
 
 const parseMuseTokenSecret = (
@@ -624,13 +632,16 @@ const refreshMistralVibeTokenIfNeeded = async (input: {
 const buildMistralVibeTokenPayload = (input: {
   accessToken: string;
   expiresAt?: string | null;
+  source?: MistralVibeTokenSecretPayload['source'];
+  externalSeatPolicy?: SeatExternalPolicy | null;
 }): MistralVibeTokenSecretPayload => ({
   accessToken: input.accessToken,
   refreshToken: null,
   tokenType: 'bearer',
   obtainedAt: new Date().toISOString(),
   expiresAt: input.expiresAt ?? null,
-  source: 'vibe-sign-in',
+  source: input.source ?? 'vibe-sign-in',
+  externalSeatPolicy: input.externalSeatPolicy ?? null,
 });
 
 const buildCloudCodeTokenPayload = (input: {
@@ -664,9 +675,12 @@ export const storeCodexAccountTransport = async (input: {
   refreshToken?: string | null;
   idToken?: string | null;
   source?: CodexTokenSecretPayload['source'];
+  /** L1 external/access-only variant: trusted custodian policy. */
+  seatPolicy?: SeatExternalPolicy | null;
 }): Promise<LlmAccountTransportPublic | null> => {
   const ownerUserId = normalizeOptionalText(input.ownerUserId);
   const accessToken = normalizeOptionalText(input.accessToken);
+  const seatPolicy = input.seatPolicy ?? null;
   if (!ownerUserId || !accessToken) return null;
 
   const token = buildTokenPayload({
@@ -674,8 +688,11 @@ export const storeCodexAccountTransport = async (input: {
     refreshToken: normalizeOptionalText(input.refreshToken),
     idToken: normalizeOptionalText(input.idToken),
     source: input.source ?? 'codex-device',
+    externalSeatPolicy: seatPolicy,
   });
   const externalAccountId = inferCodexAccountIdFromToken(token.accessToken, token.idToken);
+  // Unknown expiry is not infinite validity: external rows require expiresAt.
+  if (seatPolicy && !token.expiresAt) return null;
   const now = new Date();
   const accountId = createId();
   const tokenSecret = encryptSecret(JSON.stringify(token));
@@ -714,7 +731,7 @@ export const storeCodexAccountTransport = async (input: {
       ${now},
       NULL,
       NULL,
-      ${JSON.stringify({ source: token.source })}::jsonb,
+      ${JSON.stringify(seatPolicy ? { source: token.source, [SEAT_EXTERNAL_POLICY_KEY]: seatPolicy } : { source: token.source })}::jsonb,
       ${now},
       ${now}
     )
@@ -923,18 +940,24 @@ export const storeMuseAccountTransport = async (input: {
   expiresAt?: string | null;
   apiBaseUrl?: string | null;
   accountEmail?: string | null;
+  /** L1 external/access-only variant: trusted custodian policy. */
+  seatPolicy?: SeatExternalPolicy | null;
 }): Promise<LlmAccountTransportPublic | null> => {
   const ownerUserId = normalizeOptionalText(input.ownerUserId);
   const accessToken = normalizeOptionalText(input.accessToken);
   const externalAccountId = normalizeOptionalText(input.externalAccountId);
+  const seatPolicy = input.seatPolicy ?? null;
   if (!ownerUserId || !accessToken || !externalAccountId) return null;
+  // Unknown expiry is not infinite validity: external rows require expiresAt.
+  if (seatPolicy && !normalizeOptionalText(input.expiresAt)) return null;
 
   const token = buildMuseTokenPayload({
     accessToken,
     expiresAt: input.expiresAt ?? null,
-    source: 'muse-import',
+    source: seatPolicy ? 'muse-external' : 'muse-import',
     apiBaseUrl: normalizeOptionalText(input.apiBaseUrl),
     accountEmail: normalizeOptionalText(input.accountEmail),
+    externalSeatPolicy: seatPolicy,
   });
   const now = new Date();
   const accountId = createId();
@@ -974,7 +997,7 @@ export const storeMuseAccountTransport = async (input: {
       ${now},
       NULL,
       NULL,
-      ${JSON.stringify({ source: token.source })}::jsonb,
+      ${JSON.stringify(seatPolicy ? { source: token.source, [SEAT_EXTERNAL_POLICY_KEY]: seatPolicy } : { source: token.source })}::jsonb,
       ${now},
       ${now}
     )
@@ -1006,15 +1029,22 @@ export const storeMistralVibeAccountTransport = async (input: {
   accountLabel?: string | null;
   accessToken: string;
   expiresAt?: string | null;
+  /** L1 external/access-only variant: trusted custodian policy. */
+  seatPolicy?: SeatExternalPolicy | null;
 }): Promise<LlmAccountTransportPublic | null> => {
   const ownerUserId = normalizeOptionalText(input.ownerUserId);
   const accessToken = normalizeOptionalText(input.accessToken);
   const externalAccountId = normalizeOptionalText(input.externalAccountId);
+  const seatPolicy = input.seatPolicy ?? null;
   if (!ownerUserId || !accessToken || !externalAccountId) return null;
+  // Unknown expiry is not infinite validity: external rows require expiresAt.
+  if (seatPolicy && !normalizeOptionalText(input.expiresAt)) return null;
 
   const token = buildMistralVibeTokenPayload({
     accessToken,
     expiresAt: input.expiresAt ?? null,
+    source: seatPolicy ? 'vibe-external' : 'vibe-sign-in',
+    externalSeatPolicy: seatPolicy,
   });
   const now = new Date();
   const accountId = createId();
@@ -1054,7 +1084,7 @@ export const storeMistralVibeAccountTransport = async (input: {
       ${now},
       NULL,
       NULL,
-      ${JSON.stringify({ source: token.source })}::jsonb,
+      ${JSON.stringify(seatPolicy ? { source: token.source, [SEAT_EXTERNAL_POLICY_KEY]: seatPolicy } : { source: token.source })}::jsonb,
       ${now},
       ${now}
     )
@@ -1519,7 +1549,7 @@ export const storeAntigravityAccountTransport = async (input: {
  * no discovery/refresh/mint side effect, and writes nothing on refusal.
  */
 export const importSeatProjection = async (input: {
-  cli: 'agy' | 'claude';
+  cli: 'agy' | 'claude' | 'codex' | 'muse' | 'vibe';
   ownerUserId: string;
   expectedOwnerScope: string;
   externalAccountId: string;
@@ -1569,12 +1599,43 @@ export const importSeatProjection = async (input: {
       seatPolicy: policy,
     });
   }
-  return storeClaudeCodeAccountTransport({
+  if (input.cli === 'claude') {
+    return storeClaudeCodeAccountTransport({
+      ownerUserId: input.ownerUserId,
+      accountLabel: input.accountLabel,
+      externalAccountId: input.externalAccountId,
+      accessToken: input.accessToken,
+      expiresAt: input.expiresAt,
+      seatPolicy: policy,
+    });
+  }
+  if (input.cli === 'muse') {
+    return storeMuseAccountTransport({
+      ownerUserId: input.ownerUserId,
+      accountLabel: input.accountLabel,
+      externalAccountId: input.externalAccountId,
+      accessToken: input.accessToken,
+      expiresAt: input.expiresAt,
+      seatPolicy: policy,
+    });
+  }
+  if (input.cli === 'vibe') {
+    return storeMistralVibeAccountTransport({
+      ownerUserId: input.ownerUserId,
+      accountLabel: input.accountLabel,
+      externalAccountId: input.externalAccountId,
+      accessToken: input.accessToken,
+      expiresAt: input.expiresAt,
+      seatPolicy: policy,
+    });
+  }
+  // Codex derives its external identity from token claims: the inferred id
+  // must equal the admitted account before anything is written.
+  if (inferCodexAccountId(input.accessToken) !== input.externalAccountId) return null;
+  return storeCodexAccountTransport({
     ownerUserId: input.ownerUserId,
     accountLabel: input.accountLabel,
-    externalAccountId: input.externalAccountId,
     accessToken: input.accessToken,
-    expiresAt: input.expiresAt,
     seatPolicy: policy,
   });
 };
