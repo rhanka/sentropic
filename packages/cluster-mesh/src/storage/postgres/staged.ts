@@ -11,11 +11,12 @@ import { pgJsonBytes } from './roots.js';
 import { decodePgJson, decodePgText } from './codec.js';
 import { pgUnitHandle, readPgUnit, resolvePgUnit, savePgUnit, type PgUnit } from './units.js';
 import { assertPgHiddenVisible, registerPgHiddenCoverage } from './hidden-coverage.js';
+import { runPgHidden } from './hidden-session.js';
 export const beginPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, supplied: StagedBeginInput): Promise<AuthenticatedStagedHandle> => {
   if (core.options.moduleId !== 'comments') throw new UnsupportedProfileError('staged-units-v1');
   const input = ownPgValue(supplied);
   if (!validateBeginInput(input).ok || pgJsonBytes(input).length > core.work().maxEncodedBytes) throw new StorageInvalidCommandError('invalid staged begin');
-  return core.tx.run(false, async (session) => {
+  return runPgHidden(core, grant, async (session) => {
     await core.check(session, grant, 'write', true); await core.fence(session, grant, input.fence);
     const id = core.id('unit');
     const metadata: PgUnit['metadata'] = { version: 'pg-staged-v1', incarnation: core.incarnation, begin: input, fence: input.fence, state: 'staging', count: 0, frontier: null,
@@ -27,12 +28,12 @@ export const beginPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, su
     if (before.inputDigest !== input.inputDigest || before.contractDigest !== input.contractDigest || before.sourceBoundary !== input.sourceBoundary) throw new StorageIdempotencyConflictError('divergent staged begin');
     if (unit.metadata.fence.fenceId !== input.fence.fenceId || unit.metadata.fence.epoch !== input.fence.epoch) throw new StorageInvalidCommandError('operation requires explicit owner recovery');
     return pgUnitHandle(core, grant, unit);
-  }, true);
+  }, input.fence);
 };
 export const stagePgFragment = async (core: PgCore, grant: ScopeGrant<unknown>, supplied: RootStageInput): Promise<FragmentReceipt> => {
   const input = ownPgValue(supplied); const effects = input.effects; const limits = core.work(input.limits);
   if (!validateFragmentInput({ ...input, unitId: input.unit.unitId }, limits).ok || pgJsonBytes(effects).length > limits.maxEncodedBytes || EFFECT_SECTIONS.reduce((n, key) => n + effects[key].length, effects.moduleResult === undefined ? 0 : 1) > limits.maxRecords) throw new StorageInvalidCommandError('invalid staged fragment or admission limits');
-  return core.tx.run(false, async (session) => {
+  return runPgHidden(core, grant, async (session) => {
     const unit = await resolvePgUnit(core, session, grant, input.unit, input.fence);
     const metadata = unit.metadata;
     if (effects.purgeIntents.length) {
@@ -65,13 +66,13 @@ export const stagePgFragment = async (core: PgCore, grant: ScopeGrant<unknown>, 
     metadata.count += 1; metadata.frontier = digest; metadata.barriers += effects.barriers.length; metadata.purges += effects.purgeIntents.length;
     await core.fence(session, grant, input.fence); await savePgUnit(core, session, grant, unit);
     return { unitId: unit.id, ordinal: input.ordinal, fragmentDigest: digest };
-  }, true);
+  }, input.fence);
 };
 export const readPgFragmentMetadata = async (core: PgCore, session: import('./protocol.js').PgSession, unit: PgUnit, ordinal: number) => {
   const result = await session.execute({ text: `SELECT metadata::text FROM ${core.roots.schema}.fragments WHERE unit_id=$1 AND ordinal=$2::bigint`, values: [unit.id, String(ordinal)] });
   return decodePgJson<{ counts: number[]; dependencyLength: number; effectLength: number }>(decodePgText(result.rows[0]?.metadata));
 };
-export const inspectPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, operationKey: string): Promise<StagedUnitStatus> => core.tx.run(false, async (session) => {
+export const inspectPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, operationKey: string): Promise<StagedUnitStatus> => runPgHidden(core, grant, async (session) => {
   await core.check(session, grant, 'write');
   const result = await session.execute({ text: `SELECT id FROM ${core.roots.schema}.units WHERE scope_key=$1 AND operation=$2`, values: [core.roots.key(grant.scope), operationKey] });
   if (!result.rows[0]) throw new StorageInvalidCommandError('unknown staged operation');
