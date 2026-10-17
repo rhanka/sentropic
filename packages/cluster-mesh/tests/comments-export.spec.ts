@@ -23,6 +23,8 @@ describe.skipIf(!pgEnabled)('retained authorized comments transport export', () 
           records.push(record); previous = record;
         }
         expect(Buffer.byteLength(JSON.stringify(records))).toBeGreaterThan(1048576);
+        const reader = grantFor({ scope, token: 'export-reader', operations: ['read'] }); await root.bindNew(reader);
+        await module.withContext(reader, async () => {
         const selection = { scope, exportId: 'export-long', selections: [{ kind: 'annotation-revisions' as const, annotationId: 'long' }] };
         let preparation = await module.services.prepareExportBoundary(selection);
         for (let step = 0; preparation.state !== 'prepared' && step < 100; step++) {
@@ -32,7 +34,7 @@ describe.skipIf(!pgEnabled)('retained authorized comments transport export', () 
         expect(preparation.state).toBe('prepared'); const boundary = preparation.boundary;
         expect(boundary.unitRoot).toEqual({ unitId: selection.exportId, records: '28', payloadDigest: commentsUnitPayloadDigest(selection.exportId, records) });
         const newer = createAnnotationRevision(previous, { scope, annotationId: 'long', primary: conformanceTarget(conformanceResource(scope)), secondary: [], visualAnchors: [], body: conformanceBody('after snapshot'), provenance: conformanceProvenance() }, capacity);
-        await module.store.appendAnnotationRevision(scope, 'long', newer, { kind: 'revision', revisionHash: previous.hash });
+        await module.withContext(grant, () => module.store.appendAnnotationRevision(scope, 'long', newer, { kind: 'revision', revisionHash: previous.hash }));
         const first = await module.services.readExportFragments(boundary.request, null, 1);
         expect(await module.services.readExportFragments(boundary.request, null, 1)).toEqual(first);
         const collected = []; let page = first; let lastDigest = null; let ordinal = 0; let terminal = null; const cursors = new Set();
@@ -51,6 +53,7 @@ describe.skipIf(!pgEnabled)('retained authorized comments transport export', () 
         expect(canonical.page.records).toEqual(records.slice(0, 2)); expect(canonical.nextCursor).not.toBeNull();
         authority.allowed = false;
         await expect(module.services.readExportFragments(boundary.request, first.nextCursor, 1)).rejects.toMatchObject({ code: 'denied' });
+        });
       });
     } finally { await fixture.close(); }
   });

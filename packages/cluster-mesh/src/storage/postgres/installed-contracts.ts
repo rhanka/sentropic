@@ -21,5 +21,5 @@ export interface PgInstalledContext extends PgProjectionContext {
   stageFragment(input: RootStageInput): Promise<FragmentReceipt>;
   inspectStaged(operationKey: string): Promise<StagedUnitStatus>;
 }
-export interface PgInstalledOperation { readonly operation: 'write' | 'maintain'; execute(input: unknown, context: PgInstalledContext): Promise<unknown>; }
+export interface PgInstalledOperation { readonly operation: 'read' | 'write' | 'maintain'; execute(input: unknown, context: PgInstalledContext): Promise<unknown>; }
 export type PgPurgeFinalizer = (job: RootPurgeJob, context: PgInstalledContext) => Promise<void>;
