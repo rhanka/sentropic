@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "cluster-mesh-pg/001-core@1",
+      "file": "001-core.sql",
+      "order": 1,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 0,
+      "toVersion": 1,
+      "requires": [],
+      "checksum": "40fa2bed5b4076860d505385f3e044bc60e74a2e1e1bfd524562cd911812c460"
+    },
+    {
+      "id": "cluster-mesh-pg/002-map@1",
+      "file": "002-map.sql",
+      "order": 2,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 1,
+      "toVersion": 2,
+      "requires": [
+        "cluster-mesh-pg/001-core@1"
+      ],
+      "checksum": "03a9c68bfb1ace1eb3c067a04d2293129f80d4cb354f28a22298bf66354b1dfc"
+    }
+  ]
+}
