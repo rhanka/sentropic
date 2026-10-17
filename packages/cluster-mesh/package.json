@@ -104,6 +104,10 @@
       "types": "./dist/compose/mcp.d.ts",
       "import": "./dist/compose/mcp.js"
     },
+    "./mcp/web-pages": {
+      "types": "./dist/integrations/mcp/web-pages.d.ts",
+      "import": "./dist/integrations/mcp/web-pages.js"
+    },
     "./loaders/mcp": {
       "types": "./dist/loaders/mcp/index.d.ts",
       "import": "./dist/loaders/mcp/index.js"
@@ -143,6 +147,7 @@
     "@sentropic/mcp-auth": ">=0.2.1 <0.3.0",
     "@sentropic/auth-hono": "^0.15.0 || ^0.16.0",
     "@sentropic/mcp-platform": ">=0.3.0 <0.4.0",
+    "@sentropic/artifacts": ">=0.1.0 <0.2.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "jose": "^5.10.0"
   },
@@ -152,6 +157,7 @@
     "@sentropic/mcp-auth": { "optional": true },
     "@sentropic/auth-hono": { "optional": true },
     "@sentropic/mcp-platform": { "optional": true },
+    "@sentropic/artifacts": { "optional": true },
     "@modelcontextprotocol/sdk": { "optional": true },
     "jose": { "optional": true }
   },
