@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startGatewayHost } from '../src/node/gateway-host.js';
 import { createGatewayControlClient } from '../src/node/control-client.js';
-import { durableHostFixture, model } from './helpers/durable-host.js';
-const session = { ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'c', models: [model] };
+import { durableHostFixture, model, routingContract } from './helpers/durable-host.js';
+const session = { ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'c', routingContract };
 const send = (endpoint: string, key: string) => fetch(`${endpoint}/v1/chat/completions`, { method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, messages: [{ role: 'user', content: 'synthetic' }] }) });
 describe('durable published host composition', () => {
   it('serves through the real planner, recovers its key/receipts and retains revocation', async () => {

@@ -6,7 +6,9 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGatewayControlClient } from '@sentropic/llm-gateway/node/control-client';
-const session = { ownerScopeRef: 'owner-a', workspaceRef: 'workspace', clientSessionRef: 'native-synthetic', models: ['gpt-6.1-sol'] };
+const session = { ownerScopeRef: 'owner-a', workspaceRef: 'workspace', clientSessionRef: 'native-synthetic', routingContract: {
+  version: 1 as const, revision: 'packed-p1', ownerScopeRef: 'owner-a', exactModels: ['gpt-6.1-sol'],
+  authorizedAccountRefs: ['account-a'], rotateAccounts: false, effortPolicy: { mode: 'preserve' as const } } };
 const launch = async (dir: string, children: Set<ChildProcess>, key = 'a'.repeat(64)) => {
   const child = fork(new URL('./host-child.ts', import.meta.url), [], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
     env: { ...process.env, GW_TEST_STATE_DIR: dir, GW_TEST_DEK: key } });

@@ -5,15 +5,16 @@ import type { CallerContext } from '../session-service.js';
 import type { CreateGatewayRouterOptions } from '../router/index.js';
 import type { KeyringReader } from './gateway-state-store.js';
 import type { RouteMeteringSink } from '../route-flow-core.js';
+import type { RouteAffinityStore, RoutePlanner } from '@sentropic/llm-mesh';
 
 export interface MeshBinding {
   readonly ownerScopeRef: string;
   readonly keyring: KeyringReader;
   unlockKeyring(): Promise<void>;
+  createRoutePlanner(options: { affinityStore?: RouteAffinityStore }): RoutePlanner;
   resolveOwner(caller: CallerContext, context: CallerAuthRequestContext): CostContext | Promise<CostContext>;
-  readonly gateway: Omit<CreateGatewayRouterOptions, 'config' | 'readiness' | 'requestAudit'> & {
+  readonly gateway: Omit<CreateGatewayRouterOptions, 'config' | 'readiness' | 'requestAudit' | 'routePlanner'> & {
     readonly config: Omit<GatewayConfig, 'callerAuth'>;
-    readonly routePlanner: NonNullable<CreateGatewayRouterOptions['routePlanner']>;
     readonly routeMetering: RouteMeteringSink;
   };
 }
