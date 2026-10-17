@@ -218,6 +218,7 @@
     - [ ] `root-snapshot.ts` pages five captured canonical indexes, owns returned rows, enforces contiguous consumption and current barriers, and never clears consumer poison or pause state.
   - [ ] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
     - [ ] RED manifest probes construct the exact selection/unit-root flattening collision and mutate nested caller/returned heads; all asynchronous rejection assertions are now awaited, and storage fixtures use computed commitments.
+    - [ ] Manifest encoding separately frames selected heads, unit roots and terminal metadata; nested head values are owned at build and deeply frozen at retention. The value registry alone grants no storage capability; scoped root retention follows.
   - [ ] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with actual dispositions.
     - [ ] `root-lifecycle.ts` prepares coverage, holds, shared references and disposal on the common root. Completion and notification membership publish together; retained memory payloads report `retained`, including captured older roots.
     - [ ] Lifecycle/atomic fixture authorizers now name the verified fixture principal; a new shared refusal proves that a forged authorizer publishes neither purge work nor its carrier.
