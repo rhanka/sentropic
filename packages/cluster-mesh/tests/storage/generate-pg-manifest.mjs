@@ -11,8 +11,8 @@ for (const [index, file] of files.entries()) {
 await writeFile(new URL('manifest.json', directory), `${JSON.stringify({ version: 1, assets }, null, 2)}\n`);
 const modules = [];
 for (const file of ['comments/001-projections.sql', 'comments/002-transport.sql', 'comments/003-exports.sql', 'comments/004-authority.sql', 'comments/005-lifecycle-evidence.sql', 'comments/006-review-evidence.sql']) {
-  const sql = await readFile(new URL(file, directory)); const version = assets.length + modules.length;
+  const sql = await readFile(new URL(file, directory)); const version = modules.length;
   modules.push({ id: `cluster-mesh-pg/${file.slice(0, -4)}@1`, file, order: version + 1, dialect: 'postgresql', mode: 'transactional',
-    fromVersion: version, toVersion: version + 1, requires: [(modules.at(-1) ?? assets.at(-1)).id], schemaRole: 'comments', checksum: createHash('sha256').update(sql).digest('hex') });
+    fromVersion: version, toVersion: version + 1, requires: [modules.at(-1)?.id ?? 'cluster-mesh-pg/006-staged-coverage@1'], schemaRole: 'comments', checksum: createHash('sha256').update(sql).digest('hex') });
 }
 await writeFile(new URL('comments/manifest.json', directory), `${JSON.stringify({ version: 1, assets: modules }, null, 2)}\n`);

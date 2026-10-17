@@ -43,8 +43,11 @@ and database driver evaluation. Hosts inject parameterized execution and
 serializable transaction sessions with finite deadlines. The package imports
 neither `pg`, `drizzle-orm`, application code nor engram implementation code.
 
-Packaged checksum-ordered SQL assets attach to the host's single migration
-history. Installation verifies actual configured schemas, receipts, constraints,
+Packaged SQL assets have independent core/module version chains and explicit
+dependencies. The host records chronological, ID-keyed receipts under its single
+migration lock; local asset order is not a global receipt position. A future core
+asset can follow installed comments assets without renumbering either chain.
+Installation verifies only asset-owned objects, receipts, constraints,
 indexes and functions; runtime startup never creates a second history/scheduler.
 Outbox/profile claims follow the configured host binding. Bounded registered
 queries and trusted installed operations receive a private same-session SPI;
@@ -52,8 +55,9 @@ untrusted inputs supply names/DTOs, never SQL, callbacks or enforcement flags.
 Read operations cannot publish canonical effects. Pending operations and nested
 bindings reuse the ambient session and its final grant/domain revalidators.
 
-The comments descriptor adds six projection/transport/export/authority/evidence
-assets after six core assets. Installed staged contracts authorize actual
+The comments descriptor adds six locally numbered projection/transport/export/
+authority/evidence assets; its first asset depends explicitly on core 006.
+Installed staged contracts authorize actual
 persisted unit facts on every phase; receipt `moduleResult` is owned and retained
 with the original publication. All seventeen additive port changes are listed
 for gr-conductor in BRANCH.md. SQLite, live-generation replacement and application
