@@ -24,6 +24,7 @@ export interface RootPurgeJob {
 export interface RootBlob { readonly bytes: string | null; readonly owners: IndexedMap<true>; }
 export interface RootPurgeEvidence { readonly intentId: string; readonly outcomeId: string; }
 export interface StagedRootData {
+  readonly kind: 'staged-root-v1';
   readonly barriers: IndexedMap<{ readonly reason: string; readonly createdAt: string }>;
   readonly coverage: IndexedMap<string>; readonly disposed: IndexedMap<true>;
   readonly jobs: IndexedMap<RootPurgeJob>; readonly holds: IndexedMap<string>; readonly blobs: IndexedMap<RootBlob>;
@@ -36,12 +37,14 @@ export const createStagedRootData = (descriptor?: ModuleDescriptor): StagedRootD
   const projections = new ProjectionRuntime();
   if (descriptor) projections.registerDescriptor(descriptor);
   return {
+    kind: 'staged-root-v1',
     barriers: new IndexedMap(), coverage: new IndexedMap(), disposed: new IndexedMap(), jobs: new IndexedMap(),
     holds: new IndexedMap(), blobs: new IndexedMap(), journal: new IndexedHistory(), audit: new IndexedHistory(),
     outcomes: new IndexedHistory(), notifications: new IndexedHistory(), unitRoots: new IndexedMap(), projections, policy: 'optional',
   };
 };
 export const forkStagedRootData = (base: StagedRootData): StagedRootData => ({
+  kind: 'staged-root-v1',
   barriers: base.barriers.fork(), coverage: base.coverage.fork(), disposed: base.disposed.fork(), jobs: base.jobs.fork(),
   holds: base.holds.fork(), blobs: base.blobs.fork(), journal: base.journal.fork(), audit: base.audit.fork(),
   outcomes: base.outcomes.fork(), notifications: base.notifications.fork(), unitRoots: base.unitRoots.fork(),
@@ -90,9 +93,10 @@ export interface RootSnapshot { readonly root: BackendScopeState; readonly journ
 export interface StagedControl {
   readonly units: Map<string, StagedOperation>; readonly byId: Map<string, StagedOperation>;
   readonly consumers: Map<string, RootConsumer>; readonly snapshots: Map<string, RootSnapshot>;
-  fence: { readonly value: WriterFence; readonly ownerId: string; readonly expiresAt: string | null } | null;
+  readonly fences: Map<string, { readonly value: WriterFence; readonly ownerId: string; readonly expiresAt: string | null }>;
+  readonly journalLanes: Map<string, string>;
   readonly failures: Set<'external' | 'purge-before' | 'purge-response' | 'stage-response'>;
 }
 export const createStagedControl = (): StagedControl => ({
-  units: new Map(), byId: new Map(), consumers: new Map(), snapshots: new Map(), fence: null, failures: new Set(),
+  units: new Map(), byId: new Map(), consumers: new Map(), snapshots: new Map(), fences: new Map(), journalLanes: new Map(), failures: new Set(),
 });
