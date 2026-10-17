@@ -45,11 +45,11 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
   - `docs/oauth-client-*.md`
   - `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
+- (`Makefile` is Conditional via BR45-EX1, not Forbidden, so the exception applies.)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
