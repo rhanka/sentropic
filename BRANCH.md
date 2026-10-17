@@ -61,10 +61,10 @@
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
   - [x] Read current rules (legacy .mdc absent), README, TODO/PLAN, reviewed branch plan and template; verify branch mechanically and check ps-all/disk.
-  - [ ] Read feasibility v4 and owner decisions; snapshot exports/catalog/ranges and main/npm versions; check ports before listeners; record #684 rebase dependency.
+  - [x] Read feasibility v4 and owner decisions; npm cluster-mesh=0.18.0 via container npm view, candidate=0.20.0; original ranges mesh<0.27/gateway<0.21/auth>=0.2.1 retained; #684 rebase dependency recorded. Recheck ports before listeners.
   - [ ] Prepare manifest-context.json from real branch diff/CI filters before manifest gates. API/UI/E2E test edits: none.
 - [ ] **Lot 1 — Optional auth leaves and typed loaders**
-  - [x] Auth loader and actual provider-identity contract tests written before implementation; runtime verification pending.
+  - [x] Auth loader contracts RED: missing loader import; static leaves/loaders/catalog and provider-identity tests now implemented; verification pending.
   - [ ] Add static mcp/auth + mcp/auth/hono, typed loaders/barrel, selected-only >=0.2.2 <0.3.0 topology guard, explicit exports/sideEffects; preserve provider identity and gateway >=0.2.1 floor.
   - [ ] Package tests updated: modules/capabilities.spec.ts, registry.spec.ts, namespace-loading.spec.ts, topology-ranges.spec.ts; new loaders/mcp-auth.spec.ts and integrations/mcp-auth-surface.spec.ts. Cover disabled/missing/skew/export failures, shared loads and selected-only evaluation.
   - [ ] Scoped gates: `rtk make test-cluster-mesh SCOPE=tests/loaders/mcp-auth.spec.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; repeat for integrations/mcp-auth-surface.spec.ts and tests/modules.
