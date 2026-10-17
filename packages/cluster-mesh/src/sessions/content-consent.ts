@@ -60,6 +60,7 @@ export type ContentConsentErrorCode =
   | 'grant_closed'
   | 'admin_read_refused'
   | 'membership_required'
+  | 'project_revision_changed'
   | 'revision_conflict';
 
 export class ContentConsentError extends Error {
@@ -350,6 +351,22 @@ export interface DeriveChildInput {
   readonly nativeStartSeq: number;
   /** Set when the new child locally resumes/forks an older provider conversation. */
   readonly resumedConversation?: ResumedConversation;
+}
+
+/** Source acknowledgment refreshing one live child to the amended revision. */
+export interface RefreshChildInput {
+  readonly projectId: string;
+  readonly sessionId: string;
+  readonly bindingId: string;
+  readonly bindingVersion: number;
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly ownerId: string;
+  readonly sessionCreatedAt: number;
+  readonly sourceGeneration: string;
+  readonly sourceTrustVersion: string;
+  readonly nativeBoundarySeq: number;
+  readonly expectedProjectRevision: number;
 }
 
 /** One native record reference submitted for pre-export boundary filtering. */
@@ -691,6 +708,12 @@ export const createContentConsentService = (
       if (existing.state === 'excluded') throw new ContentConsentError('session_excluded', 'child grant excluded');
       if (existing.state === 'closed') throw new ContentConsentError('grant_closed', 'child grant is closed');
       if (existing.state === 'expired') throw new ContentConsentError('live_expired', 'child grant expired');
+      // N3: a confirmed amendment fences old live capture authority at the
+      // parent revision; returning the stale grant is invalid — the caller
+      // must acknowledge the refresh explicitly.
+      if (existing.projectRevision !== project.projectRevision) {
+        throw new ContentConsentError('project_revision_changed', 'capture paused; acknowledge the refresh first');
+      }
       return existing;
     }
     if (existing && existing.state !== 'active' && existing.state !== 'closed') {
@@ -748,6 +771,86 @@ export const createContentConsentService = (
     };
     if (!await store.writeGrant(existing ? existing.version : null, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent child derivation; retry derivation');
+    }
+    return next;
+  };
+
+  /**
+   * N3 post-amendment child refresh: re-evaluate one eligible live child
+   * against the amended project and CAS-advance its capture revision,
+   * snapshot and boundary. No new human prompt per eligible child after
+   * the confirmed project amendment. Duplicate acknowledgments are
+   * idempotent; stale ones cannot overwrite a newer revision.
+   */
+  const refreshChild = async (input: RefreshChildInput): Promise<SessionContentGrant> => {
+    const projectId = requireId(input.projectId, 'projectId');
+    const sessionId = requireId(input.sessionId, 'sessionId');
+    const bindingId = requireId(input.bindingId, 'bindingId');
+    const project = await readActiveProject(projectId);
+    if (input.tenantId !== project.tenantId) {
+      throw new ContentConsentError('cross_tenant_refused', 'session tenant does not match project');
+    }
+    if (input.ownerId !== project.ownerId) {
+      throw new ContentConsentError('cross_owner_refused', 'session owner does not match project');
+    }
+    if (input.workspaceId !== project.workspaceId) {
+      throw new ContentConsentError('invalid_request', 'session workspace does not match project');
+    }
+    const existing = await store.readGrant(sessionId);
+    if (!existing || existing.projectId !== projectId) {
+      throw new ContentConsentError('invalid_request', 'no live child grant to refresh');
+    }
+    if (existing.bindingId !== bindingId) {
+      throw new ContentConsentError('invalid_request', 'binding changed; derive anew instead of refreshing');
+    }
+    if (existing.state === 'revoked') throw new ContentConsentError('grant_revoked', 'child grant revoked');
+    if (existing.state === 'excluded') throw new ContentConsentError('session_excluded', 'child grant excluded');
+    if (existing.state === 'closed') throw new ContentConsentError('grant_closed', 'child grant is closed');
+    if (existing.state === 'expired') throw new ContentConsentError('live_expired', 'child grant expired');
+    if (existing.state !== 'active') throw new ContentConsentError('grant_revoked', 'child grant is not active');
+    if (input.expectedProjectRevision !== project.projectRevision) {
+      throw new ContentConsentError('revision_conflict', 'acknowledged revision is not current; re-acknowledge');
+    }
+    if (existing.projectRevision === project.projectRevision) return existing;
+    if (project.excludedSessionIds.includes(sessionId)) {
+      throw new ContentConsentError('session_excluded', 'session is excluded from this project');
+    }
+    if (project.requiresFreshAmendment) {
+      throw new ContentConsentError('suppressed_scope', 'cleared exclusion needs a fresh scope amendment');
+    }
+    if (!project.sourceTrustVersions.includes(input.sourceTrustVersion)) {
+      throw new ContentConsentError('source_reauthorization_required', 'source trust version is not enrolled');
+    }
+    const selected = project.selectedSessionIds.includes(sessionId);
+    const eligibleFuture = project.futureSessions && input.sessionCreatedAt >= project.activatedAt;
+    if (!selected && !eligibleFuture) {
+      throw new ContentConsentError('ineligible_session', 'session is outside the amended project scope');
+    }
+    if (!Number.isSafeInteger(input.bindingVersion) || input.bindingVersion < 0) {
+      throw new ContentConsentError('invalid_request', 'acknowledged binding version must be a safe integer');
+    }
+    if (!Number.isSafeInteger(input.nativeBoundarySeq) || input.nativeBoundarySeq < 0) {
+      throw new ContentConsentError('invalid_request', 'acknowledged boundary must be a safe integer');
+    }
+    const timestamp = nowMs();
+    const next: SessionContentGrant = {
+      ...existing,
+      projectRevision: project.projectRevision,
+      bindingVersion: input.bindingVersion,
+      sourceGeneration: input.sourceGeneration,
+      sourceTrustVersion: input.sourceTrustVersion,
+      nativeBoundarySeq: input.nativeBoundarySeq,
+      channels: { ...project.channels },
+      retentionSnapshot: {
+        'terminal.cache': { ...project.retentionByChannel['terminal.cache'] },
+        'native.mirror': { ...project.retentionByChannel['native.mirror'] },
+      },
+      version: existing.version + 1,
+      lastFreshnessAckAt: timestamp,
+      updatedAt: timestamp,
+    };
+    if (!await store.writeGrant(existing.version, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent refresh; re-acknowledge');
     }
     return next;
   };
@@ -935,6 +1038,7 @@ export const createContentConsentService = (
     acceptProject,
     readProject,
     deriveChild,
+    refreshChild,
     readGrant,
     revokeProject,
     excludeSession,
