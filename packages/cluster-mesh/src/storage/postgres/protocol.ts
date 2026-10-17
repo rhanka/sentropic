@@ -4,6 +4,7 @@ import type { ModuleDescriptor } from '../descriptor.js';
 import { StorageInvalidCommandError } from '../errors.js';
 import type { PgAsset, PgHostHistory } from './migrations.js';
 import type { AtomicUnit } from '../atomic.js';
+import type { PgInstalledOperation, PgPurgeFinalizer } from './installed-contracts.js';
 import type { ScopeGrant } from '../authority.js';
 
 export type SqlValue = string | number | boolean | bigint | Uint8Array | null | readonly SqlValue[];
@@ -46,6 +47,8 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
   readonly history: PgHostHistory;
   readonly assets?: readonly PgAsset[];
   readonly projection?: PgRegisteredProjection;
+  readonly operations?: Readonly<Record<string, PgInstalledOperation>>;
+  readonly purgeFinalizer?: PgPurgeFinalizer;
   readonly pgPredicates?: Readonly<Record<string, (dependency: string, context: Pick<PgQueryContext, 'session' | 'stream' | 'root'>) => Promise<boolean>>>;
 }
 export const quotePgIdentifier = (value: string): string => {

@@ -1,0 +1,18 @@
+import type { AtomicUnit, IdempotencyEntry } from '../atomic.js';
+import type { EncodedValue } from '../contracts.js';
+import type { PurgePolicy, RootPurgeJob } from '../staged-state.js';
+import type { PgProjectionContext } from './protocol.js';
+// Only installed module code receives this SPI. Scoped callers select named
+// operations, never SQL, a callback, or an enforcement/bypass parameter.
+export interface PgInstalledContext extends PgProjectionContext {
+  readonly policy: PurgePolicy;
+  head(chain: string): Promise<{ readonly hash: string; readonly sequence: number; readonly bytes: string } | null>;
+  headMetadata(chain: string): Promise<{ readonly head: string; readonly count: number } | null>;
+  aggregate(key: string): Promise<{ readonly version: number; readonly value: EncodedValue } | null>;
+  index(key: string): Promise<IdempotencyEntry | null>;
+  apply(unit: AtomicUnit): Promise<void>;
+  revalidate(check: () => Promise<void>): void;
+  replayed(): void;
+}
+export interface PgInstalledOperation { readonly operation: 'write' | 'maintain'; execute(input: unknown, context: PgInstalledContext): Promise<unknown>; }
+export type PgPurgeFinalizer = (job: RootPurgeJob, context: PgInstalledContext) => Promise<void>;
