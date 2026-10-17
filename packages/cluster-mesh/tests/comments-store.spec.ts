@@ -6,14 +6,14 @@ import type { CanonicalCommandStore, CanonicalStoreScope } from '@sentropic/comm
 import { createPgFixture } from './storage/pg-fixture.js';
 import { pgEnabled } from './storage/pg-driver.js';
 import { grantFor } from './storage/authority-corpus.js';
-import { createCommentsModule } from '../src/comments/index.js';
+import { createCommentsModule, createCommentsPostgresRegistration } from '../src/comments/index.js';
 import { runCommentsConformance, conformanceCapacity, conformanceScope, conformanceTarget, conformanceResource, conformanceBody, conformanceProvenance } from '../assets/storage/comments/oracle/conformance.mjs';
 const annotation = (scope: CanonicalStoreScope, id: string, text = 'content') => createAnnotationRevision(null, {
   scope, annotationId: id, primary: conformanceTarget(conformanceResource(scope)), secondary: [], visualAnchors: [], body: conformanceBody(text), provenance: conformanceProvenance(),
 }, conformanceCapacity());
 describe.skipIf(!pgEnabled)('comments frozen store on the shared Postgres root', () => {
   it('runs the unchanged digest-pinned M1 corpus through explicit issued host contexts', async () => {
-    const fixture = await createPgFixture();
+    const fixture = await createPgFixture(await createCommentsPostgresRegistration());
     try {
       const root = await fixture.open(); const module = createCommentsModule({ storage: root.adapter(), capacity: conformanceCapacity() });
       const grants = new Map();
@@ -28,7 +28,7 @@ describe.skipIf(!pgEnabled)('comments frozen store on the shared Postgres root',
     } finally { await fixture.close(); }
   });
   it('requires live matching contexts and keeps simultaneous requests isolated', async () => {
-    const fixture = await createPgFixture();
+    const fixture = await createPgFixture(await createCommentsPostgresRegistration());
     try {
       const root = await fixture.open(); const module = createCommentsModule({ storage: root.adapter(), capacity: conformanceCapacity() });
       const scope = conformanceScope(); const grant = grantFor({ scope }); await root.bindNew(grant);
@@ -46,7 +46,7 @@ describe.skipIf(!pgEnabled)('comments frozen store on the shared Postgres root',
     } finally { await fixture.close(); }
   });
   it('preserves pending reads, rollback-only errors and stored-value genesis replay', async () => {
-    const fixture = await createPgFixture();
+    const fixture = await createPgFixture(await createCommentsPostgresRegistration());
     try {
       const root = await fixture.open(); const module = createCommentsModule({ storage: root.adapter(), capacity: conformanceCapacity() });
       const scope = conformanceScope(); const grant = grantFor({ scope }); await root.bindNew(grant);
