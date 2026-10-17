@@ -418,6 +418,7 @@
   - [ ] RED `comments-export.spec.ts` creates a 28-revision history above 1 MiB, captures exact heads through bounded preparation, requires whole advancing fragments and a terminal typed payload root, stable request replay, canonical record pages and current-authority refusal after capture.
   - [ ] BRCM2-PORT-14: installed read operations use the same injected session and immutable root but cannot apply canonical effects or stage writes; read-only issued grants now suffice for receipt recovery and retained export qualification.
   - [ ] Added shared-history export control assets and an authenticated versioned continuation binding exact selection/root, page kind and advancing position; export metadata retains no canonical body copies and has no time-based expiry.
+  - [ ] Added owner/incarnation-bound export controls and bounded exact-position reads from the retained kernel root. Each emitted historical record resolves its actual resource references and receives current all-target read checks; missing retained payloads are explicit incomplete outcomes.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).

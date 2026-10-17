@@ -15,7 +15,8 @@ export const assertCommentsPgVisible = async (context: PgProjectionContext, targ
   const pending = [target]; const seen = new Set<string>();
   while (pending.length) {
     const next = pending.pop()!; if (seen.has(next)) continue;
-    if (seen.size >= 128 || await commentsPgValue(context, 'barrier', next, context.coverageRoot === undefined ? context.root : context.coverageRoot)) throw new CommentsTransportError('denied', 'Required comments content is unavailable');
+    const coverage = context.coverageRoot === undefined ? context.root : context.coverageRoot;
+    if (seen.size >= 128 || await commentsPgValue(context, 'barrier', next, coverage) || await commentsPgValue(context, 'disposed', next, coverage)) throw new CommentsTransportError('denied', 'Required comments content is unavailable');
     seen.add(next); pending.push(...await commentsPgValue<readonly string[]>(context, 'parents', next) ?? []);
   }
 };
