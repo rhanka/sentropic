@@ -37,7 +37,7 @@ export const qualifyInstalledTransport = async (installedHost, grantFor) => {
     const units = [{ unitId: 'long-unit', unitKind: 'annotation', dependsOnUnitIds: [], manifestDigest: commandPayloadDigest({ unitId: 'long-unit' }), payloadDigest: commentsUnitPayloadDigest('long-unit', records) }];
     const envelope = { scope: destination.scope, importId: 'installed-manifest', sourceUnitCount: 1, admissibleManifestDigest: commentsAdmissibleManifestDigest(units), mappingVersion: 'mapping-v1' };
     const request = { scope: destination.scope, batchId: 'installed-batch', manifest: { kind: 'import-manifest', ...envelope, hash: hashRecord('import-manifest', envelope) }, units, expectedMappingVersion: 'mapping-v1', idempotencyKey: commandIdempotencyKey('installed-import') };
-    const binding = { version: 'comments-transport-v1', operationId: 'installed-import', request, unitIds: ['long-unit'], sourceBoundary: boundary.request.boundary.boundaryDigest, targets: [conformanceResource(destination.scope)], capabilities: COMMAND_CAPABILITIES };
+    const binding = { version: 'comments-transport-v1', operationId: 'installed-import', request, unitIds: ['long-unit'], sourceBoundary: boundary.boundaryDigest, targets: [conformanceResource(destination.scope)], capabilities: COMMAND_CAPABILITIES };
     const bindingDigest = commentsImportBindingDigest(binding); let ordinal = 0; let predecessorHash = null; let prepared; let interactiveMs;
     await destination.module.withContext(destination.grant, async () => {
       for (const chunk of chunks) {
