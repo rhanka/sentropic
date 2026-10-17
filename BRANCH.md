@@ -483,6 +483,7 @@
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
 
 - [ ] **Lot N-1 — Docs consolidation**
+  - [ ] The full source gate passed typecheck/lint and all runtime checks but found a stale C0 documentation assertion requiring oracle packaging to stay unverified. Updated it to the now-executable installed qualification boundary, preserving the absent M1 conformance-export assertion.
   - [ ] Added the concrete Immo host guide: injected session/migration ownership, issued grants, full-runtime namespace, frozen store transactions, chained bounded import/terminal receipts, recovery and current-authority export/readback.
   - [ ] Updated compatibility documentation to the delivered candidate exports, injected PG/host-history ownership, seven module transport methods, packaged frozen oracle and exact remaining service/SQLite/application boundaries.
   - [ ] Update `spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md` with K4 rebuild, Postgres module and port changes (BRCM2-PORT).

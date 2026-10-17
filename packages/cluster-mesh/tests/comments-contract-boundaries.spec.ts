@@ -395,7 +395,7 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
     expect(doc).toContain('64 KiB');
     expect(doc).toContain('512 KiB');
     expect(doc).toContain('not an existing export');
-    expect(doc).toContain('unverified');
+    expect(doc).toContain('installed qualification target');
     expect(doc).toContain('by-resource');
     expect(doc).toContain('scope-chain-index');
     expect(doc).toContain('retained-headers');
