@@ -43,10 +43,8 @@ const erasureProbe = async (omitErase = false) => {
     await bound.appendChain('target', { id: 'a', hash: 'a', bytes: 'private content' }, { kind: 'absent', allocation: '0' });
     await bound.commitAtomic({ ...emptyEffects(), purgeIntents: [{ intentId: 'purge', target: 'target', authorizedBy: grant.principalId }] });
     assert.equal((await bound.completePurge('purge')).payloadDisposition, 'erased');
-    await fixture.tx.run(true, async (session) => {
-      const row = (await session.execute({ text: `SELECT bytes FROM "${fixture.name}".payloads WHERE target='target'`, values: [] })).rows[0];
-      assert.equal(row?.bytes, null, 'PG erasure probe: an erased result requires actual bytea erasure');
-    });
+    const row = await fixture.tx.run(true, async (session) => (await session.execute({ text: `SELECT bytes FROM "${fixture.name}".payloads WHERE target='target'`, values: [] })).rows[0]);
+    assert.equal(row?.bytes, null, 'PG erasure probe: an erased result requires actual bytea erasure');
   } finally { await fixture.close(); }
 };
 describe.skipIf(!pgEnabled)('discriminating production Postgres mutations', () => {
