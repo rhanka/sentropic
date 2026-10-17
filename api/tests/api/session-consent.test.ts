@@ -1,5 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Hono } from 'hono';
+import { createSessionContentRouter } from '../../src/routes/namespaces/session-content';
 import { db } from '../../src/db/client';
 import {
   sessionContentAdmissions,
@@ -220,6 +222,55 @@ describe('session consent durable lifecycle', () => {
     await db.delete(tenants).where(inArray(tenants.id, [TENANT_A, TENANT_B]));
     await cleanupAuthData();
     await fixture.cleanup();
+  });
+
+  const productContent = () => new Hono().route('/api/v1/auth/session/content',
+    createSessionContentRouter({ content: service, websiteOrigin: 'http://localhost:5581' }));
+  const browserHeaders = (user = owner) => ({ cookie: `session=${user.sessionToken}`,
+    origin: 'http://localhost:5581', 'x-session-content': 'browser' });
+
+  it('should expose product content metadata only to the current workspace member and owner', async () => {
+    await adoptSession('product-content-owner');
+    const router = productContent();
+    const path = `/api/v1/auth/session/content/workspaces/${workspaceId}/sessions`;
+    const response = await router.request(path, { headers: browserHeaders() });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const body = await response.json();
+    expect(body).toMatchObject({ ownerId: owner.id, workspaceId, sourceVerified: false,
+      credentials: [], eligibleSources: [], reason: 'unsupported_source' });
+    expect(body.items).toMatchObject([{ sessionId: 'product-content-owner', liveAuthorized: false }]);
+    const foreign = await router.request(path, { headers: browserHeaders(other) });
+    expect(foreign.status).toBe(403);
+    expect((await router.request(path)).status).toBe(401);
+    expect((await router.request(path, { headers: { ...browserHeaders(), authorization: `Bearer ${owner.sessionToken}` } })).status).toBe(401);
+    expect((await router.request(path, { headers: { ...browserHeaders(), origin: 'https://elsewhere.invalid' } })).status).toBe(403);
+  });
+
+  it('should refuse product content activation and attachment without reading an unverified source body', async () => {
+    const router = productContent();
+    for (const path of [`workspaces/${workspaceId}/attachments`, `workspaces/${workspaceId}/consent/prepare`,
+      `workspaces/${workspaceId}/consent`, 'unknown/history-authorizations', 'unknown/keyboard/lease',
+      'unknown/keyboard/prepare', 'unknown/keyboard/submissions']) {
+      const response = await router.request(`/api/v1/auth/session/content/${path}`, {
+        method: 'POST', headers: { ...browserHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ ...basePolicy(), sourceVerified: true, human: true, bytes: 'forged' }),
+      });
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ error: 'unsupported_source', dispatch: 'not_attempted' });
+    }
+    expect((await db.select().from(sessionContentProjects))).toHaveLength(0);
+    expect((await db.select().from(sessionWorkspaceBindings))).toHaveLength(0);
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+    const source = await router.request('/api/v1/auth/session/content/unknown/source/segments', {
+      method: 'POST', headers: browserHeaders(), body: 'never-source-authenticated-by-cookie',
+    });
+    expect(source.status).toBe(401);
+    expect(await source.json()).toMatchObject({ error: 'source_auth_required' });
+    const csrf = await router.request('/api/v1/auth/session/content/unknown/keyboard/submissions', {
+      method: 'POST', headers: { cookie: `session=${owner.sessionToken}`, 'x-session-content': 'browser' },
+    });
+    expect(csrf.status).toBe(403);
   });
 
   it('should persist consent and survive service reinstantiation', async () => {
@@ -654,6 +705,15 @@ describe('session consent durable lifecycle', () => {
     expect(handles).toHaveLength(1);
     expect(handles[0]!.retainedScopeId).toContain(bindingId);
     expect(handles[0]!.bytes).toBe(body.length);
+    const router = productContent();
+    const inventory = await router.request('/api/v1/auth/session/content/retained-content', { headers: browserHeaders() });
+    expect(inventory.status).toBe(200);
+    expect(await inventory.json()).toEqual({ items: handles });
+    expect(Object.keys(handles[0]!).sort()).toEqual(['bindingId', 'bytes', 'retainedScopeId', 'status']);
+    const cleanupPath = `/api/v1/auth/session/content/${bindingId}/consent?retainedScopeId=${encodeURIComponent(handles[0]!.retainedScopeId)}`;
+    expect((await router.request(cleanupPath, { method: 'DELETE', headers: browserHeaders(other) })).status).toBe(404);
+    expect((await router.request(cleanupPath.replace(bindingId, 'wrong-binding'), { method: 'DELETE', headers: browserHeaders() })).status).toBe(404);
+    expect((await fixture.listPhysical('')).length).toBe(1);
     const foreignHandles = await service.listRetainedHandles(other.id, TENANT_A);
     expect(foreignHandles).toHaveLength(0);
     const purged = await service.requestRetainedPurge(handles[0]!.retainedScopeId, owner.id);
