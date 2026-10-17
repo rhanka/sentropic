@@ -1,7 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { validateScopeGrant, type ScopeGrant } from '../authority.js';
-import { DEFAULT_WORK_LIMITS, validateWorkLimits, validateWriterFence, type EncodedValue, type StorageOperation, type StorageScope, type WorkLimits, type WriterFence } from '../contracts.js';
+import {
+  DEFAULT_WORK_LIMITS,
+  validateWorkLimits,
+  validateWriterFence,
+  type EncodedValue,
+  type StorageOperation,
+  type StorageScope,
+  type WorkLimits,
+  type WriterFence,
+} from '../contracts.js';
 import type { CommitReceipt } from '../atomic.js';
 import { StorageDeniedError, StorageInvalidCommandError } from '../errors.js';
 import { createStaticAuthorityPort } from '../kernel.js';
@@ -13,13 +22,30 @@ import { PostgresStorageError } from './errors.js';
 import { loadPgAssets, verifyPgInstallation } from './migrations.js';
 import { validatePgLayout, type PgSession, type PostgresStorageOptions } from './protocol.js';
 import { validateModuleDescriptor } from '../descriptor.js';
-const freezeRegistration = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freezeRegistration); Object.freeze(value); } };
+const freezeRegistration = (value: unknown): void => {
+  if (value && typeof value === 'object') {
+    Object.values(value).forEach(freezeRegistration);
+    Object.freeze(value);
+  }
+};
 
 export interface PgTx {
-  readonly session: PgSession; readonly scope: StorageScope; readonly base: PgRoot;
-  root: string | null; closed: boolean; failed: unknown; count: number;
-  records: number; recordWrites: number; appends: number; encodedBytes: number; readonly receipt: CommitReceipt;
-  barriers: number; purges: number; moduleResult?: EncodedValue; readonly digests: string[];
+  readonly session: PgSession;
+  readonly scope: StorageScope;
+  readonly base: PgRoot;
+  root: string | null;
+  closed: boolean;
+  failed: unknown;
+  count: number;
+  records: number;
+  recordWrites: number;
+  appends: number;
+  encodedBytes: number;
+  readonly receipt: CommitReceipt;
+  barriers: number;
+  purges: number;
+  moduleResult?: EncodedValue;
+  readonly digests: string[];
   noop?: boolean;
   readonly contributors: Map<string, ScopeGrant<unknown>>;
   readonly revalidators: Set<() => Promise<void>>;
@@ -31,20 +57,56 @@ export class PgCore {
   readonly provider: ChainBoundaryProvider;
   readonly limits: WorkLimits;
   readonly authority;
-  constructor(readonly options: PostgresStorageOptions, readonly incarnation: string) {
+  constructor(
+    readonly options: PostgresStorageOptions,
+    readonly incarnation: string,
+  ) {
     if (typeof options.cursorSecret !== 'string' || !options.cursorSecret.trim()) {
       throw new StorageInvalidCommandError('durable Postgres storage requires a stable cursorSecret');
     }
-    const descriptor = options.descriptor ? JSON.parse(JSON.stringify(options.descriptor)) as typeof options.descriptor : undefined;
-    if (descriptor) { if (!validateModuleDescriptor(descriptor).ok || descriptor.queryNames.some((name) => typeof options.queries?.[name] !== 'function')) throw new StorageInvalidCommandError('invalid registered Postgres descriptor'); freezeRegistration(descriptor); }
-    this.options = Object.freeze({ ...options, descriptor, layout: validatePgLayout(options.layout),
-      assets: options.assets ? Object.freeze(options.assets.map((asset) => Object.freeze({ ...asset, requires: Object.freeze([...asset.requires]) }))) : undefined,
-      limits: options.limits ? Object.freeze({ ...options.limits }) : undefined, budgets: Object.freeze({ ...options.budgets }),
-      operations: Object.freeze(Object.fromEntries(Object.entries(options.operations ?? {}).map(([key, operation]) => [key, Object.freeze({ ...operation })]))),
-      stagedModules: Object.freeze(Object.fromEntries(Object.entries(options.stagedModules ?? {}).map(([key, module]) => [key, Object.freeze({ ...module })]))),
-      queries: Object.freeze({ ...options.queries }), pgPredicates: Object.freeze({ ...options.pgPredicates }) });
+    const descriptor = options.descriptor
+      ? (JSON.parse(JSON.stringify(options.descriptor)) as typeof options.descriptor)
+      : undefined;
+    if (descriptor) {
+      if (
+        !validateModuleDescriptor(descriptor).ok ||
+        descriptor.queryNames.some((name) => typeof options.queries?.[name] !== 'function')
+      )
+        throw new StorageInvalidCommandError('invalid registered Postgres descriptor');
+      freezeRegistration(descriptor);
+    }
+    this.options = Object.freeze({
+      ...options,
+      descriptor,
+      layout: validatePgLayout(options.layout),
+      assets: options.assets
+        ? Object.freeze(
+            options.assets.map((asset) => Object.freeze({ ...asset, requires: Object.freeze([...asset.requires]) })),
+          )
+        : undefined,
+      limits: options.limits ? Object.freeze({ ...options.limits }) : undefined,
+      budgets: Object.freeze({ ...options.budgets }),
+      operations: Object.freeze(
+        Object.fromEntries(
+          Object.entries(options.operations ?? {}).map(([key, operation]) => [key, Object.freeze({ ...operation })]),
+        ),
+      ),
+      stagedModules: Object.freeze(
+        Object.fromEntries(
+          Object.entries(options.stagedModules ?? {}).map(([key, module]) => [key, Object.freeze({ ...module })]),
+        ),
+      ),
+      queries: Object.freeze({ ...options.queries }),
+      pgPredicates: Object.freeze({ ...options.pgPredicates }),
+    });
     options = this.options;
-    if (options.outbox && ['append', 'read', 'find'].some((name) => typeof options.outbox?.[name as keyof typeof options.outbox] !== 'function')) throw new StorageInvalidCommandError('alternate journal requires append and replay on the same log');
+    if (
+      options.outbox &&
+      ['append', 'read', 'find'].some(
+        (name) => typeof options.outbox?.[name as keyof typeof options.outbox] !== 'function',
+      )
+    )
+      throw new StorageInvalidCommandError('alternate journal requires append and replay on the same log');
     this.tx = new PgTransactions(options.driver, options.budgets);
     this.roots = new PgRoots(options, incarnation);
     this.provider = options.boundaryProvider ?? new HmacExactHeadBoundaryProvider(options.cursorSecret);
@@ -52,40 +114,68 @@ export class PgCore {
     this.limits = Object.freeze({ ...(options.limits ?? DEFAULT_WORK_LIMITS) });
     if (!validateWorkLimits(this.limits).ok) throw new StorageInvalidCommandError('invalid Postgres work limits');
   }
-  now(): string { return this.options.domainClock?.now() ?? this.options.now?.() ?? new Date().toISOString(); }
+  now(): string {
+    return this.options.domainClock?.now() ?? this.options.now?.() ?? new Date().toISOString();
+  }
   id(kind: string): string {
     if (kind.endsWith('capability') || kind === 'boundary') return `${kind}:${randomUUID()}`;
     return this.options.ids?.next(kind) ?? `${kind}:${randomUUID()}`;
   }
   admit(grant: ScopeGrant<unknown>, operation: StorageOperation): void {
     const valid = validateScopeGrant(grant, { expectedModuleId: this.options.moduleId, nowIso: this.now() });
-    if (!valid.ok || !grant.operations.includes(operation)) throw new StorageDeniedError('invalid or insufficient scope grant');
+    if (!valid.ok || !grant.operations.includes(operation))
+      throw new StorageDeniedError('invalid or insufficient scope grant');
     this.authority.attest(grant);
   }
-  async check(session: PgSession, grant: ScopeGrant<unknown>, operation: StorageOperation, lock = false): Promise<void> {
+  async check(
+    session: PgSession,
+    grant: ScopeGrant<unknown>,
+    operation: StorageOperation,
+    lock = false,
+  ): Promise<void> {
     this.admit(grant, operation);
-    const result = await session.execute({ text: `SELECT bytes,revoked FROM ${this.roots.schema}.grants WHERE module=$1 AND token=$2${lock ? ' FOR SHARE' : ''}`, values: [this.options.moduleId, grant.token] });
+    const result = await session.execute({
+      text: `SELECT bytes, revoked FROM ${this.roots.schema}.grants WHERE module=$1 AND token=$2${lock ? ' FOR SHARE' : ''}`,
+      values: [this.options.moduleId, grant.token],
+    });
     const row = result.rows[0];
-    if (!row || row.revoked !== false || decodePgUtf8(row.bytes) !== JSON.stringify(grant)) throw new StorageDeniedError('unknown, revoked or changed scope grant');
+    if (!row || row.revoked !== false || decodePgUtf8(row.bytes) !== JSON.stringify(grant))
+      throw new StorageDeniedError('unknown, revoked or changed scope grant');
   }
   async issue(grant: ScopeGrant<unknown>): Promise<void> {
     this.admit(grant, Array.isArray(grant.operations) ? grant.operations[0]! : 'read');
     await this.tx.run(false, async (session) => {
-      await session.execute({ text: `INSERT INTO ${this.roots.schema}.grants(module,token,bytes) VALUES($1,$2,$3) ON CONFLICT(module,token) DO NOTHING`, values: [this.options.moduleId, grant.token, pgJsonBytes(grant)] });
+      await session.execute({
+        text: `INSERT INTO ${this.roots.schema}.grants(module, token, bytes) VALUES($1, $2, $3) ON CONFLICT(module, token) DO NOTHING`,
+        values: [this.options.moduleId, grant.token, pgJsonBytes(grant)],
+      });
       await this.check(session, grant, grant.operations[0]!, true);
     });
   }
   async revoke(token: string): Promise<void> {
-    await this.tx.run(false, (session) => session.execute({ text: `INSERT INTO ${this.roots.schema}.grants(module,token,bytes,revoked) VALUES($1,$2,$3,true) ON CONFLICT(module,token) DO UPDATE SET revoked=true`, values: [this.options.moduleId, token, Buffer.from('null')] }));
+    await this.tx.run(false, (session) =>
+      session.execute({
+        text: `INSERT INTO ${this.roots.schema}.grants(module, token, bytes, revoked) VALUES($1, $2, $3, true) ON CONFLICT(module, token) DO UPDATE SET revoked=true`,
+        values: [this.options.moduleId, token, Buffer.from('null')],
+      }),
+    );
   }
   work(requested?: WorkLimits): WorkLimits {
     const limits = requested ?? this.limits;
-    if (!validateWorkLimits(limits).ok || (Object.keys(this.limits) as (keyof WorkLimits)[]).some((key) => limits[key] > this.limits[key])) throw new StorageInvalidCommandError('requested work exceeds installed limits');
+    if (
+      !validateWorkLimits(limits).ok ||
+      (Object.keys(this.limits) as (keyof WorkLimits)[]).some((key) => limits[key] > this.limits[key])
+    )
+      throw new StorageInvalidCommandError('requested work exceeds installed limits');
     return { ...limits };
   }
   async fence(session: PgSession, grant: ScopeGrant<unknown>, fence: WriterFence): Promise<void> {
     if (!validateWriterFence(fence).ok) throw new StorageInvalidCommandError('invalid writer fence');
-    const result = await session.execute({ text: `SELECT epoch::text FROM ${this.roots.schema}.fences WHERE scope_key=$1 AND lane=$2 AND owner=$3 AND incarnation=$4 AND epoch=$5::bigint AND (lease_until IS NULL OR lease_until>clock_timestamp()) FOR SHARE`, values: [this.roots.key(grant.scope), fence.fenceId, grant.principalId, this.incarnation, fence.epoch] });
+    const result = await session.execute({
+      text: `SELECT epoch::text FROM ${this.roots.schema}.fences WHERE scope_key=$1 AND lane=$2 AND owner=$3 AND incarnation=$4 AND epoch=$5::bigint AND
+        (lease_until IS NULL OR lease_until>clock_timestamp()) FOR SHARE`,
+      values: [this.roots.key(grant.scope), fence.fenceId, grant.principalId, this.incarnation, fence.epoch],
+    });
     if (result.rows.length !== 1) throw new StorageInvalidCommandError('stale writer ownership or expired lease');
   }
   async provision(grant: ScopeGrant<unknown>, fence: WriterFence, leaseUntil: string | null = null): Promise<void> {
