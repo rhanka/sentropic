@@ -9,7 +9,7 @@
 - [x] Make-only container tooling; no image rebuild unless required by the existing target; never merge or publish.
 - [x] Dedicated `ENV=test-artifacts-fl-act`, always last; no application services or exposed ports required by unit/content tests.
 - [x] Preserve root dev/UAT and unrelated work; English source/docs; selective staging and `make commit`; commits at most 150 lines.
-- [x] Preserve consumer ranges and locks: no rebase or Post-Rebase Gate required; the existing `npm ci` target accepts the manifest-only version bump.
+- [x] Preserve consumer ranges and fixture locks; refresh only the root lock's artifacts workspace version to match manifest 0.1.1 through `make lock-root ENV=test-artifacts-fl-act`; no rebase or Post-Rebase Gate required.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**: `packages/artifacts/**`, `BRANCH.md`, `package-lock.json` (only the required artifacts workspace version update).
@@ -21,9 +21,9 @@
 - [x] FL-ACT-READ: `acknowledge` — packet's `.cursor/rules/*.mdc` paths are absent; loaded consolidated equivalents in `rules/`; owner: branch agent, 2026-10-17.
 - [x] Requested delivery report is an ignored runtime artifact at `.h2a/build/artifacts_fl_act_report.md`, outside the committed implementation diff.
 - [x] FL-ACT-NPM: `acknowledge` — container `npm view @sentropic/artifacts version` returned public-registry E404; retain packet's explicit 0.1.1 candidate; owner: branch agent, 2026-10-17.
-- [x] FL-ACT-REVIEW: `attention` — consensus selection failed because exact author model/effort are unattested; no peers dispatched or consensus claimed; dossier: `.h2a/build/artifacts_fl_act_review.md`; owner: branch agent, 2026-10-17; requires author metadata before independent consensus review.
+- [x] FL-ACT-REVIEW: `acknowledge` — independent Opus review `.h2a/reviews/artifacts_fl_act_opus.md` on `0f247c433bf6a7579183706bf8907c601047475c` validates the security fix and requests R1 (FL-ACT-LOCK); non-blocking remarks: atomic `take()` result not rechecked, grants lack channel binding (separation relies on the `__Host-` host-only cookie), tickets consumed before ACL recheck; no consensus claimed; owner: branch agent, 2026-10-17.
 - [x] FL-ACT-CHECK: `acknowledge` — concurrent package install and harness compilation caused TS2688 during one scope check; serialized retry passed; owner: branch agent, 2026-10-17.
-- [x] FL-ACT-LOCK: `acknowledge` — restored the unnecessary lock workspace-version edit after rechecking the packet; existing `make test-artifacts ENV=test-artifacts-fl-act` passed with the original lock (128 tests); final diff leaves all locks unchanged; owner: branch agent, 2026-10-17.
+- [x] FL-ACT-LOCK: `acknowledge` — Opus blocking reserve R1 corrected through `make lock-root ENV=test-artifacts-fl-act`: root `packages["packages/artifacts"].version` restored to 0.1.1, matching the manifest; generated diff is exactly one version line; consumer ranges and fixture locks unchanged; owner: branch agent, 2026-10-17.
 
 ## AI Flaky tests
 - [x] No AI tests or timeout changes; deterministic in-memory tests only for the affected activation surface.
@@ -47,7 +47,7 @@
   - [x] Update `packages/artifacts/src/content/grants.ts`: mandatory release/channel binding at issuance and redemption; subject/artifact checks and single-use semantics preserved; expiry refused at its boundary.
   - [x] Update `packages/artifacts/src/content/handler.ts`: redeem against resolved release and origin channel.
   - [x] Update existing `packages/artifacts/tests/content.e2e.test.ts` activation helper to issue explicit release/channel tickets.
-  - [x] Query published npm version through container Make tooling (E404); bump `packages/artifacts/package.json` from 0.1.0 to 0.1.1; no consumer range or lock change required (FL-ACT-LOCK).
+  - [x] Query published npm version through container Make tooling (E404); bump `packages/artifacts/package.json` from 0.1.0 to 0.1.1; synchronize the root lock workspace version through Make (FL-ACT-LOCK); no consumer range or fixture lock change required.
   - [x] GREEN gate: `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act` (2 passed).
   - [x] Commit fix after `make scope-check ENV=test-artifacts-fl-act`.
 - [x] **Lot 2 — Binding negatives and automated UAT**
@@ -63,12 +63,12 @@
   - [x] Commit regression coverage after `make scope-check ENV=test-artifacts-fl-act`.
 - [x] **Lot 3 — Docs consolidation**
   - [x] Update `packages/artifacts/README.md` to document explicit release/channel ticket binding and expiry; no temporary spec required for this bounded fix.
-- [ ] **Lot 4 — Final validation and delivery**
+- [x] **Lot 4 — Final validation and delivery**
   - [x] `make typecheck-artifacts lint-artifacts test-artifacts ENV=test-artifacts-fl-act` passed (128 unit tests across 24 files).
   - [x] `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act` passed (5 content journey tests).
   - [x] Database/S3 integration and application/browser suites are outside the unchanged storage/UI surfaces; CI runs required selected gates.
   - [x] Review exact diff, package version and scope; record review evidence or any unavailable review prerequisites (FL-ACT-REVIEW); mechanical scope passed, no exceptions.
   - [x] Push `fix/artifacts-activation-binding` without merging/publishing; create PR #688 using this file as body; post a 3–6 step plan comment.
-  - [ ] Watch branch CI to completion and resolve failures within authorized scope.
+  - [x] Watch branch CI to completion and resolve failures within authorized scope: run `39069870885` succeeded on `0f247c433bf6a7579183706bf8907c601047475c`; follow-up R1 CI recorded in the delivery report.
   - [x] `make down ps ENV=test-artifacts-fl-act` passed with no remaining services; retain BRANCH.md because merging is forbidden.
-  - [ ] Write `.h2a/build/artifacts_fl_act_report.md`: changes, RED/GREEN, checks/CI, feedback, risks, scope and read set.
+  - [x] Write `.h2a/build/artifacts_fl_act_report.md`: changes, RED/GREEN, checks/CI, feedback, risks, scope and read set; refresh with the R1 final HEAD and CI outcome.
