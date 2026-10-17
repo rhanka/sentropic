@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.27.0 candidate
+
+- Exact provider/model identity is now the default for canonical resolution,
+  quotes and planning. A Claude request cannot silently become an Argon,
+  Muse or Codex request. Identity aliases such as the Vibe wire name remain.
+- Migration: trusted low-level callers that intentionally use the existing
+  equivalence tables must select `allowEquivalentModels: true` explicitly.
+  Durable gateway sessions instead commit a frozen `LaunchRoutingContract`
+  with mapping ID/revision/content digest, model grants, authorized accounts,
+  independent rotation consent and preserved effort. Old sessions do not
+  inherit this consent. Conflicting overrides refuse.
+- The `RouteAffinityStore` port acknowledges first pins and account epochs
+  durably before output. Restart and memory eviction reload protected pins;
+  missing/deleted pins refuse. A sticky account never authorizes an obsolete
+  model. Same-model account rotation records cache-continuity risk.
+- Muse Chat now also rejects unproved reasoning controls on direct adapter
+  calls, before network I/O. No native Responses transport or CLI qualification
+  is claimed by this candidate.
+
 ## 0.26.1
 
 - CI seat envelope `SeatBundleV1` for the five CLI seats (agy, codex, vibe,
