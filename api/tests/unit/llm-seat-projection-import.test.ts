@@ -1,5 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
+
+const { mockRefreshClaudeCode } = vi.hoisted(() => ({ mockRefreshClaudeCode: vi.fn() }));
+vi.mock('../../src/services/claude-code-provider-auth', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../src/services/claude-code-provider-auth')>();
+  return { ...original, refreshClaudeCodeAccessToken: (...args: unknown[]) => mockRefreshClaudeCode(...args) };
+});
 
 import { db } from '../../src/db/client';
 import {
@@ -10,6 +16,7 @@ import {
   acquireMuseAccountTransport,
   acquireOpenAICodexAccountTransport,
   importSeatProjection,
+  storeClaudeCodeAccountTransport,
   storeCodexAccountTransport,
   storeMistralVibeAccountTransport,
   storeMuseAccountTransport,
@@ -89,6 +96,7 @@ const markExternal = async (ownerUserId: string, externalAccountId: string, seat
 
 describe('llm seat projection import', () => {
   afterEach(async () => {
+    mockRefreshClaudeCode.mockReset();
     await cleanupAuthData();
   });
 
@@ -173,6 +181,41 @@ describe('llm seat projection import', () => {
     expect(row?.token_secret).not.toBeNull();
     expect(row?.last_error).toContain('access-unavailable');
     expect(row?.status).toBe('active');
+  });
+
+  it('preserves the renewable 401 path while external seats never reach the provider', async () => {
+    const renewable = await createAuthenticatedUser('admin_app');
+    mockRefreshClaudeCode.mockRejectedValueOnce(new Error('Claude Code token refresh failed (401).'));
+    await storeClaudeCodeAccountTransport({
+      ownerUserId: renewable.id,
+      externalAccountId: 'claude-renewable-01',
+      accessToken: 'claude-renewable-access',
+      refreshToken: 'claude-renewable-refresh',
+      expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    });
+    expect(
+      await acquireClaudeCodeAccountTransport({ userId: renewable.id, modelId: 'claude-sonnet-4-6' }),
+    ).toBeNull();
+    expect(mockRefreshClaudeCode).toHaveBeenCalledTimes(1);
+    const renewableRow = await accountRow(renewable.id, 'claude-renewable-01');
+    expect(renewableRow?.status).toBe('reauth_required');
+
+    const user = await createAuthenticatedUser('admin_app');
+    mockRefreshClaudeCode.mockClear();
+    await importSeatProjection({
+      ...claudeProjection(),
+      ownerUserId: user.id,
+      accessToken: 'sk-ant-stale',
+      expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    });
+    expect(
+      await acquireClaudeCodeAccountTransport({ userId: user.id, modelId: 'claude-sonnet-4-6' }),
+    ).toBeNull();
+    expect(mockRefreshClaudeCode).not.toHaveBeenCalled();
+    const row = await accountRow(user.id, 'claude-lab-01');
+    expect(row?.token_secret).not.toBeNull();
+    expect(row?.status).toBe('active');
+    expect(row?.last_error).toContain('access-unavailable');
   });
 
   it('recovers on a newer projection without account duplication', async () => {
