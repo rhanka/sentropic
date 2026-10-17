@@ -139,6 +139,7 @@
   "dependencies": {
     "@sentropic/contracts": "^0.3.0",
     "@sentropic/events": "^0.2.0",
+    "@stablelib/sha256": "2.0.1",
     "hono": "^4.10.7"
   },
   "peerDependencies": {
