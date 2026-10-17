@@ -7,8 +7,8 @@ const mesh = {
   unlockKeyring: async () => undefined,
   resolveOwner: (caller: any, context: any) => ({ ownerScopeRef: caller.ownerScopeRef, tenantId: 't', principalId: 'owner',
     workspaceId: caller.workspaceRef, source: 'packed-fixture', correlationId: context.requestId }),
-  gateway: { config: stubGatewayConfig, routeMetering: { settleRoute: async () => undefined },
-    routePlanner: new InMemoryRoutePlanner({ directory: {
+  gateway: { config: stubGatewayConfig, routeMetering: { settleRoute: async () => undefined } },
+    createRoutePlanner: (options: any) => new InMemoryRoutePlanner({ ...options, directory: {
       listEligible: async () => [{ accountRef: 'account-a', diagnosticAccountRef: 'opaque-a', targetProviderId: 'openai', transportProviderId: 'codex',
         supportedModelIds: [model], enrollmentCompletedAt: '2026-10-01T00:00:00Z', readiness: 'ready', revision: '1' }],
       prepareAttempt: async () => ({ attemptRef: 'synthetic-attempt',
@@ -19,7 +19,6 @@ const mesh = {
         complete: async () => undefined, releaseCancelled: async () => undefined,
       }),
     } }),
-  },
 };
 const host = await startGatewayHost({ stateDir: process.env.GW_TEST_STATE_DIR!, mesh, listen: { host: '127.0.0.1', port: 0 } });
 process.on('message', async () => {

@@ -9,6 +9,8 @@ import { startControlSocket } from './control-socket.js';
 import { FileGatewayStateStore } from './gateway-state-store.js';
 import { createNodeGatewayServer, closeNodeServer, listenNodeServer } from './http-server.js';
 import { createSessionAuth } from './session-auth.js';
+import { createGatewayRouteAffinityStore } from './route-affinity-store.js';
+import { freezeLaunchRoutingContract } from '@sentropic/llm-mesh';
 import type { GatewayHostHandle, HostReadiness, StartGatewayHostOptions } from './host-types.js';
 export { resolveGatewayStateDir } from './state-directory.js';
 export type { GatewayHostHandle, HostReadiness, MeshBinding, StartGatewayHostOptions } from './host-types.js';
@@ -46,11 +48,15 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
   };
   const controlToken = randomBytes(32).toString('base64url');
   const control = new ControlServer({ service, ownerScopeRef,
-    controlToken, beforeAcquire: requireReady });
+    controlToken, beforeAcquire: async (input) => { await requireReady(); freezeLaunchRoutingContract(input.routingContract); } });
   let closeControl: (() => Promise<void>) | undefined;
   let endpoint = '';
   try {
     const router = createGatewayRouter({ ...mesh.gateway,
+      routePlanner: mesh.createRoutePlanner({ affinityStore: createGatewayRouteAffinityStore(store) }),
+      routeInput: (input) => ({ ...mesh.gateway.routeInput?.(input),
+        workspaceId: input.cost.workspaceId, affinityKey: input.cost.gatewayClientSessionRef,
+        launchRoutingContract: input.cost.launchRoutingContract }),
       config: { ...mesh.gateway.config, callerAuth: createSessionAuth({ service, ownerScopeRef,
         ready: async () => (await readiness()).ready, resolveOwner: (caller, context) => mesh.resolveOwner(caller, context) }) },
       readiness: { isReady: async () => (await readiness()).ready },
