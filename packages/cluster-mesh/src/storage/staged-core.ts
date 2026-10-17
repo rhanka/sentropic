@@ -8,11 +8,13 @@ import type { KernelOptions, KernelRoot } from './kernel.js';
 import type { RootMutationCoordinator } from './mutation-coordinator.js';
 import type { CommitContext } from './record-runtime.js';
 import { HmacExactHeadBoundaryProvider, type ChainBoundaryProvider } from './tokens.js';
+import type { RegisteredRootQuery } from './root-query.js';
 import { coveredBy, createStagedControl, createStagedRootData, lockStagedRootData, type StagedControl, type StagedRootData } from './staged-state.js';
 
 export interface StagedCoreOptions extends Omit<KernelOptions, 'coordinator'> {
   readonly limits?: WorkLimits;
   readonly descriptor?: ModuleDescriptor;
+  readonly queries?: Readonly<Record<string, RegisteredRootQuery>>;
   readonly beforePublish?: (scope: StorageScope, unitId: string) => void | Promise<void>;
 }
 export interface JournalFence extends WriterFence { readonly incarnation: string; readonly ownerId: string; }
