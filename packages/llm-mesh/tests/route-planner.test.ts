@@ -263,7 +263,7 @@ describe('opaque route planner', () => {
     expect(directory.prepared).toHaveLength(1);
   });
 
-  it('keeps the stale affinity without migration on standard alias success', async () => {
+  it('refuses implicit policy migration while retaining the original affinity', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
       {
@@ -290,31 +290,11 @@ describe('opaque route planner', () => {
       routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
     )).complete();
 
-    const fresh = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'migrate',
-    });
-    expect(fresh.diagnostics[0]).toMatchObject({
-      reason: 'sticky', actualModelId: 'claude-opus-5',
-    });
-    await (await planner.prepareAttempt(
-      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
-    )).complete();
-
-    const kept = planner.describeAffinity(routingSubject(), 'migrate');
-    expect(kept).toMatchObject({
-      revision: 1, diagnosticAccountRef: 'anthropic-redacted',
-    });
-    expect(kept?.target).toMatchObject({
-      providerId: 'anthropic', modelId: 'claude-opus-5',
-      transportProviderId: 'claude-code',
-    });
-    expect(events).toEqual([]);
-    const sticky = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'migrate',
-    });
-    expect(sticky.diagnostics[0]).toMatchObject({
-      reason: 'sticky', actualModelId: 'claude-opus-5',
-    });
+    const before = planner.describeAffinity(routingSubject(), 'migrate');
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-opus-5-5', affinityKey: 'migrate' }))
+      .rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'migrate')).toEqual(before);
+    expect(events).toEqual([]); expect(directory.prepared).toHaveLength(1);
   });
 
   it('leaves a stale affinity untouched when the standard alias plan fails', async () => {
@@ -341,13 +321,10 @@ describe('opaque route planner', () => {
     )).complete();
     const before = planner.describeAffinity(routingSubject(), 'stale');
 
-    const fresh = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'stale',
-    });
-    await (await planner.prepareAttempt(
-      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
-    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-opus-5-5', affinityKey: 'stale' }))
+      .rejects.toMatchObject({ code: 'no-route' });
     expect(planner.describeAffinity(routingSubject(), 'stale')).toEqual(before);
+    expect(directory.prepared).toHaveLength(1);
   });
 
   it('leaves a stale affinity untouched on commit-then-failure or commit-then-cancellation', async () => {
@@ -374,58 +351,20 @@ describe('opaque route planner', () => {
       return { directory, events, planner };
     };
 
-    {
-      const { planner, events } = makeIsolatedPlanner();
-      const first = await planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-fail',
-      });
-      await (await planner.prepareAttempt(
-        routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
-      )).complete();
-      const beforeFail = planner.describeAffinity(routingSubject(), 'stale-commit-fail');
-
-      const failed = await planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-fail',
-      });
-      const failedAttempt = await planner.prepareAttempt(
-        routingSubject(), failed.planRef, failed.candidateRefs[0]!, 'req-2', 0,
-      );
-      await failedAttempt.markCommitted();
-      await failedAttempt.recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
-      expect(planner.describeAffinity(routingSubject(), 'stale-commit-fail')).toEqual(beforeFail);
-
-      // The route-scoped failure suppresses the sticky route, so a new
-      // alias plan on the same planner fails closed while the stale affinity
-      // stays untouched.
-      await expect(planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-fail',
-      })).rejects.toMatchObject({ code: 'no-route' });
-      expect(planner.describeAffinity(routingSubject(), 'stale-commit-fail')).toEqual(beforeFail);
-
-      expect(events).toEqual([]);
-    }
-
-    {
-      const { planner, events } = makeIsolatedPlanner();
-      const first = await planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-cancel',
-      });
-      await (await planner.prepareAttempt(
-        routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
-      )).complete();
-      const beforeCancel = planner.describeAffinity(routingSubject(), 'stale-commit-cancel');
-
-      const cancelled = await planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-cancel',
-      });
-      const cancelledAttempt = await planner.prepareAttempt(
-        routingSubject(), cancelled.planRef, cancelled.candidateRefs[0]!, 'req-2', 0,
-      );
-      await cancelledAttempt.markCommitted();
-      await cancelledAttempt.releaseCancelled();
-      expect(planner.describeAffinity(routingSubject(), 'stale-commit-cancel')).toEqual(beforeCancel);
-
-      expect(events).toEqual([]);
+    for (const terminal of ['failure', 'cancelled']) {
+      const { planner, directory, events } = makeIsolatedPlanner();
+      const input = { requestedModel: 'claude-opus-5', affinityKey: terminal };
+      const first = await planner.plan(routingSubject(), input);
+      await (await planner.prepareAttempt(routingSubject(), first.planRef, first.candidateRefs[0]!, 'first', 0)).complete();
+      const before = planner.describeAffinity(routingSubject(), terminal);
+      await expect(planner.plan(routingSubject(), { ...input, requestedModel: 'claude-opus-5-5' })).rejects.toMatchObject({ code: 'no-route' });
+      const active = await planner.plan(routingSubject(), input);
+      const attempt = await planner.prepareAttempt(routingSubject(), active.planRef, active.candidateRefs[0]!, 'active', 0);
+      await attempt.markCommitted();
+      if (terminal === 'cancelled') await attempt.releaseCancelled();
+      else await attempt.recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+      expect(planner.describeAffinity(routingSubject(), terminal)).toEqual(before);
+      expect(directory.prepared).toHaveLength(2); expect(events).toEqual([]);
     }
   });
 
