@@ -11,6 +11,9 @@ export const LLM_GATEWAY_PACKAGE = '@sentropic/llm-gateway';
 export const MCP_PLATFORM_PACKAGE = '@sentropic/mcp-platform';
 /** Tight bound on the qualified platform candidate (single 0.3.0, no intermediate publication). */
 export const MCP_PLATFORM_RANGE = '>=0.3.0 <0.4.0';
+export const ARTIFACTS_PACKAGE = '@sentropic/artifacts';
+/** Single 0.1.0 web-pages candidate covering L-5a–5e (no per-slice train). */
+export const ARTIFACTS_RANGE = '>=0.1.0 <0.2.0';
 export const LLM_MESH_RANGE = '>=0.22.0 <0.27.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.21.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
@@ -67,6 +70,10 @@ const mcpPlatform = (id: ClusterMeshProviderModuleId, subpath: string, requiredM
   id, owner: 'mcp-platform', packageName: MCP_PLATFORM_PACKAGE, subpath, range: MCP_PLATFORM_RANGE, requiredMembers,
   meshCoherence: false, authPeers: [],
 });
+const artifacts = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembers: readonly string[]): ProviderDescriptor => ({
+  id, owner: 'artifacts', packageName: ARTIFACTS_PACKAGE, subpath, range: ARTIFACTS_RANGE, requiredMembers,
+  meshCoherence: false, authPeers: [],
+});
 
 export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, ProviderDescriptor>> = {
   'llm-mesh': mesh('llm-mesh', '.', ['createLlmMesh', 'createProviderRegistry'], '/llm-mesh'),
@@ -82,6 +89,10 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   'mcp-platform/bridge': mcpPlatform('mcp-platform/bridge', './transport/bridge', ['registerBridgeTools', 'identityFromExtra']),
   'mcp-platform/hono': mcpPlatform('mcp-platform/hono', './hono', ['createMcpPlatformHono']),
   'mcp-platform/stdio': mcpPlatform('mcp-platform/stdio', './transport/stdio', ['createStdioTransport', 'extractStdioRequestIdentity']),
+  'mcp/web-pages': artifacts('mcp/web-pages', './mcp', [
+    'createWebPagesRegistryDefinition', 'createWebPagesToolExecutor',
+    'WEB_PAGES_PROVIDER_ID', 'ARTIFACTS_TOOL_NAMES',
+  ]),
 };
 
 const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; namespace?: ClusterMeshNamespace }>> = {
