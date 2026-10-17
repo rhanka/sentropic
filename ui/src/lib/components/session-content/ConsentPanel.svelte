@@ -136,7 +136,7 @@
         {/if}
       {/each}
       <p class="text-sm text-slate-700">{$_('sessionContent.futureOnly')}</p>
-      {#each Array(7) as _, index}<p class="text-sm text-slate-700">{$_(`sessionContent.disclosures.${index}`)}</p>{/each}
+      {#each [0, 1, 2, 3, 4, 5, 6] as index}<p class="text-sm text-slate-700">{$_(`sessionContent.disclosures.${index}`)}</p>{/each}
       <label class="flex min-h-9 items-start gap-2"><input type="checkbox" checked={offer.offlineReadAccepted} on:change={(e) => { offer.offlineReadAccepted = e.currentTarget.checked; edited(); }} />{$_('sessionContent.offlineAccept')}</label>
     </fieldset>
     {#if !available}<p role="status">{$_('sessionContent.noKey')}</p>{/if}
