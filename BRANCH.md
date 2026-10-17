@@ -1,7 +1,7 @@
 # Feature: Retire GPT-4.1 nano and qualify both Luna candidates
 
 ## Objective
-- [ ] Replace every active nano selection through one configurable model default; qualify A `openai/gpt-6-luna` and B `openai/gpt-5.6-luna` before the owner decides, with results by October 19 and production readiness before October 23, 2026.
+- [x] Replace every active nano selection through one configurable model default; qualify A `openai/gpt-6-luna` and B `openai/gpt-5.6-luna` before the owner decides, with results by October 19 and production readiness before October 23, 2026.
 
 ## Scope / Guardrails
 - [x] Implementation packet: `/home/antoinefa/src/sentropic/.tmp/packets/nano-retirement-build.md`; `AGENT_SIG:7f3a9c2e1b`.
@@ -92,10 +92,20 @@
 - [x] Final reasoning-boundary correction at `0517ead57`: two red regressions preceded the fix; 176 focused contracts pass. Generic omitted effort remains omitted; the existing comment proposal explicitly sends none with its 800-token cap.
 - [x] Final offline gates before the boundary correction: API unit 133 files / 1,316 passed / one skipped; endpoints 127 files / 1,304 passed; queue 26, security 49; UI 83 files / 489 passed. CI validates the final source separately.
 - [x] Initial CI AI failure signature: `initiative-generation-async` exceeded the unchanged 120,000ms workflow limit and executive summary returned no response. Corrected the inherited high-effort factory; both CI AI groups now pass at `4540e81b5`. No retry, timeout increase or AI-flake acceptance.
+- [x] Final boundary panel: independent Claude-hosted Opus/Sonnet legs completed with no blocking code finding; all nine h2a runtime receipts exit zero. Readable legs, exact frozen targets, raw diff recipes and accept/reject/defer reconciliation retained externally in `review/aggregate.md`; requested identity is not effective-model attestation.
+- [x] Boundary N1: pin the existing omitted-effort regression to `OPENAI_MODEL=gpt-6-luna`, independent of ambient B configuration; 176 focused tests pass with a retained `api-boundary-final.log`. Full final API unit gate: 133 files / 1,318 passed / one skipped in `api-unit-final-restored.log`.
+- [x] Boundary N2/E1: the 800-token comment helper deliberately requests none even for another workspace model; explicit user main-turn reasoning is separate. Report names `0517ead57` and confirms all five measured helper wires remain unchanged. N4: distinguish unit from endpoint counts and link reachable gate receipts.
+- [x] Boundary N3 disposition: defer three comment-only nano evaluator examples in untouched `packages/chat-core/src/runtime.ts`; no executable selection. Owner: branch maintainer, October 17, 2026; no additional public-package change for comment cleanup.
+- [x] Local dependency repro: three office extraction failures were missing `officeparser` after internal-package-only preparation. Restore the complete mounted workspace using the final `prepare-node-workspace` npm-ci recipe; focused extraction 4/4 and final full unit 1,318 pass. No manifest or parser source change.
+- [x] Local E2E port repro: dummy OAuth callbacks were 5173/5397 and service resource 8787; allocate callback 5651/resource 9451 and set `AUTH_CALLBACK_BASE_URL=http://localhost:5651`. Seven auth tests pass with retries zero; fresh seed must precede the complete pass so a prior auth test cannot persist consent.
+- [x] Local E2E execution evidence: port-corrected fresh seed passes groups 00/01/02/03/05/06/07/09/10, including all 36 chat cases; groups 04/08 encounter upstream `Connection error` / `AggregateError ETIMEDOUT`. No timeout inflation or AI-flake acceptance. Preserve all attempts; authoritative final local/CI outcomes are recorded in external `validation-final.md`.
+- [x] Final clean E2E at `be5d4757b`: recreate the complete isolated project, seed and apply only dummy-client port fixtures; verify an empty queue. Same test command with retries zero passes all groups 00–10: 239 passed / one skipped, every group exits zero. `e2e-clean-final.log` retained alongside earlier failures; no AI-flake waiver is accepted for merge.
+- [x] Complete source CI at `be5d4757bb940a8b900f465c835502d63ab184d8`: run `39065605526`, overall success, all 55 jobs passed including API AI/limit/endpoints/unit, all five E2E groups and VSCode. The final documentation/test-env-pin commit changes no product source; its separate pushed-head CI receipt is recorded externally.
 
 ## AI Flaky tests
 - [x] No provider failure in the paired campaign; 30/30 cases and all 38 requests completed without retry, repair, fallback or timeout inflation. Raw outputs/usage retained externally with no credentials.
 - [x] No AI flake accepted. Any future exception requires same-command/same-commit success and explicit owner sign-off before a merge.
+- [x] Local upstream E2E failure history is retained with the same-command/same-HEAD clean success above; no exception or merge approval is inferred. The sealed paid campaign plus supplement completed all 54 requests without a provider failure or retry.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch**: sequential implementation and builds; independent read-only peer reviews; no cherry-pick.
@@ -135,16 +145,16 @@
   - [x] Supplement preflight: remaining-allowance regression failed before the runtime limit option; 13 offline tests now pass, including three real text chunks with facts in distinct chunks and merge. Unarmed supplementary suite skips all five tests with zero egress.
   - [x] Add a separate fixed supplementary journal, gated by exact SCOPE/private SHA pin; verify both original evidence SHA-256 hashes and subtract its settled ledger before constructing the shared A/B allowance (16 sends, no retry).
   - [x] Combined sealed evidence: 17/17 cases per candidate, 54 requests, all 17 paired fixture hashes match; 30/30 long-fact answers each. A USD 0.303924350, B USD 0.608196500, total USD 0.912120850; conservative ledger USD 0.912415 / 15, no pending reservation. Both original journals remain immutable; do not rerun.
-- [ ] **Lot 4 — UAT and documentation consolidation**
-  - [ ] Web: load saved nano choice, inspect replacement provider/model, generate/reload title, inspect in-memory compact summary and retained facts, tool/JSON result, history/document single/chunk/merge usage. Durable DB summary persistence is not asserted by this branch.
-  - [ ] Chrome/VSCode: verify shared catalog selection and captured tool-continuation behavior; report any unavailable live surface explicitly.
+- [x] **Lot 4 — UAT evidence and documentation consolidation**
+  - [x] Web evidence: saved alias/snapshot selection, provider repair and server catalog covered by contracts; real captured titles, in-memory compaction/facts, tool/JSON continuation and six history/document paths inspected. Local browser group 03 passes 36 cases. This is captured/automated evidence, not manual production UAT or durable DB summary persistence.
+  - [x] Chrome/VSCode evidence: shared catalog/controller contracts and existing Chrome browser scenarios pass; official CI VSCode passes at `4540e81b5`. No manually installed production extension surface was exercised; final CI is recorded separately.
   - [x] Write external tables-first `qualification-results.md` and French `dossier-remplacement-nano.html` under `/home/antoinefa/src/sentropic/.tmp/model-retirement/`, with exact matching title/H1, verbatim owner quote, all 34 measured cases and one decision question; final gate status remains explicit.
   - [x] UI files: existing `ui/tests/stores/initiatives.test.ts`, `ui/tests/utils/user-ai-settings-events.test.ts`, `packages/chat-ui/tests/chat-loop-controller.spec.ts` plus version assertions; no new UI test scenario.
   - [x] E2E inventory: existing `e2e/tests/00-ai-generation.spec.ts`, `03-chat.spec.ts`, `03-chat-chrome-extension.spec.ts`, `05-executive-summary.spec.ts`, `06-settings.spec.ts`, `06-settings-codex-provider.spec.ts`, `09-chat-multitool-demo.spec.ts`, `09-chat-org-update-tool.spec.ts`, `vscode/01-vscode-chat-streaming.spec.ts`; no new E2E scenario.
-- [ ] **Lot 5 — Final validation and draft handoff**
-  - [ ] Typecheck/lint impacted API/UI/packages; final `make test-api` and `make test-ui` with test ports/ENV; investigate every failure.
-  - [ ] Build API then UI images sequentially; `make clean test-e2e API_PORT=9451 UI_PORT=5651 MAILDEV_UI_PORT=1551 ENV=e2e-model-retirement`; use existing E2E files without new UI scenarios.
-  - [ ] Run two independent reviews, reconcile findings and inspect every final diff hunk; verify no active retired selection remains.
-  - [ ] Check logs, update evidence and checkboxes, stop isolated services with `make down`.
-  - [ ] Push `fix/openai-nano-retirement`, create DRAFT PR using this file as body, add the required execution-plan comment, monitor CI and resolve failures.
-  - [ ] Leave BRANCH.md and PR in draft; never merge, publish or deploy.
+- [x] **Lot 5 — Final validation and draft handoff**
+  - [x] Typecheck/lint API/UI/packages passed; complete local non-AI API gate, UI 489 and final unit 1,318 passed with isolated ports. `test-api-ai` and limit authority remain official CI; neither paid qualification suite is replayed. Every local failure and repair is retained in `validation-final.md`.
+  - [x] Build API then UI images sequentially, rebuild final API/E2E images, execute full `make clean test-e2e` with allocated ports and retries zero; preserve the failed setup/network attempts and final outcome separately. Existing E2E files are unchanged.
+  - [x] Two eligible independent reviewers per exact code delta, plus Codex/Opus decision review; all findings reconciled, final hunks inspected and no active retired selection remains. Raw receipts/journals stay in place and match external copies.
+  - [x] Capture API/UI logs, record setup/dependency/network failures and completed receipts, update evidence/checkboxes, stop both isolated environments with `make down`; all six allocated ports are free. Private journals and evidence are preserved.
+  - [x] Push branch, open DRAFT PR #686 and required execution-plan comment. Prior run `39063681772`: 53 passing jobs, only stale packed lock plus aggregate failed; fix packed gate 63/63. Monitor final pushed-head CI; its immutable receipt and actual conclusion belong in `validation-final.md`, without inferring green from local checks.
+  - [x] Leave BRANCH.md and PR in draft; no merge, publication or deployment. Owner model choice and later release authorization are separate.

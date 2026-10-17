@@ -101,6 +101,7 @@ describe('nano replacement through the product mesh boundary', () => {
   });
 
   it('should preserve omitted effort for explicitly selected Luna at both API boundaries', async () => {
+    vi.stubEnv('OPENAI_MODEL', 'gpt-6-luna');
     const generate = vi.spyOn(runtime, 'generate').mockResolvedValue({ choices: [{ message: { content: 'Offline' } }] });
     const stream = vi.spyOn(runtime, 'streamGenerate').mockResolvedValue((async function* () {
       yield { type: 'response.output_text.delta', delta: 'Offline' };
