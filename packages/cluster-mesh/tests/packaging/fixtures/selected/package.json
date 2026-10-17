@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.16.0.tgz",
+    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.18.0.tgz",
     "@sentropic/llm-gateway": "0.19.2",
     "@sentropic/llm-mesh": "0.22.3",
     "@sentropic/mcp-auth": "0.2.1",
+    "@sentropic/artifacts": "0.1.0",
     "hono": "4.10.7",
     "jose": "5.10.0"
   }

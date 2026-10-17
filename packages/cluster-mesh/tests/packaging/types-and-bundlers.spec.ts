@@ -56,14 +56,31 @@ describe.skipIf(!enabled)('packed declarations and bundlers', () => {
 
   it('should emit provider leaves as the guard import plus export-star only', () => {
     const leaves = files(join(packageDir('bare'), 'dist/integrations'));
-    expect(leaves.filter((file) => file.endsWith('.d.ts'))).toHaveLength(8);
+    // 8 provider re-export leaves plus the mcp/artifacts builtin-factory leaf
+    // (asserted separately below: it carries mesh code, so it is no export-star).
+    expect(leaves.filter((file) => file.endsWith('.d.ts'))).toHaveLength(9);
     for (const file of leaves.filter((path) => /\.(d\.ts|js)$/u.test(path))) {
+      if (file.includes('integrations/mcp/artifacts.')) continue;
       const lines = read(file).split('\n').map((line) => line.trim())
         .filter((line) => line && !line.startsWith('//') && !line.startsWith('/*'));
       const exports = lines.filter((line) => line.startsWith('export'));
       expect(exports, file).toHaveLength(1);
       expect(exports[0], file).toMatch(/^export \* from "(@sentropic\/llm-(mesh|gateway)[^"]*)";$|^export \* from '(@sentropic\/llm-(mesh|gateway)[^']*)';$/u);
     }
+  });
+
+  it('should keep the artifacts builtin leaf free of embedded provider code', () => {
+    // The mcp/artifacts leaf carries mesh code (the sentropic.artifacts builtin
+    // factory), so it is not an export-star leaf — but like every leaf it must
+    // not embed provider code: the only external @sentropic/* edge is the
+    // declared optional artifacts peer, imported, never inlined.
+    for (const leaf of ['dist/integrations/mcp/artifacts.js', 'dist/integrations/mcp/artifacts.d.ts']) {
+      const source = read(join(packageDir('bare'), leaf));
+      const externals = [...source.matchAll(/from\s+["'](@sentropic\/[^"']+)["']/gu)].map((match) => match[1]);
+      expect(externals, leaf).not.toHaveLength(0);
+      for (const name of externals) expect(name, leaf).toBe('@sentropic/artifacts/mcp');
+    }
+    expect(read(join(packageDir('bare'), 'dist/integrations/mcp/artifacts.js'))).toMatch(/export function createArtifactsBuiltin/u);
   });
 
   it('should keep the emitted root declaration graph free of optional peers', () => {

@@ -1,4 +1,4 @@
-import { createOAuthRouter, createWellKnownRouter } from '@sentropic/auth-hono';
+import { createOAuthRouter, createWellKnownRouter, TOKEN_EXCHANGE_GRANT_TYPE } from '@sentropic/auth-hono';
 import { ALL_MCP_SCOPES } from '@sentropic/mcp-auth';
 import { Hono, type Context } from 'hono';
 
@@ -43,7 +43,11 @@ export const createSentropicWellKnownIngress = (oauthPublicPath: string): Hono =
       ports: getSentropicOAuthPorts(),
       // MCP Protected Resource Metadata remains owned by createMcpAuth; this AS
       // projection only advertises the MCP scopes its allowlisted clients may receive.
-      additionalScopesSupported: ALL_MCP_SCOPES,
+      // 2-IdP: the host side of Lot 3's scope correction — the union of generic MCP
+      // scopes and the grantable Immo scopes. Metadata is descriptive and never
+      // replaces client `allowedScopes`.
+      additionalGrantTypesSupported: [TOKEN_EXCHANGE_GRANT_TYPE],
+      additionalScopesSupported: [...ALL_MCP_SCOPES, 'immo:read', 'immo:search', 'immo:documents:read'],
     }).fetch(new Request(url, { headers: c.req.raw.headers, method: 'GET' }));
   };
 

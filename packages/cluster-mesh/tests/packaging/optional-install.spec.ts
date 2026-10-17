@@ -84,13 +84,13 @@ describe.skipIf(!enabled)('packed optional install', () => {
       console.log(JSON.stringify({
         identical: leaf.createLlmMesh === provider.createLlmMesh,
         service: typeof service.ServiceAuthVerifyToken,
-        session: { code: session.code, reason: session.reason, packageName: session.packageName },
+        session: typeof session.AuthHonoVerifyToken,
         health: (await router.request('/healthz')).status,
         sharedMesh: report.gateway.llmMesh.path === report.llmMesh.path,
       }));`);
     expect(result).toEqual({
       identical: true, service: 'function',
-      session: { code: 'cluster_mesh_module_unavailable', reason: 'not_installed', packageName: '@sentropic/auth-hono' },
+      session: 'function',
       health: 200, sharedMesh: true,
     });
     expect(read(join(fixtureDir('selected'), 'tuple.txt'))).toContain(`@sentropic/llm-gateway@${trainVersion('llm-gateway')}`);

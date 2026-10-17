@@ -9,6 +9,7 @@ import {
 } from './membership.js';
 import { createH2aNhiLifecycle, type CommandRunnerPort, type NhiLifecyclePort } from './nhi.js';
 import { createLocalProjectionDomain, type LocalProjectionPort, type ProjectionDomain, type ProjectionKind } from './projection.js';
+import { createTokenExchangeClient, type TokenExchangeClientInput } from './token-exchange.js';
 import { createGatedTrustDomain, type TrustDomain } from './trust.js';
 import type { ClusterMeshModules, ModuleCapabilityMap } from './modules/contracts.js';
 
@@ -31,7 +32,8 @@ export interface ClusterMesh {
     /** Effective kinds; optional for compatibility with older capability providers. */
     readonly localProjectionKinds?: readonly ProjectionKind[];
     readonly interServerDirectory: 'gated';
-    readonly tokenExchange: 'gated';
+    /** 'available' when a token-exchange issuer binding is configured, 'gated' otherwise. */
+    readonly tokenExchange: 'available' | 'gated';
     readonly memoryReplication: 'gated';
     /** Package availability snapshot; present only when a module registry is injected. */
     readonly modules?: ModuleCapabilityMap;
@@ -48,6 +50,12 @@ export function createDegenerateClusterMesh(input: {
   readonly nhi?: NhiLifecyclePort;
   readonly devices: LocalDeviceAttachmentPort;
   readonly modules?: ClusterMeshModules;
+  /**
+   * RFC 8693 exchange binding plus policy. The client is built eagerly: an invalid
+   * policy throws here, so `available` always follows a successful local preflight.
+   * Absent: the seam stays gated. Issuer reachability remains a runtime condition.
+   */
+  readonly tokenExchange?: TokenExchangeClientInput;
 }): ClusterMesh {
   if (input.nhi !== undefined) {
     for (const method of ['attest', 'offboard', 'exportBundle'] as const) {
@@ -58,6 +66,7 @@ export function createDegenerateClusterMesh(input: {
   }
   const nhi = input.nhi ?? (input.nhiRunner ? createH2aNhiLifecycle(input.nhiRunner) : undefined);
   if (!nhi) throw new TypeError('nhi or nhiRunner is required');
+  const tokenExchangeClient = input.tokenExchange ? createTokenExchangeClient(input.tokenExchange) : undefined;
   const boundaries = createBoundaryDomain({
     homeNodeId: input.self.nodeId,
     memberships: input.memberships,
@@ -71,7 +80,7 @@ export function createDegenerateClusterMesh(input: {
       return [...(input.projections.supportedKinds ?? ['human_identity', 'agent_identity', 'memory_snapshot'])];
     },
     interServerDirectory: 'gated',
-    tokenExchange: 'gated',
+    get tokenExchange() { return tokenExchangeClient ? 'available' : 'gated'; },
     memoryReplication: 'gated',
   };
   const modules = input.modules;
@@ -81,7 +90,7 @@ export function createDegenerateClusterMesh(input: {
   }
   return {
     membership: createSingleNodeMembership({ ...input, boundaries }),
-    trust: createGatedTrustDomain(),
+    trust: tokenExchangeClient ? { tokenExchange: tokenExchangeClient } : createGatedTrustDomain(),
     wrap: {
       projections: createLocalProjectionDomain({ homeNodeId: input.self.nodeId, local: input.projections }),
       nhi,

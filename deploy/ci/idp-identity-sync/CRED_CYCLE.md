@@ -101,3 +101,38 @@ their own rotation process; confirm that process also updates the live DB role.
 Retirement requires disabling schedule/CD, removing delegations and tenant Secrets,
 then revoking relay credentials under k8s governance. Do not delete the shared
 preprod backup identity as part of retiring this sync feature.
+
+## Workload client rotation (2-IdP)
+
+The `immo-mcp-workload` secret is environment-specific, server-side, and never
+committed or returned to the MCP client. Rotate with
+`make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload ENV=<env>`
+(single-secret cutover) and prove the effect: the rotated credential exchanges
+successfully while the previous hash no longer authenticates, with no rotation
+of user credentials or of the public `immo-mcp` client identity. Revocation sets
+`service_clients.revoked_at`; the exchange handler rejects revoked clients
+before any policy check. Fixture hashes (`synthetic-*-workload-hash`) are
+test-only markers and never valid operational secrets.
+
+## Workload client creation (2-IdP, M3)
+
+First-time creation in any environment (including prod) uses the protected
+idempotent path — never a manual SQL edit:
+
+```sh
+make oauth-provision-exchange-client ENV=<env>
+```
+
+with the secret supplied through the protected channel only
+(`OAUTH_WORKLOAD_CLIENT_SECRET`, ≥32 chars, stored in the ignored 0600
+`.env` / protected GitHub environment / namespace Secret — never committed,
+never printed). Optional overrides: `OAUTH_WORKLOAD_CLIENT_ID` (only
+`immo-mcp-workload` is creatable), `OAUTH_WORKLOAD_SUBJECT_AUD`,
+`OAUTH_WORKLOAD_TARGET_AUD`. The script creates solely the named workload row
+with the search-only exchange policy and refuses a conflicting
+identity/policy instead of overwriting (converge policy through the reviewed
+sync pass); the public `immo-mcp` row is never touched. Replay is a verified
+no-op. Cycle: create → verify exchange → record secret location and creation
+date in the tenant credential register → rotate ≤90 days → verify reprise
+(authenticate with the current secret after every rotation before recording
+success).

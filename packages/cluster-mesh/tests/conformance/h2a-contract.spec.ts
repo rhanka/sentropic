@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 // Cross-repo runners replace only this import with the pinned package under test.
 import * as api from '../../src/index.js';
+import { FakeTokenIssuer } from '../fixtures/fake-token-issuer.js';
 
 const f = JSON.parse(readFileSync(new URL('./h2a-contract.json', import.meta.url), 'utf8'));
 function bindings() {
@@ -62,6 +63,31 @@ describe('h2a public contract: N/N-1 baseline', () => {
       [() => mesh.wrap.memoryReplication.replicate(f.reference), 'memory_replication'],
       [() => mesh.wrap.memoryReplication.purge(f.reference), 'memory_replication'],
     ] as const) await expect(operation()).rejects.toMatchObject({ code: 'capability_gated', capability });
+  });
+
+  it('should keep token exchange gated without an issuer binding and refuse invalid subjects with one', async () => {
+    const unconfigured = api.createDegenerateClusterMesh(bindings());
+    expect(unconfigured.capabilities).toMatchObject(f.capabilities);
+    const issuer = new FakeTokenIssuer({ issuer: 'https://fake-idp.example.test' });
+    const configured = api.createDegenerateClusterMesh({
+      ...bindings(),
+      tokenExchange: {
+        issuer,
+        audiences: ['remote'],
+        subjectAudience: 'https://mesh.example.test',
+        workloadClientId: 'workload-1',
+        workloadActorSub: 'workload-1',
+        environment: 'test',
+      },
+    });
+    expect(configured.capabilities).toMatchObject(f.capabilitiesConfigured);
+    await expect(configured.trust.tokenExchange.exchange({
+      grantType: api.RFC8693_GRANT_TYPE,
+      subjectToken: 'forged',
+      subjectTokenType: api.ACCESS_TOKEN_TYPE,
+      audience: 'remote',
+      scope: ['openid'],
+    })).rejects.toMatchObject({ code: 'token_exchange_refused', reason: 'subject_unverified' });
   });
 });
 
