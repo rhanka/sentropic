@@ -997,5 +997,408 @@ export const liveGitDeclarations = controlSchema.table(
 export type SessionWorkspaceBindingRow = typeof sessionWorkspaceBindings.$inferSelect;
 export type SessionWorkspaceBindingInsert = typeof sessionWorkspaceBindings.$inferInsert;
 
+/**
+ * control.session_content_projects — durable owner-confirmed project consent
+ * (D2 Lot 2, BRCM2-EX2). One row per project (`project_id` PK); the accepted
+ * revision is CAS-guarded on (`project_id`, `project_revision`). All scope
+ * references are SOFT (no cross-namespace FK; integrity is service-enforced).
+ * Retention lives only in the owner-confirmed `retention_by_channel` map plus
+ * its source-verified `retention_digest`; no env/tenant/admin default here.
+ */
+export const sessionContentProjects = controlSchema.table(
+  'session_content_projects',
+  {
+    projectId: text('project_id').primaryKey(),
+    projectRevision: integer('project_revision').notNull().default(0),
+    tenantId: text('tenant_id').notNull(),
+    workspaceId: text('workspace_id').notNull(),
+    workspaceIncarnation: integer('workspace_incarnation').notNull().default(1),
+    ownerId: text('owner_id').notNull(),
+    state: text('state').notNull().default('active'),
+    channels: jsonb('channels').notNull(),
+    futureSessions: boolean('future_sessions').notNull().default(false),
+    selectedSessionIds: jsonb('selected_session_ids').notNull(),
+    namedHistories: jsonb('named_histories').notNull(),
+    retentionByChannel: jsonb('retention_by_channel').notNull(),
+    retentionDigest: text('retention_digest').notNull(),
+    acceptedPolicy: jsonb('accepted_policy').notNull(),
+    authorityEpoch: text('authority_epoch').notNull(),
+    offlineReadAccepted: boolean('offline_read_accepted').notNull().default(false),
+    exclusionRevision: integer('exclusion_revision').notNull().default(0),
+    excludedSessionIds: jsonb('excluded_session_ids').notNull(),
+    requiresFreshAmendment: boolean('requires_fresh_amendment').notNull().default(false),
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    tenantOwnerIdx: index('session_content_projects_tenant_owner_idx').on(
+      table.tenantId,
+      table.ownerId,
+    ),
+    stateCheck: check(
+      'session_content_projects_state_check',
+      sql`${table.state} IN ('active', 'revoked', 'excluded')`,
+    ),
+    revisionCheck: check(
+      'session_content_projects_revision_check',
+      sql`${table.projectRevision} >= 0 AND ${table.exclusionRevision} >= 0`,
+    ),
+  }),
+);
+
+/**
+ * control.session_content_grants — derived eligible future/selected session
+ * grants (D2 Lot 2). One row per session (`session_id` UNIQUE); derivation is
+ * CAS-guarded on (`session_id`, `version`). `retained_copies` marks committed
+ * objects surviving under immutable origin scope after close/revoke.
+ */
+export const sessionContentGrants = controlSchema.table(
+  'session_content_grants',
+  {
+    grantId: text('grant_id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    projectId: text('project_id').notNull(),
+    projectRevision: integer('project_revision').notNull(),
+    bindingId: text('binding_id').notNull(),
+    bindingVersion: integer('binding_version').notNull(),
+    d1Version: integer('d1_version').notNull(),
+    d1Incarnation: integer('d1_incarnation').notNull(),
+    d1StartSeq: integer('d1_start_seq').notNull().default(0),
+    tenantId: text('tenant_id').notNull(),
+    workspaceId: text('workspace_id').notNull(),
+    ownerId: text('owner_id').notNull(),
+    sourceGeneration: text('source_generation').notNull(),
+    sourceTrustVersion: text('source_trust_version').notNull(),
+    authorityEpoch: text('authority_epoch').notNull(),
+    nativeBoundarySeq: integer('native_boundary_seq').notNull().default(0),
+    channels: jsonb('channels').notNull(),
+    retentionSnapshot: jsonb('retention_snapshot').notNull(),
+    state: text('state').notNull().default('active'),
+    version: integer('version').notNull().default(1),
+    lastFreshnessAckAt: bigint('last_freshness_ack_at', { mode: 'number' }).notNull().default(0),
+    localDenyPending: boolean('local_deny_pending').notNull().default(false),
+    retainedCopies: boolean('retained_copies').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    sessionUnique: uniqueIndex('session_content_grants_session_unique').on(table.sessionId),
+    projectIdx: index('session_content_grants_project_idx').on(table.projectId),
+    tenantOwnerIdx: index('session_content_grants_tenant_owner_idx').on(
+      table.tenantId,
+      table.ownerId,
+    ),
+    bindingIdx: index('session_content_grants_binding_idx').on(table.bindingId),
+    stateCheck: check(
+      'session_content_grants_state_check',
+      sql`${table.state} IN ('active', 'closed', 'revoked', 'excluded', 'expired')`,
+    ),
+    versionCheck: check(
+      'session_content_grants_version_check',
+      sql`${table.version} >= 1`,
+    ),
+  }),
+);
+
+/**
+ * control.session_content_history_authorizations — distinct closed-session
+ * reading authority (D2 Lot 2, O4=B). Ceilings record the covered objects'
+ * existing immutable deadlines (`null` = no expiry); a grant can never
+ * shorten, extend or create a duration.
+ */
+export const sessionContentHistoryAuthorizations = controlSchema.table(
+  'session_content_history_authorizations',
+  {
+    authorizationId: text('authorization_id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    sessionId: text('session_id').notNull(),
+    bindingId: text('binding_id').notNull(),
+    projectRevision: integer('project_revision').notNull(),
+    ceilings: jsonb('ceilings').notNull(),
+    state: text('state').notNull().default('active'),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    sessionIdx: index('session_content_history_session_idx').on(table.sessionId),
+    bindingIdx: index('session_content_history_binding_idx').on(table.bindingId),
+    stateCheck: check(
+      'session_content_history_state_check',
+      sql`${table.state} IN ('active', 'revoked')`,
+    ),
+  }),
+);
+
+/**
+ * control.session_content_namespaces — immutable tenant/owner/epoch object
+ * scope (D2 Lot 2). The R2-3 empty-state fast path probes this table first:
+ * absent D2 state returns without allocating namespace, tombstone or job.
+ * Ordinary login admission never creates a row here.
+ */
+export const sessionContentNamespaces = controlSchema.table(
+  'session_content_namespaces',
+  {
+    namespaceId: text('namespace_id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    ownerId: text('owner_id').notNull(),
+    epoch: text('epoch').notNull(),
+    status: text('status').notNull().default('active'),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    tenantOwnerEpochIdx: index('session_content_namespaces_tenant_owner_epoch_idx').on(
+      table.tenantId,
+      table.ownerId,
+      table.epoch,
+    ),
+    statusCheck: check(
+      'session_content_namespaces_status_check',
+      sql`${table.status} IN ('active', 'purge_pending', 'purged')`,
+    ),
+  }),
+);
+
+/**
+ * control.session_content_objects — immutable committed/staged object index
+ * (D2 Lot 2). Payload bytes live only in the private bucket; rows carry
+ * accounting (`bytes_raw`, `bytes_encoded`), the capture-bound immutable
+ * `expires_at` (`null` = no expiry) and lifecycle state. No payload bodies.
+ * P2: `reservation_id` links a staged row to its writer reservation so an
+ * object purge settles exactly that writer (nullable: rows predate the link
+ * settle nothing).
+ */
+export const sessionContentObjects = controlSchema.table(
+  'session_content_objects',
+  {
+    objectId: text('object_id').primaryKey(),
+    namespaceId: text('namespace_id').notNull(),
+    bindingId: text('binding_id').notNull(),
+    sessionId: text('session_id').notNull(),
+    reservationId: text('reservation_id'),
+    channel: text('channel').notNull(),
+    bucket: text('bucket').notNull(),
+    objectKey: text('object_key').notNull(),
+    bytesRaw: bigint('bytes_raw', { mode: 'number' }).notNull().default(0),
+    bytesEncoded: bigint('bytes_encoded', { mode: 'number' }).notNull().default(0),
+    authorityEpoch: text('authority_epoch').notNull(),
+    capturedAt: bigint('captured_at', { mode: 'number' }).notNull().default(0),
+    expiresAt: bigint('expires_at', { mode: 'number' }),
+    state: text('state').notNull().default('staged'),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    namespaceIdx: index('session_content_objects_namespace_idx').on(table.namespaceId),
+    bindingIdx: index('session_content_objects_binding_idx').on(table.bindingId),
+    sessionIdx: index('session_content_objects_session_idx').on(table.sessionId),
+    reservationIdx: index('session_content_objects_reservation_idx').on(table.reservationId),
+    bucketKeyUnique: uniqueIndex('session_content_objects_bucket_key_unique').on(
+      table.bucket,
+      table.objectKey,
+    ),
+    channelCheck: check(
+      'session_content_objects_channel_check',
+      sql`${table.channel} IN ('terminal.cache', 'native.mirror')`,
+    ),
+    stateCheck: check(
+      'session_content_objects_state_check',
+      sql`${table.state} IN ('staged', 'committed', 'purge_pending', 'purged')`,
+    ),
+  }),
+);
+
+/**
+ * control.session_content_reservations — quota reservations held before
+ * upload and conditionally published after it (D2 Lot 2). Stale completions
+ * become purge work; staging and pending-deletion bytes stay charged.
+ * N3: each reservation freezes its capture authorization tuple T
+ * (`project_revision`, `grant_version`, `retention_snapshot`); the commit
+ * rechecks T instead of reconstructing authority from the latest grant.
+ */
+export const sessionContentReservations = controlSchema.table(
+  'session_content_reservations',
+  {
+    reservationId: text('reservation_id').primaryKey(),
+    namespaceId: text('namespace_id').notNull(),
+    sessionId: text('session_id').notNull(),
+    projectRevision: integer('project_revision').notNull(),
+    grantVersion: integer('grant_version').notNull(),
+    retentionSnapshot: jsonb('retention_snapshot').notNull(),
+    channel: text('channel').notNull(),
+    bytesRaw: bigint('bytes_raw', { mode: 'number' }).notNull().default(0),
+    bytesEncoded: bigint('bytes_encoded', { mode: 'number' }).notNull().default(0),
+    authorityEpoch: text('authority_epoch').notNull(),
+    state: text('state').notNull().default('reserved'),
+    attemptDigest: text('attempt_digest'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    namespaceIdx: index('session_content_reservations_namespace_idx').on(table.namespaceId),
+    sessionIdx: index('session_content_reservations_session_idx').on(table.sessionId),
+    stateCheck: check(
+      'session_content_reservations_state_check',
+      sql`${table.state} IN ('reserved', 'published', 'consumed', 'cancelled', 'stale')`,
+    ),
+  }),
+);
+
+/**
+ * control.session_content_attempts — durable writer/attempt journal (D2 Lot
+ * 2). Tracks every writer and SDK retry by scoped idempotency digest:
+ * duplicate same-key submissions query outcomes only, changed payloads
+ * conflict, and an unknown outcome keeps purge pending with quota charged.
+ */
+export const sessionContentAttempts = controlSchema.table(
+  'session_content_attempts',
+  {
+    attemptId: text('attempt_id').primaryKey(),
+    namespaceId: text('namespace_id').notNull(),
+    sessionId: text('session_id').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    payloadDigest: text('payload_digest').notNull(),
+    outcome: text('outcome').notNull().default('attempted'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    namespaceKeyUnique: uniqueIndex('session_content_attempts_namespace_key_unique').on(
+      table.namespaceId,
+      table.idempotencyKey,
+    ),
+    sessionIdx: index('session_content_attempts_session_idx').on(table.sessionId),
+    outcomeCheck: check(
+      'session_content_attempts_outcome_check',
+      sql`${table.outcome} IN ('attempted', 'published', 'conflicted', 'outcome_unknown', 'cancelled')`,
+    ),
+  }),
+);
+
+/**
+ * control.session_content_purge_jobs — writer-settled physical purge work and
+ * its evidence (D2 Lot 2). Revocation commits before readers/producers
+ * close; deletion runs only after writers settle, then the final inventory
+ * is verified and recorded in `evidence`. Scope `object` (with `object_id`)
+ * deletes one staged/`purge_pending` row only and never committed copies;
+ * `binding`/`namespace`/`history` remain the real purge-event scopes.
+ */
+export const sessionContentPurgeJobs = controlSchema.table(
+  'session_content_purge_jobs',
+  {
+    purgeJobId: text('purge_job_id').primaryKey(),
+    namespaceId: text('namespace_id').notNull(),
+    bindingId: text('binding_id'),
+    objectId: text('object_id'),
+    scope: text('scope').notNull(),
+    state: text('state').notNull().default('pending'),
+    evidence: jsonb('evidence'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => ({
+    namespaceIdx: index('session_content_purge_jobs_namespace_idx').on(table.namespaceId),
+    stateCheck: check(
+      'session_content_purge_jobs_state_check',
+      sql`${table.state} IN ('pending', 'in_progress', 'complete')`,
+    ),
+    scopeCheck: check(
+      'session_content_purge_jobs_scope_check',
+      sql`${table.scope} IN ('binding', 'namespace', 'history', 'object')`,
+    ),
+  }),
+);
+
+/**
+ * control.session_content_tombstones — surviving offboarding markers (D2 Lot
+ * 2). Persisted by the hand-written public DELETE/offboard triggers and by
+ * the service; a tombstoned (kind, public_id) denies re-activation of the
+ * same scope, so recreated textual IDs cannot reuse old grants.
+ */
+export const sessionContentTombstones = controlSchema.table(
+  'session_content_tombstones',
+  {
+    tombstoneId: text('tombstone_id').primaryKey(),
+    kind: text('kind').notNull(),
+    publicId: text('public_id').notNull(),
+    tenantId: text('tenant_id'),
+    ownerId: text('owner_id'),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    kindPublicUnique: uniqueIndex('session_content_tombstones_kind_public_unique').on(
+      table.kind,
+      table.publicId,
+    ),
+    tenantIdx: index('session_content_tombstones_tenant_idx').on(table.tenantId),
+    kindCheck: check(
+      'session_content_tombstones_kind_check',
+      sql`${table.kind} IN ('tenant', 'user', 'workspace')`,
+    ),
+  }),
+);
+
+/**
+ * control.session_content_admissions — durable human admission records (D2
+ * Lot 2). Written by the website WebAuthn finalizer (Lot 3a routes); the
+ * service records and checks them, but admission alone never grants content
+ * reads, capture or control.
+ */
+export const sessionContentAdmissions = controlSchema.table(
+  'session_content_admissions',
+  {
+    admissionId: text('admission_id').primaryKey(),
+    authSessionId: text('auth_session_id').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    credentialId: text('credential_id').notNull(),
+    origin: text('origin').notNull(),
+    userVerified: boolean('user_verified').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    sessionIdx: index('session_content_admissions_session_idx').on(table.authSessionId),
+    credentialIdx: index('session_content_admissions_credential_idx').on(table.credentialId),
+  }),
+);
+
+/**
+ * control.session_content_offline_receipts — explicit offline-risk receipts
+ * (D2 Lot 2, O2=B). Persisted at project activation alongside the accepted
+ * policy: the owner accepts that local-only revocation may remain unknown
+ * indefinitely while disconnected.
+ */
+export const sessionContentOfflineReceipts = controlSchema.table(
+  'session_content_offline_receipts',
+  {
+    receiptId: text('receipt_id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    ownerId: text('owner_id').notNull(),
+    policyDigest: text('policy_digest').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    projectIdx: index('session_content_offline_receipts_project_idx').on(table.projectId),
+  }),
+);
+
+export type SessionContentProjectRow = typeof sessionContentProjects.$inferSelect;
+export type SessionContentProjectInsert = typeof sessionContentProjects.$inferInsert;
+export type SessionContentGrantRow = typeof sessionContentGrants.$inferSelect;
+export type SessionContentGrantInsert = typeof sessionContentGrants.$inferInsert;
+export type SessionContentHistoryAuthorizationRow = typeof sessionContentHistoryAuthorizations.$inferSelect;
+export type SessionContentNamespaceRow = typeof sessionContentNamespaces.$inferSelect;
+export type SessionContentObjectRow = typeof sessionContentObjects.$inferSelect;
+export type SessionContentReservationRow = typeof sessionContentReservations.$inferSelect;
+export type SessionContentAttemptRow = typeof sessionContentAttempts.$inferSelect;
+export type SessionContentPurgeJobRow = typeof sessionContentPurgeJobs.$inferSelect;
+export type SessionContentTombstoneRow = typeof sessionContentTombstones.$inferSelect;
+export type SessionContentAdmissionRow = typeof sessionContentAdmissions.$inferSelect;
+export type SessionContentOfflineReceiptRow = typeof sessionContentOfflineReceipts.$inferSelect;
+
 export type LiveGitDeclarationRow = typeof liveGitDeclarations.$inferSelect;
 export type LiveGitDeclarationInsert = typeof liveGitDeclarations.$inferInsert;
