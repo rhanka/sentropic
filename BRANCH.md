@@ -466,6 +466,7 @@
   - [ ] Added shipped literal transport-v1 vectors with an independently generated native SHA-256 oracle for escaped/multibyte identities, typed payload inventory and the exact terminal predecessor/count; documentation and package-asset bytes must match.
   - [x] Literal vectors pass 3/3; the updated generic PG gate passes 26 files / 47 tests, with the two server-crash phases delegated to their separate target.
   - [ ] Added neutral-host transfer qualification: foreign-scope bytes cannot publish; an explicitly mapped derivative preserves attribution with new IDs/hashes and a separate scoped derivation audit; destination recovery/readback precedes independently authorized source retirement, whose denial leaves source intact.
+  - [ ] Strengthened the review-evidence probe with a self-consistent final validation after a different contest was resolved: an older unresolved contest must still refuse the complete unit with zero canonical publication.
   - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
   - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.

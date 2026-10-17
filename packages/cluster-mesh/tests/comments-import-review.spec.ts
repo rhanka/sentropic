@@ -17,7 +17,7 @@ describe.skipIf(!pgEnabled)('frozen review state invariants during coherent comm
       });
     } finally { await h.fixture.close(); }
   });
-  it('retains older open contests across withdrawal, resubmission and resolution of a later contest', async () => {
+  it.each([false, true])('retains older open contests across later resolution (forged final validation=%s)', async (forged) => {
     const h = await commentsHost();
     try {
       const annotation = h.annotation('a'); const events: ReviewEventRecord[] = [];
@@ -27,9 +27,19 @@ describe.skipIf(!pgEnabled)('frozen review state invariants during coherent comm
         events.push(event); return event;
       };
       add('submit'); const validation = add('validate'); add('contest', validation.hash); add('withdraw'); add('submit'); const secondValidation = add('validate'); const secondContest = add('contest', secondValidation.hash); add('resolve-contest', secondContest.hash);
+      expect(() => add('validate')).toThrow(/fully resolved contest/i);
+      if (forged) {
+        const last = events.at(-1)!; const { kind: _kind, hash: _hash, link: _link, ...base } = last;
+        const envelope = { ...base, action: 'validate' as const, referencesEventHash: null, link: { sequence: last.link.sequence + 1, previousHash: last.hash } };
+        events.push({ kind: 'review-event', ...envelope, hash: hashRecord('review-event', envelope) });
+      }
       const validUnits = [{ unitId: 'unit', records: [annotation, ...events] }]; const request = importRequest(h, validUnits);
-      await h.module.withContext(h.grant, async () => { await commitImport(h, request, await prepareImport(h, request, 'valid-history', validUnits)); });
-      expect((await h.bound.journalRead(0, 100)).events).toHaveLength(1);
+      await h.module.withContext(h.grant, async () => {
+        const prepared = await prepareImport(h, request, 'review-history', validUnits);
+        if (forged) { await expect(commitImport(h, request, prepared)).rejects.toThrow(/fully resolved contest/i); expect(await h.module.store.getAnnotationHead(h.scope, 'a')).toBeNull(); }
+        else await commitImport(h, request, prepared);
+      });
+      expect((await h.bound.journalRead(0, 100)).events).toHaveLength(forged ? 0 : 1);
     } finally { await h.fixture.close(); }
   });
 });
