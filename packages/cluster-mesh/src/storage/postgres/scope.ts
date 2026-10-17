@@ -25,6 +25,8 @@ import { queryPgRoot, type PgQueryRequest } from './queries.js';
 import { capturePgSnapshot, readPgSnapshot } from './snapshots.js';
 import { capturePgManifest, verifyPgManifest, readPgManifestPage } from './manifests.js';
 import type { RootManifestRequest } from '../root-manifest.js';
+import { readPgBlob, sharePgBlob } from './blobs.js';
+import { inspectPgPurge, readPgMaintenance, type PgMaintenanceRequest } from './maintenance-readers.js';
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export class PgScoped {
   readonly #core: PgCore;
@@ -89,6 +91,10 @@ export class PgScoped {
   declareCoverage(parent: string, child: string) { return declarePgCoverage(this.#core, this.#grant, parent, child); }
   holdTarget(target: string, reason: string | null) { return holdPgTarget(this.#core, this.#grant, target, reason); }
   completePurge(intentId: string) { return completePgPurge(this.#core, this.#grant, intentId); }
+  purgeProgress(intentId: string) { return inspectPgPurge(this.#core, this.#grant, intentId); }
+  purgeRead(kind: 'jobs' | 'outcomes' | 'notifications', request: PgMaintenanceRequest) { return readPgMaintenance(this.#core, this.#grant, kind, request); }
+  shareBlob(id: string, owner: string, bytes?: string) { return sharePgBlob(this.#core, this.#grant, id, owner, bytes); }
+  readBlob(id: string) { return readPgBlob(this.#core, this.#grant, id); }
   journalRead(after: number, limit: number, consumer?: string) { return readPgJournal(this.#core, this.#grant, after, limit, consumer); }
   query(name: string, input: unknown, request: PgQueryRequest) { return queryPgRoot(this.#core, this.#grant, name, input, request); }
   journalResync(consumer: string, fence: JournalFence) { return capturePgSnapshot(this.#core, this.#grant, consumer, fence); }
