@@ -279,6 +279,7 @@
     - [x] `postgres/digest.ts` serializes only documented chaining state, active remainder and byte count, validates persisted shape/version and clears temporary library buffers. Eight restart/branch/corruption vectors pass against native SHA-256; typecheck passes. The existing v1 commitment bytes are preserved.
     - [x] Isolated resolved digest tree audit reports 0 vulnerabilities. The lock importer preserves other package entries and verifies the exact five-package MIT/registry-integrity closure before updating root and selected-consumer locks; image/artifact coverage is separate.
     - [x] Production and selected-consumer locks now pin the same audited `@stablelib/sha256@2.0.1` closure; root imports still do not evaluate the Postgres leaf.
+    - [x] Existing cluster-mesh CI validation bootstraps/audits the storage dependency closure before ordinary Make gates (BRCM2-EX5); database qualification wiring remains pending.
   - [ ] Scope/incarnation journal, captured snapshot queries, poison-preserving consumers and actual lifecycle dispositions.
   - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
   - [ ] Structural driver port (parameterized query + transaction on one connection), serializable atomic ops, fences, error mapping in `src/storage/postgres/*.ts`; no `pg` import.
