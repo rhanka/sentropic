@@ -326,6 +326,82 @@ describe('mesh mcp composition', () => {
     expect(effects).toBe(0);
   });
 
+  it('enforces the compiled plan on /invoke with insufficient_scope', async () => {
+    let effects = 0;
+    const module = await createMcpNamespaceModule(kernelModules(), {
+      registry: await compiledRegistry(),
+      tools: [{ name: 'immo_search', schema: SCHEMA }],
+      runner: {
+        run: async () => {
+          effects += 1;
+          return { ok: true, output: {}, auditId: 'a', redactionClass: 'low' };
+        },
+      },
+      auth: auth() as never,
+      contextResolver: async (identity) => ({
+        sub: identity?.clientId ?? 'anonymous',
+        clientId: identity?.clientId ?? 'anonymous',
+        tid: identity?.tenantRef ?? null,
+        scopes: [...(identity?.scopes ?? [])],
+      }),
+      invocation: { authorize: async () => ({ allowed: true as const }) },
+      createTransport: () => new WebStandardStreamableHTTPServerTransport(),
+      generationId: 'test-generation',
+    });
+    const router = module.createRouter(ports(verifiedContext()));
+    const response = await router.request('/invoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ connectorId: 'mesh', capabilityRef: 'immo_search', input: {} }),
+    });
+    expect(await response.json()).toMatchObject({ error: { code: 'insufficient_scope' } });
+    expect(effects).toBe(0);
+  });
+
+  it('preserves the verified principal on /invoke', async () => {
+    const seenIdentities: unknown[] = [];
+    let effects = 0;
+    const scopedAuth = {
+      ...auth(),
+      context: () => ({ sub: 'user-1', clientId: 'c-1', tid: 't-2', scopes: ['probe:use'] }),
+    };
+    const module = await createMcpNamespaceModule(kernelModules(), {
+      registry: await compiledRegistry(),
+      tools: [{ name: 'immo_search', schema: SCHEMA }],
+      runner: {
+        run: async () => {
+          effects += 1;
+          return { ok: true, output: { echo: true }, auditId: 'a', redactionClass: 'low' };
+        },
+      },
+      auth: scopedAuth as never,
+      contextResolver: async (identity: unknown) => {
+        seenIdentities.push(identity);
+        const record = (identity ?? {}) as { clientId?: string; tenantRef?: string; scopes?: string[] };
+        return {
+          sub: record.clientId ?? 'anonymous',
+          clientId: record.clientId ?? 'anonymous',
+          tid: record.tenantRef ?? null,
+          scopes: [...(record.scopes ?? [])],
+        };
+      },
+      invocation: { authorize: async () => ({ allowed: true as const }) },
+      createTransport: () => new WebStandardStreamableHTTPServerTransport(),
+      generationId: 'test-generation',
+    });
+    const router = module.createRouter(ports(verifiedContext()));
+    const response = await router.request('/invoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ connectorId: 'mesh', capabilityRef: 'immo_search', input: {} }),
+    });
+    expect(response.status).toBe(200);
+    expect(effects).toBe(1);
+    expect(seenIdentities).toEqual([
+      { clientId: 'c-1', tenantRef: 't-2', scopes: ['probe:use'], hasBearer: true },
+    ]);
+  });
+
   it('refuses a bridge tool outside the compiled plan at startup', async () => {
     await expect(
       createMcpNamespaceModule(kernelModules(), {
@@ -335,9 +411,8 @@ describe('mesh mcp composition', () => {
         auth: auth() as never,
         contextResolver: async () => ({ sub: 'x', clientId: 'x', tid: null, scopes: [] }),
         invocation: { authorize: async () => ({ allowed: true as const }) },
-        createTransport: () =>
-          new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: () => crypto.randomUUID() }),
-        stateful: true,
+        createTransport: () => new WebStandardStreamableHTTPServerTransport(),
+        generationId: 'test-generation',
       }),
     ).rejects.toThrow(/not in the compiled plan/);
   });
@@ -357,9 +432,8 @@ describe('mesh mcp composition', () => {
         auth: auth() as never,
         contextResolver: async () => ({ sub: 'x', clientId: 'x', tid: null, scopes: [] }),
         invocation: { authorize: async () => ({ allowed: true as const }) },
-        createTransport: () =>
-          new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: () => crypto.randomUUID() }),
-        stateful: true,
+        createTransport: () => new WebStandardStreamableHTTPServerTransport(),
+        generationId: 'test-generation',
       }),
     ).rejects.toThrow();
   });
