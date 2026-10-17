@@ -108,15 +108,26 @@ describe('model selection legacy cutovers', () => {
     });
   });
 
+  it.each(['gpt-4.1-nano', 'gpt-4.1-nano-2025-04-14', ' GPT-4.1-NANO '])(
+    'should retire %s and repair the provider attribution',
+    (modelId) => {
+      expect(normalizeLegacyModelSelection({ providerId: 'gemini', modelId })).toEqual({
+        providerId: 'openai',
+        modelId: 'gpt-6-luna',
+        migrated: true,
+      });
+    },
+  );
+
   it('leaves non-legacy ids unchanged', () => {
     expect(
       normalizeLegacyModelSelection({
         providerId: 'openai',
-        modelId: 'gpt-4.1-nano',
+        modelId: 'gpt-4.1',
       })
     ).toEqual({
       providerId: 'openai',
-      modelId: 'gpt-4.1-nano',
+      modelId: 'gpt-4.1',
       migrated: false,
     });
   });
