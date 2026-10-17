@@ -268,6 +268,7 @@
 - [ ] **Lot 6 — Postgres injected-driver module (P1, P2a, P2u, P2b-J, P2b-M, P2c consumed by comments)**
   - [ ] Driver protocol/codec: one injected session, parameterized statements, SERIALIZABLE finite transactions, strict lossless decoding and typed operational/uncertain outcomes.
     - [ ] RED `postgres-protocol.spec.ts` covers layout ownership/injection refusal, exact large counters, owned UTF-8 including BOM/multibyte bytes, malformed encoding refusal and structural SQLSTATE/uncertain-commit classification.
+    - [ ] Driver/session/layout/outbox/query interfaces import no Postgres client. Strict codecs preserve bytes/counters; failure mapping uses SQLSTATE, named constraints and explicit transaction outcomes, never error text or empty-data fallback.
   - [ ] Immutable SQL map nodes and canonical payload bytes; scope root/version CAS and package journal share the transaction. No scope clone or history replay at publication.
   - [ ] Durable staged intake, prepared roots, fenced ownership and bounded progress; qualify a published SHA-256 implementation with documented state save/restore instead of persisting native Node hash objects.
     - [ ] Inspected published `@stablelib/sha256@2.0.1` declarations and registry integrity: documented `saveState`/`restoreState` includes chaining state, remainder buffer and byte count. Branch-local Make bootstrap/audit prepares its resolved tree for independent restart vectors; no custom cryptographic implementation.
