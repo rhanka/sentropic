@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { IndexedMap } from '../../src/storage/indexed-map.js';
+import { IndexedHistory } from '../../src/storage/indexed-history.js';
 
 describe('indexed storage roots', () => {
+  it('should append to a long captured history without copying its records', () => {
+    const history = new IndexedHistory<number>();
+    for (let n = 0; n < 10000; n += 1) history.push(n);
+    const captured = history.fork();
+    history[Symbol.iterator] = function* () { throw new Error('historical enumeration'); };
+    const successor = history.fork();
+    successor.push(10000);
+    expect(captured.length).toBe(10000);
+    expect(captured.at(-1)).toBe(9999);
+    expect(successor.at(-1)).toBe(10000);
+    expect(successor.at(0)).toBe(0);
+    expect(successor.at(10001)).toBeUndefined();
+  });
+
   it('should preserve captured versions while replacing and deleting keys in successors', () => {
     const original = new IndexedMap<number>();
     for (let n = 0; n < 2000; n += 1) original.set(`key-${n}`, n);
