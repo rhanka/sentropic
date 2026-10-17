@@ -270,6 +270,7 @@
   - [ ] Immutable SQL map nodes and canonical payload bytes; scope root/version CAS and package journal share the transaction. No scope clone or history replay at publication.
   - [ ] Durable staged intake, prepared roots, fenced ownership and bounded progress; qualify a published SHA-256 implementation with documented state save/restore instead of persisting native Node hash objects.
     - [ ] Inspected published `@stablelib/sha256@2.0.1` declarations and registry integrity: documented `saveState`/`restoreState` includes chaining state, remainder buffer and byte count. Branch-local Make bootstrap/audit prepares its resolved tree for independent restart vectors; no custom cryptographic implementation.
+    - [ ] RED `postgres-digest.spec.ts` compares JSON-restored contexts to independent native SHA-256 across byte/block/multibyte boundaries, branches saved prefixes and refuses malformed persisted state.
   - [ ] Scope/incarnation journal, captured snapshot queries, poison-preserving consumers and actual lifecycle dispositions.
   - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
   - [ ] Structural driver port (parameterized query + transaction on one connection), serializable atomic ops, fences, error mapping in `src/storage/postgres/*.ts`; no `pg` import.
