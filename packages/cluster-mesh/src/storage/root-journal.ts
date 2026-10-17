@@ -25,6 +25,7 @@ export const readRootJournal = (core: StagedCore, bound: ScopedRuntime, after: n
   const data = core.data(core.current(bound.scope));
   if (after > data.journal.length) throw new StorageInvalidCommandError('journal position exceeds watermark');
   const state = consumer === undefined ? undefined : journalConsumer(core, bound, consumer);
+  const contiguous = state !== undefined && after <= state.scanned;
   const events: RootJournalEvent[] = [];
   let bytes = 0;
   if (!state || state.status === 'running') {
@@ -34,7 +35,7 @@ export const readRootJournal = (core: StagedCore, bound: ScopedRuntime, after: n
       if (bytes + size > stagedLimits(core).maxEncodedBytes) break;
       events.push(ownedCopy(event)); bytes += size;
       if (state) {
-        state.scanned = Math.max(state.scanned, event.seq);
+        if (contiguous) state.scanned = Math.max(state.scanned, event.seq);
         if (state.retryAuthorized && event.eventId === state.failedEvent) state.deliveredPoison = true;
       }
     }
