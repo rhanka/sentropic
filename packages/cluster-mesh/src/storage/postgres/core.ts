@@ -11,7 +11,7 @@ import { PgTransactions } from './transactions.js';
 import { decodePgText, decodePgUtf8 } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { loadPgAssets, verifyPgInstallation } from './migrations.js';
-import type { PgSession, PostgresStorageOptions } from './protocol.js';
+import { validatePgLayout, type PgSession, type PostgresStorageOptions } from './protocol.js';
 import { validateModuleDescriptor } from '../descriptor.js';
 const freezeRegistration = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freezeRegistration); Object.freeze(value); } };
 
@@ -33,7 +33,10 @@ export class PgCore {
   constructor(readonly options: PostgresStorageOptions, readonly incarnation: string) {
     const descriptor = options.descriptor ? JSON.parse(JSON.stringify(options.descriptor)) as typeof options.descriptor : undefined;
     if (descriptor) { if (!validateModuleDescriptor(descriptor).ok || descriptor.queryNames.some((name) => typeof options.queries?.[name] !== 'function')) throw new StorageInvalidCommandError('invalid registered Postgres descriptor'); freezeRegistration(descriptor); }
-    this.options = Object.freeze({ ...options, descriptor, queries: Object.freeze({ ...options.queries }), pgPredicates: Object.freeze({ ...options.pgPredicates }) });
+    this.options = Object.freeze({ ...options, descriptor, layout: validatePgLayout(options.layout),
+      limits: options.limits ? Object.freeze({ ...options.limits }) : undefined, budgets: Object.freeze({ ...options.budgets }),
+      queries: Object.freeze({ ...options.queries }), pgPredicates: Object.freeze({ ...options.pgPredicates }) });
+    options = this.options;
     if (options.outbox && ['append', 'read', 'find'].some((name) => typeof options.outbox?.[name as keyof typeof options.outbox] !== 'function')) throw new StorageInvalidCommandError('alternate journal requires append and replay on the same log');
     this.tx = new PgTransactions(options.driver, options.budgets);
     this.roots = new PgRoots(options, incarnation);
@@ -43,7 +46,10 @@ export class PgCore {
     if (!validateWorkLimits(this.limits).ok) throw new StorageInvalidCommandError('invalid Postgres work limits');
   }
   now(): string { return this.options.domainClock?.now() ?? this.options.now?.() ?? new Date().toISOString(); }
-  id(kind: string): string { return this.options.ids?.next(kind) ?? `${kind}:${randomUUID()}`; }
+  id(kind: string): string {
+    if (kind.endsWith('capability') || kind === 'boundary') return `${kind}:${randomUUID()}`;
+    return this.options.ids?.next(kind) ?? `${kind}:${randomUUID()}`;
+  }
   admit(grant: ScopeGrant<unknown>, operation: StorageOperation): void {
     const valid = validateScopeGrant(grant, { expectedModuleId: this.options.moduleId, nowIso: this.now() });
     if (!valid.ok || !grant.operations.includes(operation)) throw new StorageDeniedError('invalid or insufficient scope grant');
@@ -97,6 +103,7 @@ export class PgCore {
 export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCore> => {
   if (!options.history) throw new PostgresStorageError('configuration');
   const provisional = new PgCore(options, options.incarnation ?? `store:${randomUUID()}`);
+  options = provisional.options;
   const assets = await loadPgAssets();
   const incarnation = await provisional.tx.run(false, async (session) => {
     await verifyPgInstallation(session, options.layout, assets, options.history);
