@@ -463,16 +463,14 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
     expect(response).toMatchObject({ providerRawFinishReason: 'length' });
   });
 
-  it('never invents a reasoning slot on the Meta wire (spec §16.4)', async () => {
+  it('refuses unsupported reasoning before Meta I/O (spec §16.4)', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({
       id: 'resp-3', choices: [{ message: { content: 'ok' } }],
     }), { status: 200 }));
     const client = new MuseRuntimeClient({ fetch: fetchFn });
-    await client.generate({
+    await expect(client.generate({
       ...request, reasoning: { effort: 'max', summary: 'auto' },
-    }, auth);
-    const body = JSON.parse(String(fetchFn.mock.calls[0]![1].body)) as Record<string, unknown>;
-    expect(body).not.toHaveProperty('reasoning');
-    expect(body).not.toHaveProperty('reasoning_effort');
+    }, auth)).rejects.toMatchObject({ status: 400, code: 'unsupported_projection', param: 'reasoning' });
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });

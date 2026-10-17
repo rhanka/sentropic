@@ -279,6 +279,11 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     accept: string,
     stream = false,
   ): Promise<Response> {
+    if (request.reasoning && Object.keys(request.reasoning).length > 0) {
+      throw Object.assign(new Error('Muse Chat cannot preserve required reasoning controls'), {
+        status: 400, code: 'unsupported_projection', param: 'reasoning',
+      });
+    }
     const auth = getSecretAuthMaterial(context?.auth);
     if (!auth || !('accessToken' in auth) || !auth.accessToken) {
       throw Object.assign(new Error('Muse account token is missing'), { status: 401 });

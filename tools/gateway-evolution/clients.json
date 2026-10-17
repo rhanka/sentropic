@@ -30,7 +30,7 @@
       "os": ["linux"],
       "digest": "",
       "status": "unresolved",
-      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "vendorRuntime": { "kind": "python", "version": "" },
       "launcherDependencies": [],
       "allowedContexts": ["owner-machine"],
       "recipe": "unqualified"
