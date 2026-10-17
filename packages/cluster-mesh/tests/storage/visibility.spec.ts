@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { stagedDigestOf, stagedSealRoot } from './staged-corpus.js';
 import { createStagedTestKernel as createStagedKernel } from './staged-client.js';
-import { ScopeVisibilityRoot } from '../../src/storage/visibility-root.js';
+import { stagedRootFixture } from './staged-root-fixture.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 import type { WriterFence } from '../../src/storage/contracts.js';
 import { expectCode } from './atomic-corpus.js';
@@ -48,7 +48,8 @@ const appendUnit = (chainId: string, id: string, hash: string): AtomicUnit => ({
 
 describe('K4 visibility root: versions and base conflicts', () => {
   it('K4-RED a fresh root starts at version zero', () => {
-    const root = new ScopeVisibilityRoot();
+    const fixture = stagedRootFixture();
+    const root = fixture.coordinator.capture(fixture.bound.scope);
     assert.equal(root.version, '0');
   });
 
