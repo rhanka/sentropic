@@ -12,6 +12,7 @@ import { decodePgJson, decodePgText } from './codec.js';
 import { pgUnitHandle, readPgUnit, resolvePgUnit, savePgUnit, type PgUnit } from './units.js';
 import { assertPgHiddenVisible, registerPgHiddenCoverage } from './hidden-coverage.js';
 import { runPgHidden } from './hidden-session.js';
+import { checkPgStagedModule } from './staged-module.js';
 export const beginPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, supplied: StagedBeginInput): Promise<AuthenticatedStagedHandle> => {
   if (core.options.moduleId !== 'comments') throw new UnsupportedProfileError('staged-units-v1');
   const input = ownPgValue(supplied);
@@ -27,6 +28,7 @@ export const beginPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, su
     const before = unit.metadata.begin;
     if (before.inputDigest !== input.inputDigest || before.contractDigest !== input.contractDigest || before.sourceBoundary !== input.sourceBoundary) throw new StorageIdempotencyConflictError('divergent staged begin');
     if (unit.metadata.fence.fenceId !== input.fence.fenceId || unit.metadata.fence.epoch !== input.fence.epoch) throw new StorageInvalidCommandError('operation requires explicit owner recovery');
+    await checkPgStagedModule(core, session, grant, unit, 'begin');
     return pgUnitHandle(core, grant, unit);
   }, input.fence);
 };
@@ -41,6 +43,7 @@ export const stagePgFragment = async (core: PgCore, grant: ScopeGrant<unknown>, 
       if (effects.purgeIntents.some((intent) => intent.authorizedBy !== grant.principalId)) throw new StorageDeniedError('unverified purge authorizer');
     }
     const digest = stagedFragmentDigest({ moduleId: core.options.moduleId, scope: grant.scope, operationId: metadata.begin.operationKey, contractDigest: metadata.begin.contractDigest, sourceBoundary: metadata.begin.sourceBoundary, ordinal: input.ordinal, predecessorHash: input.predecessorHash }, effects);
+    await checkPgStagedModule(core, session, grant, unit, 'fragment', undefined, { ordinal: input.ordinal, digest });
     const prior = await session.execute({ text: `SELECT digest FROM ${core.roots.schema}.fragments WHERE unit_id=$1 AND ordinal=$2::bigint`, values: [unit.id, input.ordinal] });
     if (prior.rows[0] && metadata.state !== 'aborted') {
       if (prior.rows[0].digest !== digest || input.fragmentDigest !== digest) throw new StorageIdempotencyConflictError('changed accepted fragment');
