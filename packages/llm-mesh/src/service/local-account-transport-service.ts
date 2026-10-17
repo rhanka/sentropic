@@ -565,6 +565,12 @@ export class LocalAccountTransportService {
       ? readExternalSeatAuthority(held.metadata as Record<string, unknown> | undefined)
       : null;
     if (held && heldAuthority && heldAuthority.seatRef === seatRef) {
+      // The held account's owner wins: another owner scope presenting the
+      // same seatRef never takes the account over, even at a higher
+      // generation. Only the holding owner may advance its lineage.
+      if (heldAuthority.ownerScope !== owner) {
+        throw new Error('Seat bundle refused: held seat is owned by another owner scope');
+      }
       const transition = classifyTransition(
         { epoch: heldAuthority.epoch, generation: heldAuthority.generation, operationId: heldAuthority.operationId },
         incoming,

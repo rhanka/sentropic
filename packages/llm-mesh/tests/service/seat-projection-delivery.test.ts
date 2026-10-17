@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   parseCliSeatProfile,
   parseTokenSeatEnvelope,
@@ -150,6 +150,86 @@ describe('seat-bundle canonical registration', () => {
         ownerScope: 'owner-seat-01',
       }),
     ).rejects.toThrow(/epoch-replacement-required/);
+  });
+
+  it('keeps a served external seat active on a 401 outcome with a classified diagnostic', async () => {
+    const keyring = new InMemoryKeyring();
+    const service = serviceOn(keyring);
+    const imported = await service.importSeatBundle({
+      bundle: parseCliSeatProfile(consumerBundle()),
+      ownerScope: 'owner-seat-01',
+    });
+    const directory = service.createRouteDirectory({ generate: vi.fn(), stream: vi.fn() });
+    const attempt = await directory.prepareAttempt({
+      subject: { principalRef: 'test', ownerScopeRef: 'owner-seat-01' },
+      accountRef: imported.accountId,
+      target: {
+        requestedModel: 'claude-opus-4-6',
+        providerId: 'anthropic',
+        modelId: 'claude-opus-4-6',
+        transportProviderId: 'claude-code',
+        reason: 'exact',
+      },
+      requestId: 'seat-401',
+      attemptIndex: 0,
+    });
+    await attempt.recordOutcome({ reason: 'auth-failed', retryable: false, healthScope: 'account' });
+    const pub = JSON.parse((await keyring.getSecret(`sentropic-llm-mesh:${imported.accountId}:public`))!);
+    expect(pub.status).toBe('active');
+    expect(pub.account.status).toBe('active');
+    expect(pub.account.lastError).toContain('access-unavailable');
+  });
+
+  it('refuses an expired external cloud-code seat with zero provider refresh calls', async () => {
+    const refresh = vi.fn(async () => {
+      throw new Error('provider refresh forbidden for external seats');
+    });
+    const keyring = new InMemoryKeyring();
+    const service = new LocalAccountTransportService(
+      keyring,
+      new Map([['cloud-code', { refresh } as never]]),
+      { async resolveConfig() { return {}; } },
+    );
+    await service.importSeatBundle({
+      bundle: parseCliSeatProfile(consumerBundle({
+        cli: 'agy',
+        seatRef: 'seat-agy-01',
+        refreshFamilyRef: 'family-agy-01',
+        issuingClientRef: 'client-agy-01',
+        endpointFamily: 'endpoint-agy-01',
+        accountBinding: 'binding-agy-01',
+        accessRef: 'access-agy-01',
+        operationId: 'op-agy-01',
+        providerExpiry: '2000-01-01T00:00:00Z',
+      })),
+      ownerScope: 'owner-seat-01',
+    });
+    await expect(
+      service.acquire({
+        targetProviderId: 'gemini',
+        transportProviderId: 'cloud-code',
+        ownerScopeRef: 'owner-seat-01',
+      }),
+    ).rejects.toMatchObject({ code: 'access-unavailable' });
+    expect(refresh).toHaveBeenCalledTimes(0);
+  });
+
+  it('refuses a same seatRef takeover by another owner scope', async () => {
+    const service = serviceOn();
+    await service.importSeatBundle({
+      bundle: parseCliSeatProfile(consumerBundle()),
+      ownerScope: 'owner-seat-01',
+    });
+    await expect(
+      service.importSeatBundle({
+        bundle: parseCliSeatProfile(consumerBundle({
+          generation: 2,
+          operationId: 'op-reg-02',
+          ownerScope: 'owner-other-01',
+        })),
+        ownerScope: 'owner-other-01',
+      }),
+    ).rejects.toThrow(/owner/);
   });
 
   it('refuses wrong-owner, refresh-bearing, and dateless bundles', async () => {
