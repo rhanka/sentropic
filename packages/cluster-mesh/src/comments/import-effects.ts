@@ -38,6 +38,14 @@ export const verifyCommentsTerminal = (state: CommentsImportState, fragment: Com
 };
 export const commentsImportReceiptEffects = async (state: CommentsImportState, context: PgInstalledContext): Promise<AtomicUnit> => {
   const request = state.binding.request; const parts: AtomicUnit[] = [];
+  const batchKey = canonicalJson(['comments-batch-binding', 'v1', request.batchId]);
+  const stored = await context.aggregate(batchKey);
+  const batch = stored ? JSON.parse(stored.value.data) as { manifestHash: string; mappingVersion: string; units: readonly string[] } : null;
+  if (batch && (batch.manifestHash !== request.manifest.hash || batch.mappingVersion !== request.expectedMappingVersion)) throw new CommentsTransportError('conflict', 'Frozen batch manifest or mapping changed');
+  if (state.binding.unitIds.some((id) => batch?.units.includes(id))) throw new CommentsTransportError('conflict', 'Import unit is already committed under another operation');
+  const requestDigest = sha256Hex(canonicalJson(['comments-batch-request', 'v1', request]));
+  const committedCommand = await context.index(commandKey(request.idempotencyKey));
+  if (committedCommand && committedCommand.digest !== requestDigest) throw new CommentsTransportError('conflict', 'Batch command identity changed');
   const genesis = async (record: CanonicalChainRecord) => {
     const selection = selectionForRecord(record); const previous = await context.head(chainIdentity(selection).key);
     if (previous) {
@@ -49,6 +57,7 @@ export const commentsImportReceiptEffects = async (state: CommentsImportState, c
   await genesis(request.manifest);
   const receipts: CanonicalUnitReceipt[] = [];
   for (const unitId of state.binding.unitIds) {
+    if (await context.head(chainIdentity({ kind: 'unit-receipts', unitId }).key)) throw new CommentsTransportError('conflict', 'Import unit receipt is already committed');
     const definition = request.units.find((unit) => unit.unitId === unitId)!;
     for (const dependency of definition.dependsOnUnitIds) if (!state.binding.unitIds.includes(dependency)) {
       const prior = await context.head(chainIdentity({ kind: 'unit-receipts', unitId: dependency }).key);
@@ -67,6 +76,9 @@ export const commentsImportReceiptEffects = async (state: CommentsImportState, c
   parts.push(commentsRecordEffects(selection, snapshot, previous?.hash ?? null));
   state.canonical = { snapshot, unitOutcomes: receipts.map((receipt) => ({ outcome: 'committed', unitId: receipt.unitId, receipt })) };
   const effects = mergeCommentsEffects(...parts);
-  return { ...effects, indexWrites: [{ key: commandKey(request.idempotencyKey), digest: state.bindingDigest, resultIds: [...state.binding.unitIds], resultHash: snapshot.hash }],
+  const committedUnits = [...batch?.units ?? [], ...state.binding.unitIds];
+  return { ...effects, guards: stored ? [{ kind: 'aggregate-version', key: batchKey, version: stored.version }] : [],
+    updates: [{ key: batchKey, version: (stored?.version ?? 0) + 1, value: { format: 'utf8', data: canonicalJson({ manifestHash: request.manifest.hash, mappingVersion: request.expectedMappingVersion, units: committedUnits }) } }],
+    indexWrites: [{ key: commandKey(request.idempotencyKey), digest: requestDigest, resultIds: committedUnits, resultHash: snapshot.hash }],
     moduleResult: { format: 'utf8', data: canonicalJson(state.canonical) } };
 };
