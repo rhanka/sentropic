@@ -82,6 +82,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `L2-control-preservation`: real host tests now prove missing usage remains null and out-of-grant Chat effort returns 400/unsupported_parameter/reasoning.effort with zero provider calls. Chat normalization preserves reasoning controls, rejects invalid/conflicting controls and requires proven transport support. Full gateway gate passes 1327/1327.
 - `L1-storage-final-gate`: reproduced missing committed ciphertext resetting to revision zero; the protected initialization marker now makes that state corrupt across instances. Invalid namespace shapes refuse. Migration key + ack commit atomically; store outages propagate instead of quarantining valid input. Interrupted physical attempts become incomplete, and unreported usage remains null.
 - `L2-gateway-full-gate`: `make typecheck-llm-gateway lint-llm-gateway test-llm-gateway ENV=test-gw-durable-vibe-muse` passes (75 files, 1327 tests). Chat reasoning_effort is preserved and feature-gated, invalid/conflicting controls refuse, and out-of-grant effort returns a named 400 before dispatch. No timeout changed.
 - `L0-archive-semantics`: pure tooling suite now passes 36/36, including PAX extraction-size/sparse overrides and duplicate-field refusals. The extractor and inspector cannot disagree through those metadata fields.
