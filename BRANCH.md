@@ -113,7 +113,9 @@
 - [ ] **Lot 0 — Baseline and test contract freeze**
   - [ ] Re-pin G/H6/H327, main `fb5e92a6a`, published #662 tuple, immo #679 head/manifests, h2a base `abb64ce4`; record H327 case per 6.3; record H0 pins gateway 0.20.0 mesh 0.26.0 cluster-mesh 0.16.0
   - [ ] Freeze LaunchRoutingContract, four 6.1 export paths, host start/readiness/drain/stop, control/session/config/qualification descriptors, receipt import/revoke, recipes with h-cond; register companion `feat/gw-thin-consumer-pr1`
-  - [ ] Create `tools/gateway-evolution/Makefile` + `run.mjs` + `clients.json` (BR120-EX7); seven targets: gateway-candidate-bundle, gateway-consumer-gate, gateway-client-fixtures, gateway-client-e2e, gateway-release-check, gateway-host-packed-test, gateway-harness-test
+  - [x] Create `tools/gateway-evolution/clients.json` L0 vendor runtime inventory (BR120-EX7 scope)
+  - [ ] Create `tools/gateway-evolution/run.mjs` shared verifier (BR120-EX7)
+  - [ ] Create `tools/gateway-evolution/Makefile` with seven targets (BR120-EX7): gateway-candidate-bundle, gateway-consumer-gate, gateway-client-fixtures, gateway-client-e2e, gateway-release-check, gateway-host-packed-test, gateway-harness-test
   - [ ] Create `tools/gateway-evolution/tests/run.test.mjs` + `make-contract.test.sh` + `runner-cleanup.test.sh`; sub-Makefile requires command-line ENV, includes root Makefile, rejects .env project override and port mismatch
   - [ ] Create gateway `tests/evolution-contract.test.ts` + `tests/client-runtime-admission.test.ts`; freeze shared GWRC-CI-V1 schemaVersion 1 with gateway/registry arms, none, contractSha256, profiles, programCoverage, releaseLockSha256, indexed candidate layout
   - [ ] Implement GW6-M1/RC6-M1 context lock validation + `release bump accepted` + `@sentropic drift refused` (typed `external-row-unpinned`, zero installs) in helper/verifier/tests
