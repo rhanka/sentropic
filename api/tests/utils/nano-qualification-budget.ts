@@ -2,7 +2,7 @@ import { LUNA_MAX_INPUT_TOKENS, LUNA_MAX_OUTPUT_TOKENS } from '../../src/config/
 
 export const NANO_CANDIDATES = ['gpt-6-luna', 'gpt-5.6-luna'] as const;
 export type NanoCandidate = typeof NANO_CANDIDATES[number];
-export type NanoUsage = { input: number; output: number; reasoning: number; cached: number };
+export type NanoUsage = { input: number; output: number; reasoning: number; cached: number; cacheWrite?: number };
 export const qualificationSelected = (scope?: string): boolean =>
   scope?.trim() === 'tests/ai/nano-replacement-qualification.test.ts';
 
@@ -18,7 +18,9 @@ const rates = (model: NanoCandidate, input: number) => ({
 });
 export const priceNanoUsage = (model: NanoCandidate, usage: NanoUsage): number => {
   const price = rates(model, usage.input);
-  return ((usage.input - usage.cached) * price.input + usage.cached * price.cached + usage.output * price.output) / 1_000_000;
+  const cacheWrite = usage.cacheWrite ?? 0;
+  return ((usage.input - usage.cached - cacheWrite) * price.input + usage.cached * price.cached
+    + cacheWrite * price.input * 1.25 + usage.output * price.output) / 1_000_000;
 };
 
 export type NanoReservation = Readonly<{
@@ -53,7 +55,8 @@ export const createNanoBudget = (append: (event: Record<string, unknown>) => voi
   const settle = (ticket: NanoReservation, usage: NanoUsage | null) => {
     if (closed || ticket !== active) throw new Error('Qualification reservation is closed or unknown');
     if (!usage || !(['input', 'output', 'reasoning', 'cached'] as const).every((key) => Number.isInteger(usage[key]) && usage[key] >= 0)
-      || usage.input > LUNA_MAX_INPUT_TOKENS || usage.output > ticket.maxOutputTokens || usage.reasoning > usage.output || usage.cached > usage.input) {
+      || usage.input > LUNA_MAX_INPUT_TOKENS || usage.output > ticket.maxOutputTokens || usage.reasoning > usage.output || usage.cached > usage.input
+      || !Number.isInteger(usage.cacheWrite ?? 0) || (usage.cacheWrite ?? 0) < 0 || usage.cached + (usage.cacheWrite ?? 0) > usage.input) {
       closed = true;
       throw new Error('Qualification usage is missing or violates the reserved limits');
     }

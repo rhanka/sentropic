@@ -59,4 +59,18 @@ describe('paired nano qualification admission', () => {
     expect(priceNanoUsage('gpt-6-luna', { input: 1000, output: 100, reasoning: 20, cached: 0 })).toBeCloseTo(0.00015);
     expect(priceNanoUsage('gpt-5.6-luna', { input: 300_000, output: 100, reasoning: 0, cached: 0 })).toBeCloseTo(0.12018);
   });
+
+  it('should price reported cache writes separately from ordinary input and cached reads', async () => {
+    const { priceNanoUsage } = await loadBudget();
+    expect(priceNanoUsage('gpt-6-luna', { input: 1000, output: 100, reasoning: 0, cached: 100, cacheWrite: 800 })).toBeCloseTo(0.000161, 9);
+    expect(priceNanoUsage('gpt-5.6-luna', { input: 300_000, output: 100, reasoning: 0, cached: 0, cacheWrite: 299_990 })).toBeCloseTo(0.150179, 9);
+  });
+
+  it('should stop and retain the reservation on inconsistent cache-write counters', async () => {
+    const { createNanoBudget } = await loadBudget();
+    const budget = createNanoBudget(() => undefined);
+    const ticket = budget.reserve('gpt-6-luna', 32);
+    expect(() => budget.settle(ticket, { input: 100, output: 10, reasoning: 0, cached: 30, cacheWrite: 80 })).toThrow(/usage/i);
+    expect(budget.snapshot()).toMatchObject({ closed: true, chargedMicroUsd: ticket.reservedMicroUsd });
+  });
 });
