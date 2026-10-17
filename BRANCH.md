@@ -134,7 +134,8 @@
     - [x] Reference captures owned canonical rows under opaque scope-held snapshot capabilities and pages them with current authorization/coverage; J5 substitutes live rows while retaining the captured watermark and dies at the content-boundary assertion. Profile mutations: 40/40.
     - [x] External reference streams are keyed by full scope/incarnation and copy exact kernel events; the cross-scope exposure mutant targets C11.
   - [ ] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
-    - [ ] Lifecycle RED probes require explicit payload dispositions, independent outcome/notification membership, and response-loss recovery after committed disposal; the aggregate fixture now uses the K1 encoded-value contract.
+    - [x] Lifecycle RED probes require explicit payload dispositions, independent outcome/notification membership, and response-loss recovery after committed disposal; the aggregate fixture now uses the K1 encoded-value contract.
+    - [x] Reference records actual retained/erased dispositions and canonical completion/notification membership before simulating a lost response; pre-outcome failure leaves the local disposal uncommitted. Profile mutations pass 40/40; new lifecycle mutants follow.
   - [ ] MINEUR-9/10: fix contradictory `read-corpus.ts` header (done with MINEUR-1); corrections recorded here with post-rebase SHAs.
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` + `make lint-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
