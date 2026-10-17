@@ -37,6 +37,19 @@
         "cluster-mesh-pg/002-map@1"
       ],
       "checksum": "1d1c6bd83bb080ecde057181742554fddd2812f08d03ea16407bf3a77ba429d5"
+    },
+    {
+      "id": "cluster-mesh-pg/004-queries@1",
+      "file": "004-queries.sql",
+      "order": 4,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 3,
+      "toVersion": 4,
+      "requires": [
+        "cluster-mesh-pg/003-staged@1"
+      ],
+      "checksum": "17a5c4a78e20efa1c9a21f0112b5cbf70b9f9acaf8d577f2e16efc6759e4b295"
     }
   ]
 }
