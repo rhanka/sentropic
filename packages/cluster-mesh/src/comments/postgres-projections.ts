@@ -7,7 +7,7 @@ export const commentsHeaderLinks = (record: CanonicalChainRecord): Record<string
   if (record.kind === 'thread-structure-revision') return { resources: [commentsResourceKey(record.primary.resource)], annotationId: record.annotationId };
   if (record.kind === 'comment-revision') return { threadId: record.threadId, parentCommentId: record.parentCommentId, structureRevision: record.structureRevision, annotationPin: record.annotationPin };
   if (record.kind === 'review-event') return { revisionHash: record.revisionHash, referencesEventHash: record.referencesEventHash };
-  if (record.kind === 'lifecycle-event') return { action: record.action, archiveKind: record.archiveKind };
+  if (record.kind === 'lifecycle-event') return { action: record.action, archiveKind: record.archiveKind, sequence: record.link.sequence };
   return {};
 };
 // Installed trusted code writes only projection rows on the kernel session.
