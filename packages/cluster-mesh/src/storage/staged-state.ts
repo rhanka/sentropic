@@ -97,7 +97,7 @@ export interface StagedControl {
   readonly consumers: Map<string, RootConsumer>; readonly snapshots: Map<string, RootSnapshot>;
   readonly fences: Map<string, { readonly value: WriterFence; readonly ownerId: string; readonly expiresAt: string | null }>;
   readonly journalLanes: Map<string, string>;
-  readonly failures: Set<'external' | 'purge-before' | 'purge-response' | 'stage-response'>;
+  readonly failures: Set<'external' | 'purge-before' | 'purge-response' | 'stage-response' | 'commit-response'>;
 }
 export const createStagedControl = (): StagedControl => ({
   units: new Map(), byId: new Map(), consumers: new Map(), snapshots: new Map(), fences: new Map(), journalLanes: new Map(), failures: new Set(),
