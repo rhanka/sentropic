@@ -78,7 +78,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 - `M4`: discriminating refusal tests with spies (`refreshAntigravityAccessToken`, `readMuseCliEntry`, `importAntigravityEnrollment`, `fetch`); expired agy and Muse cases; controlled 401 pair (renewable refreshes, external records no-call); explicit-refresh and Muse paths; the 11 listed package test files updated.
 - `M5`: unknown expiry is not infinite validity — mesh `isExternalSeatUnavailable` (missing/empty/unparseable expiry → unavailable) and API-side unavailable outcome (last_error only, status stays `active`, secret retained).
 - Minors: expired seat = `access-unavailable`; inspect helper has an explicit sidecar file backend or returns `unverified` (`seat-tools/README.md` documents inspect-only use); receiver covers all five CLIs; no invented `issuedAt` (custodian-observed `issuedAt` required); commits kept small; automated single-copy lock assertion (`tests/node/mesh-release-invariants.test.ts`).
-- Status: mesh suite 49 files / 881 tests green; mesh typecheck + lint green; API gates pending rerun; push/PR held by conductor (immo #679 runner starvation) — commits stay local until told.
+- Status: mesh suite 49 files / 881 tests green; mesh typecheck + lint green; API typecheck clean, lint 0 errors, unit 127 files / 1288 green, endpoints 126 files / 1301 green; push/PR held by conductor (immo #679 runner starvation) — commits stay local until told.
 
 ## Scope notes
 - L1's required mesh patch bump (0.26.1 to 0.26.2, inside gateway `^0.26.0`)
