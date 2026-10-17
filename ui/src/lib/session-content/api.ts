@@ -12,6 +12,7 @@ export interface RetainedHandle {
   status: string;
 }
 export interface SessionsMetadata extends ContentScope {
+  projectRevision?: number;
   sourceVerified: boolean;
   credentials: EnrolledCredential[];
   namedHistories: NamedHistory[];

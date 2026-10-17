@@ -32,6 +32,7 @@
     flow?.cancel(); previousMetadata = metadata;
     if (metadata) {
       offer = createOffer(metadata);
+      offer.expectedRevision = metadata.projectRevision ?? 0;
       modes = { 'terminal.cache': 'none', 'native.mirror': 'none' };
       flow = new ConsentFlow(offer, {
         prepare: contentApi.prepareOffer, accept: contentApi.acceptOffer,
