@@ -54,7 +54,9 @@ export class PgTransactions {
               if (durability !== 'on' && durability !== 'remote_apply')
                 await session.execute({ text: "SET LOCAL synchronous_commit = 'on'", values: [] });
               await session.execute({
-                text: "SELECT set_config('TimeZone', $1, true), set_config('DateStyle', $2, true), set_config('lock_timeout', $3, true), set_config('statement_timeout', $4, true), set_config('idle_in_transaction_session_timeout', $5, true)",
+                text: `SELECT set_config('TimeZone', $1, true), set_config('DateStyle', $2, true),
+                  set_config('lock_timeout', $3, true), set_config('statement_timeout', $4, true),
+                  set_config('idle_in_transaction_session_timeout', $5, true)`,
                 values: [
                   'UTC',
                   'ISO, YMD',
