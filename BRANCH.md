@@ -82,6 +82,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `L2-regression-migration-4`: planner suite now passes 52/52. Exact same-account model switches serve the new model; consented rotation records a rebind/cache-continuity event; deleted pins refuse in ordinary and round-robin strategies instead of selecting a replacement.
 - `L2-regression-migration-3`: refused implicit policy upgrades preserve the prior pin and make no new provider preparation; commit/failure and commit/cancellation on the original exact model preserve it as well. Three more legacy expectations migrated (47/52 planner cases now pass; five remaining expectations under migration).
 - `L2-regression-migration-2`: explicit mapping/health tests pass again; availability diagnostics now resolve the same selected policy as planning. Four former stale-model/explicit-account/withdrawn-model success cases now assert no-route and zero additional preparation (44/52 planner cases pass; remaining eight legacy expectations are being migrated).
 - `L2-product-exact-source`: GWV-EX5 shared standalone/product factory now defaults exact, validates frozen mappings/owner/account authorization/quoted target, binds execution to the selected model and preserves selected effort. Added factory, real namespace and dispatch refusal cases. API execution is blocked by FL-21 (service cannot start); these tests are not reported green.
