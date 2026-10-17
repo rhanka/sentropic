@@ -22,7 +22,7 @@ The [convergence receipt](convergence.md) resolves the complete predecessor/resu
 | [convergence](convergence.md) | `85ca30dccc40d4ebbd694caad80fcdc90f0264a84944fdd3d42983caf1a171bd` |
 | [storage-alignment](storage-alignment.md) | `f03090f73c3c9ca842d780eaad1b0031c744a740d37b0de4ad6e7605a3527c24` |
 | [storage-module-v1](../contract/storage-module-v1.json) | `02114383aaac4dfe701da2b637776dfc1bd91669ed6d47eab3d6194e13e21a46` |
-| [storage-compatibility](../contract/storage-compatibility.md) | `e846e92946044946d14236491daab5954c0b1085da7159e547e4fd284c57882f` |
+| [storage-compatibility](../contract/storage-compatibility.md) | `229d74426beac9b66910e6d2b08f092416efa652ea491bf22dca35bee04f3e97` |
 | [Immo host guide](../immo-host-guide.md) | `6df7eeda92260754a8c3d897d269994486c21960ac9bba90814a28c1b01c14e3` |
 
 The [documentary BRANCH.md](../../../BRANCH.md) link refers to its state at the LAST promotion-series anchor commit, whose actual SHA will be recorded in the subsequent model BRANCH.md. The model branch replaces that checklist at Lot 0 and the merge workflow later deletes it; the durable summary below preserves its exceptions and series. Its checkboxes evolve, so this index does not pin their changing digest. This index's own digest is supplied in the files-only handoff, not embedded recursively.
