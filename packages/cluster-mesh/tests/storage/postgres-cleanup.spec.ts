@@ -18,11 +18,12 @@ describe.skipIf(!pgEnabled)('bounded terminal Postgres preparation cleanup', () 
       await bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: stagedDigestOf(unit, '0', null, effects), effects, fence });
       const limits = { maxRecords: 1, maxAppends: 1, maxEncodedBytes: 4096 };
       await bound.sealStep({ unit, root: stagedSealRoot(unit, [effects]), fence, limits });
-      await expect(bound.cleanupStaged('aborted', limits)).rejects.toMatchObject({ code: 'invalid-command' });
+      const cleanup = { operationKey: 'aborted', limits, fence };
+      await expect(bound.cleanupStaged(cleanup)).rejects.toMatchObject({ code: 'invalid-command' });
       await bound.abortStaged({ unit, fence, reason: 'cancelled' });
       let complete = false; let steps = 0;
       while (!complete && steps++ < 16) {
-        const next = await (await (await fixture.open()).bind(grant)).cleanupStaged('aborted', limits);
+        const next = await (await (await fixture.open()).bind(grant)).cleanupStaged(cleanup);
         expect(next.work.items).toBeLessThanOrEqual(1); expect(next.work.bytes).toBeLessThanOrEqual(4096); complete = next.complete;
       }
       expect(complete, 'cleanup must finish without replaying the hidden unit').toBe(true);
