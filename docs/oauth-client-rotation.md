@@ -46,6 +46,10 @@ locations convention. The IdP stores only the sha256 (`printf '%s'`, never `echo
    `oauth-client-registration` Secret from the file, applies the versioned Job
    (`deploy/k8s/base/36-oauth-register-client-job.yaml`), waits for completion,
    prints the Job logs, then deletes the Job and the temporary Secret.
+   Omitting `OAUTH_CLIENT_REQUIRED_ACR` / `OAUTH_CLIENT_ALLOWED_USER_IDS`
+   preserves the stored policy (rotation never wipes it); providing them
+   replaces it. The Job output prints the effective `required ACR` and
+   `allowed user IDs` — verify them before cutting over.
 3. IMMEDIATELY update the RP `.env` with the new secret and restart the RP.
    Between step 2 and this restart, the RP cannot authenticate (no grace period).
 4. Verify: fresh RP login issues tokens; old secret returns `invalid_client`.
