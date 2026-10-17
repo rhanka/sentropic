@@ -170,7 +170,7 @@
 - [ ] **Lot 1 — Gateway-owned durable sessions and request state**
   - [x] Create gateway `src/session-service.ts` (+importSession), `src/ports/gateway-state.ts`, `src/request-receipts.ts` (unit green 7+2)
   - [x] Create `src/node/gateway-state-store.ts` + `control-server.ts` + `control-client.ts` + `session-migration.ts` (unit green 4+4+3)
-  - [ ] Create `src/node/gateway-host.ts` + `src/node/index.ts` + published export map (`./node`, `./node/control-client`)
+  - [x] Create `src/node/gateway-host.ts` + `src/node/index.ts` + published export map (`./node`, `./node/control-client`); one package-owned HTTP/SSE/session/control lifecycle, protected key recovery, readiness/drain/stop
   - [ ] Wire exports/auth in `src/index.ts`, `src/ports/caller-auth.ts`, `src/router/index.ts`, `package.json` export/files map, README/CHANGELOG; protected mesh storage adapter reuse; optional `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts` change with its test
   - [ ] Wire same published host into private app under GWV-EX1 only: `apps/llm-gateway/src/app.ts`, `apps/llm-gateway/src/config.ts`, `apps/llm-gateway/src/readiness.ts` + manifest/tests; no Compose edit; private app never published
   - [ ] Lot gate:
@@ -276,6 +276,7 @@
   - [ ] Record registry writer window R2/R7a/R3 after PR1 publication
 
 ## Environment
+- Candidate feature versions gateway 0.21.0 / mesh 0.27.0: fresh npm 0.20.0 / 0.26.1, main fb5e92a6a unchanged after fetch, immo in-flight 0.20.1 / 0.26.1 and C mesh 0.26.2. Final L8 rechecks versions/peers after the required immo merge/rebase; no publication here.
 - Branch `feat/gw-durable-vibe-muse`; worktree `/home/antoinefa/src/sentropic/tmp/worktrees/gw-durable-vibe-muse`; base `origin/main fb5e92a6a`
 - Candidate index 120 slot 0; API_PORT 9600 UI_PORT 5800 MAILDEV_UI_PORT 1700 GATEWAY_PORT 19600
 - Test ENV `test-gw-durable-vibe-muse`; native E2E ENV `e2e-gw-durable-vibe-muse`; owner UAT host `dev-gw-durable-vibe-muse` after qualification
