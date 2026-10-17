@@ -68,6 +68,11 @@ cluster-mesh-pg-manifest:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
 		node packages/cluster-mesh/tests/storage/generate-pg-manifest.mjs
 
+.PHONY: cluster-mesh-comments-package-info
+cluster-mesh-comments-package-info:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(LLM_MESH_NODE_IMAGE) sh -lc \
+		'npm_config_cache=/tmp/npm-cache npm view @sentropic/comments version exports dependencies dist.integrity --json'
+
 .PHONY: cluster-mesh-pg-crash cluster-mesh-pg-crash-test
 cluster-mesh-pg-crash:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) exit 1;; esac
