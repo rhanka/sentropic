@@ -32,6 +32,7 @@ on:
           - llm-gateway
           - cluster-mesh
           - cited-source-viewer
+          - artifacts
 
 env:
   REGISTRY: ${{ secrets.REGISTRY }}
@@ -1835,6 +1836,20 @@ jobs:
       - name: Publish MCP Platform
         run: make publish-mcp-platform
 
+  publish-artifacts:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-artifacts]
+    if: needs.changes.outputs.artifacts_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Artifacts
+        run: make publish-artifacts
+
   publish-auth-hono:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-hono]
@@ -2096,7 +2111,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
-            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer) ;;
+            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac
       - uses: actions/checkout@v6
@@ -2174,6 +2189,9 @@ jobs:
       - name: Bootstrap publish cluster-mesh
         if: inputs.bootstrap_publish_target == 'cluster-mesh'
         run: make publish-cluster-mesh-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish artifacts
+        if: inputs.bootstrap_publish_target == 'artifacts'
+        run: make publish-artifacts-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Qualify bootstrap-published cluster-mesh
         if: inputs.bootstrap_publish_target == 'cluster-mesh'
         run: |
