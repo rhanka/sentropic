@@ -1964,12 +1964,14 @@ describe('session consent durable lifecycle', () => {
       .select()
       .from(sessionContentReservations)
       .where(eq(sessionContentReservations.reservationId, reserved.reservationId));
-    expect(reservations[0]!.state).toBe('stale');
+    expect(reservations[0]!.state).toBe('cancelled');
     const attempts = await db
       .select()
       .from(sessionContentAttempts)
       .where(eq(sessionContentAttempts.sessionId, 'sess-content-s1'));
-    expect(attempts[0]!.outcome).toBe('outcome_unknown');
+    expect(attempts[0]!.outcome).toBe('cancelled');
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.reservedBytes).toBe(0);
     expect(await fixture.listPhysical('')).toHaveLength(0);
     const jobs = await db
       .select()
@@ -2057,6 +2059,7 @@ describe('session consent durable lifecycle', () => {
     const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
     expect(usage.pendingDeletionBytes).toBe(0);
     expect(usage.committedBytes).toBe(seed.length);
+    expect(usage.reservedBytes).toBe(body.length);
     void bindingId;
   });
 
@@ -2163,5 +2166,66 @@ describe('session consent durable lifecycle', () => {
     await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-sp', {
       projectRevision: 1, bindingVersion: sp.bindingVersion, nativeBoundarySeq: 0,
     }, ctx), 'epoch_mismatch');
+  });
+
+  it('should not exhaust a small session quota over amend-and-refresh cycles (P1)', async () => {
+    service = makeService({ maxBytesPerSession: 32, maxBytesPerTenant: 1000, maxObjectsPerSession: 64 });
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const digestOf = async () => (await db
+      .select()
+      .from(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, 'sess-content-project-1')))[0]!.retentionDigest as string;
+    for (let i = 1; i <= 8; i += 1) {
+      const body = new TextEncoder().encode(`p1c${i}`);
+      const r1 = await service.reserveBeforeUpload(
+        'sess-content-s1', 'terminal.cache',
+        { raw: body.length, encoded: body.length }, `k-p1-${i}-a`, ctx,
+      );
+      await service.amendProject(
+        'sess-content-project-1',
+        basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: i - 1 }),
+        ctx,
+      );
+      await expectContentError(() => service.publishAfterUpload(
+        r1.reservationId, body, ctx,
+      ), 'project_revision_changed');
+      await service.acknowledgeGrantRefresh('sess-content-s1', {
+        projectRevision: i,
+        bindingVersion: rows[0]!.version,
+        nativeBoundarySeq: i,
+        sourceGeneration: 'gen-1',
+        d1Version: 1,
+        policyDigest: await digestOf(),
+      }, ctx);
+      const r2 = await service.reserveBeforeUpload(
+        'sess-content-s1', 'terminal.cache',
+        { raw: body.length, encoded: body.length }, `k-p1-${i}-b`, ctx,
+      );
+      await service.publishAfterUpload(r2.reservationId, body, ctx);
+    }
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.reservedBytes).toBe(0);
+    expect(usage.pendingDeletionBytes).toBe(0);
+    expect(usage.committedBytes).toBe(32);
+    void bindingId;
   });
 });
