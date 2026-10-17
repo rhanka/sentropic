@@ -16,16 +16,22 @@ describe.skipIf(!pgEnabled)('real publication races and uncertain responses', ()
       expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
       let armed = false;
       const driver: InjectedPgDriver = { transaction: async (options, operation) => {
-        const value = await fixture.options.driver.transaction(options, operation);
-        if (armed) { armed = false; throw { phase: 'commit', outcome: 'unknown' }; } return value;
+        let published = false;
+        const value = await fixture.options.driver.transaction(options, (session) => operation({ execute: (statement) => {
+          if (statement.text.startsWith('UPDATE') && statement.text.includes('.scopes ')) published = true;
+          return session.execute(statement);
+        } }));
+        if (armed && published) { armed = false; throw { phase: 'commit', outcome: 'unknown' }; } return value;
       } };
       const uncertain = await (await createPostgresKernel({ ...fixture.options, driver })).bind(grant);
       const input = { ...emptyEffects(), records: [{ key: 'durable', bytes: { format: 'utf8' as const, data: 'committed' }, contentHash: 'h' }], moduleResult: { format: 'utf8' as const, data: '{"receipt":"complete"}' } };
-      // Omit command id on this probe so the injected failure follows the
-      // publishing transaction rather than an initial receipt lookup.
       armed = true;
-      await expect(uncertain.commitAtomic(input)).rejects.toMatchObject({ condition: 'outcome_unknown' });
+      await expect(uncertain.commitAtomic(input, { idempotencyKey: 'uncertain-operation' })).rejects.toMatchObject({ condition: 'outcome_unknown' });
       expect((await a.readRecord('durable'))?.bytes.data).toBe('committed');
+      const recovered = await a.commitAtomic(input, { idempotencyKey: 'uncertain-operation' });
+      expect(recovered.moduleResult).toEqual(input.moduleResult);
+      expect(await b.commitAtomic(input, { idempotencyKey: 'uncertain-operation' })).toEqual(recovered);
+      expect((await a.journalRead(0, 10)).events.filter((event) => event.commitId === recovered.commitId)).toHaveLength(1);
       const keyed = await a.commitAtomic({ ...emptyEffects(), indexWrites: [{ key: 'recovered', digest: 'd', resultIds: ['durable'], resultHash: 'h' }], moduleResult: input.moduleResult }, { idempotencyKey: 'recover' });
       expect(await b.commitAtomic({ ...emptyEffects(), indexWrites: [{ key: 'recovered', digest: 'd', resultIds: ['durable'], resultHash: 'h' }], moduleResult: input.moduleResult }, { idempotencyKey: 'recover' })).toEqual(keyed);
     } finally { await fixture.close(); }
