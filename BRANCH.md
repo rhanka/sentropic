@@ -496,6 +496,7 @@
   - [ ] Update `docs/comments-annotations/contract/storage-compatibility.md` and evidence index with M2 delivery and Immo import/receipt/readback API.
 
 - [ ] **Lot N — Final validation**
+  - [ ] BRCM2-EX6 updates the packed integration inventory for its ninth local comments leaf and extends root-declaration isolation to the optional comments peer; the shipped README now documents candidate setup and delivery boundaries.
   - [ ] Fresh root build prerequisites relinked the optional peer to its unbuilt workspace package. CI now builds the unchanged peer first; moved the comments-specific single-session probe into the comments gate so neutral PG qualification requires no domain peer.
   - [x] BRCM2-EX5 CI now repeats the actual packed comments single-session/PG/full-runtime/long-history qualification and uploads its audit, lock and archive identity; isolated database cleanup remains unconditional.
   - [ ] The installed unchanged M1 corpus, all-kind vectors, single-session rollback and bare isolation passed before a fixture used a nonexistent export-boundary field. Corrected it to the public `boundaryDigest`; installed transport/HTTP qualification continues.
