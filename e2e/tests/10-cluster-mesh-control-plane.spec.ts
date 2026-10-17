@@ -1,4 +1,5 @@
 import { expect, request, test } from '@playwright/test';
+import { waitForVerificationCode } from '../helpers/maildev';
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
 const USER_A_STATE = './.auth/user-a.json';
@@ -73,6 +74,47 @@ test.describe('D2 anonymous Sessions guard', () => {
     await page.goto('/sessions');
     await expect(page).toHaveURL(/\/auth\/login\?returnUrl=%2Fsessions/);
     await expect(page.getByRole('heading', { name: 'Connexion', exact: true })).toBeVisible();
+  });
+
+  test('returns to Sessions after actual website passkey login without granting remote control', async ({ page }) => {
+    // The virtual key exercises website login only; it never supplies D2 source/browser proof.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('WebAuthn.enable');
+    await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal',
+      hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
+    await page.goto('/auth/register');
+    await page.getByLabel('Email', { exact: true }).fill('e2e-user-a@example.com');
+    await page.getByRole('button', { name: 'Obtenir un code', exact: true }).click();
+    const code = await waitForVerificationCode('e2e-user-a@example.com', 60000);
+    for (let index = 0; index < 6; index++) await page.locator(`#auth-ui-code-${index}`).fill(code[index]);
+    const enrolled = page.waitForResponse((response) => response.url().endsWith('/auth/register/verify') && response.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Enregistrer mon appareil WebAuthn', exact: true }).click();
+    expect((await enrolled).ok()).toBeTruthy();
+    await expect(page).not.toHaveURL(/\/auth\/register/);
+    await page.context().clearCookies();
+    await page.evaluate(() => sessionStorage.clear());
+    await page.goto('/sessions');
+    await expect(page).toHaveURL(/\/auth\/login\?returnUrl=%2Fsessions/);
+    await page.getByRole('button', { name: 'Se connecter avec WebAuthn', exact: true }).click();
+    await expect(page).toHaveURL(/\/sessions$/);
+    await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
+    await expect(page.getByText("Aucune clé d'accès enregistrée utilisable dans ce navigateur.", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Confirmer et envoyer une seule fois' })).toBeDisabled();
+    await cdp.detach();
+  });
+});
+
+test.describe('D2 workspace lock UI fixture', () => {
+  test.use({ storageState: USER_A_STATE });
+  test('keeps the real zero-workspace layout lock and exposes cleanup on settings', async ({ page }) => {
+    // Bootstrap boundary only: the real authenticated layout and Settings page remain mounted.
+    await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: { items: [] } }));
+    await page.goto('/sessions');
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.getByRole('heading', { name: 'Paramètres', exact: true }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Copies conservées : demander la purge', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Copies conservées : demander la purge', exact: true })).toBeVisible();
+    await expect(page.getByText('Aucune copie conservée à purger.', { exact: true })).toBeVisible();
   });
 });
 
