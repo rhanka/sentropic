@@ -46,6 +46,19 @@ export const findIndexed = <V>(tree: Tree<V>, key: string): IndexedNode<V> | nul
   return null;
 };
 
+export const indexedAt = <V>(tree: Tree<V>, ordinal: number): IndexedNode<V> | null => {
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0) return null;
+  let current = tree;
+  let index = ordinal;
+  while (current) {
+    const left = current.left?.size ?? 0;
+    if (index === left) return current;
+    if (index < left) current = current.left;
+    else { index -= left + 1; current = current.right; }
+  }
+  return null;
+};
+
 export const putIndexed = <V>(tree: Tree<V>, key: string, value: V): IndexedNode<V> => {
   if (!tree) return node({ key, value }, null, null);
   if (key === tree.key) return node({ key, value }, tree.left, tree.right);
