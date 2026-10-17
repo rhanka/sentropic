@@ -19,7 +19,6 @@ import {
   sessionContentHistoryAuthorizations,
   sessionContentNamespaces,
   sessionContentObjects,
-  sessionContentOfflineReceipts,
   sessionContentProjects,
   sessionContentPurgeJobs,
   sessionContentReservations,
@@ -345,9 +344,7 @@ export interface PreparedSessionProject {
   readonly expectedRevision: number | null;
 }
 
-export interface AcceptSessionProjectInput extends PreparedSessionProject {
-  readonly offlineReadAccepted: boolean;
-}
+export type AcceptSessionProjectInput = PreparedSessionProject;
 
 export interface DeriveSessionGrantInput {
   readonly projectId: string;
@@ -628,14 +625,11 @@ export class SessionContentService {
     return { policy, digest, expectedRevision };
   }
 
-  /** Atomically persist the accepted project, its offline-risk receipt and
+  /** Atomically persist the accepted project and
    * its namespace. Public-row locks precede first allocation so delete
    * cannot race new D2 state. */
   async acceptProject(input: AcceptSessionProjectInput, ctx: SessionContentContext) {
     requireContext(ctx);
-    if (input.offlineReadAccepted !== true) {
-      throw new SessionContentError('invalid_request', 'offlineReadAccepted must be accepted');
-    }
     if (computePolicyDigest(input.policy) !== input.digest) {
       throw new SessionContentError('policy_digest_mismatch', 'prepared policy was altered');
     }
@@ -710,7 +704,8 @@ export class SessionContentService {
         retentionDigest: input.digest,
         acceptedPolicy: input.policy,
         authorityEpoch: epoch.epoch,
-        offlineReadAccepted: true,
+        // Historical column retained; N5 requires no additional risk receipt.
+        offlineReadAccepted: false,
         exclusionRevision: acceptLocked ? acceptLocked.exclusionRevision : 0,
         excludedSessionIds: acceptLocked
           ? [...(acceptLocked.excludedSessionIds as string[])]
@@ -746,12 +741,6 @@ export class SessionContentService {
           throw new SessionContentError('revision_conflict', 'project already exists');
         }
       }
-      await tx.insert(sessionContentOfflineReceipts).values({
-        receiptId: this.newId(),
-        projectId: row.projectId,
-        ownerId: ctx.ownerId,
-        policyDigest: input.digest,
-      });
       const namespaceId = namespaceIdFor(ctx.tenantId, ctx.ownerId, epoch.epoch);
       await tx
         .insert(sessionContentNamespaces)
