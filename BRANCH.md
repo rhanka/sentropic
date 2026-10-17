@@ -398,6 +398,7 @@
   - [ ] RED `comments-import.spec.ts` requires durable identical-fragment acknowledgement, hidden canonical/query state through bounded preparation, complete original receipts after reopen, one publication and same-unit imported tombstone/barrier; truncated terminal payloads must fail without visibility.
   - [ ] RED `postgres-installed-staging.spec.ts` requires the installed module's hidden metadata and accepted kernel fragments to share one caller session/rollback, with no canonical event or payload visibility.
   - [x] Observed the missing same-session staging SPI. Kernel hidden operations now join an active scope session, retain contributor/fence revalidation and roll back with module preparation; standalone hidden operations retain their bounded immutable retry behavior.
+  - [ ] Added source/mapping/group/resource binding validation and a deterministic admissible-inventory digest. The implementation note records kernel-owned canonical state, same-session hidden intake, terminal receipt derivation and retained authorized export requirements.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
