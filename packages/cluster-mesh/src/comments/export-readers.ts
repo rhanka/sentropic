@@ -9,6 +9,7 @@ import { assertCommentsPgVisible, commentsPgValue, readCommentsPgRecord } from '
 import { commentsTransportBytes } from './fragment-codec.js';
 import { CommentsTransportError } from './transport-contracts.js';
 import type { CommentsExportPosition, CommentsExportState } from './boundary-codec.js';
+import { readCommentsAuthorityTargets } from './authority-projection.js';
 const terminalSequence = (state: CommentsExportState, chain: number): bigint => {
   const sequence = state.manifest.heads[chainIdentity(state.selection.selections[chain]!).key]?.terminalSeq;
   if (typeof sequence !== 'string' || !/^(0|[1-9][0-9]*)$/.test(sequence)) throw new CommentsTransportError('unavailable', 'Retained terminal sequence is invalid');
@@ -43,7 +44,8 @@ export const readCommentsExportRecords = async (options: CommentsServiceOptions,
       if (!records.length) throw new CommentsTransportError('capacity-exceeded', 'Indivisible export record exceeds its declared page budget');
       break;
     }
-    const targets = await commentsRecordResources(record, lookup);
+    const direct = await commentsRecordResources(record, lookup);
+    const targets = direct.length ? direct : await readCommentsAuthorityTargets(captured, selection, record.hash);
     if (!targets.length) throw new CommentsTransportError('incomplete', 'Export record has no installed resource authority binding');
     await authorizeComments(options, context, 'read', targets);
     records.push(record); encoded += cost; position.sequence += 1; position.records = (BigInt(position.records) + 1n).toString();
