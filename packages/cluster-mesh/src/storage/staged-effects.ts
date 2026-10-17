@@ -27,6 +27,16 @@ export const applyRootModuleEffects = (core: StagedCore, base: StagedRootData, d
     if (coveredBy(base, subject) !== null || base.disposed.has(subject)) throw new StorageInvalidCommandError('a covered subject cannot escape its boundary');
   }
   data.projections.applyRelationships(unit.relationships);
+  for (const change of unit.relationships) if (change.relation === 'coverage-parent-v1') {
+    const previous = data.coverage.get(change.to);
+    if (change.kind !== 'add' || (previous !== undefined && previous !== change.from) || coveredBy(data, change.from) !== null || coveredBy(data, change.to) !== null) throw new StorageInvalidCommandError('covered relationship refused');
+    const seen = new Set([change.to]); let parent: string | undefined = change.from;
+    while (parent !== undefined) {
+      if (seen.has(parent) || seen.size >= 128) throw new StorageInvalidCommandError('coverage cycle or depth exceeded');
+      seen.add(parent); parent = data.coverage.get(parent);
+    }
+    data.coverage.set(change.to, change.from);
+  }
   for (const barrier of unit.barriers) {
     if (!nonEmpty(barrier.boundary) || !nonEmpty(barrier.reason)) throw new StorageInvalidCommandError('invalid barrier');
     data.barriers.set(barrier.boundary, Object.freeze({ reason: barrier.reason, createdAt: core.clock() }));
