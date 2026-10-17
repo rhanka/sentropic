@@ -49,6 +49,7 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
   readonly projection?: PgRegisteredProjection;
   readonly operations?: Readonly<Record<string, PgInstalledOperation>>;
   readonly purgeFinalizer?: PgPurgeFinalizer;
+  readonly purgeAuthorize?: PgPurgeFinalizer;
   readonly pgPredicates?: Readonly<Record<string, (dependency: string, context: Pick<PgQueryContext, 'session' | 'stream' | 'root'>) => Promise<boolean>>>;
 }
 export const quotePgIdentifier = (value: string): string => {
