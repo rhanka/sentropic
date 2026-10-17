@@ -60,7 +60,7 @@ export const coveredBy = (data: StagedRootData, id: string): string | null => {
   const seen = new Set<string>();
   let current: string | undefined = id;
   while (current !== undefined && !seen.has(current)) {
-    if (data.barriers.has(current)) return current;
+    if (data.barriers.has(current) || data.disposed.has(current)) return current;
     seen.add(current); current = data.coverage.get(current);
   }
   return null;
