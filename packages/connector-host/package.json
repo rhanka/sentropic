@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@sentropic/mcp-platform": "^0.2.0",
-    "hono": "^4.12.18"
+    "hono": "^4.13.13"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",
