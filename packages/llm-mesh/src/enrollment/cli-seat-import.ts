@@ -39,7 +39,8 @@ export interface CliSeatProfileInput {
   epoch: number;
   generation: number;
   operationId: string;
-  issuedAt?: string;
+  /** Custodian-observed issuance time; never invented by the consumer. */
+  issuedAt: string;
   providerExpiry?: string;
   accessRef?: string;
   accessKind?: 'access' | 'static-key' | 'unavailable';
@@ -61,6 +62,10 @@ const nonEmpty = (value: unknown): value is string =>
 export function parseCliSeatProfile(input: CliSeatProfileInput): SeatBundleV1 {
   if (!nonEmpty(input.issuingClientRef) || !nonEmpty(input.endpointFamily)) {
     throw new SeatImportError('client-mismatch', 'cli profile needs an issuing client and endpoint family');
+  }
+  // No invented timestamps: the custodian-observed issuedAt is required.
+  if (!nonEmpty(input.issuedAt) || Number.isNaN(new Date(input.issuedAt as string).getTime())) {
+    throw new SeatImportError('schema-mismatch', 'cli profile needs a valid custodian-observed issuedAt');
   }
   const accessKind = input.accessKind ?? 'access';
   const credentialClass = accessKind === 'static-key' ? 'static-key' : 'access-only';
@@ -93,7 +98,7 @@ export function parseCliSeatProfile(input: CliSeatProfileInput): SeatBundleV1 {
       epoch: input.epoch,
       generation: input.generation,
       operationId: input.operationId,
-      issuedAt: input.issuedAt ?? new Date().toISOString(),
+      issuedAt: input.issuedAt as string,
       localExpiryPolicy: 'seat-consumer-policy-v1',
       refreshAuthority: 'none',
       ...(input.providerExpiry !== undefined ? { providerExpiry: input.providerExpiry } : {}),
