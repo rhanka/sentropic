@@ -20,6 +20,7 @@ import { prepareCommentsExport } from './export-prepare.js';
 import { readCommentsExportFragments, continueCommentsExport } from './export-pages.js';
 import { COMMENTS_STORAGE_LIMITS, requireCommentsStorageLimits } from './limits.js';
 import { prepareCommentsAuthority } from './authority-projection.js';
+import { executeCommentsRevision } from './revision-command.js';
 export { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
@@ -33,6 +34,7 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
   const services = options.services ? pinCommentsServices(options.services) : undefined;
   const operations = Object.freeze<Record<string, PgInstalledOperation>>(services ? {
     'comments.lifecycle': { operation: 'write', execute: (input, context) => executeCommentsLifecycle(services, context, input) },
+    'comments.revision': { operation: 'write', execute: (input, context) => executeCommentsRevision(services, context, input) },
     'comments.import.prepare': { operation: 'write', execute: (input, context) => prepareCommentsImport(services, context, input) },
     'comments.import.inspect': { operation: 'write', execute: (input, context) => inspectCommentsImport(services, context, input) },
     'comments.import.progress': { operation: 'write', execute: (input, context) => inspectCommentsImportProgress(services, context, input) },
