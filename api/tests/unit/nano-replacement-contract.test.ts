@@ -16,6 +16,7 @@ import { providerRegistry } from '../../src/services/provider-registry';
 import { getDefaultOpenAIModel } from '../../src/config/models';
 import { normalizeLegacyModelSelection } from '../../src/services/model-selection-legacy';
 import { validateOpenAIRequestBudget } from '../../src/services/llm-runtime/openai-budget';
+import { getReasoningParamsForModel } from '../../src/services/model-catalog';
 
 const candidates = ['gpt-6-luna', 'gpt-5.6-luna'];
 const messages = [{ role: 'user' as const, content: 'Return a short title.' }];
@@ -43,6 +44,13 @@ describe('nano replacement through the product mesh boundary', () => {
 
   it('should resolve a saved retired default to candidate A', async () => {
     expect(await resolveRuntimeSelection({})).toEqual({ providerId: 'openai', model: 'gpt-6-luna' });
+  });
+
+  it.each(candidates)('should preserve nonreasoning inherited generation defaults for configured %s', (model) => {
+    vi.stubEnv('OPENAI_MODEL', model);
+    expect(getReasoningParamsForModel(model, 'high', 'detailed')).toEqual({ reasoningEffort: 'none' });
+    expect(getReasoningParamsForModel('gpt-5.6-sol', 'high', 'detailed'))
+      .toEqual({ reasoningEffort: 'high', reasoningSummary: 'detailed' });
   });
 
   it.each(candidates)('should bound synchronous %s output with reasoning disabled', async (model) => {

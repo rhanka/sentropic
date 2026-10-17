@@ -193,6 +193,8 @@ export const getReasoningParamsForModel = (
   effort: 'low' | 'medium' | 'high' | 'xhigh' = 'high',
   summary: 'auto' | 'concise' | 'detailed' = 'detailed'
 ): { reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh'; reasoningSummary?: 'auto' | 'concise' | 'detailed' } => {
+  // These inherited generation defaults were nonreasoning on nano; explicit user turns bypass this helper.
+  if (modelId === getDefaultOpenAIModel()) return { reasoningEffort: 'none' };
   if (!modelSupportsReasoning(modelId)) return {};
   return { reasoningEffort: effort, reasoningSummary: summary };
 };
