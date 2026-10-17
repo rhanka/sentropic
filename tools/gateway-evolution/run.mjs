@@ -412,6 +412,12 @@ export const main = async (argv, { fs, out } = {}) => {
     out?.(`${JSON.stringify(result)}\n`);
     return 0;
   }
+  if (command === 'packed-gate') {
+    const { preparePackedGate } = await import('./packed.mjs');
+    const result = await preparePackedGate({ manifestPath: flag('manifest'), scope: flag('scope'), output: flag('output') });
+    out?.(`${JSON.stringify(result)}\n`);
+    return 0;
+  }
   if (
     command === 'packed-gate' ||
     command === 'consumer-gate' ||
