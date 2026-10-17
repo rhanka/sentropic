@@ -72,6 +72,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] `blocked` BRCM2-REGISTRY — owner: release maintainer; base peers `@sentropic/artifacts@0.1.0` and `@sentropic/auth-hono@0.16.0` return npm E404/ETARGET. Main run [39067479900](https://github.com/rhanka/sentropic/actions/runs/39067479900), publish jobs 117498953279 and 117498823452, failed with ENEEDAUTH. Public-install qualification requires owner-controlled publication/availability. Local qualification uses strictly guarded base-peer archives; this agent never publishes or weakens the public gate.
 - [x] `acknowledge` BRCM2-REVIEW — gr-conductor APPROVED PORT-1..17 / U1..U7, including its no-regression comparison through `ec6f8017b`; Opus targeted closure is GO at that head. Evidence: [gr-conductor no-regression report](/home/antoinefa/src/graphify/.graphify/scratch/design/live-git-indexing/REVIEW-port684-r2b-nonreg-opus.out). Storage and comments source trees remain byte-identical after rebase onto `1472d961e`.
 - [x] `acknowledge` BRCM2-EX8 — comments prerequisites and Docker peer ordering fixed the cold TS2307 failure. Run 39024243221 at 383d48f24 passed API typecheck, API image and toolbox image. Impact: build ordering only; rollback: restore the prior order with comments module removal.
 - [x] `acknowledge` BRCM2-EX9 — owner-requested Opus m7: make cluster-mesh cold build/typecheck/test self-contained and keep dependencies inside disposable containers. Root Makefile tooling and the qualification include may change. CI retains the explicit include under tests/storage as the accepted isolated PostgreSQL harness. Rollback: revert tooling and qualification wiring together.
@@ -102,7 +103,7 @@
   - [x] PORT-2 root composition: opt-in indexed backend state and a trusted mutation coordinator covers ordinary writes, transactions and current-coverage reads; adapter handles keep binding only. Existing default K3 behavior is qualified by its 56-test suite; co-review approved for the additive root options and backend record-history type.
   - [x] PORT-3 backend identity: an injected backend must retain one module/incarnation identity and hold hidden progress by scope/namespace; cross-module reuse and a conflicting incarnation are rejected before binding.
     - [x] RED identity probes observed; backend pins identity and exposes trusted scoped control storage for resumable hidden preparation. All eight coordinator/identity probes pass.
-- [x] `acknowledge` BRCM2-VER — required order: merge #679 (0.18.0) first, then rebase #684, resolve overlapping Makefile/CI/Dockerfile/lock edits and re-bump above both main and npm before publication. Current candidate is 0.19.0; it is not cleared for either merge order. `@sentropic/comments` remains frozen at 0.3.0. Never merge from this builder.
+- [x] `acknowledge` BRCM2-VER — #679 merged first at `1472d961e` (0.18.0); #684 is rebased linearly on it with build/CI/manifest conflicts resolved. Candidate 0.19.0 exceeds main 0.18.0 and public npm 0.16.0 after rebase; comments remains frozen at 0.3.0. Never merge or publish from this builder.
 - [x] `acknowledge` BRCM2-U1 — gr-conductor co-review: validateAtomicUnit now rejects malformed arrays, records, guards, relations, barriers, purge intents and index results, including default K3 callers. Approved; see BRCM2-REVIEW.
 - [x] `acknowledge` BRCM2-U2 — gr-conductor re-pass: dense records[i].seq === i is an explicit memory-only representation contract, checked on restored arrays/indexed histories at composition; unrelated to DAG ordering/SQL layout. Approved; see BRCM2-REVIEW.
 - [x] `acknowledge` BRCM2-U3 — gr-conductor re-pass: trusted composition rejects a coordinator unless its exact backend is explicitly supplied. Approved; see BRCM2-REVIEW.
@@ -135,13 +136,13 @@
   - [x] Rebase all 562 commits onto `origin/main` `1472d961e`, preserving both MCP/artifacts and comments delivery; no merge or squash.
   - [x] Post-Rebase Gate: only public package with source changes is cluster-mesh; candidate 0.19.0 exceeds main 0.18.0 and npm 0.16.0.
   - [x] Close PORT-1..17 / U1..U7 with the approved co-owner report in BRCM2-REVIEW.
-  - [ ] Regenerate root and selected consumer locks through documented Make targets.
+  - [x] Regenerate root and selected consumer locks only through `lock-root` and `refresh-lazy-package-lock` with guarded base-peer archives; six-line root and 61-line selected diffs preserve both base-peer integrities exactly. Public availability remains BRCM2-REGISTRY.
   - [x] Remove ignored, unreferenced `.h2a/storage-pg-tools/node_modules` through the Make cleanup target; post-rebase cold typecheck passes with MCP SDK/platform/artifacts prerequisites in disposable storage.
-  - [ ] Run scoped source, PostgreSQL, crash, installed, major-upgrade, packaging and CI-wiring gates.
+  - [x] Scoped gates PASS: cold typecheck/lint, source 106 files/931 tests, PG 29 files/51 tests, comments PG 28 files/109 tests, both SIGKILL phases, installed host, real PG17→18 upgrade, packed matrix 14 files/75 tests, CI wiring 22/22 and every export with minimum peers (guarded base artifacts). Archive `43055c8fa8c11525328395145cf42bf902b16783115159aeca480c3b22d01dda`; public availability remains BRCM2-REGISTRY.
   - [ ] Update PR #684 from this plan, then delete BRANCH.md in its dedicated final commit.
   - [ ] Push with force-with-lease, wait for green CI, mark PR #684 ready and write `.h2a/build/cm_comments_m2_merge_prep_report.md`; never merge or publish.
 
-- [ ] **Opus corrections — PR #684 NO-GO (2026-10-17)**
+- [x] **Opus corrections — PR #684 GO at ec6f8017b (2026-10-17)**
   - [x] Engram U2/U3/U5: all four representation/composition/argument probes observed RED then PASS, including malformed cursors; memory contracts/spec and restored-state checks align. Existing K3 suites unchanged.
   - [x] Engram MAJ-1/2: effective-record and cursor regressions observed RED; postgres-effective-records.spec.ts 2/2 and comments-cursor.spec.ts restart/replica/key-mismatch 1/1 PASS.
   - [x] MAJ-1: owned-object fingerprints and typed PgSchemaDriftError; host-DDL regression and operator re-attestation PASS. postgres-reattest.spec.ts simulates PostgreSQL catalog-rendering changes, rejects stale approvals/actual drift and reopens after audited host approval.
@@ -160,7 +161,7 @@
   - [x] Required #679-first order also recorded in PR #679 comment 6235207955; #684 receives this BRANCH.md body. PORT-1..17 and U1..U7 remain the explicit co-owner re-pass inventory.
   - [x] m8: binding-derivation, terminal-root, receipt-owner SQL and captured-export-root mutants PASS with assertion-specific kill markers; import/receipt refusals assert exact typed conditions. Evidence: comments-transport-mutations.spec.ts 3/3 and comments-export-mutations.spec.ts 1/1.
   - [x] m9: host-owned full-receipt table/audit, finite host 40001 callback retry versus immutable module flush retry, and separate 50-operation recovery cap documented with concrete Immo migration guidance.
-  - [ ] Final: source/PG/crash/installed gates, mutation record, push #684, fresh CI with restored OpenAI credit, report and stop without merging.
+  - [x] Final fix2 baseline: source/PG/crash/installed gates, mutations and CI 39044682075 PASS at `ec6f8017b`; `.h2a/build/cm_comments_m2_fix2_report.md` records the completed handoff. The new post-rebase campaign is tracked above.
 
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `plan/BRANCH_TEMPLATE.md`.
@@ -306,5 +307,5 @@
   - [x] Isolated PostgreSQL/network/volume removed; `make down ps API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` confirms no remaining branch Compose service.
   - [x] API/UI/E2E source/tests unchanged; EX8's build definitions are validated through cold API typecheck/image CI. Package-local source/PG/installed acceptance completes synthetic host UAT. Actual Immo data/cutover and delivery remain host/owner work.
   - [x] Final gate step 1: draft PR #684 uses this exact BRANCH.md body; the consolidated linear branch is pushed and supersession links from #666/#669/#670/#671/#667 are preserved. Subsequent corrections refresh the same PR/body.
-  - [ ] Final gate step 2: verify completed CI on the pushed fix2 candidate and resolve any failure; record the final SHA/run/result in `.h2a/build/cm_comments_m2_fix2_report.md`.
-  - [ ] Final gate step 3: storage co-owner review, BRANCH.md removal, merge/publication and actual delivery remain owner actions. This builder stops after its final validation/handoff and never performs them.
+  - [x] Final fix2 CI: run 39044682075 SUCCESS on `ec6f8017b`, including all API/AI/E2E/security gates; final SHA/run/result recorded in `.h2a/build/cm_comments_m2_fix2_report.md`.
+  - [ ] Final merge-prep gate: co-owner review is approved in BRCM2-REVIEW; the owner launch packet authorizes BRANCH.md removal, force-with-lease push and ready status after green CI. Merge, publication and actual delivery remain owner actions.
