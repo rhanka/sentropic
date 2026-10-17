@@ -16,6 +16,15 @@ const setup = () => {
   return { root, bound };
 };
 describe('protected registered root queries', () => {
+  it('should own descriptor registration instead of accepting later caller edits', async () => {
+    const names = ['children'];
+    const root = createStagedKernel({ moduleId: 'comments', descriptor: { ...descriptor, queryNames: names },
+      queries: { children: () => ({ records: [], nextCursor: null }), hidden: () => ({ records: ['leak'], nextCursor: null }) },
+    });
+    const bound = root.bindNew(grantFor());
+    names.push('hidden');
+    await expect(bound.query('hidden', 'p', { limit: 1, maxEncodedBytes: 4096 })).rejects.toMatchObject({ code: 'unsupported-profile' });
+  });
   it('should execute bounded registered queries on a captured root with current authorization', async () => {
     const { root, bound } = setup();
     await bound.commitAtomic({ ...emptyEffects(), relationships: ['a', 'b', 'c'].map((to) => ({ kind: 'add', relation: 'child', from: 'p', to })) });

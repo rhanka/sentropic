@@ -18,6 +18,11 @@ const unit = (chainId: string) => ({
 });
 
 describe('root-aware ordinary mutations', () => {
+  it('should not let a request weaken the coordinator work ceiling', async () => {
+    const { bound } = setup();
+    await expect(bound.commitAtomic(unit('oversized-limits'), { limits: { maxRecords: 129, maxAppends: 128, maxEncodedBytes: 524288 } })).rejects.toMatchObject({ code: 'invalid-command' });
+    expect(await bound.readHead('oversized-limits')).toBeNull();
+  });
   it('should recover an owned module result in the ordinary receipt', async () => {
     const { bound } = setup();
     const result = { format: 'utf8' as const, data: 'module-result' };
