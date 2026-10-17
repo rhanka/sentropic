@@ -153,8 +153,9 @@
 - [ ] **Lot 2 — K4 rebuild on K3 (O4:B1, O4:m7, O4:MAJ-9)**
   - [ ] Indexed successors: `tests/storage/indexed-state.spec.ts` qualifies version preservation and capture without historical enumeration before coordinator integration.
     - [x] `src/storage/indexed-{tree,map}.ts`: immutable balanced search paths and lockable forked maps; indexed-state probes pass 2/2. Coordinator integration follows.
-    - [ ] Indexed history RED probe prevents successor creation from copying the historical records of a touched chain.
-    - [ ] Backend adds opt-in indexed maps/histories and constant-metadata forks; K3 default state remains unchanged. Root-aware record integration follows before the next typecheck.
+    - [x] Indexed history RED probe prevents successor creation from copying historical records; all three indexed-state probes pass.
+    - [x] Backend adds opt-in indexed maps/histories and constant-metadata forks; K3 default state remains unchanged.
+    - [x] Ordinary record preparation uses indexed forks when supplied, clones only touched history paths, and installs successor map pointers without replaying every scope entry; exact cursor sequence uses indexed lookup. Typecheck passes; K3 kernel suite stays 56/56.
   - [ ] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
   - [ ] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
