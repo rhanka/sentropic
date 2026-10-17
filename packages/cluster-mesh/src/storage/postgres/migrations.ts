@@ -196,23 +196,51 @@ export const reattestPgInstallation = async (
   });
   await verifyPgInstallation(session, layout, assets, history);
 };
-export const applyPgMigrations = async (session: PgSession, configured: PgLayout, assets: readonly PgAsset[], history: PgHostHistory, host: { readonly id: string; readonly checksum: string }): Promise<void> => {
+export const applyPgMigrations = async (
+  session: PgSession,
+  configured: PgLayout,
+  assets: readonly PgAsset[],
+  history: PgHostHistory,
+  host: { readonly id: string; readonly checksum: string },
+): Promise<void> => {
   const layout = validatePgLayout(configured);
   validateChains(assets);
   if (!host.id || !/^[a-f0-9]{64}$/.test(host.checksum)) refuse();
   const applied = await history.read(session);
   if (applied.length > assets.length) refuse();
   const installed = new Set(applied.map((row) => row.id));
-  if (applied.length > 0) await verifyPgInstallation(session, layout, assets.filter((asset) => installed.has(asset.id)), history);
+  if (applied.length > 0)
+    await verifyPgInstallation(
+      session,
+      layout,
+      assets.filter((asset) => installed.has(asset.id)),
+      history,
+    );
   const schema = quotePgIdentifier(layout.dataSchema);
   for (const asset of assets.filter((candidate) => !installed.has(candidate.id))) {
     if (digest(asset.sql) !== asset.checksum) refuse();
     if (asset.requires.some((id) => !installed.has(id))) refuse();
     if (asset.schemaRole === 'comments' && !layout.projectionSchemas.comments) refuse();
-    await session.execute({ text: asset.sql.replaceAll('__DATA_SCHEMA__', schema).replaceAll('__COMMENTS_SCHEMA__', quotePgIdentifier(layout.projectionSchemas.comments ?? layout.dataSchema)), values: [] });
+    await session.execute({
+      text: asset.sql
+        .replaceAll('__DATA_SCHEMA__', schema)
+        .replaceAll('__COMMENTS_SCHEMA__', quotePgIdentifier(layout.projectionSchemas.comments ?? layout.dataSchema)),
+      values: [],
+    });
     const { sql: _sql, file: _file, ...identity } = asset;
     installed.add(asset.id);
-    await history.complete(session, { ...identity, hostMigrationId: host.id, hostChecksum: host.checksum, appliedChecksum: asset.checksum,
-      schemaFingerprint: await fingerprint(session, layout, assets.filter((candidate) => installed.has(candidate.id))), status: 'complete', conversionState: 'not-required' });
+    await history.complete(session, {
+      ...identity,
+      hostMigrationId: host.id,
+      hostChecksum: host.checksum,
+      appliedChecksum: asset.checksum,
+      schemaFingerprint: await fingerprint(
+        session,
+        layout,
+        assets.filter((candidate) => installed.has(candidate.id)),
+      ),
+      status: 'complete',
+      conversionState: 'not-required',
+    });
   }
 };
