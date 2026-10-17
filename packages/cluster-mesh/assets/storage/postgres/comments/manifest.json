@@ -70,6 +70,20 @@
       ],
       "schemaRole": "comments",
       "checksum": "cd53d617d2f2076456764d3224cee3549d4ee7f4e1c83743361f56682a06b87b"
+    },
+    {
+      "id": "cluster-mesh-pg/comments/006-review-evidence@1",
+      "file": "comments/006-review-evidence.sql",
+      "order": 12,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 11,
+      "toVersion": 12,
+      "requires": [
+        "cluster-mesh-pg/comments/005-lifecycle-evidence@1"
+      ],
+      "schemaRole": "comments",
+      "checksum": "a058e7aebee898368d8f385874425596949e73d008283418bdcf63c6f5c815dd"
     }
   ]
 }
