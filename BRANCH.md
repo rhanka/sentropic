@@ -204,6 +204,7 @@
     - [x] Shared replay staging reuses the actual maintenance fence issued by its backend, allowing opaque lane ids without a hard-coded reference fence; profile mutations stay 40/40.
   - [ ] Seal binds base B, ordered fragment set, recomputed roots; bounded sealing steps honoring limits; failure does not reopen staging; distinct staged/commit/command-index namespaces.
     - [ ] `root-work.spec.ts` measures actual core preparations for 100 touched chains with fixed two-item/512-byte steps, forbids historical scope/history enumeration and whole-unit replay at commit. `root-journal.spec.ts` rejects a checkpoint over an unread prefix after an arbitrary read-position jump.
+    - [ ] Arbitrary journal-position reads remain available for inspection, but only contiguous delivery advances a consumer's verified checkpoint frontier; an unread prefix cannot be acknowledged by reading its final event.
     - [ ] New RED probes require semantic root equality across JSON property ordering and reject asynchronous final preparation hooks before canonical publication.
     - [ ] Commit-root equality/digests share a framed field-order-independent encoding. The coordinator owns/freezes accepted options/effects and refuses asynchronous final hooks so their carriers cannot publish early.
     - [x] RED `tests/storage/root-seal.spec.ts`: bounded preparation with evolving heads, one root/event at commit, stable receipt retry and a failed seal that cannot reopen staging; 2/2 pass, typecheck passes.
