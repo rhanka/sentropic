@@ -1,6 +1,7 @@
 import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import { access } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import * as gateway from '@sentropic/llm-gateway';
 import { startGatewayHost, resolveGatewayStateDir, GatewaySessionService } from '@sentropic/llm-gateway/node';
 import { createGatewayControlClient } from '@sentropic/llm-gateway/node/control-client';
@@ -12,4 +13,7 @@ it('loads portable contracts and the published Node host/control subpaths from t
   for (const subpath of ['@sentropic/llm-gateway', '@sentropic/llm-gateway/node', '@sentropic/llm-gateway/node/control-client']) {
     await access(new URL(import.meta.resolve(subpath).replace(/\.js$/, '.d.ts')));
   }
+  const types = spawnSync(process.execPath, ['node_modules/typescript/bin/tsc', '--noEmit', '--strict', '--module', 'NodeNext',
+    '--moduleResolution', 'NodeNext', '--target', 'ES2022', '--lib', 'ES2022,DOM,DOM.Iterable', 'packed/host-consumer.ts'], { encoding: 'utf8' });
+  assert.equal(types.status, 0, types.stdout + types.stderr);
 });
