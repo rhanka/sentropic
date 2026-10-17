@@ -22,6 +22,60 @@ const qualificationAvailable = [
 
 test.describe.configure({ mode: 'serial' });
 
+test.describe('D2 Sessions navigation and no-source UI', () => {
+  test.use({ storageState: USER_A_STATE });
+  test('reaches the actual Sessions page through desktop and mobile navigation', async ({ page }) => {
+    await page.goto('/sessions');
+    await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sessions', exact: true })).toBeVisible();
+    await expect(page.getByText("Aucune clé d'accès enregistrée utilisable dans ce navigateur.", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Confirmer et envoyer une seule fois' })).toBeDisabled();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('link', { name: 'Sessions', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Copies conservées : demander la purge', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Copies conservées : demander la purge', exact: true })).toBeVisible();
+  });
+
+  test('keeps a UI-only project offer off and cancellation sends no activation or input', async ({ page }) => {
+    const current = await page.request.get(`${API_BASE_URL}/api/v1/auth/session`);
+    expect(current.ok()).toBeTruthy();
+    const { userId } = await current.json();
+    const effects: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('/auth/session/content/') && ['POST', 'PUT', 'DELETE'].includes(req.method())) effects.push(req.url());
+    });
+    // Only metadata is intercepted. The real layout/auth/workspace guards still run.
+    await page.route('**/api/v1/auth/session/content/workspaces/*/sessions', async (route) => {
+      const workspaceId = new URL(route.request().url()).pathname.split('/').at(-2);
+      await route.fulfill({ json: { ownerId: userId, workspaceId, projectId: workspaceId, sourceId: '',
+        sourceVerified: false, reason: 'unsupported_source', credentials: [], items: [], namedHistories: [], eligibleSources: [] } });
+    });
+    await page.goto('/sessions');
+    const offer = page.getByRole('region', { name: 'Partager ce projet et les historiques affichés', exact: true });
+    for (const checkbox of await offer.getByRole('checkbox').all()) await expect(checkbox).not.toBeChecked();
+    await offer.getByRole('checkbox', { name: 'Conserver les copies du terminal', exact: true }).check();
+    await expect(offer.getByRole('combobox', { name: 'Conservation choisie avant confirmation' })).toHaveValue('none');
+    await offer.getByRole('combobox', { name: 'Conservation choisie avant confirmation' }).selectOption('duration');
+    await offer.getByRole('spinbutton', { name: 'Durée', exact: true }).fill('2');
+    await offer.getByRole('combobox', { name: 'Durée', exact: true }).selectOption('hours');
+    await expect(offer.getByRole('spinbutton', { name: 'Durée', exact: true })).toHaveValue('2');
+    await expect(offer.getByRole('button', { name: "Préparer l'accord", exact: true })).toBeDisabled();
+    await offer.getByRole('button', { name: 'Annuler', exact: true }).click();
+    expect(effects).toEqual([]);
+  });
+});
+
+test.describe('D2 anonymous Sessions guard', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+  test('redirects a real anonymous Sessions visit to login with its return URL', async ({ page }) => {
+    await page.goto('/sessions');
+    await expect(page).toHaveURL(/\/auth\/login\?returnUrl=%2Fsessions/);
+    await expect(page.getByRole('heading', { name: 'Connexion', exact: true })).toBeVisible();
+  });
+});
+
 test.describe('Cluster Mesh central control plane A1 qualification', () => {
   test('executes real A1 or proves the production source-gap fence', async () => {
     const api = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
