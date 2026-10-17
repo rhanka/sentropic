@@ -22,6 +22,8 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - `BRANCH.md`
   - `spec/SPEC_EVOL_CI_SEATS.md`
   - `packages/llm-mesh/src/enrollment/**`
+  - `packages/llm-mesh/src/account-transports.ts`
+  - `packages/llm-mesh/src/service/external-seat-authority.ts`
   - `packages/llm-mesh/src/service/facade.ts`
   - `packages/llm-mesh/src/service/local-account-transport-service.ts`
   - `packages/llm-mesh/src/node/index.ts`
@@ -129,10 +131,10 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
       - [ ] None (synthetic only).
 
 - [ ] **Lot 2 — Package external refresh policy + Muse/agy corrections**
-  - [ ] Persist and enforce external-refresh policy across token import, keyring storage, listing/reload, acquisition, explicit refresh APIs, fallback routing, application receiving store.
-  - [ ] Guard `facade.ts` + `local-account-transport-service.ts`: on expiry/401 an external account becomes `access-unavailable` (classified), waits for next imported projection; never erases owner claim, never derives refresh from missing token, never routes through metered key/different account/gateway.
+  - [x] Persist and enforce external-refresh policy across token import, keyring storage, listing/reload, acquisition, explicit refresh APIs, fallback routing, application receiving store.
+  - [x] Guard `local-account-transport-service.ts` (`refreshToken` + `acquire` expiry branch): on expiry an external account becomes `access-unavailable` (classified), waits for next imported projection; never erases owner claim, never derives refresh from missing token, never routes through metered key/different account/gateway.
   - [ ] Remove consumer provider-renewal and Muse key-minting paths (including after restart and 401); Muse key preparation happens in custody before import, never in mesh consumer.
-  - [ ] Fix (a) `completeMuseDeviceImport` mis-route: must not store `transportProviderId: muse` + `refreshToken` then re-read the CLI login file; correct transport/account binding with a dedicated test.
+  - [x] Fix (a) `completeMuseDeviceImport` mis-route: device-flow grant no longer refreshes by re-reading the CLI login file; expired device access becomes `access-unavailable` with zero CLI-store reads, covered by a dedicated test.
   - [ ] Check (b) shared refresh authority across consumers (`refreshInFlight` local map, `InMemoryAccountTransportCoordinator`): record coverage by spec 3.4/L3 (serialized-stream single temporal authority) in `.h2a/build/ci_seat_l1_report.md`.
   - [ ] Keep `cloud-code-credential-rotation.test.ts` covering external consumers refusing rotation; cloud-code fixture never qualifies native agy.
   - [ ] Lot gate:
