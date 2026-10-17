@@ -406,6 +406,7 @@
   - [ ] Added shared-history transport assets for bounded private preparation/acknowledgement metadata. Canonical payloads remain in the kernel. Portable contexts accumulate the existing generic v1 roots and per-unit typed-hash inventories without retaining history-sized arrays.
   - [ ] Added scope/owner/incarnation-bound private control and acknowledgement persistence on the installed session; current domain checks can also be applied by staged contract handlers.
   - [ ] Added server-derived data/barrier effects, streamed unit payload validation and terminal M1 manifest/unit/batch receipt effects. External history claims create no physical-purge completion proof.
+  - [ ] Added same-session fragment preparation with durable byte-identical acknowledgement, frozen binding/frontier and terminal root; installed staged policy permits only module-prepared fragment commitments and rechecks current domain authority.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
