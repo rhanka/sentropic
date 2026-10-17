@@ -24,7 +24,7 @@ export const rootCapability = (runtime: RootScopedRuntime, profile: ProfileId) =
   const ports = {
     'atomic-units-v1': { commitAtomic: runtime.commitAtomic.bind(runtime), transact: runtime.transact.bind(runtime) },
     'immutable-chains-v1': { appendChain: runtime.appendChain.bind(runtime), readChain: runtime.readChain.bind(runtime) },
-    'immutable-boundaries-v1': { readPage: runtime.readPage.bind(runtime) },
+    'immutable-boundaries-v1': { readPage: runtime.readPage.bind(runtime), captureManifest: runtime.captureManifest.bind(runtime), verifyManifest: runtime.verifyManifest.bind(runtime), readManifestPage: runtime.manifestReadPage.bind(runtime) },
     'scope-outbox-v1': { read: runtime.journalRead.bind(runtime), checkpoint: runtime.journalCheckpoint.bind(runtime), inspect: runtime.journalInspect.bind(runtime),
       pause: runtime.journalPause.bind(runtime), retry: runtime.journalRetry.bind(runtime), resync: runtime.journalResync.bind(runtime), snapshotRead: runtime.snapshotRead.bind(runtime) },
     'visibility-barriers-v1': { declareCoverage: runtime.declareCoverage.bind(runtime), readHead: runtime.readHead.bind(runtime), query: runtime.query.bind(runtime) },
