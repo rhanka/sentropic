@@ -1,6 +1,6 @@
 # Comments Generic Storage Port Compatibility & Extension Manifest (C0 / M2)
 
-Date: 2026-10-17  
+Date: 2026-10-17
 Specification: L3a v4.1 frozen §17.2 row C0, §17.4
 Deliverables:
 - Manifest: [`storage-module-v1.json`](storage-module-v1.json)
