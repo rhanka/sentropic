@@ -26,6 +26,11 @@ const bindStaged = (
   return { store: target, bound: target.bindStaged(stagedGrant()) };
 };
 
+const replayHooks = (store: TestStagedReferenceStore) => ({
+  rebind: async () => store.bindStaged(stagedGrant()),
+  bindWithoutMaintain: async () => store.bindStaged(grantFor({ token: `weak-replay-${++tokenSeq}`, operations: ['read', 'write'] })),
+});
+
 describe('K2b reference: staged corpus', () => {
   it('K2b-RED hidden state, sequencing, publication, conflicts and recovery hold', async () => {
     const store = new TestStagedReferenceStore('comments');
@@ -68,9 +73,7 @@ describe('K2b reference: replay corpus', () => {
         scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' },
       }),
     );
-    await runReplayCorpus(primary, foreign, {
-      rebind: async () => store.bindStaged(stagedGrant()),
-    });
+    await runReplayCorpus(primary, foreign, replayHooks(store));
   });
 });
 
@@ -440,9 +443,9 @@ class NoCheckpointCasStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
     const inner = bound.journalCheckpoint.bind(bound);
-    bound.journalCheckpoint = async (consumer, _expected, next) => {
+    bound.journalCheckpoint = async (consumer, _expected, next, fence) => {
       const view = await bound.journalInspect(consumer);
-      return inner(consumer, view.cursor, next);
+      return inner(consumer, view.cursor, next, fence);
     };
     return bound;
   }
@@ -460,10 +463,11 @@ class ResyncAdvancingStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
     const inner = bound.journalResync.bind(bound);
-    bound.journalResync = async (consumer) => {
-      const boundary = await inner(consumer);
+    bound.journalResync = async (consumer, fence) => {
+      const boundary = await inner(consumer, fence);
+      if (consumer !== 'c1') return boundary;
       const view = await bound.journalInspect(consumer);
-      await bound.journalCheckpoint(consumer, view.cursor, boundary.journalSeq);
+      await bound.journalCheckpoint(consumer, view.cursor, boundary.journalSeq, fence);
       return boundary;
     };
     return bound;
@@ -607,7 +611,7 @@ describe('K2b discriminating mutations: replay', () => {
     const store = new NoCheckpointCasStore('comments');
     const { primary, foreign } = bindReplayPair(store);
     await expect(
-      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+      runReplayCorpus(primary, foreign, replayHooks(store)),
     ).rejects.toThrow(/stale checkpoint expectation/);
   });
 
@@ -615,7 +619,7 @@ describe('K2b discriminating mutations: replay', () => {
     const store = new PoisonBlindStore('comments');
     const { primary, foreign } = bindReplayPair(store);
     await expect(
-      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+      runReplayCorpus(primary, foreign, replayHooks(store)),
     ).rejects.toThrow(/poison stalls the consumer/);
   });
 
@@ -623,7 +627,7 @@ describe('K2b discriminating mutations: replay', () => {
     const store = new ResyncAdvancingStore('comments');
     const { primary, foreign } = bindReplayPair(store);
     await expect(
-      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+      runReplayCorpus(primary, foreign, replayHooks(store)),
     ).rejects.toThrow(/without advancing the checkpoint/);
   });
 
@@ -631,7 +635,7 @@ describe('K2b discriminating mutations: replay', () => {
     const store = new IdRewriteStore('comments');
     const { primary, foreign } = bindReplayPair(store);
     await expect(
-      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+      runReplayCorpus(primary, foreign, replayHooks(store)),
     ).rejects.toThrow(/external mirrors preserve kernel identities/);
   });
 
@@ -639,7 +643,7 @@ describe('K2b discriminating mutations: replay', () => {
     const store = new SnapshotBlindStore('comments');
     const { primary, foreign } = bindReplayPair(store);
     await expect(
-      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+      runReplayCorpus(primary, foreign, replayHooks(store)),
     ).rejects.toThrow(/excludes records committed after its boundary/);
   });
 });
