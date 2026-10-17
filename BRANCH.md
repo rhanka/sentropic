@@ -193,6 +193,7 @@
   - [ ] Kernel-computed fragment digests and roots from the shared codec; owned deep-frozen buffers; divergent begin refused; terminal states kept.
     - [ ] `src/storage/staged-operations.ts` authenticates backend-held capabilities and current fences, owns canonical fragment bytes, recomputes every ordinal digest, indexes retry receipts and separates operation identities from ordinary commit indexes.
   - [ ] Authenticated unforgeable handles/seals bound to module/tenant/workspace/incarnation/owner; current fence verified at begin/stage/seal/commit/abort and after the publication gate.
+    - [ ] RED `root-recovery.spec.ts` injects lost fragment/commit responses, recreates the runtime on its backend and checks exactly one journal event. Explicit operator ownership recovery must retain frozen intent, record its action and invalidate old handles/seals.
     - [ ] `src/storage/staged-state.ts` defines indexed canonical root attachments separately from backend-held hidden operation/consumer/snapshot progress; memory progress makes no durability claim.
     - [ ] `src/storage/staged-core.ts` binds progress to backend identity, verifies provisioned lane ownership/epoch/lease and exposes trusted provisioning/rotation separately from scoped adapter operations.
     - [x] Shared replay staging reuses the actual maintenance fence issued by its backend, allowing opaque lane ids without a hard-coded reference fence; profile mutations stay 40/40.
