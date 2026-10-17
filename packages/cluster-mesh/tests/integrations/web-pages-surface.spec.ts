@@ -105,26 +105,32 @@ describe('web-pages mesh leaf', () => {
     });
   });
 
-  it('compiles web-pages beside a local provider through the kernel', async () => {
+  it('selects and configures sentropic.artifacts beside a local provider', async () => {
     const facade = facadeWith();
-    facade.select(['immo', 'sentropic.web-pages']);
-    facade.configure('sentropic.web-pages', { defaultStorageScopeId: 'scope-1' });
+    facade.select(['immo', 'sentropic.artifacts']);
+    facade.configure('sentropic.artifacts', { defaultStorageScopeId: 'scope-1' });
     const builtin = createWebPagesBuiltin({ modules: modulesWith(), definition: { app: fakeApp } });
     const definition = await builtin.load();
     const compiled = await facade.compile({
       bindings: {},
       compatibility: {
         immo: { manifestDigest: computeManifestDigest(IMMO_MANIFEST) },
-        'sentropic.web-pages': { manifestDigest: computeManifestDigest(definition.manifest) },
+        'sentropic.artifacts': { manifestDigest: computeManifestDigest(definition.manifest) },
       },
     });
     if (!compiled.ok) throw new Error(`compile refused: ${JSON.stringify(compiled.diagnostics)}`);
     expect(compiled.registry.resolveTool('immo_search')?.providerId).toBe('immo');
     for (const name of SPEC_TOOLS) {
-      expect(compiled.registry.resolveTool(name)?.providerId, name).toBe('sentropic.web-pages');
+      expect(compiled.registry.resolveTool(name)?.providerId, name).toBe('sentropic.artifacts');
     }
-    const entry = facade.catalog().find((item) => item.providerId === 'sentropic.web-pages');
+    const entry = facade.catalog().find((item) => item.providerId === 'sentropic.artifacts');
     expect(entry?.availability).toBe('available');
+  });
+
+  it('refuses the previous provider ID as unknown for selection and configuration', () => {
+    const facade = facadeWith();
+    expect(() => facade.select(['sentropic.web-pages'])).toThrow(/unknown provider/);
+    expect(() => facade.configure('sentropic.web-pages', {})).toThrow(/unknown provider/);
   });
 
   it('never loads the artifacts leaf while web-pages stays unselected', async () => {
