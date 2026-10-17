@@ -95,18 +95,30 @@ describe('OAuth authorize per-client MFA policy (B3)', () => {
     expect(location.searchParams.get('error')).toBe('access_denied');
   });
 
-  it('B4: refuses a passkey session without UV (mfaVerified=false) on a policy client', async () => {
-    const { ports, store } = await createOauthPorts({ clients: [policyClient] });
+  it('B4: forces re-auth for an existing passkey session without UV, then refuses the still-UV-less re-login', async () => {
+    // Unlike B3 (no session at all: magic-link/Google landing), B4 starts from a
+    // live passkey session whose ceremony skipped user verification: B1 minted it
+    // with mfaVerified=false, so the main flow must force a re-auth first ...
+    const { ports, store } = await createOauthPorts({
+      authenticated: true,
+      clients: [policyClient],
+      sessionMfaVerified: false,
+    });
     const { router, stateCodec } = createOauthRouterForTest({ ports });
     const initial = await router.request(authorizePath());
-    const continuation = new URL(initial.headers.get('location') ?? '').searchParams.get('continue') ?? '';
 
-    // A passkey ceremony without user verification mints mfaVerified=false (B1),
-    // which is indistinguishable from a bearer session at authorize time — and
-    // must be refused for policy clients all the same.
+    expect(initial.status).toBe(302);
+    const loginLocation = new URL(initial.headers.get('location') ?? '');
+    expect(`${loginLocation.origin}${loginLocation.pathname}`).toBe('http://localhost:5397/auth/login');
+    const continuation = loginLocation.searchParams.get('continue') ?? '';
+
+    // ... and when the re-login ceremony again skips UV (new session id, still
+    // mfaVerified=false), the resume path refuses with access_denied instead of
+    // looping back to login.
     const { ports: noUvPorts } = await createOauthPorts({
       authenticated: true,
       clients: [policyClient],
+      sessionId: 'session-2',
       sessionMfaVerified: false,
       store,
     });
@@ -118,7 +130,24 @@ describe('OAuth authorize per-client MFA policy (B3)', () => {
 
     expect(response.status).toBe(302);
     const location = new URL(response.headers.get('location') ?? '');
+    expect(`${location.origin}${location.pathname}`).toBe('http://localhost:5397/callback');
     expect(location.searchParams.get('error')).toBe('access_denied');
+  });
+
+  it('returns login_required for prompt=none with a bearer session on a policy client', async () => {
+    const { ports } = await createOauthPorts({
+      authenticated: true,
+      clients: [policyClient],
+      sessionMfaVerified: false,
+    });
+    const { router } = createOauthRouterForTest({ ports });
+
+    const response = await router.request(authorizePath({ prompt: 'none' }));
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(`${location.origin}${location.pathname}`).toBe('http://localhost:5397/callback');
+    expect(location.searchParams.get('error')).toBe('login_required');
   });
 
   it('accepts a fresh passkey session after a forced re-auth', async () => {

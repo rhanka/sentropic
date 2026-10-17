@@ -35,6 +35,19 @@ describe('OAuth authorize per-client subject allowlist (C1)', () => {
     expect(location.searchParams.get('error')).toBe('access_denied');
   });
 
+  it('lets prompt=login switch account instead of refusing a non-listed session', async () => {
+    const client = createOauthClient({ allowedUserIds: ['owner-1'] });
+    const { ports } = await createOauthPorts({ authenticated: true, clients: [client] });
+    const { router } = createOauthRouterForTest({ ports });
+
+    const response = await router.request(authorizePath({ prompt: 'login' }));
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(`${location.origin}${location.pathname}`).toBe('http://localhost:5397/auth/login');
+    expect(location.searchParams.get('error')).toBeNull();
+  });
+
   it('lets a listed subject through to consent', async () => {
     const client = createOauthClient({ allowedUserIds: ['user-1'] });
     const { ports } = await createOauthPorts({ authenticated: true, clients: [client] });
