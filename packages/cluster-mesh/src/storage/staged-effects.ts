@@ -67,7 +67,6 @@ export const appendRootEvent = (core: StagedCore, base: BackendScopeState, data:
 
 export const prepareStagedRootNotice = (core: StagedCore, base: BackendScopeState, prepared: BackendScopeState,
   grant: ScopeGrant<unknown>, notice: RootMutationNotice): void => {
-  core.consumeFailure(grant.scope, 'external');
   const before = core.data(base);
   const data = prepared.attachment === base.attachment ? forkStagedRootData(before) : core.data(prepared);
   validateRootPolicy(core, data, grant,
