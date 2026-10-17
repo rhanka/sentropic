@@ -9,6 +9,7 @@ import type { CommentsServiceOptions } from './lifecycle-contracts.js';
 import { pinCommentsServices } from './authority.js';
 import { executeCommentsLifecycle } from './lifecycle.js';
 import { authorizeCommentsPurge, finalizeCommentsPurge } from './purge.js';
+import type { PgInstalledOperation } from '../storage/postgres/installed-contracts.js';
 export const COMMENTS_CONTRACT_DIGEST = 'e027fdbb4a806df39809326697bf9b60ad5cb977eb1988af3be293da07161ba0';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
@@ -20,10 +21,11 @@ export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
 });
 export const createCommentsPostgresRegistration = async (options: { readonly services?: CommentsServiceOptions } = {}) => {
   const services = options.services ? pinCommentsServices(options.services) : undefined;
+  const operations: Readonly<Record<string, PgInstalledOperation>> = Object.freeze(services ? { 'comments.lifecycle': { operation: 'write', execute: (input, context) => executeCommentsLifecycle(services, context, input) } } : {});
   return Object.freeze({
   assets: await loadPgAssets({ comments: true }), descriptor: COMMENTS_DESCRIPTOR, projection: prepareCommentsProjection,
   queries: Object.freeze({ 'by-resource': commentsPgQuery('by-resource'), 'scope-chain-index': commentsPgQuery('scope-chain-index'), 'retained-headers': commentsPgQuery('retained-headers') }),
-  operations: Object.freeze(services ? { 'comments.lifecycle': { operation: 'write' as const, execute: (input: unknown, context: import('../storage/postgres/installed-contracts.js').PgInstalledContext) => executeCommentsLifecycle(services, context, input) } } : {}),
+  operations,
   purgeAuthorize: services ? authorizeCommentsPurge(services) : undefined, purgeFinalizer: services ? finalizeCommentsPurge(services) : undefined,
   });
 };
