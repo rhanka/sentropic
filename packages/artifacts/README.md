@@ -46,5 +46,42 @@ make test-artifacts-integration API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 
 - `migrations/0001_artifacts.sql` — domain schema (manifest TEXT for
   byte-identity). Sharing/lifecycle/GC tables arrive with the 0002 migration.
 
-No Immo defaults, URLs or bindings in generic source. Content serving and
-MCP tools arrive in L-5d–5e.
+No Immo defaults, URLs or bindings in generic source.
+
+## What's here (L-5d–5e)
+
+- `src/content/grants.ts` — 55s HMAC content grants (60s cutoff budget) and
+  single-use bound activation tickets; secrets and clocks are injected.
+- `src/content/routing.ts` — stable (`<artifactId>.<base>`) and pinned
+  (`<releaseId>.pinned.<base>`) single-UUID origins; safe path resolution.
+- `src/content/headers.ts` — no-store/nosniff/frame-denial/CSP headers and
+  the host-only `__Host-artifacts_grant` cookie.
+- `src/content/handler.ts` — transport-free content serving: per-version
+  activation, grant + live ACL recheck per request, raw bytes out.
+- `src/content/api-profile.ts` — reader-delegation profile: exact
+  method/route/binding checks plus Origin/CSRF evidence for writes.
+- `src/server/templates.ts` — generic template kit + versioned API guide
+  catalog port (hosts inject approved local assets).
+- `src/mcp.ts` — the `sentropic.web-pages` MCP provider: 15 exact
+  `artifacts_*` tools with closed schemas, a host-bindable invocation
+  scope, an executor over the same HTTP app, a platform adapter, and the
+  `@sentropic/mcp-platform` kernel registry definition (the platform is
+  an optional peer, required only by the `./mcp` subpath).
+
+## First publish (bootstrap)
+
+`0.1.0` is the single candidate covering L-5a–5e; it is not on npm yet,
+so the steady-state OIDC job cannot publish before an npm trusted
+publisher exists. Bootstrap sequence (owner-run, never automated here):
+
+1. Trigger the `bootstrap-publish` workflow manually with
+   `bootstrap_publish_target=artifacts` (runs
+   `make publish-artifacts-token` with the `NPM_TOKEN` secret; no OIDC
+   provenance on the token publish). Locally equivalent:
+   `make publish-artifacts-token NPM_TOKEN_FILE=/path/to/token`.
+2. On npmjs.com, open `@sentropic/artifacts` → Settings → Trusted
+   Publishers and attach the GitHub Actions publisher for
+   `rhanka/sentropic` workflow `ci.yml`.
+3. After that, merges to `main` touching the artifacts package publish
+   through the `publish-artifacts` job (`make publish-artifacts`, OIDC +
+   provenance), gated by `validate-artifacts`.
