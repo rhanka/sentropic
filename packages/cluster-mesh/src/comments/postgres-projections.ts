@@ -6,7 +6,7 @@ export const commentsHeaderLinks = (record: CanonicalChainRecord): Record<string
   if (record.kind === 'annotation-revision') return { resources: [record.primary, ...record.secondary].map((target) => commentsResourceKey(target.resource)) };
   if (record.kind === 'thread-structure-revision') return { resources: [commentsResourceKey(record.primary.resource)], annotationId: record.annotationId };
   if (record.kind === 'comment-revision') return { threadId: record.threadId, parentCommentId: record.parentCommentId, structureRevision: record.structureRevision, annotationPin: record.annotationPin };
-  if (record.kind === 'review-event') return { revisionHash: record.revisionHash, referencesEventHash: record.referencesEventHash };
+  if (record.kind === 'review-event') return { revisionHash: record.revisionHash, referencesEventHash: record.referencesEventHash, action: record.action, sequence: record.link.sequence };
   if (record.kind === 'lifecycle-event') return { action: record.action, archiveKind: record.archiveKind, sequence: record.link.sequence };
   return {};
 };

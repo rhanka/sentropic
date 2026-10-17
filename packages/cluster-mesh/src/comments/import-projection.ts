@@ -1,5 +1,5 @@
-import { createLifecycleEvent } from '@sentropic/comments';
-import type { ResourceRef, ThreadStructureRevisionRecord, AnnotationRevisionRecord, CanonicalChainRecord, LifecycleEventRecord } from '@sentropic/comments';
+import { createLifecycleEvent, createReviewEvent } from '@sentropic/comments';
+import type { ResourceRef, ThreadStructureRevisionRecord, AnnotationRevisionRecord, CanonicalChainRecord, LifecycleEventRecord, ReviewEventRecord } from '@sentropic/comments';
 import type { AtomicUnit } from '../storage/atomic.js';
 import type { PgProjectionContext } from '../storage/postgres/protocol.js';
 import { decodePgText } from '../storage/postgres/codec.js';
@@ -12,6 +12,7 @@ import type { PgChain } from '../storage/postgres/effects.js';
 import { validateCommentsRecord } from './record-validation.js';
 import { CommentsTransportError } from './transport-contracts.js';
 import { retainedCommentsLifecycleBasis } from './lifecycle-evidence.js';
+import { retainedCommentsReviewBasis } from './review-evidence.js';
 export const validateCommentsImportProjection = async (options: CommentsServiceOptions, effects: AtomicUnit, context: PgProjectionContext): Promise<void> => {
   if (!context.stagedUnitId || !effects.appends.length) return;
   const { schema, scope } = commentsControlAddress(context);
@@ -25,6 +26,11 @@ export const validateCommentsImportProjection = async (options: CommentsServiceO
     const previous = append.expectation.kind === 'head' ? await lookup(selection, append.expectation.hash) : null;
     if ('link' in record && (record.link.sequence !== metadata?.count || record.link.previousHash !== (previous?.hash ?? null))) throw new CommentsTransportError('conflict', 'Canonical link sequence differs from the prepared chain');
     await validateCommentsRecord(record, previous, options.capacity, lookup);
+    if (record.kind === 'review-event') {
+      const { kind: _kind, hash: _hash, link: _link, ...input } = record;
+      const basis = await retainedCommentsReviewBasis(context, record, previous as ReviewEventRecord | null);
+      if (createReviewEvent(basis, input, options.capacity).hash !== record.hash) throw new CommentsTransportError('invalid-request', 'Imported review envelope differs');
+    }
     if (record.kind === 'lifecycle-event') {
       const { kind: _kind, hash: _hash, link: _link, ...input } = record;
       const basis = await retainedCommentsLifecycleBasis(context, selection, previous as LifecycleEventRecord | null);
