@@ -37,12 +37,12 @@ export const captureManifestRoot = (core: StagedCore, bound: ScopedRuntime, inpu
     storeIncarnation: core.kernel.incarnation, rootVersion: root.version ?? '0', terminal: { count: String(new Set(input.selections).size), complete: true },
   });
   const digest = digestManifest(manifest);
-  registry(core, bound).set(digest, { root, ownerId: bound.grant.principalId, manifest: ownedCopy(manifest) });
+  registry(core, bound).set(JSON.stringify([bound.grant.principalId, digest]), { root, ownerId: bound.grant.principalId, manifest: ownedCopy(manifest) });
   return { digest, manifest: ownedCopy(manifest) };
 };
 const retained = (core: StagedCore, bound: ScopedRuntime, digest: string): CapturedManifest => {
   bound.requireOperation('read');
-  const captured = registry(core, bound).get(digest);
+  const captured = registry(core, bound).get(JSON.stringify([bound.grant.principalId, digest]));
   if (!captured) throw new StorageInvalidCommandError('unknown retained storage manifest');
   if (captured.ownerId !== bound.grant.principalId) throw new StorageDeniedError('manifest belongs to another principal');
   return captured;

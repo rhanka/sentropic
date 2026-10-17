@@ -93,8 +93,9 @@ export const createKernel = (options: KernelOptions): KernelRoot => {
   const kernelId = `kernel-${randomBytes(8).toString('hex')}`;
   const provider = options.boundaryProvider ?? new HmacExactHeadBoundaryProvider(options.cursorSecret);
   const authority = options.authority ?? createStaticAuthorityPort();
-  const revoked = new Set<string>();
-  const issued = new Map<string, string>();
+  const { revoked, issued } = backend.controlState({ tenantId: '$kernel', workspaceId: '$authority' }, 'grant-issuance-v1', () => ({
+    revoked: new Set<string>(), issued: new Map<string, string>(),
+  }));
   const nextCommitId = createOpaqueIssuer('commit');
   const deps: ScopedRuntimeDeps = { moduleId, kernelId, backend, provider, incarnation, clock, revoked, issued, nextCommitId, authority, predicates: options.predicates, coordinator: options.coordinator };
 

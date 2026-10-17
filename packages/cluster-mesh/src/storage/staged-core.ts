@@ -46,6 +46,7 @@ export class StagedCore {
     return root;
   }
   data(root: BackendScopeState): StagedRootData {
+    if (!root.indexed) throw new StorageInvalidCommandError('staged storage requires indexed backend roots');
     if (root.attachment === undefined) return this.empty;
     if ((root.attachment as StagedRootData)?.kind !== 'staged-root-v1') throw new StorageInvalidCommandError('unknown module root attachment');
     return root.attachment as StagedRootData;
