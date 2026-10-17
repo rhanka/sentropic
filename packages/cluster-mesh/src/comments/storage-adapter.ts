@@ -130,18 +130,25 @@ export class CommentsAdapter {
       do {
         const page = await this.page(scope, selection, { limit: 100, cursor });
         const advancing = page.records.length > 0 && page.nextCursor !== null && page.nextCursor !== cursor;
-        if (page.outcome === 'inaccessible' || (page.outcome === 'incomplete' && !advancing)) throw new CanonicalCommandError('denied', 'Complete canonical chain is unavailable');
-        records.push(...page.records as T[]); cursor = page.nextCursor;
+        if (page.outcome === 'inaccessible' || (page.outcome === 'incomplete' && !advancing))
+          throw new CanonicalCommandError('denied', 'Complete canonical chain is unavailable');
+        records.push(...(page.records as T[]));
+        cursor = page.nextCursor;
       } while (cursor !== null);
       return records;
     });
   }
   find(scope: CanonicalStoreScope, key: string): Promise<CommittedCommand | null> {
-    return this.context.invoke(scope, (_request, tx) => tx ? tx.findIdempotency({ key: commandKey(key) }) : _request.storage.indexGet(commandKey(key)));
+    return this.context.invoke(scope, (_request, tx) =>
+      tx ? tx.findIdempotency({ key: commandKey(key) }) : _request.storage.indexGet(commandKey(key)),
+    );
   }
   record(scope: CanonicalStoreScope, key: string, supplied: CommittedCommand): Promise<void> {
-    return this.context.invoke(scope, () => this.context.mutate(async (tx) => {
-      const committed = own(supplied); await tx.apply({ ...emptyEffects(), indexWrites: [{ key: commandKey(key), ...committed }] });
-    }));
+    return this.context.invoke(scope, () =>
+      this.context.mutate(async (tx) => {
+        const committed = own(supplied);
+        await tx.apply({ ...emptyEffects(), indexWrites: [{ key: commandKey(key), ...committed }] });
+      }),
+    );
   }
 }
