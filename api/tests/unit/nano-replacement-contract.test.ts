@@ -82,6 +82,16 @@ describe('nano replacement through the product mesh boundary', () => {
     expect(() => validateOpenAIRequestBudget('gpt-5.6-luna', {}, 128_001)).toThrow(/output.*budget/i);
   });
 
+  it('should preserve uncapped unrelated OpenAI calls and bound the replacement at its model ceiling', async () => {
+    const generate = vi.spyOn(runtime, 'generate').mockResolvedValue({
+      choices: [{ message: { content: 'Offline result' } }], usage: { prompt_tokens: 10, completion_tokens: 3 },
+    });
+    await callLLM({ model: 'gpt-5.6-sol', messages });
+    expect((generate.mock.calls[0]?.[0] as any).requestOptions).not.toHaveProperty('max_completion_tokens');
+    await callLLM({ model: 'gpt-6-luna', messages, reasoningEffort: 'high' });
+    expect((generate.mock.calls[1]?.[0] as any).requestOptions).toMatchObject({ max_completion_tokens: 128_000, reasoning_effort: 'high' });
+  });
+
   it.each([0, -1, NaN, Infinity, 128_001])('should refuse an invalid output ceiling %s before dispatch', async (maxOutputTokens) => {
     const generate = vi.spyOn(runtime, 'generate').mockRejectedValue(new Error('Unexpected provider dispatch'));
     await expect(callLLM({ model: 'gpt-6-luna', messages, maxOutputTokens })).rejects.toThrow(/output.*budget/i);

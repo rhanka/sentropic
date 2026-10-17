@@ -658,7 +658,7 @@ const toBudgetString = (value: unknown): string => {
   }
 };
 
-/** Per-model context window budgets (total tokens including input + output) */
+/** Context admission budgets; Luna uses its stricter maximum input, other profiles retain their existing windows. */
 const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   // OpenAI
   'gpt-5.6-luna':  LUNA_MAX_INPUT_TOKENS,
@@ -2444,6 +2444,7 @@ export class ChatService {
       return {
         shouldEvaluate: true,
         effortLabel: 'medium',
+        effortForMessage: 'medium',
         evaluatedBy: 'fallback',
         evaluatorModel,
         failure: { message: safeMsg },
