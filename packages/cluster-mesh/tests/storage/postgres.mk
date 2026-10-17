@@ -36,6 +36,7 @@ cluster-mesh-pg-up:
 	@docker network inspect "$(CM_PG_NAME)" >/dev/null 2>&1 || docker network create "$(CM_PG_NAME)" >/dev/null
 	@docker container inspect "$(CM_PG_NAME)" >/dev/null 2>&1 || docker run -d --name "$(CM_PG_NAME)" --network "$(CM_PG_NAME)" \
 		--label sentropic.storage-test="$(ENV)" -e POSTGRES_PASSWORD=qualification-only -e POSTGRES_DB=storage_test "$(CM_PG_IMAGE)" >/dev/null
+	@if [ "$$(docker container inspect --format '{{.State.Running}}' "$(CM_PG_NAME)")" != true ]; then docker start "$(CM_PG_NAME)" >/dev/null; fi
 	@attempt=0; until docker exec "$(CM_PG_NAME)" pg_isready -U postgres -d storage_test >/dev/null; do \
 		attempt=$$((attempt+1)); [ "$$attempt" -lt 30 ] || exit 1; sleep 1; done
 
@@ -43,12 +44,13 @@ cluster-mesh-pg-down:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) exit 1;; esac
 	@if docker container inspect "$(CM_PG_NAME)" >/dev/null 2>&1; then \
 		[ "$$(docker container inspect --format '{{ index .Config.Labels "sentropic.storage-test" }}' "$(CM_PG_NAME)")" = "$(ENV)" ] || exit 1; \
-		docker rm -f "$(CM_PG_NAME)" >/dev/null; fi
+		docker rm -fv "$(CM_PG_NAME)" >/dev/null; fi
 	@docker network rm "$(CM_PG_NAME)" >/dev/null 2>&1 || true
 
 cluster-mesh-pg-test: cluster-mesh-pg-up cluster-mesh-storage-deps
 	@docker run --rm --init --network "$(CM_PG_NAME)" -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
 		-e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
+		-e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
 		-v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
 		tool_dir=/workspace/.h2a/storage-pg-tools; mkdir -p "$$tool_dir"; \
 		npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --ignore-scripts --no-audit --no-fund pg@8.16.3 vitest@4.1.5 typescript@5.4.5 @types/node >/dev/null; \
@@ -65,3 +67,16 @@ cluster-mesh-pg-diagnostics:
 cluster-mesh-pg-manifest:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
 		node packages/cluster-mesh/tests/storage/generate-pg-manifest.mjs
+
+.PHONY: cluster-mesh-pg-crash cluster-mesh-pg-crash-test
+cluster-mesh-pg-crash:
+	@case "$(ENV)" in test-*|e2e-*) ;; *) exit 1;; esac
+	@[ "$$(docker container inspect --format '{{ index .Config.Labels "sentropic.storage-test" }}' "$(CM_PG_NAME)")" = "$(ENV)" ]
+	@docker kill --signal KILL "$(CM_PG_NAME)" >/dev/null
+	@docker start "$(CM_PG_NAME)" >/dev/null
+	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-up API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+
+cluster-mesh-pg-crash-test:
+	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=postgres-crashes.spec.ts CM_PG_CRASH_PHASE=seed API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-crash API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=postgres-crashes.spec.ts CM_PG_CRASH_PHASE=verify API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
