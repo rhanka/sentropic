@@ -120,6 +120,62 @@ describe('llm seat projection import', () => {
     await acquired?.recordOutcome({ status: 'success' });
   });
 
+  it.each([
+    ['muse', 'muse-lab-03', 'muse-access-03'],
+    ['vibe', 'vibe-lab-03', 'vibe-access-03'],
+  ] as const)('accepts a refresh-less %s projection through the receiver', async (cli, externalAccountId, accessToken) => {
+    const user = await createAuthenticatedUser('admin_app');
+    const stored = await importSeatProjection({
+      cli,
+      ownerUserId: user.id,
+      expectedOwnerScope: OWNER_SCOPE,
+      externalAccountId,
+      accessToken,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      seatPolicy: policy({ seatRef: `seat-synth-${cli}-03` }),
+      billingClear: true,
+    });
+    expect(stored).not.toBeNull();
+  });
+
+  it('accepts a codex projection only when token claims match the admitted account', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    const accessToken = codexJwt('codex-lab-03', Math.floor(Date.now() / 1000) + 3600);
+    const stored = await importSeatProjection({
+      cli: 'codex',
+      ownerUserId: user.id,
+      expectedOwnerScope: OWNER_SCOPE,
+      externalAccountId: 'codex-lab-03',
+      accessToken,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      seatPolicy: policy({ seatRef: 'seat-synth-codex-03' }),
+      billingClear: true,
+    });
+    expect(stored).not.toBeNull();
+    const acquired = await acquireOpenAICodexAccountTransport({
+      userId: user.id,
+      modelId: 'gpt-5.5',
+      requestId: 'seat-codex-receiver',
+    });
+    expect(acquired?.accessToken).toBe(accessToken);
+    await acquired?.recordOutcome({ status: 'success' });
+
+    const before = await rowCount(user.id);
+    expect(
+      await importSeatProjection({
+        cli: 'codex',
+        ownerUserId: user.id,
+        expectedOwnerScope: OWNER_SCOPE,
+        externalAccountId: 'codex-lab-mismatch',
+        accessToken,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        seatPolicy: policy({ seatRef: 'seat-synth-codex-03' }),
+        billingClear: true,
+      }),
+    ).toBeNull();
+    expect(await rowCount(user.id)).toBe(before);
+  });
+
   it('accepts a refresh-less Claude projection and serves it without renewal', async () => {
     const user = await createAuthenticatedUser('admin_app');
     expect(await importSeatProjection({ ...claudeProjection(), ownerUserId: user.id })).not.toBeNull();
