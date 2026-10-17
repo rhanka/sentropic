@@ -699,7 +699,7 @@ export class SessionContentService {
         updatedAt: now,
       };
       if (existing) {
-        if (!acceptLocked) {
+        if (expectedRevision === undefined || !acceptLocked) {
           throw new SessionContentError('revision_conflict', 'project already exists');
         }
         const updated = await tx
