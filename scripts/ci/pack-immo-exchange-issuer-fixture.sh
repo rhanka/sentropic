@@ -65,14 +65,11 @@ tool_version="$(make -s api-tool-version ENV="$FIXTURE_ENV")"
 [ -n "$tool_version" ] || fail "empty API_TOOL_VERSION"
 MAKE_ARGS="REGISTRY=$FIXTURE_REGISTRY API_PORT=$API_PORT UI_PORT=$UI_PORT MAILDEV_UI_PORT=$MAILDEV_UI_PORT ENV=$FIXTURE_ENV"
 
-before_tags="$(docker images "$FIXTURE_REGISTRY/sentropic-api" --format '{{.Tag}}' 2>/dev/null || true)"
-make -C "$snap" build-api-image TARGET=production $MAKE_ARGS
-api_tag=""
-for tag in $(docker images "$FIXTURE_REGISTRY/sentropic-api" --format '{{.Tag}}' 2>/dev/null); do
-  case " $before_tags " in *" $tag "*) ;; *) api_tag="$tag";; esac
-done
-[ -n "$api_tag" ] || fail "no new api image tag built"
+api_tag="$(make -C "$snap" -s --eval='show-api-ver:;@echo $(API_VERSION)' show-api-ver $MAKE_ARGS)"
+[ -n "$api_tag" ] || fail "empty api tag"
 api_ref="$FIXTURE_REGISTRY/sentropic-api:$api_tag"
+make -C "$snap" build-api-image TARGET=production $MAKE_ARGS
+docker image inspect "$api_ref" >/dev/null || fail "built api image missing: $api_ref"
 api_id="$(docker image inspect "$api_ref" --format '{{.Id}}')"
 make -C "$snap" test-ci-api-runtime API_IMAGE_REF="$api_ref" $MAKE_ARGS >/dev/null
 docker save "$api_ref" -o "$out/api-image.tar"
