@@ -19,6 +19,8 @@ import type { AuthenticatedStagedHandle, AuthenticatedStagedSeal } from '../stag
 import type { WriterFence } from '../contracts.js';
 import { configurePgLifecycle, declarePgCoverage, holdPgTarget, completePgPurge } from './lifecycle.js';
 import type { PurgePolicy } from '../staged-state.js';
+import { readPgJournal, checkpointPgJournal, inspectPgConsumer, operatePgConsumer } from './journal.js';
+import type { JournalFence } from '../staged-core.js';
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export class PgScoped {
   readonly #core: PgCore;
@@ -82,6 +84,12 @@ export class PgScoped {
   declareCoverage(parent: string, child: string) { return declarePgCoverage(this.#core, this.#grant, parent, child); }
   holdTarget(target: string, reason: string | null) { return holdPgTarget(this.#core, this.#grant, target, reason); }
   completePurge(intentId: string) { return completePgPurge(this.#core, this.#grant, intentId); }
+  journalRead(after: number, limit: number, consumer?: string) { return readPgJournal(this.#core, this.#grant, after, limit, consumer); }
+  journalCheckpoint(consumer: string, expected: number, next: number, fence: JournalFence) { return checkpointPgJournal(this.#core, this.#grant, consumer, expected, next, fence); }
+  journalInspect(consumer: string) { return inspectPgConsumer(this.#core, this.#grant, consumer); }
+  journalPoison(consumer: string, event: string, reason: string) { return operatePgConsumer(this.#core, this.#grant, consumer, 'poison', event, reason); }
+  journalPause(consumer: string, fence: JournalFence) { return operatePgConsumer(this.#core, this.#grant, consumer, 'pause', null, undefined, fence); }
+  journalRetry(consumer: string, expected: string | null, fence: JournalFence) { return operatePgConsumer(this.#core, this.#grant, consumer, 'retry', expected, undefined, fence); }
   stageFragment(input: RootStageInput) { return stagePgFragment(this.#core, this.#grant, input); }
   sealStep(input: PgSealRequest) { return sealPgStep(this.#core, this.#grant, input); }
   commitStaged(seal: AuthenticatedStagedSeal, fence: WriterFence) { return commitPgStaged(this.#core, this.#grant, seal, fence); }
