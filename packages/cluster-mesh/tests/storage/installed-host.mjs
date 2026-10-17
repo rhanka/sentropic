@@ -32,7 +32,7 @@ export const installedHost = async () => {
   const layout = { dataSchema: name, projectionSchemas: { comments: name }, outboxSchema: name };
   const history = {
     read: async (session) => (await session.execute({ text: `SELECT receipt FROM "${name}".host_history ORDER BY ordinal`, values: [] })).rows.map((row) => row.receipt),
-    complete: (session, receipt) => session.execute({ text: `INSERT INTO "${name}".host_history VALUES($1,$2::jsonb)`, values: [receipt.order, JSON.stringify(receipt)] }),
+    complete: (session, receipt) => session.execute({ text: `INSERT INTO "${name}".host_history VALUES((SELECT COALESCE(MAX(ordinal),0)+1 FROM "${name}".host_history),$1::jsonb)`, values: [JSON.stringify(receipt)] }),
   };
   const assets = await loadPgAssets({ comments: true });
   await driver.transaction({ readOnly: false, deadlineMs: 5000 }, async (session) => {
