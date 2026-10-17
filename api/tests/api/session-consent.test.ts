@@ -60,7 +60,6 @@ const basePolicy = (overrides: Record<string, unknown> = {}): Record<string, unk
     'native.mirror': { mode: 'none' },
   },
   authorityEpoch: 'epoch-test-1',
-  offlineReadAccepted: true,
   ...overrides,
 });
 
@@ -135,7 +134,7 @@ describe('session consent durable lifecycle', () => {
       ...overrides,
     });
     const prepared = service.prepareProject(policy);
-    return service.acceptProject({ ...prepared, offlineReadAccepted: true }, context);
+    return service.acceptProject(prepared, context);
   };
 
   const adoptSession = async (sessionId: string, tenantId = TENANT_A): Promise<string> => {
@@ -305,13 +304,12 @@ describe('session consent durable lifecycle', () => {
       .where(eq(sessionContentProjects.projectId, accepted.projectId));
     expect(projects).toHaveLength(1);
     expect(projects[0]!.retentionDigest).toBe(accepted.digest);
-    expect(projects[0]!.offlineReadAccepted).toBe(true);
+    expect(projects[0]!.offlineReadAccepted).toBe(false);
     const receipts = await db
       .select()
       .from(sessionContentOfflineReceipts)
       .where(eq(sessionContentOfflineReceipts.projectId, accepted.projectId));
-    expect(receipts).toHaveLength(1);
-    expect(receipts[0]!.policyDigest).toBe(accepted.digest);
+    expect(receipts).toHaveLength(0);
     void restarted;
   });
 
@@ -388,7 +386,6 @@ describe('session consent durable lifecycle', () => {
           {
             ...prepared,
             policy: { ...prepared.policy, projectRevision: 99 },
-            offlineReadAccepted: true,
           },
           ctx,
         ),
@@ -1579,7 +1576,7 @@ describe('session consent durable lifecycle', () => {
     const prepared = service.prepareProject(
       basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 1 }),
     );
-    await service.acceptProject({ ...prepared, offlineReadAccepted: true }, ctx);
+    await service.acceptProject(prepared, ctx);
     await expectContentError(deriveS2, 'session_excluded');
     const projects = await db
       .select()
@@ -1856,7 +1853,7 @@ describe('session consent durable lifecycle', () => {
       const prepared = service.prepareProject(
         basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 1 }),
       );
-      return service.acceptProject({ ...prepared, offlineReadAccepted: true }, ctx);
+      return service.acceptProject(prepared, ctx);
     };
     const outcomes = await Promise.allSettled([atOne(), atOne()]);
     expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
@@ -2776,7 +2773,7 @@ describe('session consent durable lifecycle', () => {
     const prepared = service.prepareProject(
       basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
     );
-    await service.acceptProject({ ...prepared, offlineReadAccepted: true }, ctx);
+    await service.acceptProject(prepared, ctx);
     await expectContentError(() => service.reserveBeforeUpload(
       'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-m2-acceptn', ctx,
     ), 'project_revision_changed');
