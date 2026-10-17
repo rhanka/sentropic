@@ -101,7 +101,7 @@
   - [x] Consolidation C0: 30 commits of `origin/feat/comments-cm-c0` `e19b394e2` and its `spec/comments-annotations-port` intake cherry-picked; C0 paths byte-identical to `e19b394e2`; obsolete K1 duplicates and already-merged M1 commits not replayed.
   - [x] Version bump `@sentropic/cluster-mesh` 0.16.0 -> 0.19.0 with lock and selected packaging fixture (BRCM2-VER).
   - [x] O4:B1(a) compile-only adaptation of carried K4 `staged-runtime.ts` to the K3 `KernelRoot` type (typecheck RED: `bindNew`/`revoke` missing on `KernelHandle`); B1(b)/(c) stay in Lot 2.
-  - [ ] Push, open ONE draft PR, comment-and-close #666, #669, #670, #671, #667 pointing to it.
+  - [x] Existing draft PR #684; #666, #669, #670, #671 and #667 are CLOSED with a comment pointing to #684 (verified on relaunch); reuse #684.
   - [ ] Lot gate: `make typecheck-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` + `make test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` (carried K4 runtime failures recorded, fixed by Lots 2-5).
     - [x] Typecheck green at `8fec6302d`.
     - [ ] Tests at `8fec6302d`: 61 files pass, 5 skipped, 3 failed (`staged-units.spec.ts`, `visibility.spec.ts`, `manifest.spec.ts`; 9 K4 tests) — all `UnsupportedProfileError: fenced-writers-v1` from carried K4 passing a fence to K3 `commitAtomic` (O4:B1(b)), owned by Lot 2. K1/K2a/K2b/K3/C0 suites green.
@@ -118,7 +118,8 @@
   - [x] MINEUR-2: M18 mutant measures the candidate cursor instead of the effective cursor (no budget inflation).
     - [x] Evidence: `assertEmptyIncomplete` (null or fitting cursor plus explicit recovery of the exact remaining records), `validateReadPage` on disposed/missing/floor pages, `RecoveryCursorStore` conformance test in `reference.spec.ts`; M18 now overrides `admissionCursor` and dies at "the exhausting record is admitted with its effective null cursor" (final E/E-1 envelope case); `reference.spec.ts` 36/36, `mutations.spec.ts` 19/19, `kernel.spec.ts` 56/56.
   - [ ] MINEUR-3: mutant regexes pinned to one exact assertion each (M1-M16, S1, B1/E1).
-  - [ ] MINEUR-4: raw tombstone names `thread-2`; assertion "readable"; mutant "raw tombstone installs barrier".
+  - [x] MINEUR-4: raw tombstone names `thread-2`; its covered child remains readable; B5 installs a barrier from the raw tombstone and dies at that exact assertion.
+    - [x] Relaunch evidence: `make test-cluster-mesh SCOPE=tests/storage/profile-mutations.spec.ts API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` passes 40/40, including B5.
   - [ ] MINEUR-5: fence rotation hook (superseded fence cannot publish/abort), nested buffer alias via record bytes reader, hidden audit reader, deliberate `unitId` collision across scopes.
   - [ ] MINEUR-6: replay ports gain `fence`, `pauseConsumer`, `maintain` authority; refusal cases for unauthorized principal, stale fence, wrong incarnation; `c-stall` consumes the snapshot then checks poison redelivery; mutant "resync clears stall".
   - [ ] MINEUR-7: snapshot returns root state (heads/indexes) not journal events; captured roots authenticated; external journal scoped per stream.
