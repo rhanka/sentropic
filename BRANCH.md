@@ -69,6 +69,8 @@
 - [x] Selectable-retired-model assertion reproduced before catalog removal; mesh candidate bumped to 0.26.2 after npm registry precheck.
 - [x] Full llm-mesh regression gate passed: 42 files, 808 tests; client package gate passed after the server-default and version-contract updates.
 - [x] Full API unit run exposed 26 changed assumptions: domain-tool/prompt fixtures need independent classification stubs with A, and retired stream fixtures need migration; preserve the Gemini evaluator test.
+- [x] Paired qualification completed at `a50e1928516b199c399bed84ef2953e4f19f279c`: 30/30 valid cases, 38 requests, USD 0.4955801 usage-priced cost; conservative budget ledger USD 0.619189 / 15, no pending request.
+- [x] Sonnet review: reproduced the unrelated-model output-ceiling leak with one failing offline test; scope the Luna ceiling to Luna and reuse production input/output constants in qualification admission. Luna wire behavior and prices are unchanged from the measured commit.
 
 ## AI Flaky tests
 - [ ] Record every provider failure verbatim after secret sanitization; failed qualification remains failed, without rerunning for a pass or inflating timeouts.

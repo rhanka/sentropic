@@ -1,3 +1,5 @@
+import { LUNA_MAX_INPUT_TOKENS, LUNA_MAX_OUTPUT_TOKENS } from '../../src/config/models';
+
 export const NANO_CANDIDATES = ['gpt-6-luna', 'gpt-5.6-luna'] as const;
 export type NanoCandidate = typeof NANO_CANDIDATES[number];
 export type NanoUsage = { input: number; output: number; reasoning: number; cached: number };
@@ -35,11 +37,11 @@ export const createNanoBudget = (append: (event: Record<string, unknown>) => voi
   const reserve = (model: NanoCandidate, maxOutputTokens: number): NanoReservation => {
     if (closed) throw new Error('Qualification budget is closed');
     if (active || calls >= Math.min(38, maxCalls)) throw new Error('Qualification call limit or concurrency exceeded');
-    if (!NANO_CANDIDATES.includes(model) || !Number.isInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 128_000) {
+    if (!NANO_CANDIDATES.includes(model) || !Number.isInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > LUNA_MAX_OUTPUT_TOKENS) {
       throw new Error('Qualification model or output budget refused');
     }
-    const price = rates(model, 922_000);
-    const reservedMicroUsd = Math.ceil(922_000 * price.input * 1.25 + maxOutputTokens * price.output);
+    const price = rates(model, LUNA_MAX_INPUT_TOKENS);
+    const reservedMicroUsd = Math.ceil(LUNA_MAX_INPUT_TOKENS * price.input * 1.25 + maxOutputTokens * price.output);
     if (chargedMicroUsd + reservedMicroUsd > limitMicroUsd) throw new Error('Qualification dollar budget exhausted');
     calls += 1;
     chargedMicroUsd += reservedMicroUsd;
@@ -51,7 +53,7 @@ export const createNanoBudget = (append: (event: Record<string, unknown>) => voi
   const settle = (ticket: NanoReservation, usage: NanoUsage | null) => {
     if (closed || ticket !== active) throw new Error('Qualification reservation is closed or unknown');
     if (!usage || !(['input', 'output', 'reasoning', 'cached'] as const).every((key) => Number.isInteger(usage[key]) && usage[key] >= 0)
-      || usage.input > 922_000 || usage.output > ticket.maxOutputTokens || usage.reasoning > usage.output || usage.cached > usage.input) {
+      || usage.input > LUNA_MAX_INPUT_TOKENS || usage.output > ticket.maxOutputTokens || usage.reasoning > usage.output || usage.cached > usage.input) {
       closed = true;
       throw new Error('Qualification usage is missing or violates the reserved limits');
     }
