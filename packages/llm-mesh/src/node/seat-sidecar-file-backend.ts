@@ -36,7 +36,7 @@ const boundedText = (value: unknown): string | null => {
 
 /** Parse and validate sidecar categories; throws SeatStoreReadError without echoing content. */
 export function parseSeatSidecar(raw: string): Categories {
-  if (Buffer.byteLength(raw, 'utf8') > SEAT_SIDECAR_MAX_BYTES) {
+  if (new TextEncoder().encode(raw).length > SEAT_SIDECAR_MAX_BYTES) {
     throw new SeatStoreReadError('sidecar exceeds the bounded size');
   }
   let parsed: unknown;
@@ -81,7 +81,7 @@ export class SeatSidecarFileBackend implements SeatStoreBackend {
     } catch {
       return null;
     }
-    if (Buffer.byteLength(raw, 'utf8') > SEAT_SIDECAR_MAX_BYTES) {
+    if (new TextEncoder().encode(raw).length > SEAT_SIDECAR_MAX_BYTES) {
       throw new SeatStoreReadError('sidecar exceeds the bounded size');
     }
     let sidecar: Partial<SeatSidecar>;
