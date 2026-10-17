@@ -1165,7 +1165,7 @@ export class SessionContentService {
         .where(eq(sessionContentGrants.sessionId, sessionId))
         .for('update')
         .limit(1);
-      if (!locked || locked.version !== grant.version || locked.state !== 'active'
+      if (!locked || locked.localDenyPending || locked.version !== grant.version || locked.state !== 'active'
         || locked.projectRevision !== grant.projectRevision) {
         throw new SessionContentError('revision_conflict', 'concurrent grant change; re-acknowledge the refresh');
       }
