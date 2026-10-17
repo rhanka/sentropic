@@ -302,7 +302,10 @@ export class PgScoped {
       const ref = await core.roots.get<{ hash: string; payload: string }>(session, base.root, 'genesis', key);
       return ref
         ? {
-            hash: ref.hash, value: decodePgJson(decodePgUtf8(await core.roots.readPayload(session, this.scope, ref.payload))) } : null;
+            hash: ref.hash,
+            value: decodePgJson(decodePgUtf8(await core.roots.readPayload(session, this.scope, ref.payload))),
+          }
+        : null;
     });
   }
   async disposeChain(chainId: string): Promise<void> {
@@ -310,7 +313,8 @@ export class PgScoped {
       await this.#core.check(tx.session, this.#grant, 'maintain');
       const chain = await this.#core.roots.get<PgChain>(tx.session, tx.root, 'chain', chainId);
       if (!chain) throw new StorageInvalidCommandError('unknown chain');
-      tx.root = await this.#core.roots.put(tx.session, tx.root, 'disposed', chainId, true); tx.count += 1;
+      tx.root = await this.#core.roots.put(tx.session, tx.root, 'disposed', chainId, true);
+      tx.count += 1;
     });
   }
 }
