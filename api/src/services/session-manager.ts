@@ -85,7 +85,8 @@ async function signSessionToken(
 export async function createSession(
   userId: string,
   role: string,
-  deviceInfo?: DeviceInfo
+  deviceInfo?: DeviceInfo,
+  options?: { mfaVerified?: boolean }
 ): Promise<SessionTokens> {
   const sessionId = crypto.randomUUID();
   const now = new Date();
@@ -100,6 +101,8 @@ export async function createSession(
   const refreshToken = crypto.randomUUID();
   
   // Store session in database (with hashed tokens)
+  // B1: passkey login with userVerified=true mints mfaVerified=true; every other
+  // path (magic-link, federation, registration) stays false via the default.
   await db.insert(userSessions).values({
     id: sessionId,
     userId,
@@ -108,7 +111,7 @@ export async function createSession(
     deviceName: deviceInfo?.name || null,
     ipAddress: deviceInfo?.ipAddress || null,
     userAgent: deviceInfo?.userAgent || null,
-    mfaVerified: false,
+    mfaVerified: options?.mfaVerified === true,
     expiresAt,
     createdAt: now,
     lastActivityAt: now,

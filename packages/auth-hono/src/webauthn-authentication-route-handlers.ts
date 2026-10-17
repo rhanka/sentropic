@@ -33,6 +33,7 @@ export interface AuthHonoFinalizeAuthenticationInput {
   credentialId: string;
   request: AuthHonoAuthenticationVerifyRequest;
   userId: string;
+  userVerified: boolean;
 }
 
 export interface AuthHonoAuthenticationOptionsRequest {
@@ -118,6 +119,7 @@ export const createAuthWebAuthnAuthenticationRouteHandlers = (
           credentialId: result.credentialId,
           request: input.value,
           userId: result.userId,
+          userVerified: result.userVerified,
         },
         c
       );
@@ -127,6 +129,7 @@ export const createAuthWebAuthnAuthenticationRouteHandlers = (
       credentialId: result.credentialId,
       success: true,
       userId: result.userId,
+      userVerified: result.userVerified,
     });
   },
 });

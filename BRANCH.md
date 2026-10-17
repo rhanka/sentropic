@@ -94,7 +94,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRMFA-EX1` for Makefile.
   - [x] Check `make ps-all ENV=test-idp-client-mfa-policy` single-build discipline.
-- [ ] **Lot 1 — B1 passkey login sets mfaVerified=true with UV**
+- [x] **Lot 1 — B1 passkey login sets mfaVerified=true with UV**
   - [ ] Thread `userVerified` from `verifyAuthenticationResponse.authenticationInfo` through `verifyWebAuthnAuthentication` (api) and `verifyAuthentication` (auth-hono + adapter) into `finalizeAuthentication` input.
   - [ ] Extend `createSession` (`api/src/services/session-manager.ts`) with `mfaVerified` option; pass `true` only for passkey login with `userVerified=true`; keep magic-link/federation/registration at `false`.
   - [ ] Fix README/code gap on `passkey-fresh` (`packages/auth-hono/README.md`, `spec/WORKFLOW_AUTH.md` if needed).

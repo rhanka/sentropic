@@ -36,6 +36,7 @@ export type AuthHonoVerifyAuthenticationResult =
   | {
       credentialId: string;
       userId: string;
+      userVerified: boolean;
       verified: true;
     }
   | {
@@ -149,6 +150,7 @@ export const createAuthWebAuthnAuthenticationService = (
       return {
         credentialId: storedCredential.credentialId,
         userId: storedCredential.userId,
+        userVerified: verification.authenticationInfo.userVerified === true,
         verified: true,
       };
     },
