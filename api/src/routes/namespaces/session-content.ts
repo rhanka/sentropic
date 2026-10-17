@@ -3,8 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { env } from '../../config/env';
 import { createSessionContentRateLimiters } from '../../middleware/session-content-rate-limiters';
-import { SessionContentError, SessionContentService } from '../../services/cluster-mesh/session-content';
-import { resolveSessionContentIssuer } from '../../services/cluster-mesh/session-workspace';
+import { resolveSessionContentIssuer, SessionContentError, SessionContentService } from '../../services/cluster-mesh/session-content';
 import { validateSession } from '../../services/session-manager';
 
 /** Product-only metadata and denial surface. No server claim substitutes for
