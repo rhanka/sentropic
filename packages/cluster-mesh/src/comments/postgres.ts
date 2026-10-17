@@ -11,6 +11,10 @@ import { executeCommentsLifecycle } from './lifecycle.js';
 import { authorizeCommentsPurge, finalizeCommentsPurge } from './purge.js';
 import type { PgInstalledOperation } from '../storage/postgres/installed-contracts.js';
 import { COMMENTS_CONTRACT_DIGEST } from './contract.js';
+import { COMMENTS_IMPORT_CONTRACT_DIGEST } from './import-state.js';
+import { prepareCommentsImport } from './import-prepare.js';
+import { inspectCommentsImport, recoverCommentsReceipts } from './import-recovery.js';
+import { commentsImportPolicy } from './import-policy.js';
 export { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
@@ -22,11 +26,17 @@ export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
 });
 export const createCommentsPostgresRegistration = async (options: { readonly services?: CommentsServiceOptions } = {}) => {
   const services = options.services ? pinCommentsServices(options.services) : undefined;
-  const operations = Object.freeze<Record<string, PgInstalledOperation>>(services ? { 'comments.lifecycle': { operation: 'write', execute: (input, context) => executeCommentsLifecycle(services, context, input) } } : {});
+  const operations = Object.freeze<Record<string, PgInstalledOperation>>(services ? {
+    'comments.lifecycle': { operation: 'write', execute: (input, context) => executeCommentsLifecycle(services, context, input) },
+    'comments.import.prepare': { operation: 'write', execute: (input, context) => prepareCommentsImport(services, context, input) },
+    'comments.import.inspect': { operation: 'write', execute: (input, context) => inspectCommentsImport(services, context, input) },
+    'comments.import.recover': { operation: 'write', execute: (input, context) => recoverCommentsReceipts(services, context, input) },
+  } : {});
   return Object.freeze({
   assets: await loadPgAssets({ comments: true }), descriptor: COMMENTS_DESCRIPTOR, projection: prepareCommentsProjection,
   queries: Object.freeze({ 'by-resource': commentsPgQuery('by-resource'), 'scope-chain-index': commentsPgQuery('scope-chain-index'), 'retained-headers': commentsPgQuery('retained-headers') }),
   operations,
+  stagedModules: services ? Object.freeze({ [COMMENTS_IMPORT_CONTRACT_DIGEST]: commentsImportPolicy(services) }) : undefined,
   purgeAuthorize: services ? authorizeCommentsPurge(services) : undefined, purgeFinalizer: services ? finalizeCommentsPurge(services) : undefined,
   });
 };
