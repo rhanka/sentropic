@@ -24,7 +24,6 @@ import type { LlmMesh } from '../mesh.js';
 import {
   isDeviceFlowSeatAccount,
   isExternalSeatAccount,
-  throwDeviceFlowSeatUnavailable,
   throwExternalSeatUnavailable,
 } from './external-seat-authority.js';
 import type { ProviderId } from '../providers.js';
@@ -702,14 +701,15 @@ export class LocalAccountTransportService {
     // Check if access token is expired
     if (account && account.expiresAt) {
       const expiresAtMs = new Date(account.expiresAt).getTime();
-      // L1 external policy: custodied and device-flow seats never refresh
-      // here. Expired access becomes access-unavailable; valid access is
-      // returned directly with the owner claim and policy retained.
-      const externallyManaged = isExternalSeatAccount(account) || isDeviceFlowSeatAccount(account);
+      // L1 external policy: custodied seats never refresh here. Expired
+      // access becomes access-unavailable; valid access is returned
+      // directly with the owner claim and policy retained. Mesh-managed
+      // device-flow seats fall through to refreshToken(), which dispatches
+      // them to the muse-code device provider.
+      const externallyManaged = isExternalSeatAccount(account);
       if (expiresAtMs <= nowMs && externallyManaged) {
         await acquisition.release?.();
-        if (isExternalSeatAccount(account)) throwExternalSeatUnavailable(account);
-        throwDeviceFlowSeatUnavailable(account);
+        throwExternalSeatUnavailable(account);
       }
       if (!externallyManaged && (expiresAtMs <= nowMs || this.refreshInFlight.has(account.accountId))) {
         try {
@@ -939,9 +939,6 @@ export class LocalAccountTransportService {
     // single-flight map so no state mutates and no provider is called.
     const held = this.accountsMap.get(input.accountId);
     if (held && isExternalSeatAccount(held)) throwExternalSeatUnavailable(held);
-    // A device-flow Muse grant owns no CLI-store refresh; re-reading the
-    // native login could mint for another session, so refuse instead.
-    if (held && isDeviceFlowSeatAccount(held)) throwDeviceFlowSeatUnavailable(held);
     // P0-5: Single-flight refresh map to prevent parallel refresh races
     if (this.refreshInFlight.has(input.accountId)) {
       return this.refreshInFlight.get(input.accountId)!;
@@ -951,7 +948,13 @@ export class LocalAccountTransportService {
       const account = this.accountsMap.get(input.accountId);
       let requestMayHaveBeenSent = false;
       try {
-        const providerId = account?.transportProviderId ?? 'cloud-code';
+        // L1 (a): a mesh-managed device-flow Muse grant refreshes through
+        // the muse-code device provider with its stored refresh token,
+        // never by re-reading the CLI store (which may hold another login).
+        // Externally custodied seats were refused above.
+        const providerId = account && isDeviceFlowSeatAccount(account)
+          ? 'muse-code'
+          : (account?.transportProviderId ?? 'cloud-code');
         const provider = this.providers.get(providerId);
 
         if (!provider) {
