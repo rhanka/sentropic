@@ -66,7 +66,14 @@ function headerValue(headers: Record<string, string | string[] | undefined>, nam
   return Array.isArray(value) ? value[0] : value;
 }
 
-/** Extract request identity from headers (bearer presence only, never the token). */
+/**
+ * Parse untrusted transport headers into a hint record (bearer presence
+ * only, never the token). B1: this is NEVER authority — no caller may derive
+ * invocation identity from it; verified principals come from the host's
+ * authentication and the mesh verified-invocation context only.
+ *
+ * @deprecated Do not use for authorization decisions; kept for parsing only.
+ */
 export function extractHttpRequestIdentity(
   headers: Record<string, string | string[] | undefined>,
 ): RequestIdentity {
@@ -87,10 +94,13 @@ export function extractHttpRequestIdentity(
 }
 
 /**
- * Derive request identity from the SDK handler extra (per-request headers).
- * Supports web-standard `Headers` and plain header records; returns
- * `undefined` when the transport carries no headers (e.g. in-memory,
- * stdio). The raw bearer is never exposed.
+ * Parse untrusted per-request headers from the SDK handler extra (hint
+ * only, never authority — see `extractHttpRequestIdentity`). Supports
+ * web-standard `Headers` and plain header records; returns `undefined`
+ * when the transport carries no headers (e.g. in-memory, stdio). The raw
+ * bearer is never exposed.
+ *
+ * @deprecated Do not use for authorization decisions; kept for parsing only.
  */
 export function identityFromExtra(extra: unknown): RequestIdentity | undefined {
   if (!isRecord(extra)) return undefined;
@@ -148,8 +158,12 @@ export function registerBridgeTools(
       );
     }
     try {
-      // Per-request headers win over the mount-time identity when present.
-      return encodeToolResult(await runner.run(tool.name, args, identityFromExtra(extra) ?? identity));
+      // B1: the runner receives the host-owned mount identity only. Client
+      // headers are untrusted and never override it (`extra` is intentionally
+      // unread here); verified per-request identity is the host's composition
+      // concern (mesh verified-invocation context).
+      void extra;
+      return encodeToolResult(await runner.run(tool.name, args, identity));
     } catch (error) {
       return encodeToolResult(
         errorResult(
