@@ -4,8 +4,8 @@ import { createCommentsModule, createCommentsPostgresRegistration, commentsAdmis
 import { createPgFixture } from './pg-fixture.js';
 import { grantFor } from './authority-corpus.js';
 import { conformanceCapacity, conformanceScope, conformanceResource, conformanceTarget, conformanceBody, conformanceProvenance } from '../../assets/storage/comments/oracle/conformance.mjs';
-export const commentsHost = async () => {
-  const scope = conformanceScope(); const capacity = conformanceCapacity(); const authority = { allowed: true };
+export const commentsHost = async (scope = conformanceScope()) => {
+  const capacity = conformanceCapacity(); const authority = { allowed: true };
   const options = { capacity, capabilities: { check: async () => authority.allowed }, resolver: { resolve: async () => 'exact' as const }, clock: { now: () => 1717000000123 } };
   const fixture = await createPgFixture(await createCommentsPostgresRegistration({ services: options })); const root = await fixture.open();
   const grant = grantFor({ scope, operations: ['read', 'write', 'maintain'] }); const bound = await root.bindNew(grant);
