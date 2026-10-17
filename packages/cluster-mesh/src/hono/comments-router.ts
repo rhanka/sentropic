@@ -34,7 +34,7 @@ export const createCanonicalCommentsRouter: CanonicalRouterFactory<Hono> = (port
         const actual = request.kind === 'annotation' ? request.content.annotationId : request.kind === 'thread' ? request.content.threadId : request.content.commentId;
         if (actual !== id) throw new SyntaxError('Revision path identity differs');
       }
-      const result = await ports.store.transaction(async () => {
+      const result = await ports.store.transaction().run(async () => {
         const authority = await commentsHttpRevisionTargets(binding, request);
         await checkCommentsHttpTargets(ports, binding, authority.capability, authority.targets);
         await checkCommentsHttpDecision(ports, binding, request, authority.capability);
@@ -51,7 +51,7 @@ export const createCanonicalCommentsRouter: CanonicalRouterFactory<Hono> = (port
       const request = body as CanonicalLifecycleRequest;
       if (!['archive', 'restore', 'tombstone', 'purge-intent'].includes(request.action)) throw new SyntaxError('Unsupported lifecycle command');
       const capability = request.action === 'purge-intent' ? 'purge' as const : request.action === 'tombstone' ? 'tombstone' as const : request.action === 'restore' ? 'shared-restore' as const : request.archiveKind === 'personal' ? 'personal-archive' as const : 'shared-archive' as const;
-      const result = await ports.store.transaction(async () => {
+      const result = await ports.store.transaction().run(async () => {
         const targets = await binding.services.targets({ scope: request.scope, selection: selection(id), capability });
         await checkCommentsHttpTargets(ports, binding, capability, targets);
         await checkCommentsHttpDecision(ports, binding, request, request.action);
