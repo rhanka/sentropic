@@ -36,7 +36,6 @@ const STATE_FILE = 'gateway-state.enc';
 const LOCK_FILE = '.lock';
 const AAD = 'gateway-state/v1';
 const STATE_SCHEMA = 1;
-const STALE_LOCK_MS = 30_000;
 
 export interface KeyringReader {
   getSecret(key: string): Promise<string | null>;
@@ -46,7 +45,6 @@ export interface FileStoreOptions {
   readonly stateDir: string;
   readonly keyring: KeyringReader;
   readonly dekKey?: string;
-  readonly lockTimeoutMs?: number;
 }
 
 interface Envelope {
@@ -138,8 +136,8 @@ const pidAlive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return !isCode(error, 'ESRCH');
   }
 };
 
@@ -147,7 +145,7 @@ export class FileGatewayStateStore implements GatewayStateStore {
   private readonly stateDir: string;
   private readonly keyring: KeyringReader;
   private readonly dekKey: string;
-  private readonly lockTimeoutMs: number;
+  private transaction: Promise<unknown> = Promise.resolve();
   private dekCache: string | null = null;
 
   constructor(options: FileStoreOptions) {
@@ -157,7 +155,6 @@ export class FileGatewayStateStore implements GatewayStateStore {
     this.stateDir = options.stateDir;
     this.keyring = options.keyring;
     this.dekKey = options.dekKey ?? 'gateway/state-dek';
-    this.lockTimeoutMs = options.lockTimeoutMs ?? STALE_LOCK_MS;
   }
 
   private async ensureDir(): Promise<void> {
@@ -168,7 +165,7 @@ export class FileGatewayStateStore implements GatewayStateStore {
   private async dek(): Promise<string> {
     if (this.dekCache) return this.dekCache;
     const secret = await this.keyring.getSecret(this.dekKey);
-    if (!secret) {
+    if (!secret || !/^[0-9a-f]{64}$/i.test(secret)) {
       throw new GatewayStateError('gateway key identity unavailable', 'KEY-UNAVAILABLE');
     }
     this.dekCache = secret;
@@ -203,12 +200,13 @@ export class FileGatewayStateStore implements GatewayStateStore {
   }
 
   async load(): Promise<StoredState> {
+    await this.dek();
     return this.readRaw();
   }
 
-  private async acquireLock(): Promise<string> {
+  private async acquireLock(name = LOCK_FILE): Promise<string> {
     const token = randomBytes(8).toString('hex');
-    const path = join(this.stateDir, LOCK_FILE);
+    const path = join(this.stateDir, name);
     const claim = JSON.stringify({ pid: process.pid, token, startedAt: Date.now() });
     try {
       await writeFile(path, claim, { flag: 'wx', mode: 0o600 });
@@ -222,17 +220,18 @@ export class FileGatewayStateStore implements GatewayStateStore {
     try {
       held = await readFile(path, 'utf8');
     } catch {
-      return this.acquireLock();
+      return this.acquireLock(name);
     }
-    const { pid, startedAt } = JSON.parse(held) as { pid: number; startedAt: number };
-    const stale = !Number.isSafeInteger(pid) || !pidAlive(pid) || Date.now() - startedAt > this.lockTimeoutMs;
-    if (!stale) throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+    let pid: number;
+    try { pid = JSON.parse(held).pid; } catch { throw corrupt('unreadable lock'); }
+    if (!Number.isSafeInteger(pid) || pid <= 0) throw corrupt('invalid lock owner');
+    if (pidAlive(pid)) throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
     await unlink(path).catch(() => undefined);
-    return this.acquireLock();
+    return this.acquireLock(name);
   }
 
-  private async releaseLock(token: string): Promise<void> {
-    const path = join(this.stateDir, LOCK_FILE);
+  private async releaseLock(token: string, name = LOCK_FILE): Promise<void> {
+    const path = join(this.stateDir, name);
     try {
       const held = JSON.parse(await readFile(path, 'utf8')) as { token: string };
       if (held.token === token) await unlink(path);
@@ -242,6 +241,18 @@ export class FileGatewayStateStore implements GatewayStateStore {
   }
 
   async compareAndSet(expectedRevision: number, next: StoredState): Promise<{ revision: number }> {
+    const result = this.transaction.then(() => this.commit(expectedRevision, next));
+    this.transaction = result.catch(() => undefined);
+    return result;
+  }
+
+  async claimWriter(): Promise<() => Promise<void>> {
+    await this.ensureDir();
+    const token = await this.acquireLock('.host-lock');
+    return () => this.releaseLock(token, '.host-lock');
+  }
+
+  private async commit(expectedRevision: number, next: StoredState): Promise<{ revision: number }> {
     await this.ensureDir();
     const token = await this.acquireLock();
     try {
