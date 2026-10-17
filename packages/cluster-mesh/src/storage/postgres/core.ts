@@ -5,10 +5,10 @@ import { DEFAULT_WORK_LIMITS, validateWorkLimits, validateWriterFence, type Stor
 import type { CommitReceipt } from '../atomic.js';
 import { StorageDeniedError, StorageInvalidCommandError } from '../errors.js';
 import { createStaticAuthorityPort } from '../kernel.js';
-import { HmacExactHeadBoundaryProvider } from '../tokens.js';
+import { HmacExactHeadBoundaryProvider, type ChainBoundaryProvider } from '../tokens.js';
 import { PgRoots, pgJsonBytes, type PgRoot } from './roots.js';
 import { PgTransactions } from './transactions.js';
-import { decodePgCounter, decodePgText, decodePgUtf8 } from './codec.js';
+import { decodePgText, decodePgUtf8 } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { loadPgAssets, verifyPgInstallation } from './migrations.js';
 import type { PgSession, PostgresStorageOptions } from './protocol.js';
@@ -23,7 +23,7 @@ export class PgCore {
   readonly tx: PgTransactions;
   readonly roots: PgRoots;
   readonly ambient = new AsyncLocalStorage<PgTx>();
-  readonly provider: HmacExactHeadBoundaryProvider;
+  readonly provider: ChainBoundaryProvider;
   readonly limits: WorkLimits;
   readonly authority;
   constructor(readonly options: PostgresStorageOptions, readonly incarnation: string) {
