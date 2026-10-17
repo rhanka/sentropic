@@ -298,6 +298,7 @@
     - [ ] Added ordinary same-session transactions with owned inputs, sequential pending roots, closed/rollback-only nested contexts, durable command receipts, contributor/fence revalidation and one final root publication. Arbitrary callbacks run once.
     - [ ] Added exact sequence/head/allocation chain reads, HMAC continuations, complete page-envelope budgets and explicit covered/incomplete outcomes. Reads seek only requested positions and payloads; they do not scan earlier history.
     - [ ] Added a frozen scoped ordinary facade with private core/grant fields, bounded transaction views, same-identity command recovery, distinct genesis/index replay and full getters assembled from exact pages.
+    - [ ] Exposed the injected-driver factory through its selected Postgres leaf only; binding/issuance are asynchronous, durable authority operations. Root exports and disabled peers remain untouched pending packaging gates.
   - [ ] Assets `assets/storage/postgres/00N-*.sql` and `manifest.json`; host-owned migration history attachment.
     - [ ] RED `postgres-migrations.spec.ts`: a host-owned history links every transactional asset receipt to the host migration; schema drift and applied-checksum drift must both refuse opening. Asset manifest generation is explicit Make tooling.
     - [ ] Implemented packaged checksum verification and host-session-only application/completion. Opening compares every predecessor/receipt and actual catalog columns, constraints, indexes and function definitions; normal requests never apply migrations.
