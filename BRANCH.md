@@ -116,7 +116,8 @@
   - [x] Create `tools/gateway-evolution/clients.json` L0 vendor runtime inventory (BR120-EX7 scope)
   - [ ] Create `tools/gateway-evolution/run.mjs` shared verifier (BR120-EX7)
   - [ ] Create `tools/gateway-evolution/Makefile` with seven targets (BR120-EX7): gateway-candidate-bundle, gateway-consumer-gate, gateway-client-fixtures, gateway-client-e2e, gateway-release-check, gateway-host-packed-test, gateway-harness-test
-  - [ ] Create `tools/gateway-evolution/tests/run.test.mjs` + `make-contract.test.sh` + `runner-cleanup.test.sh`; sub-Makefile requires command-line ENV, includes root Makefile, rejects .env project override and port mismatch
+  - [x] Create `tools/gateway-evolution/run.mjs` closed v1 input/manifest validation + `tests/run.test.mjs` (pure green 13/13) + `manifests/tool-only.json` (node:24-bookworm-slim digest 0e0ff40c, python-absent)
+  - [ ] Create `tools/gateway-evolution/tests/make-contract.test.sh` + `runner-cleanup.test.sh`; sub-Makefile requires command-line ENV, includes root Makefile, rejects .env project override and port mismatch
   - [x] Create gateway `tests/client-runtime-admission.test.ts` + `src/client-runtime-admission.ts` (green 9/9, typecheck/lint clean)
   - [x] Create gateway `tests/evolution-contract.test.ts` + `src/evolution-contract.ts` (green 6/6, typecheck/lint clean)
   - [ ] Implement GW6-M1/RC6-M1 context lock validation + `release bump accepted` + `@sentropic drift refused` (typed `external-row-unpinned`, zero installs) in helper/verifier/tests
