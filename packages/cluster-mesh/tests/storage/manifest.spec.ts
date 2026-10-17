@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { ManifestRegistry, buildManifest, digestManifest } from '../../src/storage/manifest.js';
+import { stagedDigestOf, stagedSealRoot } from './staged-corpus.js';
 import { createStagedTestKernel as createStagedKernel } from './staged-client.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 import type { WriterFence } from '../../src/storage/contracts.js';
@@ -29,6 +30,23 @@ const emptyUnit = (): AtomicUnit => ({
 });
 
 describe('K4 manifest: canonical round-trip', () => {
+  it('should distinguish collection boundaries that collide under flattening', () => {
+    const common = { scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' }, descriptorVersion: 'd', encodingVersion: 'e', terminal: { count: '0', complete: false } };
+    const one = buildManifest({ ...common, selections: ['a'], heads: { a: { head: 'h1', allocation: '1' } }, unitRoots: ['b', 'h2', '1'] });
+    const two = buildManifest({ ...common, selections: ['a', 'b'], heads: { a: { head: 'h1', allocation: '1' }, b: { head: 'h2', allocation: '1' } }, unitRoots: [] });
+    assert.notEqual(digestManifest(one), digestManifest(two), 'C17: selection and unit-root collection boundaries cannot collide');
+  });
+
+  it('should own nested heads before and after retention', () => {
+    const heads = { a: { head: 'original', allocation: '1' } };
+    const manifest = buildManifest({ scope: { tenantId: 't', workspaceId: 'w' }, selections: ['a'], heads, unitRoots: [], descriptorVersion: 'd', encodingVersion: 'e', terminal: { count: '1', complete: true } });
+    const registry = new ManifestRegistry();
+    const digest = registry.retain(manifest);
+    heads.a.head = 'caller mutation';
+    assert.equal(manifest.heads.a.head, 'original', 'C17: building a manifest owns nested input heads');
+    try { (registry.verify(digest).heads.a as { head: string }).head = 'returned mutation'; } catch { /* frozen value */ }
+    assert.equal(registry.verify(digest).heads.a.head, 'original', 'C17: retained heads cannot change through returned aliases');
+  });
   it('K4-RED a built manifest retains and verifies by digest', () => {
     const manifest = buildManifest({
       scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
@@ -49,16 +67,16 @@ describe('K4 manifest: canonical round-trip', () => {
     assert.deepEqual(registry.verify(digest), manifest);
   });
 
-  it('K4-RED an unknown digest is refused', () => {
+  it('K4-RED an unknown digest is refused', async () => {
     const registry = new ManifestRegistry();
-    expectCode(
+    await expectCode(
       async () => registry.verify('digest-never-retained'),
       'invalid-command',
       'K4-RED manifest: an arbitrary digest with no retained boundary cannot open',
     );
   });
 
-  it('K4-RED a tampered manifest is rejected against its digest', () => {
+  it('K4-RED a tampered manifest is rejected against its digest', async () => {
     const manifest = buildManifest({
       scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
       selections: ['chain-m1'],
@@ -74,15 +92,15 @@ describe('K4 manifest: canonical round-trip', () => {
       ...manifest,
       selections: ['chain-m1', 'chain-evil'],
     };
-    expectCode(
+    await expectCode(
       async () => registry.verifyAgainst(tampered, digest),
       'invalid-command',
       'K4-RED manifest: a changed manifest no longer matches its digest',
     );
   });
 
-  it('K4-RED a truncated terminal export is rejected', () => {
-    expectCode(
+  it('K4-RED a truncated terminal export is rejected', async () => {
+    await expectCode(
       async () =>
         buildManifest({
           scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
@@ -113,12 +131,7 @@ describe('K4 manifest: binding to committed K4 storage', () => {
       sourceBoundary: 'boundary-k4m',
       fence: FENCE,
     });
-    await bound.stageFragment({
-      unit,
-      ordinal: '0',
-      predecessorHash: null,
-      fragmentDigest: 'digest-manifest-0',
-      effects: {
+    const effects: AtomicUnit = {
         ...emptyUnit(),
         appends: [
           {
@@ -127,20 +140,12 @@ describe('K4 manifest: binding to committed K4 storage', () => {
             expectation: { kind: 'absent', allocation: '0' },
           },
         ],
-      },
-      fence: FENCE,
-    });
+      };
+    const digest = stagedDigestOf(unit, '0', null, effects, 'contract-k4m', 'boundary-k4m');
+    await bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: digest, effects, fence: FENCE });
     const seal = await bound.sealStaged({
       unit,
-      root: {
-        operationId: 'op-manifest-1',
-        contractDigest: 'contract-k4m',
-        sourceBoundary: 'boundary-k4m',
-        finalFragmentHash: 'digest-manifest-0',
-        fragmentCount: '1',
-        dependencyRoot: 'dep-root-k4m',
-        effectRoot: 'eff-root-k4m',
-      },
+      root: stagedSealRoot(unit, [effects], 'contract-k4m', 'boundary-k4m'),
     });
     const receipt = await bound.commitStaged({ seal, fence: FENCE });
     const head = await bound.readHead('chain-manifest');
