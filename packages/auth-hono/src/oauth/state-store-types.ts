@@ -35,6 +35,7 @@ export interface AuthCodePayload {
   codeChallenge: string;
   codeChallengeMethod: 'S256';
   dpopJkt: string | null;
+  amr?: string[] | null;
   nonce: string | null;
   /**
    * RFC 8707 resource sealed at authorize time (BR-39l Lot 2). When present, it becomes the
@@ -57,6 +58,8 @@ export interface TokenMeta {
   scope: string;
   audience: string;
   dpopJkt: string | null;
+  acr?: string | null;
+  amr?: string[] | null;
   expiresAt: Date;
   createdAt: Date;
 }

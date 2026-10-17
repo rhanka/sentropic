@@ -6,7 +6,7 @@ import type { OAuthContinuationCodec, OAuthContinuationState } from './state-cod
 import { appendParams, oauthJsonError, redirectWithOAuthError } from './http-utils.js';
 import { issueAuthorizedCode } from './issue-authorized-code.js';
 import { validateRedirectUri } from './redirect-utils.js';
-import { resolveOAuthAcr, resolveOAuthSession } from './session-resolver.js';
+import { resolveOAuthAcr, resolveOAuthAmr, resolveOAuthSession } from './session-resolver.js';
 
 export interface OAuthAuthorizeHandlerOptions {
   authorizationCodeTtlSeconds?: number;
@@ -103,8 +103,9 @@ export const createOAuthAuthorizeHandler =
       return c.redirect(appendParams(options.loginUrl, loginParams, c.req.url), 302);
     }
 
-    const consentState: Pick<OAuthContinuationState, 'acr' | 'authTime' | 'userId'> = {
+    const consentState: Pick<OAuthContinuationState, 'acr' | 'amr' | 'authTime' | 'userId'> = {
       acr: resolveOAuthAcr(session.sessionRecord),
+      amr: resolveOAuthAmr(session.sessionRecord),
       authTime: session.sessionRecord.createdAt.toISOString(),
       userId: session.user.id,
     };
@@ -262,6 +263,7 @@ const resumeLoginContinuation = async (
   // added to the state type. The compiler backstops four fields; it will not remind you.
   const {
     acr: _preLoginAcr,
+    amr: _preLoginAmr,
     authTime: _preLoginAuthTime,
     createdAt: _preLoginCreatedAt,
     expiresAt: _preLoginExpiresAt,
@@ -274,6 +276,7 @@ const resumeLoginContinuation = async (
   const sealedState = await options.stateCodec.seal({
     ...restFromRequest,
     acr: resolveOAuthAcr(session.sessionRecord),
+    amr: resolveOAuthAmr(session.sessionRecord),
     authTime: session.sessionRecord.createdAt.toISOString(),
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
@@ -394,7 +397,7 @@ const sealContinuation = async (
   c: Context,
   options: OAuthAuthorizeHandlerOptions,
   request: ValidatedAuthorizeRequest,
-  session?: Pick<OAuthContinuationState, 'acr' | 'authTime' | 'userId'>,
+  session?: Pick<OAuthContinuationState, 'acr' | 'amr' | 'authTime' | 'userId'>,
   forceReauth?: Pick<OAuthContinuationState, 'forceReauth' | 'forceReauthSessionId'>
 ): Promise<string> => {
   const now = options.ports.clock.now();
@@ -414,6 +417,7 @@ const sealContinuation = async (
 
   return options.stateCodec.seal({
     acr: session?.acr,
+    amr: session?.amr,
     authTime: session?.authTime,
     clientId: request.client.clientId,
     codeChallenge: request.codeChallenge,

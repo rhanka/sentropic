@@ -44,5 +44,16 @@ export const resolveOAuthSession = async (
   return { claims, sessionRecord, user };
 };
 
+export const PASSKEY_FRESH_ACR = 'urn:sentropic:loa:passkey-fresh';
+export const BEARER_ACR = 'urn:sentropic:loa:bearer';
+
 export const resolveOAuthAcr = (session: AuthHonoSessionRecord): string =>
-  session.mfaVerified ? 'urn:sentropic:loa:passkey-fresh' : 'urn:sentropic:loa:bearer';
+  session.mfaVerified ? PASSKEY_FRESH_ACR : BEARER_ACR;
+
+/**
+ * B2: RFC 8176 `amr` values derived from the session. A passkey ceremony with
+ * user verification is a hardware-backed multi-factor event; any other session
+ * (magic-link, federation) is a single-factor bearer event.
+ */
+export const resolveOAuthAmr = (session: AuthHonoSessionRecord): string[] =>
+  session.mfaVerified ? ['hwk', 'user', 'mfa'] : ['pwd'];

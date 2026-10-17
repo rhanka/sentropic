@@ -245,7 +245,8 @@ On failure it returns 401/403 with a `WWW-Authenticate` header.
 
 | Claim | Source | Notes |
 | --- | --- | --- |
-| `acr` | Session type | `urn:sentropic:loa:passkey-fresh` (passkey session), `urn:sentropic:loa:bearer` (magic-link session) |
+| `acr` | Session type | `urn:sentropic:loa:passkey-fresh` (passkey session with user verification, `mfaVerified=true`), `urn:sentropic:loa:bearer` (magic-link/federation session) |
+| `amr` | Session type (RFC 8176) | `["hwk","user","mfa"]` (passkey+UV), `["pwd"]` (single-factor bearer) in id_token, access_token, userinfo |
 | `auth_time` | `session.createdAt` | Strong-auth timestamp tracking lands in BR-39j |
 | `tenant_id` | `oauth_clients.tenant_id` | Forward-compat column; real tenants in BR-39e |
 
