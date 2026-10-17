@@ -92,7 +92,7 @@
   - [x] Implement one configuration point, defaults and helper selection; preserve unrelated legacy mappings and explicit user reasoning; fix provider pairing, follow-up caps and in-memory compaction continuation.
   - [ ] Update `api/tests/unit/llm-runtime-stream.test.ts`, `chat-summary-runtime.test.ts`, `provider-mesh-contract-proof.test.ts` and `llm-metering-usage-normalizer.test.ts` only where behavior changes.
 - [ ] **Lot 2 — Retire selectable/default references and preserve large-context paths**
-  - [ ] Remove retired catalog/provider entries, regenerate council, update frontend loading defaults and affected seeds/fixtures; bump touched public packages after registry precheck and regenerate locks through Make.
+  - [x] Remove retired catalog/provider entries, regenerate council, update frontend loading defaults and affected seeds/fixtures; bump touched public packages after registry precheck and regenerate locks through Make.
   - [ ] Run `make test-llm-mesh SCOPE=tests/facade.test.ts ENV=test-model-retirement`, then scoped `execution-features.test.ts` and `responses-wire.test.ts`; run `make test-chat-ui ENV=test-model-retirement`.
   - [ ] Verify history/document single, chunk and merge output caps, retained facts, maximum input and cancellation with deterministic contracts.
   - [x] Six budget-refusal failures reproduced offline before adding full-rendered-request admission and finite output validation; document summaries now share the configured model and explicit none.

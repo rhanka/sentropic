@@ -8,7 +8,7 @@ vi.mock('../../src/services/settings', () => ({
   settingsService: {
     getAISettings: vi.fn().mockResolvedValue({
       defaultProviderId: 'openai',
-      defaultModel: 'gpt-4.1-nano',
+      defaultModel: 'gpt-6-luna',
       concurrency: 1,
       publishingConcurrency: 1,
       processingInterval: 1000,
@@ -630,60 +630,6 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
       hasDone: true,
     },
     statusEvents: [{ type: 'message-end' }],
-  },
-
-  // -----------------------------------------------------------------------
-  // OpenAI — GPT-4.1-nano (standard)
-  // -----------------------------------------------------------------------
-  {
-    providerId: 'openai',
-    model: 'gpt-4.1-nano',
-    label: 'GPT-4.1 Nano',
-    chatEvents: [
-      { type: 'response.created', response: { id: 'resp_test_123' } },
-      { type: 'response.output_text.delta', delta: 'Hello' },
-      { type: 'response.output_text.delta', delta: ' world' },
-      { type: 'response.completed' },
-    ],
-    expectedContentCount: 2,
-    expectedContentDeltas: ['Hello', ' world'],
-    toolEvents: [
-      { type: 'response.created', response: { id: 'resp_test_456' } },
-      {
-        type: 'response.output_item.added',
-        item: {
-          type: 'function_call',
-          id: 'fc_item_1',
-          call_id: 'call_1',
-          name: 'search',
-          arguments: '',
-        },
-      },
-      {
-        type: 'response.function_call_arguments.delta',
-        item_id: 'fc_item_1',
-        delta: '{"q":',
-      },
-      {
-        type: 'response.function_call_arguments.delta',
-        item_id: 'fc_item_1',
-        delta: '"test"}',
-      },
-      { type: 'response.completed' },
-    ],
-    expectedTools: {
-      startCount: 1,
-      startName: 'search',
-      startToolCallId: 'call_1',
-      deltaCount: 2,
-      deltas: ['{"q":', '"test"}'],
-    },
-    reasoningEvents: null,
-    expectedReasoning: null,
-    statusEvents: [
-      { type: 'response.created', response: { id: 'resp_test_000' } },
-      { type: 'response.completed' },
-    ],
   },
 
   // -----------------------------------------------------------------------
@@ -1799,7 +1745,7 @@ describe('LLM stream event normalization', () => {
     expect((reasoningDeltas[0].data as { delta: string }).delta).toBe('hidden planning');
   });
 
-  it('should strip mesh reasoning for GPT-4.1 Nano when chat passes reasoning options', async () => {
+  it('should migrate a saved nano model while preserving explicitly requested reasoning', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
     const provider = providerRegistry.requireProvider('openai');
     let capturedRequest: unknown;
@@ -1825,7 +1771,8 @@ describe('LLM stream event normalization', () => {
     );
 
     const requestOptions = (capturedRequest as { requestOptions?: { reasoning?: unknown } }).requestOptions;
-    expect(requestOptions?.reasoning).toBeUndefined();
+    expect(capturedRequest).toMatchObject({ requestOptions: { model: 'gpt-6-luna' } });
+    expect(requestOptions?.reasoning).toEqual({ effort: 'medium', summary: 'auto' });
     expect(events.some((event) => event.type === 'content_delta')).toBe(true);
     expect(events.some((event) => event.type === 'done')).toBe(true);
   });
