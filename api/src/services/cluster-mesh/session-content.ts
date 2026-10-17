@@ -586,7 +586,7 @@ export class SessionContentService {
     const digest = computePolicyDigest(policy);
     const revisionRaw = (policy as Record<string, unknown>)['projectRevision'];
     const expectedRevision =
-      typeof revisionRaw === 'number' && Number.isSafeInteger(revisionRaw) && revisionRaw > 0
+      typeof revisionRaw === 'number' && Number.isSafeInteger(revisionRaw) && revisionRaw >= 0
         ? revisionRaw
         : null;
     return { policy, digest, expectedRevision };
@@ -637,6 +637,9 @@ export class SessionContentService {
       if (expectedRevision === undefined && existing) {
         throw new SessionContentError('revision_conflict', 'project already exists');
       }
+      // N2: accept-at-N preserves persistent exclusions and the original
+      // activation; a fresh accept declaring revision 0 inserts it.
+      let acceptLocked: typeof existing | undefined;
       if (expectedRevision !== undefined) {
         const [locked] = await tx
           .select()
@@ -644,12 +647,17 @@ export class SessionContentService {
           .where(eq(sessionContentProjects.projectId, String(policy['projectId'])))
           .for('update')
           .limit(1);
-        if (!locked || locked.projectRevision !== expectedRevision) {
+        if (locked) {
+          if (locked.projectRevision !== expectedRevision) {
+            throw new SessionContentError('revision_conflict', 'project revision mismatch');
+          }
+          acceptLocked = locked;
+        } else if (expectedRevision !== 0) {
           throw new SessionContentError('revision_conflict', 'project revision mismatch');
         }
       }
       const now = new Date(this.nowMs());
-      const revision = expectedRevision === undefined ? 0 : expectedRevision + 1;
+      const revision = acceptLocked ? (expectedRevision as number) + 1 : 0;
       const row = {
         projectId: String(policy['projectId']),
         projectRevision: revision,
@@ -667,14 +675,16 @@ export class SessionContentService {
         acceptedPolicy: input.policy,
         authorityEpoch: epoch.epoch,
         offlineReadAccepted: true,
-        exclusionRevision: 0,
-        excludedSessionIds: [],
+        exclusionRevision: acceptLocked ? acceptLocked.exclusionRevision : 0,
+        excludedSessionIds: acceptLocked
+          ? [...(acceptLocked.excludedSessionIds as string[])]
+          : [],
         requiresFreshAmendment: false,
-        activatedAt: now,
+        activatedAt: acceptLocked?.activatedAt ?? now,
         updatedAt: now,
       };
       if (existing) {
-        if (expectedRevision === undefined) {
+        if (!acceptLocked) {
           throw new SessionContentError('revision_conflict', 'project already exists');
         }
         const updated = await tx
@@ -761,6 +771,19 @@ export class SessionContentService {
       if (locked.state !== 'active') {
         throw new SessionContentError('project_not_active', 'project is not active');
       }
+      // n3: the amendment policy must target this project row and workspace.
+      if (policy['projectId'] !== projectId) {
+        throw new SessionContentError('invalid_request', 'amendment targets another project');
+      }
+      if (policy['workspaceId'] !== locked.workspaceId) {
+        throw new SessionContentError('invalid_request', 'amendment targets another workspace');
+      }
+      await this.checkTombstones(tx, [{ kind: 'workspace', id: locked.workspaceId }]);
+      // N2: honor the caller's expected revision and preserve persistent
+      // exclusions, their revision and the original activation.
+      if (prepared.expectedRevision === null || prepared.expectedRevision !== locked.projectRevision) {
+        throw new SessionContentError('revision_conflict', 'project revision mismatch; re-prepare the amendment');
+      }
       const nextRevision = locked.projectRevision + 1;
       const updated = await tx
         .update(sessionContentProjects)
@@ -773,7 +796,6 @@ export class SessionContentService {
           retentionByChannel: policy['retentionByChannel'] ?? {},
           retentionDigest: prepared.digest,
           acceptedPolicy: policy,
-          excludedSessionIds: [],
           requiresFreshAmendment: false,
           updatedAt: new Date(this.nowMs()),
         })
@@ -1490,7 +1512,8 @@ export class SessionContentService {
         purgeJobId: this.newId(),
         namespaceId,
         bindingId,
-        scope: 'binding',
+        objectId,
+        scope: 'object',
         state: 'pending',
       });
     });
@@ -1739,18 +1762,27 @@ export class SessionContentService {
         .where(eq(sessionContentPurgeJobs.purgeJobId, purgeJobId));
       return { ...existing, state: 'in_progress' as const };
     });
+    // N1: `object` jobs delete one staged/`purge_pending` row only and
+    // never committed copies; other scopes keep real purge-event semantics.
+    const isObjectJob = job.scope === 'object' && (job.objectId?.length ?? 0) > 0;
     const objects = await db
       .select()
       .from(sessionContentObjects)
       .where(
-        and(
-          eq(sessionContentObjects.namespaceId, job.namespaceId),
-          inArray(sessionContentObjects.state, ['committed', 'staged', 'purge_pending']),
-        ),
+        isObjectJob
+          ? and(
+            eq(sessionContentObjects.namespaceId, job.namespaceId),
+            eq(sessionContentObjects.objectId, job.objectId as string),
+            inArray(sessionContentObjects.state, ['staged', 'purge_pending']),
+          )
+          : and(
+            eq(sessionContentObjects.namespaceId, job.namespaceId),
+            inArray(sessionContentObjects.state, ['committed', 'staged', 'purge_pending']),
+          ),
       );
-    const inScope = job.bindingId
-      ? objects.filter((o) => o.bindingId === job.bindingId)
-      : objects;
+    const inScope = isObjectJob || !job.bindingId
+      ? objects
+      : objects.filter((o) => o.bindingId === job.bindingId);
     let deletedBytes = 0;
     const deletedKeys: string[] = [];
     for (const object of inScope) {
@@ -1767,6 +1799,7 @@ export class SessionContentService {
           .set({ state: 'purged', updatedAt: new Date(this.nowMs()) })
           .where(eq(sessionContentObjects.objectId, object.objectId));
       }
+      const settledSessions = [...new Set(inScope.map((o) => o.sessionId))];
       await tx
         .update(sessionContentAttempts)
         .set({ outcome: 'cancelled' })
@@ -1774,6 +1807,9 @@ export class SessionContentService {
           and(
             eq(sessionContentAttempts.namespaceId, job.namespaceId),
             eq(sessionContentAttempts.outcome, 'attempted'),
+            isObjectJob && settledSessions.length > 0
+              ? inArray(sessionContentAttempts.sessionId, settledSessions)
+              : sql`TRUE`,
           ),
         );
       const [remaining] = await tx
@@ -1783,7 +1819,9 @@ export class SessionContentService {
           and(
             eq(sessionContentObjects.namespaceId, job.namespaceId),
             inArray(sessionContentObjects.state, ['committed', 'staged', 'purge_pending']),
-            job.bindingId ? eq(sessionContentObjects.bindingId, job.bindingId) : sql`TRUE`,
+            isObjectJob
+              ? eq(sessionContentObjects.objectId, job.objectId as string)
+              : job.bindingId ? eq(sessionContentObjects.bindingId, job.bindingId) : sql`TRUE`,
           ),
         );
       const record = {
@@ -1876,12 +1914,13 @@ export class SessionContentService {
             eq(sessionContentAttempts.outcome, 'attempted'),
           ),
         );
-      if (staged.length > 0 && staged[0]) {
+      for (const object of staged) {
         await tx.insert(sessionContentPurgeJobs).values({
           purgeJobId: this.newId(),
-          namespaceId: staged[0].namespaceId,
+          namespaceId: object.namespaceId,
           bindingId: grant.bindingId,
-          scope: 'binding',
+          objectId: object.objectId,
+          scope: 'object',
           state: 'pending',
         });
       }
