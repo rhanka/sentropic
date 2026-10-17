@@ -45,6 +45,7 @@ const harness = () => {
   const server = new ControlServer({
     service: new GatewaySessionService(store),
     controlToken,
+    ownerScopeRef: 'owner-a',
   });
   return { server, commits, controlToken, store };
 };
@@ -108,7 +109,7 @@ describe('authenticated session control', () => {
   it('revokes through control and keeps the revocation after restart', async () => {
     const { store } = trackingStore();
     const controlToken = 'control-token-for-trusted-launcher-only';
-    const first = new ControlServer({ service: new GatewaySessionService(store), controlToken });
+    const first = new ControlServer({ service: new GatewaySessionService(store), controlToken, ownerScopeRef: 'owner-a' });
     const client = createGatewayControlClient({
       transport: createInProcessControlTransport(first),
       token: controlToken,
@@ -119,7 +120,7 @@ describe('authenticated session control', () => {
       clientSessionRef: 'client-1',
     });
     await client.revokeSession({ ownerScopeRef: 'owner-a', sessionRef: issued.sessionRef });
-    const restarted = new ControlServer({ service: new GatewaySessionService(store), controlToken });
+    const restarted = new ControlServer({ service: new GatewaySessionService(store), controlToken, ownerScopeRef: 'owner-a' });
     const after = createGatewayControlClient({
       transport: createInProcessControlTransport(restarted),
       token: controlToken,

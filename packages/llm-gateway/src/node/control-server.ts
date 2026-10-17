@@ -36,12 +36,15 @@ const digestOf = (value: string): Buffer =>
 export class ControlServer {
   private readonly service: GatewaySessionService;
   private readonly controlDigest: Buffer;
+  private readonly ownerScopeRef: string;
 
-  constructor(options: { service: GatewaySessionService; controlToken: string }) {
+  constructor(options: { service: GatewaySessionService; controlToken: string; ownerScopeRef: string }) {
     if (!options.controlToken || options.controlToken.length < 16) {
       throw new ControlAuthError();
     }
     this.service = options.service;
+    if (!options.ownerScopeRef) throw new ControlAuthError();
+    this.ownerScopeRef = options.ownerScopeRef;
     this.controlDigest = digestOf(options.controlToken);
   }
 
@@ -52,7 +55,10 @@ export class ControlServer {
 
   async invoke(op: string, args: unknown, token: string): Promise<unknown> {
     if (!this.verified(token)) throw new ControlAuthError();
-    const input = (args ?? {}) as Record<string, never>;
+    if (!args || typeof args !== 'object' || Array.isArray(args)) throw new ControlAuthError();
+    const supplied = args as Record<string, unknown>;
+    if (supplied.ownerScopeRef !== undefined && supplied.ownerScopeRef !== this.ownerScopeRef) throw new ControlAuthError();
+    const input = { ...supplied, ownerScopeRef: this.ownerScopeRef };
     switch (op) {
       case 'acquireSession':
         return this.service.acquireSession(input as never);
