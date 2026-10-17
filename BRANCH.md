@@ -7,6 +7,7 @@
 
 ## Scope / Guardrails
 - Scope limited to `packages/cluster-mesh` storage kernel, comments module, Postgres module, M2-W wiring, their specs/docs, and the cluster-mesh version bump.
+<!-- Receipt compatibility: optional moduleResult is recorded in the feedback loop below. -->
 - No migration in `api/drizzle/*.sql`; Postgres assets are package assets under `packages/cluster-mesh/assets/storage/postgres/`.
 - Make-only workflow, no direct Docker commands; one Docker build at a time (`make ps-all` first).
 - Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -63,6 +64,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] `attention` BRCM2-PORT4 — `CommitReceipt` carries the optional K1 encoded `moduleResult`; ordinary/staged recovery owns it deeply. Existing receipt fields and K3 unfenced behavior remain compatible; co-review by gr-conductor pending.
 - [ ] `attention` BRCM2-EX1 — initial BRANCH.md creation exceeds 150 lines (template-mandated detailed plan); doc-only commit; rollback: none needed.
 - [ ] `attention` BRCM2-EX2 — consolidation commits are carried as-is from #666/#669/#670/#671/#667 (authorship preserved, BRANCH.md stripped); historical commits above 150 lines (for example K4 `staged-runtime.ts`, 986 lines) are not rewritten; the K4 rebuild lots replace them with commits under 150 lines.
 - [ ] `attention` BRCM2-EX3 — MAJEUR-N1 corpus re-derivation touches the reference and four corpora (~690 changed lines); the reference rejects every non-codec digest, so the corpora and reference land as three file-grouped commits (corpora RED first, reference GREEN last) above 150 lines each; rollback: revert the three commits together.

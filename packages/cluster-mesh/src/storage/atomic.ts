@@ -113,6 +113,7 @@ export interface CommitReceipt {
   readonly effectiveRecords: number;
   readonly effectiveAppends: number;
   readonly journalCursor: string;
+  readonly moduleResult?: EncodedValue;
 }
 
 export interface IdempotencySelector {
