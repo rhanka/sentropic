@@ -376,7 +376,7 @@ describe('K2a discriminating mutations', () => {
     const { bound } = bindFresh(new NoCasStore('comments'));
     await bound.appendChain('probe', { id: 'p', bytes: '{}', hash: 'hp-1' }, { kind: 'absent', allocation: '0' });
     await bound.appendChain('probe', { id: 'p', bytes: '{}', hash: 'hp-2' }, { kind: 'head', hash: 'hp-1' });
-    await expect(runAtomicCorpus(bound)).rejects.toThrow(/stale head|repeated bytes|CAS first/);
+    await expect(runAtomicCorpus(bound)).rejects.toThrow(/K2a-RED atomic: repeated bytes under a stale head still conflict \(CAS first\)/);
   });
 
   it('M2-no-scope is killed by the authority corpus', async () => {
@@ -391,25 +391,25 @@ describe('K2a discriminating mutations', () => {
           now = iso;
         },
       }),
-    ).rejects.toThrow(/denied|forged|lacks write|escalation|read-only/);
+    ).rejects.toThrow(/K2aR3-RED authority: operations forged after binding stay denied/);
   });
 
   it('M3-no-genesis-conflict is killed by the atomic corpus', async () => {
     const { bound } = bindFresh(new NoGenesisConflictStore('comments'));
     const first = await bound.genesis('probe', 'probe-1', 'digest-probe-1', { v: 1 });
     expect(first.replayed).toBe(false);
-    await expect(runAtomicCorpus(bound)).rejects.toThrow(/different hash|genesis.*conflict/);
+    await expect(runAtomicCorpus(bound)).rejects.toThrow(/K2a-RED atomic: same genesis id with a different hash conflicts/);
   });
 
   it('M4-no-byte-limit is killed by the read corpus', async () => {
     const { bound } = bindFresh(new NoByteLimitStore('comments'));
-    await expect(runReadCorpus(bound)).rejects.toThrow(/incomplete|byte|encoded/);
+    await expect(runReadCorpus(bound)).rejects.toThrow(/K2b-C19 reads: a one-byte budget cannot admit a record/);
   });
 
   it('M5-allow-recreate is killed by the chain corpus', async () => {
     const { bound } = bindFresh(new AllowRecreateStore('comments'));
     await bound.appendChain('probe', { id: 'p', bytes: '{}', hash: 'hp-1' }, { kind: 'absent', allocation: '0' });
-    await expect(runChainCorpus(bound)).rejects.toThrow(/disposed|recreat/);
+    await expect(runChainCorpus(bound)).rejects.toThrow(/K2a-RED chains: disposed identities refuse new appends/);
   });
 
   it('M6-no-staging is killed by the atomic corpus', async () => {
@@ -424,13 +424,13 @@ describe('K2a discriminating mutations', () => {
   it('M7-ignore-allocation is killed by the chain corpus', async () => {
     const { bound } = bindFresh(new IgnoreAllocationStore('comments'));
     await bound.appendChain('probe', { id: 'p', bytes: '{}', hash: 'hp-1' }, { kind: 'absent', allocation: '0' });
-    await expect(runChainCorpus(bound)).rejects.toThrow(/invalid-command|allocation/);
+    await expect(runChainCorpus(bound)).rejects.toThrow(/K2aC-RED chains: a new chain rejects a wrong creation allocation/);
   });
 
   it('M8-code-as-idempotency is killed by the chain corpus', async () => {
     const { bound } = bindFresh(new CodeAsIdempotencyStore('comments'));
     await bound.appendChain('probe', { id: 'p', bytes: '{}', hash: 'hp-1' }, { kind: 'absent', allocation: '0' });
-    await expect(runChainCorpus(bound)).rejects.toThrow(/cas-conflict/);
+    await expect(runChainCorpus(bound)).rejects.toThrow(/K2a-RED chains: a stale expected head stays a CAS conflict/);
   });
 
   it('M9-accept-unknown-token is killed by the authority corpus', async () => {
@@ -441,22 +441,22 @@ describe('K2a discriminating mutations', () => {
     };
     await expect(
       runAuthorityCorpus({ store, grant: grantFor(), readGrant: grantFor({ token: 'token-read-1', operations: ['read'] }), setNow }),
-    ).rejects.toThrow(/denied|unknown/);
+    ).rejects.toThrow(/K2aC-RED authority: a non-empty token never issued is denied/);
   });
 
   it('M10-offset-cursor is killed by the read corpus', async () => {
     const { bound } = bindFresh(new LatestHeadStore('comments'));
-    await expect(runReadCorpus(bound)).rejects.toThrow(/retained head|hash-e-5/);
+    await expect(runReadCorpus(bound)).rejects.toThrow(/K2aC-RED reads: a retained head boundary never picks up later appends/);
   });
 
   it('M11-record-counting-budget is killed by the read corpus', async () => {
     const { bound } = bindFresh(new RecordCountingStore('comments'));
-    await expect(runReadCorpus(bound)).rejects.toThrow(/full encoded page/);
+    await expect(runReadCorpus(bound)).rejects.toThrow(/K2aR3-RED reads: the budget covers the full encoded page, not the record alone/);
   });
 
   it('M12-empty-values is killed by the atomic corpus', async () => {
     const { bound } = bindFresh(new EmptyValuesStore('comments'));
-    await expect(runAtomicCorpus(bound)).rejects.toThrow(/persisted|hello/);
+    await expect(runAtomicCorpus(bound)).rejects.toThrow(/K2aR3-RED atomic: persisted record values survive the commit/);
   });
 
   it('M13-mutable-grant is killed by the authority corpus', async () => {
@@ -466,22 +466,22 @@ describe('K2a discriminating mutations', () => {
       now = iso;
     };
     const readGrant = grantFor({ token: 'token-read-1', operations: ['read'] });
-    await expect(runAuthorityCorpus({ store, grant: grantFor(), readGrant, setNow })).rejects.toThrow(/denied|forged/);
+    await expect(runAuthorityCorpus({ store, grant: grantFor(), readGrant, setNow })).rejects.toThrow(/K2aR3-RED authority: operations forged after binding stay denied/);
   });
 
   it('M14-ignore-aggregate-version is killed by the atomic corpus', async () => {
     const { bound } = bindFresh(new IgnoreAggregateVersionStore('comments'));
-    await expect(runAtomicCorpus(bound)).rejects.toThrow(/cas-conflict|aggregate-version/);
+    await expect(runAtomicCorpus(bound)).rejects.toThrow(/K2aR3-RED atomic: a false aggregate-version guard rolls back the whole unit/);
   });
 
   it('M15-drop-unsupported-effects is killed by the atomic corpus', async () => {
     const { bound } = bindFresh(new DropUnsupportedEffectsStore('comments'));
-    await expect(runAtomicCorpus(bound)).rejects.toThrow(/invalid-command|relationship|carrier/);
+    await expect(runAtomicCorpus(bound)).rejects.toThrow(/K2aR3-RED atomic: relationships are explicitly rejected by the K2a reference/);
   });
 
   it('M16-accept-stale-update is killed by the atomic corpus', async () => {
     const { bound } = bindFresh(new AcceptStaleUpdateStore('comments'));
-    await expect(runAtomicCorpus(bound)).rejects.toThrow(/cas-conflict|stale/);
+    await expect(runAtomicCorpus(bound)).rejects.toThrow(/K2aR3-RED atomic: a stale aggregate update rolls back the whole unit/);
   });
 
   it('M17-frozen-resume-cursor is killed by the read resume corpus', async () => {

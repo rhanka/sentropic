@@ -101,7 +101,7 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
     'K2aR3-RED reads: a retained window boundary still ends at its own head',
   );
   const exhausted = await bound.readPage('readable', 10, null, 1);
-  assert.equal(exhausted.outcome, 'incomplete');
+  assert.equal(exhausted.outcome, 'incomplete', 'K2b-C19 reads: a one-byte budget cannot admit a record');
   assert.equal(exhausted.records.length, 0);
   assert.equal(exhausted.nextCursor, null);
 
