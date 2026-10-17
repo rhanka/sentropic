@@ -109,8 +109,8 @@ export class PgScoped {
   journalRetry(consumer: string, expected: string | null, fence: JournalFence) { return operatePgConsumer(this.#core, this.#grant, consumer, 'retry', expected, undefined, fence); }
   stageFragment(input: RootStageInput) { return stagePgFragment(this.#core, this.#grant, input); }
   sealStep(input: PgSealRequest) { return sealPgStep(this.#core, this.#grant, input); }
-  commitStaged(seal: AuthenticatedStagedSeal, fence: WriterFence) { return commitPgStaged(this.#core, this.#grant, seal, fence); }
-  abortStaged(unit: AuthenticatedStagedHandle, fence: WriterFence, reason: string) { return abortPgStaged(this.#core, this.#grant, unit, fence, reason); }
+  commitStaged(input: { readonly seal: AuthenticatedStagedSeal; readonly fence: WriterFence }) { return commitPgStaged(this.#core, this.#grant, input.seal, input.fence); }
+  abortStaged(input: { readonly unit: AuthenticatedStagedHandle; readonly fence: WriterFence; readonly reason: string }) { return abortPgStaged(this.#core, this.#grant, input.unit, input.fence, input.reason); }
   indexGet(key: string) { return this.#read((view) => view.findIdempotency({ key })); }
   readPage(chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) { return this.#read((view) => view.readChain({ chainId, limit, cursor, maxEncodedBytes })); }
   async readChain(chainId: string) {

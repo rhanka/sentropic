@@ -29,7 +29,7 @@ const fenceProbe = async () => {
     let seal;
     do { seal = (await bound.sealStep({ unit, root: stagedSealRoot(unit, [effects]), fence, limits: { maxRecords: 128, maxAppends: 128, maxEncodedBytes: 524288 } })).seal; } while (!seal);
     await root.provisionFence(grant, { ...fence, epoch: '2' });
-    await assert.rejects(() => bound.commitStaged(seal!, fence), { code: 'invalid-command' }, 'PG fence probe: a valid old capability cannot publish after rotation');
+    await assert.rejects(() => bound.commitStaged({ seal: seal!, fence }), { code: 'invalid-command' }, 'PG fence probe: a valid old capability cannot publish after rotation');
   } finally { await fixture.close(); }
 };
 const erasureProbe = async (omitErase = false) => {
