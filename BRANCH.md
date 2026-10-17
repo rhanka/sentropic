@@ -455,6 +455,7 @@
   - [ ] HTTP decision references resolve through their injected port before and after pending writes; actor/action/scope/base/proposal must match. Installed services independently resolve the pinned authority and check actual domain-clock expiry/revocation immediately before publication.
   - [ ] The router integration probe exposed a transaction-handle invocation mistake: M1 uses `store.transaction().run(callback)`. Both handlers now use that exact signature; the frozen port remains unchanged.
   - [ ] Added canonical namespace composition that verifies every invocation and derives issued scope exclusively through the host's verified-context resolver; principal/workspace mismatches refuse before the module context. The selected comments leaf exports the exact factory.
+  - [ ] Added full-runtime namespace probes for disabled startup, verified principal/workspace/generation/invocation binding and forged body-scope refusal with no canonical event.
   - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
   - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
