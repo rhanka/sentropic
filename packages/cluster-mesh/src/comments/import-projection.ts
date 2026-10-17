@@ -31,7 +31,7 @@ export const validateCommentsImportProjection = async (options: CommentsServiceO
       if (createLifecycleEvent(basis, input, options.capacity).hash !== record.hash) throw new CommentsTransportError('invalid-request', 'Imported lifecycle envelope differs');
     }
     // Module-generated terminal records are authenticated by the staged digest.
-    if (['import-manifest', 'unit-receipt', 'batch-receipt-snapshot'].includes(record.kind)) continue;
+    if (state.terminalHashes.includes(record.hash)) continue;
     const resources = async (source: CanonicalChainRecord | null): Promise<readonly ResourceRef[]> => {
       if (source?.kind === 'annotation-revision') return [source.primary, ...source.secondary].map((target) => target.resource);
       if (source?.kind === 'thread-structure-revision') return [source.primary.resource];

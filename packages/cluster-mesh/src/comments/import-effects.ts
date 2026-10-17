@@ -1,4 +1,4 @@
-import { canonicalJson, hashRecord, sha256Hex } from '@sentropic/comments';
+import { canonicalJson, hashRecord, sha256Hex, createOperationAuditEvent } from '@sentropic/comments';
 import type { CanonicalChainRecord, CanonicalBatchReceiptSnapshot, CanonicalUnitReceipt } from '@sentropic/comments';
 import type { AtomicUnit } from '../storage/atomic.js';
 import { EFFECT_SECTIONS } from '../storage/staged-preparation.js';
@@ -8,6 +8,7 @@ import { commentsRecordEffects } from './record-effects.js';
 import { chainIdentity, commandKey, commentsObjectKey, decodeRecord, selectionForRecord } from './storage-schema.js';
 import { CommentsTransportError, type CommentsFragment, type CommentsUnitRoot } from './transport-contracts.js';
 import type { CommentsImportState } from './import-state.js';
+import type { CommentsServiceOptions } from './lifecycle-contracts.js';
 export const mergeCommentsEffects = (...parts: readonly AtomicUnit[]): AtomicUnit => Object.fromEntries(EFFECT_SECTIONS.map((section) => [section, parts.flatMap<unknown>((part) => part[section])])) as unknown as AtomicUnit;
 export const commentsImportDataEffects = (records: readonly CanonicalChainRecord[]): AtomicUnit => {
   const parts = records.map((record) => {
@@ -36,7 +37,7 @@ export const verifyCommentsTerminal = (state: CommentsImportState, fragment: Com
     return { unitId: unit.unitId, records: unit.records, payloadDigest };
   });
 };
-export const commentsImportReceiptEffects = async (state: CommentsImportState, context: PgInstalledContext): Promise<AtomicUnit> => {
+export const commentsImportReceiptEffects = async (state: CommentsImportState, context: PgInstalledContext, options: CommentsServiceOptions): Promise<AtomicUnit> => {
   const request = state.binding.request; const parts: AtomicUnit[] = [];
   const batchKey = canonicalJson(['comments-batch-binding', 'v1', request.batchId]);
   const stored = await context.aggregate(batchKey);
@@ -55,6 +56,8 @@ export const commentsImportReceiptEffects = async (state: CommentsImportState, c
     parts.push(commentsRecordEffects(selection, record, null));
   };
   await genesis(request.manifest);
+  await genesis(createOperationAuditEvent([], { scope: request.scope, subject: 'account-association', subjectId: canonicalJson(['comments-import', state.binding.operationId]), operation: 'import',
+    principal: context.grant.principalId, audience: [context.grant.principalId], detail: { sourceBoundary: state.binding.sourceBoundary, mappingVersion: request.expectedMappingVersion, unitIds: state.binding.unitIds } }, options.capacity));
   const receipts: CanonicalUnitReceipt[] = [];
   for (const unitId of state.binding.unitIds) {
     if (await context.head(chainIdentity({ kind: 'unit-receipts', unitId }).key)) throw new CommentsTransportError('conflict', 'Import unit receipt is already committed');
