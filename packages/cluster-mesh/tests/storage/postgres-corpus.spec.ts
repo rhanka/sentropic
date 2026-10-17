@@ -6,7 +6,48 @@ import { grantFor } from './authority-corpus.js';
 import { runAtomicCorpus } from './atomic-corpus.js';
 import { runStagedCorpus, type StagedCorpusStore } from './staged-corpus.js';
 import { runBarrierCorpus, type BarrierCorpusStore } from './barrier-corpus.js';
+import { runReplayCorpus, type ReplayCorpusStore } from './replay-corpus.js';
+import { quotePgIdentifier, type PgRegisteredQuery, type InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
+import { StorageInvalidCommandError } from '../../src/storage/errors.js';
+import type { PgScoped } from '../../src/storage/postgres/index.js';
+const snapshotQuery: PgRegisteredQuery = async (_input, context) => {
+  const schema = quotePgIdentifier(context.layout.dataSchema); const position = context.cursor as string | null ?? '0';
+  const rows = (await context.session.execute({ text: `SELECT * FROM ${schema}.map_page($1::bigint,$2::bigint,$3::integer)`, values: [context.root, position, context.limit + 1] })).rows;
+  const records = rows.slice(0, context.limit).flatMap((row) => {
+    const [kind, key] = JSON.parse(String(row.key)) as string[];
+    if (!['chain', 'index', 'record', 'aggregate', 'genesis'].includes(kind!) || row.value === null) return [];
+    return [{ kind, key, value: JSON.parse(Buffer.from(row.value as Uint8Array).toString('utf8')) }];
+  });
+  return { records, nextCursor: rows.length > context.limit ? (BigInt(position) + BigInt(context.limit)).toString() : null };
+};
 describe.skipIf(!pgEnabled)('shared corpora on injected Postgres', () => {
+  it('preserves the shared journal/checkpoint/poison/snapshot corpus', async () => {
+    const descriptor = { contractVersion: 'v1', contractDigest: 'replay', schemaVersions: ['1'], requiredProfiles: [], optionalProfiles: [], chainKinds: ['test'], queryNames: ['scope-chain-index'], boundaries: ['scope'], pageLimits: { maxRecords: 100, maxEncodedBytes: 1048576 } };
+    const fixture = await createPgFixture({ descriptor, queries: { 'scope-chain-index': snapshotQuery } });
+    try {
+      const original = fixture.options.driver; let fail = false;
+      const driver: InjectedPgDriver = { transaction: (options, operation) => original.transaction(options, (session) => operation({ execute: (statement) => {
+        if (fail && statement.text.startsWith(`INSERT INTO "${fixture.name}".journal`)) { fail = false; throw new StorageInvalidCommandError('injected journal rollback'); }
+        return session.execute(statement);
+      } })) };
+      fixture.options.driver = driver; const root = await fixture.open();
+      const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
+      const foreign = grantFor({ token: 'foreign', scope: { tenantId: 'tenant-a', workspaceId: 'foreign' }, operations: ['read', 'write', 'maintain'] });
+      const client = (issued: typeof grant, bound: PgScoped) => {
+        const base = pgCorpusClient(root, issued, bound);
+        const extra = {
+          journalRead: (consumer: string, after: number, limit: number) => bound.journalRead(after, limit, consumer),
+          journalMarkPoison: bound.journalPoison.bind(bound), externalRead: (after: number, limit: number) => bound.journalRead(after, limit),
+          armExternalFailure: async () => { fail = true; },
+        };
+        return new Proxy(base, { get(target, property) { if (Object.hasOwn(extra, property)) return extra[property as keyof typeof extra]; const value = Reflect.get(target, property, target) as unknown; return typeof value === 'function' ? value.bind(target) : value; } }) as unknown as ReplayCorpusStore;
+      };
+      await runReplayCorpus(client(grant, await root.bindNew(grant)), client(foreign, await root.bindNew(foreign)), {
+        rebind: async () => client(grant, await (await fixture.open()).bind(grant)),
+        bindWithoutMaintain: async () => { const weak = grantFor({ token: 'weak', operations: ['read', 'write'] }); return client(weak, await root.bindNew(weak)); },
+      });
+    } finally { await fixture.close(); }
+  });
   it('preserves the shared ordinary atomic contract with module effects', async () => {
     const fixture = await createPgFixture();
     try {
