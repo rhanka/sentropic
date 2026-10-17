@@ -7,7 +7,6 @@
 import { createHash } from 'node:crypto';
 import { StorageInvalidCommandError } from './errors.js';
 import {
-  encodeCompoundKey,
   isDecimalCounter,
   isNonEmptyString,
   validateStorageScope,
@@ -19,6 +18,7 @@ export const EXPORT_MANIFEST_VERSION = 'export-manifest-v1';
 export interface ManifestChainHead {
   readonly head: string;
   readonly allocation: string;
+  readonly terminalSeq?: string;
 }
 
 export interface ManifestTerminal {
@@ -66,6 +66,7 @@ export const buildManifest = (input: ManifestBuildInput): ExportManifest => {
     if (!isDecimalCounter(bound.allocation)) {
       throw new StorageInvalidCommandError(`manifest head lacks a decimal allocation: ${selection}`);
     }
+    if (bound.terminalSeq !== undefined && !isDecimalCounter(bound.terminalSeq)) throw new StorageInvalidCommandError('manifest terminal sequence must be decimal');
   }
   for (const key of Object.keys(input.heads)) {
     if (!selections.includes(key)) throw new StorageInvalidCommandError(`manifest head outside selections: ${key}`);
@@ -82,6 +83,7 @@ export const buildManifest = (input: ManifestBuildInput): ExportManifest => {
   if (!isDecimalCounter(input.terminal.count)) {
     throw new StorageInvalidCommandError('manifest terminal requires a decimal count');
   }
+  if (typeof input.terminal.complete !== 'boolean') throw new StorageInvalidCommandError('manifest terminal completeness must be boolean');
   if (input.terminal.complete && input.terminal.count !== String(selections.length)) {
     throw new StorageInvalidCommandError('a terminal fragment binds its exact count');
   }
@@ -89,7 +91,7 @@ export const buildManifest = (input: ManifestBuildInput): ExportManifest => {
     version: EXPORT_MANIFEST_VERSION,
     scope: { tenantId: input.scope.tenantId, workspaceId: input.scope.workspaceId },
     selections,
-    heads: { ...input.heads },
+    heads: Object.fromEntries(selections.map((selection) => [selection, { ...input.heads[selection] }])),
     unitRoots: [...input.unitRoots],
     descriptorVersion: input.descriptorVersion,
     encodingVersion: input.encodingVersion,
@@ -99,20 +101,20 @@ export const buildManifest = (input: ManifestBuildInput): ExportManifest => {
 
 /** Canonical encoding of a manifest for digesting. */
 export const canonicalManifestEncoding = (manifest: ExportManifest): string =>
-  encodeCompoundKey([
+  JSON.stringify([
+    'storage-export-manifest',
     manifest.version,
-    manifest.scope.tenantId,
-    manifest.scope.workspaceId,
-    ...manifest.selections.flatMap((selection) => [
+    [manifest.scope.tenantId, manifest.scope.workspaceId],
+    ['selections', manifest.selections.map((selection) => [
       selection,
-      manifest.heads[selection]?.head ?? '',
-      manifest.heads[selection]?.allocation ?? '',
-    ]),
-    ...manifest.unitRoots,
-    manifest.descriptorVersion,
-    manifest.encodingVersion,
-    manifest.terminal.count,
-    manifest.terminal.complete ? 'complete' : 'partial',
+      manifest.heads[selection].head,
+      manifest.heads[selection].allocation,
+      manifest.heads[selection].terminalSeq ?? null,
+    ])],
+    ['unit-roots', manifest.unitRoots],
+    ['descriptor', manifest.descriptorVersion],
+    ['encoding', manifest.encodingVersion],
+    ['terminal', manifest.terminal.count, manifest.terminal.complete],
   ]);
 
 /** Digest binding a manifest to its canonical bytes. */
@@ -124,16 +126,17 @@ const frozenCopy = (manifest: ExportManifest): ExportManifest =>
     ...manifest,
     scope: Object.freeze({ ...manifest.scope }),
     selections: Object.freeze([...manifest.selections]),
-    heads: Object.freeze({ ...manifest.heads }),
+    heads: Object.freeze(Object.fromEntries(Object.entries(manifest.heads).map(([key, head]) => [key, Object.freeze({ ...head })]))),
     unitRoots: Object.freeze([...manifest.unitRoots]),
     terminal: Object.freeze({ ...manifest.terminal }),
   }) as ExportManifest;
 
-/** Server-established retained manifest registry (§11.5). */
+/** Trusted manifest value registry. Storage-bound retention is performed by
+ * the scoped root port; retaining a value alone grants no storage access. */
 export class ManifestRegistry {
   private readonly retained = new Map<string, ExportManifest>();
 
-  /** Retain a manifest, binding its digest to real storage. */
+  /** Retain a deeply owned manifest value under its structural digest. */
   retain(manifest: ExportManifest): string {
     if (manifest.version !== EXPORT_MANIFEST_VERSION) {
       throw new StorageInvalidCommandError('unknown manifest version');
