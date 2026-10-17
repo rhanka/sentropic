@@ -250,6 +250,16 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
     - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [x] None (packaging only).
 
+- [x] **Lot 7 — Repair packed Cluster Mesh qualification after r2 rework**
+  - [x] Read CI run `39039913760`, job `117419061139`; compare I861-F11 on PR #679: the selected fixture retains the pre-r2 mesh archive integrity at the same `0.26.2` version.
+  - [x] Rebuild guarded siblings with the failed job's exact CI context; local mesh sha256 `a82610f421a0c3867380d29fcec0336b7c2097902734b467ff2e45901a6556cd` matches CI byte-for-byte.
+  - [x] Reproduce the exact stale-integrity refusal before the fix: `make -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import` (exit 2; existing sibling-integrity assertion).
+  - [x] Run `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`; only the mesh integrity value changes (CISEAT-EX4).
+  - [x] Lot gate: rerun the exact packed qualification above; 10 files / 63 tests pass, including the existing sibling-integrity assertion.
+  - [x] Scope gate: `make scope-check API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import` (PASS C2).
+  - [x] Prepare one atomic fixture/checklist commit under 150 changed lines; the launch packet authorizes one push, CI observation and a handoff report (no merge/publication).
+  - [x] API/UI/browser E2E changes and UAT: N/A (fixture integrity only).
+
 - [ ] **Lot N-2** UAT
   - [ ] Web app (splitted by sublist for each env)
     - [ ] Synthetic projection import through both modes shows one account (no live seat needed).
