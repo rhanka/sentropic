@@ -50,7 +50,10 @@
   <h2 class="text-lg font-semibold text-slate-900">{$_('sessionContent.viewer')} · {row.sessionId}</h2>
   {#if access.reason}<p role="status" class="text-sm text-slate-700">{$_(`sessionContent.states.${access.reason}`)}</p>{/if}
   {#if row.lastReceivedAt}<p>{$_('sessionContent.lastReceived')}: {new Date(row.lastReceivedAt).toLocaleString()}</p>{/if}
-  {#if row.retained}<p>{row.expiresAt === null ? $_('sessionContent.none') : `${$_('sessionContent.deadline')}: ${new Date(row.expiresAt).toLocaleString()}`}</p>{/if}
+  {#if row.retained && row.expiresAt !== undefined}<p>{row.expiresAt === null ? $_('sessionContent.none') : `${$_('sessionContent.deadline')}: ${new Date(row.expiresAt).toLocaleString()}`}</p>{/if}
+  {#each row.copies ?? [] as copy (copy.objectId)}
+    <p>{$_(`sessionContent.${copy.channel === 'terminal.cache' ? 'cache' : 'mirror'}`)} · {copy.expiresAt === null ? $_('sessionContent.none') : `${$_('sessionContent.deadline')}: ${new Date(copy.expiresAt).toLocaleString()}`}</p>
+  {/each}
   {#each [...(output?.gaps ?? row.gaps ?? [])].sort((a, b) => a.from - b.from) as gap}
     <p class="rounded border border-yellow-200 bg-yellow-50 p-2 text-yellow-800">{$_('sessionContent.gap')}: {gap.from}–{gap.to} · {gap.reason}</p>
   {/each}

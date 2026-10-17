@@ -58,7 +58,8 @@ export interface SessionView extends ContentScope {
   purgeStatus?: 'pending' | 'running' | 'completed' | 'failed';
   projectRevision: number;
   grantProjectRevision: number;
-  expiresAt: number | null;
+  expiresAt?: number | null;
+  copies?: { objectId: string; channel: RetainedChannel; expiresAt: number | null }[];
   pauseReason?: string;
   lastReceivedAt?: number;
   gaps?: { from: number; to: number; reason: string }[];
@@ -74,8 +75,10 @@ export function viewAccess(row: SessionView, scope: ContentScope, now = Date.now
   if (row.revoked) return denied('grant_revoked');
   if (row.purgeStatus) return denied(`purge_${row.purgeStatus}`);
   const closed = row.status !== 'attached';
-  const stored = row.retained && row.storedAuthorized && (!closed || row.historyAuthorized)
-    && (row.expiresAt === null || now < row.expiresAt);
+  const deadlineAllows = row.expiresAt === undefined
+    ? row.copies?.some((copy) => copy.expiresAt === null || now < copy.expiresAt) ?? false
+    : row.expiresAt === null || now < row.expiresAt;
+  const stored = row.retained && row.storedAuthorized && (!closed || row.historyAuthorized) && deadlineAllows;
   const reason = closed ? (row.historyAuthorized ? 'retained_closed' : 'history_authorization_required')
     : row.projectRevision !== row.grantProjectRevision ? 'project_revision_changed'
       : row.pauseReason || (!row.sourceAvailable ? 'source_unavailable' : '');
