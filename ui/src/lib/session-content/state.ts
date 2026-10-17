@@ -1,3 +1,5 @@
+import type { ControlContext } from './proof';
+
 export type RetainedChannel = 'terminal.cache' | 'native.mirror';
 export type Channel = RetainedChannel | 'terminal.live' | 'keyboard.control';
 export type Retention = { mode: 'none' } | { mode: 'duration'; durationSeconds: number };
@@ -92,6 +94,14 @@ export function canRequestHistory(row: SessionView, scope: ContentScope, now = D
   return row.sourceAvailable && row.retained && !row.historyAuthorized && copyAvailable
     && !row.excluded && !row.revoked && !row.purgeStatus && row.membershipActive !== false
     && viewAccess(row, scope, now).reason !== 'scope_mismatch';
+}
+
+export function keyboardContext(row: SessionView, scope: ContentScope, control: ControlContext | undefined,
+  sourceVerified: boolean): ControlContext | null {
+  if (!sourceVerified || !control || !viewAccess(row, scope).live
+    || control.ownerId !== scope.ownerId || control.workspaceId !== scope.workspaceId
+    || control.bindingId !== row.bindingId || control.projectRevision !== row.projectRevision) return null;
+  return control;
 }
 
 interface ConsentPorts<P> {
