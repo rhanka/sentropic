@@ -138,59 +138,141 @@ export const readPgJournal = async (
             })),
           }
         : await session.execute({
-            text: `SELECT j.sequence::text, j.event::text FROM ${core.roots.schema}.journal AS j WHERE j.scope_key=$1 AND j.sequence>$2::bigint ORDER BY j.sequence LIMIT $3`, values: [core.roots.key(grant.scope), String(after), limit] });
+            text: `SELECT j.sequence::text, j.event::text FROM ${core.roots.schema}.journal AS j WHERE j.scope_key=$1 AND j.sequence>$2::bigint ORDER BY j.sequence
+        LIMIT $3`,
+            values: [core.roots.key(grant.scope), String(after), limit],
+          });
       for (const row of result.rows) {
-        const seq = pgSafeCounter(row.sequence); const event = decodePgJson<PgJournalDraft>(decodePgText(row.event));
-        if (seq !== after + events.length + 1 || String(seq) !== event.seq || typeof event.eventId !== 'string') throw new PostgresStorageError('corruption');
-        const value: RootJournalEvent = { ...event, seq, scope: { ...grant.scope }, ...(event.segment ? { segment: { ...event.segment, from: pgSafeCounter(event.segment.from), to: pgSafeCounter(event.segment.to) } } : { segment: undefined }) };
-        if (Buffer.byteLength(JSON.stringify({ events: [...events, value], watermark }), 'utf8') > core.work().maxEncodedBytes) break;
+        const seq = pgSafeCounter(row.sequence);
+        const event = decodePgJson<PgJournalDraft>(decodePgText(row.event));
+        if (seq !== after + events.length + 1 || String(seq) !== event.seq || typeof event.eventId !== 'string')
+          throw new PostgresStorageError('corruption');
+        const value: RootJournalEvent = {
+          ...event,
+          seq,
+          scope: { ...grant.scope },
+          ...(event.segment
+            ? {
+                segment: {
+                  ...event.segment,
+                  from: pgSafeCounter(event.segment.from),
+                  to: pgSafeCounter(event.segment.to),
+                },
+              }
+            : { segment: undefined }),
+        };
+        if (
+          Buffer.byteLength(JSON.stringify({ events: [...events, value], watermark }), 'utf8') >
+          core.work().maxEncodedBytes
+        )
+          break;
         events.push(value);
         if (state) {
           if (after <= state.scanned) state.scanned = Math.max(state.scanned, seq);
           if (state.retryAuthorized && state.failedEvent === value.eventId) state.deliveredPoison = true;
         }
       }
-      if (events.length === 0 && after < watermark) throw new StorageCapacityExceededError('journal replay is unavailable or event exceeds its byte budget');
+      if (events.length === 0 && after < watermark)
+        throw new StorageCapacityExceededError('journal replay is unavailable or event exceeds its byte budget');
     }
     if (state) await savePgConsumer(core, session, grant, consumer!, state);
     return { events, watermark };
   });
 };
-export const checkpointPgJournal = async (core: PgCore, grant: ScopeGrant<unknown>, consumer: string, expected: number, next: number, fence: JournalFence): Promise<void> => {
+export const checkpointPgJournal = async (
+  core: PgCore,
+  grant: ScopeGrant<unknown>,
+  consumer: string,
+  expected: number,
+  next: number,
+  fence: JournalFence,
+): Promise<void> => {
   await core.tx.run(false, async (session) => {
     await assertPgJournalFence(core, session, grant, fence);
     const state = await pgConsumer(core, session, grant, consumer);
     if (state.cursor !== expected) throw new StorageCasConflictError('checkpoint changed');
-    if (!Number.isSafeInteger(next) || next < expected || next > state.scanned || state.status !== 'running' || (state.failedSeq !== null && next >= state.failedSeq && (!state.retryAuthorized || !state.deliveredPoison))) throw new StorageInvalidCommandError('checkpoint exceeds delivered progress or unresolved poison');
+    if (
+      !Number.isSafeInteger(next) ||
+      next < expected ||
+      next > state.scanned ||
+      state.status !== 'running' ||
+      (state.failedSeq !== null && next >= state.failedSeq && (!state.retryAuthorized || !state.deliveredPoison))
+    )
+      throw new StorageInvalidCommandError('checkpoint exceeds delivered progress or unresolved poison');
     state.cursor = next;
-    if (state.failedSeq !== null && next >= state.failedSeq) { state.failedSeq = null; state.failedEvent = null; state.failedReason = null; state.retryAuthorized = false; state.deliveredPoison = false; }
+    if (state.failedSeq !== null && next >= state.failedSeq) {
+      state.failedSeq = null;
+      state.failedEvent = null;
+      state.failedReason = null;
+      state.retryAuthorized = false;
+      state.deliveredPoison = false;
+    }
     await savePgConsumer(core, session, grant, consumer, state);
   });
 };
-export const inspectPgConsumer = async (core: PgCore, grant: ScopeGrant<unknown>, consumer: string) => core.tx.run(true, async (session) => {
-  await core.check(session, grant, 'read'); const base = await core.roots.capture(session, grant.scope);
-  const state = await pgConsumer(core, session, grant, consumer, false);
-  return { cursor: state.cursor, status: state.status, failedEvent: state.failedEvent, failedReason: state.failedReason, lag: pgSafeCounter(base.sequence) - state.cursor };
-});
-export const operatePgConsumer = async (core: PgCore, grant: ScopeGrant<unknown>, consumer: string, operation: 'poison' | 'pause' | 'retry', eventId: string | null, reason?: string, fence?: JournalFence): Promise<void> => {
+export const inspectPgConsumer = async (core: PgCore, grant: ScopeGrant<unknown>, consumer: string) =>
+  core.tx.run(true, async (session) => {
+    await core.check(session, grant, 'read');
+    const base = await core.roots.capture(session, grant.scope);
+    const state = await pgConsumer(core, session, grant, consumer, false);
+    return {
+      cursor: state.cursor,
+      status: state.status,
+      failedEvent: state.failedEvent,
+      failedReason: state.failedReason,
+      lag: pgSafeCounter(base.sequence) - state.cursor,
+    };
+  });
+export const operatePgConsumer = async (
+  core: PgCore,
+  grant: ScopeGrant<unknown>,
+  consumer: string,
+  operation: 'poison' | 'pause' | 'retry',
+  eventId: string | null,
+  reason?: string,
+  fence?: JournalFence,
+): Promise<void> => {
   await core.tx.run(false, async (session) => {
     await core.check(session, grant, 'maintain', true);
     if (fence) await assertPgJournalFence(core, session, grant, fence);
     const state = await pgConsumer(core, session, grant, consumer);
     if (operation === 'poison') {
-      const external = core.options.outbox && eventId ? await core.options.outbox.find(session, stream(core, grant), eventId) : null;
-      const rows = core.options.outbox ? { rows: external?.eventId === eventId ? [{ sequence: external.seq }] : [] }
-        : await session.execute({ text: `SELECT sequence::text FROM ${core.roots.schema}.journal WHERE scope_key=$1 AND event_id=$2`, values: [core.roots.key(grant.scope), eventId] });
+      const external =
+        core.options.outbox && eventId ? await core.options.outbox.find(session, stream(core, grant), eventId) : null;
+      const rows = core.options.outbox
+        ? { rows: external?.eventId === eventId ? [{ sequence: external.seq }] : [] }
+        : await session.execute({
+            text: `SELECT sequence::text FROM ${core.roots.schema}.journal WHERE scope_key=$1 AND event_id=$2`,
+            values: [core.roots.key(grant.scope), eventId],
+          });
       const seq = rows.rows[0] ? pgSafeCounter(rows.rows[0].sequence) : -1;
-      if (seq <= state.cursor || seq > state.scanned || !reason || reason.length > 4096 || (state.failedEvent !== null && state.failedEvent !== eventId)) throw new StorageInvalidCommandError('poison must identify delivered unacknowledged progress');
-      state.failedSeq = seq; state.failedEvent = eventId; state.failedReason = reason; state.status = 'stalled'; state.retryAuthorized = false; state.deliveredPoison = false;
+      if (
+        seq <= state.cursor ||
+        seq > state.scanned ||
+        !reason ||
+        reason.length > 4096 ||
+        (state.failedEvent !== null && state.failedEvent !== eventId)
+      )
+        throw new StorageInvalidCommandError('poison must identify delivered unacknowledged progress');
+      state.failedSeq = seq;
+      state.failedEvent = eventId;
+      state.failedReason = reason;
+      state.status = 'stalled';
+      state.retryAuthorized = false;
+      state.deliveredPoison = false;
     } else if (operation === 'pause') state.status = 'paused';
     else {
       if (state.failedEvent !== eventId) throw new StorageCasConflictError('failed event changed');
-      state.status = 'running'; state.retryAuthorized = eventId !== null; state.deliveredPoison = false;
-      state.actions.push({ by: grant.principalId, eventId, at: core.now() }); if (state.actions.length > 32) state.actions.shift();
+      state.status = 'running';
+      state.retryAuthorized = eventId !== null;
+      state.deliveredPoison = false;
+      state.actions.push({ by: grant.principalId, eventId, at: core.now() });
+      if (state.actions.length > 32) state.actions.shift();
     }
     await savePgConsumer(core, session, grant, consumer, state);
-    await session.execute({ text: `INSERT INTO ${core.roots.schema}.consumer_actions(scope_key,consumer,operation,owner,event_id) VALUES($1,$2,$3,$4,$5)`, values: [core.roots.key(grant.scope), consumer, operation, grant.principalId, eventId] });
+    await session.execute({
+      text: `INSERT INTO ${core.roots.schema}.consumer_actions(scope_key, consumer, operation, owner, event_id) VALUES($1, $2, $3, $4, $5)`,
+      values: [core.roots.key(grant.scope), consumer, operation, grant.principalId, eventId],
+    });
   });
 };
