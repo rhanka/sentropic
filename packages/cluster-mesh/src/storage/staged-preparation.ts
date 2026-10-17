@@ -21,7 +21,7 @@ export const startRootPreparation = (core: StagedCore, bound: ScopedRuntime, ope
   const data = forkStagedRootData(core.data(base));
   validateRootPolicy(core, data, bound.grant, operation.barrierCount, operation.purgeCount);
   const prepared = core.coordinator.prepare(base);
-  prepared.attachment = data;
+  Object.assign(prepared, { attachment: data });
   const progress: RootSealProgress = {
     base, prepared, data, root: Object.freeze(ownedCopy(root)),
     dependencyHash: createHash('sha256').update('["staged-dependency-root","v1",['),
@@ -36,19 +36,20 @@ export const startRootPreparation = (core: StagedCore, bound: ScopedRuntime, ope
 /** Costs are measured once while accepting each bounded fragment. Preparation
  * never serializes prior fragments just to discover the next step's size. */
 export const prepareNextEffect = (core: StagedCore, bound: ScopedRuntime, progress: RootSealProgress,
-  operation: StagedOperation, work: SealStepWork, byteBudget: number): boolean => {
+  operation: StagedOperation, work: SealStepWork, byteBudget: number, appendBudget: number): boolean => {
   const fragment = operation.fragments.at(progress.fragment)!;
   while (progress.section < EFFECT_SECTIONS.length) {
     const section = EFFECT_SECTIONS[progress.section];
     const values = fragment.effects[section];
     if (progress.item >= values.length) { progress.section += 1; progress.item = 0; continue; }
+    if (section === 'appends' && work.appends >= appendBudget) return false;
     const cost = fragment.itemCosts[progress.section][progress.item];
     if (cost > byteBudget) throw new StorageCapacityExceededError('a seal item requires a larger declared byte budget');
     if (work.bytes + cost > byteBudget) return false;
     const effect = { ...emptyEffects(), [section]: [values[progress.item]] };
     prepareUnitsInScope(progress.prepared, [effect], core.context(bound.grant, operation.commitId));
     applyRootModuleEffects(core, core.data(progress.base), progress.data, bound.grant, effect);
-    if (section !== 'guards') progress.data.projections.emitDelta({ cause: 'staged',
+    if (section !== 'guards') progress.data.projections.emitDelta({ cause: 'staged-publication',
       records: section === 'records' ? [effect.records[0].key] : section === 'appends' ? [effect.appends[0].chainId] : [],
       aggregates: section === 'updates' ? [effect.updates[0].key] : [],
       relationships: section === 'relationships' ? [effect.relationships[0].relation] : [],
@@ -94,7 +95,7 @@ export const finishRootPreparation = (core: StagedCore, bound: ScopedRuntime, op
   };
   progress.data.unitRoots.set(operation.begin.operationKey, progress.root);
   appendRootEvent(core, progress.base, progress.data, bound.grant, receipt, operation.begin.operationKey, true);
-  progress.prepared.attachment = lockStagedRootData(progress.data);
+  Object.assign(progress.prepared, { attachment: lockStagedRootData(progress.data) });
   progress.receipt = receipt;
   operation.seal = Object.freeze({ unitId: operation.unitId, commitRoot: progress.root, capability: opaqueId('seal') });
   operation.state = 'sealed';
