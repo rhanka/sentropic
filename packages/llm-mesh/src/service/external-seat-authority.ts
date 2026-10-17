@@ -14,56 +14,21 @@ import {
   type AccountTransportAccount,
 } from '../account-transports.js';
 
-/** Metadata key carrying the trusted external-custody marker. */
-export const SEAT_EXTERNAL_AUTHORITY_KEY = 'seatExternalAuthority';
-
-export interface SeatExternalAuthority {
-  seatRef: string;
-  ownerScope: string;
-  epoch: number;
-  generation: number;
-  operationId: string;
-}
+// The marker key, record, and predicates live in the leaf module so the
+// base transport layer can classify outcomes without importing services.
+export {
+  isExternalSeatAccount,
+  markExternalSeatAuthority,
+  readExternalSeatAuthority,
+  SEAT_EXTERNAL_AUTHORITY_KEY,
+  type SeatExternalAuthority,
+} from '../external-seat-marker.js';
+import { readExternalSeatAuthority } from '../external-seat-marker.js';
 
 type AccountLike = Pick<AccountTransportAccount, 'accountId' | 'metadata'>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
-
-/** Read the trusted marker; malformed markers stay fail-closed (external). */
-export function readExternalSeatAuthority(
-  metadata: Record<string, unknown> | undefined,
-): SeatExternalAuthority | null {
-  if (!metadata) return null;
-  const marker = metadata[SEAT_EXTERNAL_AUTHORITY_KEY];
-  if (marker === undefined || marker === null) return null;
-  if (!isRecord(marker)) {
-    return { seatRef: 'unknown', ownerScope: 'unknown', epoch: 0, generation: 0, operationId: 'unknown' };
-  }
-  const text = (key: string): string => (typeof marker[key] === 'string' ? (marker[key] as string) : 'unknown');
-  const integer = (key: string): number =>
-    typeof marker[key] === 'number' && Number.isInteger(marker[key]) ? (marker[key] as number) : 0;
-  return {
-    seatRef: text('seatRef'),
-    ownerScope: text('ownerScope'),
-    epoch: integer('epoch'),
-    generation: integer('generation'),
-    operationId: text('operationId'),
-  };
-}
-
-/** Attach the trusted marker; returns a new metadata record. */
-export function markExternalSeatAuthority(
-  metadata: Record<string, unknown> | undefined,
-  authority: SeatExternalAuthority,
-): Record<string, unknown> {
-  return { ...(metadata ?? {}), [SEAT_EXTERNAL_AUTHORITY_KEY]: { ...authority } };
-}
-
-/** True when the trusted import path marked this account externally held. */
-export function isExternalSeatAccount(account: AccountLike): boolean {
-  return readExternalSeatAuthority(account.metadata as Record<string, unknown> | undefined) !== null;
-}
 
 /** True for a Muse device-flow grant, which owns no CLI-store refresh. */
 export function isDeviceFlowSeatAccount(account: AccountLike): boolean {
