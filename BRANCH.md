@@ -364,6 +364,7 @@
   - [ ] Added trusted same-session projection preparation and selected module asset loading to the existing backend/history bridge. Asset SQL and predecessor chains are verified; installation fingerprints include configured projection schemas.
   - [ ] Added comments projection assets under the shared PG inventory and same-session immutable metadata/resource rows. They retain explicit headers/links only; canonical bodies remain in kernel payload storage and captured roots determine membership.
   - [ ] Added bounded keyset queries joining immutable projection rows against captured kernel heads. Full resource tuples include secondary targets; retained metadata reports current ancestor availability without substituting a partial canonical record.
+  - [ ] Selected comments registration now installs its frozen descriptor, three queries, same-session projection handler and complete shared asset sequence. The M1 oracle is rerun with this full registration active from scope genesis.
   - [ ] Prepare the frozen optional peer and digest-pinned conformance/vector artifact through branch-local Docker/Make tooling; inspect the published peer before selecting its compatible range. Root/disabled imports must evaluate neither comments nor a database client.
   - [ ] Eleven-kind codecs, exact 24-method store mapping, request/transaction context, authority composition (C1a).
   - [ ] Three named queries, projections, PG projection assets (C1b); lifecycle, coverage, purge, availability (C2).

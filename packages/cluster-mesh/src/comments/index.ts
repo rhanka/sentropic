@@ -14,3 +14,4 @@ export const createCommentsModule = (options: CommentsModuleOptions) => {
   return Object.freeze({ store, withContext: <T>(grant: ScopeGrant<unknown>, operation: () => Promise<T>) => context.enter(grant, operation) });
 };
 export type { CommentsModuleOptions, CommentsStorageBinding, CommentsStorage } from './storage-contracts.js';
+export { createCommentsPostgresRegistration, createCommentsPostgresStorage, COMMENTS_DESCRIPTOR, COMMENTS_CONTRACT_DIGEST } from './postgres.js';
