@@ -22,6 +22,10 @@ for package in contracts events llm-mesh oauth-verify mcp-auth auth-hono llm-gat
   "$tsc" --typeRoots /tmp/cm-tools/node_modules/@types -p "packages/$package/tsconfig.json"
 done
 cd packages/cluster-mesh
+mkdir -p ../../.h2a
+if [ -f /source/.h2a/pg-crash-witness.json ]; then
+  cp /source/.h2a/pg-crash-witness.json ../../.h2a/
+fi
 case "$CM_ACTION" in
   typecheck)
     "$tsc" --noEmit -p tsconfig.json
@@ -32,6 +36,12 @@ case "$CM_ACTION" in
     cp -R dist /source/packages/cluster-mesh/dist ;;
   test)
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" \
-      --environment node --maxWorkers=1 ;;
+      --environment node --maxWorkers=1
+    if [ "$CM_PG_CRASH_PHASE" = seed ]; then
+      mkdir -p /source/.h2a
+      cp ../../.h2a/pg-crash-witness.json /source/.h2a/
+    elif [ "$CM_PG_CRASH_PHASE" = verify ]; then
+      rm /source/.h2a/pg-crash-witness.json
+    fi ;;
   *) echo 'Unknown cluster-mesh action' >&2; exit 1 ;;
 esac

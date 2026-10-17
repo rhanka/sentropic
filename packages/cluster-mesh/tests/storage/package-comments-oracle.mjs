@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-const require = createRequire(new URL('../../../../.h2a/comments-deps/package.json', import.meta.url));
+const require = createRequire(process.env.CM_COMMENTS_DEPS);
 const { build } = require('esbuild');
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const freeze = JSON.parse(await readFile('docs/comments-annotations/contract/contract-v1.json', 'utf8'));
