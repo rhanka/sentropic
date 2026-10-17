@@ -52,7 +52,7 @@ export const runPgTransaction = async <T>(core: PgCore, grant: ScopeGrant<unknow
         try { value = await core.ambient.run(tx, () => operation(tx)); }
         catch (error) { callbackError = error; callbackFailed = true; throw error; }
         if (tx.failed) throw tx.failed;
-        if (tx.count === 0) throw new StorageInvalidCommandError('empty transaction');
+        if (tx.count === 0) { if (tx.noop) return { value, receipt }; throw new StorageInvalidCommandError('empty transaction'); }
         const digest = pgUnitDigest(tx.digests);
         const previous = options.idempotencyKey ? await core.roots.get<{ digest: string; receipt: CommitReceipt }>(session, base.root, 'commit', options.idempotencyKey) : null;
         if (previous) {
