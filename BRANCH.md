@@ -208,6 +208,7 @@
   - [ ] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
   - [ ] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with honest dispositions.
     - [ ] `root-lifecycle.ts` prepares coverage, holds, shared references and disposal on the common root. Completion and notification membership publish together; retained memory payloads report `retained`, including captured older roots.
+    - [ ] Lifecycle/atomic fixture authorizers now name the verified fixture principal; a new shared refusal proves that a forged authorizer publishes neither purge work nor its carrier.
   - [ ] Lot gate: copy of Lot 1 gate; tests `manifest.spec.ts`, `visibility.spec.ts`, `staged-units.spec.ts`.
 
 - [ ] **Lot 6 — Postgres injected-driver module (P1, P2a, P2u, P2b-J, P2b-M, P2c consumed by comments)**
