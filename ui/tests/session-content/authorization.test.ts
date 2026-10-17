@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { canRequestHistory, ConsentFlow, createOffer, viewAccess } from '$lib/session-content/state';
+import { canRequestHistory, ConsentFlow, createOffer, keyboardContext, viewAccess } from '$lib/session-content/state';
 import { contentApi } from '$lib/session-content/api';
 import { apiRequest } from '$lib/utils/api';
 import { getApiAuthToken } from '@sentropic/cowork-bridge/core';
@@ -95,6 +95,19 @@ describe('session content authorization', () => {
       { sourceAvailable: false }, { historyAuthorized: true }, { expiresAt: 0 }]) {
       expect(canRequestHistory({ ...session, ...change }, scope)).toBe(false);
     }
+  });
+
+  it('should keep controller metadata disabled across owner, binding and project mismatches', () => {
+    const control = { ownerId: scope.ownerId, workspaceId: scope.workspaceId, bindingId: session.bindingId,
+      bindingVersion: 1, sourceGeneration: 'source', incarnation: 'incarnation', projectRevision: 2,
+      controllerEpoch: 1, sourceAvailable: true, liveAuthorized: true, credentialUsable: true };
+    expect(keyboardContext(session, scope, control, true)).toEqual(control);
+    expect(keyboardContext(session, scope, control, false)).toBeNull();
+    for (const change of [{ ownerId: 'other' }, { workspaceId: 'other' }, { bindingId: 'other' }, { projectRevision: 1 }]) {
+      expect(keyboardContext(session, scope, { ...control, ...change }, true)).toBeNull();
+    }
+    expect(keyboardContext({ ...session, status: 'ended' }, scope, control, true)).toBeNull();
+    expect(keyboardContext({ ...session, excluded: true }, scope, control, true)).toBeNull();
   });
 
   it.each(['ownerId', 'workspaceId', 'sourceId', 'projectId'] as const)(

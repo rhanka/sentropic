@@ -5,6 +5,7 @@
   import { session } from '$lib/stores/session';
   import { selectedWorkspace, setWorkspaceScope, workspaceScope } from '$lib/stores/workspaceScope';
   import { contentApi, type SessionsMetadata } from '$lib/session-content/api';
+  import { keyboardContext } from '$lib/session-content/state';
   import ConsentPanel from '$lib/components/session-content/ConsentPanel.svelte';
   import SessionViewer from '$lib/components/session-content/SessionViewer.svelte';
   import KeyboardPanel from '$lib/components/session-content/KeyboardPanel.svelte';
@@ -59,7 +60,7 @@
       {/each}
       {#each metadata?.items ?? [] as row (row.bindingId)}
         {#if metadata}<SessionViewer {row} scope={metadata} credentials={metadata.credentials} onchanged={() => void load()} />{/if}
-        <KeyboardPanel context={row.bindingId ? metadata?.controls?.[row.bindingId] ?? null : null} credentials={metadata?.credentials ?? []} />
+        <KeyboardPanel context={row.bindingId && metadata ? keyboardContext(row, metadata, metadata.controls?.[row.bindingId], metadata.sourceVerified) : null} credentials={metadata?.credentials ?? []} />
       {:else}
         {#if !busy}<p>{$_('sessionContent.empty')}</p>{/if}
         <KeyboardPanel />
