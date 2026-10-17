@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { EnrollmentProvider } from '../../src/enrollment/contracts.js';
 import { MuseEnrollmentProvider } from '../../src/enrollment/muse.js';
@@ -295,5 +295,36 @@ describe('LocalAccountTransportService muse native device-flow round-trip (S5)',
     const publicRecord = await keyring.getSecret(`sentropic-llm-mesh:${completion.accountId}:public`);
     expect(publicRecord).toContain('seat');
     expect(publicRecord).not.toContain('minted-svc-key');
+  });
+
+  it('refreshes a non-device muse account from the CLI store without touching muse-code', async () => {
+    const keyring = new InMemoryKeyring();
+    const museCodeRefresh = vi.fn(async () => {
+      throw new Error('muse-code must stay untouched for CLI-store accounts');
+    });
+    const service = new LocalAccountTransportService(
+      keyring,
+      new Map<string, EnrollmentProvider>([
+        ['muse', new MuseEnrollmentProvider({ readAuthFile: async () => AUTH_FILE, fetchFn: mintFetch })],
+        ['muse-code', { refresh: museCodeRefresh } as unknown as EnrollmentProvider],
+      ]),
+      { async resolveConfig() { return {}; } },
+    );
+    const session = await service.enroll('muse', {
+      configRef: 'default',
+      mode: 'cli',
+      redirectUri: 'http://127.0.0.1',
+      ownerScope: OWNER_SCOPE,
+    });
+    const completion = await service.completeMuseImport(session.enrollmentId, '', OWNER_SCOPE);
+    const acquisition = await service.acquire({
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      ownerScopeRef: OWNER_SCOPE,
+      now: Date.now() + 2 * 3600 * 1000,
+    });
+    expect(acquisition.material.accountId).toBe(completion.accountId);
+    expect(acquisition.material.accessToken).toBe('minted-roundtrip-key');
+    expect(museCodeRefresh).not.toHaveBeenCalled();
   });
 });
