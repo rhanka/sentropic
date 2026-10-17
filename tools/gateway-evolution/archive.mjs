@@ -36,13 +36,18 @@ export const inspectArchive = (bytes) => {
     offset = start + Math.ceil(size / 512) * 512;
     if (type === 'x') {
       let pos = 0;
+      const keys = new Set();
       while (pos < data.length) {
         const space = data.indexOf(32, pos);
-        const length = Number(data.subarray(pos, space).toString());
+        const lengthText = data.subarray(pos, space).toString();
+        const length = Number(lengthText);
         if (space < 0 || !Number.isSafeInteger(length) || length <= space - pos || pos + length > data.length) refuse();
         const record = data.subarray(space + 1, pos + length - 1).toString();
         const equals = record.indexOf('=');
-        if (equals < 1 || record.startsWith('linkpath=')) refuse();
+        const key = record.slice(0, equals);
+        if (!/^[0-9]+$/.test(lengthText) || data[pos + length - 1] !== 10 || equals < 1 || keys.has(key)
+          || !['path', 'mtime', 'atime', 'ctime', 'uid', 'gid', 'uname', 'gname'].includes(key)) refuse();
+        keys.add(key);
         if (record.startsWith('path=')) paxPath = record.slice(5);
         pos += length;
       }
