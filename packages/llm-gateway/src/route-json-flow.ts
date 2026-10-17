@@ -4,7 +4,7 @@ import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonica
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, retainRouteBody, routeUsage,
-  settleRouteRequest, terminalGatewayError, type RouteAttemptSettlement, type RouteFlowDeps,
+  markDurableAttempt, RequestAuditError, settleRouteRequest, terminalGatewayError, type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
 import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
@@ -69,6 +69,7 @@ export const runRouteJsonFlow = async (
     let lifecycle: ReturnType<typeof nativeLifecycle> | undefined;
     let nativeReader: ReturnType<typeof nativeResponseReader>;
     let nativeServedModelId: string | undefined;
+    let observedServedModel: string | undefined;
     try {
       signal?.throwIfAborted();
       attempt = await deps.routePlanner.prepareAttempt(
@@ -78,6 +79,7 @@ export const runRouteJsonFlow = async (
       const native = prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
       if (nativeInvoked && !native) throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
       signal?.throwIfAborted();
+      await markDurableAttempt(deps, prepared.cost, attempt.attemptRef, diagnostic);
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       if (native) {
@@ -103,11 +105,16 @@ export const runRouteJsonFlow = async (
           ...(signal ? { signal } : {}),
         } });
         if (response.usage) observedUsage = routeUsage(response.usage);
+        const observed = response.providerMetadata?.observedServedModelId;
+        if (typeof observed === 'string') observedServedModel = observed;
+        if (observedServedModel && observedServedModel !== diagnostic.actualModelId) {
+          throw Object.assign(new Error('upstream model identity mismatch'), { code: 'model_identity_mismatch' });
+        }
         signal?.throwIfAborted();
         encoded = encodeGatewayResponse(request.wire, response, request.responsesLimits);
       }
     } catch (error) {
-      if (error instanceof BudgetDispatchMarkError) {
+      if (error instanceof BudgetDispatchMarkError || error instanceof RequestAuditError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
       }
       if (error instanceof NativeAttemptRefusal) {
@@ -168,7 +175,7 @@ export const runRouteJsonFlow = async (
     request.bodyLease?.detach();
     attempts.push({ candidateRef, providerId: diagnostic.actualProviderId,
       modelId: diagnostic.actualModelId, transportProviderId: diagnostic.actualTransportProviderId,
-      outcome: 'success', usage });
+      outcome: 'success', usage, ...((nativeServedModelId ?? observedServedModel) ? { observedServedModel: nativeServedModelId ?? observedServedModel } : {}) });
     // Operational and financial callbacks are outside provider retry handling.
     try { await attempt.complete(attemptUsage(usage)); }
     finally { await settle('success'); }

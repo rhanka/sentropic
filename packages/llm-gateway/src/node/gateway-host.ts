@@ -63,6 +63,12 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
       requestAudit: { admit: async ({ cost, requestId, model }) => {
         const receipt = await service.recordAttempt({ ownerScopeRef, sessionRef: cost.gatewaySessionRef!, requestId, model });
         return { receiptId: receipt.receiptId };
+      }, beginAttempt: async ({ cost, attemptRef, diagnostic }) => {
+        await service.appendAttempt({ ownerScopeRef, receiptId: cost.gatewayReceiptId!, attempt: {
+          attemptRef, candidateRef: diagnostic.candidateRef, diagnosticAccountRef: diagnostic.diagnosticAccountRef,
+          selectedProviderId: diagnostic.actualProviderId, selectedModel: diagnostic.actualModelId,
+          selectedTransport: diagnostic.actualTransportProviderId, outcome: 'pending', usage: null,
+          observedServedModel: null, modelEvidence: 'selection-only' } });
       }, refuse: async (receiptId) => {
         const current = await service.readReceipt({ ownerScopeRef, receiptId });
         if (current.settlement === 'pending') await service.settleReceipt({ ownerScopeRef, receiptId, outcome: 'error' });
@@ -70,7 +76,8 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
       routeMetering: { settleRoute: async (context) => {
         await mesh.gateway.routeMetering.settleRoute(context);
         if (context.cost.gatewayReceiptId) await service.settleReceipt({ ownerScopeRef,
-          receiptId: context.cost.gatewayReceiptId, outcome: context.outcome === 'success' ? 'stop' : context.outcome === 'cancelled' ? 'cancelled' : 'error' });
+          receiptId: context.cost.gatewayReceiptId, attempts: context.attempts,
+          outcome: context.outcome === 'success' ? 'stop' : context.outcome === 'cancelled' ? 'cancelled' : 'error' });
       } },
     });
     server = createNodeGatewayServer((request) => router.fetch(request), () => endpoint, (delta) => {
