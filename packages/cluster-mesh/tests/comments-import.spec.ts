@@ -82,11 +82,15 @@ describe.skipIf(!pgEnabled)('coherent comments import and complete receipt recov
     } finally { await s.fixture.close(); }
   });
   it('refuses a self-consistent hash with a false canonical sequence before publication', async () => {
-    const s = await scenario(false, (records) => records.map((record, index) => {
-      if (index !== 0 || !('link' in record)) return record;
-      const { kind, hash: _hash, ...envelope } = record; const changed = { ...envelope, link: { ...record.link, sequence: 7 } };
-      return { kind, ...changed, hash: hashRecord(kind, changed) } as CanonicalChainRecord;
-    }));
+    const s = await scenario(false, (records) => {
+      let previousHash: string | null = null;
+      return records.map((record, index) => {
+        if (!('link' in record)) return record;
+        const { kind, hash: _hash, ...envelope } = record; const changed = { ...envelope, link: { previousHash, sequence: index + 7 } };
+        previousHash = hashRecord(kind, changed);
+        return { kind, ...changed, hash: previousHash } as CanonicalChainRecord;
+      });
+    });
     try {
       await s.module.withContext(s.grant, async () => {
         const prepared = await prepareAll(s);
