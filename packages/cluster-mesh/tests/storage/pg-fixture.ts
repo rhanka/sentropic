@@ -10,7 +10,7 @@ export const createPgFixture = async (extra: Partial<PostgresStorageOptions> = {
   const layout = { dataSchema: name, projectionSchemas: { comments: name }, outboxSchema: name };
   const history: PgHostHistory = {
     read: async (session) => (await session.execute({ text: `SELECT receipt FROM "${name}".host_history ORDER BY ordinal`, values: [] })).rows.map((row) => row.receipt as PgMigrationReceipt),
-    complete: async (session, receipt) => { await session.execute({ text: `INSERT INTO "${name}".host_history VALUES($1,$2::jsonb)`, values: [receipt.order, JSON.stringify(receipt)] }); },
+    complete: async (session, receipt) => { await session.execute({ text: `INSERT INTO "${name}".host_history VALUES((SELECT COALESCE(MAX(ordinal),0)+1 FROM "${name}".host_history),$1::jsonb)`, values: [JSON.stringify(receipt)] }); },
   };
   const tx = new PgTransactions(connection.driver);
   await tx.run(false, async (session) => {

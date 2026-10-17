@@ -48,6 +48,11 @@ The host implements `InjectedPgDriver.transaction(options, operation)`. It acqui
 
 Use existing host migration ownership and history. `PgHostHistory.read(session)` returns ordered package migration receipts; `complete(session, receipt)` records each receipt in that same transaction. Under the host's migration lock:
 
+Keep receipts in chronological application order, keyed by asset `id`. Each core/module chain has
+its own `order` and `fromVersion`/`toVersion`; these numbers are not global host positions. Comments
+001 explicitly depends on core 006, and a later core 007 can install after comments without rewriting
+their receipts. Keep a separate host application ordinal if the host needs one.
+
 ```ts
 const assets = await loadPgAssets({ comments: true });
 await driver.transaction({ readOnly: false, deadlineMs: 5000 }, session =>
