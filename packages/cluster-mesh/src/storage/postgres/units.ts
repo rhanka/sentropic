@@ -22,7 +22,7 @@ export interface PgUnit {
     version: 'pg-staged-v1'; incarnation: string; begin: StagedBeginInput; fence: WriterFence;
     state: StagedState; count: number; frontier: string | null; barriers: number; purges: number;
     commitId: string; progress: PgSealProgress | null; seal: AuthenticatedStagedSeal | null;
-    receipt: CommitReceipt | null; moduleResult?: AtomicUnit['moduleResult']; reason?: string;
+    receipt: CommitReceipt | null; moduleResultPayload?: string; reason?: string;
   };
 }
 export const readPgUnit = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, unitId: string): Promise<PgUnit> => {
