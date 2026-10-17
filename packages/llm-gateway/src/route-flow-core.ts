@@ -19,6 +19,7 @@ import {
 } from './admission.js';
 
 export interface RouteAttemptSettlement {
+  readonly observedServedModel?: string;
   readonly candidateRef: string;
   readonly providerId: string;
   readonly modelId: string;
@@ -52,6 +53,7 @@ export interface RouteFlowDeps {
   readonly requestAudit?: {
     admit(input: { cost: CostContext; requestId: string; model: string }): Promise<{ receiptId: string }>;
     refuse?(receiptId: string): Promise<void>;
+    beginAttempt?(input: { cost: CostContext; attemptRef: string; diagnostic: RoutePlan['diagnostics'][number] }): Promise<void>;
   };
   readonly dispatch?: RouteAttemptDispatchPort;
   readonly config: GatewayConfig;
@@ -77,6 +79,12 @@ export interface PreparedRouteFlow {
   /** Present only when budget admission admitted the request. */
   readonly admission?: AdmittedRoute;
 }
+export class RequestAuditError extends Error {}
+export const markDurableAttempt = async (deps: RouteFlowDeps, cost: CostContext,
+  attemptRef: string, diagnostic: RoutePlan['diagnostics'][number]): Promise<void> => {
+  try { await deps.requestAudit?.beginAttempt?.({ cost, attemptRef, diagnostic }); }
+  catch { throw new RequestAuditError('durable attempt acknowledgement unavailable'); }
+};
 
 /** Retry projection is detached only when upload/commit or terminal SDK cleanup permits it. */
 export const retainRouteBody = (prepared: PreparedRouteFlow, request: GatewayFlowRequest): void => {
@@ -314,6 +322,7 @@ export const classifyRouteError = (
   const status = typeof record?.statusCode === 'number' ? record.statusCode
     : typeof record?.status === 'number' ? record.status : undefined;
   const code = typeof record?.code === 'string' ? record.code.toLowerCase() : '';
+  if (code === 'model_identity_mismatch') return { reason: 'unsupported-model', retryable: false, healthScope: 'route' };
   const retryAfterMs = typeof record?.retryAfterMs === 'number' ? record.retryAfterMs : undefined;
   if (code === 'native_protocol_error') return { reason: 'provider-5xx', retryable: false, healthScope: 'route' };
   if (status === 413) return { reason: 'invalid-request', retryable: false, healthScope: 'route' };

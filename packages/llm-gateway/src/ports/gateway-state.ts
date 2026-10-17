@@ -29,6 +29,10 @@ export interface StoredSession {
 }
 
 export interface StoredReceipt {
+  readonly policyRevision?: string;
+  readonly mappingRevision?: string;
+  readonly mappingContentSha256?: string;
+  readonly physicalAttempts?: readonly StoredRequestAttempt[];
   readonly schemaVersion: number;
   readonly receiptId: string;
   readonly sessionRef: string;
@@ -39,6 +43,19 @@ export interface StoredReceipt {
   readonly settlement: string;
   readonly createdAt: string;
   readonly settledAt?: string;
+}
+export interface StoredRequestAttempt {
+  readonly attemptRef: string;
+  readonly candidateRef: string;
+  readonly diagnosticAccountRef: string;
+  readonly selectedProviderId: string;
+  readonly selectedModel: string;
+  readonly selectedTransport: string;
+  readonly outcome: string;
+  readonly usage: { inputTokens: number; outputTokens: number } | null;
+  /** Launch/selection is not upstream model attestation. */
+  readonly observedServedModel: string | null;
+  readonly modelEvidence: 'selection-only' | 'provider-reported';
 }
 
 export interface StoredState {

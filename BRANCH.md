@@ -43,6 +43,7 @@
   - `packages/llm-gateway/tests/**`
   - `tools/gateway-evolution/**`
   - `apps/llm-gateway/src/{app,config,readiness}.ts` (GWV-EX1 only)
+  - `apps/llm-gateway/src/{index,lifecycle}.ts` (GWV-EX1a only)
   - `apps/llm-gateway/tests/**` (GWV-EX1 only)
   - `api/src/services/llm-runtime/standalone-ports.ts` (GWV-EX5 only)
   - `api/tests/unit/gateway-exact-model-policy.test.ts` (GWV-EX5 only)
@@ -78,6 +79,9 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `GWV-EX1a`: bounded process-entry delegation in private app `index.ts` and signal-handler type in `lifecycle.ts`. Reason: exposing an unused wrapper in app.ts would not prove the actual process uses the published host. Impact: an explicitly injected durable binding chooses package-owned listener/control/readiness/stop; existing unconfigured scaffold stays unavailable. Rollback: withdraw that binding, retain encrypted state and keys. Declared before editing these two paths; deployment/Compose unchanged.
+- `L2-physical-receipts` (2026-10-17): every Node-host attempt requires a durable receipt acknowledgement before dispatch; records link requested/selected model, redacted account, policy/mapping revision and terminal outcome. Estimated usage remains null in the receipt; echoed model identity remains selection-only. JSON identity contradictions terminate without retry. Receipt/zero-dispatch tests pass 2/2; host restart remains 3/3.
+- `FL-21-blocked-api-lock` (2026-10-17): `make up-api-test ... ENV=test-gw-durable-vibe-muse` stops at `install-internal-packages`: npm ci reports missing gateway 0.20.0 / mesh 0.26.1 lock rows after candidate version bumps. Root lock and cluster peer widening belong to the immo-dependent L8 gate; no peer/lock bypass or fabricated API pass. GWV-EX5 source/tests can proceed, API/app acceptance remains blocked.
 - `L2-host-policy-binding` (2026-10-17): the published Node host always supplies the protected affinity store to the mesh planner and obtains launch policy/native session identity from verified durable auth. Control acquisition requires a policy; legacy implicit sessions refuse inference. Real HTTP/restart/revocation host scenarios remain green 3/3.
 - `L2-session-policy` (2026-10-17): sessions persist a frozen trusted launch policy and reject conflicting reacquisition or implicit legacy-policy upgrades; migration rejects a key already bound to any owner. Session policy tests pass 2/2; mesh durable affinity scenarios pass 3/3.
 - `L2-durable-planner` (2026-10-17): mesh persists a first account pin before provider preparation, reloads pins for each plan, refuses deleted pins/unreadable state and awaits consented account-epoch transitions. Durable administrative reset/rebind requires a new acknowledged session policy. Scoped restart/15-session-eviction/rotation/refusal tests pass 3/3.
