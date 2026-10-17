@@ -243,25 +243,27 @@
 
   - [x] Current memory gate: typecheck/lint pass; 85 files and 777 tests pass, 5 packaging files / 34 tests skip. Command: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; code head `497d40838`, gate launch `a14161d66`, RTK evidence `5537ba475ece`. Durable Postgres remains Lot 6.
 
-- [ ] **Lot 5 — K4 journal, manifests and ports (N7-N9, N11; MAJ-7..8, m1, m4-m6, S4:7-9, S4:11-12; C10-C18)**
-  - [ ] Scoped/incarnated journal streams; resync preserves poison; fenced checkpoints with maintain authority; pause/retry.
-    - [ ] `root-journal.ts` reads the canonical root's indexed stream and retains consumer poison/pause state independently; checkpoints require delivered bounds, owner/incarnation/current fences and maintain authority. Snapshot capture retains an actual immutable root under an opaque scoped capability.
-    - [ ] Snapshot paging uses order-statistic indexed lookup to visit only the requested canonical rows; RED ordinal-window probe forbids enumerating historical keys.
-    - [ ] `root-snapshot.ts` pages five captured canonical indexes, owns returned rows, enforces contiguous consumption and current barriers, and never clears consumer poison or pause state.
-  - [ ] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
-    - [ ] `manifest-integrity.spec.ts` reintroduces the exact old flattening/shallow-copy transformations and pins four mutation deaths to separate framing, build-input, retained-input and returned-value assertions.
-    - [ ] RED manifest probes construct the exact selection/unit-root flattening collision and mutate nested caller/returned heads; all asynchronous rejection assertions are now awaited, and storage fixtures use computed commitments.
-    - [ ] Manifest encoding separately frames selected heads, unit roots and terminal metadata; nested head values are owned at build and deeply frozen at retention. The value registry alone grants no storage capability; scoped root retention follows.
-    - [ ] RED `root-manifest.spec.ts` captures actual head/sequence/allocation, excludes later writes, rejects unissued/foreign roots and checks current barriers on retained-page reads.
-    - [ ] Root manifest retention derives heads and committed unit roots from one captured root, binds incarnation/version and owner, and pages its exact head under fresh authorization/coverage. Caller-selected manifest digests cannot establish storage boundaries.
-    - [ ] New RED recovery probes preserve revoked issuance across runtime recreation and prevent a second authorized manifest owner from overwriting the first owner's retained capability.
-    - [ ] Initial manifest probe run stopped at a duplicate fixture variable, before semantic assertions. The fixture now distinguishes fragment and manifest digests; discriminating legacy-code mutants will supply the semantic regression evidence.
-    - [ ] Awaited rejection assertions exposed an untyped missing-head exception in `verifyAgainst`; it now validates manifest structure before encoding, preserving `invalid-command` for tampering.
-  - [ ] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with actual dispositions.
-    - [ ] `root-lifecycle.ts` prepares coverage, holds, shared references and disposal on the common root. Completion and notification membership publish together; retained memory payloads report `retained`, including captured older roots.
-    - [ ] Lifecycle/atomic fixture authorizers now name the verified fixture principal; a new shared refusal proves that a forged authorizer publishes neither purge work nor its carrier.
-    - [ ] Reference verifies the same authorizer binding. External-journal failure is checked at staged publication, including failures armed after sealing; the prepared seal remains retryable while the canonical root stays unchanged.
-  - [ ] Lot gate: copy of Lot 1 gate; tests `manifest.spec.ts`, `visibility.spec.ts`, `staged-units.spec.ts`.
+- [x] **Lot 5 — K4 journal, manifests and ports (N7-N9, N11; MAJ-7..8, m1, m4-m6, S4:7-9, S4:11-12; C10-C18)**
+  - [x] Scoped/incarnated journal streams; resync preserves poison; fenced checkpoints with maintain authority; pause/retry.
+    - [x] `root-journal.ts` reads the canonical root's indexed stream and retains consumer poison/pause state independently; checkpoints require delivered bounds, owner/incarnation/current fences and maintain authority. Snapshot capture retains an actual immutable root under an opaque scoped capability.
+    - [x] Snapshot paging uses order-statistic indexed lookup to visit only the requested canonical rows; RED ordinal-window probe forbids enumerating historical keys.
+    - [x] `root-snapshot.ts` pages five captured canonical indexes, owns returned rows, enforces contiguous consumption and current barriers, and never clears consumer poison or pause state.
+  - [x] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
+    - [x] `manifest-integrity.spec.ts` reintroduces the exact old flattening/shallow-copy transformations and pins four mutation deaths to separate framing, build-input, retained-input and returned-value assertions.
+    - [x] RED manifest probes construct the exact selection/unit-root flattening collision and mutate nested caller/returned heads; all asynchronous rejection assertions are now awaited, and storage fixtures use computed commitments.
+    - [x] Manifest encoding separately frames selected heads, unit roots and terminal metadata; nested head values are owned at build and deeply frozen at retention. The value registry alone grants no storage capability; scoped root retention is qualified below.
+    - [x] RED `root-manifest.spec.ts` captures actual head/sequence/allocation, excludes later writes, rejects unissued/foreign roots and checks current barriers on retained-page reads.
+    - [x] Root manifest retention derives heads and committed unit roots from one captured root, binds incarnation/version and owner, and pages its exact head under fresh authorization/coverage. Caller-selected manifest digests cannot establish storage boundaries.
+    - [x] New RED recovery probes preserve revoked issuance across runtime recreation and prevent a second authorized manifest owner from overwriting the first owner's retained capability.
+    - [x] Initial manifest probe run stopped at a duplicate fixture variable, before semantic assertions. The fixture now distinguishes fragment and manifest digests; the legacy-code mutants now supply the semantic regression evidence.
+    - [x] Awaited rejection assertions exposed an untyped missing-head exception in `verifyAgainst`; it now validates manifest structure before encoding, preserving `invalid-command` for tampering.
+  - [x] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with actual dispositions.
+    - [x] `root-lifecycle.ts` prepares coverage, holds, shared references and disposal on the common root. Completion and notification membership publish together; retained memory payloads report `retained`, including captured older roots.
+    - [x] Lifecycle/atomic fixture authorizers now name the verified fixture principal; a new shared refusal proves that a forged authorizer publishes neither purge work nor its carrier.
+    - [x] Reference verifies the same authorizer binding. External-journal failure is checked at staged publication, including failures armed after sealing; the prepared seal remains retryable while the canonical root stays unchanged.
+  - [x] Lot gate: copy of Lot 1 gate; tests `manifest.spec.ts`, `visibility.spec.ts`, `staged-units.spec.ts`.
+
+  - [x] Current memory gate: typecheck/lint pass; 85 files and 777 tests pass, 5 packaging files / 34 tests skip. Command: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; code head `497d40838`, gate launch `a14161d66`, RTK evidence `5537ba475ece`. Durable Postgres remains Lot 6.
 
 - [ ] **Lot 6 — Postgres injected-driver module (P1, P2a, P2u, P2b-J, P2b-M, P2c consumed by comments)**
   - [ ] Driver protocol/codec: one injected session, parameterized statements, SERIALIZABLE finite transactions, strict lossless decoding and typed operational/uncertain outcomes.
