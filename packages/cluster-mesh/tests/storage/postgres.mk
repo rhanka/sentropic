@@ -60,3 +60,8 @@ cluster-mesh-pg-test: cluster-mesh-pg-up cluster-mesh-storage-deps
 cluster-mesh-pg-diagnostics:
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc \
 		'df -h /workspace /tmp; node --version; node .h2a/storage-pg-tools/node_modules/vitest/vitest.mjs --version'
+
+.PHONY: cluster-mesh-pg-manifest
+cluster-mesh-pg-manifest:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		node packages/cluster-mesh/tests/storage/generate-pg-manifest.mjs
