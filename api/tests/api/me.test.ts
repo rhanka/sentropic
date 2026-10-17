@@ -6,6 +6,7 @@ import { chatGenerationTraces, chatMessages, chatSessions, organizations, folder
 import { and, eq } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 import { settingsService } from '../../src/services/settings';
+import { getDefaultOpenAIModel } from '../../src/config/models';
 
 describe('Me API', () => {
   afterEach(async () => {
@@ -42,7 +43,7 @@ describe('Me API', () => {
     expect(initial.status).toBe(200);
     const initialData = await initial.json();
     expect(initialData.defaultProviderId).toBe('openai');
-    expect(initialData.defaultModel).toBe('gpt-4.1-nano');
+    expect(initialData.defaultModel).toBe(getDefaultOpenAIModel());
 
     const update = await authenticatedRequest(
       app,
@@ -80,7 +81,7 @@ describe('Me API', () => {
     expect(anotherSettings.status).toBe(200);
     const anotherData = await anotherSettings.json();
     expect(anotherData.defaultProviderId).toBe('openai');
-    expect(anotherData.defaultModel).toBe('gpt-4.1-nano');
+    expect(anotherData.defaultModel).toBe(getDefaultOpenAIModel());
   });
 
   it('migrates legacy stored user defaults on read', async () => {

@@ -33,6 +33,8 @@ import { createId } from '../../src/utils/id';
 import { callLLMStream } from '../../src/services/llm-runtime';
 import { generateCommentResolutionProposal } from '../../src/services/context-comments';
 import { queueManager } from '../../src/services/queue-manager';
+import { chatService } from '../../src/services/chat-service';
+import { mockDefaultModelEffort } from '../utils/mock-default-model-effort';
 
 const llmStreamMock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
 const proposalMock = generateCommentResolutionProposal as unknown as ReturnType<typeof vi.fn>;
@@ -58,6 +60,7 @@ describe('Chat tools API - comment_assistant', () => {
   const sessionIds: string[] = [];
 
   beforeEach(async () => {
+    mockDefaultModelEffort(chatService);
     user = await createAuthenticatedUser('editor', `editor-${createTestId()}@example.com`);
     viewer = await createAuthenticatedUser('guest', `viewer-${createTestId()}@example.com`);
     admin = await createAuthenticatedUser('admin', `admin-${createTestId()}@example.com`);
@@ -113,6 +116,7 @@ describe('Chat tools API - comment_assistant', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     for (const messageId of assistantMessageIds) {
       await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, messageId));
     }
