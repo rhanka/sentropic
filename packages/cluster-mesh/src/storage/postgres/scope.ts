@@ -183,60 +183,126 @@ export class PgScoped {
   journalRead(after: number, limit: number, consumer?: string) {
     return readPgJournal(this.#core, this.#grant, after, limit, consumer);
   }
-  query(name: string, input: unknown, request: PgQueryRequest) { return queryPgRoot(this.#core, this.#grant, name, input, request); }
-  journalResync(consumer: string, fence: JournalFence) { return capturePgSnapshot(this.#core, this.#grant, consumer, fence); }
-  snapshotRead(token: string, after: number, limit: number) { return readPgSnapshot(this.#core, this.#grant, token, after, limit); }
-  captureManifest(input: RootManifestRequest) { return capturePgManifest(this.#core, this.#grant, input); }
-  verifyManifest(digest: string) { return verifyPgManifest(this.#core, this.#grant, digest); }
-  manifestReadPage(digest: string, chainId: string, limit: number, cursor: unknown, bytes: number) { return readPgManifestPage(this.#core, this.#grant, digest, chainId, limit, cursor, bytes); }
-  journalCheckpoint(consumer: string, expected: number, next: number, fence: JournalFence) { return checkpointPgJournal(this.#core, this.#grant, consumer, expected, next, fence); }
-  journalInspect(consumer: string) { return inspectPgConsumer(this.#core, this.#grant, consumer); }
-  journalPoison(consumer: string, event: string, reason: string) { return operatePgConsumer(this.#core, this.#grant, consumer, 'poison', event, reason); }
-  journalPause(consumer: string, fence: JournalFence) { return operatePgConsumer(this.#core, this.#grant, consumer, 'pause', null, undefined, fence); }
-  journalRetry(consumer: string, expected: string | null, fence: JournalFence) { return operatePgConsumer(this.#core, this.#grant, consumer, 'retry', expected, undefined, fence); }
-  stageFragment(input: RootStageInput) { return stagePgFragment(this.#core, this.#grant, input); }
-  sealStep(input: PgSealRequest) { return sealPgStep(this.#core, this.#grant, input); }
-  commitStaged(input: { readonly seal: AuthenticatedStagedSeal; readonly fence: WriterFence }) { return commitPgStaged(this.#core, this.#grant, input.seal, input.fence); }
-  abortStaged(input: { readonly unit: AuthenticatedStagedHandle; readonly fence: WriterFence; readonly reason: string }) { return abortPgStaged(this.#core, this.#grant, input.unit, input.fence, input.reason); }
-  indexGet(key: string) { return this.#read((view) => view.findIdempotency({ key })); }
-  readPage(chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) { return this.#read((view) => view.readChain({ chainId, limit, cursor, maxEncodedBytes })); }
+  query(name: string, input: unknown, request: PgQueryRequest) {
+    return queryPgRoot(this.#core, this.#grant, name, input, request);
+  }
+  journalResync(consumer: string, fence: JournalFence) {
+    return capturePgSnapshot(this.#core, this.#grant, consumer, fence);
+  }
+  snapshotRead(token: string, after: number, limit: number) {
+    return readPgSnapshot(this.#core, this.#grant, token, after, limit);
+  }
+  captureManifest(input: RootManifestRequest) {
+    return capturePgManifest(this.#core, this.#grant, input);
+  }
+  verifyManifest(digest: string) {
+    return verifyPgManifest(this.#core, this.#grant, digest);
+  }
+  manifestReadPage(digest: string, chainId: string, limit: number, cursor: unknown, bytes: number) {
+    return readPgManifestPage(this.#core, this.#grant, digest, chainId, limit, cursor, bytes);
+  }
+  journalCheckpoint(consumer: string, expected: number, next: number, fence: JournalFence) {
+    return checkpointPgJournal(this.#core, this.#grant, consumer, expected, next, fence);
+  }
+  journalInspect(consumer: string) {
+    return inspectPgConsumer(this.#core, this.#grant, consumer);
+  }
+  journalPoison(consumer: string, event: string, reason: string) {
+    return operatePgConsumer(this.#core, this.#grant, consumer, 'poison', event, reason);
+  }
+  journalPause(consumer: string, fence: JournalFence) {
+    return operatePgConsumer(this.#core, this.#grant, consumer, 'pause', null, undefined, fence);
+  }
+  journalRetry(consumer: string, expected: string | null, fence: JournalFence) {
+    return operatePgConsumer(this.#core, this.#grant, consumer, 'retry', expected, undefined, fence);
+  }
+  stageFragment(input: RootStageInput) {
+    return stagePgFragment(this.#core, this.#grant, input);
+  }
+  sealStep(input: PgSealRequest) {
+    return sealPgStep(this.#core, this.#grant, input);
+  }
+  commitStaged(input: { readonly seal: AuthenticatedStagedSeal; readonly fence: WriterFence }) {
+    return commitPgStaged(this.#core, this.#grant, input.seal, input.fence);
+  }
+  abortStaged(input: {
+    readonly unit: AuthenticatedStagedHandle;
+    readonly fence: WriterFence;
+    readonly reason: string;
+  }) {
+    return abortPgStaged(this.#core, this.#grant, input.unit, input.fence, input.reason);
+  }
+  indexGet(key: string) {
+    return this.#read((view) => view.findIdempotency({ key }));
+  }
+  readPage(chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) {
+    return this.#read((view) => view.readChain({ chainId, limit, cursor, maxEncodedBytes }));
+  }
   async readChain(chainId: string) {
     return this.#read(async (view) => {
-      const records = []; let cursor: string | null = null;
+      const records = [];
+      let cursor: string | null = null;
       do {
         const page = await view.readChain({ chainId, limit: 100, cursor, maxEncodedBytes: 1048576 });
         if (page.outcome !== 'page') throw new StorageDeniedError('chain payload is unavailable');
-        records.push(...page.records); cursor = page.nextCursor;
+        records.push(...page.records);
+        cursor = page.nextCursor;
       } while (cursor !== null);
       return records;
     });
   }
   async indexPut(key: string, entry: IdempotencyEntry): Promise<'insert' | 'replace'> {
     const owned = ownPgValue(entry);
-    return (await runPgTransaction(this.#core, this.#grant, {}, async (tx) => {
-      const previous = await this.#core.roots.get(tx.session, tx.root, 'index', key);
-      await applyPgTransaction(this.#core, this.#grant, tx, { ...emptyEffects(), indexWrites: [{ key, ...owned }] }, {});
-      return previous ? 'replace' as const : 'insert' as const;
-    })).value;
+    return (
+      await runPgTransaction(this.#core, this.#grant, {}, async (tx) => {
+        const previous = await this.#core.roots.get(tx.session, tx.root, 'index', key);
+        await applyPgTransaction(
+          this.#core,
+          this.#grant,
+          tx,
+          { ...emptyEffects(), indexWrites: [{ key, ...owned }] },
+          {},
+        );
+        return previous ? ('replace' as const) : ('insert' as const);
+      })
+    ).value;
   }
   async genesis(kind: string, id: string, hash: string, value: unknown) {
-    const owned = ownPgValue(value); const key = JSON.stringify([kind, id]); const core = this.#core;
-    return (await runPgTransaction(core, this.#grant, {}, async (tx) => {
-      await core.visible(tx.session, tx.root, key);
-      const previous = await core.roots.get<{ hash: string; payload: string }>(tx.session, tx.root, 'genesis', key);
-      if (previous) { if (previous.hash !== hash) throw new StorageIdempotencyConflictError('genesis conflict'); tx.noop = true; return { hash, replayed: true }; }
-      const bytes = pgJsonBytes(owned); if (bytes.length > core.work().maxEncodedBytes) throw new StorageInvalidCommandError('genesis exceeds work limits');
-      const payload = await core.roots.payload(tx.session, this.scope, key, bytes, hash);
-      tx.root = await core.roots.put(tx.session, tx.root, 'genesis', key, { hash, payload }); tx.count += 1; tx.records += 1; tx.digests.push(pgUnitDigest([kind, id, hash]));
-      return { hash, replayed: false };
-    })).value;
+    const owned = ownPgValue(value);
+    const key = JSON.stringify([kind, id]);
+    const core = this.#core;
+    return (
+      await runPgTransaction(core, this.#grant, {}, async (tx) => {
+        await core.visible(tx.session, tx.root, key);
+        const previous = await core.roots.get<{ hash: string; payload: string }>(tx.session, tx.root, 'genesis', key);
+        if (previous) {
+          if (previous.hash !== hash) throw new StorageIdempotencyConflictError('genesis conflict');
+          tx.noop = true;
+          return { hash, replayed: true };
+        }
+        const bytes = pgJsonBytes(owned);
+        if (bytes.length > core.work().maxEncodedBytes)
+          throw new StorageInvalidCommandError('genesis exceeds work limits');
+        const payload = await core.roots.payload(tx.session, this.scope, key, bytes, hash);
+        tx.root = await core.roots.put(tx.session, tx.root, 'genesis', key, { hash, payload });
+        tx.count += 1;
+        tx.records += 1;
+        tx.digests.push(pgUnitDigest([kind, id, hash]));
+        return { hash, replayed: false };
+      })
+    ).value;
   }
   async readGenesis(kind: string, id: string): Promise<{ hash: string; value: unknown } | null> {
-    const core = this.#core; const key = JSON.stringify([kind, id]);
+    const core = this.#core;
+    const key = JSON.stringify([kind, id]);
     return core.tx.run(true, async (session) => {
-      await core.check(session, this.#grant, 'read'); const base = await core.roots.capture(session, this.scope); await core.visible(session, base.root, key);
+      await core.check(session, this.#grant, 'read');
+      const base = await core.roots.capture(session, this.scope);
+      await core.visible(session, base.root, key);
       const ref = await core.roots.get<{ hash: string; payload: string }>(session, base.root, 'genesis', key);
-      return ref ? { hash: ref.hash, value: decodePgJson(decodePgUtf8(await core.roots.readPayload(session, this.scope, ref.payload))) } : null;
+      return ref
+        ? {
+            hash: ref.hash, value: decodePgJson(decodePgUtf8(await core.roots.readPayload(session, this.scope, ref.payload))) } : null;
     });
   }
   async disposeChain(chainId: string): Promise<void> {
