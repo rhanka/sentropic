@@ -42,6 +42,7 @@ export class PgTransactions {
         });
       } catch (error) {
         const mapped = classifyPgFailure(error);
+        if (mapped !== error) Object.defineProperty(mapped, 'cause', { value: error, configurable: true });
         if (!immutableFlush || !(mapped instanceof PostgresStorageError) || !mapped.retryable || attempt >= this.budgets.attempts || Date.now() >= deadline) throw mapped;
       }
     }
