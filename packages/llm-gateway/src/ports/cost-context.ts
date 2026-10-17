@@ -12,6 +12,9 @@ export interface CostContextResolver {
 }
 
 export interface CostContext {
+  /** Gateway-owned durable session/request linkage supplied by trusted auth. */
+  readonly gatewaySessionRef?: string;
+  readonly gatewayReceiptId?: string;
   readonly tenantId: string;
   readonly workspaceId?: string;
   readonly principalId: string;
