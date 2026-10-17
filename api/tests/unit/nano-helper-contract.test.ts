@@ -8,6 +8,7 @@ vi.mock('../../src/services/stream-service', () => ({
 import { callLLM, callLLMStream } from '../../src/services/llm-runtime';
 import * as chatModule from '../../src/services/chat-service';
 import { executeWithToolsStream } from '../../src/services/tools';
+import { generateCommentResolutionProposal } from '../../src/services/context-comments';
 
 const chat = chatModule.chatService as any;
 const generate = vi.mocked(callLLM);
@@ -21,6 +22,17 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('former nano product helpers', () => {
+  it('should explicitly disable reasoning within the existing comment proposal ceiling', async () => {
+    stream.mockImplementation(async function* () {
+      yield { type: 'content_delta', data: { delta: '{"summary_markdown":"Checked","actions":[],"confirmation_prompt":"Confirm","confirmation_options":["OK"]}' } };
+    });
+    const result = await generateCommentResolutionProposal({ contextLabel: 'Offline', currentUserId: 'user', currentUserRole: 'editor', users: [],
+      threads: [{ threadId: 'thread', contextType: 'initiative', contextId: 'item', sectionKey: null, status: 'open', assignedTo: null,
+        createdBy: 'user', createdAt: '2026-10-17', updatedAt: null, messageCount: 1, rootMessage: 'Check deadline',
+        rootMessageAt: '2026-10-17', lastMessage: 'Check deadline', lastMessageAt: '2026-10-17' }] });
+    expect(result.summary_markdown).toBe('Checked');
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ reasoningEffort: 'none', maxOutputTokens: 800 }));
+  });
   it.each(['gpt-6-luna', 'gpt-5.6-luna'])('should use configured %s for bounded titles and effort evaluation', async (model) => {
     vi.stubEnv('OPENAI_MODEL', model);
     expect(await chat.generateSessionTitle({ lastUserMessage: 'Plan Project Atlas' })).toBe('Project Atlas');
