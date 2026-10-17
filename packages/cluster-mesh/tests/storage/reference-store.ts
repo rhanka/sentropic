@@ -12,6 +12,7 @@ import {
 } from '../../src/storage/errors.js';
 import type { AtomicUnit, ChainExpectation, CommitOptions, CommitReceipt } from '../../src/storage/atomic.js';
 import type { ScopeGrant } from '../../src/storage/authority.js';
+import type { ReplaySnapshotRow } from './replay-corpus.js';
 import { canOperate, validateScopeGrant } from '../../src/storage/authority.js';
 import {
   createReferenceState,
@@ -90,6 +91,18 @@ const fitIncomplete = (
 };
 
 export class TestBoundStore {
+  captureSnapshot(): readonly ReplaySnapshotRow[] {
+    this.requireOperation('read');
+    const state = getScopeState(this.state, this.scope);
+    const rows: ReplaySnapshotRow[] = [];
+    for (const [kind, entries] of [
+      ['chain', state.chains], ['index', state.index], ['record', state.records],
+      ['aggregate', state.aggregates], ['genesis', state.genesis],
+    ] as const) {
+      for (const [key, value] of entries) rows.push({ kind, key, value: JSON.parse(JSON.stringify(value)) });
+    }
+    return rows;
+  }
   readonly grant: ScopeGrant<unknown>;
   // Effective cursor used to admit a record (§8.4): the exhausting record is
   // measured with its actual null cursor. Overridable only by registered
