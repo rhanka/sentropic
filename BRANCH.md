@@ -33,6 +33,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
   - `api/src/services/auth/oauth-state-adapter.ts`
   - `api/src/services/auth/webauthn-adapter.ts`
   - `api/src/services/webauthn-authentication.ts`
+  - `api/src/services/webauthn-config.ts`
   - `api/src/routes/namespaces/auth/authentication.ts`
   - `api/src/routes/auth/oauth.ts`
   - `api/src/scripts/oauth-register-client.ts`
