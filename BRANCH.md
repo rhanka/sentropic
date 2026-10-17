@@ -234,6 +234,7 @@
     - [ ] Snapshot paging uses order-statistic indexed lookup to visit only the requested canonical rows; RED ordinal-window probe forbids enumerating historical keys.
     - [ ] `root-snapshot.ts` pages five captured canonical indexes, owns returned rows, enforces contiguous consumption and current barriers, and never clears consumer poison or pause state.
   - [ ] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
+    - [ ] `manifest-integrity.spec.ts` reintroduces the exact old flattening/shallow-copy transformations and pins four mutation deaths to separate framing, build-input, retained-input and returned-value assertions.
     - [ ] RED manifest probes construct the exact selection/unit-root flattening collision and mutate nested caller/returned heads; all asynchronous rejection assertions are now awaited, and storage fixtures use computed commitments.
     - [ ] Manifest encoding separately frames selected heads, unit roots and terminal metadata; nested head values are owned at build and deeply frozen at retention. The value registry alone grants no storage capability; scoped root retention follows.
     - [ ] RED `root-manifest.spec.ts` captures actual head/sequence/allocation, excludes later writes, rejects unissued/foreign roots and checks current barriers on retained-page reads.
