@@ -5,11 +5,18 @@ import type { ScopeGrant } from '../authority.js';
 import type { WriterFence } from '../contracts.js';
 import type { PostgresStorageOptions } from './protocol.js';
 import { recoverPgStaged, type PgRecoveryRequest } from './recovery.js';
+import { StorageInvalidCommandError } from '../errors.js';
 export const createPostgresKernel = async (options: PostgresStorageOptions) => {
   const core = await openPgCore(options);
   const bind = async (supplied: ScopeGrant<unknown>): Promise<PgScoped> => {
     const grant = ownPgValue(supplied);
-    await core.tx.run(true, (session) => core.check(session, grant, Array.isArray(grant.operations) ? grant.operations[0]! : 'read'));
+    const operation = Array.isArray(grant.operations) ? grant.operations[0]! : 'read'; const active = core.ambient.getStore();
+    if (active) {
+      if (active.closed) throw new StorageInvalidCommandError('binding transaction is closed');
+      await core.check(active.session, grant, operation);
+      if (core.roots.key(active.scope) !== core.roots.key(grant.scope)) throw new StorageInvalidCommandError('binding scope differs from the active transaction');
+      active.revalidators.add(() => core.check(active.session, grant, operation));
+    } else await core.tx.run(true, (session) => core.check(session, grant, operation));
     return new PgScoped(core, grant);
   };
   const adapter = Object.freeze({ moduleId: core.options.moduleId, incarnation: core.incarnation, bind });
