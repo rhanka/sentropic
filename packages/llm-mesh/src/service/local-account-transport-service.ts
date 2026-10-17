@@ -610,7 +610,15 @@ export class LocalAccountTransportService {
         createdAt: now,
         updatedAt: now,
       },
-      { accountId, accessToken: meshUse.accessRef, expiresAt: bundle.lifecycle.providerExpiry ?? undefined },
+      {
+        accountId,
+        accessToken: meshUse.accessRef,
+        // Unknown provider expiry is stored as '': Date.parse('') is NaN,
+        // so every finite-date check fails closed. External seats never
+        // refresh here; availability is gated by isExternalSeatUnavailable.
+        expiresAt: bundle.lifecycle.providerExpiry ?? '',
+        authClientConfigVersion: bundle.identity.credentialFormatVersion,
+      },
       account,
     );
     return { accountId, seatRef, generation: incoming.generation, idempotent: false };
