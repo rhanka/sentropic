@@ -7,7 +7,7 @@
  * configurations) and delegates to the platform kernel — acquired through
  * the module registry, never an eager import — only at `compile` time.
  * Mesh-supplied builtins are static descriptors plus loaders (e.g. the
- * `sentropic.web-pages` builtin): unknown providers fail explicitly, never
+ * `sentropic.artifacts` builtin): unknown providers fail explicitly, never
  * as silent stubs. Selected builtins materialize at compile; loader
  * failures refuse atomically.
  */

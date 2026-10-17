@@ -104,9 +104,9 @@
       "types": "./dist/compose/mcp.d.ts",
       "import": "./dist/compose/mcp.js"
     },
-    "./mcp/web-pages": {
-      "types": "./dist/integrations/mcp/web-pages.d.ts",
-      "import": "./dist/integrations/mcp/web-pages.js"
+    "./mcp/artifacts": {
+      "types": "./dist/integrations/mcp/artifacts.d.ts",
+      "import": "./dist/integrations/mcp/artifacts.js"
     },
     "./loaders/mcp": {
       "types": "./dist/loaders/mcp/index.d.ts",
