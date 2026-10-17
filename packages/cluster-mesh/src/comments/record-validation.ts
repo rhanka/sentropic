@@ -20,7 +20,7 @@ export const validateCommentsRecord = async (record: CanonicalChainRecord, previ
     if (createCommentRevision(previous as CommentRevisionRecord | null, input, capacity).hash !== record.hash) invalid('comment envelope mismatch');
     if (previous && (previous as CommentRevisionRecord).threadId !== record.threadId) invalid('comment thread is immutable');
     const structure = await lookup({ kind: 'thread-structure-revisions', threadId: record.threadId }, record.structureRevision.hash) as ThreadStructureRevisionRecord | null;
-    if (record.structureRevision.id !== record.threadId || !structure) invalid('exact structural reference is missing');
+    if (record.structureRevision.id !== record.threadId || !structure) return invalid('exact structural reference is missing');
     if (structure.annotationId !== null && record.annotationPin?.annotationId !== structure.annotationId) invalid('annotation-bound comment pin mismatch');
     if (record.annotationPin && !await lookup({ kind: 'annotation-revisions', annotationId: record.annotationPin.annotationId }, record.annotationPin.revisionHash)) invalid('exact annotation pin is missing');
     if (record.parentCommentId !== null) {
