@@ -78,6 +78,9 @@ export interface KernelRoot extends KernelHandle {
 }
 
 export const createKernel = (options: KernelOptions): KernelRoot => {
+  if (options.coordinator && options.coordinator.backend !== options.backend) {
+    throw new StorageInvalidCommandError('coordinator backend mismatch');
+  }
   if (typeof options.moduleId !== 'string' || options.moduleId.length === 0) {
     throw new StorageInvalidCommandError('kernel requires a moduleId');
   }

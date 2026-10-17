@@ -15,6 +15,13 @@ substitute for storage co-owner review of the additive port changes.
 
 ## Shared root and bounded preparation
 
+The memory `BackendChainState.records` representation is a dense zero-based
+sequence: `records.at(i).seq === i`. Restored arrays and indexed histories are
+validated at composition. This internal representation does not constrain SQL
+physical layout or identify any DAG topological order. A supplied coordinator
+must own the exact explicitly supplied backend. Coordinated page operations
+validate arguments after grant checks and before returning coverage refusal.
+
 The rebuilt K4 runtime shares K3's actual indexed root with ordinary writes,
 transactions, staged units, barriers, journal and purge. Adapters retain
 binding identity; durable backend control owns incarnation, issued/revoked

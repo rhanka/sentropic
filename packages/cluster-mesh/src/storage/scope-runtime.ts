@@ -333,6 +333,15 @@ export class ScopedRuntime {
 
   async readPage(chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number): Promise<ReadPageResult> {
     this.requireOperation('read');
+    if (this.#deps.coordinator) {
+      if (!nonEmpty(chainId) || !Number.isSafeInteger(limit) || limit <= 0 ||
+        !Number.isSafeInteger(maxEncodedBytes) || maxEncodedBytes <= 0) {
+        throw new StorageInvalidCommandError('invalid coordinated page arguments');
+      }
+      if (cursor != null && this.#deps.provider.verify(chainId, cursor, {
+        moduleId: this.moduleId, scope: this.boundScope, incarnation: this.#deps.incarnation,
+      }) === null) throw new StorageInvalidCommandError('invalid cursor');
+    }
     if (!this.accessible('chain', chainId)) return { outcome: 'inaccessible', records: [], nextCursor: null };
     return readPageFromScope(this.#deps.backend.scopeState(this.boundScope), chainId, limit, cursor, maxEncodedBytes, {
       moduleId: this.moduleId,
@@ -591,11 +600,14 @@ export class ScopedRuntime {
         const { chainId, limit, maxEncodedBytes } = input;
         const cursor = input.cursor ?? null;
         if (!nonEmpty(chainId)) throw new StorageInvalidCommandError('chain read requires a chainId');
-        if (!this.accessible('chain', chainId)) return { outcome: 'inaccessible', records: [], nextCursor: null };
         if (!Number.isSafeInteger(limit) || limit <= 0) throw new StorageInvalidCommandError('invalid limit');
         if (!Number.isSafeInteger(maxEncodedBytes) || maxEncodedBytes <= 0) {
           throw new StorageInvalidCommandError('invalid byte budget');
         }
+        if (cursor != null && this.#deps.provider.verify(chainId, cursor, {
+          moduleId: this.moduleId, scope: this.boundScope, incarnation: this.#deps.incarnation,
+        }) === null) throw new StorageInvalidCommandError('invalid cursor');
+        if (!this.accessible('chain', chainId)) return { outcome: 'inaccessible', records: [], nextCursor: null };
         // Paginated over the combined committed-plus-pending view: delegate
         // to the committed pager on a scratch scope state, so tx pages share
         // the exact budget, floor and cursor semantics of readPage (§5.2).
