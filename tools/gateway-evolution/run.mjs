@@ -500,6 +500,117 @@ export const verifyMergeParents = async ({ mergeSha, baseSha, headSha }, git = {
   return { mergeSha, baseSha, headSha };
 };
 
+/**
+ * External-closure projection (GW7-M1 = RC7-M1): resolve every lock row by
+ * actual package identity. Workspace-name copies are excluded by name at any
+ * location or version; the @sentropic scope alone never exempts a package.
+ */
+export const externalProjection = (lockEntries, workspaceNames) => {
+  const names = new Set(workspaceNames);
+  return lockEntries
+    .filter((row) => typeof row.name === 'string' && row.name.startsWith('@sentropic/') && !names.has(row.name))
+    .map((row) => ({
+      location: row.location,
+      name: row.name,
+      version: row.version,
+      resolved: row.resolved,
+      integrity: row.integrity,
+    }))
+    .sort((a, b) => (`${a.location}${a.name}` < `${b.location}${b.name}` ? -1 : 1));
+};
+
+/** Truly external rows must be pinned before drift comparison or install. */
+export const assertPinnedProjection = (projection) => {
+  for (const row of projection) {
+    if (typeof row.resolved !== 'string' || !row.resolved) {
+      throw new GatewayInputError(
+        `external row unpinned: ${row.location} ${row.name} resolved`,
+        'external-row-unpinned',
+      );
+    }
+    if (typeof row.integrity !== 'string' || !row.integrity) {
+      throw new GatewayInputError(
+        `external row unpinned: ${row.location} ${row.name} integrity`,
+        'external-row-unpinned',
+      );
+    }
+  }
+  return projection;
+};
+
+/** Missing, extra, or changed external rows fail before installation. */
+export const compareExternalProjection = (actual, declared) => {
+  assertPinnedProjection(actual);
+  assertPinnedProjection(declared);
+  const keyOf = (row) => `${row.location}${row.name}`;
+  const want = new Map(declared.map((row) => [keyOf(row), row]));
+  for (const row of actual) {
+    const expected = want.get(keyOf(row));
+    if (!expected) throw new GatewayInputError(`external drift (extra): ${keyOf(row)}`, 'external-drift');
+    for (const field of ['version', 'resolved', 'integrity']) {
+      if (row[field] !== expected[field]) {
+        throw new GatewayInputError(`external drift (changed ${field}): ${keyOf(row)}`, 'external-drift');
+      }
+    }
+    want.delete(keyOf(row));
+  }
+  if (want.size > 0) {
+    throw new GatewayInputError(`external drift (missing): ${[...want.keys()].join(',')}`, 'external-drift');
+  }
+  return actual;
+};
+
+/**
+ * Receipt verification (GW6-M1 = RC6-M1 run identity). Companion-own runs
+ * enforce full-lock equality; inherited/main runs allow a changed full lock
+ * only with an equal external projection. User JSON or a green title never
+ * replaces server metadata (the caller supplies the fetched receipt).
+ */
+export const verifyConsumerReceipt = (receipt, expected) => {
+  if (!isRecord(receipt)) throw new GatewayInputError('blocked (ci-receipt-unavailable)', 'ci-receipt-unavailable');
+  if (receipt.program !== expected.program || receipt.phase !== expected.phase) {
+    throw new GatewayInputError('wrong program/phase in receipt', 'wrong-phase');
+  }
+  if (receipt.conclusion !== 'success') {
+    throw new GatewayInputError('receipt conclusion is not success', 'incomplete-evidence');
+  }
+  for (const job of receipt.jobs ?? []) {
+    if (job.conclusion !== 'success') {
+      throw new GatewayInputError(`job not successful: ${job.name}`, 'incomplete-evidence');
+    }
+  }
+  if (String(receipt.runId) !== String(expected.runId) || String(receipt.attempt) !== String(expected.attempt)) {
+    throw new GatewayInputError('receipt run/attempt does not match expected', 'stale-receipt');
+  }
+  if (receipt.headSha !== expected.headSha) throw new GatewayInputError('stale head', 'stale-head');
+  if (receipt.baseSha !== undefined && expected.baseSha !== undefined && receipt.baseSha !== expected.baseSha) {
+    throw new GatewayInputError('stale base', 'stale-base');
+  }
+  if (receipt.mergeSha !== undefined && expected.mergeSha !== undefined && receipt.mergeSha !== expected.mergeSha) {
+    throw new GatewayInputError('unrelated merge checkout', 'unrelated-merge');
+  }
+  if (expected.inputSha256 !== undefined && receipt.inputSha256 !== expected.inputSha256) {
+    throw new GatewayInputError('input digest mismatch', 'digest-mismatch');
+  }
+  if (expected.manifestSha256 !== undefined && receipt.manifestSha256 !== expected.manifestSha256) {
+    throw new GatewayInputError('manifest digest mismatch', 'digest-mismatch');
+  }
+  if (expected.allowLockChange === true) {
+    if (!expected.actualProjection || !expected.declaredProjection) {
+      throw new GatewayInputError('inherited runs require both projections', 'incomplete-evidence');
+    }
+    compareExternalProjection(expected.actualProjection, expected.declaredProjection);
+  } else {
+    if (receipt.releaseLockSha256 !== expected.releaseLockSha256) {
+      throw new GatewayInputError('companion-own run requires full-lock equality', 'lock-mismatch');
+    }
+    if (receipt.declaredReleaseLockSha256 !== expected.releaseLockSha256) {
+      throw new GatewayInputError('declared full-lock hash mismatch', 'lock-mismatch');
+    }
+  }
+  return { verified: true, program: receipt.program, phase: receipt.phase };
+};
+
 import { pathToFileURL } from 'node:url';
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
