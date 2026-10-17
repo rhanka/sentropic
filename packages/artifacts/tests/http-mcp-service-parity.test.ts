@@ -187,17 +187,17 @@ describe('http service parity', () => {
     const grantOther = await app.handle(
       req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'read' }, READER),
     );
-    expect(grantOther.status).toBe(403);
+    expect(grantOther.status).toBe(404);
     await app.handle(req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'source' }, OWNER));
     const forked = await app.handle(req('POST', '/fork', { artifactId: id }, READER));
     expect(forked.status).toBe(201);
     expect(asId(forked.body)).not.toBe(id);
     const strangerFork = await app.handle(req('POST', '/fork', { artifactId: id }, STRANGER));
-    expect(strangerFork.status).toBe(403);
+    expect(strangerFork.status).toBe(404);
     const noSource = await app.handle(req('GET', `/source/${id}`, undefined, READER));
     expect(noSource.status).toBe(404);
     const strangerSource = await app.handle(req('GET', `/source/${id}`, undefined, STRANGER));
-    expect(strangerSource.status).toBe(403);
+    expect(strangerSource.status).toBe(404);
     const putBadSource = await app.handle(
       req('POST', '/sources', { artifactId: id, source: { kind: 'recipe', steps: [] } }, OWNER),
     );
@@ -217,7 +217,7 @@ describe('http service parity', () => {
     );
     expect(revoked.status).toBe(200);
     const afterRevoke = await app.handle(req('GET', `/source/${id}`, undefined, READER));
-    expect(afterRevoke.status).toBe(403);
+    expect(afterRevoke.status).toBe(404);
     const unknownRoute = await app.handle(req('GET', '/nope', undefined, OWNER));
     expect(unknownRoute.status).toBe(404);
     const purgeEarly = await app.handle(req('POST', '/purge', { artifactId: id }, OWNER));
@@ -244,7 +244,7 @@ describe('http service parity', () => {
     expect(served.status).toBe(200);
     expect(served.body).toMatchObject({ digest, mimeType: 'text/html', size: 3, bytes: [1, 2, 3] });
     const stranger = await app.handle(req('GET', `/content/${id}/${digest}`, undefined, STRANGER));
-    expect(stranger.status).toBe(403);
+    expect(stranger.status).toBe(404);
     const noBlob = await app.handle(
       req('GET', `/content/${id}/sha256:${'0'.repeat(64)}`, undefined, OWNER),
     );
