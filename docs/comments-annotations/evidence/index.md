@@ -1,6 +1,6 @@
 # Comments and annotations — evidence index
 
-**C0 frozen-storage alignment.** M1 is owner-closed at `2dabe25ce`, preserving four reserves and unprovided manifest confirmation/host acknowledgement. The [storage alignment reference](storage-alignment.md) pins frozen v4.1 and its current boundaries. Earlier treatments below are historical; their review verdicts do not transfer to current bytes. C0 declares compatibility and unverified transport/oracle packaging, not delivered M2 capability.
+**M2 candidate and frozen-storage alignment.** M1 is owner-closed at `2dabe25ce`, preserving four reserves and unprovided manifest confirmation/host acknowledgement. The [storage alignment reference](storage-alignment.md) pins frozen v4.1. The [installed candidate evidence](installed-module.md) records executed PG/runtime/corpus/long-history checks, exact archive and consumer identities; the [host guide](../immo-host-guide.md) describes integration. Earlier treatments below are historical; their review verdicts do not transfer to current bytes. Final CI, storage co-owner review and actual delivery keep separate gates.
 
 The [convergence receipt](convergence.md) resolves the complete predecessor/result hashes, actual CONF3/CONF4 verdicts, author treatment, reviewer identity/limits and the closed recording delta. At the final anchor it supersedes, for promotion-delta confirmation only, the pending mentions in the frozen SPEC, three plans and historical treatment/review extracts; those confirmations remain tied to their historical hashes; M2-DELTA below supersedes only storage/API ownership and pre-delivery restoration gates, and the current SPEC/plans have new hashes. The [promotion treatment](treatment-promotion.md) records every n-1–n-7 disposition. Original source digests are distinct from translated-extract digests.
 
@@ -8,7 +8,7 @@ The [convergence receipt](convergence.md) resolves the complete predecessor/resu
 
 | Readable document | SHA-256 of current bytes |
 |---|---|
-| [SPEC](../../../spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md) | `ca90a83f6312ceefbe638c29ace991835d3dfc6f438b748a1ee7aab6a88eb8e3` |
+| [SPEC](../../../spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md) | `a666e373cb0476f3d72b10a962166124227d5151cd992b2e644263fc0e384e4b` |
 | [Two-lane plan](../plan/PLAN_COMMENTS_ANNOTATIONS.md) | `be9d8263eeded6131ff042c754fcae7bd4d7219eda0c25743d2dd6b0dfd3a386` |
 | [Model template](../plan/BRANCH_P1_TEMPLATE.md) | `ac5ce92b64379a9b6ca4b2890b24094e6d67f056097aead9cf103140400ac34c` |
 | [Plan handoff](../plan/PLAN_HANDOFF.md) | `c69ab3014f5c5b10d97ed205a1f7d16f0d69ddade66a64d3c94c1019787dcad8` |
@@ -22,7 +22,8 @@ The [convergence receipt](convergence.md) resolves the complete predecessor/resu
 | [convergence](convergence.md) | `85ca30dccc40d4ebbd694caad80fcdc90f0264a84944fdd3d42983caf1a171bd` |
 | [storage-alignment](storage-alignment.md) | `f03090f73c3c9ca842d780eaad1b0031c744a740d37b0de4ad6e7605a3527c24` |
 | [storage-module-v1](../contract/storage-module-v1.json) | `02114383aaac4dfe701da2b637776dfc1bd91669ed6d47eab3d6194e13e21a46` |
-| [storage-compatibility](../contract/storage-compatibility.md) | `4ea4ba63a92a9b0cfd33d3880b2fc550fd2e04a8bbb3429f164724dd762ca6ae` |
+| [storage-compatibility](../contract/storage-compatibility.md) | `e846e92946044946d14236491daab5954c0b1085da7159e547e4fd284c57882f` |
+| [Immo host guide](../immo-host-guide.md) | `6df7eeda92260754a8c3d897d269994486c21960ac9bba90814a28c1b01c14e3` |
 
 The [documentary BRANCH.md](../../../BRANCH.md) link refers to its state at the LAST promotion-series anchor commit, whose actual SHA will be recorded in the subsequent model BRANCH.md. The model branch replaces that checklist at Lot 0 and the merge workflow later deletes it; the durable summary below preserves its exceptions and series. Its checkboxes evolve, so this index does not pin their changing digest. This index's own digest is supplied in the files-only handoff, not embedded recursively.
 
