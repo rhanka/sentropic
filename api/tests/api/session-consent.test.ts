@@ -2228,4 +2228,137 @@ describe('session consent durable lifecycle', () => {
     expect(usage.committedBytes).toBe(32);
     void bindingId;
   });
+
+  it('should not cancel unrelated attempts when an object job drains twice (P2)', async () => {
+    await acceptProject();
+    const deriveS = async (sessionId: string) => {
+      const bindingId = await adoptSession(sessionId);
+      const rows = await db
+        .select()
+        .from(sessionWorkspaceBindings)
+        .where(eq(sessionWorkspaceBindings.sessionId, sessionId));
+      await service.deriveGrant({
+        projectId: 'sess-content-project-1',
+        sessionId,
+        bindingId,
+        bindingVersion: rows[0]!.version,
+        d1Version: rows[0]!.version,
+        d1Incarnation: 1,
+        d1StartSeq: 0,
+        workspaceId,
+        sessionCreatedAt: now,
+        sourceGeneration: 'gen-1',
+        sourceTrustVersion: 'tv-1',
+        nativeStartSeq: 0,
+      }, ctx);
+      return { bindingId };
+    };
+    const s1 = await deriveS('sess-content-s1');
+    const failing = makeService({
+      publishHooks: {
+        beforePut: async () => {
+          throw new Error('injected PUT failure');
+        },
+      },
+    });
+    const body = new TextEncoder().encode('p2-failed');
+    const r1 = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: body.length, encoded: body.length }, 'k-p2-1', ctx,
+    );
+    await expectContentError(() => failing.publishAfterUpload(
+      r1.reservationId, body, ctx,
+    ), 'unknown_outcome');
+    const jobs = await db
+      .select()
+      .from(sessionContentPurgeJobs)
+      .where(eq(sessionContentPurgeJobs.bindingId, s1.bindingId));
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]!.scope).toBe('object');
+    await service.runPurge(jobs[0]!.purgeJobId);
+    const other = new TextEncoder().encode('p2-live');
+    const rm = await service.reserveBeforeUpload(
+      'sess-content-s1', 'native.mirror',
+      { raw: other.length, encoded: other.length }, 'k-p2-m', ctx,
+    );
+    await deriveS('sess-content-s2');
+    const r2 = await service.reserveBeforeUpload(
+      'sess-content-s2', 'terminal.cache',
+      { raw: other.length, encoded: other.length }, 'k-p2-2', ctx,
+    );
+    const second = await service.runPurge(jobs[0]!.purgeJobId);
+    expect(second.remainingObjects).toBe(0);
+    const attemptOf = async (reservationId: string) => (await db
+      .select()
+      .from(sessionContentAttempts)
+      .where(eq(sessionContentAttempts.attemptId, reservationId)))[0]!.outcome;
+    expect(await attemptOf(rm.reservationId)).toBe('attempted');
+    expect(await attemptOf(r2.reservationId)).toBe('attempted');
+    const res1 = await db
+      .select()
+      .from(sessionContentReservations)
+      .where(eq(sessionContentReservations.reservationId, r1.reservationId));
+    expect(res1[0]!.state).toBe('cancelled');
+    void s1;
+  });
+
+  it('should cancel only the linked attempt when an object job settles a crash (P2)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const failing = makeService({
+      publishHooks: {
+        beforePut: async () => {
+          throw new Error('injected PUT failure');
+        },
+      },
+    });
+    const body = new TextEncoder().encode('p2-crash');
+    const r3 = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: body.length, encoded: body.length }, 'k-p2-3', ctx,
+    );
+    await expectContentError(() => failing.publishAfterUpload(
+      r3.reservationId, body, ctx,
+    ), 'unknown_outcome');
+    await db
+      .update(sessionContentAttempts)
+      .set({ outcome: 'attempted' })
+      .where(eq(sessionContentAttempts.attemptId, r3.reservationId));
+    const live = new TextEncoder().encode('p2-other');
+    const r4 = await service.reserveBeforeUpload(
+      'sess-content-s1', 'native.mirror',
+      { raw: live.length, encoded: live.length }, 'k-p2-4', ctx,
+    );
+    const jobs = await db
+      .select()
+      .from(sessionContentPurgeJobs)
+      .where(eq(sessionContentPurgeJobs.bindingId, bindingId));
+    expect(jobs).toHaveLength(1);
+    await service.runPurge(jobs[0]!.purgeJobId);
+    const attemptOf = async (reservationId: string) => (await db
+      .select()
+      .from(sessionContentAttempts)
+      .where(eq(sessionContentAttempts.attemptId, reservationId)))[0]!.outcome;
+    expect(await attemptOf(r3.reservationId)).toBe('cancelled');
+    expect(await attemptOf(r4.reservationId)).toBe('attempted');
+    void bindingId;
+  });
 });
