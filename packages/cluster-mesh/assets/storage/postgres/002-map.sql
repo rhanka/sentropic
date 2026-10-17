@@ -59,25 +59,25 @@ BEGIN
   END LOOP;
   RETURN NULL;
 END $$;
-CREATE FUNCTION __DATA_SCHEMA__.map_at(root bigint, position bigint) RETURNS TABLE(key text,value bytea)
+CREATE FUNCTION __DATA_SCHEMA__.map_at(root bigint, ordinal_position bigint) RETURNS TABLE(key text,value bytea)
 LANGUAGE plpgsql STABLE SET search_path = pg_catalog AS $$
 DECLARE n __DATA_SCHEMA__.map_nodes; left_size bigint;
 BEGIN
-  IF position < 0 THEN RETURN; END IF;
+  IF ordinal_position < 0 THEN RETURN; END IF;
   WHILE root IS NOT NULL LOOP
     SELECT * INTO STRICT n FROM __DATA_SCHEMA__.map_nodes WHERE id=root;
     left_size:=0;
     IF n.left_id IS NOT NULL THEN SELECT size INTO STRICT left_size FROM __DATA_SCHEMA__.map_nodes WHERE id=n.left_id; END IF;
-    IF position=left_size THEN key:=n.key; value:=n.value; RETURN NEXT; RETURN;
-    ELSIF position<left_size THEN root:=n.left_id;
-    ELSE position:=position-left_size-1; root:=n.right_id; END IF;
+    IF ordinal_position=left_size THEN key:=n.key; value:=n.value; RETURN NEXT; RETURN;
+    ELSIF ordinal_position<left_size THEN root:=n.left_id;
+    ELSE ordinal_position:=ordinal_position-left_size-1; root:=n.right_id; END IF;
   END LOOP;
 END $$;
-CREATE FUNCTION __DATA_SCHEMA__.map_page(root bigint, position bigint, page_size integer) RETURNS TABLE(key text,value bytea)
+CREATE FUNCTION __DATA_SCHEMA__.map_page(root bigint, ordinal_position bigint, page_size integer) RETURNS TABLE(key text,value bytea)
 LANGUAGE plpgsql STABLE SET search_path = pg_catalog AS $$
 BEGIN
   IF page_size < 1 OR page_size > 1024 THEN RAISE EXCEPTION 'invalid map page size' USING ERRCODE='22023'; END IF;
   FOR offset_value IN 0..page_size-1 LOOP
-    RETURN QUERY SELECT * FROM __DATA_SCHEMA__.map_at(root,position+offset_value);
+    RETURN QUERY SELECT * FROM __DATA_SCHEMA__.map_at(root,ordinal_position+offset_value);
   END LOOP;
 END $$;
