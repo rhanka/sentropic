@@ -10,7 +10,7 @@ const setup = (hooks: RootMutationHooks = {}) => {
   const coordinator = new RootMutationCoordinator(backend, hooks);
   const kernel = createKernel({ moduleId: 'comments', backend, coordinator });
   const bound = kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
-  return { coordinator, kernel, bound };
+  return { backend, coordinator, kernel, bound };
 };
 const unit = (chainId: string) => ({
   guards: [], records: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [],
@@ -18,6 +18,16 @@ const unit = (chainId: string) => ({
 });
 
 describe('root-aware ordinary mutations', () => {
+  it('should reject sharing one backend between different owning modules', () => {
+    const { backend } = setup();
+    expect(() => createKernel({ moduleId: 'engram-live', backend })).toThrow(StorageInvalidCommandError);
+  });
+
+  it('should retain a backend incarnation and reject a conflicting identity', () => {
+    const { backend, kernel } = setup();
+    expect(createKernel({ moduleId: 'comments', backend }).incarnation).toBe(kernel.incarnation);
+    expect(() => createKernel({ moduleId: 'comments', backend, incarnation: 'foreign' })).toThrow(StorageInvalidCommandError);
+  });
   it('should refuse unsupported module effects before publishing their carriers', async () => {
     const { bound } = setup();
     await expect(bound.commitAtomic({ ...unit('unsupported'), relationships: [{ kind: 'add', relation: 'r', from: 'a', to: 'b' }] }))
