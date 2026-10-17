@@ -18,6 +18,7 @@ import { commentsImportPolicy } from './import-policy.js';
 import { validateCommentsImportProjection } from './import-projection.js';
 import { prepareCommentsExport } from './export-prepare.js';
 import { readCommentsExportFragments, continueCommentsExport } from './export-pages.js';
+import { COMMENTS_STORAGE_LIMITS, requireCommentsStorageLimits } from './limits.js';
 export { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
@@ -46,11 +47,12 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
   },
   queries: Object.freeze({ 'by-resource': commentsPgQuery('by-resource'), 'scope-chain-index': commentsPgQuery('scope-chain-index'), 'retained-headers': commentsPgQuery('retained-headers') }),
   operations,
+  limits: COMMENTS_STORAGE_LIMITS,
   stagedModules: services ? Object.freeze({ [COMMENTS_IMPORT_CONTRACT_DIGEST]: commentsImportPolicy(services) }) : undefined,
   purgeAuthorize: services ? authorizeCommentsPurge(services) : undefined, purgeFinalizer: services ? finalizeCommentsPurge(services) : undefined,
   });
 };
 export const createCommentsPostgresStorage = async (options: Omit<PostgresStorageOptions, 'moduleId' | 'assets' | 'descriptor' | 'projection' | 'queries' | 'operations' | 'purgeAuthorize' | 'purgeFinalizer'> & { readonly services?: CommentsServiceOptions }) => {
   const { services, ...storage } = options;
-  return createPostgresKernel({ ...storage, moduleId: 'comments', ...await createCommentsPostgresRegistration({ services }) });
+  return createPostgresKernel({ ...storage, moduleId: 'comments', ...await createCommentsPostgresRegistration({ services }), limits: requireCommentsStorageLimits(storage.limits) });
 };

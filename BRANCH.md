@@ -421,6 +421,8 @@
   - [ ] Added owner/incarnation-bound export controls and bounded exact-position reads from the retained kernel root. Each emitted historical record resolves its actual resource references and receives current all-target read checks; missing retained payloads are explicit incomplete outcomes.
   - [ ] Export preparation captures real heads/allocation/committed operation roots once and hashes typed record inventory in bounded 50-record/512-KiB steps. Its final boundary carries exact complete counts/digest and the unchanged canonical export request shape.
   - [ ] Selected read services now return whole hash-chained export fragments with an explicit terminal, or unchanged M1 canonical record pages. Original requests replay from the start; advancing continuations remain separate arguments and complete response envelopes are measured.
+  - [x] The real-PG export probe passes with a read-only grant, above-1-MiB history, fixed heads after a newer write, replay-stable fragment pages, terminal counts/roots, canonical pages and revoked-domain denial.
+  - [ ] BRCM2-PORT-15: trusted installed context exposes committed root/version separately from pending root, so retained export cannot capture rolled-back transaction state. The comments factory declares measured internal encoding budgets and refuses a smaller host profile instead of silently shrinking wire capacity.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
