@@ -111,7 +111,7 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline and test contract freeze**
-  - [ ] Re-pin G/H6/H327, main `fb5e92a6a`, published #662 tuple, immo #679 head/manifests, h2a base `abb64ce4`; record H327 case per 6.3; record H0 pins gateway 0.20.0 mesh 0.26.0 cluster-mesh 0.16.0
+  - [x] Re-pin baseline: G `db314a67` in HEAD; main `fb5e92a6a` == branch base; H327 open/draft head `58dc4fd7` (case: open/rebasing, re-pin at L4 per 6.3); immo #679 draft head `5d23a96c7` (local==remote); h2a base `abb64ce4`; companion HEAD `b0041d8a9` with H0 `5211c18f` adopting #662 tuple; mesh local 0.26.1 above H0 0.26.0 (final bump exceeds main/npm/in-flight)
   - [ ] Freeze LaunchRoutingContract, four 6.1 export paths, host start/readiness/drain/stop, control/session/config/qualification descriptors, receipt import/revoke, recipes with h-cond; register companion `feat/gw-thin-consumer-pr1`
   - [x] Create `tools/gateway-evolution/clients.json` L0 vendor runtime inventory (BR120-EX7 scope)
   - [ ] Create `tools/gateway-evolution/run.mjs` shared verifier (BR120-EX7)
