@@ -180,8 +180,9 @@
     - [ ] `src/storage/staged-core.ts` binds progress to backend identity, verifies provisioned lane ownership/epoch/lease and exposes trusted provisioning/rotation separately from scoped adapter operations.
     - [x] Shared replay staging reuses the actual maintenance fence issued by its backend, allowing opaque lane ids without a hard-coded reference fence; profile mutations stay 40/40.
   - [ ] Seal binds base B, ordered fragment set, recomputed roots; bounded sealing steps honoring limits; failure does not reopen staging; distinct staged/commit/command-index namespaces.
-    - [ ] RED `tests/storage/root-seal.spec.ts`: bounded preparation with evolving heads, one root/event at commit, stable receipt retry and a failed seal that cannot reopen staging.
+    - [x] RED `tests/storage/root-seal.spec.ts`: bounded preparation with evolving heads, one root/event at commit, stable receipt retry and a failed seal that cannot reopen staging; 2/2 pass, typecheck passes.
     - [ ] `staged-preparation.ts` prepares one measured effect at a time on captured indexed roots and streams the shared v1 root commitments in bounded UTF-8 chunks; the memory backend retains hash progress without a durability claim.
+    - [ ] `staged-seal.ts` freezes sealing input, authenticates seals, rechecks authority/current fence after the scheduling hook, publishes one captured successor and preserves terminal receipts independently of hidden fragments.
   - [ ] Lot gate: copy of Lot 1 gate; tests `staged-units.spec.ts` + corpus cases C01-C04 with mutants.
 
 - [ ] **Lot 4 — K4 publication (N4-N6; MAJ-4..6, S4:1-3, S4:5-6, m13; C05-C09)**
