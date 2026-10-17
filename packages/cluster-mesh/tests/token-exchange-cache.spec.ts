@@ -7,9 +7,84 @@ import {
   RFC8693_GRANT_TYPE,
   resolveTokenExchangeCacheTtlMs,
   TOKEN_EXCHANGE_CACHE_TTL_MS,
+  type MintedToken,
+  type MintExchangedTokenInput,
   type TokenExchangeIssuer,
+  type VerifiedSubjectToken,
 } from '../src/index.js';
 import { FakeTokenIssuer } from './fixtures/fake-token-issuer.js';
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((entry) => {
+    resolve = entry;
+  });
+  return { promise, resolve };
+}
+
+/** Issuer double with controllable mint/verify gates for invalidation-race tests (O2). */
+class GatedIssuer extends FakeTokenIssuer {
+  gateMint = false;
+  gateVerify = false;
+  private readonly mintEntries: Array<{ promise: Promise<void>; resolve: () => void }> = [];
+  private readonly mintReleases: Array<{ promise: Promise<void>; resolve: () => void }> = [];
+  private readonly verifyEntries: Array<{ promise: Promise<void>; resolve: () => void }> = [];
+  private readonly verifyReleases: Array<{ promise: Promise<void>; resolve: () => void }> = [];
+
+  override async verify(subjectToken: string): Promise<VerifiedSubjectToken> {
+    if (this.gateVerify) {
+      const entry = deferred();
+      this.verifyEntries.push(entry);
+      entry.resolve();
+      const release = deferred();
+      this.verifyReleases.push(release);
+      await release.promise;
+    }
+    return super.verify(subjectToken);
+  }
+
+  override async mint(input: MintExchangedTokenInput): Promise<MintedToken> {
+    const entry = deferred();
+    this.mintEntries.push(entry);
+    entry.resolve();
+    if (this.gateMint) {
+      const release = deferred();
+      this.mintReleases.push(release);
+      await release.promise;
+    }
+    return super.mint(input);
+  }
+
+  async waitForMintEntry(index: number): Promise<void> {
+    for (let i = 0; i < 1000 && this.mintEntries.length <= index; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    const entry = this.mintEntries[index];
+    if (entry === undefined) throw new Error(`mint ${index} never entered`);
+    return entry.promise;
+  }
+
+  async waitForVerifyEntry(index: number): Promise<void> {
+    for (let i = 0; i < 1000 && this.verifyEntries.length <= index; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    const entry = this.verifyEntries[index];
+    if (entry === undefined) throw new Error(`verify ${index} never entered`);
+    return entry.promise;
+  }
+
+  releaseMint(index: number): void {
+    const release = this.mintReleases[index];
+    if (release === undefined) throw new Error(`mint ${index} has no release gate`);
+    release.resolve();
+  }
+
+  releaseVerify(index: number): void {
+    const release = this.verifyReleases[index];
+    if (release === undefined) throw new Error(`verify ${index} has no release gate`);
+    release.resolve();
+  }
+}
 
 const ISSUER = 'https://fake-idp.example.test';
 const SUBJECT_AUDIENCE = 'https://mesh.example.test';
