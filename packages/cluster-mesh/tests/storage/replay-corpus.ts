@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { expectCode, type Awaitable } from './atomic-corpus.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
-import type { StagedCorpusHandle, StagedCorpusSeal } from './staged-corpus.js';
+import { stagedDigestOf, stagedSealRoot, type StagedCorpusHandle, type StagedCorpusSeal } from './staged-corpus.js';
 import type { StagedCommitRoot } from '../../src/storage/staged-units.js';
 import type { WriterFence } from '../../src/storage/contracts.js';
 
@@ -205,40 +205,33 @@ export const runReplayCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
+  const sealingEffects: AtomicUnit = {
+    guards: [],
+    records: [],
+    appends: [
+      {
+        chainId: 'journal-sealed',
+        record: { id: 's1', bytes: '{}', hash: 'hash-sealed-1' },
+        expectation: { kind: 'absent', allocation: '0' },
+      },
+    ],
+    updates: [],
+    relationships: [],
+    barriers: [],
+    purgeIntents: [],
+    indexWrites: [],
+  };
   await bound.stageFragment({
     unit: sealing,
     ordinal: '0',
     predecessorHash: null,
-    fragmentDigest: 'digest-sealed-0',
-    effects: {
-      guards: [],
-      records: [],
-      appends: [
-        {
-          chainId: 'journal-sealed',
-          record: { id: 's1', bytes: '{}', hash: 'hash-sealed-1' },
-          expectation: { kind: 'absent', allocation: '0' },
-        },
-      ],
-      updates: [],
-      relationships: [],
-      barriers: [],
-      purgeIntents: [],
-      indexWrites: [],
-    },
+    fragmentDigest: stagedDigestOf(sealing, '0', null, sealingEffects),
+    effects: sealingEffects,
     fence: FENCE,
   });
   const sealed = await bound.sealStaged({
     unit: sealing,
-    root: {
-      operationId: 'op-replay-sealed',
-      contractDigest: 'contract-k2b',
-      sourceBoundary: 'boundary-k2b',
-      finalFragmentHash: 'digest-sealed-0',
-      fragmentCount: '1',
-      dependencyRoot: 'dep-root-k2b',
-      effectRoot: 'eff-root-k2b',
-    },
+    root: stagedSealRoot(sealing, [sealingEffects]),
   });
   const beforeCommit = await bound.journalRead('c1', 0, 100);
   assert.equal(
@@ -262,27 +255,28 @@ export const runReplayCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
+  const abandonedEffects: AtomicUnit = {
+    guards: [],
+    records: [],
+    appends: [
+      {
+        chainId: 'journal-abandoned',
+        record: { id: 'x1', bytes: '{}', hash: 'hash-abandoned-1' },
+        expectation: { kind: 'absent', allocation: '0' },
+      },
+    ],
+    updates: [],
+    relationships: [],
+    barriers: [],
+    purgeIntents: [],
+    indexWrites: [],
+  };
   await bound.stageFragment({
     unit: abandoned,
     ordinal: '0',
     predecessorHash: null,
-    fragmentDigest: 'digest-abandoned-0',
-    effects: {
-      guards: [],
-      records: [],
-      appends: [
-        {
-          chainId: 'journal-abandoned',
-          record: { id: 'x1', bytes: '{}', hash: 'hash-abandoned-1' },
-          expectation: { kind: 'absent', allocation: '0' },
-        },
-      ],
-      updates: [],
-      relationships: [],
-      barriers: [],
-      purgeIntents: [],
-      indexWrites: [],
-    },
+    fragmentDigest: stagedDigestOf(abandoned, '0', null, abandonedEffects),
+    effects: abandonedEffects,
     fence: FENCE,
   });
   await bound.abortStaged({ unit: abandoned });
@@ -364,40 +358,33 @@ export const runReplayCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
+  const failingEffects: AtomicUnit = {
+    guards: [],
+    records: [],
+    appends: [
+      {
+        chainId: 'journal-fail',
+        record: { id: 'f1', bytes: '{}', hash: 'hash-fail-1' },
+        expectation: { kind: 'absent', allocation: '0' },
+      },
+    ],
+    updates: [],
+    relationships: [],
+    barriers: [],
+    purgeIntents: [],
+    indexWrites: [],
+  };
   await bound.stageFragment({
     unit: failing,
     ordinal: '0',
     predecessorHash: null,
-    fragmentDigest: 'digest-fail-0',
-    effects: {
-      guards: [],
-      records: [],
-      appends: [
-        {
-          chainId: 'journal-fail',
-          record: { id: 'f1', bytes: '{}', hash: 'hash-fail-1' },
-          expectation: { kind: 'absent', allocation: '0' },
-        },
-      ],
-      updates: [],
-      relationships: [],
-      barriers: [],
-      purgeIntents: [],
-      indexWrites: [],
-    },
+    fragmentDigest: stagedDigestOf(failing, '0', null, failingEffects),
+    effects: failingEffects,
     fence: FENCE,
   });
   const failingSeal = await bound.sealStaged({
     unit: failing,
-    root: {
-      operationId: 'op-replay-fail',
-      contractDigest: 'contract-k2b',
-      sourceBoundary: 'boundary-k2b',
-      finalFragmentHash: 'digest-fail-0',
-      fragmentCount: '1',
-      dependencyRoot: 'dep-root-k2b',
-      effectRoot: 'eff-root-k2b',
-    },
+    root: stagedSealRoot(failing, [failingEffects]),
   });
   await bound.armExternalFailure();
   await expectCode(
