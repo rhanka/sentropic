@@ -82,6 +82,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `L1-L2-docs`: gateway README documents the published host/control binding, protected state, keys and receipts; mesh changelog records exact-default migration; canonical routing spec records the v8 amendment and unqualified/deferred surfaces. Registry recheck remains gateway 0.20.0 / mesh 0.26.1; candidate 0.21.0 / 0.27.0 stays above them. Equivalence generation check passes.
 - `L2-control-preservation`: real host tests now prove missing usage remains null and out-of-grant Chat effort returns 400/unsupported_parameter/reasoning.effort with zero provider calls. Chat normalization preserves reasoning controls, rejects invalid/conflicting controls and requires proven transport support. Full gateway gate passes 1327/1327.
 - `L1-storage-final-gate`: reproduced missing committed ciphertext resetting to revision zero; the protected initialization marker now makes that state corrupt across instances. Invalid namespace shapes refuse. Migration key + ack commit atomically; store outages propagate instead of quarantining valid input. Interrupted physical attempts become incomplete, and unreported usage remains null.
 - `L2-gateway-full-gate`: `make typecheck-llm-gateway lint-llm-gateway test-llm-gateway ENV=test-gw-durable-vibe-muse` passes (75 files, 1327 tests). Chat reasoning_effort is preserved and feature-gated, invalid/conflicting controls refuse, and out-of-grant effort returns a named 400 before dispatch. No timeout changed.
