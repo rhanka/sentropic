@@ -274,6 +274,7 @@
 
 - [ ] **Lot 3b — Reachable Sessions UI and per-action IdP confirmation**
   - [ ] [D] N5 test-first entry: acquisition and input each require a new IdP ceremony, then an explicit confirmation after return. Callback completion alone causes zero effects; the added keyboard regression precedes implementation.
+  - [x] [D] N5 keyboard red: scoped suite 10 passed/1 failed; acquisition occurred before explicit confirmation (`lot2_n5_keyboard_red.log`, 2026-10-17). Post-Rebase Gate: cluster-mesh 0.17.0 > published 0.16.0, verified through Docker/Make with explicit local API tag.
   - [x] Lot 3b test-first entry: authorization and retention suites fail red on missing `$lib/session-content/state` (2026-10-17); implement within ratified BRCM2-EX6. Positive source/browser qualification remains CM2-F2/CM2-N5-AUTH/CONTROL-gated.
   - [x] Lot 3b presentation model: independent all-off offers, owner/channel duration choices in seconds, immutable-copy and paused/closed/offline authorization states; scope declarations spell out the three test paths for mechanical checking.
   - [x] Lot 3b consent flow: transient proof state, exact-payload preparation, cancellation/edit fencing and post-authentication rechecks; no activation without explicit offline-risk acceptance and a selected channel. Historical pre-N5 evidence; local-key/risk-receipt/source-online-read semantics are superseded and do not qualify N5.
