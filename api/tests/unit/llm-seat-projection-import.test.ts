@@ -172,6 +172,7 @@ describe('llm seat projection import', () => {
     const row = await accountRow(user.id, 'claude-lab-01');
     expect(row?.token_secret).not.toBeNull();
     expect(row?.last_error).toContain('access-unavailable');
+    expect(row?.status).toBe('active');
   });
 
   it('recovers on a newer projection without account duplication', async () => {
@@ -219,6 +220,22 @@ describe('llm seat projection import', () => {
     await acquired?.recordOutcome({ status: 'success' });
   });
 
+  it('treats an external Codex row with unknown expiry as unavailable, never served', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    await storeCodexAccountTransport({ ownerUserId: user.id, accessToken: codexJwt('codex-lab-01') });
+    await markExternal(user.id, 'codex-lab-01', 'seat-synth-codex-01');
+    const acquired = await acquireOpenAICodexAccountTransport({
+      userId: user.id,
+      modelId: 'gpt-5.5',
+      requestId: 'seat-codex-unknown-expiry',
+    });
+    expect(acquired).toBeNull();
+    const row = await accountRow(user.id, 'codex-lab-01');
+    expect(row?.token_secret).not.toBeNull();
+    expect(row?.last_error).toContain('access-unavailable');
+    expect(row?.status).toBe('active');
+  });
+
   it('never wipes an expired externally marked Codex secret', async () => {
     const user = await createAuthenticatedUser('admin_app');
     await storeCodexAccountTransport({
@@ -235,6 +252,7 @@ describe('llm seat projection import', () => {
     const row = await accountRow(user.id, 'codex-lab-01');
     expect(row?.token_secret).not.toBeNull();
     expect(row?.last_error).toContain('access-unavailable');
+    expect(row?.status).toBe('active');
   });
 
   it('serves an externally marked Muse row without re-reading the CLI store', async () => {

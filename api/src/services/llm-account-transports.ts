@@ -256,6 +256,18 @@ export const readSeatExternalPolicy = (metadata: unknown): SeatExternalPolicy | 
 const readSeatPolicyFromPayload = (parsed: Record<string, unknown>): SeatExternalPolicy | null =>
   readSeatExternalPolicy({ [SEAT_EXTERNAL_POLICY_KEY]: parsed['externalSeatPolicy'] });
 
+/**
+ * L1 unavailability predicate for external seats. Unknown expiry is not
+ * infinite validity: a missing, empty, or unparseable expiry is
+ * unavailable, exactly like an elapsed one.
+ */
+export const isExternalSeatUnavailable = (expiresAt: string | null | undefined): boolean => {
+  if (!expiresAt) return true;
+  const parsed = new Date(expiresAt);
+  if (Number.isNaN(parsed.getTime())) return true;
+  return isTokenExpiring(expiresAt);
+};
+
 const toIso = (value: Date | string | null | undefined): string | null => {
   if (!value) return null;
   if (value instanceof Date) return value.toISOString();
@@ -749,7 +761,10 @@ export const storeClaudeCodeAccountTransport = async (input: {
   const seatPolicy = input.seatPolicy ?? null;
   // External rows carry access material only; a missing refresh token without
   // the trusted policy is still refused. No dummy refresh token is stored.
+  // Unknown expiry is not infinite validity: external rows require expiresAt.
+  const expiresAt = normalizeOptionalText(input.expiresAt);
   if (!ownerUserId || !externalAccountId || !accessToken || (!refreshToken && !seatPolicy)) return null;
+  if (seatPolicy && !expiresAt) return null;
 
   const token = buildClaudeCodeTokenPayload({
     accessToken,
@@ -1403,7 +1418,10 @@ export const storeAntigravityAccountTransport = async (input: {
   const seatPolicy = input.seatPolicy ?? null;
   // External rows carry access material only; a missing refresh token without
   // the trusted policy is still refused. No dummy refresh token is stored.
+  // Unknown expiry is not infinite validity: external rows require expiresAt.
+  const expiresAt = normalizeOptionalText(input.expiresAt);
   if (!ownerUserId || !externalAccountId || !accessToken || (!refreshToken && !seatPolicy)) return null;
+  if (seatPolicy && !expiresAt) return null;
 
   const token = buildAntigravityTokenPayload({
     accessToken,
@@ -1530,6 +1548,8 @@ export const importSeatProjection = async (input: {
     || !Number.isInteger(policy.generation) || policy.generation < 0) return null;
   if (policy.ownerScope !== input.expectedOwnerScope) return null;
   if (normalizeOptionalText(input.accessToken) === null) return null;
+  // Unknown expiry is not infinite validity.
+  if (normalizeOptionalText(input.expiresAt) === null) return null;
   if (input.cli === 'agy') {
     // Exact layer mapping: package cloud-code to application
     // antigravity/cloudcode-pa. The application cloud-code/gemini route,
@@ -2575,12 +2595,11 @@ const acquireDbAccountTransport = async <TToken extends ParsedAccountTransportTo
   // projection. No missing-token branch may erase an external account.
   const seatPolicy = readSeatExternalPolicy(acquired.metadata);
   if (seatPolicy) {
-    if (isTokenExpiring(token.expiresAt)) {
-      await recordLlmAccountTransportOutcome({
+    if (isExternalSeatUnavailable(token.expiresAt)) {
+      await recordSeatUnavailableOutcome({
         accountId: acquired.account_id,
         reservationId: acquired.reservation_id,
-        status: 'auth_failed',
-        errorMessage: `Seat ${seatPolicy.seatRef} access-unavailable; awaiting the next imported projection.`,
+        seatRef: seatPolicy.seatRef,
       });
       return null;
     }
@@ -2782,6 +2801,33 @@ export const acquireAntigravityAccountTransport = async (input: {
     invalidTokenMessage: 'Antigravity account token secret is missing or invalid.',
     reauthMessage: 'Antigravity account requires reauthentication.',
   });
+
+/**
+ * L1 classified outcome for an unavailable external seat. It completes the
+ * reservation and records the access-unavailable diagnostic WITHOUT
+ * flipping the account status: no product surface may ask the user to
+ * re-authenticate a custodied seat. `token_secret`, owner, lineage, and
+ * policy are retained for the next projection; drain (`disabled`) stays
+ * the maintenance path.
+ */
+export const recordSeatUnavailableOutcome = async (input: {
+  accountId: string;
+  reservationId: string;
+  seatRef: string;
+}): Promise<void> => {
+  const now = new Date();
+  await db.run(sql`
+    UPDATE llm_account_reservations
+    SET status = 'completed', completed_at = ${now}
+    WHERE id = ${input.reservationId} AND status = 'active'
+  `);
+  await db.run(sql`
+    UPDATE llm_provider_accounts
+    SET last_error = ${`Seat ${input.seatRef} access-unavailable; awaiting the next imported projection.`},
+        updated_at = ${now}
+    WHERE id = ${input.accountId}
+  `);
+};
 
 export const recordLlmAccountTransportOutcome = async (
   input: LlmAccountTransportOutcomeInput & {
