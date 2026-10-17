@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { StorageScope } from '../contracts.js';
 import type { CommitReceipt } from '../atomic.js';
 import { StorageCasConflictError, StorageInvalidCommandError } from '../errors.js';
-import { decodePgBytes, decodePgCounter, decodePgJson, decodePgText } from './codec.js';
+import { decodePgBytes, decodePgCounter, decodePgJson, decodePgText, decodePgUtf8 } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { quotePgIdentifier, validatePgLayout, type PgSession, type PostgresStorageOptions } from './protocol.js';
 
@@ -31,7 +31,7 @@ export class PgRoots {
     const result = await session.execute({ text: `SELECT ${this.schema}.map_get($1::bigint,$2) AS value`, values: [root, pgMapKey(kind, id)] });
     const value = result.rows[0]?.value;
     if (value === null) return null;
-    return decodePgJson(decodePgBytes(value)) as T;
+    return decodePgJson(decodePgUtf8(value)) as T;
   }
   async put(session: PgSession, root: string | null, kind: string, id: string, value: unknown): Promise<string> {
     const result = await session.execute({ text: `SELECT ${this.schema}.map_put($1::bigint,$2,$3) AS root`, values: [root, pgMapKey(kind, id), value === null ? null : pgJsonBytes(value)] });
@@ -40,7 +40,7 @@ export class PgRoots {
   async page(session: PgSession, root: string | null, position: string, limit: number): Promise<readonly { key: string; value: unknown }[]> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1024) throw new StorageInvalidCommandError('invalid map page');
     const result = await session.execute({ text: `SELECT * FROM ${this.schema}.map_page($1::bigint,$2::bigint,$3::integer)`, values: [root, position, limit] });
-    return result.rows.map((row) => ({ key: decodePgText(row.key), value: row.value === null ? null : decodePgJson(decodePgBytes(row.value)) }));
+    return result.rows.map((row) => ({ key: decodePgText(row.key), value: row.value === null ? null : decodePgJson(decodePgUtf8(row.value)) }));
   }
   async payload(session: PgSession, scope: StorageScope, target: string, bytes: Uint8Array, hash: string): Promise<string> {
     const id = randomUUID();

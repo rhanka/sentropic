@@ -19,7 +19,9 @@ const fixture = (failures = 0, synchronousCommit = 'remote_apply') => {
 describe('Postgres transaction policy', () => {
   it('should keep one injected session, finite local settings and stronger durability', async () => {
     const f = fixture();
-    await f.transactions.run(false, async (session) => { expect(session).toBe(f.seen[0]); await session.execute({ text: 'SELECT $1::text', values: ['canonical bytes'] }); });
+    let retained: PgSession | undefined;
+    await f.transactions.run(false, async (session) => { retained = session; expect(f.seen).toHaveLength(1); await session.execute({ text: 'SELECT $1::text', values: ['canonical bytes'] }); });
+    await expect(retained!.execute({ text: 'SELECT 1', values: [] })).rejects.toMatchObject({ condition: 'timeout' });
     expect(f.statements.some((statement) => statement.text.includes('synchronous_commit') && statement.text !== 'SHOW synchronous_commit')).toBe(false);
     expect(f.statements.some((statement) => statement.text.includes('set_config') && statement.values.includes('250ms'))).toBe(true);
     expect(f.statements.at(-1)?.values).toEqual(['canonical bytes']);
