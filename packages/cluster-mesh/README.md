@@ -115,9 +115,11 @@ providers stay independent packages and never depend on cluster-mesh. They are
 | `/llm-mesh`, `/llm-mesh/facade`, `/llm-mesh/enrollment`, `/llm-mesh/node`, `/llm-mesh/transport/cloud-code` | matching `@sentropic/llm-mesh` entry | `@sentropic/llm-mesh >=0.22.0 <0.27.0` |
 | `/gateway` | `@sentropic/llm-gateway` root (neither auth mode) | llm-mesh + `@sentropic/llm-gateway >=0.19.0 <0.21.0` |
 | `/gateway/auth` (service mode) | `@sentropic/llm-gateway/auth` | gateway + `@sentropic/mcp-auth >=0.2.1 <0.3.0`, `jose ^5.10.0` |
-| `/gateway/auth-hono` (session mode) | `@sentropic/llm-gateway/auth-hono` | gateway + `@sentropic/auth-hono ^0.15.0` |
+| `/gateway/auth-hono` (session mode) | `@sentropic/llm-gateway/auth-hono` | gateway + `@sentropic/auth-hono ^0.15.0 \|\| ^0.16.0` |
 | `/loaders/<leaf>` | async typed loader (`loadLlmMesh`, `loadGateway`, `loadGatewayAuth`, ...) | as its leaf, resolved on call |
 | `/compose/llm-mesh`, `/compose/gateway` | `createLlmMeshNamespaceModule`, `createGatewayNamespaceModule` | as the loaders they call |
+| `/mcp/registry`, `/mcp/stdio` | `@sentropic/mcp-platform` MCP kernel entries | `@sentropic/mcp-platform >=0.3.0 <0.4.0` (plus `@modelcontextprotocol/sdk ^1.31.0` for the stdio transport) |
+| `/compose/mcp`, `/loaders/mcp` | `createMcpNamespaceModule`, `loadMcpPlatform{Registry,Stdio,Bridge,Entry,Hono}` | as its leaf, resolved on call |
 
 Static leaves are `export *` re-exports of the provider namespace: same values,
 types, overloads and class identity. Importing a leaf selects that provider; a
@@ -129,7 +131,7 @@ load_failed | source_unavailable`). Recognize it with `isClusterMeshModuleUnavai
 or by `code`, never by `instanceof` (duplicate copies have distinct constructors).
 `modules.probe()` reports metadata-only availability without evaluating providers;
 pass `modules` to `createDegenerateClusterMesh` to expose `capabilities.modules`.
-MCP and other catalogued capabilities are listed as `source_unavailable` until a
+Other catalogued capabilities are listed as `source_unavailable` until a
 later minor delivers them.
 
 **Startup preflight (fail closed before bind).** llm-gateway imports its auth peers
@@ -177,15 +179,16 @@ resolution anchor at the installed package; bundling the root inline (as the API
 build does) embeds no provider code. TypeScript >= 5.7 is required with
 `skipLibCheck: false` (hono's declarations); with `skipLibCheck: true`, a missing
 peer surfaces as TS2305 on the named import. Frozen tuple (committed lockfile):
-cluster-mesh 0.16.0, llm-mesh 0.26.0, llm-gateway 0.20.0, mcp-auth 0.2.1,
-oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7; session mode with auth-hono 0.15.0
-(llm-gateway 0.20.0's declared peer range `^0.15.0`); the latest versions inside
+cluster-mesh 0.18.0, llm-mesh 0.26.1, llm-gateway 0.20.1, mcp-auth 0.2.2,
+oauth-verify 0.1.0, jose 5.10.0, hono 4.13.0; session mode with auth-hono 0.16.0
+(llm-gateway 0.20.1's declared peer range `^0.15.0 || ^0.16.0`); the latest versions inside
 every declared range are re-qualified on each release run. The previous tuple
 (llm-mesh 0.21.x, llm-gateway 0.18.x) is refused, see "Upgrading to 0.13" below.
 
-The current release target is **cluster-mesh 0.16.0, llm-mesh 0.26.0 and
-llm-gateway 0.20.0** (llm-mesh/llm-gateway still unpublished; cluster-mesh 0.15.0
-is published on npm). Final sibling archive qualification
+The current release target is **cluster-mesh 0.18.0, llm-mesh 0.26.1 and
+llm-gateway 0.20.1** (cluster-mesh 0.18.0 is the unpublished branch candidate;
+main carries llm-mesh 0.26.1 and llm-gateway 0.20.0 — see the Post-Rebase Gate in
+BRANCH.md). Final sibling archive qualification
 and the selected-lock integrity refresh remain release gates; the selected fixture
 retains the baseline until that final refresh. The widened ranges retain the prior
 qualified minors.
