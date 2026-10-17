@@ -20,7 +20,7 @@ describe.skipIf(!pgEnabled)('comments frozen store on the shared Postgres root',
       const oracleHost = new Proxy({} as CanonicalCommandStore, { get(_target, key) { return async (scope: CanonicalStoreScope, ...args: unknown[]) => {
         const identity = JSON.stringify(scope); let grant = grants.get(identity);
         if (!grant) { grant = grantFor({ scope, token: identity }); await root.bindNew(grant); grants.set(identity, grant); }
-        return module.withContext(grant, () => Reflect.apply(module.store[key as keyof CanonicalCommandStore] as Function, module.store, [scope, ...args]));
+        return module.withContext(grant, () => Reflect.apply(module.store[key as keyof CanonicalCommandStore] as (...values: unknown[]) => unknown, module.store, [scope, ...args]));
       }; } });
       const manifest = JSON.parse(await readFile(new URL('../assets/storage/comments/oracle/manifest.json', import.meta.url), 'utf8'));
       for (const artifact of manifest.artifacts) expect(createHash('sha256').update(await readFile(new URL(`../assets/storage/comments/oracle/${artifact.file}`, import.meta.url))).digest('hex')).toBe(artifact.sha256);
