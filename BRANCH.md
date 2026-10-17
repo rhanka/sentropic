@@ -62,7 +62,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `CISEAT-EX2`: status proposed. Reason: scoped sentropic-seat-delivery receiver integration (new route `api/src/routes/namespaces/llm-seat-delivery.ts`, auth `api/src/middleware/llm-seat-delivery-auth.ts`, mount in `llm-mesh-router.ts`, k8s mTLS manifests + selected overlay patch). Impact: bounded to this integration, fixed before editing. Rollback: delete the new route/middleware/manifests and revert the router mount.
+- `CISEAT-EX2`: status active. Reason: scoped sentropic-seat-delivery receiver integration (new route `api/src/routes/namespaces/llm-seat-delivery.ts`, auth `api/src/middleware/llm-seat-delivery-auth.ts`, optional mount in `llm-mesh-router.ts` via `delivery.enabled`, service tuple/drain/reopen in `llm-account-transports.ts`). k8s mTLS manifests (`deploy/k8s/base/seat-delivery-mtls.yaml`, preprod overlay patch) are explicitly deferred to L3 P-DEPLOY, which owns TLS-termination design; no speculative infra is committed (delivery shares the api pod behind existing ingress). Impact: bounded to this integration; router behavior unchanged when `delivery` is unset. Rollback: delete the new route/middleware files, revert the router mount hunk and the service delivery functions.
 - `CISEAT-EX3`: status acknowledged (reserved downstream requirement from L0a). Reason: owner-machine native Node helper (`seat-inspect`, `seat-reenroll`) needs native session keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service D-Bus). Bounds: only reviewed Make entrypoints run the bounded local store reader/inspect helper and `src/seat-reenroll.ts` natively; no host test campaign, server, second refresher or whole-home/keyring export. Rollback: disable/remove owner targets, revoke helper GitHub session, remove private runtime dir, retire disposable lab profile only.
 - `R6-1`: status acknowledged. llm-gateway 0.20.0 accepts llm-mesh `^0.26.0`; L1 keeps mesh at 0.26.x (patch only) with single-copy lock assertion, or adds the named gateway bump step (not planned; gateway paths stay forbidden).
 
@@ -194,7 +194,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [ ] None (synthetic API only).
 
-- [ ] **Lot 5 — Seat-delivery receiver (conditional CISEAT-EX2)**
+- [x] **Lot 5 — Seat-delivery receiver (conditional CISEAT-EX2)**
   - [ ] Declare `CISEAT-EX2` before editing conditional paths (exact overlay files, rationale, impact, rollback).
   - [ ] Add `api/src/routes/namespaces/llm-seat-delivery.ts` + `api/src/middleware/llm-seat-delivery-auth.ts`; mount in `api/src/routes/namespaces/llm-mesh-router.ts` (existing mount edit only).
   - [ ] Add `deploy/k8s/base/seat-delivery-mtls.yaml` + `deploy/k8s/base/kustomization.yaml` + selected target overlay patch only (P-DEPLOY resolves target; no infra changes beyond selection).
