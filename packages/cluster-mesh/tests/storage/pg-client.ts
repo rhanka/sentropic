@@ -17,8 +17,8 @@ export const pgCorpusClient = (root: Awaited<ReturnType<typeof createPostgresKer
         if (page.seal) return page.seal;
       }
     },
-    commitStaged: (input: { seal: AuthenticatedStagedSeal; fence: WriterFence }) => bound.commitStaged(input.seal, input.fence),
-    abortStaged: (input: { unit: AuthenticatedStagedHandle }) => bound.abortStaged(input.unit, fences.get(input.unit.unitId)!, 'corpus cancellation'),
+    commitStaged: (input: { seal: AuthenticatedStagedSeal; fence: WriterFence }) => bound.commitStaged(input),
+    abortStaged: (input: { unit: AuthenticatedStagedHandle }) => bound.abortStaged({ unit: input.unit, fence: fences.get(input.unit.unitId)!, reason: 'corpus cancellation' }),
   };
   return new Proxy(bound, { get(target, property) {
     if (Object.hasOwn(extra, property)) return extra[property as keyof typeof extra];
