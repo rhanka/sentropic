@@ -31,7 +31,7 @@ export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<u
     },
     index: async (key: string) => { live(); return core.roots.get<IdempotencyEntry>(tx.session, tx.root, 'index', key); },
     apply: async (unit) => { live(); await applyPgTransaction(core, grant, tx, unit, {}, REGISTERED_PG_EFFECTS); },
-    revalidate: (check) => { live(); checks.push(check); },
+    revalidate: (check) => { live(); checks.push(check); tx.revalidators.add(check); },
     replayed: () => { live(); tx.noop = true; },
   });
   return { context, finish: async () => { try { live(); for (const check of checks) await check(); } finally { closed = true; } } };
