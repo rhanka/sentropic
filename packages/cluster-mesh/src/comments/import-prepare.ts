@@ -30,9 +30,10 @@ export const prepareCommentsImport = async (options: CommentsServiceOptions, con
       nextOrdinal: '0', frontier: null, kernelFrontier: null, ...startCommentsImportDigests(binding), root: null, canonical: null, roots: [], terminalHashes: [] } satisfies CommentsImportState;
     if (!Number.isSafeInteger(state.issuedAt) || state.issuedAt < 0) throw new CommentsTransportError('unavailable', 'Import clock is invalid');
     await insertCommentsImport(context, state);
-    state.unit = await context.beginStaged(begin);
   }
   if (state.bindingDigest !== bindingDigest || canonicalJson(state.begin.fence) !== canonicalJson(input.fence)) throw new CommentsTransportError('conflict', 'Import preparation binding changed');
+  state.unit = await context.beginStaged(state.begin);
+  if (BigInt(manifest.ordinal) > BigInt(state.nextOrdinal)) throw new CommentsTransportError('conflict', 'Fragment frontier differs');
   const prior = await readCommentsAcknowledgement(context, binding.operationId, manifest.ordinal);
   if (prior) {
     if (prior.transportDigest !== fragment.digest) throw new CommentsTransportError('conflict', 'Accepted fragment bytes changed');
