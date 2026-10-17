@@ -104,14 +104,17 @@ docker run -d --name "$pg" --network "$net" -e POSTGRES_USER=app -e POSTGRES_PAS
 for _ in $(seq 1 60); do docker exec "$pg" pg_isready -U app -d app >/dev/null 2>&1 && break; sleep 2; done
 docker exec "$pg" pg_isready -U app -d app >/dev/null || fail "disposable postgres never ready"
 dburl="postgres://app:$dbpass@$pg:5432/app"
-docker run --rm --network "$net" -e DATABASE_URL="$dburl" -w /workspace/api "$tool_ref" npm run db:migrate >/dev/null
+temkey="$(openssl rand -hex 32)"
+proof_env=(-e "DATABASE_URL=$dburl" -e "SCW_TEM_SECRET_KEY=$temkey")
+docker run --rm --network "$net" "${proof_env[@]}" -w /workspace/api "$tool_ref" npm run db:migrate >/dev/null
 secret="$(openssl rand -hex 32)"
 create_log="$out/.provision-create.log"
-docker run --rm --network "$net" -e DATABASE_URL="$dburl" -e OAUTH_WORKLOAD_CLIENT_SECRET="$secret" -w /workspace/api "$tool_ref" npm run oauth:provision-exchange-client >"$create_log" 2>&1
+docker run --rm --network "$net" "${proof_env[@]}" -e OAUTH_WORKLOAD_CLIENT_SECRET="$secret" -w /workspace/api "$tool_ref" npm run oauth:provision-exchange-client >"$create_log" 2>&1
 grep -qF "$secret" "$create_log" && fail "secret leaked into provision output"
+grep -qF "$temkey" "$create_log" && fail "tem key leaked into provision output"
 created=1
-docker run --rm --network "$net" -e DATABASE_URL="$dburl" -e OAUTH_WORKLOAD_CLIENT_SECRET="$secret" -w /workspace/api "$tool_ref" npm run oauth:provision-exchange-client >/dev/null 2>&1 && replay_noop=1 || replay_noop=0
-if docker run --rm --network "$net" -e DATABASE_URL="$dburl" -e OAUTH_WORKLOAD_CLIENT_SECRET="$secret" -e OAUTH_WORKLOAD_TARGET_AUD=https://127.0.0.1.invalid -w /workspace/api "$tool_ref" npm run oauth:provision-exchange-client >/dev/null 2>&1; then conflict_refused=0; else conflict_refused=1; fi
+docker run --rm --network "$net" "${proof_env[@]}" -e OAUTH_WORKLOAD_CLIENT_SECRET="$secret" -w /workspace/api "$tool_ref" npm run oauth:provision-exchange-client >/dev/null 2>&1 && replay_noop=1 || replay_noop=0
+if docker run --rm --network "$net" "${proof_env[@]}" -e OAUTH_WORKLOAD_CLIENT_SECRET="$secret" -e OAUTH_WORKLOAD_TARGET_AUD=https://127.0.0.1.invalid -w /workspace/api "$tool_ref" npm run oauth:provision-exchange-client >/dev/null 2>&1; then conflict_refused=0; else conflict_refused=1; fi
 rows="$(docker exec "$pg" psql -U app -d app -tc 'SELECT COUNT(*) FROM service_clients;' | tr -d ' ')"
 [ "$replay_noop" = 1 ] || fail "replay was not a no-op"
 [ "$conflict_refused" = 1 ] || fail "policy conflict did not refuse"
