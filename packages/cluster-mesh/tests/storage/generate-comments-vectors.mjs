@@ -1,0 +1,16 @@
+import { writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { canonicalJson, hashRecord } from '@sentropic/comments';
+const sha = (value) => createHash('sha256').update(canonicalJson(value), 'utf8').digest('hex');
+const scope = { tenantId: 'tenant"', workspaceId: 'workspace\\🦊' }; const unitId = 'unit🦊';
+const envelope = { scope, unitId, manifestHash: 'a'.repeat(64), issuedAt: 1717000000123 };
+const record = { kind: 'unit-receipt', ...envelope, hash: hashRecord('unit-receipt', envelope) };
+const unitRoot = { unitId, records: '1', payloadDigest: sha(['comments-unit-payload', 'v1', unitId, [[record.kind, record.hash]]]) };
+const manifest = { scope, operationId: 'operation"\\', bindingDigest: 'b'.repeat(64), unitId, ordinal: '0', predecessorHash: null, terminal: null };
+const first = { version: 'comments-transport-v1', manifest, payload: [record], digest: sha(['comments-fragment', 'v1', manifest, [record]]) };
+const terminalManifest = { ...manifest, unitId: null, ordinal: '1', predecessorHash: first.digest, terminal: { fragmentCount: '2', unitRoots: [unitRoot] } };
+const terminal = { version: 'comments-transport-v1', manifest: terminalManifest, payload: [], digest: sha(['comments-fragment', 'v1', terminalManifest, []]) };
+const vectors = { version: 'comments-transport-v1', encoding: 'framed-jcs-utf8', fragmentDomain: ['comments-fragment', 'v1'], unitPayloadDomain: ['comments-unit-payload', 'v1'], unitRoot, fragments: [first, terminal] };
+const bytes = `${JSON.stringify(vectors)}\n`;
+await writeFile(new URL('../../../../docs/comments-annotations/contract/transport-v1.json', import.meta.url), bytes);
+await writeFile(new URL('../../assets/storage/comments/transport-v1.json', import.meta.url), bytes);
