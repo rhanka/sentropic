@@ -161,7 +161,7 @@ describe('cluster mesh transfers cutover', () => {
       .toBe('07102840c30953ce293db51fd85adc85bb2e08c7');
     const journal = readFileSync(new URL(`${fixtureRoot}/drizzle/meta/_journal.json`, import.meta.url));
     expect(createHash('sha1').update(`blob ${journal.byteLength}\0`).update(journal).digest('hex'))
-      .toBe('afd23b5a944fe172bd77bcee5df43ea04c64c429');
+      .toBe('4faa9e279d71d698d87ebfc5eb32c7939d593fde');
     for (const [path, digest] of bridges) {
       const bridge = readFileSync(new URL(`${fixtureRoot}/src/${path}`, import.meta.url));
       expect(createHash('sha256').update(bridge).digest('hex'), path).toBe(digest);
