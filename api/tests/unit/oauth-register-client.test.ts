@@ -98,4 +98,26 @@ describe('buildOAuthClientRegistration', () => {
       buildOAuthClientRegistration({ ...baseEnv, OAUTH_CLIENT_TOKEN_AUTH: 'private_key_jwt' }),
     ).toThrow(/OAUTH_CLIENT_TOKEN_AUTH/);
   });
+
+  it('defaults required_acr to null and allowed_user_ids to [] (no policy, zero change)', () => {
+    const values = buildOAuthClientRegistration({ ...baseEnv });
+    expect(values.requiredAcr).toBeNull();
+    expect(values.allowedUserIds).toEqual([]);
+  });
+
+  it('parses OAUTH_CLIENT_REQUIRED_ACR + OAUTH_CLIENT_ALLOWED_USER_IDS for a 2FA owner client', () => {
+    const values = buildOAuthClientRegistration({
+      ...baseEnv,
+      OAUTH_CLIENT_ALLOWED_USER_IDS: 'owner-sub-1, owner-sub-2',
+      OAUTH_CLIENT_REQUIRED_ACR: 'urn:sentropic:loa:passkey-fresh',
+    });
+    expect(values.requiredAcr).toBe('urn:sentropic:loa:passkey-fresh');
+    expect(values.allowedUserIds).toEqual(['owner-sub-1', 'owner-sub-2']);
+  });
+
+  it('rejects an unsupported OAUTH_CLIENT_REQUIRED_ACR value', () => {
+    expect(() =>
+      buildOAuthClientRegistration({ ...baseEnv, OAUTH_CLIENT_REQUIRED_ACR: 'urn:example:gold' }),
+    ).toThrow(/OAUTH_CLIENT_REQUIRED_ACR/);
+  });
 });
