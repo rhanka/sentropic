@@ -283,15 +283,24 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
     }
   });
 
-  it('P10.tooling.receipt-contract: accepts a complete acyclic on-disk bundle, both ownerUat branches, and rejects prototype/nested extra or omitted keys', () => withBundle(({ doc, opts }, dir) => {
-    expect(checkCheckpoint(doc, opts)).toEqual([]);
+const EXPECTED_LOT0_OBLIGATIONS = [
+  'provenance.predecessors: pendingPredecessorMappings remain unresolved (BR3/L5-F1)',
+  'importGraph.resolver: tools/memory-mcp-l5/import-graph.mjs is not yet implemented (Lot 1 obligation)',
+  'assurance.verifier: tools/memory-mcp-l5/verifier.mjs is not yet implemented (Lot 2 obligation)',
+  'ci.provenance: trusted CI run provenance is not established by local evidence files',
+  'ownerUat.provenance: authenticated owner decision provenance is not established by local actorRef strings',
+  'acceptances.provenance: authenticated co-owner acceptance provenance is not established by local actorRef strings',
+];
+
+  it('P10.tooling.receipt-contract: validates complete acyclic on-disk bundle, both ownerUat branches, and rejects prototype/nested extra or omitted keys', () => withBundle(({ doc, opts }, dir) => {
+    expect(checkCheckpoint(doc, opts)).toEqual(EXPECTED_LOT0_OBLIGATIONS);
     const deferred = structuredClone(doc);
     const defRef = writeRef(dir, 'receipts/owner-uat-def.json', {
       tupleSha256: doc.tupleSha256, authoritySourceSha256: doc.contracts.l0Freeze.sha256, ciRunId: '1001',
       status: 'owner-deferred', actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z', owningLot: 'L6', reason: 'preprod IdP maintenance window',
     });
     deferred.ownerUat = { status: 'owner-deferred', evidence: { path: defRef.path, sha256: defRef.sha256 }, actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z', owningLot: 'L6', reason: 'preprod IdP maintenance window' };
-    expect(checkCheckpoint(deferred, opts)).toEqual([]);
+    expect(checkCheckpoint(deferred, opts)).toEqual(EXPECTED_LOT0_OBLIGATIONS);
     const protoCtor = structuredClone(doc);
     protoCtor.source = JSON.parse(JSON.stringify(protoCtor.source).replace(/\}$/, ',"constructor":{"unexpected":true}}'));
     expect(checkCheckpoint(protoCtor, opts).join(' ')).toMatch(/additional property constructor forbidden/);
@@ -305,7 +314,7 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
     expect(checkCheckpoint(doc, opts).join(' ')).toMatch(/missing on-disk file results\/P01\.json/);
   }));
 
-  it('P10.tooling.receipt-contract: rejects zero-assertion files, unlisted files, misplaced cases, and accepts Vitest absolute-path reports', () => withBundle(({ doc, opts }, dir) => {
+  it('P10.tooling.receipt-contract: rejects zero-assertion files, unlisted files, misplaced cases, and normalizes Vitest absolute-path reports', () => withBundle(({ doc, opts }, dir) => {
     const origP01 = readFileSync(join(dir, 'results/P01.json'));
     const emptyFileRep = JSON.parse(origP01.toString('utf8'));
     emptyFileRep.testResults[0].assertionResults = [];
@@ -327,19 +336,41 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
     const absDoc = structuredClone(doc);
     absDoc.proofs[9].result.sha256 = p10Ref.sha256;
     absDoc.proofs[9].result.executedCasesSha256 = sha256OfBytes(Buffer.from(canonicalizeJson(normExec)));
-    writeRef(dir, 'receipts/ci-job-memory-l5-qualification.json', {
-      jobId: 'memory-l5-qualification', runId: '1001', attempt: 1, head: C40, tupleSha256: absDoc.tupleSha256, conclusion: 'success',
-      proofResultSha256s: absDoc.proofs.map((p) => ({ id: p.id, sha256: p.result.sha256 })),
-    });
-    const jobBytes = readFileSync(join(dir, 'receipts/ci-job-memory-l5-qualification.json'));
-    absDoc.ci.jobs[0].resultSha256 = sha256OfBytes(jobBytes);
-    expect(checkCheckpoint(absDoc, opts)).toEqual([]);
+    rebindTuple(dir, absDoc);
+    expect(checkCheckpoint(absDoc, opts)).toEqual(EXPECTED_LOT0_OBLIGATIONS);
   }));
 
-  it('P10.tooling.receipt-contract: rejects invalid/substituted manifests, extra P1 contracts, mutated contract bytes, and cross-digest reuse', () => withBundle(({ doc, preMf, candMf, opts }, dir) => {
+  it('P10.tooling.receipt-contract: rejects invalid/substituted manifests, candidate source drift, extra P1 contracts, and mutated contract bytes', () => withBundle(({ doc, preMf, candMf, opts }, dir) => {
     expect(checkCheckpoint(doc, { ...opts, manifestBytes: Buffer.from('{"manifestVersion":1,"stage":"candidate"}') }).join(' ')).toMatch(/manifest|artifactManifestSha256/);
     expect(checkCheckpoint(doc, { ...opts, preCandidateManifestBytes: Buffer.from('NOT JSON') }).join(' ')).toMatch(/preCandidate|JSON/);
     expect(checkCheckpoint(doc, { ...opts, preCandidateManifestBytes: candMf.bytes }).join(' ')).toMatch(/preCandidate/);
+
+    const candDrift = JSON.parse(candMf.bytes.toString('utf8'));
+    candDrift.source.specSha256 = 'c'.repeat(64);
+    candDrift.source.l0Commit = 'd'.repeat(40);
+    const candDriftRef = writeRef(dir, candMf.path, candDrift);
+    const compDrift = writeRef(dir, 'receipts/contract-comparison.json', {
+      identical: true, preCandidateManifestSha256: preMf.sha256, candidateManifestSha256: candDriftRef.sha256, contracts: doc.preCandidate.contractInventory,
+    });
+    const instClosureDrift = writeRef(dir, 'receipts/installed-closure.json', {
+      artifactManifestSha256: candDriftRef.sha256, sdkVersion: '1.31.0', referenceExport: '@sentropic/mcp-broker/memory-reference', artifacts: doc.artifacts,
+    });
+    const origProbe = readFileSync(join(dir, 'receipts/runtime-probe.json'));
+    writeRef(dir, 'receipts/runtime-probe.json', { ...JSON.parse(origProbe.toString('utf8')), artifactManifestSha256: candDriftRef.sha256 });
+    const driftDoc = structuredClone(doc);
+    driftDoc.preCandidate.contractComparison.sha256 = compDrift.sha256;
+    driftDoc.closure.artifactManifestSha256 = candDriftRef.sha256;
+    driftDoc.closure.installedClosureSha256 = instClosureDrift.sha256;
+    const origReports = driftDoc.proofs.map((p) => [p.result.path, readFileSync(join(dir, p.result.path))]);
+    driftDoc.proofs = driftDoc.proofs.map((p) => {
+      const r = writeRef(dir, p.result.path, { ...JSON.parse(readFileSync(join(dir, p.result.path), 'utf8')), artifactManifestSha256: candDriftRef.sha256 });
+      return { ...p, artifactManifestSha256: candDriftRef.sha256, result: { ...p.result, sha256: r.sha256 } };
+    });
+    rebindTuple(dir, driftDoc);
+    expect(checkCheckpoint(driftDoc, { ...opts, manifestBytes: candDriftRef.bytes }).join(' ')).toMatch(/candidateManifest\.source mismatch/);
+    writeFileSync(join(dir, 'receipts/runtime-probe.json'), origProbe);
+    for (const [p, b] of origReports) writeFileSync(join(dir, p), b);
+
     const extraP1 = JSON.parse(preMf.bytes.toString('utf8'));
     extraP1.contractInventory.push({ path: 'packages/mcp-broker/dist/memory/missing.d.ts', version: '0.2.0', sha256: H64 });
     const extraP1Bytes = Buffer.from(JSON.stringify(extraP1), 'utf8');
@@ -350,31 +381,59 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
     expect(checkCheckpoint(doc, opts).join(' ')).toMatch(/preCandidate\.qualified.*sha256 mismatch/);
   }));
 
-  it('P10.tooling.receipt-contract: rejects unverified lock/closure/assurance/runtime claims, prerelease SDK, proof runId drift, and unauthorized actors', () => withBundle(({ doc, opts }, dir) => {
-    const badClaims = structuredClone(doc);
-    badClaims.closure.declaredLockSha256 = H64;
-    badClaims.assurance.productionPolicySha256 = H64;
-    badClaims.runtime.nodeVersion = '99.0.0';
-    badClaims.runtime.sqliteVersion = '3.0.0';
-    badClaims.runtime.imageDigest = `sha256:${H64}`;
-    badClaims.closure.sdkVersion = '1.31.0-rc.1';
-    expect(checkCheckpoint(badClaims, opts).join(' ')).toMatch(/sdkVersion.*nodeVersion.*imageDigest/s);
+  it('P10.tooling.receipt-contract: verifies source-tree, installed-lock, installed-closure, tarballs, runtime-probe, import-graph, and ci-run contents', () => withBundle(({ doc, opts }, dir) => {
+    const badTreeRef = writeRef(dir, 'receipts/source-tree-bad.json', { repository: 'rhanka/sentropic', head: 'd'.repeat(40), base: C40, merge: C40, checkout: C40, files: [] });
+    writeFileSync(join(dir, 'receipts/source-tree.json'), badTreeRef.bytes);
+    const treeDoc = rebindTuple(dir, { ...structuredClone(doc), source: { ...doc.source, sourceTreeSha256: badTreeRef.sha256 } });
+    expect(checkCheckpoint(treeDoc, opts).join(' ')).toMatch(/source\.sourceTree/);
 
-    const driftRun = structuredClone(doc);
-    driftRun.proofs[0].runId = 'unrelated-old-run';
-    driftRun.proofs[0].attempt = 99;
-    expect(checkCheckpoint(driftRun, opts).join(' ')).toMatch(/proofs\/P01: runId\/attempt mismatch/);
+    const badLockRef = writeRef(dir, 'receipts/installed-lock.json', { sdkVersion: '0.1.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'], packages: {} });
+    const lockDoc = rebindTuple(dir, { ...structuredClone(doc), closure: { ...doc.closure, installedLockSha256: badLockRef.sha256 } });
+    expect(checkCheckpoint(lockDoc, opts).join(' ')).toMatch(/closure\.installedLock/);
 
-    const badActor = structuredClone(doc);
-    badActor.ownerUat.actorRef = 'arbitrary-caller';
-    badActor.acceptances[0].actorRef = 'arbitrary-caller';
-    expect(checkCheckpoint(badActor, opts).join(' ')).toMatch(/unauthorized actorRef/);
+    const badClosRef = writeRef(dir, 'receipts/installed-closure.json', { artifactManifestSha256: doc.closure.artifactManifestSha256, sdkVersion: '1.31.0', referenceExport: '@sentropic/mcp-broker/memory-reference', artifacts: [] });
+    const closDoc = rebindTuple(dir, { ...structuredClone(doc), closure: { ...doc.closure, installedClosureSha256: badClosRef.sha256 } });
+    expect(checkCheckpoint(closDoc, opts).join(' ')).toMatch(/closure\.installedClosure: artifacts mismatch/);
 
-    writeFileSync(join(dir, PROOF_CATALOG.immutableFixtures[0]), 'tampered fixture');
-    expect(checkCheckpoint(doc, opts).join(' ')).toMatch(/immutableFixtures/);
+    const badProbe = { ...JSON.parse(readFileSync(join(dir, 'receipts/runtime-probe.json'), 'utf8')), execArgv: ['--experimental-sqlite'], tupleHead: 'd'.repeat(40), nodeVersion: '22.13.0' };
+    writeRef(dir, 'receipts/runtime-probe.json', badProbe);
+    const node22Doc = rebindTuple(dir, { ...structuredClone(doc), runtime: { ...doc.runtime, nodeVersion: '22.13.0' } });
+    expect(checkCheckpoint(node22Doc, opts).join(' ')).toMatch(/runtime\.nodeVersion|runtime\.probe/);
+
+    writeRef(dir, 'receipts/ci-run.json', {
+      workflow: '.github/workflows/ci.yml', status: 'completed', conclusion: 'success', runId: '1001', attempt: 1,
+      head: C40, base: 'd'.repeat(40), merge: 'd'.repeat(40), checkout: 'd'.repeat(40), imageDigest: `sha256:${H64}`, artifactName: 'wrong-artifact', tupleSha256: doc.tupleSha256,
+    });
+    expect(checkCheckpoint(doc, opts).join(' ')).toMatch(/ci\.evidence: ci-run\.json field mismatch/);
+
+    const dupResolved = PROOF_CATALOG.importGraphRoots.map(() => ({ root: 'unrelated-root', path: 'tools/memory-mcp-l5/verifier.mjs', sha256: doc.assurance.verifierArtifactSha256 }));
+    const dupSha = sha256OfBytes(Buffer.from(canonicalizeJson(dupResolved)));
+    const dupGraph = writeRef(dir, 'import-graph.json', { roots: PROOF_CATALOG.importGraphRoots, resolvedFiles: dupResolved, edges: [], resolvedFilesSha256: dupSha, forbiddenHits: 0, unresolvedEdges: 0 });
+    const dupDoc = rebindTuple(dir, { ...structuredClone(doc), importGraph: { ...doc.importGraph, sha256: dupGraph.sha256, resolvedFilesSha256: dupSha } });
+    expect(checkCheckpoint(dupDoc, opts).join(' ')).toMatch(/importGraph: resolvedFiles roots mismatch/);
+
+    const badVer = writeRef(dir, 'tools/memory-mcp-l5/verifier.mjs', "export * from '../../cluster-mesh/src/mock/oidc.ts';\n");
+    const forbidResolved = PROOF_CATALOG.importGraphRoots.map((r) => {
+      const p = r.startsWith('@sentropic/') ? `installed/node_modules/${r.replace('/memory-reference', '/dist/memory-reference/index.js').replace('/memory', '/dist/memory/index.js').replace(/^@sentropic\/mcp-broker$/, '@sentropic/mcp-broker/dist/index.js')}` : r;
+      return { root: r, path: p, sha256: sha256OfBytes(readFileSync(join(dir, p))) };
+    });
+    const forbidSha = sha256OfBytes(Buffer.from(canonicalizeJson(forbidResolved)));
+    const forbidGraph = writeRef(dir, 'import-graph.json', { roots: PROOF_CATALOG.importGraphRoots, resolvedFiles: forbidResolved, edges: [], resolvedFilesSha256: forbidSha, forbiddenHits: 0, unresolvedEdges: 0 });
+    const forbidDoc = rebindTuple(dir, {
+      ...structuredClone(doc),
+      assurance: { ...doc.assurance, verifierArtifactSha256: badVer.sha256 },
+      importGraph: { ...doc.importGraph, sha256: forbidGraph.sha256, resolvedFilesSha256: forbidSha },
+    });
+    expect(checkCheckpoint(forbidDoc, opts).join(' ')).toMatch(/importGraph: forbidden import/);
+
+    const plainTgz = writeRef(dir, 'archives/engram.tgz', 'package: @sentropic/engram@0.20.1');
+    const plainDoc = structuredClone(doc);
+    plainDoc.artifacts[0].sha256 = plainTgz.sha256;
+    plainDoc.artifacts[0].integrity = plainTgz.integrity;
+    expect(checkCheckpoint(plainDoc, opts).join(' ')).toMatch(/invalid tar\.gz archive/);
   }));
 
-  it('P10.tooling.receipt-contract: handles malformed shapes without crashing and enforces full on-disk bundle in CLI modes', () => withBundle(({ doc, preMf, candMf }, dir) => {
+  it('P10.tooling.receipt-contract: handles malformed shapes without crashing and keeps checkpoint CLI gated on Lot 0 obligations', () => withBundle(({ doc, preMf, candMf }, dir) => {
     expect(checkCheckpoint({ schemaVersion: 1, checkpoint: 'L5-MEMORY-V1', artifacts: {}, ci: { jobs: {} }, proofs: [null] }, {}).length).toBeGreaterThan(0);
     const badFile = join(dir, 'malformed.json');
     writeFileSync(badFile, JSON.stringify({ artifacts: {}, ci: { jobs: {} }, proofs: [null] }));
@@ -387,13 +446,18 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
 
     const cpFile = join(dir, 'checkpoint.json');
     writeFileSync(cpFile, JSON.stringify(doc));
-    const failIncompleteMf = spawnSync(process.execPath, [RECEIPT_BIN, '--mode', 'checkpoint', '--checkpoint', cpFile, '--manifest', badFile, '--base-dir', dir], { encoding: 'utf8' });
-    expect(failIncompleteMf.status).toBe(1);
-    const pass = spawnSync(process.execPath, [
+    const preBundle = spawnSync(process.execPath, [
+      RECEIPT_BIN, '--mode', 'preflight', '--checkpoint', cpFile,
+      '--manifest', join(dir, candMf.path), '--pre-candidate-manifest', join(dir, preMf.path), '--base-dir', dir,
+    ], { encoding: 'utf8' });
+    expect(preBundle.status).toBe(0);
+    expect(JSON.parse(preBundle.stdout)).toEqual({ mode: 'preflight', accepted: false, outstanding: EXPECTED_LOT0_OBLIGATIONS });
+
+    const cpGate = spawnSync(process.execPath, [
       RECEIPT_BIN, '--mode', 'checkpoint', '--checkpoint', cpFile,
       '--manifest', join(dir, candMf.path), '--pre-candidate-manifest', join(dir, preMf.path), '--base-dir', dir,
     ], { encoding: 'utf8' });
-    expect(pass.status).toBe(0);
-    expect(JSON.parse(pass.stdout).accepted).toBe(true);
+    expect(cpGate.status).toBe(1);
+    expect(JSON.parse(cpGate.stdout)).toEqual({ mode: 'checkpoint', accepted: false, failures: EXPECTED_LOT0_OBLIGATIONS });
   }));
 });
