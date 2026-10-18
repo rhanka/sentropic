@@ -16,7 +16,7 @@
 - [x] No real provider tokens or real JEV calls; synthetic fixtures/injected transports only. Live qualification needs conductor-relayed owner GO.
 - [x] Atomic commits at most 149 changed lines/15 files including BRANCH.md; selective staging, separate add/commit, `make commit MSG="type: description"`; no attribution trailers.
 - [x] Stop after every lot and write `.h2a/build/lotN_report.md`; conductor's Opus 5.5 high review must resolve blocking findings before the next lot.
-- [x] No version bumps, packaging tuple/lock changes, publish, push, PR or merge until conductor GO after the /gw train lands; carve-outs: Sol P2 0.27.0 version/range/lockfile edits under active BR96-EX4/EX7/EX8, no publish.
+- [x] No version bumps, packaging tuple/lock changes, publish, push, PR or merge until conductor GO after the /gw train lands; carve-outs: Sol P2 0.27.0/0.21.0/0.20.0 version/range/lockfile/qualification edits under active BR96-EX4/EX7/EX8/EX9, no publish.
 - [x] Product durable-host §10.3, later providers/local serving and §9.3 architecture are outside this execution; portable client 2.09 is the explicit §10.2 cluster prerequisite.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -30,7 +30,7 @@
   - [x] `packages/cluster-mesh/src/modules/contracts.ts`, `packages/cluster-mesh/src/modules/catalog.ts`, `packages/cluster-mesh/src/compose/llm-mesh.ts`
   - [x] `packages/cluster-mesh/src/integrations/llm-mesh/judge.ts`, `packages/cluster-mesh/src/integrations/llm-mesh/judge/**`, `packages/cluster-mesh/src/integrations/llm-mesh/transport/jev.ts`
   - [x] `packages/cluster-mesh/src/loaders/llm-mesh/judge.ts`, `packages/cluster-mesh/src/loaders/llm-mesh/judge/**`, `packages/cluster-mesh/src/loaders/llm-mesh/transport/jev.ts`
-  - [x] `packages/cluster-mesh/package.json` (judge export-map additions only; no version/peer-range changes)
+  - [x] `packages/cluster-mesh/package.json` (judge export-map additions plus the 0.20.0 feature version and `<0.28.0`/`<0.22.0` peer ranges; BR96-EX8/EX9)
   - [x] `packages/cluster-mesh/tests/judge-*.spec.ts`, `packages/cluster-mesh/tests/modules/judge-loading.spec.ts`, `packages/cluster-mesh/tests/modules/capabilities.spec.ts`
   - [x] `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`, `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`, `packages/cluster-mesh/tests/fixtures/train.ts`, `packages/cluster-mesh/tests/fixtures/package-tree.ts`
   - [x] `packages/cluster-mesh/tests/modules/registry.spec.ts`, `packages/cluster-mesh/tests/modules/topology.spec.ts`, `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
@@ -41,19 +41,21 @@
   - [x] `api/tests/unit/gateway-package-version.test.ts` (version literal follows the gateway bump only; BR96-EX8)
   - [x] `packages/llm-mesh/README.md`, `packages/cluster-mesh/README.md`, `spec/SPEC_EVOL_LLM_MESH.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` (judge semantics only)
 - [x] **Forbidden Paths (must not change in this branch)**:
-  - [x] `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `.github/workflows/**`, `plan/**`, `.track/**`
+  - [x] `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `.github/workflows/idp-identity-sync.yml`, `plan/**`, `.track/**`
   - [x] `packages/contracts/**`, `packages/events/**`, `package.json`
 - [x] `packages/llm-gateway/src/**`, `packages/llm-gateway/tests/**`, `packages/llm-gateway/scripts/**`, `packages/llm-gateway/README.md`, `packages/llm-gateway/CHANGELOG.md`, `packages/llm-gateway/LICENSE`, `packages/llm-gateway/tsconfig.json`, `packages/llm-gateway/tsconfig.test.json`
-- [x] `packages/cluster-mesh/tests/packaging/*.spec.ts`, `packages/cluster-mesh/tests/packaging/*.mjs`, `packages/cluster-mesh/tests/packaging/*.ts`, `packages/cluster-mesh/tests/packaging/*.sh`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer/**`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer-pinned/**`, `packages/cluster-mesh/tests/packaging/fixtures/separate-runtime/**`
+- [x] `packages/cluster-mesh/tests/packaging/helpers.ts`, `packages/cluster-mesh/tests/packaging/*.mjs`, `packages/cluster-mesh/tests/packaging/*.sh`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer/**`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer-pinned/**`, `packages/cluster-mesh/tests/packaging/fixtures/separate-runtime/**`
   - [x] `ui/**`, `apps/**`, `deploy/**`, `api/src/db/**`, `api/drizzle/**`, `api/src/services/llm-metering/**`
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [x] `api/vitest.config.ts` (judge-subpath aliases only; declare a numeric branch exception before editing)
   - [x] `api/src/routes/namespaces/llm-mesh.ts` (only aiSettingsSchema/updateUserSettings if the existing typesafe refusal needs a source edit)
-  - [x] `package-lock.json` (root lock mirrors for the 0.27.0 cascade only; BR96-EX4)
-  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (B3 0.19.0 fixture pins only; BR96-EX7)
+  - [x] `package-lock.json` (root lock mirrors for the 0.27.0/0.21.0/0.20.0 cascade only; BR96-EX4)
+  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (B3 0.20.0 candidate and sibling archive lock pins only; BR96-EX7)
   - [x] `packages/llm-gateway/package.json` (mesh range ^0.27.0 and the required 0.21.0 bump only; BR96-EX8)
   - [x] `api/package.json` (gateway range ^0.21.0 only, keeps the workspace link; BR96-EX8)
-- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8.
+  - [x] `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.ts`, `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (coupled `<0.28.0`/`<0.22.0` peer range and 13 `.d.ts` integration leaf assertions only; BR96-EX9)
+  - [x] `.github/workflows/ci.yml`, `scripts/ci/publishable-ci-wiring.test.mjs` (cluster-mesh qualification `PEERS` tuple `@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0` only; BR96-EX9)
+- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9.
 
 ## Feedback Loop
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
@@ -134,6 +136,8 @@
 - [x] Sol P2 feature version (2026-10-18): llm-mesh placeholder 0.26.2 replaced by feature minor 0.27.0 per rules/workflow.md:116; gateway mesh range re-applied to ^0.27.0 (BR96-EX5 rollback), workspace-linked so npm ci still resolves without a published 0.27.0; lockfile mirrors, train literal and version test follow; rollback: revert the five version lines with the manifests.
 - [x] BR96-EX8 (2026-10-18): llm-gateway mesh dependency ^0.26.0 to ^0.27.0 for the Sol P2 feature minor, superseding BR96-EX5 per its rollback clause; rationale: release coherence, the gateway must admit the feature mesh while workspace linkage keeps npm ci green without a published 0.27.0; impact: 1 range in package.json plus the lock mirror; rollback: revert the range with the mesh version.
 - [x] BR96-EX8 extension (2026-10-18): gateway 0.20.1 to 0.21.0 plus api gateway range ^0.20.0 to ^0.21.0, required by the manifest bump gate (published 0.20.1 with a changed dep needs a new version); rationale: satisfy check-publishable-manifests without publishing; api range keeps the workspace link so no nested registry copy appears; impact: 2 version/range lines plus lock mirrors and the api version-test literal; rollback: revert versions and ranges together.
+- [x] Sol R2 review resolution (2026-10-18): resolved P1-1/P1-2/P2-3 (transmitted snapshot binding, verdict receipt dispatch/accounting invariants, error identity validation), P2-4 (`rebuildWireError` preserves non-retryable outcome without hint when receipt retains `reserved`/`pending-reconciliation` liability), and P2-5 (oversized response stream read resolves before awaiting `reader.cancel()`).
+- [x] Rebase onto origin/main 441453966 & BR96-EX9 (2026-10-18): rebased 113 commits cleanly onto origin/main `441453966`; cluster-mesh bumped from published 0.19.0 to 0.20.0 with gateway peer range widened to `<0.22.0` and `./comments` self-range to `<0.21.0`; rationale: origin/main PR #684 published cluster-mesh 0.19.0 and new judge re-export leaves require sibling tarballs `@sentropic/llm-mesh@0.27.0` and `@sentropic/llm-gateway@0.21.0` during `qualify-published-install` (precedent `bdf5d5a26`); impact: packaging range/leaf-count assertions, B3 selected fixture lock (BR96-EX7), and 3 `PEERS` lines in `ci.yml` + `publishable-ci-wiring.test.mjs`; rollback: revert cluster-mesh 0.20.0, `<0.22.0` range, fixture lock, and `PEERS` tuple together.
 
 
 ## AI Flaky tests
