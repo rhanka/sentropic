@@ -623,17 +623,15 @@ is logged as its own event.
 
 ### 10.1 Method-neutral value migration (existing clients)
 
-Applies to every client already carrying `required_acr =
-'urn:sentropic:loa:passkey-fresh'` at Lot 5 time, and to `kvm-gateway`
-once it exists. No step widens acceptance:
+Applies to every client carrying `required_acr = 'urn:sentropic:loa:passkey-fresh'` at Lot 5 time, including `kvm-gateway`. The migration separates **preserved authorization decisions** (the 4-leg evaluator accepts both `urn:sentropic:loa:mfa` and `urn:sentropic:loa:passkey-fresh` for qualifying fresh trusted-MFA sessions) from **intentional emitted claim changes** (switching emitted `acr` to `urn:sentropic:loa:mfa` and emitted `amr` to the single table in section 5.1):
 
-| Step | Action | Acceptance effect | Lot |
+| Step | Action | Acceptance & emission effect | Lot |
 |---|---|---|---|
-| M-0 | Clients keep `passkey-fresh`; sessions emit `passkey-fresh` | Baseline | `[EXISTS]` |
-| M-1 | Authorize accepts `mfa` as an equivalent required spelling and a qualifying session satisfies either spelling; unknown values still refuse | Identical accept/refuse set for every existing session origin | `[TO BUILD Lot 5]` |
-| M-2 | Each MFA client is re-registered through the governed Job with `OAUTH_CLIENT_REQUIRED_ACR=urn:sentropic:loa:mfa`; the Job output is checked to show the new value. Secret rotation is not required and not performed by this step | Stored policy now uses the neutral spelling; authorize outcome unchanged | `[TO BUILD Lot 5]` (operator step) |
-| M-3 | Session emission switches to canonical `mfa` **globally** (the resolver has no client context, so per-client sequencing of emission is impossible): token `acr` follows for every client at once, and `amr` is rewritten to the single final contract in the same lot (the interim `hwk`+`mfa` emission is not a stable RP contract). Before the switch, inventory actual `acr`/`amr` consumers — authorize, token, userinfo, host fallback at `api/src/services/auth/oauth-state-adapter.ts:282`, IdP-sync readback/postcondition, logs/fixtures, and the tiers application. Discovery advertises both spellings during M-1…M-3, then the neutral value (alias retained as accepted requirement) | Every RP sees the new emission together; KVM reads nothing and is unaffected; bounded dual-output window with a fixture inventory as the completion proof | `[TO BUILD Lot 5]` |
-| M-4 | `passkey-fresh` stays as an accepted required alias for one deprecation window; new declarations (section 8.1) must use `mfa`. Removing the alias is a separate, later decision and is not scheduled here | No client is stranded | — |
+| M-0 | Clients store `passkey-fresh`; sessions emit `passkey-fresh` and legacy `amr` | Baseline (`[EXISTS]`) | `[EXISTS]` |
+| M-1 | Deploy 4-leg evaluator accepting both `mfa` and `passkey-fresh` as equivalent required spellings for qualifying sessions; unknown values refuse; discovery advertises both spellings | Identical authorization accept/refuse decisions across all session origins; emitted claims unchanged | `[TO BUILD Lot 5]` |
+| M-2 | Re-register each MFA client through the governed Job with `OAUTH_CLIENT_REQUIRED_ACR=urn:sentropic:loa:mfa` and verify persisted readback (no secret rotation required) | Stored policy uses `mfa`; authorization decisions unchanged | `[TO BUILD Lot 5]` (operator) |
+| M-3 | **Consumer qualification gate then single global emission cutover:** before flipping emission, qualify all internal and external consumers against the target `acr = 'urn:sentropic:loa:mfa'` and single section 5.1 `amr` table — `authorize-handler.ts`, `consent-decision-handler.ts`, `issue-authorized-code.ts:30`, `token-handler.ts:430,:472,:528`, `userinfo`, host fallback removal at `api/src/services/auth/oauth-state-adapter.ts:282`, `packages/auth-hono/tests/example-oauth-rp.test.ts`, `kvm-gateway` (whose RP gate checks `"mfa"` in signed `amr` and is unaffected by `acr` spelling or method removal), live DB client readback, and the Lot 2 tier-sync SQL exclusions (`deploy/k8s/overlays/preprod/idp-identity-sync/client-postcondition.sql:7`, `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql:7`). Then switch resolver/token emission globally in one step (no dual-output window). Legacy in-flight non-protected code payloads without stored method emit `amr: []` until drained and are rejected if presented to a protected client. Safe rollback: if rolling back the binary before M-4, revert client rows to `passkey-fresh` first so stored `mfa` rows are never evaluated by an M-0 binary | Every RP receives canonical `acr = 'urn:sentropic:loa:mfa'` and the section 5.1 `amr` table; authorization decisions stay identical | `[TO BUILD Lot 5]` |
+| M-4 | Retain `passkey-fresh` as an accepted required alias for one deprecation window while new declarations (section 8.1) require `mfa`; alias removal is a separate future change | No client is stranded | — |
 
 Package note: `@sentropic/auth-hono` carries the authorize and resolver
 changes, so each BUILD lot touching `packages/auth-hono/src/**` bumps that
@@ -643,37 +641,14 @@ rules apply.
 
 ### 10.2 Starting state, trust migration, and sequencing (normative)
 
-1. **Register** `kvm-gateway` (Lot 1 declaration, governed Job, legacy
-   spelling). **[Corrected: recorded production fact (owner-supplied,
-   2026-10-18T07:14Z): this row already exists in production with
-   `passkey-fresh` and the owner-only allowlist; work is
-   confirmation/reconciliation by readback, and the pre-closure email
-   exposure of section 2.3 stands until Lot 3.]**
-2. **Enrol** independently recoverable authenticators (R-REC-8) and
-   complete the trust-migration inventory below (advisory checks first).
-3. **Close** the email path for hardened accounts (Lot 3 deployed). Only
-   now does R-REC-0 hold.
-4. **Prove full-loss recovery, then enforce**: the Lot 4 Job, its
-   pending-binding activation, and the Lot 6 drill (normal IdP/KVM access
-   unavailable) pass first; only then is the owner subject gated in
-   production. Enforcement after Lot 3 alone leaves total device loss
-   without P-REC and is forbidden.
-5. **Neutralise** (Lot 5, M-1…M-3) at any later time; it does not interact
-   with steps 1–4.
+1. **Preserve and verify existing baseline gate (pre-activation):** Confirm by readback the existing production `kvm-gateway` row (`2026-10-18T07:14Z`, `required_acr = 'urn:sentropic:loa:passkey-fresh'`, non-empty owner allowlist) and reconcile it with `deploy/oauth-clients/kvm-gateway.yaml` (Lot 1). Never clear or downgrade this row. While `users.is_mfa_protected` remains `false`, this baseline gate retains the residual email-enrollment exposure (`G-RECOVERY`, section 2.3) and boolean age — neither full `P-MFA` nor `P-REC` is claimed until step 5.
+2. **Deploy Lots 1–4 and durable transition store:** Ship the single schema migration (`api/src/db/schema.ts`, `api/src/services/auth/security-transition-store.ts`), 4-leg evaluator (Lot 2), email-closure/purpose/registration enforcement (Lot 3), and recovery/break-glass Job (`api/src/scripts/auth-breakglass-reset.ts`, `deploy/k8s/base/37-auth-breakglass-reset-job.yaml`, Lot 4) with `users.is_mfa_protected` still `false` so email recovery is not closed before `P-REC` is live.
+3. **Non-circular trust bootstrap for initial trusted credentials:** Pre-migration `webauthn_credentials` (`api/src/db/schema.ts:168`) carry no enrollment provenance; holding two rows does not prove owner control, and no unbootstrapped credential may confirm itself or another credential. Before any account can activate `is_mfa_protected = true`, run the scoped, digest-pinned admin bootstrap operation (`api/src/scripts/auth-breakglass-reset.ts`, independent cluster identity, `targetUserId`, `expectedSecurityGeneration`, `operationId`, `reason`) in one of two modes: **Mode A** confirms explicitly named owner `credentialId`s demonstrated in a fresh UV ceremony to `binding_state = 'trusted'` while atomically revoking all other pre-existing credentials on that account; **Mode B** revokes all pre-existing credentials and issues a single-use subject/generation-bound grant to enroll and activate the initial two independently recoverable `trusted` authenticators (`R-REC-1`). Both modes atomically bump `security_generation`, invalidate all legacy sessions, continuations, and codes, and write a durable transition record in the same DB transaction (idempotent on retry by `operationId`). Only after bootstrap establishes `trusted` credentials in the current generation can subsequent keys be added via signed-in `P-ADD`.
+4. **Execute live full-loss recovery drill (Lot 6 prerequisite):** Run the end-to-end full-loss recovery drill (`P-BREAK` + independent activation + fresh UV login through all 4 issuance legs, with normal IdP/KVM access assumed unavailable) before any account sets `is_mfa_protected = true`.
+5. **Activate `is_mfa_protected = true` and verify RP cutover:** Atomically transition the owner account to `is_mfa_protected = true` once all five `R-REC-1` prerequisites and the step 4 drill pass — closing email enrollment at the exact moment `P-MFA` and `P-REC` are both active — then exercise that activation point with normal IdP/KVM access unavailable and verify `kvm-gateway` RP `"mfa"`-in-`amr` enforcement.
+6. **Method-neutral cutover (Lot 5, M-1…M-4):** Execute after consumer qualification (section 10.1).
 
-Existing non-KVM clients and accounts need no action: clients with `NULL`
-policy stay legacy; accounts never allowlisted on an MFA client stay
-non-hardened with today's recovery; existing sessions are not revoked by
-any migration step — a stale or bearer session simply fails the next
-forced authorize and steps up (section 5.3). **Trust migration:**
-  pre-protection credentials have no provenance and are never
-  grandfathered — each is confirmed trusted through a ceremony with an
-  already confirmed factor or marked `pending-recovery` (an
-  email-enrolled key stays unrecognized until confirmed); legacy sessions
-  work only for non-protected issuance; rollback to software that cannot
-  enforce the profile disables protected issuance. Existing credentials are
-never deleted by migration; only the break-glass Job deletes, on explicit
-operator action.
+Existing non-KVM clients and accounts need no action: clients with `NULL` policy stay legacy; accounts that never undergo a protected-activation transition remain `is_mfa_protected = false` with today's recovery; legacy sessions work only for non-protected issuance; rollback to software that cannot enforce the profile fails closed for protected issuance.
 
 ### 10.3 Tiers
 
@@ -709,19 +684,11 @@ Given parameters (kvm lane, 2026-10-18; treated as requirements):
 | `allowed_scopes` | `openid profile email` |
 | `token_endpoint_auth_method` | `client_secret_basic`; secret minted cluster-side, stored SHA-256 only at the IdP, plaintext only in the RP secret locations named by variable |
 | Required level | MFA level — stored today as `urn:sentropic:loa:passkey-fresh` (only merged spelling), migrated to `urn:sentropic:loa:mfa` by section 10.1 |
-| `allowed_user_ids` | Owner subject only (single entry; the value is tier data supplied in the 0600 file, never in git) |
+| `allowed_user_ids` | Owner subject only (`require_non_empty_allowlist: true`; tier value supplied in the 0600 file, never in git). Missing, empty (`""` / `'{}'`), placeholder, or unresolved subjects are rejected before any DB write; removing the last subject is rejected unless explicitly disabling/deleting the client or running R-GOV-4 weakening |
 | Freshness bound | Per-client bound of section 5.3; the KVM value is an owner decision (section 15) |
-| Gateway check | **None**: oauth2-proxy validates the token (signature, issuer, audience, expiry) and the IdP session it establishes locally; it performs no `acr`/`amr` gate. The MFA guarantee is the IdP authorize decision plus tests R-KVM-TEST |
+| Gateway check | **Standard OIDC token validation plus `"mfa"` in signed `amr`**: `kvm-gateway` validates signature, issuer, audience, and expiry and checks that signed `amr` contains `"mfa"`, with no method-name or `acr`-spelling check. Combined with the IdP 4-leg evaluator and tests R-KVM-TEST, this enforces P-MFA |
 
-Onboarding steps (operator, per tier): mint the secret by the runbook
-method; build the 0600 file from the Lot 1 declaration plus the secret and
-owner subject; run the registration Job; verify the Job output shows the
-expected required level and single-subject allowlist; cut the RP over to
-the new secret in the same operation (no grace period); verify a fresh
-owner passkey sign-in reaches KVM, a magic-link session receives
-`access_denied`, and the old secret returns `invalid_client`; record the
-minted-at variables. Rollback is a re-run with the previous secret values
-file, per the runbook.
+Onboarding steps (operator, per tier): mint the secret by the runbook method; build the 0600 file from the Lot 1 declaration plus the secret and resolved owner subject; run the registration Job; verify the persisted DB readback shows the expected required level and non-empty single-subject allowlist; cut the RP over to the new secret in the same operation (no grace period); verify a fresh owner passkey sign-in reaches KVM, a magic-link session receives `access_denied`, a valid token lacking `"mfa"` in `amr` is rejected by the RP, a valid token with `"mfa"` in `amr` is accepted, and the old secret returns `invalid_client`; record the minted-at variables. Rollback is a re-run with the previous secret values file, per the runbook.
 
 Compatibility note — Netbird (out of scope): a second client, `netbird`
 (embedded Dex federating to the IdP), may come later and already appears
