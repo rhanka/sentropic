@@ -56,9 +56,9 @@
 - [x] **Lot 2 — Typed knowledge and authority boundaries**
   - [x] Add one DS profile, explicit lossless adapters, package layout and the technical-package/memory boundary.
   - [x] Gate: preserve relation conservation, provenance, separate views and exclusion of memory metadata from committed facts.
-- [ ] **Lot 3 — Conductor and capitalisation contracts**
-  - [ ] Add deterministic scheduling, phase-matched steering, source-skill adoption, Track joins and the qualified Engram seam.
-  - [ ] Gate: retain coverage, zero unqualified reuse credit, historical/incomplete fallbacks and host prerequisites.
+- [x] **Lot 3 — Conductor and capitalisation contracts**
+  - [x] Add deterministic scheduling, phase-matched steering, source-skill adoption, Track joins and the qualified Engram seam.
+  - [x] Gate: retain coverage, zero unqualified reuse credit, historical/incomplete fallbacks and host prerequisites.
 - [ ] **Lot 4 — Delivery, decisions and documentation consolidation**
   - [ ] Publish the unified K0–K6 sequence, observable exits, risks and French D1/D2 dossiers with no selection asserted.
   - [ ] Record R2-P3 resolution and refreshed source hashes; make the study self-contained without scratch-file prerequisites.
