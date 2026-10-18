@@ -4,7 +4,7 @@ import { canonicalJson } from '../../src/tool-configuration.js';
 import { A05_MUTATION_DIGEST_VECTORS_SPEC_RULE as corpus } from '../../../../tools/memory-mcp-l5/fixtures/l0/60a8bfa828b5eabd360232ea5865391c23f99f48/memory-mcp-spec-rules.js';
 const capture = () => JSON.parse(corpus.vectors.capture_v1.expected_jcs_utf8);
 
-describe('identical frozen A05 corpus', () => {
+describe('P03.platform.a05-mutation-digest-vectors — identical frozen A05 corpus', () => {
   it.each(Object.entries(corpus.vectors))('seals %s to its committed digest and JCS bytes', (_name, vector) => {
     const input = JSON.parse(vector.expected_jcs_utf8);
     expect(validateMutationPreimage(input)).toEqual([]);
