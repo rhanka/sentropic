@@ -3,12 +3,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGatewayControlClient } from '@sentropic/llm-gateway/node/control-client';
-import { main } from '../src/index';
+import { main, type MainOptions } from '../src/index';
 import { durableHostFixture, model, routingContract } from '../../../packages/llm-gateway/tests/helpers/durable-host';
+const fixtureMesh = () => durableHostFixture().mesh as unknown as NonNullable<MainOptions['durable']>['mesh'];
 it('uses the published durable host from the actual private process entry', async () => {
   const stateDir = await mkdtemp(join(tmpdir(), 'gw-private-entry-'));
   const options = { env: { NODE_ENV: 'test', HOST: '127.0.0.1', PORT: '0' }, log: () => undefined,
-    durable: { stateDir, mesh: durableHostFixture().mesh } };
+    durable: { stateDir, mesh: fixtureMesh() } };
   let host = await main(options);
   try {
     const session = { ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'private-app', routingContract };
@@ -17,7 +18,7 @@ it('uses the published durable host from the actual private process entry', asyn
       authorization: `Bearer ${first.key}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, messages: [{ role: 'user', content: 'synthetic' }] }) });
     expect(response.status, await response.text()).toBe(200);
     const receiptId = response.headers.get('x-sentropic-receipt')!;
-    await host.drain(); await host.stop(); host = await main({ ...options, durable: { stateDir, mesh: durableHostFixture().mesh } });
+    await host.drain(); await host.stop(); host = await main({ ...options, durable: { stateDir, mesh: fixtureMesh() } });
     const control = createGatewayControlClient({ controlSocket: host.controlSocket });
     expect((await control.acquireSession(session)).key).toBe(first.key);
     expect((await control.readReceipt({ ownerScopeRef: 'owner-a', receiptId })).settlement).toBe('stop');

@@ -1,21 +1,40 @@
 // Standalone gateway route-plane ports (BRDP-EX7). Pure bookkeeping over injected
 // ports: no product runtime, database, registry or cluster-mesh import, so the
 // standalone gateway host and the product `/gw` namespace share one factory.
-import type {
-  GenerateRequest,
-  GenerateResponse,
-  PlannedRouteTarget,
-  PreparedRouteAttempt,
-  RoutePlan,
-  RoutePlanInput,
-  RoutePlanner,
-  StreamRequest,
-  StreamResult,
-  VerifiedRoutingSubject,
-  LaunchRoutingContract,
+import {
+  freezeLaunchRoutingContract,
+  isExactModelTarget,
+  isNativeMessagesTarget,
+  launchTargets,
+  LaunchRoutingContractError,
+  RoutePlanError,
+  type GenerateRequest,
+  type GenerateResponse,
+  type LaunchRoutingContract,
+  type PlannedRouteTarget,
+  type PreparedNativeMessages,
+  type PreparedRouteAttempt,
+  type RoutePlan,
+  type RoutePlanInput,
+  type RoutePlanner,
+  type StreamRequest,
+  type StreamResult,
+  type VerifiedRoutingSubject,
 } from '@sentropic/llm-mesh';
-import { freezeLaunchRoutingContract, isExactModelTarget, isNativeMessagesTarget, launchTargets, LaunchRoutingContractError, RoutePlanError } from '@sentropic/llm-mesh';
-import type { AnthropicNativePort } from './anthropic-native';
+
+export interface GatewayNativeMessagesPort {
+  readonly modelIds: readonly string[];
+  available(
+    subject: VerifiedRoutingSubject,
+    workspaceId: string | undefined,
+    target: { providerId: string; modelId: string },
+  ): Promise<boolean>;
+  prepare(
+    subject: VerifiedRoutingSubject,
+    workspaceId: string | undefined,
+    target: { providerId: string; modelId: string },
+  ): Promise<PreparedNativeMessages | undefined>;
+}
 
 export interface GatewayRouteIntentEvidence {
   readonly requestedModel: string;
@@ -53,7 +72,7 @@ export interface GatewayRouteDispatchPort {
 }
 
 export interface GatewayRoutePlanePorts {
-  readonly nativeMessages?: AnthropicNativePort;
+  readonly nativeMessages?: GatewayNativeMessagesPort;
   readonly targets: GatewayRouteTargetPort;
   readonly catalog: GatewayModelCatalogPort;
   readonly dispatch: GatewayRouteDispatchPort;
