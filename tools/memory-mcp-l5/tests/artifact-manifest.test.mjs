@@ -2,66 +2,104 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { checkArtifactManifest, hasPathTraversal, hasExternalSourceAlias } from '../receipt.mjs';
+import { checkArtifactManifest, hasPathTraversal, hasExternalSourceAlias, isSha512Integrity, FROZEN_SPEC_SHA256 } from '../receipt.mjs';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SCHEMA_PATH = join(HERE, '..', 'schemas', 'artifact-manifest-v1.schema.json');
 const H64 = 'c'.repeat(64);
+const C40 = 'b'.repeat(40);
+const S512 = 'sha512-' + 'A'.repeat(86) + '==';
 
-function makeValidManifest() {
+function makeValidPreCandidateManifest() {
   return {
     manifestVersion: 1,
+    stage: 'pre-candidate',
+    source: { head: C40, base: C40, l0Commit: C40, specSha256: FROZEN_SPEC_SHA256 },
     artifacts: [
-      { name: '@sentropic/mcp-platform', version: '0.4.0', sha256: H64, integrity: 'sha512-BBBB==', archive: 'archives/mcp-platform-0.4.0.tgz' },
-      { name: '@sentropic/mcp-broker', version: '0.2.0', sha256: H64, integrity: 'sha512-CCCC==', archive: 'archives/mcp-broker-0.2.0.tgz' },
+      { role: 'platform', name: '@sentropic/mcp-platform', version: '0.4.0', sha256: H64, integrity: S512, sourceHead: C40, archive: 'archives/mcp-platform-0.4.0.tgz' },
+      { role: 'broker', name: '@sentropic/mcp-broker', version: '0.2.0', sha256: H64, integrity: S512, sourceHead: C40, archive: 'archives/mcp-broker-0.2.0.tgz' },
     ],
     contractInventory: [
-      { path: 'packages/mcp-platform/dist/memory/index.d.ts', sha256: H64 },
-      { path: 'packages/mcp-broker/dist/memory/index.d.ts', sha256: H64 },
-      { path: 'tools/memory-mcp-l5/schemas/checkpoint-v1.schema.json', sha256: H64 },
+      { path: 'packages/mcp-platform/dist/memory/index.d.ts', version: '0.4.0', sha256: H64 },
+      { path: 'packages/mcp-broker/dist/memory/index.d.ts', version: '0.2.0', sha256: H64 },
+      { path: 'tools/memory-mcp-l5/schemas/checkpoint-v1.schema.json', version: '1.0.0', sha256: H64 },
+    ],
+  };
+}
+
+function makeValidCandidateManifest() {
+  const pre = makeValidPreCandidateManifest();
+  return {
+    ...pre,
+    stage: 'candidate',
+    preCandidateManifestSha256: H64,
+    e4ArtifactSha256: H64,
+    l4BuildReceipt: { path: 'receipts/l4-build.json', sha256: H64 },
+    contractComparison: { path: 'receipts/contract-comparison.json', sha256: H64 },
+    artifacts: [
+      ...pre.artifacts,
+      { role: 'l4', name: '@sentropic/engram', version: '0.20.1', sha256: H64, integrity: S512, sourceHead: C40, archive: 'archives/engram-0.20.1.tgz' },
+      { role: 'mesh', name: '@sentropic/cluster-mesh', version: '0.19.0', sha256: H64, integrity: S512, sourceHead: C40, archive: 'archives/cluster-mesh-0.19.0.tgz' },
     ],
   };
 }
 
 describe('L5 artifact-manifest schema and verifier', () => {
-  it('enforces closed JSON Schema draft 2020-12 on artifact-manifest-v1.schema.json', () => {
+  it('enforces closed JSON Schema draft 2020-12 with stage-specific oneOf and finite bounds', () => {
     const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'));
-    expect(schema.additionalProperties).toBe(false);
-    expect(schema.required).toEqual(['manifestVersion', 'artifacts', 'contractInventory']);
-    expect(schema.properties.artifacts.items.additionalProperties).toBe(false);
-    expect(schema.properties.contractInventory.items.additionalProperties).toBe(false);
+    expect(Array.isArray(schema.oneOf)).toBe(true);
+    expect(schema.oneOf).toHaveLength(3);
+    for (const branch of schema.oneOf) expect(branch.additionalProperties).toBe(false);
+    expect(schema.$defs.artifactEntry.additionalProperties).toBe(false);
+    expect(schema.$defs.contractEntry.required).toEqual(['path', 'version', 'sha256']);
   });
 
-  it('accepts a valid closed manifest and matching retained pre-candidate contract inventory', () => {
-    const manifest = makeValidManifest();
-    expect(checkArtifactManifest(manifest, { retainedContractInventory: structuredClone(manifest.contractInventory) })).toEqual([]);
+  it('accepts valid closed pre-candidate, lot2, and candidate manifests', () => {
+    const pre = makeValidPreCandidateManifest();
+    expect(checkArtifactManifest(pre, { retainedContractInventory: structuredClone(pre.contractInventory) })).toEqual([]);
+    const lot2 = {
+      ...pre,
+      stage: 'lot2',
+      preCandidateManifestSha256: H64,
+      e2ArtifactSha256: H64,
+      e2Provenance: { path: 'receipts/e2-provenance.json', sha256: H64 },
+      artifacts: [...pre.artifacts, { role: 'e2', name: '@sentropic/engram', version: '0.20.0', sha256: H64, integrity: S512, sourceHead: C40, archive: 'archives/engram-0.20.0.tgz' }],
+    };
+    expect(checkArtifactManifest(lot2)).toEqual([]);
+    expect(checkArtifactManifest(makeValidCandidateManifest())).toEqual([]);
   });
 
-  it('rejects duplicate package names, duplicate archives, duplicate contract paths, and extra keys', () => {
-    const dupPkg = makeValidManifest();
+  it('rejects duplicate names/archives/paths, root/nested extra keys, and stage role mismatches', () => {
+    const dupPkg = makeValidPreCandidateManifest();
     dupPkg.artifacts.push({ ...dupPkg.artifacts[0], archive: 'archives/other.tgz' });
     expect(checkArtifactManifest(dupPkg).join(' ')).toMatch(/duplicate name @sentropic\/mcp-platform/);
 
-    const dupArch = makeValidManifest();
-    dupArch.artifacts.push({ ...dupArch.artifacts[0], name: '@sentropic/other' });
+    const dupArch = makeValidPreCandidateManifest();
+    dupArch.artifacts.push({ ...dupArch.artifacts[0], name: '@sentropic/other', role: 'dependency' });
     expect(checkArtifactManifest(dupArch).join(' ')).toMatch(/duplicate archive/);
 
-    const dupContract = makeValidManifest();
-    dupContract.contractInventory.push({ ...dupContract.contractInventory[0] });
-    expect(checkArtifactManifest(dupContract).join(' ')).toMatch(/duplicate path/);
+    const nestedExtra = makeValidPreCandidateManifest();
+    nestedExtra.artifacts[0].extraBag = 1;
+    expect(checkArtifactManifest(nestedExtra).join(' ')).toMatch(/additional property extraBag forbidden/);
 
-    expect(checkArtifactManifest({ ...makeValidManifest(), extra: true })).toContain('manifest: extra key extra');
+    const badCand = makeValidCandidateManifest();
+    badCand.artifacts[2].role = 'dependency';
+    expect(checkArtifactManifest(badCand).join(' ')).toMatch(/candidate requires exactly one l4 artifact/);
   });
 
-  it('rejects path traversal, external source aliases, and bad digests/integrities', () => {
+  it('rejects path traversal, absolute/URL paths, external source aliases, and short sha512 integrities', () => {
     expect(hasPathTraversal('../outside.tgz')).toBe(true);
     expect(hasPathTraversal('/abs/path.tgz')).toBe(true);
+    expect(hasPathTraversal('https://evil.example/pkg.tgz')).toBe(true);
     expect(hasExternalSourceAlias('file:../mcp-platform')).toBe(true);
     expect(hasExternalSourceAlias('workspace:*')).toBe(true);
+    expect(isSha512Integrity('sha512-A')).toBe(false);
+    expect(isSha512Integrity(S512)).toBe(true);
 
-    const bad = makeValidManifest();
+    const bad = makeValidPreCandidateManifest();
     bad.artifacts[0].version = 'file:../mcp-platform';
-    bad.artifacts[1].archive = '../escape.tgz';
+    bad.artifacts[1].archive = 'https://evil.example/escape.tgz';
+    bad.artifacts[1].integrity = 'sha512-A';
     bad.contractInventory[0].sha256 = 'SHORT';
     const errs = checkArtifactManifest(bad).join(' ');
     expect(errs).toMatch(/manifest\.artifacts\/@sentropic\/mcp-platform/);
@@ -70,7 +108,7 @@ describe('L5 artifact-manifest schema and verifier', () => {
   });
 
   it('rejects mutated or missing contract inventory entries against the retained pre-candidate', () => {
-    const manifest = makeValidManifest();
+    const manifest = makeValidCandidateManifest();
     const mutated = structuredClone(manifest.contractInventory);
     mutated[0].sha256 = 'd'.repeat(64);
     expect(checkArtifactManifest(manifest, { retainedContractInventory: mutated }).join(' ')).toMatch(/differs from retained pre-candidate/);
