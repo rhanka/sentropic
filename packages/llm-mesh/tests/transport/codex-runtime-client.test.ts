@@ -226,4 +226,53 @@ describe('Codex runtime client', () => {
       }, auth)).rejects.toMatchObject({ code: 'model_identity_mismatch', observedServedModelIds: expect.arrayContaining(['gpt-6-astra', 'gpt-6.1-sol']) });
     },
   );
+
+  it('retains a contradictory response.created.model as a nonretryable mismatch when the stream later emits an SSE error or read failure', async () => {
+    const sseErrorClient = new CodexRuntimeClient({ fetch: async () => sseResponse([
+      { type: 'response.created', response: { id: 'r-err', model: 'gpt-6-astra' } },
+      { type: 'error', error: { message: 'rate limit', code: 'rate_limit_exceeded', retryable: true } },
+    ]) });
+    await expect(sseErrorClient.generate({
+      providerId: 'openai', modelId: 'gpt-6.1-sol',
+      messages: [{ role: 'user', content: 'hi' }],
+    }, auth)).rejects.toMatchObject({
+      code: 'model_identity_mismatch',
+      retryable: false,
+      observedServedModelId: 'gpt-6-astra',
+      observedServedModelIds: ['gpt-6-astra'],
+    });
+
+    const readFailClient = new CodexRuntimeClient({
+      fetch: async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'response.created', response: { id: 'r-read', model: 'gpt-6-astra' } })}\n\n`));
+        },
+        pull() {
+          throw new Error('upstream socket reset');
+        },
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    });
+    await expect(readFailClient.generate({
+      providerId: 'openai', modelId: 'gpt-6.1-sol',
+      messages: [{ role: 'user', content: 'hi' }],
+    }, auth)).rejects.toMatchObject({
+      code: 'model_identity_mismatch',
+      retryable: false,
+      observedServedModelId: 'gpt-6-astra',
+      observedServedModelIds: ['gpt-6-astra'],
+    });
+
+    const matchingErrorClient = new CodexRuntimeClient({ fetch: async () => sseResponse([
+      { type: 'response.created', response: { id: 'r-ok', model: 'gpt-6.1-sol' } },
+      { type: 'error', error: { message: 'rate limit', code: 'rate_limit_exceeded', retryable: true } },
+    ]) });
+    await expect(matchingErrorClient.generate({
+      providerId: 'openai', modelId: 'gpt-6.1-sol',
+      messages: [{ role: 'user', content: 'hi' }],
+    }, auth)).rejects.toMatchObject({
+      code: 'rate_limit_exceeded',
+      retryable: true,
+      observedServedModelId: 'gpt-6.1-sol',
+    });
+  });
 });
