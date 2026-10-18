@@ -55,6 +55,13 @@ export async function verifyOAuthRequest(
 
 /** Fail before listening, including malformed JavaScript callers bypassing the public types. */
 export function validateOAuthOptions(options: McpOAuthNamespaceOptions): void {
+  if (options.keySource !== undefined && typeof options.keySource?.resolveKey !== 'function') {
+    throw new TypeError('MCP OAuth requires a valid verification key source');
+  }
+  if (options.exchange !== undefined && (typeof options.exchange?.issuer?.verify !== 'function'
+    || typeof options.exchange?.issuer?.mint !== 'function')) {
+    throw new TypeError('MCP OAuth exchange requires a trusted issuer binding');
+  }
   if (typeof options.resolveAccount !== 'function' || typeof options.invoke !== 'function'
     || typeof options.sessions?.createTransport !== 'function') {
     throw new TypeError('MCP OAuth requires account, invocation and transport bindings');

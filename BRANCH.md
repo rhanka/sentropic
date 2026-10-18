@@ -75,6 +75,7 @@
   - [ ] Scoped gates: `rtk make test-cluster-mesh SCOPE=tests/loaders/mcp-auth.spec.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; repeat for integrations/mcp-auth-surface.spec.ts and tests/modules.
   - [ ] Gate: `rtk make typecheck-cluster-mesh lint-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`. UI/E2E files: none.
 - [ ] **Lot 2 — Metadata, request authority and sessions**
+  - [x] SDK cancellation/SSE GREEN (5 session tests). Startup binding RED: malformed key source resolved a mountable factory. Added explicit verifier/issuer function preflight; focused GREEN pending.
   - [x] Shutdown initialization regression GREEN (4 session tests); added real SDK cancellation-notification/SSE capability-revocation case for focused verification.
   - [x] Shutdown-during-initialization RED: transport.close called zero times. Track all connected transports before assigning IDs, include initialization in capacity, and memoize connection close; focused GREEN pending.
   - [x] Typecheck GREEN after typed native cancellation operation and HTTP adapter boundary (TS5.4/Hono4.10.7+4.13.0); overlap repro identified incompatible schema validation, now adapted locally without altering published schemas.
@@ -127,6 +128,7 @@
   - [ ] Update README, CHANGELOG and existing lazy-surface spec with exact typed API/tuple, Node-only compose leaf, 2FA boundary, secret rotation/custody, policy sync/cache bound, tenant state/restore and R-O1/#865 sequence.
   - [ ] Write `.h2a/build/o1_report.md`: changes, checks, owned feedback, risks, scope exceptions and read set; no secrets or messages to others. Gate: docs match packed types; no duplicate issuer/recovery spec.
 - [ ] **Lot 7 — Final validation**
+  - [x] Updated exactly the three cluster-mesh qualification peer pins and matching CI wiring constant to mcp-auth0.2.2; gateway service-auth range remains unchanged. Focused CI wiring test pending.
   - [ ] Run `rtk make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; reuse final-SHA passing gates, document intentional environment gating.
   - [ ] Run `rtk make test-mcp-auth test-oauth-verify API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; auth core/hono/prm/challenge/scopes/application-scopes/service-auth/manifest and oauth verifier/JWKS/DPoP existing tests unchanged.
   - [ ] Update three CI qualification pins and wiring test; scoped `rtk make test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`.
