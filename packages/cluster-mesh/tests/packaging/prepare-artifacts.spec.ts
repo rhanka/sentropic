@@ -8,7 +8,8 @@ it('should install the same packed artifacts candidate in selected, latest and a
   const root = mkdtempSync(join(tmpdir(), 'prepare-artifacts-'));
   const work = join(root, 'work');
   try {
-    // Stub npm's network operations while running the real preparation and source selection.
+    // Stub npm's network operations while running the real preparation and source selection,
+    // limited to the asserted artifacts-candidate consumers (prepare.sh default stays full).
     writeFileSync(join(root, 'npm'), `#!${process.execPath}
 const fs = require('node:fs');
 const path = require('node:path');
@@ -23,7 +24,7 @@ if (args[0] === 'pack') {
 `, { mode: 0o755 });
     const result = spawnSync('sh', ['tests/packaging/prepare.sh', work], {
       cwd: new URL('../..', import.meta.url),
-      env: { ...process.env, PATH: `${root}:${process.env.PATH}`, CLUSTER_MESH_SIBLING_RECEIPTS: '' },
+      env: { ...process.env, PATH: `${root}:${process.env.PATH}`, CLUSTER_MESH_SIBLING_RECEIPTS: '', CLUSTER_MESH_PREPARE_ONLY: 'artifacts' },
       encoding: 'utf8',
     });
     expect(result.status, result.stderr).toBe(0);
