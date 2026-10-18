@@ -3929,19 +3929,11 @@ memory-l5-tooling: ## L5 tooling contract tests via Vitest JSON-capable runner (
 memory-l5-test: ## L5 lot-scoped package tests, LOT=<n> enumerates the exact lot file set (L5-EX1)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-test requires ENV=<env> last" >&2; exit 1; }
 	@test "$(LOT)" = "1" || { echo "ERROR: memory-l5-test LOT=$(LOT) is owned by a later lot (only LOT=1 exists)" >&2; exit 1; }
-	@$(MAKE) test-mcp-platform SCOPE=tests/memory/invocation-context.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
-	@$(MAKE) test-mcp-platform SCOPE=tests/memory/mutation-guard.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
-	@$(MAKE) test-mcp-platform SCOPE=tests/memory/confirmation.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
-	@$(MAKE) test-mcp-platform SCOPE=tests/memory/mutation-digest-vectors.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/memory API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) test-mcp-platform SCOPE=tests/request-identity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) test-mcp-platform SCOPE=tests/wire-parity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) test-mcp-platform SCOPE=tests/registry-dispatch.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
-	@$(MAKE) test-mcp-broker SCOPE=tests/broker.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
-	@$(MAKE) test-mcp-broker SCOPE=tests/memory/invocation-context.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
-	@$(MAKE) test-mcp-broker SCOPE=tests/memory/source-binding.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
-	@$(MAKE) test-mcp-broker SCOPE=tests/memory/forged-call.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
-	@$(MAKE) test-mcp-broker SCOPE=tests/memory/literal-true.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
-	@$(MAKE) test-mcp-broker SCOPE=tests/memory/audit-refusal.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker SCOPE=tests API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
 .PHONY: memory-l5-packed
 memory-l5-packed: ## L5 installed-consumer packed SDK suite, SCOPE=packed/<file> against ARTIFACT_MANIFEST (Lot 4)
@@ -3967,10 +3959,16 @@ memory-l5-receipt: ## L5 receipt verifier: MODE=preflight reports obligations, M
 	@test -n "$(CHECKPOINT)" || { echo "ERROR: memory-l5-receipt requires CHECKPOINT=<path> (arrives in Lot 5+)" >&2; exit 1; }
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node tools/memory-mcp-l5/receipt.mjs --mode "$(MODE)" --checkpoint "$(CHECKPOINT)" --manifest "$(ARTIFACT_MANIFEST)" --base-dir /workspace
 
+.PHONY: memory-l5-verify
+memory-l5-verify: ## Verify retained P1 manifest, exact inventory and packed runtime/declaration graph
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: ARTIFACT_MANIFEST is required" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode packed --root /workspace --manifest "$(ARTIFACT_MANIFEST)"
+
 .PHONY: memory-l5-gate
 memory-l5-gate: ## L5 lot gate aggregate: lint, tooling, LOT tests (L5-EX1; later lots extend it)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-gate requires ENV=<env> last" >&2; exit 1; }
 	@test -n "$(LOT)" || { echo "ERROR: memory-l5-gate requires LOT=<n>" >&2; exit 1; }
+	@$(MAKE) memory-l5-verify ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) typecheck-mcp-platform API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) typecheck-mcp-broker API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) memory-l5-lint API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
