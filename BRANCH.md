@@ -82,7 +82,7 @@
   - [x] Specify client eligibility (`grant_types` containing `refresh_token`), `offline_access` scope semantics vs MCP native refresh clients (claude.ai), discovery metadata (`wellknown-handler.ts`), and authorize/consent/token/revoke/introspect/end-session contracts.
   - [x] Specify atomic rotation on every use, reuse detection (family-wide revocation + issued access token revocation), DPoP/PKCE/client-auth bindings, RFC 8707 `resource` sealing and downscoping, live user/tenant/consent revalidation on refresh, and interaction with per-client MFA (`required_acr`, `allowed_user_ids`, PR #695 `maxMfaAgeSeconds` / `security_generation` / `kvm-gateway` exclusion or step-up).
   - [x] Specify interaction with `packages/mcp-auth` (`0.2.2` `403 insufficient_scope` fix, PRM canonical path), cluster-mesh MCP registry and RFC 8693 token exchange (PR #679, PR #692: exchanged workload tokens never carry refresh tokens; refreshed human access tokens remain valid subjects for token exchange), and tier identity sync (`export-prod.sql`, `import-preprod.sql`).
-  - [x] Specify test plan at file granularity, implementation lots for BUILD branches, and owner decisions (in French, only if any remain open beyond the closed owner decision).
+  - [x] Specify test plan at file granularity, implementation lots for BUILD branches, verbatim owner receipt and clearly unratified residual product defaults.
   - [x] Reconcile the parallel Astra max analysis (`/home/antoinefa/src/sentropic/.tmp/idp-refresh-token/analysis-astra.md`) into the spec when it lands; record each point taken or rejected with reason in `/home/antoinefa/src/sentropic/.tmp/idp-refresh-token/reconciliation.md`.
   - [x] **API tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
   - [x] **UI tests (TypeScript only)**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
@@ -97,13 +97,13 @@
   - [x] Check `spec/SPEC.md` for a SPEC_EVOL index and record the finding in this file; edit only if an index exists (`spec/SPEC.md` has no `SPEC_EVOL` index; left unchanged).
   - [x] Lot gate: `make scope-check ENV=test-idp-oauth-refresh-token` passes; every new link resolves to an existing file in this branch.
   - [ ] UAT (docs read): owner follows each cross-reference to the new spec and back to the policy it extends; pending explicit receipt tied to the reviewed version.
-- [ ] **Review round 1 — PR #699 (`pr699_sol.md`, target `393919d76d5ca65971aed472e015d3ec5bbc4167`)**
+- [x] **Review round 1 — PR #699 (`pr699_sol.md`, target `393919d76d5ca65971aed472e015d3ec5bbc4167`)**
   - [x] Preserve the closed owner receipt verbatim; correct unsupported owner-UAT completion claims (finding 8).
   - [x] Define canonical digest and durable family/authorization serialization (findings 2 and 5); carry forward the existing partial evidence corrections.
   - [x] Complete current-policy and resource-aware offline-consent contracts and amendments (findings 1 and 3).
   - [x] Correct revocation/cache/JWT windows, source paths and concrete regression/race/expiry acceptance (findings 4 and 6; citation part of 7).
-  - [ ] Reconcile actual analysis bytes/provenance and distinguish proposed interaction/logout defaults from owner ratification (findings 7 and 8).
-  - [ ] Validate scope, write `.h2a/reviews/pr699_treatment.md`, push atomic commits and report head; never merge.
+  - [x] Reconcile actual 353-line analysis bytes/provenance in the committed reconciliation amendment and distinguish proposed interaction/logout defaults from owner ratification (findings 7 and 8).
+  - [x] Validate scope and prepare `.h2a/reviews/pr699_treatment.md`; final atomic-commit/push/head receipt is recorded there (ignored local artifact), with no merge or new approval claim.
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Confirm the new spec reuses merged mechanisms without duplicating them and contains no secret value, only variable names.
   - [x] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
