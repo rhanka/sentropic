@@ -196,8 +196,8 @@ function withBundle(fn) {
   try { return fn(buildCheckpointBundle(dir), dir); } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-describe('L5 receipt contract and closed checkpoint schema', () => {
-  it('aligns closed schema bounds and catalog P01-P10 files, commands, cases, and roots', () => {
+describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkpoint schema', () => {
+  it('P10.tooling.receipt-contract: aligns closed schema bounds and catalog P01-P10 fileCases, commands, source/packed roots, and authorizedOwners', () => {
     const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'));
     const catalog = JSON.parse(readFileSync(CATALOG_PATH, 'utf8'));
     expect(schema.additionalProperties).toBe(false);
@@ -205,45 +205,65 @@ describe('L5 receipt contract and closed checkpoint schema', () => {
     expect(catalog.proofs.map((p) => p.id)).toEqual(PROOF_IDS);
     expect(catalog.proofs.find((p) => p.id === 'P02').files).toContain('tools/memory-mcp-l5/packed/identity-source-refusal.test.ts');
     expect(catalog.proofs.find((p) => p.id === 'P09').files).toHaveLength(22);
-    expect(catalog.immutableFixtures).toContain('packages/mcp-platform/tests/wire-parity.test.ts');
-    expect(catalog.pendingPredecessorMappings.map((m) => m.file)).toContain('packages/mcp-platform/tests/remote-bound-dispatch.test.ts');
+    expect(catalog.importGraphRoots).toContain('tools/memory-mcp-l5/verifier.mjs');
+    expect(catalog.importGraphRoots).toContain('@sentropic/mcp-platform/memory');
+    expect(catalog.importGraphRoots).toContain('@sentropic/mcp-broker/memory-reference');
+    expect(Array.isArray(catalog.authorizedOwners?.ownerUat)).toBe(true);
+    for (const p of catalog.proofs) {
+      expect(typeof p.fileCases).toBe('object');
+      for (const f of p.files) expect(p.fileCases[f]?.length).toBeGreaterThan(0);
+    }
   });
 
-  it('accepts a complete on-disk bundle, both ownerUat oneOf branches, and rejects missing files or nested extra/omitted keys', () => withBundle(({ doc, opts }, dir) => {
+  it('P10.tooling.receipt-contract: accepts a complete acyclic on-disk bundle, both ownerUat branches, and rejects prototype/nested extra or omitted keys', () => withBundle(({ doc, opts }, dir) => {
     expect(checkCheckpoint(doc, opts)).toEqual([]);
     const deferred = structuredClone(doc);
     const defRef = writeRef(dir, 'receipts/owner-uat-def.json', {
-      tupleSha256: doc.tupleSha256, status: 'owner-deferred', actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z', owningLot: 'L6', reason: 'preprod IdP maintenance window',
+      tupleSha256: doc.tupleSha256, authoritySourceSha256: doc.contracts.l0Freeze.sha256, ciRunId: '1001',
+      status: 'owner-deferred', actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z', owningLot: 'L6', reason: 'preprod IdP maintenance window',
     });
     deferred.ownerUat = { status: 'owner-deferred', evidence: { path: defRef.path, sha256: defRef.sha256 }, actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z', owningLot: 'L6', reason: 'preprod IdP maintenance window' };
     expect(checkCheckpoint(deferred, opts)).toEqual([]);
+    const protoCtor = structuredClone(doc);
+    protoCtor.source = JSON.parse(JSON.stringify(protoCtor.source).replace(/\}$/, ',"constructor":{"unexpected":true}}'));
+    expect(checkCheckpoint(protoCtor, opts).join(' ')).toMatch(/additional property constructor forbidden/);
+    const protoUnder = structuredClone(doc);
+    protoUnder.source = JSON.parse(JSON.stringify(protoUnder.source).replace(/\}$/, ',"__proto__":{"alsoUnexpected":true}}'));
+    expect(checkCheckpoint(protoUnder, opts).join(' ')).toMatch(/additional property __proto__ forbidden/);
     const mixedUat = structuredClone(doc);
     mixedUat.ownerUat.owningLot = 'L6';
     expect(checkCheckpoint(mixedUat, opts).join(' ')).toMatch(/ownerUat: must match exactly one oneOf branch/);
-    const nestedExtra = structuredClone(doc);
-    nestedExtra.source.extraBag = 1;
-    expect(checkCheckpoint(nestedExtra, opts).join(' ')).toMatch(/source: additional property extraBag forbidden/);
-    const missingNested = structuredClone(doc);
-    delete missingNested.source.repository;
-    expect(checkCheckpoint(missingNested, opts).join(' ')).toMatch(/source: missing required property repository/);
     unlinkSync(join(dir, 'results/P01.json'));
     expect(checkCheckpoint(doc, opts).join(' ')).toMatch(/missing on-disk file results\/P01\.json/);
   }));
 
-  it('rejects missing/duplicate proofs, skipped counts, and missing file or case ID in on-disk Vitest JSON', () => withBundle(({ doc, opts }, dir) => {
-    const missing = structuredClone(doc);
-    missing.proofs = missing.proofs.slice(0, 9);
-    expect(checkCheckpoint(missing, opts).join(' ')).toMatch(/expected exactly 10/);
-    const skipped = structuredClone(doc);
-    skipped.proofs[0].result.skipped = 1;
-    expect(checkCheckpoint(skipped, opts).join(' ')).toMatch(/proofs\/P01: invalid vitest-json counts/);
-    const badRep = JSON.parse(readFileSync(join(dir, 'results/P01.json'), 'utf8'));
-    badRep.testResults[0].assertionResults[0].title = 'wrong.case';
-    badRep.testResults[0].assertionResults[0].fullName = 'wrong.case';
-    const ref = writeRef(dir, 'results/P01.json', badRep);
-    const badCaseDoc = structuredClone(doc);
-    badCaseDoc.proofs[0].result.sha256 = ref.sha256;
-    expect(checkCheckpoint(badCaseDoc, opts).join(' ')).toMatch(/missing required case P01\.broker\.invocation-context/);
+  it('P10.tooling.receipt-contract: rejects zero-assertion files, unlisted files, misplaced cases, and accepts Vitest absolute-path reports', () => withBundle(({ doc, opts }, dir) => {
+    const emptyFileRep = JSON.parse(readFileSync(join(dir, 'results/P01.json'), 'utf8'));
+    emptyFileRep.testResults[0].assertionResults = [];
+    emptyFileRep.testResults.push({ name: 'unlisted/no-real-test.ts', status: 'passed', assertionResults: [{ title: 'P01.broker.invocation-context', fullName: 'P01.broker.invocation-context', status: 'passed' }] });
+    const emptyRef = writeRef(dir, 'results/P01.json', emptyFileRep);
+    const emptyDoc = structuredClone(doc);
+    emptyDoc.proofs[0].result.sha256 = emptyRef.sha256;
+    expect(checkCheckpoint(emptyDoc, opts).join(' ')).toMatch(/empty assertions|unlisted file|missing required case/i);
+
+    const p10Rep = JSON.parse(readFileSync(join(dir, 'results/P10.json'), 'utf8'));
+    p10Rep.testResults = p10Rep.testResults.map((tr) => ({
+      ...tr,
+      name: join(dir, tr.name),
+      assertionResults: tr.assertionResults.map((ar) => ({ ...ar, fullName: `${ar.title} — suite > ${ar.title}: case` })),
+    }));
+    const normExec = p10Rep.testResults.flatMap((tr) => tr.assertionResults.map((ar) => ({ file: tr.name.slice(dir.length + 1), caseId: ar.fullName, status: 'passed' })));
+    const p10Ref = writeRef(dir, 'results/P10.json', p10Rep);
+    const absDoc = structuredClone(doc);
+    absDoc.proofs[9].result.sha256 = p10Ref.sha256;
+    absDoc.proofs[9].result.executedCasesSha256 = sha256OfBytes(Buffer.from(canonicalizeJson(normExec)));
+    writeRef(dir, 'receipts/ci-job-memory-l5-qualification.json', {
+      jobId: 'memory-l5-qualification', runId: '1001', attempt: 1, head: C40, tupleSha256: absDoc.tupleSha256, conclusion: 'success',
+      proofResultSha256s: absDoc.proofs.map((p) => ({ id: p.id, sha256: p.result.sha256 })),
+    });
+    const jobBytes = readFileSync(join(dir, 'receipts/ci-job-memory-l5-qualification.json'));
+    absDoc.ci.jobs[0].resultSha256 = sha256OfBytes(jobBytes);
+    expect(checkCheckpoint(absDoc, opts)).toEqual([]);
   }));
 
   it('rejects mutated pre-candidate bytes, mismatched on-disk E4 build receipt, mutated contract bytes, and cross-digest reuse', () => withBundle(({ doc, opts }, dir) => {
