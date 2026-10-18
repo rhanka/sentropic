@@ -22,3 +22,7 @@ Workspace segmentation remains the platform enrollment concern on
 `ConnectorEnrollment.workspaceRef`. When production wiring is introduced later, the API's Google
 account identifier should map to that distinct `connectorInstanceId`; it is deliberately not
 implemented in this benchmark package.
+
+## Releases
+
+First publication uses the owner-operated [web bootstrap](../../scripts/publish/README.md); later releases use CI trusted publishing.
