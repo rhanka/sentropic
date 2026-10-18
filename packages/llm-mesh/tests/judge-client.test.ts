@@ -27,6 +27,10 @@ const mockVerdictResult = (correlationId = 'test-corr-1'): JudgeResult => ({
   receipt: mockReceipt(correlationId),
 });
 
+/** Fail fast when an uncooperative fetch would otherwise hang judge() past the test timeout. */
+const failAfterHang = <T>(judged: Promise<T>): Promise<T> => Promise.race([judged,
+  new Promise<never>((_, reject) => setTimeout(() => reject(new Error('judge() hung on an uncooperative fetch')), 500))]);
+
 describe('remote judge client', () => {
   it('authenticates to mesh without JEV key and returns valid verdict result', async () => {
     let capturedUrl = '';
@@ -360,6 +364,44 @@ describe('remote judge client', () => {
     const result = await client.judge(request);
     expect(result.ok).toBe(true);
     expect(JSON.parse(sentBody).inputs).toEqual({ output: 'original' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('times out a fetch that ignores abort without retrying', async () => {
+    const fetch = vi.fn(() => new Promise<Response>(() => {}));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+      fetch: fetch as unknown as typeof globalThis.fetch, timeoutMs: 5 });
+    const result = await failAfterHang(client.judge(judgeRequest({ correlationId: 'hang-corr' })));
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'unknown',
+      error: { code: 'TIMEOUT' }, correlationId: 'hang-corr' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a hanging fetch on caller abort without retrying', async () => {
+    const fetch = vi.fn(() => new Promise<Response>(() => {}));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+      fetch: fetch as unknown as typeof globalThis.fetch, timeoutMs: 10_000 });
+    const caller = new AbortController();
+    const pending = client.judge(judgeRequest({ correlationId: 'abort-corr' }), { signal: caller.signal });
+    caller.abort();
+    const result = await failAfterHang(pending);
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'unknown',
+      error: { code: 'CANCELLED' }, correlationId: 'abort-corr' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a late fetch settlement after timeout without retrying', async () => {
+    let release: ((response: Response) => void) | undefined;
+    const fetch = vi.fn(() => new Promise<Response>((resolve) => { release = resolve; }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+      fetch: fetch as unknown as typeof globalThis.fetch, timeoutMs: 5 });
+    const pending = client.judge(judgeRequest({ correlationId: 'late-corr' }));
+    const result = await failAfterHang(pending);
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'unknown',
+      error: { code: 'TIMEOUT' }, correlationId: 'late-corr' });
+    release?.(new Response(JSON.stringify(mockVerdictResult('late-corr')),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(fetch).toHaveBeenCalledOnce();
   });
 
