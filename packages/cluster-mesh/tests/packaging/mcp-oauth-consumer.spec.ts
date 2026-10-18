@@ -17,7 +17,8 @@ describe.skipIf(!enabled)('installed MCP OAuth consumer', () => {
     `)).toEqual({ identity: true, oauth: 'unprobed' });
   });
 
-  it.each(['NodeNext', 'Bundler'] as const)('should compile the real typed host and public call site with full library checks (%s)', (module) => {
+  // Full lib checks over the installed OAuth graph take ~8-10s in CI (default budget 5s).
+  it.each(['NodeNext', 'Bundler'] as const)('should compile the real typed host and public call site with full library checks (%s)', { timeout: 30_000 }, (module) => {
     const result = tsc(fixtureDir('mcp-oauth'), 'oauth', read(new URL('./fixtures/mcp-oauth/consumer.ts', import.meta.url).pathname),
       { module, skipLibCheck: false });
     expect(result.stdout + result.stderr).toBe('');
