@@ -2,7 +2,7 @@
 
 ## Objective
 - [x] Turn the approved study into a repository study defining committed timing, CI/CD and architecture knowledge for conductor planning.
-- [x] Preserve the binding owner request and keep the current D1/D2 dossiers open in French.
+- [x] Preserve the binding owner request and French dossiers; record D1-C (2026-10-18), keeping D2 open and conditional.
 
 ## Scope / Guardrails
 - [x] Documentation only: `spec/SPEC_STUDY_CI_TIMING_KNOWLEDGE.md` and this branch plan.
@@ -11,7 +11,7 @@
 - [x] Use Make for checks and commits, with `ENV=test-ci-timing-knowledge` last; no service or port allocation is needed.
 - [x] Keep each commit below 150 changed lines, stage explicit paths and update this checklist in every commit.
 - [x] English documentation except the verbatim owner request and the French owner decisions explicitly requested for this study.
-- [x] Deliver a draft PR, report its number and stop; never merge or implement the proposed K0–K6 program here.
+- [x] Update draft PR #698, commit and push the owner decision, report the head SHA and stop; never merge or implement K0–K6 here.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
@@ -31,7 +31,9 @@
 
 ## Feedback Loop
 - [x] R2-P3 — Owner: study author; status: resolved. Active contract consolidated, obsolete votes retired and source identities/citations refreshed in study §10.
-- [x] D1/D2 — Owner: repository owner; status: open. Preserve [D1](spec/SPEC_STUDY_CI_TIMING_KNOWLEDGE.md#d1) and [D2](spec/SPEC_STUDY_CI_TIMING_KNOWLEDGE.md#d2); reversible drafting has no new approval prerequisite.
+- [x] D1 — Owner: repository owner; status: closed, C selected on 2026-10-18. [Decision](spec/SPEC_STUDY_CI_TIMING_KNOWLEDGE.md#d1): Engram primary timing service with committed typed exports; preserve the options table.
+- [x] D2 — Owner: repository owner; status: open and conditional. Preserve the [resource-priority dossier](spec/SPEC_STUDY_CI_TIMING_KNOWLEDGE.md#d2); reversible drafting has no new approval prerequisite.
+- [x] D1-C contract — Co-owned with gr-conductor; spec author Muse Wonder, review Astra. Align with ontology guardianship; preserve D3/D10 and closed DTOs; specification/qualification remain K0/K5 work.
 - [x] Track — Existing WP9 study item `01M57FSNB4ZYA7N55GEWAN2016`, parent `01KYNH2CTQXQSGHD731H19T3XX`; leave import/realization to the designated repository writer.
 
 ## AI Flaky tests
@@ -60,7 +62,8 @@
   - [x] Add deterministic scheduling, phase-matched steering, source-skill adoption, Track joins and the qualified Engram seam.
   - [x] Gate: retain coverage, zero unqualified reuse credit, historical/incomplete fallbacks and host prerequisites.
 - [x] **Lot 4 — Delivery, decisions and documentation consolidation**
-  - [x] Publish the unified K0–K6 sequence, observable exits, risks and French D1/D2 dossiers with no selection asserted.
+  - [x] Align K0–K6, observable exits and dependencies with D1-C; keep D2 conditional and distinguish selected scope from unqualified implementation.
+  - [x] Link the parallel ontology-guardian decision, record the additional Engram contract/circuit and preserve memory authority and closed-DTO constraints.
   - [x] Record R2-P3 resolution and refreshed source hashes; make the study self-contained without scratch-file prerequisites.
 - [x] **Lot 5 — Final validation**
   - [x] Pass `make scope-check ENV=test-ci-timing-knowledge` and `git diff --check`; inspect every changed path and commit size.
