@@ -37,7 +37,7 @@
   - [ ] `spec/ci-cd-ten-minutes/dossier/tests/controls.spec.ts`
   - [ ] `spec/ci-cd-ten-minutes/dossier/tests/path-calculation.test.mjs`
 - [ ] **Forbidden Paths (must not change in this branch)**:
-  - [ ] `Makefile` except BR70-EX2; `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
+  - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [ ] `.github/workflows/ci.yml` under BR70-EX1; `Makefile` under BR70-EX2.

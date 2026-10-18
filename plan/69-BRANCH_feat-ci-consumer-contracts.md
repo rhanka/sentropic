@@ -38,7 +38,7 @@
   - [ ] `apps/llm-gateway/tests/cluster-candidate.test.ts`
   - [ ] `api/tests/contracts/cluster-candidate.test.ts`
 - [ ] **Forbidden Paths (must not change in this branch)**:
-  - [ ] `Makefile` except BR69-EX2; `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
+  - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [ ] `.github/workflows/ci.yml` under BR69-EX1; `Makefile` under BR69-EX2.

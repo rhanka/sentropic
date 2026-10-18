@@ -40,7 +40,7 @@
   - [ ] `scripts/ci/live-provider-receipt.mjs`
   - [ ] `scripts/ci/live-provider-receipt.test.mjs`
 - [ ] **Forbidden Paths (must not change in this branch)**:
-  - [ ] `Makefile` except BR67-EX2; `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
+  - [ ] `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [ ] `.github/workflows/ci.yml` under BR67-EX1; `Makefile` under BR67-EX2.
