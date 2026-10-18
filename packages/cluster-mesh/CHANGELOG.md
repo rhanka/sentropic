@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.19.1
+
+- Widen optional peer ranges to the PR1 durable/exact routing union:
+  `@sentropic/llm-mesh >=0.22.0 <0.28.0` and `@sentropic/llm-gateway >=0.19.0 <0.22.0`
+  in `package.json` and `src/modules/catalog.ts`. Retain the previously qualified
+  `0.22.x`–`0.26.x` / `0.19.x`–`0.20.x` tuples while admitting `0.27.0` / `0.21.0`.
+
 ## 0.19.0
 
 - Add the generic K1–K4 storage port and injected-driver PostgreSQL backend,
