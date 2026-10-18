@@ -319,8 +319,10 @@ test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publis
     if (name.endsWith('-token')) assert.match(body, /NPM_TOKEN_FILE/);
     else assert.match(body, /-e ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
   }
-  assert.match(recipe('publish-cluster-mesh-token'), /--access public --no-provenance\)/);
-  assert.match(recipe('publish-auth-hono-token'), /--access public --provenance=false\)/);
+  for (const slug of STEADY_STATE_PUBLISHERS) {
+    assert.match(recipe(`publish-${slug}-token`) ?? '', new RegExp(`\\$\\(call manifest_guard_publish,${slug},--access public --provenance=false\\)`), `publish-${slug}-token disables provenance on the token path`);
+    assert.doesNotMatch(recipe(`publish-${slug}`) ?? '', /provenance/, `publish-${slug} keeps provenance for OIDC publishes`);
+  }
   assert.match(recipe('publish-chat-ui'), /make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/);
 });
 
