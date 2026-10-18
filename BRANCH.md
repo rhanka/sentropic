@@ -57,6 +57,21 @@
   - `packages/llm-mesh/package.json`
   - `packages/llm-gateway/package.json`
   - `packages/llm-gateway/README.md`
+  - `package-lock.json` (BR120-EX9)
+  - `api/package.json` (BR120-EX10)
+  - `api/tests/unit/gateway-package-version.test.ts` (BR120-EX10)
+  - `packages/cluster-mesh/package.json` (BR120-EX10)
+  - `packages/cluster-mesh/src/modules/catalog.ts` (BR120-EX10)
+  - `packages/cluster-mesh/CHANGELOG.md` (BR120-EX10)
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (BR120-EX10)
+  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts` (BR120-EX10)
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts` (BR120-EX10)
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts` (BR120-EX10)
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts` (BR120-EX10)
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts` (BR120-EX10)
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts` (BR120-EX10)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR120-EX10)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR120-EX10)
   - `BRANCH.md`
   - `.h2a/build/gw_pr1_report.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -82,6 +97,9 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR120-EX10`: minimal cluster-mesh peer widening and train version sync for the PR #685 CI repair. Reason: post-rebase `make lock-root` reproduces ERESOLVE on cluster-mesh peer caps (mesh `>=0.22.0 <0.27.0`, gateway `>=0.19.0 <0.21.0`) against candidates mesh 0.27.0 / gateway 0.21.0; immo #679 (`1472d961e`), #684 (`886cefc64`) and #688 (`441453966`) are MERGED so the FL-24 timing constraint is lifted and merge-train slot 3 is active. Impact: two range replacements in `packages/cluster-mesh/package.json` and `src/modules/catalog.ts`, cluster version 0.19.0 to 0.19.1 (above main/npm 0.19.0 while staying within comments `>=0.19.0 <0.20.0`), CHANGELOG entry, aligned range/version assertions in seven cluster-mesh test files, `selected` packaging fixture tarball/lock refresh (`0.19.1`), `api/package.json` gateway range `^0.21.0` + `gateway-package-version.test.ts` (`0.21.0`) so workspace resolution links the single 0.21.0/0.27.0 tuple without nested registry copies, regenerated root lock through `make lock-root`, no workflow/AI change. Rollback: restore ranges, versions, CHANGELOG, test strings, fixture lock and root lock rows. No merge or publication on this branch.
+- `FL-24-blocked-ci-peer-window` (2026-10-17): owner gateway/release maintainer. Root lock regeneration reproduces ERESOLVE on cluster-mesh's gateway peer cap. Both current gateway/mesh candidates exceed the manifest/catalog caps. The minimal widening is documented in `.h2a/build/gw_pr1_report.md`; v9 L8/9 schedules it after immo #679 merge/publication, which is still absent at ba5165c9. Resolve that timing constraint before changing the shared cluster paths; acceptance requires plain dependency resolution and train lock-sync, without peer or CI bypasses.
+- `BR120-EX9`: root lock refresh for the owner-requested PR #685 CI repair. Reason: run 39042373493 fails `changes` because mesh 0.27.0 is locked as 0.26.1; manifest classification and ci-gate then fail. Impact: dependency metadata generated through `make lock-root`, without publication or peer bypass. Rollback: restore the previous lock together with its compatible package tuple. Cluster-mesh shared-writer changes remain deferred pending evidence that they block this repair.
 - `Final-local-checkpoint`: C1/C2 and diff whitespace checks pass; `make down ps ... ENV=test-gw-durable-vibe-muse` leaves no owned Compose services. Tooling pure/behavior and packed host gates pass. Artifact source remains 22e1d6b24; later commits record tooling/acceptance evidence only. API/private/native/consumer acceptance remains explicitly unchecked.
 - `L1-packed-gate`: actual guarded mesh/gateway archives from `22e1d6b24425629e5d9b64fb407c2aa7d5fa6692` pass clean-container installed imports and strict TypeScript 5.9.3 consumer compilation (1/1), plus real Node process restart/key/receipt/revocation/wrong-key/corruption scenarios (2/2). Installation scripts enabled, Python absent, no repository mount in the consumer. SHA-256: mesh `2585c06699dedeedd0fa1826e6a6dd9c151ea72e665ba5aae100e7df0c9679a6`; gateway `226dffc08e42a180654ef925db0f4c48ce1609a3733ee9c831a53fc4eb3747f5`. This is independent host evidence, not the pending h2a consumer/release receipt.
 - `FL-23-consumer-types`: the clean packed TypeScript 5.4 probe fails in current Hono declarations (`Uint8Array` generic, TS2315). The Hono dependency range is unchanged from main. The packed consumer uses pinned TypeScript 5.9.3 with full declaration checking; repository source gates still use 5.4.5. No skipLibCheck/peer bypass was added. TypeScript 5.4 consumers need separate Hono/type compatibility qualification.
@@ -160,6 +178,16 @@
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
+- [ ] **CI repair — PR #685 run 39042373493**
+  - [x] Verify branch mechanically, inspect failed job logs and check `make ps-all`
+  - [x] CI filter coverage, all 56 numbered E2E specs, fresh registry version check and full changed-package manifest gate pass; both packed archive digests are unchanged
+  - [x] Record original run completion: enforce-package-bump passes; changes, manifest classification and ci-gate fail; all remaining jobs including AI are skipped, with no workaround
+  - [x] Rebase locally on origin/main `94a38286e` (one version conflict in gateway package.json kept at candidate 0.21.0); immo #679 MERGED at `1472d961e`, FL-24 timing constraint lifted
+  - [x] `make lock-root API_PORT=9630 UI_PORT=5830 MAILDEV_UI_PORT=1730 ENV=test-gw-durable-vibe-muse` reproduces ERESOLVE on cluster-mesh 0.18.0 peer caps; lock unchanged, no force/legacy-peer-deps bypass
+  - [x] Apply BR120-EX10 widening (mesh `<0.28.0`, gateway `<0.22.0`, cluster 0.19.1), refresh the root lock through `make lock-root`, recheck versions against npm (gateway 0.20.1, mesh 0.26.1, cluster 0.19.0)
+  - [x] Recheck train lock-sync and run the required manifest/package gates without bypasses
+  - [ ] Commit scoped fixes in changes of at most 150 lines, report ready unpushed with head SHA, wait for slot, then rebase-push once and follow CI to completion
+
 - [ ] **Lot 0 — Baseline and test contract freeze**
   - [x] Re-pin baseline: G `db314a67` is in HEAD; fresh origin/main remains `fb5e92a6a`; immo #679 remains OPEN/DRAFT at `43872522a22467f39d5211c5c59f1eca1ff62a11`; h2a companion #353 remains OPEN/DRAFT at `60816a1cafdb03a923e03f484b221a93efeb4a51`. Published gateway/mesh are 0.20.0/0.26.1; candidates 0.21.0/0.27.0 exceed main/npm/in-flight.
   - [ ] Freeze LaunchRoutingContract, four 6.1 export paths, host start/readiness/drain/stop, control/session/config/qualification descriptors, receipt import/revoke, recipes with h-cond; register companion `feat/gw-thin-consumer-pr1`
@@ -309,7 +337,7 @@
 
 ## Environment
 - Candidate feature versions gateway 0.21.0 / mesh 0.27.0: fresh npm 0.20.0 / 0.26.1, main fb5e92a6a unchanged after fetch, immo in-flight 0.20.1 / 0.26.1 and C mesh 0.26.2. Final L8 rechecks versions/peers after the required immo merge/rebase; no publication here.
-- Branch `feat/gw-durable-vibe-muse`; worktree `/home/antoinefa/src/sentropic/tmp/worktrees/gw-durable-vibe-muse`; base `origin/main fb5e92a6a`
+- Branch `feat/gw-durable-vibe-muse`; worktree `/home/antoinefa/src/sentropic/tmp/worktrees/gw-durable-vibe-muse`; base `origin/main 441453966`
 - Candidate index 120 slot 0; API_PORT 9600 UI_PORT 5800 MAILDEV_UI_PORT 1700 GATEWAY_PORT 19600
 - Test ENV `test-gw-durable-vibe-muse`; native E2E ENV `e2e-gw-durable-vibe-muse`; owner UAT host `dev-gw-durable-vibe-muse` after qualification
 - Companion h2a `feat/gw-thin-consumer-pr1` at `/home/antoinefa/src/h2a/tmp/gw-thin-consumer-pr1` (h-cond); immo `feat/immo-861-mcp-registry` at `tmp/worktrees/immo-861-mcp-registry`
