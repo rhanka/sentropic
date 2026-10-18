@@ -20,6 +20,7 @@ import type {
 import {
   MEMORY_CONNECTOR_ID,
   MEMORY_PROVIDER_ID,
+  MemoryTrustedContextError,
   isMemoryToolName,
   isMutatingMemoryToolName,
   isValidIdempotencyKey,
@@ -198,6 +199,7 @@ export class CompiledMemoryDispatch {
         elicitationRef: input.elicitationRef,
       });
     } catch (error) {
+      if (error instanceof MemoryTrustedContextError) throw error;
       throw new MemoryDispatchRefusal(
         'source_binding_mismatch',
         error instanceof Error ? error.message : 'invalid invocation binding',
