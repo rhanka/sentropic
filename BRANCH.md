@@ -73,6 +73,7 @@
   - [x] Prepare manifests and release documentation: mcp-connector-hubspot, mcp-connector-linear, mcp-connector-notion.
   - [x] Prepare manifests and release documentation: mcp-connector-slack, mcp-connector-stripe, skills.
   - [x] Port sibling-source imports, batch 1: 9 files.
+  - [x] Port sibling-source imports, batch 2: 9 files.
   - [ ] Refresh affected workspace lock entries through Docker/Make.
   - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
 - [ ] **Lot 2 — Guarded build, pack and web-login bootstrap**
