@@ -1,4 +1,4 @@
-import type { JudgeRequest } from './request.js';
+import { parseJudgeRequest, type JudgeRequest } from './request.js';
 import type { JudgeConnectionFailure, JudgeReceipt, JudgeResult, RemoteJudgeClient } from './receipt.js';
 import { parseJudgeUsage, resolveJudgeCorrelationId, unreportedJudgeUsage } from './receipt.js';
 import type { JudgeError } from './errors.js';
@@ -199,6 +199,11 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       };
       if (callOptions?.signal?.aborted) return preflightFail('CANCELLED');
 
+      // Detached 256-KiB snapshot before any async resolution: later caller
+      // mutation, NaN/undefined smuggling, depth and size abuse never egress.
+      const outgoing = parseJudgeRequest({ ...request, correlationId });
+      if (!outgoing.ok) return preflightFail('MESH_UNAVAILABLE');
+
       const racePreflight = async <T>(promiseOrValue: T | Promise<T>): Promise<T> => {
         if (controller.signal.aborted) throw new Error('preflight-interrupted');
         let cleanup: (() => void) | undefined;
@@ -239,7 +244,7 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       let response: Response;
       try {
         response = await fetchFn(endpoint, {
-          method: 'POST', redirect: 'manual', headers, body: JSON.stringify({ ...request, correlationId }), signal: controller.signal,
+          method: 'POST', redirect: 'manual', headers, body: JSON.stringify(outgoing.request), signal: controller.signal,
         });
       } catch {
         clearTimeout(timer);
