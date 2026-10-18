@@ -52,8 +52,8 @@
 - [ ] **Lot 0 — Baseline and evidence boundaries**
   - [x] Read MASTER/workflow, README/TODO/PLAN, branch template and approved owner request/plan.
   - [x] Mechanical `harness check branch` passes; branch is clean and starts at pinned main.
-  - [ ] Record live evidence, endpoint parity, configured domains and generated-content authorities in `docs/baselines/app-cm-w0/baseline.md`.
-  - [ ] Pin exact releases, selected peers, integrities and lock/config hashes in `published-tuple.json`.
+  - [x] Record available runtime evidence, pending operator facts, endpoint parity, configured domains and generated-content authorities in `docs/baselines/app-cm-w0/baseline.md`.
+  - [x] Pin exact releases, selected peers, integrities and lock/config hashes in `published-tuple.json`.
 - [ ] **Lot 1 — Frozen implementation handoffs**
   - [ ] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
   - [ ] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
