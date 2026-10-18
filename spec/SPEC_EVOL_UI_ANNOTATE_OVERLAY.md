@@ -280,3 +280,52 @@ make test-ui-annotations-preprod UI_BASE_URL=https://preprod.sentropic.sent-tech
 ```
 
 The new runner must not depend on `up-e2e`, `db-seed-test`, ordinary global setup, deploy, reset or clean targets. It consumes protected test-session references without printing them, refuses production hosts, requires expected release/schema/module pins, and creates/deletes only uniquely identified synthetic-owner fixtures. Preprod uses its own enrolled OIDC identity; real phone 2FA stays a witnessed human step. Run Chromium/WebKit mobile projects and real iOS/Android phone UAT; desktop extension tests remain Chromium. Do not transfer a prod cookie into preprod or reuse the root `ENV=dev`.
+
+## 10. Feedback Loop, owner decision DV3, and acceptance
+
+Handoffs are recorded here only; no external message, Track item, branch or reservation was created by the scratch specification. Owners are roles until the conductor assigns people/sessions.
+
+| ID / status | Owner | Evidence, bounded action and observable closure |
+|---|---|---|
+| FL-CM2 · **blocked C production persistence** | #684 maintainer + C | Recheck/merge #684, install local pinned tuple, run canonical/PG/HTTP/recovery gates. No npm publication predecessor for C; no frozen comments 0.3.0 mutation. |
+| FL-DS · **attention A2 check** | A | Main already consumes DS `^0.34.40`; check Popover/Tabs in that installed host. Historical 0.10.3 failure does not justify a separate DS clean-consumer gate. Escalate to DS owner only on reproduced failure. |
+| FL-HOME · **attention A0** | Sentropic conductor/package maintainer | Record package home/publication ownership using section 2 and existing migration decision. Only escalate in French if maintainers propose changing that governance choice; no speculative owner question now. |
+| FL-CAPTURE · **blocked automatic-capture claim until B0/B3** | B + D | Source only supplies a port. Qualify actual crop fidelity/masking on supported phone browsers and page features, including failure→manual crop. All saved records have a crop; no browser-API assumption substitutes for witness. |
+| FL-HOST · **attention C0/D0** | C + deploy/auth/blob operators | Bind server-row MFA / exact OAuth acr, owner, release manifest, private crops, retention/backup/GC and retained page registry. Verify wrong tier/owner/weak session and forged pageId fail safely. |
+| FL-STORAGE · **blocked C1/app A1 composition** | **C lane owner, sole writer** | Install shared PG storage/roles/executor/journal at section 4 exact paths, +6–10 h; app A1 consumes it serially. If A1 delivers first, record owner transfer/dependency/cost removal at dispatch. Real PG boot/restart/role-denial witness; no duplicate executor. Deferred app F1 reuses C host mapping. |
+| FL-DV3 · **closed — owner decision DV3 = B recorded below; C3 seed implementation and D3 witness remain future evidence** | Owner (decision); C + deployment seed operator execute the B policy | Scope: canonical annotation/thread/comment chains, host catalog/intents/outbox/grants and capture prefix. The B policy below is the selected policy; a synthetic rehearsal validates it and GP reads evidence without running a seed. No further owner answer is awaited for the policy choice. |
+| FL-F0 · **attention before E1** | App-replacement F0 owner | Accept generic F2a envelope (section 6), preserving artifact handlers. Otherwise E adds +3–5 h. Cross-plan request recorded here only; no external message sent. |
+| FL-AUDIENCE · **blocked E1 until E0 review** | E + app F0/security reviewers | Review explicit `/api/v1/artifacts-mcp` purpose/scope widening; artifact-only and annotation-only tokens remain separated, each annotation requires C delivery grant. No second MCP endpoint. |
+| FL-M2 · **blocked E final agent loop** | App-replacement F2a/F2w/F3 owners + E | S7: reusable inbox/wake is planned work. Consume its qualified tuple; pass same-running-agent wake/fetch/ack/reply and revoked/busy/duplicate tests. Remote-control M3/M4 are not substitutes or prerequisites. |
+| FL-RUNNER · **blocked deployed E2E until D3** | D + CI maintainer | S8 ordinary target seeds data. Implement the separate target/config, exact URL allowlist, no-seed static dependency check and synthetic-fixture cleanup; demonstrate real preprod without touching prod. |
+| FL-REVIEW · **v2 reviewed; dispatch revalidation** | Conductor | Supplied Astra GO review reconciled; two independent read-only reviews (security/canonical and execution/mobile) found no remaining spec blockers. Revalidate actual upstream pins/shared paths at dispatch. This is not product-test evidence. The DV3 policy decision is closed by the owner record below. |
+| FL-ENV · **attention at dispatch** | Conductor | Register actual branch slots, shared writers, exact tests/Make availability and build capacity. Scope-check with harness in each real worktree; verify port ownership before service start. |
+
+**Owner decision DV3 — closed 2026-10-18, option B (Inclure).** Question asked verbatim: « quand on recopie la prod vers la preprod pour tester, est-ce qu'on copie aussi tes annotations privées (texte et captures d'écran) ? ». Owner answer verbatim: « Tout copier » = option B (Inclure). This record closes the DV3 policy choice; no pending owner question remains and no default is inferred beyond this answer.
+
+Context: DV3 copies real prod data, PII included; DV4 imports users/passkeys and DV5 excludes sessions/tokens (see [Login-A amendment](SPEC_AMENDMENT_D11R_LOGIN_A.md)). The annotations can contain private prod text and captures. The decision covers all their canonical revisions, the catalog, and the blob prefix `ui-annotations/<tier>/` (proposed), with associated indexes/intents.
+
+B consequences and controls (normative):
+- Copy the chains, the text, the catalog and the captures into private preprod storage. Parity for testing this data, with duplication of private content among operators and in non-prod backups accepted by the decision.
+- Access controls qualified before any copy: the DV3 access-control gate (non-public ingress / IP-allowlist, NetworkPolicy + RBAC, locked-down exec/port-forward, audited PII access, encrypted backups) must be qualified before any annotation copy runs.
+- Projections rebuilt for the target tier: rebuild authorized projections for the preprod tier; do not copy any active grant, session, pending delivery, or prod routing right. The owner must re-authorize any send from preprod.
+- Re-seed overwrites preprod annotations: each re-seed replaces the preprod base and overwrites its local annotations.
+- Verification: an isolated test and the operator witness verify tables/catalog/capture prefix, overwrite, and absence of cross-access; the GP runner never runs a seed.
+
+Options A (Exclure) and C (Inclure sans les captures) were presented in scratch v2 and are **not selected**; they are retained here only as the decision record. The specification and independent lots proceed; C3 implements the B policy and D3/GP acceptance verifies its evidence. No seed is executed by this specification.
+
+Acceptance checklist:
+
+- [ ] Owner on a real phone signs in with the correct tier's enrolled OIDC 2FA, opens a deployed page, points/rectangles/lassos targets, previews/redacts the crop and saves privately.
+- [ ] Reload/restart retains exact comment, all selected members, crop, sanitized page URL, observed served commit/version, viewport and verified author; duplicate submission produces one logical annotation.
+- [ ] Non-owner/weak/cross-tenant/cross-tier access fails across API/list/crop/history/stream/agent fetch. Grant A never exposes B on the same page; annotation mode off preserves native navigation and selection.
+- [ ] Deployment A→B shows explicit DOM drift; a deleted page remains authorized for owner read/reply/resolve; re-anchor preserves history. Point/edge shapes satisfy non-zero area/frame bounds and annotation body text is non-empty.
+- [ ] Owner sends to the bound repo; the same running agent wakes, fetches, acknowledges and replies; receipt/retry/revocation behavior survives restart. PR link and open/resolved states behave independently.
+- [ ] Clean packed package, file-level tests, browser component tests, private PG/blob integration, non-seeding preprod E2E and real phone UAT pass on recorded immutable versions; no timeout inflation.
+- [ ] Production rollout enables the owner-only feature after preprod acceptance. Rollback disables new activation/writes/routing and restores a previously qualified app while retaining authorized history and immutable crops; no deletion/migration reversal implied.
+- [ ] Owner DV3 choice B is recorded above; C3 isolated seed tests and D3/GP witness cover canonical chains/catalog/capture prefix, preprod overwrite and no copied prod authority.
+- [ ] Later F qualifies activeTab injection, prod/preprod exclusions, closed shadow root, exact OAuth acr and unknown-version/opaque-DOM limits. Bookmarklet remains deferred.
+
+Review closure map: R1 section 3/C1/E1; R2 section 3/C2; R3 this section/C3/D3 (decision closed as B above); R4 section 4/B2/C1; R5 sections 4–5/C1; R6 section 4/C-storage/FL-STORAGE; R7 section 7/B3/D→E/PLAN. Non-blocking corrections: CSS/interception/DS/local consumption section 2; armed shortcuts/mobile section 5; browser/layout seams B0/B1; generic events/audience/F1 sections 4/6; extension section 3/F0; CSP section 3/B0; bookmarklet deferred section 1/F2; circle wording section 1; E2E inventory D0.
+
+Planning validation: pinned main source reads and two independent reviews; **38** future Make commands pass ENV-last/three-port checks; **23** local links resolve in the scratch validation; fences/tables and lane sums pass. A–D = 66–100 h, E base = 10–16 h (+3–5 conditional), F = 12–18 h. No product tests executed for this specification. The scratch v2 spec, its reviews, and concurrent work are preserved outside the repository; this file is the promoted repository copy with DV3 = B closed.
