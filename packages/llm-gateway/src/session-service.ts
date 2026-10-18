@@ -9,7 +9,7 @@
  * public result carries opaque references, never secrets.
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { freezeLaunchRoutingContract, type LaunchRoutingContract } from '@sentropic/llm-mesh';
+import { freezeLaunchRoutingContract, routeAffinityRef, type LaunchRoutingContract } from '@sentropic/llm-mesh';
 
 import {
   GatewayStateError,
@@ -333,7 +333,18 @@ export class GatewaySessionService {
         sessionRef: updated.sessionRef, ownerScopeRef: updated.ownerScopeRef, requestId: 'migration', model: '',
         attempts: 0, physicalAttempts: [], policyRevision: updated.policyRevision, settlement: 'migration-ack',
         createdAt: nowIso, settledAt: nowIso };
+      const oldRef = routeAffinityRef({ ownerScopeRef: existing.ownerScopeRef, workspaceRef: existing.workspaceRef,
+        clientSessionRef: existing.clientSessionRef, policyRevision: existing.policyRevision });
+      const newRef = routeAffinityRef({ ownerScopeRef: updated.ownerScopeRef, workspaceRef: updated.workspaceRef,
+        clientSessionRef: updated.clientSessionRef, policyRevision: updated.policyRevision });
+      let affinities = loaded.affinities;
+      const oldRow = loaded.affinities?.[oldRef];
+      const newRow = loaded.affinities?.[newRef];
+      if (oldRef !== newRef && oldRow && !newRow && routingContract.authorizedAccountRefs.includes(oldRow.accountRef)) {
+        affinities = { ...loaded.affinities, [newRef]: { ...oldRow, policyRevision: updated.policyRevision } };
+      }
       await this.store.compareAndSet(loaded.revision, { ...loaded, revision: loaded.revision + 1,
+        ...(affinities ? { affinities } : {}),
         sessions: { ...loaded.sessions, [updated.sessionRef]: updated }, receipts: { ...loaded.receipts, [receipt.receiptId]: receipt } });
       return { sessionRef: updated.sessionRef, expiresAt: updated.expiresAt, policyRevision: updated.policyRevision, receiptId: receipt.receiptId };
     });
