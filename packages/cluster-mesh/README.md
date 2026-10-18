@@ -151,6 +151,9 @@ providers stay independent packages and never depend on cluster-mesh. They are
 | `/mcp/registry`, `/mcp/stdio` | `@sentropic/mcp-platform` MCP kernel entries | `@sentropic/mcp-platform >=0.3.0 <0.4.0` (plus `@modelcontextprotocol/sdk ^1.31.0` for the stdio transport) |
 | `/compose/mcp`, `/loaders/mcp` | `createMcpNamespaceModule`, `loadMcpPlatform{Registry,Stdio,Bridge,Entry,Hono}` | as its leaf, resolved on call |
 | `/mcp/artifacts` | `createArtifactsBuiltin` over `@sentropic/artifacts/mcp` | `@sentropic/artifacts >=0.1.0 <0.2.0`, `@sentropic/mcp-platform >=0.3.0 <0.4.0` |
+| `/mcp/auth`, `/mcp/auth/hono` | unchanged `@sentropic/mcp-auth` provider identities | `@sentropic/mcp-auth >=0.2.2 <0.3.0`, oauth-verify 0.1.x, jose 5.x; Hono for the adapter |
+| `/loaders/mcp/auth`, `/loaders/mcp/auth/hono` | `loadMcpAuth`, `loadMcpAuthHono` (also in `/loaders/mcp`) | checked only on selection |
+| `/compose/mcp-oauth` (Node) | `createMcpOAuthNamespace` | human auth + platform bridge + SDK; independent of gateway service auth |
 
 The `./mcp/artifacts` export provides the `sentropic.artifacts` builtin factory;
 its optional `@sentropic/artifacts >=0.1.0 <0.2.0` peer must be installed when
@@ -221,13 +224,10 @@ oauth-verify 0.1.0, jose 5.10.0, hono 4.13.0; session mode with auth-hono 0.16.0
 every declared range are re-qualified on each release run. The previous tuple
 (llm-mesh 0.21.x, llm-gateway 0.18.x) is refused, see "Upgrading to 0.13" below.
 
-The current release target is **cluster-mesh 0.18.0, llm-mesh 0.26.1 and
-llm-gateway 0.20.1** (cluster-mesh 0.18.0 is the unpublished branch candidate;
-main carries llm-mesh 0.26.1 and llm-gateway 0.20.0 — see the Post-Rebase Gate in
-BRANCH.md). Final sibling archive qualification
-and the selected-lock integrity refresh remain release gates; the selected fixture
-retains the baseline until that final refresh. The widened ranges retain the prior
-qualified minors.
+The OAuth addition targets **cluster-mesh 0.20.0**, after the 0.19.0 comments/storage
+release (#684). Its final rebase, full release-train qualification and publication
+remain release gates. It retains the existing gateway/llm-mesh ranges; #685 owns
+their next widening. One cluster-mesh writer publishes at a time, in conductor order.
 
 Release-train runs qualify the unpublished llm-mesh and llm-gateway candidates from
 same-PR sibling archives validated by the CI `loadSiblings` rules (sha256, packed
@@ -266,6 +266,91 @@ once at `mounts[namespace] ?? namespace`. A standalone gateway host passes
 `mounts: { '/gw': '/' }` and serves exactly `/healthz`, `/readyz`, `/v1/messages`,
 `/v1/chat/completions` and `/v1/models` (nothing under `/gw`); the product keeps
 `/gw` under its own prefix.
+
+## Human MCP OAuth (0.20.0 candidate)
+
+`/compose/mcp-oauth` is a Node-only leaf using request-local async context. Root
+imports remain provider-free. The host supplies its compiled registry, original
+tool schemas/domain runner, current account resolver, trusted key/issuer bindings
+and environment configuration. The existing stateless `/compose/mcp` is unchanged.
+
+```ts
+import { createClusterMeshModules } from '@sentropic/cluster-mesh';
+import { createMcpOAuthNamespace, type McpOAuthNamespaceOptions }
+  from '@sentropic/cluster-mesh/compose/mcp-oauth';
+
+const options = {
+  registry: compiled.registry,
+  tools: immoTools,
+  resource: immoMcpResource,
+  authorizationServers: [immoIssuer],
+  keySource: trustedKeySource,
+  scopesSupported: ['immo:read', 'immo:search', 'immo:documents:read'],
+  requiredIngressScopes: ['immo:read'],
+  requiredAcr: requiredHumanAcr, // optional, from the operator's assurance policy
+  subjectClientId: 'immo-mcp', // exchange restriction; optional client at ingress
+  environment: immoEnvironment,
+  sessions: { createTransport: createFreshStatefulTransport },
+  resolveAccount: immoCurrentAccountDecision,
+  exchange: {
+    issuer: trustedHttpExchangeIssuer,
+    workloadClientId: immoWorkloadClientId,
+    workloadActorSub: immoWorkloadClientId,
+    policyRevision: immoExchangePolicyRevision,
+    profiles: { signals: {
+      tool: 'search_signals', method: 'GET', origin: trustedSignalsOrigin,
+      audience: immoApiAudience, pathTemplate: '/api/graph-signals/:city',
+      requiredScopes: ['immo:search'], validateParams: canonicalCityParams,
+    } },
+  },
+  invoke: (tool, args, call) => immoRunner.run(tool, args, call),
+} satisfies McpOAuthNamespaceOptions;
+const secured = await createMcpOAuthNamespace(createClusterMeshModules(), options);
+app.route('/', secured.metadataRoutes);
+app.route('/mcp', secured.mcpRoutes);
+// Alternatively mount secured.module through the namespace plugin, once.
+// On process shutdown: await secured.close().
+```
+
+All undeclared names above are trusted host bindings. A fresh stateful SDK transport
+must generate its own session ID. Defaults are 30 minutes idle and 8 hours absolute;
+Immo maps its existing `IMMO_MCP_SESSION_IDLE_TIMEOUT_MS` and
+`IMMO_MCP_SESSION_MAX_LIFETIME_MS`. Every POST/GET/DELETE verifies a current token;
+sessions bind subject, optional signed client, tenant, resource and environment.
+Unknown, expired and foreign-owner sessions all return the same 404. Conflicting
+signed `azp`/`client_id` values refuse; ingress accepts other registered clients.
+
+Metadata is public at `/.well-known/oauth-protected-resource/mcp`, with the root
+alias and a 308 from `/mcp/.well-known/oauth-protected-resource`. Missing/invalid
+bearer gives 401; missing ingress scope gives 403 with its scope challenge. A
+configured `requiredAcr` refuses missing/insufficient human assurance at ingress.
+Exchanged tokens omit `acr`, `amr` and `auth_time`; the API receiver cannot enforce
+human 2FA. The IdP operator records `immo-mcp.required_acr` for each environment.
+
+Every tool checks its compiled policy and current account approval before effects,
+including raw-data tools and stubs. The SDK validates original schemas/defaults;
+the bridge retains its 64 KiB argument budget and result codec. Handlers receive
+readonly principal/correlation data and `call.egress.request('signals', { city })`,
+with no bearer getter. Only the bound tool can use that fixed GET destination;
+canonical parameters exclude `by-city`, traversal and encoded separators. Redirects
+refuse and downstream JSON is bounded to 1 MiB. Raw/public data and stubs need no
+exchange. Retained or cancelled invocation capabilities refuse before egress.
+
+Exchange cache is memory-only, at most 60 seconds minus the existing safety margin;
+minted lifetime is at most 300 seconds and never exceeds the subject lifetime.
+Identity, clients, tenant, environment, audience/scopes and policy revision isolate
+entries. Shutdown invalidates pending exchange work and closes sessions, including
+initializing transports. A cold/expired/restarted consumer fails closed during an
+issuer outage; it never forwards the original bearer. Offline JWT verification
+does not promise immediate unsignalled revocation. Policy sync has no live
+`policyRevision` notification, so the cache bound limits its propagation window.
+
+The frozen OAuth consumer uses platform 0.3.0, mcp-auth 0.2.2, oauth-verify 0.1.0,
+jose 5.10.0, SDK 1.32.1 and Hono 4.13.13. A second normal installation exercises
+SDK 1.31.0/Hono 4.10.7. Use dedicated typed loader leaves for full library checking
+without unrelated optional providers; the existing MCP barrel references all its
+loader contracts. Run `make -f packages/cluster-mesh/packaging.mk test-mcp-oauth-package
+ENV=<test-env>` for the focused proof; full release-train qualification is separate.
 
 ## Available in v1
 

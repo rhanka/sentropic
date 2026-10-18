@@ -95,6 +95,7 @@
   - [ ] New tests/mcp-oauth-http.spec.ts: loopback issuer/MCP/independent API verifier, real Basic RFC8693 + SDK, positive search, inverse audiences, same client automatic reinitialization after restart. Synthetic keys, port 0 inside container.
   - [ ] Scoped gates: Lot 1 command with SCOPE=tests/mcp-oauth-egress.spec.ts and SCOPE=tests/token-exchange; service gate uses SCOPE=tests/mcp-oauth-http.spec.ts and ENV=e2e-feat-cluster-mesh-oauth-o1. No UI tests.
 - [ ] **Lot 4 — Packed API, compatibility and release tuple**
+  - [x] Added selected-fixture version-only lock refresh using npm --package-lock-only through refresh-lazy-package-lock; preserve old peer pins/auth0.2.1, install no unpublished base peers, and keep full qualification pending. Execution pending.
   - [x] Both isolated normal installations GREEN: SDK1.31.0/Hono4.10.7 and Radar SDK1.32.1/Hono4.13.13; same real HTTP scenario, 8 packed tests plus complete fixture compilation. Intermediate candidate 93739054; no peer bypass or unpublished base archive.
   - [x] Focused installed OAuth tuple GREEN: 7 tests, full NodeNext/Bundler library checks and native HTTP/ACR/restart; exact SDK1.32.1/Hono4.13.13, platform0.3.0/auth0.2.2/oauth0.1.0/jose5.10.0, no unrelated peers. Intermediate archive ed09bfa2; final freeze pending source/docs completion.
   - [x] Installed full-library check exposed the existing MCP barrel's artifacts type dependency. OAuth consumer uses the dedicated new typed loader leaves; barrel runtime identity is tested separately. No artifacts shim or unrelated declaration change introduced.
@@ -120,6 +121,7 @@
   - [ ] Immo restore: complete manifest/checksum/G1/G2/annotation guards, normal restore then MCP fresh-exchange/raw/login smoke, isolated empty-target DR, reconcile later suspensions/admin removals; record hashes/times. T3 offline recon/flip/wiring proof pending with i-cond; live injection remains blocked/non-gating.
   - [ ] Sentropic web/Chrome/VSCode code/tests unaffected; no application test/build campaign. Gate: local package UAT complete; external receipts explicitly pending.
 - [ ] **Lot 6 — Docs consolidation**
+  - [x] README/CHANGELOG describe typed Node-only composition, exact auth floors/tuples, assurance, original schemas/budgets, request/session ownership and controlled exchange. Restore/Radar handoff spec consolidation pending.
   - [ ] Update README, CHANGELOG and existing lazy-surface spec with exact typed API/tuple, Node-only compose leaf, 2FA boundary, secret rotation/custody, policy sync/cache bound, tenant state/restore and R-O1/#865 sequence.
   - [ ] Write `.h2a/build/o1_report.md`: changes, checks, owned feedback, risks, scope exceptions and read set; no secrets or messages to others. Gate: docs match packed types; no duplicate issuer/recovery spec.
 - [ ] **Lot 7 — Final validation**
