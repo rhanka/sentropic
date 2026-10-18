@@ -101,5 +101,5 @@ Actions with the following status should be included around tasks only if really
   - [x] F692-4: shared glossary and "pages" repair; « Tout en artifacts » recorded from the 2026-10-18 feedback.
   - [x] F692-5: storage and serialization ownership (generic module-storage target; no shared-app DB service).
   - [x] F692-6: annotations and per-app MFA connection (three distinct facts; open owner questions kept in French).
-  - [ ] F692-7: terminology repair (`SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md:7`) and dated status layer (#688 merged, #689 open).
+  - [x] F692-7: terminology repair (`SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md:7`) and dated status layer (#688 merged, #689 open).
   - [ ] Push and amendment-to-commit table in `.h2a/reviews/pr692_amend-v2.md` (gitignored, not committed).
