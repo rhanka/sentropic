@@ -694,11 +694,82 @@ export interface StpConnectorContext {
     mcpClient?: {
         clientId: string;
         client: 'claude.ai' | 'claude-code' | 'codex' | string;
+    };
+    memory?: {
+        binding: MemoryInvocationBindingV1;
+        expectedActiveGeneration: string;
+        expectedPolicyEpoch: string;
+        now: string;
+    };
+    // (undocumented)
+    principal: {
+        sub: string;
+        claims: Record<string, unknown>;
+        scopes: string[];
+        tenantRef: string;
+        workspaceRef?: string;
+        authTime: string;
+        freshness?: AuthFreshnessPolicy;
+    };
+    // (undocumented)
+    requestId: string;
+    // (undocumented)
+    session: {
+        mcpSessionId: string;
+    };
+    // (undocumented)
+    surface: 'chat' | 'vscode' | 'stp' | 'backend' | (string & {});
+    // (undocumented)
+    tenantRef: string;
+    // (undocumented)
+    trackRef?: string;
+    // (undocumented)
+    workspaceRef?: string;
+}
+
 // @public
 export const TRUSTED_CONTEXT_PROTOCOL_ERROR_CODE = -32603;
 
 // @public
 export const TRUSTED_CONTEXT_UNAVAILABLE_MESSAGE = "Trusted invocation context unavailable";
+
+// @public (undocumented)
+export interface TrustedInvocationContextV1 {
+    // (undocumented)
+    readonly authorization_context: AuthorizationContextV1;
+    // (undocumented)
+    readonly authorization_expires_at?: Instant;
+    // (undocumented)
+    readonly authorization_issued_at?: Instant;
+    // (undocumented)
+    readonly authorization_receipt_digest?: Digest;
+    // (undocumented)
+    readonly connector_id: 'engram-memory';
+    // (undocumented)
+    readonly correlation_id: OpaqueRef;
+    // (undocumented)
+    readonly deadline_ms: number;
+    // (undocumented)
+    readonly mcp_client_id: OpaqueRef;
+    // (undocumented)
+    readonly now_utc: Instant;
+    // (undocumented)
+    readonly policy_epoch?: Cursor;
+    // (undocumented)
+    readonly principal_id: OpaqueRef;
+    // (undocumented)
+    readonly principal_namespace: OpaqueRef;
+    // (undocumented)
+    readonly scope_ref: OpaqueRef;
+    // (undocumented)
+    readonly session_id: OpaqueRef;
+    // (undocumented)
+    readonly store_id: OpaqueRef;
+    // (undocumented)
+    readonly tenant_id: OpaqueRef;
+    // (undocumented)
+    readonly trust_epoch?: Cursor;
+}
 
 // @public
 export function utf8ByteLength(value: string): number;
@@ -717,6 +788,29 @@ export function validateMutationTarget(target: unknown): string[];
 
 // @public
 export function validatePolicyVersionsProjection(effectiveInput: EffectiveMemoryMutationInputV1, projection: MemoryMutationPolicyVersionsV1): string[];
+
+// @public
+export function verifyMemoryConfirmationContinuationV1(continuation: unknown, expected: ExpectedConfirmationContinuationBindingV1): ConfirmationContinuationDecisionV1;
+
+// Warnings were encountered during analysis:
+//
+// dist/memory/contracts.d.ts:111:5 - (ae-forgotten-export) The symbol "CandidatePayloadV2" needs to be exported by the entry point index.d.ts
+// dist/memory/contracts.d.ts:112:5 - (ae-forgotten-export) The symbol "EvidenceBundleV1" needs to be exported by the entry point index.d.ts
+// dist/memory/contracts.d.ts:123:5 - (ae-forgotten-export) The symbol "LifecycleEventAnchorV1" needs to be exported by the entry point index.d.ts
+// dist/memory/frozen-context.d.ts:114:9 - (ae-forgotten-export) The symbol "Cursor" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:157:9 - (ae-forgotten-export) The symbol "AuthFreshnessPolicy" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:184:5 - (ae-forgotten-export) The symbol "AppMcpProviderManifest" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:185:5 - (ae-forgotten-export) The symbol "ConnectorTenantResolutionInput" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:185:5 - (ae-forgotten-export) The symbol "ConnectorTenantContext" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:186:5 - (ae-forgotten-export) The symbol "AppCapability" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:187:5 - (ae-forgotten-export) The symbol "AppToolInvocation" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:187:5 - (ae-forgotten-export) The symbol "AppToolResult" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:187:5 - (ae-forgotten-export) The symbol "DurableCallRef" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:188:5 - (ae-forgotten-export) The symbol "AppResourceRead" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:188:5 - (ae-forgotten-export) The symbol "AppResourceResult" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:189:5 - (ae-forgotten-export) The symbol "AppPromptRequest" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:189:5 - (ae-forgotten-export) The symbol "AppPromptResult" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:190:5 - (ae-forgotten-export) The symbol "ConnectorSecretStatus" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

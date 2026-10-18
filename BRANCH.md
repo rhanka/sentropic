@@ -74,6 +74,7 @@
   - [x] Preserve non-NFC opaque candidate identifiers, enforce canonical record IDs and close policy-version projections.
   - [x] Validate the complete public A03 projection and reject open or inconsistent nested receipt/context carriers.
   - [x] Refresh generated root API context declarations and memory contract report, batch 1 within the commit line limit.
+  - [x] Refresh generated memory API contract report, batch 5 within the commit line limit.
   - [x] Refresh generated memory API contract report, batch 4 within the commit line limit.
   - [x] Refresh generated memory API contract report, batch 3 within the commit line limit.
   - [x] Refresh generated memory API contract report, batch 2 within the commit line limit.
