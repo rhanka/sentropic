@@ -33,6 +33,8 @@ export type AppInvocationEnvelope<TInput> = {
   elicitationRef?: string; // satisfied elicitation, REQUIRED when gates.requiresElicitation
   /** Verified A03 projection for the memory provider, outside tool arguments. */
   memoryContext?: import('./memory/frozen-context.js').MemoryContextProjectionV1;
+  /** Effective compiled/host memory confirmation policy, outside tool arguments. */
+  memoryConfirmationRequired?: boolean;
 };
 
 export type AppToolInvocation = AppInvocationEnvelope<unknown>;
@@ -208,6 +210,8 @@ export interface StpConnectorContext {
     expectedActiveGeneration: string;
     expectedPolicyEpoch: string;
     now: string;
+    /** Stronger current host policy, combined with the compiled tool gates. */
+    confirmationRequired?: boolean;
   };
   requestId: string;
   correlationId: string;
