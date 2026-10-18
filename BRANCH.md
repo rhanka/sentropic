@@ -97,7 +97,7 @@ Actions with the following status should be included around tasks only if really
 - [ ] **Lot 3 — Amendment v2: catalogue integration (2026-10-18)**
   - [x] F692-1: catalogue projection of the host registry (typed discovery, five kinds, transverse columns).
   - [x] F692-2: owner-facing permission-filtered catalogue view at the D13 `/catalog` + `/apps` boundary.
-  - [ ] F692-3: managed-app adoption matrix in §11 (one row per app, evidence status `unverified`).
+  - [x] F692-3: managed-app adoption matrix in §11 (one row per app, evidence status `unverified`).
   - [x] F692-4: shared glossary and "pages" repair; « Tout en artifacts » recorded from the 2026-10-18 feedback.
   - [ ] F692-5: storage and serialization ownership (generic module-storage target; no shared-app DB service).
   - [ ] F692-6: annotations and per-app MFA connection (three distinct facts; open owner questions kept in French).
