@@ -1,10 +1,10 @@
 # SPEC STUDY — CI timing knowledge for conductor integration planning
 
-Status: **STUDY — draft repository artifact, 2026-10-18**. The approved paper design permits reversible drafting. This document proposes implementation contracts and gates; it records no owner selection, implementation, deployment qualification or cross-owner design freeze.
+Status: **STUDY — D1 closed, option C selected by the owner on 2026-10-18**. This draft records the delivery scope and proposes implementation contracts and gates; it records no implementation, deployment qualification or cross-owner design freeze. D2 remains open and conditional.
 
 Lineage: consolidated from the approved study [S1], its adopted reconciliation [S3] and round-two review [S4]. Track: WP9 item `01M57FSNB4ZYA7N55GEWAN2016`, parent `01KYNH2CTQXQSGHD731H19T3XX`. Drafting base: Sentropic `8c3a44c176ee06c9e2d1666158079c23a8b731ab`; the historical measurement baseline below is distinct. Follow [the branch plan](../BRANCH.md), [workflow rules](../rules/workflow.md) and [the branch template](../plan/BRANCH_TEMPLATE.md).
 
-Recommendation: commit a typed repository knowledge package with reproducible timing references and CI/CD and architecture subgraphs. Have the conductor and source planning skill consume an exact revision with Track, proposed changes and resource constraints. Capitalise bounded lessons through the existing Engram authority and qualified host seam. The Git-backed planner remains useful while that seam is unavailable.
+Recommendation after D1: make Engram the primary service for timing references, with committed typed exports and CI/CD and architecture subgraphs. Have the conductor and source planning skill consume exact service revisions and matching exports with Track, proposed changes and resource constraints. Deliver the additional numerical-service/export contract with gr-conductor through the owner's spec circuit (author Muse Wonder, review Astra). Preserve the existing memory authority and qualified host seam; a Git-only pilot does not complete option C.
 
 ## 0. Binding owner request
 
@@ -12,7 +12,7 @@ Verbatim from [S0], including its original spelling:
 
 > séparément: track et lance l'étude suivante : la référence des temps estimée devra être une connaissance utilisée par le conductor pour l'optimisation des plan d'intégration et ameliorre la skill de planification. idéalement voir comment avec gr-conductor comment gérer ce type de knowledge spécifique a capitaliser pour le repo. poru moi CI CD et graphes d'archi devraient être commités et intégrés au graphe de connaissance (committés comme sous-graphe typé - pour le diag voir le meta model du design system aussi)
 
-The required outcome is committed technical subgraphs, timing-informed integration planning, a source-level planning-skill change and a bounded gr-conductor seam. Only [D1](#d1) and conditional [D2](#d2) remain owner questions. Their answers are unnecessary for this documentation work.
+The required outcome is Engram as the primary timing-reference service with committed technical exports/subgraphs, timing-informed integration planning and a source-level planning-skill change. [D1](#d1) is closed with option C (2026-10-18); only conditional [D2](#d2) remains an owner question. Its answer is unnecessary for this documentation work.
 
 ## 1. Evidence baseline and limits
 
@@ -78,6 +78,8 @@ An unrelated commit with an unchanged transitive fingerprint preserves applicabi
 
 Commit a compact manifest with `schemaVersion`, `repoKey`, analyzed revision, input-manifest digest, extractor/estimator/profile versions, observation-window manifest, typed subgraph paths/digests, superseded reference and freshness policy. Use SHA-256 for evidence and semantic payloads. Sanitize observations before persistence; raw jobs/steps remain in immutable evidence storage with committed compact manifests and small reproducibility fixtures. Scratch paths are bootstrap sources, not the durable storage contract. [S2:61–80]
 
+Under D1-C, Engram publishes the numerical reference and its committed typed export as one versioned release. K0/K5 must define the service-revision/export-digest binding, publication consistency and recovery; Git exports cannot acquire an independently maintained numerical lifecycle. The reproduction and technical-provenance requirements below remain binding.
+
 | Trigger | Response |
 |---|---|
 | Workflow/action, Make closure, Docker input, test routing, matrix, runner or resolved dependency change | Refresh structural facts and invalidate affected regimes; expose dynamic/unresolved inputs. |
@@ -101,6 +103,8 @@ Identical pinned inputs must produce identical semantic bytes. Generated facts a
 
 Use the actual `@sentropic/diagram-core` contracts pinned at DS `25c0f3d33c258fc2b906a4b85219ffce5f67eccc`: [SemanticDocument](https://github.com/rhanka/sent-tech-design-system/blob/25c0f3d33c258fc2b906a4b85219ffce5f67eccc/packages/diagram-core/src/document.ts#L127) holds entities, relations, ports, resources and versioned profiles; [ViewDocument](https://github.com/rhanka/sent-tech-design-system/blob/25c0f3d33c258fc2b906a4b85219ffce5f67eccc/packages/diagram-core/src/view.ts#L126) holds occurrences, geometry, grouping and presentation. The focus kit's SvelteFlow scenes are presentation instances, not the semantic schema. [S2:82–94; S3 row 18]
 
+The parallel [ontology-guardian owner decision](#o1) already assigns Engram guardianship of every ontology, including diagram meta-models (architecture, BPMN and other supported domains). K0/K2 must align this profile and its exports with that work; DS retains rendering and consumer compatibility responsibilities. The source pin above documents the inspected contract, not a completed transfer or a separate DS ontology authority.
+
 Declare one `repo-knowledge@1` profile with CI/CD, architecture and shared timing/provenance modules. The manifest separately types its subgraphs. The pinned [profile validator](https://github.com/rhanka/sent-tech-design-system/blob/25c0f3d33c258fc2b906a4b85219ffce5f67eccc/packages/diagram-core/src/profile.ts#L174) requires endpoint `entityTypes` to be declared in the same profile; a future profile split needs an explicit join contract. Attribute sets remain K0/K2 work with DS maintainers. [S4 finding 2]
 
 | Module | Entity vocabulary | Principal relations and roles |
@@ -117,7 +121,7 @@ Timing attributes include metric, mode, support, sample count, p50/p90, quantile
 
 Assign collision-checked stable DS slugs/hashes, preserving canonical external keys as typed attributes. Arbitrary slash-bearing graph IDs cannot be copied directly into restricted nominal `EntityRef`s. Cross-document references use declared `ExternalAnchor` entities bound to exact resource, revision and key; unresolved anchors remain visible and cannot justify smaller test selection. Resource resolution belongs to the repository adapter; DS itself does not fetch `artifact:` URIs. [S2:163–165; DS refs.ts:34, 57 at the pin above]
 
-The committed semantic documents are the common CI/architecture source for downstream consumers, still derived from pinned Git and reviewed declarations. Timing attributes are generated from `timings.json` in the same publication transaction; the manifest and consistency checks prevent independently maintained prices. Generate Graphify fragments and renderer inputs from these sources. Never maintain parallel handwritten dependency lists. [S2:167]
+The committed semantic documents are the common CI/architecture exchange for downstream consumers, still derived from pinned Git and reviewed declarations. Engram exports its numerical reference into `timings.json`; timing attributes are generated from that export in the same publication transaction. The manifest binds the service revision and export digests, preventing independently maintained prices. Generate Graphify fragments and renderer inputs from these sources. Never maintain parallel handwritten dependency lists. [S2:167; D1-C]
 
 Graphify's inspected loader uses `multi:false`, merges edges by endpoints and skips absent endpoints. Preserve each semantic relation as a uniquely identified relation node with role-labelled incidence edges and its original `RelationRef`; materialize anchors before assembly. Verify every relation and incidence survives, including parallel semantic relations. Raw edge-count equality across representations is not the invariant. A future multigraph replacement needs separate compatibility qualification. [S2:169; G1]
 
@@ -134,9 +138,9 @@ These are proposed implementation paths, not files produced by this study. Maint
 | Path or surface | Content | Owner |
 |---|---|---|
 | `knowledge/manifest.json` | Repo identity, schema/profile/source pins, graph/reference digests, window, publication lineage | Repository knowledge maintainer; conductor coordinates final merged snapshot. |
-| `knowledge/profiles/*.json` | Reviewed domain profiles and compatibility declarations | Domain maintainers with DS review. |
+| `knowledge/profiles/*.json` | Versioned profiles and compatibility declarations aligned with ontology guardianship | Engram guardian with domain maintainers; DS consumer review. |
 | `knowledge/ci/graph.json` | CI/CD semantic document, including validation/publication/deployment | CI extractor and owning maintainers. |
-| `knowledge/ci/timings.json` | Distinct series, estimates and budgets | Measurement adapter and normal repository review. |
+| `knowledge/ci/timings.json` | Committed typed export of distinct series, estimates and budgets, bound to an Engram service revision | gr-conductor with measurement adapter and repository review. |
 | `knowledge/architecture/graph.json` | Components, contracts, build/runtime relations | Architecture extractor and maintainers. |
 | `knowledge/evidence/manifests/*.json` | Immutable evidence locators, digests and selection rules; small golden fixtures | Collector/CI operations. |
 | `knowledge/views/*.json` | Optional curated view documents; geometry is excluded from semantic digest | Diagram author. |
@@ -145,11 +149,12 @@ These are proposed implementation paths, not files produced by this study. Maint
 | `.track/events.jsonl` | Existing realization, decisions and acceptance | Designated single writer. |
 | `.engram/` or configured graph cache | Rebuildable technical fragments and audience-authorized current runtime projections | Assembly host; `.graphify/` may remain a configured/read compatibility path. |
 | Host-owned Engram store | Canonical memory and lifecycle | gr-conductor and qualified host owner. |
+| Engram timing-reference service | Primary numerical-reference lifecycle and versioned export contract; storage to specify in K0 | gr-conductor with repository conductor and service host owner. |
 | Immutable CI evidence store | Full sanitized observations retained for reproduction | CI operations. |
 
 ## 5. Authority boundary and capitalisation flow
 
-gr-conductor identifies four surfaces: committed project sources (profiles, registries, mappings and reviewed declarations); generated `.engram/` state; canonical memory journal; and ontology lifecycle (proposal → deterministic validation → decision journal → `needs_update`). A generated graph stays derived even when tracked. Git/CI establish technical facts, Track establishes work/decision/acceptance state, and Engram's immutable records plus lifecycle journal are the sole memory authority. [S5; S6:3–26]
+gr-conductor identifies four surfaces: committed project sources (profiles, registries, mappings and reviewed declarations); generated `.engram/` state; canonical memory journal; and ontology lifecycle (proposal → deterministic validation → decision journal → `needs_update`). A generated graph stays derived even when tracked. Git/CI establish technical facts, Track establishes work/decision/acceptance state, and Engram's immutable records plus lifecycle journal are the sole memory authority (D3). D1-C adds a primary Engram numerical-reference service over technical evidence; it does not make exports or `graph.json` a second memory authority. [S5; S6:3–26]
 
 The committed technical package contains **no memory body, identifier, digest, citation, relation or existence signal**; pending candidates, private journals, authorization receipts and revocable projections are excluded too. Memory metadata and indirect influence fall within D10. A text-only allowlist cannot establish this boundary. Review the entire package and its derivation. Every committed fact must regenerate from Git, sanitized CI evidence or an explicitly pinned Track projection, never from the Engram memory journal. [S1 §4.3; S4 findings 1 and 8]
 
@@ -158,11 +163,12 @@ Memory-to-snapshot citations live only on the memory side or in an authorized ru
 ```mermaid
 flowchart LR
   S[Pinned Git sources] --> E[CI and architecture extraction]
-  O[Sanitized immutable CI observations] --> T[Versioned timing reference]
+  O[Sanitized immutable CI observations] --> T[Engram timing-reference service]
   E --> K[Committed typed technical package]
-  T --> K
+  T -->|Versioned typed export| K
   R[Track journal] --> X[Read-only pinned fragment]
   K --> P[Planning skill and conductor]
+  T -->|Qualified pinned reference| P
   X --> P
   Q[Current policy and capacity] --> P
   P --> L[Plan, knowledge lock and prediction]
@@ -177,13 +183,13 @@ flowchart LR
   G --> V[DS semantic references and view occurrences]
 ```
 
-Read the committed package at the branch base, validate and predict, then compare actual outcomes. Publish revised technical references through the source/generator review loop. Submit only bounded, reusable lessons through memory admission: for example, an integration underestimated consumer qualification and a shared publication window, with immutable evidence and a scoped revised rule. Avoid creating one memory per job execution; arithmetic always resolves to the pinned numerical reference. [S1 §4.4; S2:241–247]
+Resolve the Engram numerical reference and matching committed export at the branch base, validate and predict, then compare actual outcomes. Publish revised references through the service and source/generator review loop. Submit only bounded, reusable lessons through memory admission: for example, an integration underestimated consumer qualification and a shared publication window, with immutable evidence and a scoped revised rule. Avoid creating one memory per job execution; arithmetic always resolves to the pinned numerical reference. [S1 §4.4; S2:241–247; D1-C]
 
 ## 6. Conductor and planning-skill consumption
 
 ### 6.1 Read-only prediction contract
 
-Inputs are explicit: cumulative candidate changes and attested candidate/base/tested revisions; graph/timing manifest; current Track cursor, blockers and decisions; integration policy; runner/resource limits; writer, publication and environment constraints. Resolve the dependency graph, not lockfile text alone. Missing capacity yields an unconstrained scenario, never a start-time commitment. [S2:192–210]
+Inputs are explicit: cumulative candidate changes and attested candidate/base/tested revisions; graph/timing manifest binding the Engram reference revision and typed export; current Track cursor, blockers and decisions; integration policy; runner/resource limits; writer, publication and environment constraints. Resolve the dependency graph, not lockfile text alone. Missing capacity yields an unconstrained scenario, never a start-time commitment. [S2:192–210; D1-C]
 
 ```text
 predict(changes, revisions, knowledgeManifest, track, policy, capacity) -> {
@@ -228,20 +234,24 @@ Preserve the existing urgency ladder and dependency/owner waits before timing-ba
 
 Implement the change in h2a's source `packages/h2a/skills/harness/plan/SKILL.md`, then distribute/install normally. The installed plugin cache is not an authoring surface. Keep the strict checkbox template, scope boundaries, feedback loop and wave cap; harness owns the plan artifact and Track owns realization. [S2:220–233; H1]
 
-1. Resolve exact repo/manifest identity, schema, digests, applicability and missing inputs.
+1. Resolve exact repo/manifest identity, Engram numerical-reference revision and matching export, schema, digests, applicability and missing inputs.
 2. Read Track items, decisions and blockers with their original IDs and ownership.
 3. Derive each lot's affected closure and functional, writer, qualification and publication predecessors.
 4. Compare integration alternatives against an unoptimized reference under explicit objective/capacity assumptions; list all unknowns.
 5. Emit normal `BRANCH.md` checkboxes plus the knowledge lock and prediction artifact; attach gate/evidence and measurement obligations to each lot.
 6. Refresh remaining work after relevant changes, retain prior predictions, reconcile actuals and propose bounded cited lessons.
 
-No package produces a useful untimed plan with `timing: unknown` and a bounded measurement task. Historical-only inputs follow `conditional-historical` restrictions. Optional memory unavailability never prevents direct technical-package reads. Existing h2a discovery, ownership election and launch recommendations stay in place; the new consumer belongs in planning and launch packets. [S2:231–233]
+Missing qualified numerical references produce a useful untimed plan with `timing: unknown` and a bounded measurement or service-restoration task. Historical-only inputs follow `conditional-historical` restrictions. Pinned exports preserve reproduction; K0/K5 must qualify any use during service unavailability. Optional lesson-memory unavailability never prevents technical-export reads, but an export-only pilot cannot complete D1-C. Existing h2a discovery, ownership election and launch recommendations stay in place; the new consumer belongs in planning and launch packets. [S2:231–233; D1-C]
 
 Reuse `track export-graph` read-only. Parent `IMPLEMENTS` links do not establish scheduling precedence. Preserve Track IDs through the identity adapter; repository joins live in the plan/knowledge adapter, not event edits. Pin exporter version and source-derived observation timestamp, distinguish its source hash/cursor from the artifact-byte SHA-256, and avoid time-varying exports over unchanged inputs. [S2:235–237]
 
 Track MCP remains read-only; its designated CLI writer handles authorized imports and transitions. Keep this study under the existing WP9 item, with one owner and explicit dependencies for cross-owner delivery. Do not restructure the backlog or duplicate status. Future merge/closure preserves structural event containment and refreshed acceptance, then rereads after consolidation; knowledge refresh never repairs Track implicitly. [S2:218, 239]
 
-## 7. Qualified Engram seam
+## 7. Engram numerical-service contract and qualified memory seam
+
+D1-C requires an **additional versioned numerical-service/export contract**, co-owned by the repository conductor and gr-conductor; the inspected ontology and memory mechanisms do not already demonstrate this service. It must cover ingestion of the §2 records, repo/reference identity and storage ownership, exact revision lookup, applicability/freshness/supersession, reproducible typed exports with revision/digest consistency, and failure/outage/recovery behavior. Exports remain derived from Git, sanitized CI evidence or explicitly pinned Track projections, with no memory content or indirect memory influence (§5).
+
+Route this contract through the owner's existing spec circuit: **author Muse Wonder, review Astra**, coordinated with the [ontology-guardian decision](#o1); the owner decides only real remaining choices. K0 specifies it and K5 qualifies it before the primary-service consumer is accepted. Do not add numerical fields to frozen memory DTOs or infer a new endpoint from this scope decision. The six operations and closed-DTO evolution rules below remain binding.
 
 Keep the six frozen memory operations: search, exact get, capture, request admission, withdraw and forget. Capture is pending, not admitted; candidate withdrawal differs from forgetting by `tombstone`. The host provides trusted scope, authorization, invocation provenance and admission policy. `scope_ref` is opaque and host-interpreted; a repository name supplies no authorization. Filter before ranking or graph expansion. [S5; S6:8–10, 22–25; M1]
 
@@ -249,7 +259,7 @@ The repository adapter submits a bounded cited lesson through existing DTOs and 
 
 Only authorized, eligible `accepted_current` envelopes with `projection_eligible === true` enter runtime projection. Envelopes/citation references/metadata are bounded to 52,428,800 raw bytes with deterministic omissions, freshness and invalidation; canonical bodies/history do not enter the graph. Reuse and qualify the existing `memory:` / `memory_about` seam. Authorize the view's audience before export; revocation, expiry, supersession and forgetting invalidate affected views. Shared live-Git citation resolution remains unverified. [S2:249; M1 M10; M2]
 
-Engram option B is already selected. Source `0.20.0` and the memory-tools facade do not prove published-package, installed-host or activation readiness. Preserve the existing L4-candidate → L5-qualification → L4-exit chain and voluntary host activation. No bespoke endpoint, retired shadow protocol, extra CI-knowledge release gate or federation of h2a/Sentropic stores follows from this study. [S2:251; M1 M14]
+The separate memory program's Engram option B remains selected; it is distinct from this study's D1-C. Source `0.20.0` and the memory-tools facade do not prove published-package, installed-host or activation readiness. Preserve the existing L4-candidate → L5-qualification → L4-exit chain and voluntary host activation. D1-C requires qualification of the additional numerical contract, without rewriting that memory release chain or authorizing a retired shadow protocol or federation of h2a/Sentropic stores. [S2:251; M1 M14]
 
 Handoff to gr-conductor: valid reference/lesson, stale reference, denied scope and superseded/forgotten memory fixtures; their identities and memory-side citations; intended host/purpose; expected admission/read/projection behavior; exact qualified release/host prerequisites. Also prove source-digest mismatch rejection, denied-audience export refusal, pending/admitted separation, forgetting invalidation and that rebuilding an old technical snapshot restores no excluded memory metadata. Audit the committed package and derivation, not only text fields. [S2:253; S4 finding 1]
 
@@ -261,32 +271,34 @@ These proposed implementation lots consolidate the adopted mapping; none is comp
 
 | Lot | Accountable owner and deliverable | Dependencies | Observable exit | Rollback boundary |
 |---|---|---|---|---|
-| K0 — Consumer contract | Repository conductor with h2a, DS and gr-conductor: record distinctions, stable identity/profile mapping, phase events/intervals, source pins, owners and fixtures | Approved study; material owner choices only where needed | One contract and seam package; no conflicting authority or assumed host qualification; attributes and phase events explicitly defined | Revise the draft contract before consumers activate. |
-| K1 — Measurement reference | Sentropic CI owner: collector/normalizer, schemas, compact timing data and reproducible historic import | K0 | Seed statistics reproduce with original quantiles; fixtures cover attempts, censoring, empty modes, sample/day/gate minima, absent usage and regime splits; changed samples change digest, identical inputs do not | Disable reference publication; keep evidence and an untimed plan. |
-| K2 — Typed subgraphs and views | Repository tooling owner with DS/Graphify review: profiles, CI/architecture extraction, explicit adapters and view projection | K0; parallel to K1 on disjoint files | Pinned source counts, cross-domain relations, units/references, anchors and relation/incidence conservation pass; workflow/Make/Docker/import/artifact/deploy/dynamic fixtures covered; view changes preserve semantics | Disable adapter/rendering/generation gate; preserve reviewable technical history. |
-| K3 — Deterministic prediction | Harness/planning implementation owner: closure, timing lookup, resource-constrained list scheduler and immutable prediction artifact | K1 + K2 | Serial/parallel/matrix/shared-writer/blocked/base-change/unknown fixtures pass; replay the 554 valid diffs with every closure divergence explained and comparable cohorts; no missing check earns savings | Disable recommendations; retain full current qualification and dependency planning. |
-| K4 — Skill and conductor adoption | h2a harness owner with repository conductor: source skill, launch packets, knowledge lock and replanning | K3 | Sample plan/train reproduce pins and gates; missing reference yields untimed plan; changed inputs create new prediction; the three phase-steering cases pass; normal distribution path used | Revert the source skill consumer and return to qualitative ordering. |
-| K5 — Engram seam | gr-conductor, qualified host owner and repository adapter owner: cited lesson submission, admitted lookup and controlled runtime assembly | K0, stable K1/K2 identities, existing host/transport qualification chain | Exact-candidate valid/stale/denied/pending/superseded/forgotten fixtures pass; D3/D10 package/derivation audit, denied-audience refusal and old-snapshot rebuild test pass; no closed DTO drift | Disable lesson adapter/runtime join; technical files and canonical journal remain independent. |
-| K6 — Pilot and operations | Repository conductor and CI operations: collection/publication cadence, drift attribution, actual-versus-predicted history and merge regeneration | K4; K5 additionally required for hybrid completion | Shadow baseline/candidate comparison demonstrates prediction quality, reproducibility, useful scheduling and preserved current coverage; refresh idempotence, Track containment and fresh acceptance proven | Disable train optimization; retain full qualification, technical reference and evidence. |
+| K0 — Service and consumer contracts | Repository conductor with gr-conductor, h2a and DS: §7 numerical-service/export contract, ontology alignment, record distinctions, identity/profile mapping, phase events, source pins and fixtures; author Muse Wonder, review Astra | D1-C (2026-10-18), approved study and parallel ontology-guardian circuit; material remaining owner choices only | Versioned service/export and consumer contracts; no conflicting authority or assumed qualification; attributes, phase events, lifecycle and outage behavior defined | Revise the draft contract before consumers activate. |
+| K1 — Measurement reference | Sentropic CI owner with gr-conductor: collector/normalizer, schemas, reproducible historic import and service-ingestion/export fixtures | K0 | Seed statistics reproduce with original quantiles; fixtures cover attempts, censoring, empty modes, sample/day/gate minima, absent usage and regime splits; changed samples change digest, identical inputs do not | Disable reference publication; keep evidence and an untimed plan. |
+| K2 — Typed subgraphs and views | Repository tooling owner with Engram guardian and DS review: versioned profiles, CI/architecture extraction, typed export adapters and view projection | K0 and agreed ontology/profile contract; parallel to K1 on disjoint files | Pinned source counts, cross-domain relations, units/references, anchors and relation/incidence conservation pass; workflow/Make/Docker/import/artifact/deploy/dynamic fixtures covered; view changes preserve semantics | Disable adapter/rendering/generation gate; preserve reviewable technical history. |
+| K3 — Deterministic prediction | Harness/planning implementation owner: closure, pinned Engram timing lookup/export verification, resource-constrained list scheduler and immutable prediction artifact | K1 + K2 + K5 numerical-service qualification | Serial/parallel/matrix/shared-writer/blocked/base-change/unknown fixtures pass; replay the 554 valid diffs with every closure divergence explained and comparable cohorts; no missing check earns savings | Disable recommendations; retain full current qualification and dependency planning. |
+| K4 — Skill and conductor adoption | h2a harness owner with repository conductor: source skill, launch packets, service/export knowledge lock and replanning | K3 | Sample plan/train reproduce service/export pins and gates; missing reference yields untimed plan; changed inputs create new prediction; the three phase-steering cases pass; normal distribution path used | Revert the source skill consumer and return to qualitative ordering. |
+| K5 — Engram primary service and memory seam | gr-conductor, service/qualified host owners and repository adapter owner: implement and qualify §7 numerical service/exports, cited lesson submission, admitted lookup and controlled runtime assembly | K0, stable K1/K2 identities; memory seam retains existing host/transport qualification chain | Service lookup/export digests agree; stale/mismatched/outage/recovery fixtures pass; exact-candidate valid/stale/denied/pending/superseded/forgotten memory fixtures, D3/D10 derivation audit, denied-audience refusal and old-snapshot rebuild pass; no closed DTO drift | Disable affected consumers; retain evidence and untimed planning; exports never become a second memory authority. |
+| K6 — Pilot and operations | Repository conductor, gr-conductor and CI operations: service/export publication cadence, drift attribution, actual-versus-predicted history and merge regeneration | K4 + full K5; Engram primary service required for D1-C completion | Shadow comparison demonstrates service-backed prediction quality, reproducible exports, useful scheduling and preserved coverage; refresh/recovery idempotence, Track containment and fresh acceptance proven | Disable train optimization; retain full qualification, technical exports and evidence. |
 
-Critical path: **K0 → (K1, K2) → K3 → K4 → K6**. Prepare K5 alongside it, subject to its host prerequisites. The Git pilot does not close the hybrid target. Independent CI-optimization lots and S1/S2/S3 activation criteria do not gate this program; no new skip-check policy is required. [S4 finding 3]
+Critical path for D1-C: **K0 → (K1, K2) → K5 numerical service → K3 → K4 → K6**, with full K5 required at K6. Prepare the memory seam in parallel under its existing host prerequisites. A Git-only pilot remains preparatory and cannot close C. Independent CI-optimization lots and S1/S2/S3 activation criteria do not gate this program; no new skip-check policy is required. [S4 finding 3; D1-C]
 
-Acceptance evidence must show reproducibility of seed statistics and manifests; a Git/CI/Track source for every committed fact; lossless semantic/adapter/view mappings; applicability and phase-steering fixtures; useful scheduling comparisons on comparable observations; and no loss of required checks. For K5, separately prove canonical-journal-only memory authority and audience/lifecycle enforcement. A successful technical pilot alone proves neither host readiness nor hybrid completion.
+Acceptance evidence must show reproducibility of seed statistics and manifests; a Git/CI/Track source for every committed fact; lossless semantic/adapter/view mappings; applicability and phase-steering fixtures; useful scheduling comparisons on comparable observations; and no loss of required checks. K5 must prove the primary numerical service/export contract and, separately, canonical-journal-only memory authority and audience/lifecycle enforcement. A successful export-only pilot proves neither service/host readiness nor D1-C completion.
 
 Pilot metrics: prediction error by cohort, time to required green, time to publication where relevant, runner work, cancelled/repeated work, missing-reference rate and refresh delay. Report unknown money/provider/seat costs. Existing five-minute targets and a 10% p95 regression budget are pinned scenario inputs, not achieved outcomes. Do not claim production savings or a measured 95% success rate before qualification. [S1 §2.5; S2:299]
 
 Remaining risks and bounded follow-up:
 
-- Engram per-repository canonical storage location, deployed host capability tuple, shared live-Git citation resolution and joint re-acceptance of D3/D10 restoration remain unverified in the cited handoff; resolve through K0/K5 with gr-conductor/host owners, without blocking Git-only reads. [S6:8, 18, 26; S2:249–253]
+- The additional numerical-service contract and storage ownership, Engram per-repository canonical memory location, deployed host capability tuple, shared live-Git citation resolution and joint re-acceptance of D3/D10 restoration remain unverified; resolve through K0/K5 with gr-conductor/host owners. Export reads support preparation/reproduction; they cannot discharge the primary-service dependency. [S6:8, 18, 26; S2:249–253; D1-C]
 - Profile attribute sets and identity/anchor mapping require DS review in K0/K2; the prototype's UI package version does not attest diagram-core contract adoption.
 - Missing lanes and unknown timing terms require explicit measurement/coverage work; this study does not repair job performance. Historical LLM-gap populations (335 affected-gap diffs and 486 general-debt diffs, overlapping) require boundary-specific re-audit before any separate CI activation. [S1 §9]
 - Window updates can churn committed files; publish at declared cadence with movement thresholds and semantic diffs. Missing raw evidence limits reproduction. Concrete retention costs beyond policy belong with operations/owner once evidenced.
 
-## 9. Questions ouvertes au propriétaire
+## 9. Décisions du propriétaire
 
-**Statut : aucune sélection enregistrée.** Le commit des sous-graphes est déjà demandé et l'option Engram B est déjà choisie dans son programme. Les chemins, unités, identités, contrôles d'intégrité, règles d'invalidation et paramètres réversibles relèvent des responsables techniques ; ils restent visibles dans le plan. La rédaction réversible peut avancer sans attendre D1. Les dossiers ci-dessous remplacent intégralement les anciens votes. [S2:301–321; S4 findings 3, 7 and 8]
+**Statut : D1 close, option C, le 2026-10-18 ; D2 ouverte et conditionnelle.** Le commit des sous-graphes est déjà demandé. L'option B du programme mémoire Engram reste distincte de D1-C. Les chemins, unités, identités, contrôles d'intégrité, règles d'invalidation et paramètres réversibles relèvent des responsables techniques ; ils restent visibles dans le plan. Les dossiers ci-dessous remplacent les anciens votes ; le tableau D1 conserve les options soumises. [S2:301–321; S4 findings 3, 7 and 8]
 
 ### D1
+
+**Décision close — 2026-10-18 : C.** Question posée : « Jusqu'où on va dans cette livraison ? » Réponse du propriétaire : **« C — Engram au centre »**. Le tableau conserve le dossier de consultation ; B était l'option recommandée avant cette décision.
 
 **Jusqu'où financer et coordonner la capitalisation dans cette livraison ?** Le choix porte sur le périmètre interéquipes et la responsabilité durable du raccord.
 
@@ -296,7 +308,7 @@ Remaining risks and bounded follow-up:
 | B — Cible hybride dans le programme, livrée par étapes | Même première livraison, puis leçons admises dans Engram et références filtrées dans le graphe d'exécution | Coordination gr-conductor/hôte et maintien d'un adaptateur vérifié. Le bénéfice mémoire attend sa qualification ; le premier pilote Git reste livrable avant. | La réutilisation entre sessions est attendue et une responsabilité durable peut être attribuée. |
 | C — Engram comme service principal des références numériques | Cycle de vie centralisé, avec exports typés commités | Contrat numérique supplémentaire, coordination des exports, dépendance au service ; effort/délai non mesurés. Le service complet n'est pas démontré par les contrats inspectés. | Un besoin produit plus large et déjà financé justifie ce service central. |
 
-Recommandation : **B**, avec K1–K4 utilisables avant K5. Son principal coût est une responsabilité d'adaptation durable pour une utilité mémoire encore à mesurer. **A** devient préférable si personne ne peut la porter ou si le pilote ne démontre pas l'intérêt du rappel. **C** demande une justification produit supplémentaire et un contrat distinct. Les coûts sont exprimés en lots/dépendances ; aucun budget financier ou délai humain n'est mesuré. Choix attendu : A/B/C et, pour B/C, attribution du responsable du raccord. Aucun choix ne modifie le calendrier Engram déjà accepté ni les contraintes D3/D10.
+Recommandation d'exécution après décision : **C — Engram au centre**, service principal des références de temps avec exports typés commités. Le contrat numérique supplémentaire est porté avec gr-conductor et le conducteur du dépôt, via le circuit de spécification du propriétaire : auteur Muse Wonder, revue Astra (§7). Les lots et dépendances de §8 intègrent sa qualification ; K1–K4 seuls ne livrent pas C. La [décision parallèle de gardien des ontologies](#o1) place déjà les métamodèles de diagrammes dans Engram. Les coûts restent exprimés en lots/dépendances, sans budget financier ni délai humain mesuré. D3/D10, les DTO fermés et le circuit de qualification mémoire existant restent applicables.
 
 ### D2
 
@@ -316,7 +328,7 @@ Round two approved the paper design with one non-blocking documentation note (R2
 
 | Retained historical material | Operative replacement here |
 |---|---|
-| D-K1–D-K3 votes and D-K4 autonomy/skip-check conflation | Only current French [D1](#d1) and conditional [D2](#d2); technical conventions in §§2–4; current qualification preserved in §8. |
+| D-K1–D-K3 votes and D-K4 autonomy/skip-check conflation | [D1](#d1) closed with C on 2026-10-18; only conditional [D2](#d2) remains open; technical conventions in §§2–4; current qualification preserved in §8. |
 | F1 wording requiring D1 before lot renumbering | Unified K0–K6 already defined in §8; reversible drafting proceeds. |
 | Stale price presented as a completion bound | Exactly three applicability statuses and permitted uses in §2.3. |
 | SvelteFlow scene as schema; three profiles; flat graph without adapters | Semantic/View documents, one profile and relation-preserving adapters in §4. |
@@ -345,5 +357,8 @@ Additional source identities from the approved evidence record (source inspectio
 - **M1** — Engram normative `SPEC-memory-mcp-v3.2.md`, archived at `graphify/.graphify/scratch/design/memory-mcp/`; recorded SHA-256 `18c697c1cd91287fd9f814c059910ffb4b39ddb1be46af547f384c7d912177b2`. M10 at line 1368 governs metadata/indirect influence; closing M14 at 1706 supersedes the opening's undecided wording. Six-tool/host contracts begin at lines 136–153; publication chain at 1545.
 - **M2** — Engram [memory projection](https://github.com/rhanka/engram/blob/ceb33dae4570ca20c4fbae2a69b065919de17a25/src/graph-memory-projection.ts#L17) and [memory tools](https://github.com/rhanka/engram/blob/ceb33dae4570ca20c4fbae2a69b065919de17a25/src/memory-tools/index.ts#L1), source `ceb33dae4570ca20c4fbae2a69b065919de17a25`, package `0.20.0`; the deployed/qualified host tuple remains K5 evidence.
 - **DS** — Immutable diagram-core source links in §4 pin `25c0f3d33c258fc2b906a4b85219ffce5f67eccc`; the older local DS checkout and prototype Svelte packages establish neither schema absence nor contract qualification at that revision.
+
+<a id="o1"></a>
+**O1 — Parallel ontology-guardian owner decision (2026-10-18).** [Archived multi-project brief](/home/antoinefa/src/graphify/.graphify/scratch/design/ontology-guardian/brainstorm/README.md), SHA-256 `b8c4996b9825cf0f79580a8b46356f6ad2468d9572685d659debaf60d9e1922b`: Engram is guardian of every ontology, including development ontologies and diagram meta-models; DS consumes/renders them. The Muse Wonder → Astra dossier coordinates the transfer and contracts. This local evidence link is not a runtime dependency; the binding direction is reproduced here and in §4.1, without claiming a completed migration.
 
 Documentation verification checks quote fidelity, source digests, active-vs-historical requirements, current D1/D2 anchors, branch scope and atomic commit sizes. Runtime schemas, prediction correctness, host behavior and pilot performance remain the observable K0–K6 gates above.
