@@ -98,6 +98,7 @@
   - [x] Wire validation, consumer smoke, OIDC publisher and gate: mcp-connector-googlecalendar, mcp-connector-googledocs.
   - [x] Wire validation, consumer smoke, OIDC publisher and gate: mcp-connector-googledrive, mcp-connector-googlesheets.
   - [x] Wire validation, consumer smoke, OIDC publisher and gate: mcp-connector-hubspot, mcp-connector-linear.
+  - [x] Wire validation, consumer smoke, OIDC publisher and gate: mcp-connector-notion, mcp-connector-slack.
   - [ ] Add all 18 filters, validate/publish jobs, dispatch choices and ci-gate needs; package-only publication triggers.
   - [ ] Register mappings in `scripts/ci/publishable-manifests.mjs`; update `scripts/ci/publishable-ci-wiring.test.mjs`.
   - [ ] Newly public packages have web bootstrap only, never token bootstrap steps.
