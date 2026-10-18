@@ -50,9 +50,9 @@
   - [x] Read repository rules, template, neighbouring studies and approved source/reconciliation/review.
   - [x] Fetch, create the requested worktree from `origin/main`, and pass `harness check branch`.
   - [x] Define exact scope, source pins, documentation checks and the draft-only delivery boundary.
-- [ ] **Lot 1 — Evidence and timing contract**
-  - [ ] Add the binding request, pinned evidence, record types, regime applicability and refresh rules to the study.
-  - [ ] Gate: verify quoted populations and measured/modelled/unknown distinctions against the approved inputs.
+- [x] **Lot 1 — Evidence and timing contract**
+  - [x] Add the binding request, pinned evidence, record types, regime applicability and refresh rules to the study.
+  - [x] Gate: verify quoted populations and measured/modelled/unknown distinctions against the approved inputs.
 - [ ] **Lot 2 — Typed knowledge and authority boundaries**
   - [ ] Add one DS profile, explicit lossless adapters, package layout and the technical-package/memory boundary.
   - [ ] Gate: preserve relation conservation, provenance, separate views and exclusion of memory metadata from committed facts.
