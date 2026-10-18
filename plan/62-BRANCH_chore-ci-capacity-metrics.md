@@ -68,6 +68,12 @@
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
+  - [ ] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity-metrics` must parse/import the changed scripts and reject invalid result sets; application typecheck/lint is not applicable to these script-only edits.
+  - [ ] Build: no image/package build recipe changes; retain the final concurrent PR/main runs' existing build and artifact receipts.
+  - [ ] API regression: no API source/test edits; verify every selected API result from the concurrent runs is present and successful.
+  - [ ] UI regression: no UI source/test edits; verify the unchanged UI test/build results are present in the complete verdict.
+  - [ ] E2E regression: no browser/VSCode/IdP membership change; reconcile the concurrent runs' selected and executed test identities, including cancellation ownership.
+  - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
   - [ ] Run `make scope-check ENV=test-ci-capacity-metrics` before each commit; end isolated service lots with `make down ENV=test-ci-capacity-metrics` and `make down ENV=e2e-ci-capacity-metrics`.
   - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.
