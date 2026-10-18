@@ -174,3 +174,127 @@ B3 retains direct-provider absence gates separately from deferred auth: a missin
 Implementation checks use existing `make test-cluster-mesh SCOPE=tests/modules/registry.spec.ts API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`, one scoped file at a time, then `make typecheck-cluster-mesh test-cluster-mesh pack-cluster-mesh API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`. The existing target does not provision new peer fixtures; B3 supplies a package-local Docker Makefile to install/build tarballs in container scratch space and run declaration/packaging checks. Its proposed gate is `make -f packages/cluster-mesh/packaging.mk test-lazy-package API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`; it does not exist yet and is not reported as run. No direct host npm/Node or root Makefile change. Reallocate occupied ports in the implementation packet; finish with `make down` using that packet's ports/environment.
 
 First release acceptance requires B1–B3 evidence and independent review; B4 shipment gates the start of B5. Later MCP/catalog release requires B5–B7 evidence and review before B8. Private/unpublished capabilities stay gated. Lot E round 2 acceptance is the corrected auth/startup/topology/type contract, upgrade/map/build plan, amendment-only changes, mechanical scope checks and atomic documentation commits. Independent acceptance of the approve-with-fixes follow-up and the approved build handoff remain conductor-owned; runtime/build/consumer acceptance is future work.
+
+## Amendment 2026-10-18 — O1 human MCP OAuth composition
+
+Target cluster-mesh **0.20.0**, after #684's 0.19.0 comments/storage release.
+Rebase onto that actual main merge before final acceptance; preserve its entries
+and comments self-range. #685 retains gateway peer widening. Only one cluster-mesh
+writer publishes at a time; the conductor determines merge order. This amendment
+defines the additive O1 contract, not a publication or completed Immo cutover.
+
+The delivered IDs `mcp/auth` and `mcp/auth/hono` select mcp-auth
+`>=0.2.2 <0.3.0`, oauth-verify 0.1.x and owner-resolved jose 5.x. Static leaves
+preserve provider identity and enforce the selected auth floor. Dedicated typed
+loaders, also exported by `/loaders/mcp`, use the registry. Gateway service auth
+keeps its 0.2.1 floor. Root declarations/JS and unused loader JS remain isolated.
+Use the dedicated loader entries for strict types without unrelated optional peers.
+
+The Node-only `createMcpOAuthNamespace` owns public root metadata, mount-relative
+MCP routes, an equivalent namespace module sharing those routes, and idempotent
+shutdown. Mount metadata at `/`, and either routes or the module at `/mcp` once.
+The old stateless `createMcpNamespaceModule` and lower provider interfaces remain
+unchanged. Preflight validates selected exports/configuration and compiled tool
+coherence before listening; configured readiness does not prove a real exchange.
+
+Each POST/GET/DELETE verifies signature, exact issuer/single resource audience,
+expiry and human subject. Missing/invalid bearer is 401; missing ingress scope is
+403, with canonical `resource_metadata` and missing scopes in the challenge.
+Canonical PRM, root alias and appended-path 308 remain public without JWKS access.
+Optional configured `requiredAcr` enforces human assurance at ingress. The IdP
+operator must record `immo-mcp.required_acr` separately in preprod and prod;
+changing that policy remains an owner decision. Exchange drops `acr`, `amr` and
+`auth_time`, so the API receiver cannot enforce the human's 2FA level.
+
+Sessions bind verified subject, optional signed client, tenant, resource and
+environment; conflicting signed `azp`/`client_id` refuses. Ingress retains optional
+client binding; `subjectClientId: 'immo-mcp'` restricts exchange only. Defaults
+preserve T2: idle 30 minutes, absolute 8 hours. Authority is request-local through
+SDK dispatch, including overlap/cancellation; no context header or initial bearer
+is captured as session authority. Unknown/expired/foreign-owner sessions share 404.
+Close owns initializing transports too, and invalidates pending exchange work.
+
+Every invocation checks compiled scopes/claims and current product approval before
+effects, including raw data and stubs. SDK JSON Schema validation preserves Radar's
+original tuple schemas, defaults and bounds; the platform bridge retains its
+64 KiB argument budget and result codec. The host keeps all domain handling,
+redaction and filters, including the five `not_wired_yet` tools.
+
+| Scope | Unchanged Immo inventory |
+| --- | --- |
+| `immo:search` | `search_lots`, `search_signals` |
+| `immo:read` | `get_lot_card`, `get_opportunity_dossier`, `get_reglement_provenance`, `query_zoning_events`, `get_zones_geojson`, `get_lots_geojson` |
+| `immo:documents:read` | `list_documents`, `read_document_excerpt`, `get_grille_pdf`, `get_pv_pdf` |
+
+Handlers receive readonly `{ sub, clientId?, scopes, tid }`, correlation and a
+tool-bound egress capability, without token/credential getters. The `signals`
+profile fixes GET, trusted transport origin, exact API audience and
+`/api/graph-signals/:city`; canonical city excludes `by-city`, traversal and encoded
+separators. No caller URL/header/scope override, redirect or original-bearer
+fallback is allowed. Raw/public tools and stubs make no exchange. Exchanged output
+is independently verified and downstream JSON is bounded to 1 MiB.
+
+Keep #679's O2 invalidation races, single-flight/cache isolation and hard limits:
+residency at most 60 seconds minus safety margin, minted lifetime at most 300 seconds
+and no later than subject expiry. Keys include token fingerprint, human/client/
+workload, tenant, environment, audience/scopes and host policy revision. Cold,
+expired and restarted consumers fail closed during IdP outage. Identity sync does
+not push `policyRevision` updates; the cache bound limits propagation. Existing
+offline JWT/JWKS behavior does not promise instant unsignalled revocation.
+
+## O1 tenant restore and Radar handoff
+
+**Immo operates and accepts restore; the IdP owns issuer recovery.** O1 adds no
+persistent OAuth row or new dump payload. MCP sessions, JWT/JWKS bindings and
+exchange cache/pending work are process memory, discarded on scale-to-zero.
+Reopening constructs fresh host verifier/exchange bindings and compositions.
+
+| State | Custody and restore rule |
+| --- | --- |
+| Registrations, redirects, consents, tokens, revocations, memberships, signing keys/KEK | Existing IdP DB/configuration; not restored by an Immo application dump. |
+| Workload hash/policy | Existing IdP `service_clients`. Identity sync copies `exchange_policy` prod -> preprod with host-map rewrite; secret hashes are not copied. |
+| `IMMO_MCP_WORKLOAD_CLIENT_ID`, `IMMO_MCP_WORKLOAD_CLIENT_SECRET` | Target configuration/`.env`; distinct secret in each environment, outside Immo dumps. |
+| `SENTROPIC_OAUTH_CLIENT_SECRET`, `SESSION_SECRET` | Separate existing browser-RP/cookie secrets in target `.env`; application restore preserves target values. |
+| `account_users`, `account_invitations`, `account_user_status_events` | Plain prod mirror preserving subjects/UUIDs/status/history; accepted owner policy. T1 refuses missing accounts and T5 prevents invitation-driven reapproval of a suspension. |
+
+The IdP/workload operator provisions with `make oauth-provision-exchange-client
+ENV=<env>` and rotates/revokes with `make oauth-rotate-service-client
+CLIENT_ID=immo-mcp-workload ENV=<env>`. The operator chooses and records a cadence,
+minting owner, variable names and actual `.env` custody location in Radar's runbook.
+Rotate the workload secret after **every IdP database restore**, which can resurrect
+old secret hashes and discard newer revocations. Never copy production secrets to
+preprod. Do not manually run identity sync between quiesce and unquiesce (T7).
+
+Retain complete/fresh/checksummed backup and target checks, durable G1 rollback,
+quiesce/G2, migration, docs/reconciliation, flip and annotation guards. Required
+S2–S5 success permits reopening; failure keeps API/MCP and mutating jobs stopped.
+After empty-target production DR, reapply suspensions/admin removals since backup
+from the admin log or memory before reopening. Post-reopen acceptance checks
+health, the existing MCP connection, fresh exchanged `search_signals`, one raw
+tool and existing approved browser login/renewal. T4/T6 mirror decisions and T8's
+withdrawal remain settled; optional preprod-only account carry is not a gate.
+
+Radar main >= `7a2a1daf` includes #869 (T2) and #870 (T1/T3/T5). Rebase #866
+onto it, then R-O1, then #865 onto the integrated consumer. For each environment:
+published O1 integrity/install receipt -> R-O1 service/image qualification ->
+positive exchanged search receipt -> strict #865 receiver. Preprod precedes prod;
+prod needs its own receipt. Keep the same MCP URLs/public PKCE client/consent,
+accounts/stable subjects, browser RP and cookie. After strict activation, rollback
+must retain exchange capability and receiver enforcement.
+
+R-O1 retains `packages/immo-mcp/src/server.test.ts` (twelve-tool/scope coverage),
+`server-http.test.ts`, `server-http-session.test.ts`, `data-source.test.ts`,
+`raw-data.test.ts`, `oauth-discovery.test.ts`, `deployed-baseline.test.ts` and both
+checked-in fixtures. Add mesh wire-parity, exchange and real service tests; i-cond
+supplies the actual Make/container service runner. #865 reruns receiver config,
+auth/OIDC tests plus T1/T5 admin/session tests. UI code is unchanged; existing
+login/status/renewal and hosted-client continuity remain deployed UAT.
+
+**BR125-FL3 remains a Radar defect owned by i-cond**, not an O1 workflow edit:
+`bascule.mjs:723` and `bascule-preprod.yml:545-553` check only
+`O_MIGRATE/O_RESTORE/O_DOCS`. Wire and check `O_RECON/O_FLIP`; skipped flip is allowed
+only for `SKIP_FLIP=true`. Other failed/cancelled/skipped/missing required outcomes
+must refuse reopening. Extend the existing offline selftest with recon/flip failure
+and workflow-to-CLI wiring assertions. Owner OAUTH-RESTORE-T3 is **offline only**;
+live injection remains blocked/non-gating, with no new workflow injection input.
+O1 can ship while this handoff is pending; Immo cutover acceptance cannot.
