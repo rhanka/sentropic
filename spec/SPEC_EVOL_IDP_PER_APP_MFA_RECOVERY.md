@@ -377,97 +377,47 @@ finalisation, and a passkey ceremony without UV are non-qualifying. A
 future method qualifies by minting `mfaVerified=true` through its own
 ceremony verification; no client row changes when that happens (R-POL-1).
 
-| Session origin | Level today | Level after this spec | Satisfies an MFA client? |
+| Session origin | Level today | Target emitted `acr` and `amr` after this spec | Satisfies an MFA client? |
 |---|---|---|---|
-| Passkey login with UV, within freshness bound | `passkey-fresh` (emitted) | `mfa`, `amr=['hwk','user','mfa']` | Yes `[EXISTS]` for the boolean part; freshness `[TO BUILD Lot 2]`, neutral emission `[TO BUILD Lot 5]` |
-| Passkey login with UV, older than the bound | `passkey-fresh` (still passes today — G-FRESH) | `mfa` ceremony, **stale**: treated as below level at authorize | No — step-up (section 5.3) `[TO BUILD Lot 2]` |
-| Passkey ceremony without UV | Rejected by the real verifier (session auth disabled, no session minted) | Rejected; the defensive `bearer` mint branch on a mocked UV=false remains defence-in-depth, not verifier evidence | No (no session) `[EXISTS]` |
-| Magic link (with or without devices) | `bearer` | `bearer`; the no-device variant is additionally restricted to enrolment endpoints (section 6) | No `[EXISTS]` refusal; endpoint restriction `[TO BUILD Lot 3]` |
-| Federation (for example Google) | `bearer` | `bearer` | No `[EXISTS]` |
-| Registration finalisation | `bearer` | `bearer` | No `[EXISTS]` |
-| Recovery-code redemption (option (c)) | — (does not exist) | `enrolment-only`: satisfies no client, may enrol one credential (section 6) | No `[TO BUILD Lot 4]` |
-| Break-glass reset session (option (b)) | — (does not exist) | `enrolment-only`, single-purpose, short-lived | No `[TO BUILD Lot 4]` |
+| Passkey login with UV, `trusted` binding, within freshness bound | `passkey-fresh`, `amr=['hwk','user','mfa']` | `acr='urn:sentropic:loa:mfa'`, `amr=['urn:sentropic:amr:webauthn','mfa']` (`+'user'` when UP verified; `+'hwk'` only with verifier hardware-binding evidence) | Yes `[EXISTS]` boolean; freshness `[TO BUILD Lot 2]`, final claims `[TO BUILD Lot 5]` |
+| Passkey login with UV, `trusted` binding, older than the bound | `passkey-fresh` (still passes today — G-FRESH) | **Stale** for MFA: `acr='urn:sentropic:loa:bearer'`, `amr=['urn:sentropic:amr:webauthn']` (never `'mfa'`) | No — step-up (section 5.3) `[TO BUILD Lot 2]` |
+| Passkey login with UV on `pending-recovery` or `unverified_email` binding | `passkey-fresh` (G-RECOVERY) | `acr='urn:sentropic:loa:bearer'`, `amr=['urn:sentropic:amr:webauthn']` (never `'mfa'`) | No — awaits independent activation (section 6) `[TO BUILD Lot 3/4]` |
+| Passkey ceremony without UV | Rejected by real verifier (no session minted) | Rejected; defence-in-depth mocked UV=false route fallback stays `acr='urn:sentropic:loa:bearer'`, `amr=[]` | No (no session) `[EXISTS]` |
+| Magic link, account **with** devices | `bearer`, `amr=['pwd']` | `acr='urn:sentropic:loa:bearer'`, `amr=['urn:sentropic:amr:email']`; for protected accounts, credential enrolment/revocation and federation link/unlink are blocked (section 6) | No `[EXISTS]` refusal; protected endpoint blocks `[TO BUILD Lot 3]` |
+| Magic link, account **without** devices | `bearer`, `amr=['pwd']` (7-day session, `requiresDeviceRegistration=true`) | **No session** minted for protected accounts (R-REC-1 notice); unchanged 7-day `bearer` session (`amr=['urn:sentropic:amr:email']`) for non-protected accounts | No (no session for protected; `bearer` refused for non-protected) `[TO BUILD Lot 3]` |
+| Federation (for example Google) | `bearer`, `amr=['pwd']` | `acr='urn:sentropic:loa:bearer'`, `amr=['urn:sentropic:amr:federation']` | No `[EXISTS]` |
+| Registration finalisation | `bearer`, `amr=['pwd']` | `acr='urn:sentropic:loa:bearer'`, `amr=['urn:sentropic:amr:email']` | No `[EXISTS]` |
+| Recovery-code redemption (option (c) optional sublot) | — (does not exist) | `enrolment-only` capability (not an OAuth session; creates at most one `pending-recovery` credential; rejected at all OAuth legs) | No `[TO BUILD Lot 4 optional]` |
+| Break-glass reset grant (option (b)) | — (does not exist) | `enrolment-only` single-purpose short-lived grant (rejected at all OAuth legs) | No `[TO BUILD Lot 4]` |
 
 Token contract (unchanged in shape): the authorization code seals `acr`,
 `amr`, and `auth_time` from the session, and both tokens carry them
-(`packages/auth-hono/src/oauth/token-handler.ts:430`) `[EXISTS]`. After
-Lot 5 the sealed `acr` for a qualifying session is the neutral `mfa` value.
-RPs other than KVM may keep reading `acr`/`auth_time`; `kvm-gateway`
-performs no such check and relies on the IdP having refused every
-non-qualifying authorize (the IdP-side guarantee pinned by section 8.2).
+(`packages/auth-hono/src/oauth/token-handler.ts:430`, `:472`) `[EXISTS]`.
+After Lot 5 the sealed `acr` for a qualifying session is the neutral `mfa`
+value and `amr` follows the single target table above. RPs that inspect
+`acr`/`auth_time` may keep reading them; `kvm-gateway` checks only that
+signed `amr` contains `"mfa"` after standard OIDC validation, relying on
+the IdP for per-client policy, freshness, allowlist, and recovery
+enforcement (section 8.2).
 
-AMR correctness rules `[TO BUILD Lot 5]`: `mfa` membership is the only
-method signal an RP ever needs; `hwk` is emitted only when the verifier
-holds evidence of hardware binding (never inferred from the label
-"passkey", transports, or credential count); `user` denotes demonstrated
-user presence and is not a synonym for the WebAuthn UV bit — the method
-detail rides in a documented private method value (for example
-`urn:sentropic:amr:webauthn`); non-password methods (email, federation)
-must not be labelled `pwd` — they emit their documented method value or an
-omitted list when the method is unknown, and the merged fallbacks that
-manufacture `amr` from `acr` are removed in the same lot. A credential in
-`pending-recovery` binding state never yields `mfa`, even with UV, until
-its activation conditions (section 6) complete.
+AMR correctness rules `[TO BUILD Lot 5]`: `"mfa"` membership in signed `amr` is the only method signal an RP ever needs; `hwk` is emitted only when the verifier holds evidence of hardware binding (never inferred from the label "passkey", transports, or credential count); `user` denotes demonstrated user presence (`up=true`) and is not a synonym for the WebAuthn UV bit — the method detail rides in the documented private method value `urn:sentropic:amr:webauthn`; non-password methods (`urn:sentropic:amr:email`, `urn:sentropic:amr:federation`) never emit `pwd`, and legacy pre-drain sessions or code payloads whose method is unknown emit `amr=[]`. The fallbacks that manufacture `amr` from `acr` in `packages/auth-hono/src/oauth/issue-authorized-code.ts:30`, `packages/auth-hono/src/oauth/token-handler.ts:430`, `:528`, and the host adapter `api/src/services/auth/oauth-state-adapter.ts:282` are removed in Lot 5. A credential in `pending-recovery` or `unverified_email` binding state never yields `"mfa"` in `amr`, even with UV, until its independent activation (section 6) completes.
 
-### 5.2 Where enforcement lives
+### 5.2 Where enforcement lives: one evaluator across four legs
 
-All enforcement stays at **authorize** (initial leg and resume leg), reusing
-the merged seams: below-level or stale ⇒ forced re-authentication;
-still below level after re-authentication ⇒ `access_denied` to the RP
-redirect URI; unlisted subject ⇒ `access_denied` before consent
-`[EXISTS]`. **[Corrected after review: one evaluator, four legs.** The
-  same policy evaluator runs at initial authorize, resumed authorize,
-  consent (including consent-skipping issuance), and authorization-code
-  exchange, binding client policy version, subject, security generation,
-  and the actual qualifying event. Consent must not mint from a stale
-  sealed payload after a cookie swap: it re-evaluates the live session
-  and rebuilds the evidence. Code exchange rereads current policy,
-  account status, and generation and refuses stale transactions (policy
-  raised, subject removed/disabled/deleted, generation bumped, client
-  missing) while preserving PKCE and one-time consumption. File targets:
-  authorize, consent-decision, and token handlers plus the code-payload
-  and session store adapters; Lot 2 owns the change.]**
+One shared policy evaluator runs across all four OAuth issuance legs — **initial authorize, resumed authorize, consent (including consent-skipping issuance), and authorization-code exchange** — binding client `policy_version`, subject allowlist, account `is_mfa_protected` and `security_generation`, credential `binding_state`, and the actual qualifying ceremony timestamp (`mfaCompletedAt`). At initial and resumed authorize (`packages/auth-hono/src/oauth/authorize-handler.ts:80`, `:90`, `:253`), a below-level or stale session triggers forced re-authentication and a still-insufficient resumed session or unlisted subject returns `access_denied` `[EXISTS seam, extended by Lot 2]`. Consent (`packages/auth-hono/src/oauth/consent-decision-handler.ts:102`, `:118`) must not mint from a stale sealed payload after a cookie swap: it re-evaluates the live session and rebuilds the evidence. Code exchange (`packages/auth-hono/src/oauth/token-handler.ts:59`, `:79`, `:430`) rereads current client policy, account status, and `security_generation` and refuses stale transactions (policy raised, subject removed/disabled/deleted, generation bumped, client missing) while preserving PKCE and one-time consumption. File targets: `authorize-handler.ts`, `consent-decision-handler.ts`, `issue-authorized-code.ts`, and `token-handler.ts` plus `api/src/services/auth/oauth-state-adapter.ts` and the session store adapters; Lot 2 owns the change.
 
 ### 5.3 Freshness and step-up rules
 
-- **R-FRESH-1.** `[TO BUILD Lot 2]` An MFA session satisfies an MFA client
-  only while `now - mfaCompletedAt <= client freshness bound`, where
-  `mfaCompletedAt` is the recorded qualifying ceremony time (never
-  session creation, refresh, or last activity; missing or future values
-  fail closed). Sensitive IdP operations (credential create/revoke,
-  federation link/unlink, recovery management) use a separate server-side
-  administrative freshness bound, since no OAuth client selects one there. The
-  bound is per client (KVM value in section 11); when an MFA client has
-  no explicit bound, the server default for MFA clients applies. The
-  default value is an owner decision (section 15); this spec recommends
-  hours, not days, and never the 7-day session lifetime.
+- **R-FRESH-1.** `[TO BUILD Lot 2]` An MFA session satisfies an MFA client only while `now - mfaCompletedAt <= maxMfaAgeSeconds`, where `mfaCompletedAt` is the recorded qualifying ceremony time (never session creation, refresh, or last activity; missing or future values fail closed). Sensitive IdP account operations (credential create/revoke, federation link/unlink, recovery management) have no requesting OAuth client and enforce a separate server-side **administrative freshness bound** (`adminMaxMfaAgeSeconds`, default **900 seconds / 15 minutes**, frozen in Lot 0 independently of `D-P1`). For OAuth clients, `maxMfaAgeSeconds` is per client (KVM value chosen in `D-P1`, section 15; server default for other MFA clients when unset) and bounds only how long an IdP MFA ceremony remains eligible to issue a **new** OAuth authorization code — it does not revoke an already established downstream RP session cookie, whose lifetime and purge/logout procedure are bounded separately (R-REC-7, section 11).
 - **R-FRESH-2 (step-up, not lockout).** A stale MFA session is handled
   exactly like a below-level session today: authorize redirects to login
   with the force-reauth continuation sealed; the resume leg refuses with
   `access_denied` if the new ceremony is still non-qualifying. The old
   session is not revoked (merged behaviour: the user may abandon the flow
   and keep it for non-forced clients) `[EXISTS pattern, extended by Lot 2]`.
-- **R-FRESH-3 (request parameters).** `[TO BUILD Lot 2]` Authorize learns
-  the standard `max_age` and `acr_values` request parameters as
-  **hints that can only raise** the requirement: `max_age` tighter than
-  the client bound wins for that request; `acr_values` naming the MFA
-  level on a client without a stored policy triggers the same forced
-  re-auth, but never downgrades a stored policy. `prompt=login` and
-  `prompt=select_account` keep their merged force-reauth meaning.
-  Discovery then advertises `acr_values_supported` with the neutral value
-  (plus the legacy alias during migration).
-- **R-STEP-1 (sensitive IdP operations).** `[TO BUILD Lot 3]` Creating or
-  revoking a credential for an MFA-hardened account requires a current
-  MFA session (fresh, qualifying), except inside the two enrolment-only
-  recovery sessions of section 6, which may create exactly one credential
-  and nothing else. Today merged code requires only a validated session
-  for credential management; the step-up is the new part.
-- **R-DOWN-1 (no downgrade path).** No flow converts an MFA session into a
-  weaker one for the same client, no parameter clears a stored policy,
-  and ending hardening (section 4.2) never retroactively validates a
-  credential created by email proof. Refresh reuses the same session row
-  and can never raise its level: a bearer session stays bearer until a new
-  qualifying login mints a new session `[EXISTS]`.
+- **R-FRESH-3 (request parameters).** `[TO BUILD Lot 2]` Authorize learns the standard `max_age` and `acr_values` request parameters as **hints that can only raise** the requirement, and seals the effective requirement into the signed continuation through forced login and consent: `max_age` tighter than `maxMfaAgeSeconds` wins for that request; `acr_values` naming the MFA level on a client without a stored policy triggers the same forced re-auth, but never downgrades a stored policy. `prompt=login` and `prompt=select_account` keep their merged force-reauth meaning. Discovery advertises `acr_values_supported` with the neutral value (plus the legacy alias during migration).
+- **R-STEP-1 (sensitive IdP operations).** `[TO BUILD Lot 3]` Creating or revoking a credential or linking/unlinking a federation identity for a protected account (`is_mfa_protected = true`) requires a current `trusted` MFA session within `adminMaxMfaAgeSeconds`, except inside the independently authorized `enrolment-only` recovery capabilities of section 6 (`P-BREAK` and optional `P-CODE`), which may create at most one `pending-recovery` credential and nothing else.
+- **R-DOWN-1 (no downgrade path).** No flow converts an MFA session into a weaker one for the same client, no parameter clears a stored policy, and de-protection (section 4.2) never retroactively validates a credential created by email proof. Refresh (`api/src/routes/namespaces/session-lifecycle.ts:50` → `api/src/services/auth/session-adapter.ts:105` → `api/src/services/session-manager.ts:308`, `:320`) reuses the same session row, preserves original `mfaCompletedAt` and `security_generation`, and can never raise its level `[EXISTS, extended by Lot 2]`.
 
 ## 6. Recovery and re-enrolment paths (target behaviour)
 
