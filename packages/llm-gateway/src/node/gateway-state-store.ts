@@ -230,52 +230,72 @@ export class FileGatewayStateStore implements GatewayStateStore {
   }
 
   private async acquireLock(name = LOCK_FILE): Promise<string> {
-    const token = randomBytes(8).toString('hex');
     const path = join(this.stateDir, name);
-    const claim = JSON.stringify({ pid: process.pid, token, startedAt: Date.now() });
-    try {
-      await writeFile(path, claim, { flag: 'wx', mode: 0o600 });
-      return token;
-    } catch (error) {
-      if (!isCode(error, 'EEXIST')) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const token = randomBytes(8).toString('hex');
+      const claim = JSON.stringify({ pid: process.pid, token, startedAt: Date.now() });
+      try {
+        await writeFile(path, claim, { flag: 'wx', mode: 0o600 });
+        return token;
+      } catch (error) {
+        if (!isCode(error, 'EEXIST')) {
+          throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
+        }
+      }
+      let held = '{}';
+      try {
+        held = await readFile(path, 'utf8');
+      } catch (error) {
+        if (isCode(error, 'ENOENT')) continue;
         throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
       }
-    }
-    let held = '{}';
-    try {
-      held = await readFile(path, 'utf8');
-    } catch (error) {
-      if (isCode(error, 'ENOENT')) return this.acquireLock(name);
-      throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
-    }
-    let parsed: { pid?: unknown; token?: unknown };
-    try { parsed = JSON.parse(held) as { pid?: unknown; token?: unknown }; } catch { throw corrupt('unreadable lock'); }
-    const pid = parsed.pid;
-    const staleToken = typeof parsed.token === 'string' && parsed.token.length > 0 ? parsed.token : '';
-    if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) throw corrupt('invalid lock owner');
-    if (pidAlive(pid)) throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
-    const fenceKey = (staleToken || String(pid)).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fencePath = join(this.stateDir, `${name}.retire-${fenceKey}`);
-    try {
-      await writeFile(fencePath, claim, { flag: 'wx', mode: 0o600 });
-    } catch (error) {
-      if (isCode(error, 'EEXIST')) {
-        throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+      let parsed: { pid?: unknown; token?: unknown };
+      try { parsed = JSON.parse(held) as { pid?: unknown; token?: unknown }; } catch { throw corrupt('unreadable lock'); }
+      const pid = parsed.pid;
+      const staleToken = typeof parsed.token === 'string' && parsed.token.length > 0 ? parsed.token : '';
+      if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) throw corrupt('invalid lock owner');
+      if (pidAlive(pid)) throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+      const fenceKey = (staleToken || String(pid)).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fencePath = join(this.stateDir, `${name}.retire-${fenceKey}`);
+      try {
+        await writeFile(fencePath, claim, { flag: 'wx', mode: 0o600 });
+      } catch (error) {
+        if (!isCode(error, 'EEXIST')) {
+          throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
+        }
+        let fenceRaw = '';
+        try {
+          fenceRaw = await readFile(fencePath, 'utf8');
+        } catch (readError) {
+          if (isCode(readError, 'ENOENT')) continue;
+          throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
+        }
+        let fencePid: unknown;
+        try { fencePid = (JSON.parse(fenceRaw) as { pid?: unknown }).pid; } catch { fencePid = undefined; }
+        if (typeof fencePid === 'number' && Number.isSafeInteger(fencePid) && fencePid > 0 && pidAlive(fencePid)) {
+          throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+        }
+        await unlink(fencePath).catch(() => undefined);
+        const currentRaw = await readFile(path, 'utf8').catch(() => '');
+        if (currentRaw !== held) {
+          throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+        }
+        continue;
       }
-      throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
-    }
-    try {
-      const currentRaw = await readFile(path, 'utf8').catch(() => '');
-      if (currentRaw !== held) {
-        throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+      try {
+        const currentRaw = await readFile(path, 'utf8').catch(() => '');
+        if (currentRaw !== held) {
+          throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+        }
+        const claimPath = `${path}.${token}.claim`;
+        await writeFile(claimPath, claim, { flag: 'wx', mode: 0o600 });
+        await rename(claimPath, path);
+        return token;
+      } finally {
+        await unlink(fencePath).catch(() => undefined);
       }
-      const claimPath = `${path}.${token}.claim`;
-      await writeFile(claimPath, claim, { flag: 'wx', mode: 0o600 });
-      await rename(claimPath, path);
-      return token;
-    } finally {
-      await unlink(fencePath).catch(() => undefined);
     }
+    throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
   }
 
   private async releaseLock(token: string, name = LOCK_FILE): Promise<void> {

@@ -117,6 +117,32 @@ describe('FileGatewayStateStore', () => {
     await expect(writer.load()).rejects.toMatchObject({ code: 'CORRUPT' });
   });
 
+  it('recovers an abandoned retirement fence left by a crashed retirer for both lock kinds', async () => {
+    const { writeFile, readFile } = await import('node:fs/promises');
+    for (const name of ['.host-lock', '.lock']) {
+      const dir = freshDir();
+      const staleToken = `dead-token-${name === '.host-lock' ? 'h' : 't'}`;
+      await writeFile(join(dir, name), JSON.stringify({ pid: 999_999_999, token: staleToken, startedAt: 1 }), { mode: 0o600 });
+      await writeFile(join(dir, `${name}.retire-${staleToken}`), JSON.stringify({ pid: 999_999_998, token: 'crashed', startedAt: 1 }), { mode: 0o600 });
+      const store = new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(dekFor('r')) });
+      if (name === '.host-lock') {
+        const release = await store.claimWriter();
+        const held = JSON.parse(await readFile(join(dir, name), 'utf8')) as { pid: number };
+        expect(held.pid).toBe(process.pid);
+        await release();
+      } else {
+        await store.compareAndSet(0, { ...emptyState(), revision: 1 });
+        expect((await store.load()).revision).toBe(1);
+      }
+    }
+  });
+  it('keeps a live retirement fence blocking while a dead fence is reclaimed', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    const dir = freshDir();
+    await writeFile(join(dir, '.host-lock'), JSON.stringify({ pid: 999_999_999, token: 'dead-live', startedAt: 1 }), { mode: 0o600 });
+    await writeFile(join(dir, '.host-lock.retire-dead-live'), JSON.stringify({ pid: process.pid, token: 'live', startedAt: 1 }), { mode: 0o600 });
+    await expect(new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(dekFor('r')) }).claimWriter()).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
   it('fences stale-lock takeover so two contenders cannot both claim writer ownership', async () => {
     const { writeFile, readFile } = await import('node:fs/promises');
     for (let round = 0; round < 15; round += 1) {
