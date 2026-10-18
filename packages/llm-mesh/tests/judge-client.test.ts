@@ -18,8 +18,10 @@ const mockReceipt = (correlationId = 'test-corr-1'): JudgeReceipt => ({
 const mockVerdictResult = (correlationId = 'test-corr-1'): JudgeResult => ({
   kind: 'verdict', ok: true,
   verdict: {
-    criterionKind: 'binary', resolvedCriterionKind: 'binary', score: null,
-    decision: { pass: true, origin: 'provider' }, label: null, rationale: null,
+    criterionKind: 'binary', resolvedCriterionKind: 'binary',
+    score: { value: 0.25, meaning: 'probability-true',
+      scale: { kind: 'bounded', min: 0, max: 1, direction: 'unordered' } },
+    decision: { pass: true, origin: 'provider-threshold' }, label: null, rationale: null,
     confidence: null, distribution: null,
   },
   receipt: mockReceipt(correlationId),
