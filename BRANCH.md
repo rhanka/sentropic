@@ -184,7 +184,7 @@
 - [ ] **Sol 6.1 review remediation — `.h2a/reviews/pr685_sol.md`**
   - [x] Finding 1 (single-writer stale-lock takeover): fence stale lock retirement by observed token and atomic rename so delayed contenders cannot remove a live successor lock; test contested crash/takeover contention
   - [x] Finding 2 (concurrent inference snapshot contention): serialize and retry snapshot mutations across session/receipt/affinity adapters while preserving semantic revision checks; test 8 concurrent HTTP sessions + concurrent control operations
-  - [ ] Finding 3 (migration policy binding): forward/bind trusted `routingContract` in `migrateOldSessions` and provide explicit `migrateSessionPolicy` while preserving key bytes and expiry atomically; test migrated-key inference, restart, and rejection of unapproved policy changes
+  - [x] Finding 3 (migration policy binding): forward/bind trusted `routingContract` in `migrateOldSessions` and provide explicit `migrateSessionPolicy` while preserving key bytes and expiry atomically; test migrated-key inference, restart, and rejection of unapproved policy changes
   - [ ] Finding 4 (upstream model-identity observation): propagate provider-reported model identity separately from request-derived `modelId` in Muse and Codex adapters (JSON + SSE) and retain contradictory observations in failed receipts without retry; test adapter-to-host mismatches
 
 - [x] **CI repair — PR #685 run 39042373493**

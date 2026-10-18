@@ -13,6 +13,7 @@ import { freezeLaunchRoutingContract, type LaunchRoutingContract } from '@sentro
 
 import {
   GatewayStateError,
+  runGatewayStateTransaction,
   type GatewayStateStore,
   type StoredReceipt,
   type StoredSession,
@@ -57,6 +58,15 @@ export interface AcquireSessionInput {
   readonly ttlDays?: number;
 }
 
+export interface MigrateSessionPolicyInput {
+  readonly ownerScopeRef: string;
+  readonly sessionRef?: string;
+  readonly workspaceRef?: string;
+  readonly clientSessionRef?: string;
+  readonly routingContract: LaunchRoutingContract;
+  readonly expectedPolicyRevision?: string;
+}
+
 export interface IssuedSession {
   readonly sessionRef: string;
   /** Returned exclusively over authenticated acquisition, including recovery. */
@@ -84,7 +94,9 @@ const DEFAULT_TTL_DAYS = 30;
 const POLICY_REVISION = 'l1-exact-v1';
 const trustedContract = (input: Pick<AcquireSessionInput, 'routingContract' | 'ownerScopeRef' | 'models' | 'mappingRevision'>) => {
   if (!input.routingContract) return undefined;
-  const contract = freezeLaunchRoutingContract(input.routingContract);
+  let contract: LaunchRoutingContract;
+  try { contract = freezeLaunchRoutingContract(input.routingContract); }
+  catch { throw new GatewaySessionError('session routing policy conflicts', 'CONFLICT'); }
   if (contract.ownerScopeRef !== input.ownerScopeRef
     || (input.models && JSON.stringify([...input.models].sort()) !== JSON.stringify([...contract.exactModels].sort()))
     || (input.mappingRevision && input.mappingRevision !== contract.mapping?.revision)) {
@@ -121,7 +133,6 @@ const publicSession = (session: StoredSession) => ({
 
 export class GatewaySessionService {
   private readonly defaultTtlDays: number;
-  private acquisition: Promise<unknown> = Promise.resolve();
   constructor(
     private readonly store: GatewayStateStore,
     options: { defaultTtlDays?: number } = {},
@@ -130,9 +141,7 @@ export class GatewaySessionService {
   }
 
   async acquireSession(input: AcquireSessionInput): Promise<IssuedSession> {
-    const result = this.acquisition.then(() => this.acquireCommitted(input));
-    this.acquisition = result.catch(() => undefined);
-    return result;
+    return runGatewayStateTransaction(this.store, () => this.acquireCommitted(input));
   }
 
   private async acquireCommitted(input: AcquireSessionInput): Promise<IssuedSession> {
@@ -234,6 +243,10 @@ export class GatewaySessionService {
     mappingRevision?: string;
     routingContract?: LaunchRoutingContract;
   }): Promise<{ sessionRef: string; expiresAt: string; receiptId: string }> {
+    return runGatewayStateTransaction(this.store, () => this.importCommitted(input));
+  }
+
+  private async importCommitted(input: Parameters<GatewaySessionService['importSession']>[0]): Promise<{ sessionRef: string; expiresAt: string; receiptId: string }> {
     const routingContract = trustedContract(input);
     if (!input.ownerScopeRef || !input.workspaceRef || !input.clientSessionRef) {
       throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
@@ -285,6 +298,47 @@ export class GatewaySessionService {
     return { sessionRef: session.sessionRef, expiresAt: session.expiresAt, receiptId: receipt.receiptId };
   }
 
+  async migrateSessionPolicy(
+    input: MigrateSessionPolicyInput,
+  ): Promise<{ sessionRef: string; expiresAt: string; policyRevision: string; receiptId: string }> {
+    if (!input.ownerScopeRef) throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
+    const routingContract = trustedContract({ ownerScopeRef: input.ownerScopeRef, routingContract: input.routingContract });
+    if (!routingContract) throw new GatewaySessionError('session routing policy conflicts', 'CONFLICT');
+    return runGatewayStateTransaction(this.store, async () => {
+      const loaded = await this.store.load();
+      const existing = input.sessionRef ? loaded.sessions[input.sessionRef]
+        : Object.values(loaded.sessions).find((s) => s.ownerScopeRef === input.ownerScopeRef
+          && s.workspaceRef === input.workspaceRef && s.clientSessionRef === input.clientSessionRef);
+      if (!existing || existing.ownerScopeRef !== input.ownerScopeRef
+        || (input.workspaceRef !== undefined && existing.workspaceRef !== input.workspaceRef)
+        || (input.clientSessionRef !== undefined && existing.clientSessionRef !== input.clientSessionRef)) {
+        throw new GatewaySessionError('unknown session', 'NOT-FOUND');
+      }
+      if (existing.revokedAt) throw new GatewaySessionError('session revoked', 'REVOKED');
+      if (!live(existing, Date.now())) throw new GatewaySessionError('session expired', 'EXPIRED');
+      if (!existing.keyMaterial || !validKey(existing.keyMaterial, existing.keyVerifier)) {
+        throw new GatewaySessionError('protected session key unavailable', 'CORRUPT');
+      }
+      const sameModels = existing.models.length === 0
+        || JSON.stringify([...existing.models].sort()) === JSON.stringify([...routingContract.exactModels].sort());
+      const sameMapping = existing.mappingRevision === undefined || existing.mappingRevision === routingContract.mapping?.revision;
+      if (existing.routingContract ? input.expectedPolicyRevision !== existing.policyRevision
+        : (input.expectedPolicyRevision !== undefined && input.expectedPolicyRevision !== existing.policyRevision) || !sameModels || !sameMapping) {
+        throw new GatewaySessionError('session routing policy conflicts', 'CONFLICT');
+      }
+      const nowIso = new Date().toISOString();
+      const updated: StoredSession = { ...existing, models: [...routingContract.exactModels],
+        mappingRevision: routingContract.mapping?.revision, policyRevision: routingContract.revision, routingContract };
+      const receipt: StoredReceipt = { schemaVersion: SCHEMA_VERSION, receiptId: randomBytes(16).toString('hex'),
+        sessionRef: updated.sessionRef, ownerScopeRef: updated.ownerScopeRef, requestId: 'migration', model: '',
+        attempts: 0, physicalAttempts: [], policyRevision: updated.policyRevision, settlement: 'migration-ack',
+        createdAt: nowIso, settledAt: nowIso };
+      await this.store.compareAndSet(loaded.revision, { ...loaded, revision: loaded.revision + 1,
+        sessions: { ...loaded.sessions, [updated.sessionRef]: updated }, receipts: { ...loaded.receipts, [receipt.receiptId]: receipt } });
+      return { sessionRef: updated.sessionRef, expiresAt: updated.expiresAt, policyRevision: updated.policyRevision, receiptId: receipt.receiptId };
+    });
+  }
+
   async resolveCaller(input: { sessionRef: string; key: string }): Promise<CallerContext> {
     const loaded = await this.store.load();
     const session = loaded.sessions[input.sessionRef];
@@ -319,15 +373,21 @@ export class GatewaySessionService {
   }
 
   async reconcilePending(): Promise<void> {
-    const loaded = await this.store.load();
-    if (!Object.values(loaded.receipts).some((receipt) => receipt.settlement === 'pending')) return;
-    await this.store.compareAndSet(loaded.revision, { ...loaded, revision: loaded.revision + 1,
-      receipts: Object.fromEntries(Object.entries(loaded.receipts).map(([id, receipt]) => [id,
-        receipt.settlement === 'pending' ? { ...receipt, settlement: 'incomplete', settledAt: new Date().toISOString(),
-          physicalAttempts: receipt.physicalAttempts?.map((attempt) => attempt.outcome === 'pending' ? { ...attempt, outcome: 'incomplete' } : attempt) } : receipt])) });
+    await runGatewayStateTransaction(this.store, async () => {
+      const loaded = await this.store.load();
+      if (!Object.values(loaded.receipts).some((receipt) => receipt.settlement === 'pending')) return;
+      await this.store.compareAndSet(loaded.revision, { ...loaded, revision: loaded.revision + 1,
+        receipts: Object.fromEntries(Object.entries(loaded.receipts).map(([id, receipt]) => [id,
+          receipt.settlement === 'pending' ? { ...receipt, settlement: 'incomplete', settledAt: new Date().toISOString(),
+            physicalAttempts: receipt.physicalAttempts?.map((attempt) => attempt.outcome === 'pending' ? { ...attempt, outcome: 'incomplete' } : attempt) } : receipt])) });
+    });
   }
 
   async revokeSession(input: { ownerScopeRef: string; sessionRef: string }): Promise<{ revoked: boolean }> {
+    return runGatewayStateTransaction(this.store, () => this.revokeCommitted(input));
+  }
+
+  private async revokeCommitted(input: { ownerScopeRef: string; sessionRef: string }): Promise<{ revoked: boolean }> {
     if (!input.ownerScopeRef) {
       throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
     }
@@ -365,9 +425,7 @@ export class GatewaySessionService {
     requestId: string;
     model: string;
   }): Promise<StoredReceipt> {
-    const result = this.acquisition.then(() => this.recordCommitted(input));
-    this.acquisition = result.catch(() => undefined);
-    return result;
+    return runGatewayStateTransaction(this.store, () => this.recordCommitted(input));
   }
 
   private async recordCommitted(input: Parameters<GatewaySessionService['recordAttempt']>[0]): Promise<StoredReceipt> {
@@ -410,9 +468,7 @@ export class GatewaySessionService {
     outcome: string;
     attempts?: readonly RouteAttemptSettlement[];
   }): Promise<StoredReceipt> {
-    const result = this.acquisition.then(() => this.settleCommitted(input));
-    this.acquisition = result.catch(() => undefined);
-    return result;
+    return runGatewayStateTransaction(this.store, () => this.settleCommitted(input));
   }
 
   private async settleCommitted(input: Parameters<GatewaySessionService['settleReceipt']>[0]): Promise<StoredReceipt> {
@@ -450,15 +506,14 @@ export class GatewaySessionService {
   }
 
   async appendAttempt(input: { ownerScopeRef: string; receiptId: string; attempt: StoredRequestAttempt }): Promise<void> {
-    const run = this.acquisition.then(async () => {
+    await runGatewayStateTransaction(this.store, async () => {
       const state = await this.store.load(); const receipt = state.receipts[input.receiptId];
       if (!receipt || receipt.ownerScopeRef !== input.ownerScopeRef || receipt.settlement !== 'pending') throw new GatewaySessionError('receipt is unavailable', 'NOT-FOUND');
       if (receipt.physicalAttempts?.some((row) => row.attemptRef === input.attempt.attemptRef)) throw new GatewaySessionError('attempt already recorded', 'CONFLICT');
       const attempts = [...(receipt.physicalAttempts ?? []), input.attempt];
       await this.store.compareAndSet(state.revision, { ...state, revision: state.revision + 1,
-        receipts: { ...state.receipts, [receipt.receiptId]: { ...receipt, attempts: attempts.length, physicalAttempts: attempts } } });
+        receipts: { ...state.receipts, [input.receiptId]: { ...receipt, attempts: attempts.length, physicalAttempts: attempts } } });
     });
-    this.acquisition = run.catch(() => undefined); return run;
   }
 
   async readReceipt(input: { ownerScopeRef: string; receiptId: string }): Promise<StoredReceipt> {
