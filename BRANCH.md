@@ -94,7 +94,7 @@
   - [ ] Newly public packages have web bootstrap only, never token bootstrap steps.
   - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
 - [ ] **Lot 4 — Packaged consumer qualification**
-  - [ ] New `scripts/publish/packaged-consumer.test.mjs`: install real guarded archives and import every public Node entry point, including experimental/hono entries.
+  - [x] New `scripts/publish/packaged-consumer.test.mjs`: install real guarded archives and import every public Node entry point, including experimental/hono entries.
   - [ ] Gate: `make test-publishable-consumers ENV=test-publish-mcp-packages`.
   - [ ] API tests: none; no API implementation changes.
   - [ ] UI tests: none; no UI implementation changes.
