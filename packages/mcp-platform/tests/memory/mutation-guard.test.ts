@@ -75,7 +75,7 @@ describe('P02.platform.mutation-guard', () => {
     expect(
       validateEffectiveInput({
         tool_name: 'engram_memory_forget',
-        record_id: 'record-1',
+        record_id: 'mem_aaaa',
         reason_ref: 'reason-1',
         event_id: 'event-1',
         event_anchor: {
@@ -103,7 +103,7 @@ describe('P02.platform.mutation-guard', () => {
       target: { kind: 'candidate', candidate_id: 'candidate-1' },
       effective_input: {
         tool_name: 'engram_memory_forget',
-        record_id: 'record-1',
+        record_id: 'mem_aaaa',
         reason_ref: 'reason-1',
         event_id: 'event-1',
         event_anchor: {

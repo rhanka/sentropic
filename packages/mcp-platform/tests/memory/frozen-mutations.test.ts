@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeMutationDigest, validateMutationPreimage } from '../../src/memory/mutation-guard.js';
+import { computeMutationDigest, validateMutationPreimage, validatePolicyVersionsProjection } from '../../src/memory/mutation-guard.js';
 import { canonicalJson } from '../../src/tool-configuration.js';
 import { A05_MUTATION_DIGEST_VECTORS_SPEC_RULE as corpus } from '../../../../tools/memory-mcp-l5/fixtures/l0/60a8bfa828b5eabd360232ea5865391c23f99f48/memory-mcp-spec-rules.js';
 const capture = () => JSON.parse(corpus.vectors.capture_v1.expected_jcs_utf8);
@@ -28,5 +28,18 @@ describe('identical frozen A05 corpus', () => {
     const input = JSON.parse(corpus.vectors.withdraw_v1.expected_jcs_utf8);
     input.effective_input.event_anchor.occurred_at = occurred_at;
     expect(validateMutationPreimage(input).length).toBeGreaterThan(0);
+  });
+  it('preserves opaque candidate bytes while rejecting non-record identifiers', () => {
+    const candidate = JSON.parse(corpus.vectors.request_admission_v1.expected_jcs_utf8);
+    candidate.target.candidate_id = candidate.effective_input.candidate_id = 'e\u0301';
+    expect(validateMutationPreimage(candidate)).toEqual([]);
+    const record = JSON.parse(corpus.vectors.forget_v1.expected_jcs_utf8);
+    record.target.record_id = record.effective_input.record_id = 'arbitrary';
+    expect(validateMutationPreimage(record).length).toBeGreaterThan(0);
+  });
+  it('rejects extra policy projection members', () => {
+    const effective = capture().effective_input;
+    expect(validatePolicyVersionsProjection(effective, { tool_name: effective.tool_name,
+      capture_policy_version: effective.capture_policy_version, extra: true } as any).length).toBeGreaterThan(0);
   });
 });
