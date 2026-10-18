@@ -49,3 +49,7 @@ rather than silently left implicit:
   short window, or alongside other unauthenticated GitHub API usage from the same IP, can
   exhaust the quota and turn a real failure into a transient 403/429 (see S2 in the fix log
   below, now correctly reported as `retriable: true`).
+
+## Releases
+
+First publication uses the owner-operated [web bootstrap](../../scripts/publish/README.md); later releases use CI trusted publishing.

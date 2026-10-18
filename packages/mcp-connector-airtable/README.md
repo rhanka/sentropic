@@ -10,3 +10,7 @@ BR-72 matrix §7 airtable read-only rows — it is NOT a shipped production conn
 production connector's residence is an architect D4 decision, deferred.
 
 The root entry (`.` / `src/index.ts`) stays READ-ONLY and FROZEN.
+
+## Releases
+
+First publication uses the owner-operated [web bootstrap](../../scripts/publish/README.md); later releases use CI trusted publishing.
