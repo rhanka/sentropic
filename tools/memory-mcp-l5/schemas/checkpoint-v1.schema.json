@@ -137,7 +137,7 @@
     "commit": { "type": "string", "minLength": 40, "maxLength": 40, "pattern": "^[0-9a-f]{40}$" },
     "sha512Integrity": { "type": "string", "minLength": 95, "maxLength": 95, "pattern": "^sha512-[A-Za-z0-9+/]{86}==$" },
     "semver": { "type": "string", "minLength": 5, "maxLength": 64, "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$" },
-    "imageDigest": { "type": "string", "minLength": 94, "maxLength": 256, "pattern": "^node:24(?:\\.[0-9]+)*-bookworm-slim@sha256:[0-9a-f]{64}$" },
+    "imageDigest": { "type": "string", "minLength": 93, "maxLength": 256, "pattern": "^node:24(?:\\.[0-9]+)*-bookworm-slim@sha256:[0-9a-f]{64}$" },
     "dateTime": { "type": "string", "format": "date-time", "minLength": 20, "maxLength": 64, "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$" },
     "relPath": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?:\\.[A-Za-z0-9_@-]+|[A-Za-z0-9_@][A-Za-z0-9._@-]*)(?:/(?:\\.[A-Za-z0-9_@-]+|[A-Za-z0-9_@][A-Za-z0-9._@-]*))*$" },
     "evidence": { "type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": { "path": { "$ref": "#/$defs/relPath" }, "sha256": { "$ref": "#/$defs/sha256" } } },
