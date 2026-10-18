@@ -123,7 +123,7 @@ means a session that may create a credential but satisfies no client.
 | Path | What merged code does | Assurance of the resulting session |
 |---|---|---|
 | Passkey login | Verifies the credential, requires verified email and an enabled account, then mints the session with `mfaVerified` from the ceremony (`api/src/routes/namespaces/auth/authentication.ts:84`) | `MFA` when UV present, else `bearer` |
-| Add a device while signed in | The register surface is also the signed-in "add device" surface; credential rows are listed, renamed, and revoked per user behind a validated session (`api/src/routes/namespaces/auth/credentials.ts:52`, `api/src/routes/namespaces/auth/credentials.ts:76`) | Inherits the caller's session; no step-up is required by merged code |
+| Add a device while signed in (credential management) | The credential handlers list, rename, and revoke rows per user behind a validated session (`api/src/routes/namespaces/auth/credentials.ts:52`, `api/src/routes/namespaces/auth/credentials.ts:76`); enrolment itself happens on the register surface, whose finalization deliberately creates a **new** weak session rather than continuing the caller's (`api/src/routes/namespaces/auth/registration.ts:363`) | Enrol via register surface (email or invite proof); manage behind any validated session; no step-up in merged code |
 | Magic link, account **with** devices | Marks the email verified, creates a session with no `mfaVerified` option (so false), and reports the devices as activated (`api/src/routes/namespaces/auth/magic-link.ts:140`) | `bearer` |
 | Magic link, account **without** devices | Creates the same bearer session, flags `requiresDeviceRegistration`, explicitly to allow device registration (`api/src/routes/namespaces/auth/magic-link.ts:196`, `api/src/routes/namespaces/auth/magic-link.ts:224`) | `enrolment-only` in intent, `bearer` in fact (no endpoint restriction) |
 | "Lost your device?" | Login shows the lost-device notice and links to the register surface; the register flow is email code plus WebAuthn enrolment (`packages/auth-ui/src/components/AuthLogin.svelte:102`, `spec/WORKFLOW_AUTH.md:97`) | Email proof alone reaches enrolment |
@@ -351,7 +351,7 @@ ceremony verification; no client row changes when that happens (R-POL-1).
 |---|---|---|---|
 | Passkey login with UV, within freshness bound | `passkey-fresh` (emitted) | `mfa`, `amr=['hwk','user','mfa']` | Yes `[EXISTS]` for the boolean part; freshness `[TO BUILD Lot 2]`, neutral emission `[TO BUILD Lot 5]` |
 | Passkey login with UV, older than the bound | `passkey-fresh` (still passes today — G-FRESH) | `mfa` ceremony, **stale**: treated as below level at authorize | No — step-up (section 5.3) `[TO BUILD Lot 2]` |
-| Passkey login without UV | `bearer` | `bearer` | No `[EXISTS]` |
+| Passkey ceremony without UV | Rejected by the real verifier (session auth disabled, no session minted) | Rejected; the defensive `bearer` mint branch on a mocked UV=false remains defence-in-depth, not verifier evidence | No (no session) `[EXISTS]` |
 | Magic link (with or without devices) | `bearer` | `bearer`; the no-device variant is additionally restricted to enrolment endpoints (section 6) | No `[EXISTS]` refusal; endpoint restriction `[TO BUILD Lot 3]` |
 | Federation (for example Google) | `bearer` | `bearer` | No `[EXISTS]` |
 | Registration finalisation | `bearer` | `bearer` | No `[EXISTS]` |
@@ -696,7 +696,8 @@ Normative additions:
   or removing a subject from an MFA client's allowlist is recorded as a
   distinct audited event (section 9.2) with the previous and new values
   (subject identifiers hashed or truncated in logs; full values stay in
-  the database row history the Job already prints for the operator).
+  history the governed operation persists; merged code has no such
+  history: the registration script prints only the resulting current row).
 - **R-GOV-3.** The client secret, its hash rotation, and the policy are
   independent: rotation follows the 90-day runbook cycle and never
   requires a policy decision; a policy change never requires a secret
@@ -736,9 +737,18 @@ downgrade fields), `auth.mfa_stepup_succeeded` / `auth.mfa_stepup_failed`
 (R-REC-1/R-REC-2 refusals), `auth.breakglass_reset_executed` (Job
 identity, target account, counts revoked), and
 `auth.enrolment_only_session_issued` / `auth.enrolment_only_session_used`.
-Failures are recorded with the same names and a refusal outcome; a missing
-audit write never changes the authorization outcome (logging is observed,
-not consulted), matching the current fire-and-forget port usage.
+Failures are recorded with the same names and a refusal outcome. Two
+record classes are distinguished `[TO BUILD Lot 6]`: **best-effort**
+records (ordinary authorization outcomes, notifications) stay
+fire-and-forget as merged; **transition records** (credential-binding
+trust, pending activation, hardening, policy/policy-version change,
+generation bump) are atomically coupled to the state change they record
+— if the transition record cannot persist, the privileged operation
+fails closed. R-REC-7's "atomically with the audit record" means this
+second class. Durable policy history likewise persists as data, not as a
+logger claim. Host target: the audit wiring at
+`api/src/routes/auth/oauth.ts:157` keeps the first class; the state layer
+owns the second.
 
 ### 9.3 Notifications
 
@@ -769,7 +779,7 @@ once it exists. No step widens acceptance:
 | M-0 | Clients keep `passkey-fresh`; sessions emit `passkey-fresh` | Baseline | `[EXISTS]` |
 | M-1 | Authorize accepts `mfa` as an equivalent required spelling and a qualifying session satisfies either spelling; unknown values still refuse | Identical accept/refuse set for every existing session origin | `[TO BUILD Lot 5]` |
 | M-2 | Each MFA client is re-registered through the governed Job with `OAUTH_CLIENT_REQUIRED_ACR=urn:sentropic:loa:mfa`; the Job output is checked to show the new value. Secret rotation is not required and not performed by this step | Stored policy now uses the neutral spelling; authorize outcome unchanged | `[TO BUILD Lot 5]` (operator step) |
-| M-3 | Session emission switches to canonical `mfa`; token `acr` follows; `amr` unchanged. Discovery advertises both spellings in `acr_values_supported` during M-1…M-3, then the neutral value (alias retained as accepted requirement) | RPs reading `acr` see the new value only after their client row moved; KVM reads nothing | `[TO BUILD Lot 5]` |
+| M-3 | Session emission switches to canonical `mfa` **globally** (the resolver has no client context, so per-client sequencing of emission is impossible): token `acr` follows for every client at once, and `amr` is rewritten to the single final contract in the same lot (the interim `hwk`+`mfa` emission is not a stable RP contract). Before the switch, inventory actual `acr`/`amr` consumers — authorize, token, userinfo, host fallback at `api/src/services/auth/oauth-state-adapter.ts:282`, IdP-sync readback/postcondition, logs/fixtures, and the tiers application. Discovery advertises both spellings during M-1…M-3, then the neutral value (alias retained as accepted requirement) | Every RP sees the new emission together; KVM reads nothing and is unaffected; bounded dual-output window with a fixture inventory as the completion proof | `[TO BUILD Lot 5]` |
 | M-4 | `passkey-fresh` stays as an accepted required alias for one deprecation window; new declarations (section 8.1) must use `mfa`. Removing the alias is a separate, later decision and is not scheduled here | No client is stranded | — |
 
 Package note: `@sentropic/auth-hono` carries the authorize and resolver
@@ -778,7 +788,7 @@ package version per `rules/workflow.md` (Package Publication). The frozen
 status of `auth-hono` for bootstrap is unaffected; steady-state publication
 rules apply.
 
-### 10.2 Account and KVM sequencing (normative order)
+### 10.2 Starting state, trust migration, and sequencing (normative)
 
 1. **Register** `kvm-gateway` (Lot 1 declaration, governed Job, legacy
    spelling). **[Corrected: recorded production fact (owner-supplied,
@@ -786,9 +796,8 @@ rules apply.
    `passkey-fresh` and the owner-only allowlist; work is
    confirmation/reconciliation by readback, and the pre-closure email
    exposure of section 2.3 stands until Lot 3.]**
-2. **Enrol** the owner account to the prerequisite: at least two distinct
-   credentials under normal signed-in flows (Lot 4 check in advisory
-   mode), optionally recovery codes (owner decision, section 15).
+2. **Enrol** independently recoverable authenticators (R-REC-8) and
+   complete the trust-migration inventory below (advisory checks first).
 3. **Close** the email path for hardened accounts (Lot 3 deployed). Only
    now does R-REC-0 hold.
 4. **Prove full-loss recovery, then enforce**: the Lot 4 Job, its
@@ -830,7 +839,8 @@ runbook already treats `kvm-gateway` as a confidential OIDC client of the
 IdP alongside `netbird` (`docs/oauth-client-rotation.md:5`), with its
 issuer, client id, and secret carried by the `KVM_GATEWAY_OIDC_*`
 variables. No `oauth_clients` row can be verified from the repository
-(the database is the record), so onboarding means creating or confirming
+(the database is the record), so onboarding means confirming the
+recorded production row (section 10.2) or creating it where absent,
 that row with the parameters below through the governed Job — it does not
 mean inventing a parallel authentication mechanism for KVM.
 
@@ -894,6 +904,7 @@ exhaustive for the named suites (existing + updated + new).
 | `packages/auth-hono/tests/oauth-consent-policy.test.ts`, `packages/auth-hono/tests/oauth-token.test.ts`, `packages/auth-hono/tests/session-service.test.ts` | existing, updated in Lots 2/5 | Cookie swap during consent; policy change or generation bump before code exchange refuses the stale transaction; refresh preserves ceremony times/generation and never elevates; revoked generation cannot be revived by refresh replay |
 | `api/tests/api/auth/passkey-mfa-session.test.ts`, `api/tests/api/auth/registration.test.ts`, `api/tests/api/auth/magic-link.test.ts`, `api/tests/api/auth/credentials.test.ts`, `packages/auth-hono/tests/federation-resolve-user.test.ts` | existing, updated in Lots 1/3/4 | Real-verifier UV failure stays refused (mocked UV=false route behaviour is not verifier evidence); protected zero/one/two-device enrolment matrix; weak session cannot delete trusted keys; federation stays bearer with no silent merge |
 | `api/tests/api/auth/mfa-recovery-policy.test.ts` | new in Lot 3/4 | Full chain: email proof, enrolment attempt, fresh passkey login, authorize/consent/token for the KVM fixture — no protected token at any shortcut (old session, no-device account, old challenge, non-MFA client detour); approved recovery completes successfully |
+| `api/tests/unit/auth/session-manager.test.ts`, `api/tests/api/auth/session.test.ts`, `api/tests/unit/auth/webauthn-authentication.test.ts` | existing, updated in Lots 2/3 | Host-seam origin coverage: delivery-to-active-credential session composition, real-verifier UV, federation/magic-link/pending-key origins through actual minting (not `resolveOAuthAcr` alone); concurrent first activation settles exactly once with one transaction/version winner |
 | `e2e/tests/02-auth-webauthn.spec.ts`, `e2e/tests/02-auth-devices.spec.ts`, `e2e/tests/02-auth-oauth-authorization-code.spec.ts` (extend); `e2e/tests/02-auth-mfa-recovery.spec.ts` (new) | existing + new in Lot 6 | Browser virtual-authenticator flows: normal MFA, spare-key recovery (spare actually authenticates), full-loss approved reset, cancelled recovery, stale session; signed result checked for RP audience |
 
 Scoped runs while evolving (one suite at a time), for example:
@@ -1018,9 +1029,10 @@ récupération dépendante de l'opérateur ; (ii) ajoute une commodité sans
 chaîne directe code-vers-MFA ; (iii) rend le vol du code éventuellement
 suffisant après délai et doit être assumé comme tel.
 
-**D-P3 — Portée du durcissement du compte.** Options : (i) le durcissement
-dérivé actuel (section 4.2 : seuls les comptes allowlistés sur un client
-MFA sont durcis), (ii) durcir tout compte dès son premier passkey, y
+**D-P3 — Portée du durcissement du compte.** Options : (i) la protection
+stockée activée explicitement (section 4.2 : entrée allowlist, première
+autorisation MFA vers un client sans allowlist, ou activation
+opérateur), (ii) durcir tout compte dès son premier passkey, y
 compris pour les applications non forcées. Conséquences : (i) préserve la
 récupération par email pour les usages non forcés et limite le changement
 aux comptes exposés à KVM ; (ii) simplifie le modèle mental mais dégrade
@@ -1031,4 +1043,3 @@ Aucune autre décision propriétaire n'est requise pour autoriser les lots :
 le choix des TTL fins (session enrolment-only, grant d'urgence), des noms
 d'événements d'audit et du schéma de la table des codes relève des lots
 d'implémentation sous les bornes normatives des sections 6 et 9.
-
