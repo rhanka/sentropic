@@ -121,6 +121,23 @@ export const runRouteJsonFlow = async (
         throw await refuseNativeAttempt(attempt, () => settle('failed'));
       }
       const classification = classifyRouteError(error, signal?.aborted);
+      if (!observedServedModel && error && typeof error === 'object') {
+        const record = error as { observedServedModelId?: unknown; observedServedModelIds?: unknown; providerMetadata?: unknown };
+        const candidates = Array.isArray(record.observedServedModelIds)
+          ? record.observedServedModelIds.filter((value): value is string => typeof value === 'string' && value.length > 0)
+          : [];
+        const preferred = candidates.find((value) => value !== diagnostic.actualModelId) ?? candidates[0];
+        const single = typeof record.observedServedModelId === 'string' && record.observedServedModelId.length > 0
+          ? record.observedServedModelId
+          : undefined;
+        const nested = record.providerMetadata && typeof record.providerMetadata === 'object'
+          && typeof (record.providerMetadata as { observedServedModelId?: unknown }).observedServedModelId === 'string'
+          ? (record.providerMetadata as { observedServedModelId: string }).observedServedModelId
+          : undefined;
+        const chosen = preferred ?? single ?? nested;
+        if (chosen && (candidates.length > 0 || chosen !== diagnostic.actualModelId)) observedServedModel = chosen;
+        else if (candidates.length === 0 && single && single !== diagnostic.actualModelId) observedServedModel = single;
+      }
       const termination = signal?.aborted ? 'cancelled' : error instanceof NativeMessagesUpstreamError
         && error.code === 'native_protocol_error' ? 'protocol_error'
         : error instanceof NativeMessagesUpstreamError && error.code === 'timeout' ? 'timeout' : 'upstream_error';

@@ -211,4 +211,19 @@ describe('Codex runtime client', () => {
     expect(generated.modelId).toBe('gpt-5.6-terra');
     expect(generated.providerMetadata).toEqual({ observedServedModelId: 'gpt-5.6-mini-fallback' });
   });
+
+  it.each([['created-contradiction', 'gpt-6-astra', 'gpt-6.1-sol'], ['completed-contradiction', 'gpt-6.1-sol', 'gpt-6-astra']])(
+    'terminates JSON aggregation when created/completed identities diverge (%s)',
+    async (_label, createdModel, completedModel) => {
+      const client = new CodexRuntimeClient({ fetch: async () => sseResponse([
+        { type: 'response.created', response: { id: 'r', model: createdModel } },
+        { type: 'response.output_text.delta', delta: 'hi' },
+        { type: 'response.completed', response: { id: 'r', model: completedModel, usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } },
+      ]) });
+      await expect(client.generate({
+        providerId: 'openai', modelId: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+      }, auth)).rejects.toMatchObject({ code: 'model_identity_mismatch', observedServedModelIds: expect.arrayContaining(['gpt-6-astra', 'gpt-6.1-sol']) });
+    },
+  );
 });
