@@ -22,27 +22,27 @@
       "specSha256": { "$ref": "#/$defs/sha256" },
       "l0Commit": { "$ref": "#/$defs/commit" },
       "l0Freeze": { "$ref": "#/$defs/evidence" },
-      "fixtures": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+      "fixtures": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/evidence" } },
       "registrySha256": { "$ref": "#/$defs/sha256" },
       "gatewaySha256": { "$ref": "#/$defs/sha256" },
-      "exports": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
-      "schemas": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
-      "profiles": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+      "exports": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/evidence" } },
+      "schemas": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/evidence" } },
+      "profiles": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/evidence" } },
       "entry": { "$ref": "#/$defs/evidence" },
       "providerManifest": { "$ref": "#/$defs/evidence" }
     } },
     "preCandidate": { "type": "object", "additionalProperties": false, "required": ["manifestSha256", "contractInventory", "l4BuildReceipt", "contractComparison"], "properties": {
       "manifestSha256": { "$ref": "#/$defs/sha256" },
-      "contractInventory": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+      "contractInventory": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/contractEntry" } },
       "l4BuildReceipt": { "$ref": "#/$defs/evidence" },
       "contractComparison": { "$ref": "#/$defs/evidence" }
     } },
-    "artifacts": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["role", "name", "version", "sha256", "integrity", "sourceHead", "archiveRef"], "properties": {
+    "artifacts": { "type": "array", "minItems": 4, "maxItems": 128, "items": { "type": "object", "additionalProperties": false, "required": ["role", "name", "version", "sha256", "integrity", "sourceHead", "archiveRef"], "properties": {
       "role": { "enum": ["l4", "platform", "broker", "mesh", "dependency"] },
       "name": { "type": "string", "minLength": 1, "maxLength": 256 },
-      "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+      "version": { "$ref": "#/$defs/semver" },
       "sha256": { "$ref": "#/$defs/sha256" },
-      "integrity": { "type": "string", "pattern": "^sha512-[A-Za-z0-9+/]+={0,2}$" },
+      "integrity": { "$ref": "#/$defs/sha512Integrity" },
       "sourceHead": { "$ref": "#/$defs/commit" },
       "archiveRef": { "$ref": "#/$defs/relPath" }
     } } },
@@ -51,17 +51,17 @@
       "declaredLockSha256": { "$ref": "#/$defs/sha256" },
       "installedLockSha256": { "$ref": "#/$defs/sha256" },
       "installedClosureSha256": { "$ref": "#/$defs/sha256" },
-      "sdkVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$" },
+      "sdkVersion": { "$ref": "#/$defs/semver" },
       "sdkRange": { "const": "^1.31.0" },
-      "protocolVersions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1, "maxLength": 64 } },
-      "referenceExport": { "type": "string", "minLength": 1, "maxLength": 256 },
+      "protocolVersions": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 64 } },
+      "referenceExport": { "const": "@sentropic/mcp-broker/memory-reference" },
       "referenceSourceSha256": { "$ref": "#/$defs/sha256" }
     } },
     "runtime": { "type": "object", "additionalProperties": false, "required": ["nodeVersion", "imageDigest", "platform", "sqliteVersion", "driver", "journalMode", "synchronous", "filesystem", "filesystemAssumptions", "fenceProfileSha256", "pythonCount", "addonBuildCount"], "properties": {
-      "nodeVersion": { "type": "string", "minLength": 1, "maxLength": 32 },
-      "imageDigest": { "type": "string", "minLength": 1, "maxLength": 256 },
+      "nodeVersion": { "type": "string", "minLength": 5, "maxLength": 32 },
+      "imageDigest": { "$ref": "#/$defs/imageDigest" },
       "platform": { "type": "string", "minLength": 1, "maxLength": 64 },
-      "sqliteVersion": { "type": "string", "minLength": 1, "maxLength": 32 },
+      "sqliteVersion": { "type": "string", "minLength": 5, "maxLength": 32, "pattern": "^3\\.[0-9]+\\.[0-9]+$" },
       "driver": { "const": "node:sqlite" }, "journalMode": { "const": "WAL" }, "synchronous": { "const": "FULL" },
       "filesystem": { "type": "string", "minLength": 1, "maxLength": 128 },
       "filesystemAssumptions": { "type": "string", "minLength": 1, "maxLength": 512 },
@@ -77,50 +77,50 @@
     } },
     "proofs": { "type": "array", "minItems": 10, "maxItems": 10, "items": { "type": "object", "additionalProperties": false, "required": ["id", "files", "command", "result", "artifactManifestSha256", "sourceHead", "runId", "attempt"], "properties": {
       "id": { "enum": ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10"] },
-      "files": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1, "maxLength": 256 } },
+      "files": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/relPath" } },
       "command": { "type": "string", "minLength": 1, "maxLength": 1024 },
       "result": { "type": "object", "additionalProperties": false, "required": ["path", "sha256", "format", "passed", "failed", "skipped", "todo", "executedCasesSha256"], "properties": {
         "path": { "$ref": "#/$defs/relPath" },
         "sha256": { "$ref": "#/$defs/sha256" },
         "format": { "const": "vitest-json" },
-        "passed": { "type": "integer", "minimum": 1 },
+        "passed": { "type": "integer", "minimum": 1, "maximum": 100000 },
         "failed": { "const": 0 }, "skipped": { "const": 0 }, "todo": { "const": 0 },
         "executedCasesSha256": { "$ref": "#/$defs/sha256" }
       } },
       "artifactManifestSha256": { "$ref": "#/$defs/sha256" },
       "sourceHead": { "$ref": "#/$defs/commit" },
       "runId": { "type": "string", "minLength": 1, "maxLength": 128 },
-      "attempt": { "type": "integer", "minimum": 1 }
+      "attempt": { "type": "integer", "minimum": 1, "maximum": 100 }
     } } },
     "importGraph": { "type": "object", "additionalProperties": false, "required": ["path", "sha256", "roots", "resolvedFilesSha256", "forbiddenHits", "unresolvedEdges"], "properties": {
       "path": { "$ref": "#/$defs/relPath" },
       "sha256": { "$ref": "#/$defs/sha256" },
-      "roots": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1, "maxLength": 256 } },
+      "roots": { "type": "array", "minItems": 4, "maxItems": 16, "items": { "type": "string", "minLength": 1, "maxLength": 256 } },
       "resolvedFilesSha256": { "$ref": "#/$defs/sha256" },
       "forbiddenHits": { "const": 0 }, "unresolvedEdges": { "const": 0 }
     } },
     "ci": { "type": "object", "additionalProperties": false, "required": ["workflow", "runId", "attempt", "head", "base", "merge", "checkout", "imageDigest", "artifactName", "jobs"], "properties": {
       "workflow": { "const": ".github/workflows/ci.yml" },
       "runId": { "type": "string", "minLength": 1, "maxLength": 64 },
-      "attempt": { "type": "integer", "minimum": 1 },
+      "attempt": { "type": "integer", "minimum": 1, "maximum": 100 },
       "head": { "$ref": "#/$defs/commit" },
       "base": { "$ref": "#/$defs/commit" },
       "merge": { "$ref": "#/$defs/commit" },
       "checkout": { "$ref": "#/$defs/commit" },
-      "imageDigest": { "type": "string", "minLength": 1, "maxLength": 256 },
+      "imageDigest": { "$ref": "#/$defs/imageDigest" },
       "artifactName": { "type": "string", "minLength": 1, "maxLength": 256 },
-      "jobs": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["id", "conclusion", "resultSha256"], "properties": {
+      "jobs": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "type": "object", "additionalProperties": false, "required": ["id", "conclusion", "resultSha256"], "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 128 }, "conclusion": { "const": "success" }, "resultSha256": { "$ref": "#/$defs/sha256" }
       } } }
     } },
     "ownerUat": { "oneOf": [
       { "type": "object", "additionalProperties": false, "required": ["status", "evidence", "policySha256", "actorRef", "recordedAt"], "properties": {
         "status": { "const": "passed" }, "evidence": { "$ref": "#/$defs/evidence" }, "policySha256": { "$ref": "#/$defs/sha256" },
-        "actorRef": { "type": "string", "minLength": 1, "maxLength": 256 }, "recordedAt": { "type": "string", "format": "date-time" }
+        "actorRef": { "type": "string", "minLength": 1, "maxLength": 256 }, "recordedAt": { "$ref": "#/$defs/dateTime" }
       } },
       { "type": "object", "additionalProperties": false, "required": ["status", "evidence", "actorRef", "recordedAt", "owningLot", "reason"], "properties": {
         "status": { "const": "owner-deferred" }, "evidence": { "$ref": "#/$defs/evidence" },
-        "actorRef": { "type": "string", "minLength": 1, "maxLength": 256 }, "recordedAt": { "type": "string", "format": "date-time" },
+        "actorRef": { "type": "string", "minLength": 1, "maxLength": 256 }, "recordedAt": { "$ref": "#/$defs/dateTime" },
         "owningLot": { "enum": ["L6", "L8"] }, "reason": { "type": "string", "minLength": 1, "maxLength": 1024 }
       } }
     ] },
@@ -133,9 +133,14 @@
     } } }
   },
   "$defs": {
-    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-    "relPath": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!.*\\.\\.)[^\\0]+$" },
-    "evidence": { "type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": { "path": { "$ref": "#/$defs/relPath" }, "sha256": { "$ref": "#/$defs/sha256" } } }
+    "sha256": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$" },
+    "commit": { "type": "string", "minLength": 40, "maxLength": 40, "pattern": "^[0-9a-f]{40}$" },
+    "sha512Integrity": { "type": "string", "minLength": 95, "maxLength": 95, "pattern": "^sha512-[A-Za-z0-9+/]{86}==$" },
+    "semver": { "type": "string", "minLength": 5, "maxLength": 64, "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$" },
+    "imageDigest": { "type": "string", "minLength": 71, "maxLength": 256, "pattern": "^(?:node:24(?:\\.[0-9]+)*-bookworm-slim@)?sha256:[0-9a-f]{64}$" },
+    "dateTime": { "type": "string", "format": "date-time", "minLength": 20, "maxLength": 64, "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$" },
+    "relPath": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?:\\.[A-Za-z0-9_@-]+|[A-Za-z0-9_@][A-Za-z0-9._@-]*)(?:/(?:\\.[A-Za-z0-9_@-]+|[A-Za-z0-9_@][A-Za-z0-9._@-]*))*$" },
+    "evidence": { "type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": { "path": { "$ref": "#/$defs/relPath" }, "sha256": { "$ref": "#/$defs/sha256" } } },
+    "contractEntry": { "type": "object", "additionalProperties": false, "required": ["path", "version", "sha256"], "properties": { "path": { "$ref": "#/$defs/relPath" }, "version": { "$ref": "#/$defs/semver" }, "sha256": { "$ref": "#/$defs/sha256" } } }
   }
 }
