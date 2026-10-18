@@ -186,7 +186,7 @@
   - [x] `make lock-root API_PORT=9630 UI_PORT=5830 MAILDEV_UI_PORT=1730 ENV=test-gw-durable-vibe-muse` reproduces ERESOLVE on cluster-mesh 0.18.0 peer caps; lock unchanged, no force/legacy-peer-deps bypass
   - [x] Apply BR120-EX10 widening (mesh `<0.28.0`, gateway `<0.22.0`, cluster 0.19.1), refresh the root lock through `make lock-root`, recheck versions against npm (gateway 0.20.1, mesh 0.26.1, cluster 0.19.0)
   - [x] Recheck train lock-sync and run the required manifest/package gates without bypasses
-  - [ ] Commit scoped fixes in changes of at most 150 lines, report ready unpushed with head SHA, wait for slot, then rebase-push once and follow CI to completion
+  - [x] Commit scoped fixes in changes of at most 150 lines, report ready unpushed with head SHA, wait for slot, then rebase-push once and follow CI to completion
 
 - [ ] **Lot 0 — Baseline and test contract freeze**
   - [x] Re-pin baseline: G `db314a67` is in HEAD; fresh origin/main remains `fb5e92a6a`; immo #679 remains OPEN/DRAFT at `43872522a22467f39d5211c5c59f1eca1ff62a11`; h2a companion #353 remains OPEN/DRAFT at `60816a1cafdb03a923e03f484b221a93efeb4a51`. Published gateway/mesh are 0.20.0/0.26.1; candidates 0.21.0/0.27.0 exceed main/npm/in-flight.
@@ -248,8 +248,8 @@
       - [x] `make test-llm-gateway SCOPE=tests/host-runtime.test.ts ENV=test-gw-durable-vibe-muse` (3/3 real HTTP/planner restart, revoke, second-writer and corruption)
       - [x] `make -f tools/gateway-evolution/Makefile gateway-host-packed-test ARTIFACT_MANIFEST=tmp/gw-pr1-packed/manifest.json SCOPE=tools/gateway-evolution/packed/host-exports.test.ts ENV=test-gw-durable-vibe-muse` (strict TS 5.9.3 consumer)
       - [x] `make -f tools/gateway-evolution/Makefile gateway-host-packed-test ARTIFACT_MANIFEST=tmp/gw-pr1-packed/manifest.json SCOPE=tools/gateway-evolution/packed/session-store-restart.test.ts ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-llm-gateway-process SCOPE=tests/host-composition.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
-      - [ ] `make typecheck-llm-gateway-process lint-llm-gateway-process API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway-process SCOPE=tests/host-composition.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [x] `make typecheck-llm-gateway-process lint-llm-gateway-process API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
     - [x] `make down API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
     - [x] `make ps API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
   - [ ] UAT L1 durable sessions
@@ -267,13 +267,13 @@
     - [x] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
     - [x] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
     - [ ] **API tests**
-      - [ ] New `api/tests/unit/gateway-exact-model-policy.test.ts`: exact Claude with only Argon makes zero provider calls; explicit G mapping reaches selected Argon with requested/selected/observed identities + mapping revision; quote/plan/execute, default absence, restart, conflicting override, old implicit session refused
-      - [ ] Update `api/tests/unit/gateway-wire-adapter.test.ts` for real mount + receipt behavior
-      - [ ] Update `api/tests/api/cluster-mesh-gw.test.ts` for real mount + receipt behavior
-      - [ ] `make test-api-unit SCOPE=tests/unit/gateway-exact-model-policy.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-api-unit SCOPE=tests/unit/gateway-wire-adapter.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
-      - [ ] `make test-api-endpoints SCOPE=tests/api/cluster-mesh-gw.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
-      - [ ] `make typecheck-api lint-api API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [x] New `api/tests/unit/gateway-exact-model-policy.test.ts`: exact Claude with only Argon makes zero provider calls; explicit G mapping reaches selected Argon with requested/selected/observed identities + mapping revision; quote/plan/execute, default absence, restart, conflicting override, old implicit session refused
+      - [x] Update `api/tests/unit/gateway-wire-adapter.test.ts` for real mount + receipt behavior
+      - [x] Update `api/tests/api/cluster-mesh-gw.test.ts` for real mount + receipt behavior
+      - [x] `make test-api-unit SCOPE=tests/unit/gateway-exact-model-policy.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-api-unit SCOPE=tests/unit/gateway-wire-adapter.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-api-endpoints SCOPE=tests/api/cluster-mesh-gw.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [x] `make typecheck-api lint-api API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
     - [ ] **UI tests (TypeScript only)**
       - [ ] None in L2
     - [ ] **E2E tests**
@@ -288,7 +288,7 @@
       - [x] `make test-llm-gateway SCOPE=tests/request-model-receipt.test.ts ENV=test-gw-durable-vibe-muse`
       - [x] `make test-llm-gateway SCOPE=tests/route-stream-flow.test.ts ENV=test-gw-durable-vibe-muse`
       - [x] `make check-llm-model-equivalences ENV=test-gw-durable-vibe-muse`
-    - [ ] `make up-api-test API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [x] `make up-api-test API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
     - [x] `make down API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
     - [x] `make ps API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
   - [ ] UAT L2 exact routing
