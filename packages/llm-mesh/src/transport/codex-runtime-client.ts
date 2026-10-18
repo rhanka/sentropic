@@ -95,11 +95,21 @@ export class CodexRuntimeClient implements OpenAIAdapterClient {
     const stream = await this.stream(request, context);
     let text = ''; let usage: TokenUsage | undefined; let responseId = 'codex_response';
     let observedServedModelId: string | undefined;
+    const seenObserved: string[] = [];
     let finishReason: GenerateResponse['finishReason'] = 'unknown';
     const toolCalls = new Map<string, ToolCall>();
     for await (const event of stream) {
       if ('metadata' in event.data && event.data.metadata && typeof event.data.metadata.observedServedModelId === 'string') {
-        observedServedModelId = event.data.metadata.observedServedModelId;
+        const observed = event.data.metadata.observedServedModelId;
+        if (!seenObserved.includes(observed)) seenObserved.push(observed);
+        if (seenObserved.length > 1) {
+          throw Object.assign(new Error('upstream model identity mismatch'), {
+            code: 'model_identity_mismatch',
+            observedServedModelId: observed,
+            observedServedModelIds: [...seenObserved],
+          });
+        }
+        observedServedModelId = observed;
       }
       if (event.type === 'content_delta') text += event.data.delta;
       else if (event.type === 'tool_call_start') {
