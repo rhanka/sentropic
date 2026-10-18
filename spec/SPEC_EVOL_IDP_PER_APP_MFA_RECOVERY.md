@@ -435,7 +435,7 @@ inventory; any new path must be added here before it ships.
 | P-LOST | "Lost your device?" (email code → register) | For a hardened account, email code alone stops at a recovery notice (choose P-CODE or P-BREAK); the current direct-to-enrolment behaviour is retained only for non-hardened accounts | None for hardened accounts `[TO BUILD Lot 3]` |
 | P-INVITE | Invite-token enrolment (new account) | Unchanged for account creation. An invite never allowlists the new account on an MFA client by itself; allowlisting still passes the two-credential prerequisite (section 4.2) | `bearer` at finalisation `[EXISTS]` |
 | P-FED | Federation sign-in (for example Google) | Unchanged `bearer`; cannot enrol a credential for a hardened account (same block as P-MAGIC-HAS) | `bearer` only `[EXISTS]` refusal; enrolment block `[TO BUILD Lot 3]` |
-| P-CODE | Recovery code → enrolment (option (c)) | A single-use code enrolled earlier under an `MFA` session redeems for a short-lived enrolment-only session that may enrol exactly one new credential; the owner must then sign in with that credential (UV) to reach `MFA`. Codes never satisfy a client directly | `enrolment-only` `[TO BUILD Lot 4]` |
+| P-CODE | Recovery code → restricted request (option (c), deferred optional sublot) | A single-use code enrolled earlier under an `MFA` session opens a restricted recovery request and one `pending-recovery` enrolment (R-REC-6); activation still needs a surviving trusted ceremony or the Job, then a fresh qualifying sign-in. Codes never satisfy a client directly | `enrolment-only`, pending binding `[TO BUILD Lot 4 optional]` |
 | P-BREAK | Break-glass reset (option (b)) | Governed Job run with the IdP admin account revokes **all** credentials, sessions, and recovery codes of the account and issues a single-purpose enrolment-only grant; the owner enrols a fresh credential and signs in. Fully audited and notified (section 9) | `enrolment-only` grant `[TO BUILD Lot 4]` |
 
 Rules that cut across the table:
@@ -671,6 +671,20 @@ Normative additions:
   independent: rotation follows the 90-day runbook cycle and never
   requires a policy decision; a policy change never requires a secret
   rotation.
+- **R-GOV-4 (weakening is a distinct operation).** `[TO BUILD Lot 6]`
+  Omission preserves policy `[EXISTS]`, but an explicitly supplied weaker
+  value (lower level, cleared level, wider allowlist, longer freshness)
+  must go through a distinct governed change operation with its own
+  approval, monotonic policy version with compare-and-swap (stale updates
+  refuse), declaration digest, and readback of the persisted result.
+  Policy history needs durable, attributable storage/export beyond the
+  logger adapter; rollback, re-seed, sync, or redeploy must never
+  reinstate an older weaker policy silently, and a downgrade never
+  removes account recovery protection by side effect. The registration
+  Job's mutable image reference and broad service account are acceptable
+  for ordinary registration; security-sensitive operations (policy
+  weakening, break-glass) require the pinned, scoped variant of
+  section 7.
 
 ### 9.2 Audit
 
@@ -835,6 +849,10 @@ exhaustive for the named suites (existing + updated + new).
 | `api/tests/api/auth/recovery-codes.test.ts` | new in Lot 4 | Codes are created only under a fresh MFA session, stored hashed, single-use, rate-limited at redemption; redemption mints enrolment-only (authorize still refuses); revoking all credentials revokes codes; prerequisite check counts distinct credentials |
 | `api/tests/api/auth/breakglass.test.ts` | new in Lot 4 | Job-side reset revokes all credentials, sessions, and codes and issues a single-purpose grant; grant enrols exactly once, expires, and is audited; a non-admin invocation refuses |
 | `api/tests/api/auth/audit-notifications.test.ts` | new in Lot 6 | Each section 9.2 event is emitted once with actor, client, and outcome; a blocked email-recovery attempt notifies without authorising enrolment; audit-write failure does not change the authorization outcome |
+| `packages/auth-hono/tests/oauth-consent-policy.test.ts`, `packages/auth-hono/tests/oauth-token.test.ts`, `packages/auth-hono/tests/session-service.test.ts` | existing, updated in Lots 2/5 | Cookie swap during consent; policy change or generation bump before code exchange refuses the stale transaction; refresh preserves ceremony times/generation and never elevates; revoked generation cannot be revived by refresh replay |
+| `api/tests/api/auth/passkey-mfa-session.test.ts`, `api/tests/api/auth/registration.test.ts`, `api/tests/api/auth/magic-link.test.ts`, `api/tests/api/auth/credentials.test.ts`, `packages/auth-hono/tests/federation-resolve-user.test.ts` | existing, updated in Lots 1/3/4 | Real-verifier UV failure stays refused (mocked UV=false route behaviour is not verifier evidence); protected zero/one/two-device enrolment matrix; weak session cannot delete trusted keys; federation stays bearer with no silent merge |
+| `api/tests/api/auth/mfa-recovery-policy.test.ts` | new in Lot 3/4 | Full chain: email proof, enrolment attempt, fresh passkey login, authorize/consent/token for the KVM fixture — no protected token at any shortcut (old session, no-device account, old challenge, non-MFA client detour); approved recovery completes successfully |
+| `e2e/tests/02-auth-webauthn.spec.ts`, `e2e/tests/02-auth-devices.spec.ts`, `e2e/tests/02-auth-oauth-authorization-code.spec.ts` (extend); `e2e/tests/02-auth-mfa-recovery.spec.ts` (new) | existing + new in Lot 6 | Browser virtual-authenticator flows: normal MFA, spare-key recovery (spare actually authenticates), full-loss approved reset, cancelled recovery, stale session; signed result checked for RP audience |
 
 Scoped runs while evolving (one suite at a time), for example:
 `make test-api SCOPE=tests/api/auth/magic-link-recovery.test.ts ENV=test-idp-per-app-mfa-recovery`.
@@ -885,10 +903,11 @@ primitive exists, but KVM enforcement (section 10.2 step 4) waits for Lot 3.
 
 | Lot | Deliverable | Key file targets | Gate |
 |---|---|---|---|
+| Lot 0 — Contract freeze (design only) | Freeze assurance semantics, evidence fields, binding provenance, security generation, policy version, and recovery authorization on existing ports/adapters; consolidate the single next migration; record age/session limits | Spec delta on this file's sections 4–6; no code | Contract examples cover every section 2 path; no method hidden in the level; rollback never accepts weak evidence |
 | Lot 1 — Declaration and non-regression pin | R-KVM-DECL declaration file plus R-KVM-TEST extensions; `kvm-gateway` registerable with the legacy spelling | `deploy/oauth-clients/kvm-gateway.yaml` (new), `packages/auth-hono/tests/oauth-client-required-acr.test.ts`, `api/tests/api/auth/oauth-client-policy.test.ts`, `api/tests/unit/oauth-register-client.test.ts` | Scoped suites green on `ENV=test-<slug>`; declaration/registration consistency check green |
 | Lot 2 — Freshness and request hints | R-FRESH-1…R-FRESH-3: per-client bound, stale step-up, `max_age`/`acr_values`, discovery `acr_values_supported` | `packages/auth-hono/src/oauth/authorize-handler.ts`, `session-resolver.ts`, `wellknown-handler.ts`, client schema/registration script, the two authorize test files | Stale-session and hint cases green; no-policy clients byte-identical |
 | Lot 3 — Email-path closure and enrolment-only confinement | R-REC-0…R-REC-5, R-STEP-1, R-KVM-CLOSE effective: hardened derivation, register/magic-link gates, session purpose | `api/src/routes/namespaces/auth/magic-link.ts`, `registration.ts`, `credentials.ts`, session-manager purpose handling, new Lot 3 test files, UI register/lost-device suites | G-RECOVERY cases green for hardened accounts; non-hardened magic-link and register behaviour unchanged; KVM enforcement may go live after this lot |
-| Lot 4 — Recovery means | Options (a) prerequisite check, (c) recovery codes, (b) break-glass Job grant | One migration max (recovery-code hashes), credential-count check, Job-side reset command, new Lot 4 test files | Recovery-code and break-glass cases green; codes never satisfy authorize |
+| Lot 4 — Recovery means | Option (a) independently-recoverable prerequisite, (b) break-glass Job with pending binding (R-REC-6); recovery codes (c) only as a deferred optional sublot | One migration max, credential check, Job-side reset command, new Lot 4 test files | Break-glass cases green; pending key cannot self-approve; codes, if built, never satisfy authorize |
 | Lot 5 — Method-neutral migration | R-POL-1, section 10.1 M-1…M-3: dual spelling, canonical `mfa` emission, declaration switched to `mfa` | `authorize-handler.ts`, `session-resolver.ts`, token emission, discovery, registration script, declaration file, both ACR test files | Alias acceptance matrix green; bearer refusal unchanged at every step |
 | Lot 6 — Governance, audit, notifications, KVM verification | R-GOV-1…R-GOV-3, section 9.2 events, section 9.3 notifications, KVM onboarding verification and E2E suite | Audit wiring at the host ports, notification calls on credential/recovery/policy events, `e2e/tests/` KVM suite | Audit/notification cases green; operator onboarding checklist executed per tier |
 
@@ -937,7 +956,8 @@ acquises et ne sont pas rouverts. Pour chaque décision : options,
 conséquences, recommandation de la spécification.
 
 **D-P1 — Fenêtre de fraîcheur MFA pour `kvm-gateway`.** Options : (i)
-quelques minutes (étape renforcée presque à chaque accès), (ii) quelques
+300 secondes à la décision d'autorisation (proposition de l'étude
+parallèle : étape renforcée presque à chaque accès), (ii) quelques
 heures (recommandé : 8 h), (iii) 24 h. Conséquences : plus la fenêtre est
 courte, plus le vol de session (T-SESS) est contenu, mais plus la
 cérémonie WebAuthn est répétée ; 24 h laisse une journée d'usage à une
@@ -946,13 +966,15 @@ session MFA volée. La valeur choisie devient la borne du client
 modèle.
 
 **D-P2 — Codes de récupération pour le compte propriétaire KVM.**
-Options : (i) activer les codes opt-in (section 7, option (c)) avant
-l'enforcement KVM, (ii) s'appuyer uniquement sur le second passkey et le
-reset d'urgence par Job (options (a)+(b)), (iii) activer les codes plus
-tard. Conséquences : (i) donne une récupération autonome mais crée un
-secret à conserver hors boîte mail ; (ii) garde la surface minimale avec
-une récupération dépendante de l'opérateur ; (iii) est compatible avec
-l'ordre des lots, le Lot 4 restant à construire dans tous les cas.
+Options : (i) différer les codes et livrer d'abord (a)+(b) (recommandé
+par la spécification et l'étude parallèle), (ii) construire le sous-lot
+codes avec liaison en attente (R-REC-6 : le code ouvre la demande, il
+n'active jamais seul un accès MFA), (iii) choisir une activation
+autonome code-plus-délai, qui consigne une racine de récupération plus
+faible. Conséquences : (i) garde la surface minimale avec une
+récupération dépendante de l'opérateur ; (ii) ajoute une commodité sans
+chaîne directe code-vers-MFA ; (iii) rend le vol du code éventuellement
+suffisant après délai et doit être assumé comme tel.
 
 **D-P3 — Portée du durcissement du compte.** Options : (i) le durcissement
 dérivé actuel (section 4.2 : seuls les comptes allowlistés sur un client

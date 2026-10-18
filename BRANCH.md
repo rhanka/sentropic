@@ -87,7 +87,7 @@
   - [x] Specify governance (who may change a client policy), audit and notifications, migration of clients and accounts, KVM onboarding, Netbird compatibility note.
   - [x] Specify test plan at file granularity and implementation lots for BUILD branches.
   - [x] List only real owner decisions, in French, with options and consequences at the end of the spec.
-  - [ ] Reconcile the parallel Astra max study (`.h2a/inputs/astra-idp-mfa-study.md`) into the spec when it lands; record each point taken or rejected with reason in `.h2a/reviews/spec-idp-mfa-reconciliation.md`.
+  - [x] Reconcile the parallel Astra max study (`.h2a/inputs/astra-idp-mfa-study.md`) into the spec when it lands; record each point taken or rejected with reason in `.h2a/reviews/spec-idp-mfa-reconciliation.md`.
   - [x] **API tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
   - [x] **UI tests (TypeScript only)**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
   - [x] **E2E tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
