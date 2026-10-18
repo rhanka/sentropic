@@ -93,14 +93,14 @@ Implement Lot 1 exactly as the reviewed plan defines it.
   - [ ] Required check: `ci-gate` aggregates every PR job; stays unconditional leaf.
   - [ ] No application ports needed: pure script/CI wiring targets only.
 
-- [ ] **Lot 1 — PR concurrency**
-  - [ ] Add workflow-level concurrency group `github.workflow`-`pr-N`/`run-ID`, `cancel-in-progress` on `pull_request` only.
-  - [ ] Prove side-effect publication/deployment jobs cannot run in the cancellable PR lane.
-  - [ ] Add `scripts/ci/concurrency.test.mjs` (same-PR cancel, cross-PR isolation, main/dispatch unique groups, locks preserved, rerun behavior).
-  - [ ] Add final-head gate assertions to `scripts/ci/ci-wiring.test.mjs`.
-  - [ ] Lot gate:
-    - [ ] `make test-ci-optimization SCOPE=scripts/ci/concurrency.test.mjs ENV=test-ci-opt-lot1`
-    - [ ] `make test-ci-optimization SCOPE=scripts/ci/ci-wiring.test.mjs ENV=test-ci-opt-lot1`
+- [x] **Lot 1 — PR concurrency**
+  - [x] Add workflow-level concurrency group `github.workflow`-`pr-N`/`run-ID`, `cancel-in-progress` on `pull_request` only.
+  - [x] Prove side-effect publication/deployment jobs cannot run in the cancellable PR lane.
+  - [x] Add `scripts/ci/concurrency.test.mjs` (same-PR cancel, cross-PR isolation, main/dispatch unique groups, locks preserved, rerun behavior).
+  - [x] Add final-head gate assertions to `scripts/ci/ci-wiring.test.mjs`.
+  - [x] Lot gate:
+    - [x] `make test-ci-optimization SCOPE=scripts/ci/concurrency.test.mjs ENV=test-ci-opt-lot1`
+    - [x] `make test-ci-optimization SCOPE=scripts/ci/ci-wiring.test.mjs ENV=test-ci-opt-lot1`
   - [ ] CI UAT:
     - [ ] Run a PR revision, then a second revision while jobs run; only the first is cancelled; the second yields complete affected results + blocking gate.
     - [ ] Run two different PRs; neither cancels the other; main/dispatch keep locks.
