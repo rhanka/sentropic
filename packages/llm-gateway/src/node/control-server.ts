@@ -63,6 +63,9 @@ export class ControlServer {
       case 'acquireSession':
         await this.options.beforeAcquire?.(input);
         return this.service.acquireSession(input as never);
+      case 'migrateSessionPolicy':
+        await this.options.beforeAcquire?.(input);
+        return this.service.migrateSessionPolicy(input as never);
       case 'revokeSession':
         return this.service.revokeSession(input as never);
       case 'listSessions':
