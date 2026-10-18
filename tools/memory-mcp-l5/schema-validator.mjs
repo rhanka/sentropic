@@ -1,10 +1,17 @@
 // schema-validator.mjs — Closed JSON Schema draft-2020-12 validator & on-disk evidence verifier for L5-MEMORY-V1.
 import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { resolve, relative } from 'node:path';
+import { dirname, resolve, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const HERE = dirname(fileURLToPath(import.meta.url));
 export const sha256Hex = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export const sha512Integrity = (bytes) => `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
+export const CHECKPOINT_SCHEMA_SHA256 = sha256Hex(readFileSync(resolve(HERE, 'schemas/checkpoint-v1.schema.json')));
+export const ARTIFACT_MANIFEST_SCHEMA_SHA256 = sha256Hex(readFileSync(resolve(HERE, 'schemas/artifact-manifest-v1.schema.json')));
+export const PROOF_CATALOG_SHA256 = sha256Hex(readFileSync(resolve(HERE, 'proof-catalog-v1.json')));
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+const asArr = (v) => (Array.isArray(v) ? v : []);
 
 export function canonicalizeJson(value) {
   if (Array.isArray(value)) return `[${value.map((v) => canonicalizeJson(v)).join(',')}]`;
@@ -15,7 +22,12 @@ export function canonicalizeJson(value) {
 export function computeTupleSha256(doc) {
   if (!doc || typeof doc !== 'object') return '';
   const { phase, source, contracts, preCandidate, artifacts, closure, runtime, assurance } = doc;
-  return sha256Hex(Buffer.from(canonicalizeJson({ phase, source, contracts, preCandidate, artifacts, closure, runtime, assurance })));
+  const definitionDigests = {
+    checkpointSchemaSha256: CHECKPOINT_SCHEMA_SHA256,
+    artifactManifestSchemaSha256: ARTIFACT_MANIFEST_SCHEMA_SHA256,
+    proofCatalogSha256: PROOF_CATALOG_SHA256,
+  };
+  return sha256Hex(Buffer.from(canonicalizeJson({ phase, source, contracts, preCandidate, artifacts, closure, runtime, assurance, definitionDigests })));
 }
 
 export function validateAgainstSchema(value, rootSchema, node = rootSchema, path = '$') {
@@ -35,12 +47,15 @@ export function validateAgainstSchema(value, rootSchema, node = rootSchema, path
   if (node.type === 'object') {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [`${path}: expected object`];
     const props = node.properties || {};
-    for (const req of node.required || []) if (!(req in value)) failures.push(`${path}: missing required property ${req}`);
+    if (node.additionalProperties === false && Object.getPrototypeOf(value) !== Object.prototype) {
+      failures.push(`${path}: additional property __proto__ forbidden`);
+    }
+    for (const req of node.required || []) if (!hasOwn(value, req)) failures.push(`${path}: missing required property ${req}`);
     if (node.additionalProperties === false) {
-      for (const k of Object.keys(value)) if (!(k in props)) failures.push(`${path}: additional property ${k} forbidden`);
+      for (const k of Object.getOwnPropertyNames(value)) if (!hasOwn(props, k)) failures.push(`${path}: additional property ${k} forbidden`);
     }
     for (const [k, propSchema] of Object.entries(props)) {
-      if (k in value) failures.push(...validateAgainstSchema(value[k], rootSchema, propSchema, `${path}.${k}`));
+      if (hasOwn(value, k)) failures.push(...validateAgainstSchema(value[k], rootSchema, propSchema, `${path}.${k}`));
     }
     return failures;
   }
@@ -80,7 +95,7 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
     const abs = resolve(rootDir, relPath), rel = relative(rootDir, abs);
     if (rel.startsWith('..') || rel.startsWith('/') || !existsSync(abs)) { failures.push(`${label}: missing on-disk file ${relPath}`); return null; }
     const bytes = readFileSync(abs);
-    if (expectedSha && sha256Hex(bytes) !== expectedSha) { failures.push(`${label}: sha256 mismatch for ${relPath}`); return null; }
+    if (!expectedSha || sha256Hex(bytes) !== expectedSha) { failures.push(`${label}: sha256 mismatch for ${relPath}`); return null; }
     return bytes;
   };
   const readJson = (ref, label) => {
@@ -88,10 +103,21 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
     if (!bytes) return null;
     try { return JSON.parse(bytes.toString('utf8')); } catch { failures.push(`${label}: invalid JSON in ${ref.path}`); return null; }
   };
-  const c = doc.contracts || {}, pre = doc.preCandidate || {}, closure = doc.closure || {};
-  for (const k of ['l0Freeze', 'entry', 'providerManifest']) readChecked(c[k]?.path, c[k]?.sha256, `contracts.${k}`);
+  const src = doc.source || {}, c = doc.contracts || {}, pre = doc.preCandidate || {}, closure = doc.closure || {};
+  readChecked('spec/evidence/memory-mcp-l5/source-tree.sha256', src.sourceTreeSha256, 'source.sourceTreeSha256');
+  readChecked('packages/mcp-platform/src/registry.ts', c.registrySha256, 'contracts.registrySha256');
+  readChecked('packages/cluster-mesh/src/gateway.ts', c.gatewaySha256, 'contracts.gatewaySha256');
+  const freezeDoc = readJson(c.l0Freeze, 'contracts.l0Freeze');
+  if (!freezeDoc || freezeDoc.specSha256 !== c.specSha256 || freezeDoc.l0Commit !== c.l0Commit || freezeDoc.checkpointSchemaSha256 !== CHECKPOINT_SCHEMA_SHA256 || freezeDoc.artifactManifestSchemaSha256 !== ARTIFACT_MANIFEST_SCHEMA_SHA256 || freezeDoc.proofCatalogSha256 !== PROOF_CATALOG_SHA256) {
+    failures.push('contracts.l0Freeze: freeze metadata or schema/catalog hash mismatch');
+  }
+  for (const reqFix of asArr(catalog.immutableFixtures)) {
+    const entry = asArr(freezeDoc?.immutableFixtures).find((f) => f && f.path === reqFix);
+    readChecked(reqFix, entry?.sha256, `immutableFixtures/${reqFix}`);
+  }
+  for (const k of ['entry', 'providerManifest']) readChecked(c[k]?.path, c[k]?.sha256, `contracts.${k}`);
   for (const listKey of ['fixtures', 'exports', 'schemas', 'profiles']) {
-    for (const item of c[listKey] || []) readChecked(item?.path, item?.sha256, `contracts.${listKey}/${item?.path}`);
+    for (const item of asArr(c[listKey])) readChecked(item?.path, item?.sha256, `contracts.${listKey}/${item?.path}`);
   }
   const retainedInv = Array.isArray(pre.contractInventory) ? pre.contractInventory : readJson(pre.contractInventory, 'preCandidate.contractInventory')?.contractInventory;
   if (!Array.isArray(retainedInv) || retainedInv.length === 0) failures.push('preCandidate.contractInventory: missing contractInventory entries');
