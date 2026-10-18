@@ -4,7 +4,23 @@
 
 ```ts
 
-// @public
+// @public (undocumented)
+export type AppConnectorProviderAdapter = {
+    appId: string;
+    connectorId: string;
+    manifest: AppMcpProviderManifest;
+    resolveTenant(input: ConnectorTenantResolutionInput): Promise<ConnectorTenantContext>;
+    listCapabilities(ctx: ConnectorTenantContext): Promise<AppCapability[]>;
+    invokeTool(req: AppToolInvocation): Promise<AppToolResult | DurableCallRef>;
+    readResource(req: AppResourceRead): Promise<AppResourceResult>;
+    renderPrompt?(req: AppPromptRequest): Promise<AppPromptResult>;
+    validateSecrets(ctx: ConnectorTenantContext): Promise<ConnectorSecretStatus>;
+};
+
+// @public (undocumented)
+export type ChannelBindingKindV1 = 'in_process_verified' | 'stdio_host_managed_verified' | 'http_mcp_auth_dpop_verified' | 'http_mcp_auth_bearer_verified';
+
+// @public (undocumented)
 export function checkOperationConfirmation(input: ConfirmationCheckInput): string[];
 
 // @public
@@ -23,20 +39,46 @@ export function computeMutationDigest(preimage: MemoryMutationPreimageV1): strin
 
 // @public (undocumented)
 export type ConfirmationCheckInput = {
-    assurance: MemoryConfirmationAssuranceV1;
     continuation: MemoryConfirmationContinuationV1;
-    capability: 'engram_memory_withdraw' | 'engram_memory_forget';
-    targetRef: string;
-    operationDigest: string;
-    logicalSessionRef: string;
-    nowIso: string;
+    expected: ExpectedConfirmationContinuationBindingV1;
 };
+
+// @public (undocumented)
+export type ConfirmationContinuationDecisionV1 = {
+    readonly ok: true;
+    readonly decision: 'execute_confirmed' | 'disclose_committed_without_repeat_effect';
+    readonly continuation: MemoryConfirmationContinuationV1;
+} | {
+    readonly ok: false;
+    readonly error_code: 'gate_failed' | 'UNAUTHORIZED' | 'NOT_FOUND' | 'MUTATION_OUTCOME_UNKNOWN';
+    readonly reason: string;
+};
+
+// @public (undocumented)
+export interface DelegationBindingV1 {
+    // (undocumented)
+    readonly delegate_principal_id: OpaqueRef;
+    // Warning: (ae-forgotten-export) The symbol "Digest" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly delegation_receipt_digest: Digest;
+    // Warning: (ae-forgotten-export) The symbol "OpaqueRef" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly delegator_principal_id: OpaqueRef;
+    // Warning: (ae-forgotten-export) The symbol "Instant" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly expires_at: Instant;
+    // (undocumented)
+    readonly verified_by_host_resolver: boolean;
+}
 
 // @public (undocumented)
 export type EffectiveMemoryMutationInputV1 = {
     tool_name: 'engram_memory_capture';
-    payload: Record<string, unknown>;
-    evidence: Record<string, unknown>;
+    payload: CandidatePayloadV2;
+    evidence: EvidenceBundleV1;
     capture_policy_version: string;
 } | {
     tool_name: 'engram_memory_request_admission';
@@ -47,15 +89,76 @@ export type EffectiveMemoryMutationInputV1 = {
     candidate_id: string;
     reason_ref: string;
     event_id: string;
-    event_anchor: Record<string, unknown>;
+    event_anchor: LifecycleEventAnchorV1;
 } | {
     tool_name: 'engram_memory_forget';
     record_id: string;
     reason_ref: string;
     event_id: string;
-    event_anchor: Record<string, unknown>;
+    event_anchor: LifecycleEventAnchorV1;
 };
 
+// @public (undocumented)
+export interface ExpectedConfirmationContinuationBindingV1 {
+    // (undocumented)
+    readonly accepted_assurance_policy_versions: readonly OpaqueRef_2[];
+    // Warning: (ae-forgotten-export) The symbol "Cursor_2" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly active_generation: Cursor_2;
+    // (undocumented)
+    readonly agent_id: OpaqueRef_2;
+    // (undocumented)
+    readonly approver_current_assurance_verified: unknown;
+    // (undocumented)
+    readonly approver_currently_enrolled_2fa: unknown;
+    // (undocumented)
+    readonly approver_not_revoked: unknown;
+    // (undocumented)
+    readonly approving_human_principal_id: OpaqueRef_2;
+    // (undocumented)
+    readonly approving_subject_sub: OpaqueRef_2;
+    // (undocumented)
+    readonly caller_currently_authorized?: unknown;
+    // Warning: (ae-forgotten-export) The symbol "DestructiveMemoryToolName" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly capability: DestructiveMemoryToolName;
+    // (undocumented)
+    readonly connector_id: 'engram-memory';
+    // (undocumented)
+    readonly connector_instance_ref: OpaqueRef_2;
+    // Warning: (ae-forgotten-export) The symbol "OpaqueRef_2" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly elicitation_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly execution_deadline_at: Instant_2;
+    // (undocumented)
+    readonly expected_issuer: OpaqueRef_2;
+    // (undocumented)
+    readonly host_deployment_qualified: unknown;
+    // (undocumented)
+    readonly initiating_principal_id: OpaqueRef_2;
+    // (undocumented)
+    readonly initiating_principal_namespace: OpaqueRef_2;
+    // (undocumented)
+    readonly logical_session_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly mcp_client_id: OpaqueRef_2;
+    // Warning: (ae-forgotten-export) The symbol "Instant_2" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly now: Instant_2;
+    // Warning: (ae-forgotten-export) The symbol "Digest_2" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly operation_digest: Digest_2;
+    // (undocumented)
+    readonly provider_contract_version: '1.0.0';
+    // (undocumented)
+    readonly provider_id: 'sentropic.engram.memory';
+    // (undocumented)
 // Warning: (ae-forgotten-export) The symbol "CapabilityTool" needs to be exported by the entry point index.d.ts
 //
 // @public (undocumented)

@@ -27,6 +27,7 @@ export type AppInvocationEnvelope<TInput> = {
     ctx: StpConnectorContext;
     idempotencyKey?: string;
     elicitationRef?: string;
+    memoryContext?: MemoryContextProjectionV1;
 };
 
 // @public
@@ -294,6 +295,12 @@ export interface StpConnectorContext {
         clientId: string;
         client: 'claude.ai' | 'claude-code' | 'codex' | string;
     };
+    memory?: {
+        binding: MemoryInvocationBindingV1;
+        expectedActiveGeneration: string;
+        expectedPolicyEpoch: string;
+        now: string;
+    };
     // (undocumented)
     principal: {
         sub: string;
@@ -327,6 +334,11 @@ export type VisibilityContext = {
     tenantRef: string;
     accessibleTenants: string[];
 };
+
+// Warnings were encountered during analysis:
+//
+// dist/runtime.d.ts:20:5 - (ae-forgotten-export) The symbol "MemoryContextProjectionV1" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:142:9 - (ae-forgotten-export) The symbol "MemoryInvocationBindingV1" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
