@@ -100,7 +100,7 @@
 - [ ] **Review round 1 — PR #699 (`pr699_sol.md`, target `393919d76d5ca65971aed472e015d3ec5bbc4167`)**
   - [x] Preserve the closed owner receipt verbatim; correct unsupported owner-UAT completion claims (finding 8).
   - [x] Define canonical digest and durable family/authorization serialization (findings 2 and 5); carry forward the existing partial evidence corrections.
-  - [ ] Complete current-policy and resource-aware offline-consent contracts and amendments (findings 1 and 3).
+  - [x] Complete current-policy and resource-aware offline-consent contracts and amendments (findings 1 and 3).
   - [ ] Correct revocation windows/citations/provenance and complete concrete regression/expiry acceptance (findings 4, 6 and 7).
   - [ ] Validate scope, write `.h2a/reviews/pr699_treatment.md`, push atomic commits and report head; never merge.
 - [x] **Lot N-1 — Docs consolidation**
