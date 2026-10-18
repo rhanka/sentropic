@@ -1,0 +1,193 @@
+{
+  "$comment": "L0 vendor runtime inventory (spec 7.3). Admission classification only, not a version qualification. An npm launcher never proves a Node-only downloaded runtime. Every unknown resolves against the pinned official distribution before job admission; unresolved rows refuse. Digests land with L4 owner-machine receipts; until then status stays unresolved and jobs refuse.",
+  "schemaVersion": 1,
+  "clients": {
+    "claude": {
+      "distribution": "npm:@anthropic-ai/claude-code",
+      "version": "2.1.296",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "node", "version": "22" },
+      "launcherDependencies": ["node-pty"],
+      "allowedContexts": ["owner-machine", "private-job"],
+      "recipe": "unqualified"
+    },
+    "codex": {
+      "distribution": "npm:@openai/codex",
+      "version": "0.162.1",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "node", "version": "22" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "vibe": {
+      "distribution": "official:mistral-vibe-cli",
+      "version": "2.26.1",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "python", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "muse": {
+      "distribution": "official:muse-cli",
+      "version": "1.4.6",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "agy": {
+      "distribution": "official:agy-cli",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "opencode": {
+      "distribution": "official:opencode",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "pi": {
+      "distribution": "official:pi-mono",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "cline": {
+      "distribution": "official:cline-vscode-extension",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": ["vscode"],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "hermes": {
+      "distribution": "official:hermes-cli",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "python", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "dsh": {
+      "distribution": "official:dsh-cli",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "grok": {
+      "distribution": "official:grok-cli",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "aider": {
+      "distribution": "official:aider-chat",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "python", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "vscode-chat": {
+      "distribution": "official:vscode-copilot-chat",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": ["vscode"],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "claude-desktop": {
+      "distribution": "official:claude-desktop",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "jetbrains-acp": {
+      "distribution": "official:jetbrains-acp",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": ["jetbrains-ide"],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "dsh-desktop": {
+      "distribution": "official:dsh-desktop",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": [],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    },
+    "claude-ide": {
+      "distribution": "official:claude-code-vscode-extension",
+      "version": "",
+      "os": ["linux"],
+      "digest": "",
+      "status": "unresolved",
+      "vendorRuntime": { "kind": "unknown", "version": "" },
+      "launcherDependencies": ["vscode"],
+      "allowedContexts": ["owner-machine"],
+      "recipe": "unqualified"
+    }
+  }
+}

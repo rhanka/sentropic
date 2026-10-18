@@ -14,8 +14,8 @@ export const MCP_PLATFORM_RANGE = '>=0.3.0 <0.4.0';
 export const ARTIFACTS_PACKAGE = '@sentropic/artifacts';
 /** Single 0.1.0 artifacts candidate covering L-5a–5e (no per-slice train). */
 export const ARTIFACTS_RANGE = '>=0.1.0 <0.2.0';
-export const LLM_MESH_RANGE = '>=0.22.0 <0.27.0';
-export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.21.0';
+export const LLM_MESH_RANGE = '>=0.22.0 <0.28.0';
+export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.22.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
 /** Follows llm-gateway 0.19.6's declared optional peer range (parity with #674: admits auth-hono 0.16.0).

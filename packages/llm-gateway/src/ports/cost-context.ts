@@ -5,6 +5,7 @@
  */
 import type { VerifiedPrincipal } from '../personal-passthrough/caller-auth.js';
 import type { CallerAuthRequestContext } from './caller-auth.js';
+import type { LaunchRoutingContract } from '@sentropic/llm-mesh';
 
 export interface CostContextResolver {
   resolve(principal: VerifiedPrincipal, context: CallerAuthRequestContext):
@@ -12,6 +13,11 @@ export interface CostContextResolver {
 }
 
 export interface CostContext {
+  /** Gateway-owned durable session/request linkage supplied by trusted auth. */
+  readonly gatewaySessionRef?: string;
+  readonly gatewayReceiptId?: string;
+  readonly gatewayClientSessionRef?: string;
+  readonly launchRoutingContract?: LaunchRoutingContract;
   readonly tenantId: string;
   readonly workspaceId?: string;
   readonly principalId: string;

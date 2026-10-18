@@ -19,6 +19,39 @@ semantics. In particular, `/v1/messages` and `/v1/chat/completions` remain
 compatible. `/v1/responses` may be added; it does not replace either existing
 endpoint in this compatible-minor evolution.
 
+## PR1 candidate amendment (2026-10-17)
+
+The owner-ratified gateway v8 packet supersedes the earlier implicit serving
+defaults below. Implemented candidate versions are gateway 0.21.0 and mesh
+0.27.0; publication and integration acceptance are pending.
+
+- Exact provider/model identity is the default at resolution, quote and plan.
+  The historical cross-model tables remain selectable policy data. Their
+  presence never grants a durable caller permission to use them.
+- A trusted immutable v1 launch contract binds owner, exact model grants,
+  account grants, independent account-rotation consent, preserved effort and
+  any selected mapping's ID, revision and content digest. The gateway persists
+  it with the native session and rejects implicit legacy-policy upgrades.
+- The published Node host owns caller key issuance/recovery, authenticated
+  private control and HTTP/SSE lifecycle. A mesh planner factory receives its
+  protected affinity store. State, pins, revocations and receipts survive a
+  restart; a required missing pin or unreadable state cannot pick a new account.
+- An account pin never permits a stale or withdrawn model. Physical attempts
+  need durable acknowledgement before dispatch. Requested/selected identities,
+  policy/mapping revisions and terminal outcomes are linked without recording
+  prompt/tool content. Unknown usage is null; selection is not attestation.
+  Pending work becomes incomplete after restart and is not replayed.
+- The private process entry can accept the same published host binding.
+  Product/standalone route policy defaults exact; mapped execution requires
+  an injected account-authorizer and a matching quote. Unsupported effort
+  refuses before dispatch instead of being dropped.
+
+Acceptance boundary: h2a contract acknowledgement/consumer CI receipts,
+immo #679 merge and lock/peer regeneration, native recipes and independent
+L8 review remain pending. Vibe requires owner-machine Python runtime
+qualification. Muse remains blocked until a C-admitted control-preserving
+transport probe succeeds; its current named 400 does not close that milestone.
+
 ## 1. Problem and intended outcome
 
 The current system has two conflicting ownership models:
