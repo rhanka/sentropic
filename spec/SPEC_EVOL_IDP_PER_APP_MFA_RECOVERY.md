@@ -338,3 +338,107 @@ is only ever sealed from a session that already passed authorize.
   the client bound wins for that request; `acr_values` naming the MFA
   level on a client without a stored policy triggers the same forced
   re-auth, but never downgrades a stored policy. `prompt=login` and
+  `prompt=select_account` keep their merged force-reauth meaning.
+  Discovery then advertises `acr_values_supported` with the neutral value
+  (plus the legacy alias during migration).
+- **R-STEP-1 (sensitive IdP operations).** `[TO BUILD Lot 3]` Creating or
+  revoking a credential for an MFA-hardened account requires a current
+  MFA session (fresh, qualifying), except inside the two enrolment-only
+  recovery sessions of section 6, which may create exactly one credential
+  and nothing else. Today merged code requires only a validated session
+  for credential management; the step-up is the new part.
+- **R-DOWN-1 (no downgrade path).** No flow converts an MFA session into a
+  weaker one for the same client, no parameter clears a stored policy,
+  and ending hardening (section 4.2) never retroactively validates a
+  credential created by email proof. Refresh reuses the same session row
+  and can never raise its level: a bearer session stays bearer until a new
+  qualifying login mints a new session `[EXISTS]`.
+
+## 6. Recovery and re-enrolment paths (target behaviour)
+
+Normative principle **R-REC-0**: for an MFA-hardened account, **email proof
+alone never creates a credential and never mints a session above
+enrolment-only**. Email stays in the system as a notification channel and
+as the recovery path for non-hardened accounts. The table is the complete
+inventory; any new path must be added here before it ships.
+
+| ID | Path | Target behaviour for an MFA-hardened account | Level granted |
+|---|---|---|---|
+| P-NORM | Sign in with an existing credential (UV) | Unchanged | `MFA` (fresh) `[EXISTS]` |
+| P-ADD | Add a credential while signed in | Requires a fresh `MFA` session (R-STEP-1); the new credential is usable immediately; all sessions and the account address are notified (section 9) | Caller's `MFA` session continues `[TO BUILD Lot 3]` |
+| P-REVOKE | Revoke a credential while signed in | Requires a fresh `MFA` session; revoking the last credential of a hardened account warns and requires re-confirmation, and revokes recovery codes with it | — `[TO BUILD Lot 3]` |
+| P-MAGIC-HAS | Magic link, account has devices | Session stays `bearer` and is refused by MFA clients (unchanged). It **cannot** enrol a credential: the register surface for a hardened account rejects email-only enrolment and directs to P-ADD (sign in first), P-CODE, or P-BREAK | `bearer` only `[EXISTS]` refusal; enrolment block `[TO BUILD Lot 3]` |
+| P-MAGIC-NONE | Magic link, account has **no** devices (`api/src/routes/namespaces/auth/magic-link.ts:194` temporary session) | The temporary session becomes truly **enrolment-only**: it may complete exactly one credential enrolment and call no other authenticated endpoint. For a hardened account it is not issued at all (see R-REC-1); for a non-hardened account it keeps today's purpose (first device after email proof) | `enrolment-only` `[TO BUILD Lot 3]` |
+| P-LOST | "Lost your device?" (email code → register) | For a hardened account, email code alone stops at a recovery notice (choose P-CODE or P-BREAK); the current direct-to-enrolment behaviour is retained only for non-hardened accounts | None for hardened accounts `[TO BUILD Lot 3]` |
+| P-INVITE | Invite-token enrolment (new account) | Unchanged for account creation. An invite never allowlists the new account on an MFA client by itself; allowlisting still passes the two-credential prerequisite (section 4.2) | `bearer` at finalisation `[EXISTS]` |
+| P-FED | Federation sign-in (for example Google) | Unchanged `bearer`; cannot enrol a credential for a hardened account (same block as P-MAGIC-HAS) | `bearer` only `[EXISTS]` refusal; enrolment block `[TO BUILD Lot 3]` |
+| P-CODE | Recovery code → enrolment (option (c)) | A single-use code enrolled earlier under an `MFA` session redeems for a short-lived enrolment-only session that may enrol exactly one new credential; the owner must then sign in with that credential (UV) to reach `MFA`. Codes never satisfy a client directly | `enrolment-only` `[TO BUILD Lot 4]` |
+| P-BREAK | Break-glass reset (option (b)) | Governed Job run with the IdP admin account revokes **all** credentials, sessions, and recovery codes of the account and issues a single-purpose enrolment-only grant; the owner enrols a fresh credential and signs in. Fully audited and notified (section 9) | `enrolment-only` grant `[TO BUILD Lot 4]` |
+
+Rules that cut across the table:
+
+- **R-REC-1 (closing the no-device email path).** `[TO BUILD Lot 3]`
+  For an MFA-hardened account, the handler at
+  `api/src/routes/namespaces/auth/magic-link.ts:194` must not mint the
+  temporary registration session on email proof alone. It returns the
+  generic recovery notice (no account-state signal beyond what the caller
+  already proved by holding the link) and notifies the account address
+  that a recovery was attempted. **Effective from Lot 3**, which is the
+  lot that makes KVM's required-MFA guarantee true; before Lot 3 lands,
+  `kvm-gateway` must not be allowlist-enforced as an MFA-only client
+  (section 10.2 orders the two). The non-hardened branch of the same
+  handler is unchanged.
+- **R-REC-2 (with-devices case).** The with-devices magic-link session
+  (`magic-link.ts:140`) already mints `bearer` and is already refused by
+  MFA clients; Lot 3 adds only the enrolment block (P-MAGIC-HAS), so email
+  proof cannot be converted into a credential from that session either.
+  Together R-REC-1 and R-REC-2 close both halves of G-RECOVERY.
+- **R-REC-3 (enrolment-only confinement).** An enrolment-only session (or
+  break-glass grant) authorizes exactly: create one credential for its own
+  account, list that the enrolment completed, and sign out. Authorize,
+  consent, credential revoke, recovery-code management, and every other
+  authenticated endpoint refuse it. It expires in minutes (Lot 3/4 sets
+  the exact TTL, single-digit minutes for the break-glass grant), is
+  single-enrolment (a second create attempt refuses), and its use is
+  audited. Confinement is enforced server-side by session purpose, never
+  by hiding UI links.
+- **R-REC-4 (no retroactive upgrade).** A credential created inside an
+  enrolment-only session is a normal credential afterwards: the **next**
+  sign-in with UV is what reaches `MFA`. Enrolment itself never seals an
+  authorization code and never marks the enrolment session as `MFA`.
+- **R-REC-5 (first enrolment of a brand-new account).** A new account is
+  not hardened until it is allowlisted (section 4.2), so initial
+  enrolment by email code or invite stays as merged. Hardening, the
+  two-credential prerequisite, and the email block all engage at
+  allowlist time, in that order (section 10.2).
+
+## 7. Recovery means — evaluation and recommendation
+
+The kvm lane proposed four options. Each is evaluated against T-MAIL
+(mailbox compromise must not yield P-MFA), T-DEVLOSS (owner who lost every
+authenticator must regain access), and operability for a single-owner
+first client.
+
+| Option | T-MAIL | T-DEVLOSS | Cost / failure mode | Verdict |
+|---|---|---|---|---|
+| (a) At least 2 registered passkeys before forced 2FA is enabled on an account | Neutral: does not stop email enrolment by itself | Strong improvement: loss of one device is a normal P-ADD, not a recovery | Enrolment friction once; a synced passkey and a hardware key count as two rows only if they are two distinct credentials | **Adopt** as the allowlist prerequisite (section 4.2, Lot 4) |
+| (b) Emergency reset only by a k8s Job run with the admin account | Strong: requires cluster access plus the admin account; email plays no role | Always available, but slow (operator in the loop) and total (all credentials revoked) | Rare, deliberate, fully audited; unusable as a self-service path | **Adopt** as the break-glass floor (P-BREAK, Lot 4) |
+| (c) Optional recovery codes that only give a weak level and force re-enrolment | Sound **only** under three conditions: codes are generated solely under an `MFA` session, stored hashed and single-use, and redemption grants enrolment-only (never `MFA`). A code mailed or stored with the mailbox collapses to T-MAIL | Self-service recovery without an operator; loss of codes plus devices falls back to (b) | Needs enrolment UX, hash storage, rate limiting, and revocation on credential changes | **Adopt as opt-in** per hardened account (P-CODE, Lot 4); whether KVM's owner enrols codes is an owner decision (section 15) |
+| (d) No recovery by email alone | This is property P-MFA restated for recovery; without it every other option is bypassed by the register flow | Removes the familiar path, so (a)+(b) and optionally (c) must land with it | Breaks the current "Lost your device?" expectation for hardened accounts only | **Adopt as the invariant** R-REC-0 (Lot 3) |
+| Baseline: keep email-code enrolment for everyone (status quo) | Fails: G-RECOVERY converts mailbox control into `MFA` in two steps | Convenient | Leaves forced 2FA as email security with extra steps | **Rejected** |
+
+**Recommendation (normative).** Ship **(d) as the invariant, (a) as the
+enrolment prerequisite, (b) as the guaranteed floor, and (c) as an opt-in
+convenience**, in the lot order of section 13: Lot 3 enforces (d) and the
+enrolment-only confinement, Lot 4 adds (a), (c), and (b). No single option
+is sufficient alone: (a) without (d) still lets email enrol a third
+credential; (d) without (a)/(b) risks owner lockout; (c) without the
+enrolment-only bound would reintroduce a bearer-equivalent secret.
+
+Explicitly rejected alternatives: email link plus a waiting period (delay
+does not change who holds the mailbox; T-MAIL waits too), email plus
+notification with veto window as the **sole** control (same reason;
+notification remains required, but as detection, not authorization), and
+requiring the RP to check `acr` for KVM (owner-decided: the gateway
+performs no check; the guarantee is the IdP's).
+
