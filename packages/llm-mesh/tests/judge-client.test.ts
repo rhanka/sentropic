@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createRemoteJudgeClient } from '../src/judge/client.js';
-import { judgeRequest, qualifiedDescriptor } from './judge-fixtures.js';
+import { createJudgeService } from '../src/judge/service.js';
+import { judgeRequest, judgeServiceFixture, qualifiedDescriptor } from './judge-fixtures.js';
 import type { JudgeReceipt, JudgeResult } from '../src/judge/receipt.js';
+import type { JudgeRequest } from '../src/judge/request.js';
 
 const mockReceipt = (correlationId = 'test-corr-1'): JudgeReceipt => ({
   schemaVersion: 1, callId: 'test-call-1', correlationId,
@@ -21,11 +23,22 @@ const mockVerdictResult = (correlationId = 'test-corr-1'): JudgeResult => ({
     criterionKind: 'binary', resolvedCriterionKind: 'binary',
     score: { value: 0.25, meaning: 'probability-true',
       scale: { kind: 'bounded', min: 0, max: 1, direction: 'unordered' } },
-    decision: { pass: true, origin: 'provider-threshold' }, label: null, rationale: null,
+    decision: null, label: null, rationale: null,
     confidence: null, distribution: null,
   },
   receipt: mockReceipt(correlationId),
 });
+
+/** Serve a real service result through the remote client over a JSON wire. */
+const roundTrip = async (request: JudgeRequest) => {
+  const service = createJudgeService(judgeServiceFixture().options);
+  const served = await service.judge(request);
+  const fetch = vi.fn(async () => new Response(JSON.stringify(served),
+    { status: 200, headers: { 'content-type': 'application/json' } }));
+  const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+    fetch: fetch as unknown as typeof globalThis.fetch });
+  return client.judge(request);
+};
 
 /** Fail fast when an uncooperative fetch would otherwise hang judge() past the test timeout. */
 const failAfterHang = <T>(judged: Promise<T>): Promise<T> => Promise.race([judged,
@@ -304,6 +317,31 @@ describe('remote judge client', () => {
     const result = await client.judge(judgeRequest({ correlationId: corr }));
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('accepts a service no-rule verdict with absent decision through a round trip', async () => {
+    const request = judgeRequest({ correlationId: 'rt-null-corr' });
+    const result = await roundTrip(request);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.kind).toBe('verdict');
+      expect(result.verdict.decision).toBeNull();
+      expect(result.verdict.score?.value).toBe(0.25);
+      expect(result.receipt.correlationId).toBe('rt-null-corr');
+      expect(result.receipt.evaluator).toEqual(request.evaluator);
+    }
+  });
+
+  it('accepts a service negative threshold verdict through a round trip', async () => {
+    const request = judgeRequest({ correlationId: 'rt-neg-corr',
+      decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.9 } });
+    const result = await roundTrip(request);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.kind).toBe('verdict');
+      expect(result.verdict.decision).toMatchObject({ pass: false, origin: 'threshold' });
+      expect(result.receipt.correlationId).toBe('rt-neg-corr');
+    }
   });
 
   it('refuses NaN inputs before any egress without inventing a receipt', async () => {
