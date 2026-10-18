@@ -93,10 +93,10 @@
   - [x] Confirm the promoted spec contains no scratch-only path, no pending DV3 question, and no forbidden wording; confirm lane, lot, Make-command, and acceptance content matches v2.
   - [x] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
 - [ ] **Lot N — Final validation**
-  - [ ] Run `make scope-check ENV=test-spec-ui-annotate-overlay` and record its result.
-  - [ ] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution.
+  - [x] Run `make scope-check ENV=test-spec-ui-annotate-overlay` and record its result: PASS C2 on every lot, including the final tree (`spec/**` + `BRANCH.md` only).
+  - [x] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution: 8 commits, 11–102 changed lines each, no AI trailer.
   - [ ] Push `docs/spec-ui-annotate-overlay` and open a DRAFT PR whose body is this `BRANCH.md` text; report the PR number and stop without merging.
-  - [ ] Retest UI: not applicable, docs only, no UI test claimed.
-  - [ ] Retest API: not applicable, docs only, no API test claimed.
-  - [ ] Retest E2E: not applicable, docs only, no E2E test claimed.
-  - [ ] Package version bump: not applicable, no `packages/<pkg>/src/**` file changed.
+  - [x] Retest UI: not applicable, docs only, no UI test claimed.
+  - [x] Retest API: not applicable, docs only, no API test claimed.
+  - [x] Retest E2E: not applicable, docs only, no E2E test claimed.
+  - [x] Package version bump: not applicable, no `packages/<pkg>/src/**` file changed.
