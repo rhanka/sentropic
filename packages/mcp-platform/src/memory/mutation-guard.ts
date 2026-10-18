@@ -16,6 +16,7 @@
 import { createHash } from 'node:crypto';
 import { canonicalMemoryJson as canonicalJson } from './canonical-json.js';
 import { validateCapture } from './capture-validation.js';
+import { isCandidateId, isRecordId } from './identifiers.js';
 import {
   MEMORY_MUTATION_DIGEST_PROFILE_ID,
   MEMORY_PROVIDER_ID,
@@ -89,7 +90,7 @@ export function validateEffectiveInput(input: unknown): string[] {
         break;
       }
       const rec = input as Record<string, unknown>;
-      if (!isValidOpaqueRef(rec['candidate_id'])) failures.push('effective_input.candidate_id: invalid OpaqueRef');
+      if (!isCandidateId(rec['candidate_id'])) failures.push('effective_input.candidate_id: invalid candidate identifier');
       checkPolicyVersion(rec['admission_policy_version'], 'effective_input.admission_policy_version', failures);
       break;
     }
@@ -118,7 +119,7 @@ function validateLifecycleArm(
   idField: 'candidate_id' | 'record_id',
   failures: string[],
 ): void {
-  if (!isValidOpaqueRef(rec[idField])) failures.push(`effective_input.${idField}: invalid OpaqueRef`);
+  if (!(idField === 'candidate_id' ? isCandidateId(rec[idField]) : isRecordId(rec[idField]))) failures.push(`effective_input.${idField}: invalid identifier`);
   if (!isValidOpaqueRef(rec['reason_ref'])) failures.push('effective_input.reason_ref: invalid OpaqueRef');
   if (!isValidOpaqueRef(rec['event_id'])) failures.push('effective_input.event_id: invalid OpaqueRef');
   const anchor = rec['event_anchor'];
@@ -156,14 +157,14 @@ export function validateMutationTarget(target: unknown): string[] {
   }
   if (kind === 'candidate') {
     if (!hasOnlyKeys(target, ['kind', 'candidate_id'])) return ['target: candidate must carry exactly kind, candidate_id'];
-    if (!isValidOpaqueRef((target as Record<string, unknown>)['candidate_id'])) {
+    if (!isCandidateId((target as Record<string, unknown>)['candidate_id'])) {
       return ['target.candidate_id: invalid OpaqueRef'];
     }
     return [];
   }
   if (kind === 'record') {
     if (!hasOnlyKeys(target, ['kind', 'record_id'])) return ['target: record must carry exactly kind, record_id'];
-    if (!isValidOpaqueRef((target as Record<string, unknown>)['record_id'])) {
+    if (!isRecordId((target as Record<string, unknown>)['record_id'])) {
       return ['target.record_id: invalid OpaqueRef'];
     }
     return [];
@@ -302,6 +303,9 @@ export function validatePolicyVersionsProjection(
   effectiveInput: EffectiveMemoryMutationInputV1,
   projection: MemoryMutationPolicyVersionsV1,
 ): string[] {
+  const keys = projection?.tool_name === 'engram_memory_capture' ? ['tool_name', 'capture_policy_version']
+    : projection?.tool_name === 'engram_memory_request_admission' ? ['tool_name', 'admission_policy_version'] : ['tool_name'];
+  if (!isPlainRecord(projection) || !hasOnlyKeys(projection, keys)) return ['policy_versions: exact closed projection required'];
   if (effectiveInput.tool_name !== projection.tool_name) {
     return ['policy_versions.tool_name: must match the effective input tool'];
   }

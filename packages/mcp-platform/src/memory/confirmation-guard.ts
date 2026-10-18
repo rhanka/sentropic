@@ -1,5 +1,6 @@
 import { isValidCursor, isValidDigest, isValidInstant, isValidOpaqueRef } from './contracts.js';
 import { closed, validDelegation } from './context-validation.js';
+import { isCandidateId } from './identifiers.js';
 import type { ExpectedConfirmationContinuationBindingV1, MemoryConfirmationContinuationV1 } from './frozen-confirmation.js';
 
 const REF_KEYS = ['elicitation_ref', 'connector_instance_ref', 'tenant_id', 'initiating_principal_namespace',
@@ -20,7 +21,8 @@ export function checkFrozenConfirmation(c: MemoryConfirmationContinuationV1, e: 
   if (c.mode !== 'confirm' || c.approved !== true || !isValidOpaqueRef(c.continuation_ref)) return ['confirmation: affirmative confirm continuation required'];
   const failures: string[] = [];
   for (const k of REF_KEYS) {
-    if (!isValidOpaqueRef(c[k]) || !isValidOpaqueRef(e[k]) ||
+    const valid = k === 'target_ref' && c.capability === 'engram_memory_withdraw' ? isCandidateId : isValidOpaqueRef;
+    if (!valid(c[k]) || !valid(e[k]) ||
         (k !== 'transport_attachment_ref' && c[k] !== e[k])) failures.push(`confirmation.${k}: binding mismatch`);
   }
   for (const k of IDENTITY_KEYS) if (c[k] !== e[k]) failures.push(`confirmation.${k}: binding mismatch`);
