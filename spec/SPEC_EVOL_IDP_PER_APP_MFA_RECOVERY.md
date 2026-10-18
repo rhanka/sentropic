@@ -249,8 +249,8 @@ named method. The normative reading of the existing columns is:
 | Column | Normative meaning after this spec | Baseline status |
 |---|---|---|
 | `oauth_clients.required_acr` | Required MFA level for the `authorization_code` flow. `NULL` = no MFA policy (legacy behaviour, byte-identical). The MFA level is satisfied by **any qualifying method** (section 5.1) | Column and authorize enforcement `[EXISTS]`; method-neutral value `[TO BUILD Lot 5]` |
-| `oauth_clients.allowed_user_ids` | Subject allowlist, refused with `access_denied` before consent; empty = no restriction. Independent of MFA: an MFA session for an unlisted subject still fails | `[EXISTS]` |
-| Freshness bound for the MFA level | Per-client maximum age of the MFA ceremony (section 5.3). Stored with the client or applied as a server default for MFA clients; the exact column and default are Lot 2 work | `[TO BUILD Lot 2]` |
+| `oauth_clients.allowed_user_ids` | Subject allowlist, refused with `access_denied` before consent; empty `'{}'` means unrestricted in `authorize-handler.ts:412` only for clients declared unrestricted. Restricted clients (`require_non_empty_allowlist=true`, including `kvm-gateway`) reject missing/empty/unresolved subjects before mutation and never convert final-entry removal into `'{}'` | Base check `[EXISTS]`; fail-closed restricted guard `[TO BUILD Lot 1/6]` |
+| Freshness bound and policy version | Per-client `max_mfa_age_seconds`, `policy_version`, and `require_non_empty_allowlist` (sections 5.3, 8.1, 9.1). Added in Lot 2's single migration; `deploy/k8s/overlays/preprod/idp-identity-sync/client-postcondition.sql:7` and `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql:7` are updated and qualified in that same lot | `[TO BUILD Lot 2]` |
 
 Should `urn:sentropic:loa:passkey-fresh` become a method-neutral value?
 **Yes — as the required level, with a backward-compatible alias.** Keeping a
@@ -266,12 +266,14 @@ target vocabulary is:
 
 Rules:
 
-- **R-POL-1 (method neutrality).** `[TO BUILD Lot 5]` Authorize compares
-  **levels**, not methods: a session at level `mfa` satisfies a client
-  requiring `mfa` and, during migration, a client still requiring
-  `passkey-fresh`. `amr` (`['hwk','user','mfa']` today) is informational
-  for RPs that want the method; the IdP guarantee does not depend on the
-  RP reading it. KVM reads neither (section 11).
+- **R-POL-1 (method neutrality).** `[TO BUILD Lot 5]` The policy evaluator
+  compares **levels**, not methods: a qualifying fresh session at level `mfa`
+  satisfies a client requiring `mfa` and, during migration, a client still
+  requiring `passkey-fresh`. Signed `amr` carries `"mfa"` plus the method
+  identifier (section 5.1 table); the IdP enforces the policy across all four
+  issuance legs, and the KVM RP checks only that signed `amr` contains
+  `"mfa"`, independent of the qualifying method and `acr` spelling
+  (section 11).
 - **R-POL-2 (fail closed).** `[EXISTS]` An unknown required value refuses
   (`meetsRequiredAcr` returns false). The neutral rename keeps this: any
   required value outside {`mfa`, `passkey-fresh` alias, `bearer`} refuses.
@@ -285,66 +287,85 @@ Backward-compatible migration (summary; steps and lots in section 10.1):
 `kvm-gateway` is created **now** with `passkey-fresh`, the only MFA value
 merged code understands — creating it with an unrecognised `mfa` value
 today would fail closed for everyone, including the owner. Lot 5 teaches
-authorize both spellings, then a governed re-registration moves each MFA
-client's stored value to `mfa`, then the emitted session level switches to
-`mfa`. At no step does a previously refused bearer session become accepted.
+authorize both spellings, qualifies consumers and switches global emission
+to `mfa` and the single target `amr` table, then moves each MFA client's
+stored value to `mfa` through the governed Job. At no step does a
+previously refused bearer session become accepted.
 
-### 4.2 Account policy: the floor can only rise
+### 4.2 Account policy: stored protection and non-circular trust
 
 Client policy alone cannot express "this account must never recover by
 email", because the same account also uses non-forced clients where email
 recovery stays legitimate (section 14). The account-side model is therefore
-a **derived hardening set**, not a per-account level the user can lower:
+**persistent stored account protection (`is_mfa_protected`)**, never a
+per-account level the user can lower or a transient derivation from client rows:
 
-- **Definition.** `[TO BUILD Lot 3]` An account is **MFA-hardened** while
-  it appears in `allowed_user_ids` of at least one client whose required
-  level is MFA (either spelling), or once it has completed enrolment for
-  such a client. **[Corrected after review: protection is stored account
-  state, not a client-row derivation.** An account becomes protected by an
-  explicit protected-activation transition: allowlist entry, first
-  successful MFA authorization to an MFA client with an empty allowlist,
-  or operator activation, each after the section 10.2 inventory.
-  Client rows may propose candidates; they never constitute the state.]
-- **Effect.** For an MFA-hardened account, email proof alone never creates
-  a credential and never mints a session above `enrolment-only`
-  (section 6). Non-hardened accounts keep today's behaviour exactly,
-  including magic-link recovery and the "Lost your device?" flow.
+- **Definition (`is_mfa_protected`).** `[TO BUILD Lot 3, schema in Lot 2]`
+  Protection is stored account state in the database; client rows may propose
+  candidates but never constitute the state. An account starts with
+  `is_mfa_protected = false` and transitions atomically to
+  `is_mfa_protected = true` (coupled with a durable transition record in
+  `api/src/services/auth/security-transition-store.ts`) upon any of three
+  triggers, each requiring the section 10.2 non-circular trust bootstrap and
+  at least two independently recoverable `trusted` credentials (R-REC-8):
+  (1) allowlist binding on an MFA client, (2) first protected authorization
+  to an unrestricted MFA client (`allowed_user_ids = '{}'`,
+  `require_non_empty_allowlist = false`), committed atomically before any
+  protected authorization code can be issued (an email-enrolled key without
+  independent bootstrap provenance is `unverified_email` and can never supply
+  its own bootstrap authority), or (3) explicit operator activation via the
+  governed Job.
+- **Effect.** For a protected account (`is_mfa_protected = true`), email
+  proof alone never creates a credential, never mints an `enrolment-only`
+  recovery capability, and never mints any session on the no-device
+  magic-link path (on the with-devices magic-link path it may mint only a
+  `bearer` session for non-MFA applications, with credential enrolment,
+  credential revocation, and federation linking/unlinking blocked;
+  section 6). Non-protected accounts (`is_mfa_protected = false`) keep
+  merged behaviour on both magic-link branches and `/auth/register`.
 - **Credential-count prerequisite.** `[TO BUILD Lot 4]` Before an account
-  is first allowlisted on an MFA client (KVM first), it must hold **at
-  least two registered credentials** (kvm-lane option (a), adopted in
-  section 7). The check runs at allowlist time and at authorize time as a
-  defence in depth: an account that drops to one credential is prompted to
-  enrol a second at its next MFA sign-in, but is not locked out of the
-  forced application for that reason alone (lockout is governed by
-  section 6, not by the count).
-- **No account-level downgrade.** Removing an account from every MFA
-  allowlist, deleting the client, or relaxing its policy ends only the
-  entitlement; stored protection persists. De-protection is its own
-  privileged audited operation (R-GOV-4). It never revives credentials,
-  sessions, or recovery codes created under the weaker posture, and the
-  removal itself is audited (section 9).
+  completes its protected-activation transition, it must hold **at least two
+  independently recoverable `trusted` credentials** (R-REC-8) established
+  through the section 10.2 trust bootstrap. The check runs at activation/allowlist
+  time and at authorize time as defence in depth: a protected account that
+  later drops to one `trusted` credential is prompted to enrol a second at its
+  next MFA sign-in, but can still authenticate with the surviving credential.
+- **Persistence and no account-level downgrade.** Once stored,
+  `is_mfa_protected = true` persists across zero remaining credentials,
+  non-MFA client detours, client deletion, policy relaxation, and entitlement
+  removal or re-addition. Removing an account from a multi-subject allowlist
+  or disabling/deleting a client ends only that entitlement (removing the
+  final subject of a restricted client like `kvm-gateway` is rejected unless
+  the client is explicitly disabled/deleted or widened under R-GOV-4; it
+  never converts the row to unrestricted `'{}'`). De-protection is its own
+  privileged audited operation (R-GOV-4) with a durable transition record,
+  and never promotes `unverified_email`, `pending-recovery`, or `revoked`
+  keys, sessions, or recovery codes to `trusted`.
 
-Stored protection, binding provenance, and generation require
-persistence (Lot 0 single migration); client rows are never the record. Recovery
-codes (section 7, option (c)) do need storage; that table is specified in
-Lot 4 and holds only hashes.
+Stored protection (`is_mfa_protected`), credential binding provenance
+(`trusted`, `pending-recovery`, `unverified_email`, `revoked`),
+`security_generation`, and durable transition records persist in the branch's
+single consolidated migration (designed in Lot 0, landed in Lot 2). Recovery
+codes (section 7, option (c) optional sublot) hold only subject- and
+generation-bound hashes.
 
 **Evidence and generation (normative, Lot 0 design then Lots 2–3).** The
 `mfaVerified` boolean stays as the merged mint flag, but BUILD lots must
 not treat it as the whole evidence record. The target evidence for a
-qualifying session is: authentication method(s) and MFA completion time
+qualifying session is: authentication method(s) and `mfaCompletedAt`
 (distinct from session creation and from last activity), the credential
 identifier that participated, credential binding state (`trusted`,
-`pending-recovery`, `revoked`) with its authorizing ceremony, an assurance
-schema version, and a monotonically increasing per-account **security
-generation** that recovery, policy hardening, and full reset increment.
+`pending-recovery`, `unverified_email`, `revoked`) with its authorizing
+ceremony or bootstrap/recovery `operationId`, an assurance schema version,
+and a monotonically increasing per-account **security generation** that
+bootstrap, recovery, protection activation, and full reset increment.
 Refresh preserves the original ceremony times and generation and can
-never create MFA evidence. Hardening persists at zero credentials: an
-account whose keys were all removed is still hardened, and zero
-credentials never re-opens weak bootstrap for it. Lot 0 (section 13)
-freezes the exact columns (the branch's single migration) on the existing
-ports/adapters; no parallel authentication subsystem is created and
-migration 0042 is not edited.
+never create MFA evidence. Stored protection persists at zero credentials:
+an account whose keys were all removed remains `is_mfa_protected = true`,
+and zero credentials never re-opens weak bootstrap for it. Lot 0
+(section 13) freezes the exact columns on the existing ports/adapters; no
+parallel authentication subsystem is created and migration 0042 is not
+edited.
 
 ## 5. Sessions, tokens, freshness, and step-up
 
