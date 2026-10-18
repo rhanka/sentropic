@@ -7,6 +7,20 @@ const live: McpOAuthNamespace[] = [];
 afterEach(async () => { await Promise.all(live.splice(0).map((secured) => secured.close())); });
 
 describe('MCP OAuth composition', () => {
+  it('should reject incomplete trusted verifier or issuer bindings before listening', async () => {
+    const { modules, options } = await fixture();
+    const retain = (secured: McpOAuthNamespace) => { live.push(secured); return secured; };
+    await expect(createMcpOAuthNamespace(modules, { ...options,
+      keySource: { resolveKey: undefined as never },
+    }).then(retain)).rejects.toThrow();
+    await expect(createMcpOAuthNamespace(modules, { ...options, exchange: {
+      issuer: undefined as never, workloadClientId: 'workload', workloadActorSub: 'workload', policyRevision: '1',
+      profiles: { signals: { tool: 'search_signals', method: 'GET', origin: 'https://api.example',
+        audience: 'https://api.example', pathTemplate: '/signals/:city', requiredScopes: ['immo:search'],
+        validateParams: (params) => params } },
+    } }).then(retain)).rejects.toThrow();
+  });
+
   it('should preserve twelve wire schemas/defaults while validating real Radar tuples and bounds', async () => {
     const { modules, options, token } = await fixture();
     const secured = await createMcpOAuthNamespace(modules, options); live.push(secured);
