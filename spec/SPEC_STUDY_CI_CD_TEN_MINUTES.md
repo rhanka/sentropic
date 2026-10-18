@@ -87,21 +87,21 @@ Isolated transformation gains are not additive: several steps share preparation 
 
 ## 5. Branch train index
 
-These are planned branches, not branches already created. File numbers 62–70 are allocated to this train after the requested 61 boundary. Each branch starts from main after its predecessor is merged; the explicit chain serializes shared workflow/Makefile ownership. Technical prerequisites are also recorded so later orchestration can distinguish necessary data dependencies from merge ordering.
+These are planned branches, not branches already created. File numbers 62–70 preserve the requested document sequence after 61; they are not branch identifiers. This train uses canonical IDs **BR-76 through BR-84**, mapped below. Existing allocations and reservations in [PLAN.md](../PLAN.md) and [track/TRACK.md](../track/TRACK.md), plus BR-75 Muse enrollment in [the gateway routing spec](SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md), remain assigned to their existing work. BR-76–84 were unused in the checkout's tracked Markdown and Track state when this mapping was selected. Each branch starts from main after its predecessor is merged; the explicit chain serializes shared workflow/Makefile ownership. Technical prerequisites remain distinct from merge ordering.
 
-| Order | Plan and branch | Dependencies | Budget to measure / acceptance focus |
+| Order / file sequence | Plan (canonical branch ID) and branch | Dependencies | Budget to measure / acceptance focus |
 | --- | --- | --- | --- |
-| 1 | [BR-62](../plan/62-BRANCH_chore-ci-capacity-metrics.md) — `chore/ci-capacity-metrics` | This documentation PR | Complete results; aggregate critical-path queue ≤60s under contention. |
-| 2 | [BR-63](../plan/63-BRANCH_perf-ci-native-checks.md) — `perf/ci-native-checks` | BR-62 | API/UI/IdP static ≤120/90/90s, cold preparation included. |
-| 3 | [BR-64](../plan/64-BRANCH_perf-ci-image-artifacts.md) — `perf/ci-image-artifacts` | BR-63; metrics from BR-62 | Longest complete image branch ≤180s warm / 210s cold; exact digest. |
-| 4 | [BR-65](../plan/65-BRANCH_perf-ci-parallel-dag.md) — `perf/ci-parallel-dag` | BR-64; verdict from BR-62 | Early runtime dispatch; scans ≤90s; all required results preserved. |
-| 5 | [BR-66](../plan/66-BRANCH_perf-ci-package-candidates.md) — `perf/ci-package-candidates` | BR-65 for train order; BR-63 preparation and BR-64 receipts | Cluster ≤210s; common guard ≤75s; original assertions retained. |
-| 6 | [BR-67](../plan/67-BRANCH_test-ci-deterministic-journeys.md) — `test/ci-deterministic-journeys` | BR-66 for train order; BR-65 scheduling and BR-64 images | Browser/API shards ≤180s; no unexpected live calls; daily live results visible. |
-| 7 | [BR-68](../plan/68-BRANCH_perf-cd-tested-artifacts.md) — `perf/cd-tested-artifacts` | BR-64, BR-65, BR-66, BR-67 | Promotions ≤40s; preprod ≤75s; selected fresh npm train ≤195s. |
-| 8 | [BR-69](../plan/69-BRANCH_feat-ci-consumer-contracts.md) — `feat/ci-consumer-contracts` | BR-68; BR-66 candidates and BR-67 blocking integration | Unchanged installed tuple/digest proven before consumer work is omitted. |
-| 9 | [BR-70](../plan/70-BRANCH_test-ci-ten-minute-proof.md) — `test/ci-ten-minute-proof` | BR-62 through BR-69 | ≥30 complete full-product runs; publish distribution and every breach. |
+| 1 / 62 | [BR-76](../plan/62-BRANCH_chore-ci-capacity-metrics.md) — `chore/ci-capacity-metrics` | This documentation PR | Complete results; aggregate critical-path queue ≤60s under contention. |
+| 2 / 63 | [BR-77](../plan/63-BRANCH_perf-ci-native-checks.md) — `perf/ci-native-checks` | BR-76 | API/UI/IdP static ≤120/90/90s, cold preparation included. |
+| 3 / 64 | [BR-78](../plan/64-BRANCH_perf-ci-image-artifacts.md) — `perf/ci-image-artifacts` | BR-77; metrics from BR-76 | Longest complete image branch ≤180s warm / 210s cold; exact digest. |
+| 4 / 65 | [BR-79](../plan/65-BRANCH_perf-ci-parallel-dag.md) — `perf/ci-parallel-dag` | BR-78; verdict from BR-76 | Early runtime dispatch; scans ≤90s; all required results preserved. |
+| 5 / 66 | [BR-80](../plan/66-BRANCH_perf-ci-package-candidates.md) — `perf/ci-package-candidates` | BR-79 for train order; BR-77 preparation and BR-78 receipts | Cluster ≤210s; common guard ≤75s; original assertions retained. |
+| 6 / 67 | [BR-81](../plan/67-BRANCH_test-ci-deterministic-journeys.md) — `test/ci-deterministic-journeys` | BR-80 for train order; BR-79 scheduling and BR-78 images | Browser/API shards ≤180s; no unexpected live calls; daily live results visible. |
+| 7 / 68 | [BR-82](../plan/68-BRANCH_perf-cd-tested-artifacts.md) — `perf/cd-tested-artifacts` | BR-78, BR-79, BR-80, BR-81 | Promotions ≤40s; preprod ≤75s; selected fresh npm train ≤195s. |
+| 8 / 69 | [BR-83](../plan/69-BRANCH_feat-ci-consumer-contracts.md) — `feat/ci-consumer-contracts` | BR-82; BR-80 candidates and BR-81 blocking integration | Unchanged installed tuple/digest proven before consumer work is omitted. |
+| 9 / 70 | [BR-84](../plan/70-BRANCH_test-ci-ten-minute-proof.md) — `test/ci-ten-minute-proof` | BR-76 through BR-83 | ≥30 complete full-product runs; publish distribution and every breach. |
 
-Each file follows [BRANCH_TEMPLATE](../plan/BRANCH_TEMPLATE.md), with exact initial file ownership, tests, scope exceptions, measured acceptance, rollback, and isolated environment/port assignment. New script/fixture names in those plans are implementation deliverables, not claims that files already exist. Before dispatch, the conductor registers the train in the execution `PLAN.md` and imports its plans into Track under that operation's scope; this documentation PR does not mutate either shared state.
+Each file follows [BRANCH_TEMPLATE](../plan/BRANCH_TEMPLATE.md), with exact initial file ownership, tests, scope exceptions, measured acceptance, rollback, and isolated environment/port assignment. New script/fixture names in those plans are implementation deliverables, not claims that files already exist. Before dispatch, the conductor registers the canonical IDs above in the execution `PLAN.md` and imports the plans into Track with those identities under that operation's scope; filename sequence numbers must not become branch IDs. Environments keep their unique branch slugs; port slots use the canonical numeric IDs (76–84) with the workflow formula. This documentation PR does not mutate either shared state.
 
 ## 6. Acceptance and rollback
 
@@ -119,7 +119,7 @@ Use the existing diagram generator and design-system theme for one layered CI/CD
 
 The heatmap expands job → step and separates setup/install/build/transfer/execute/publish/queue. Show elapsed or runner-seconds, numeric values, semantic colors, and bins ≤15s, 16–60s, 61–180s, >180s. Missing measurements display **to measure**, with a pattern; proposed values display **budget to measure**. Every sampled job/step over 60 seconds needs an optimization, source, and acceptance reference. Render and compute from the same graph; never sum unrelated example jobs into a measured run or add isolated savings together.
 
-The validated portable dossier is the presentation reference. Its controls check and Sol GO r3 are source-validation records supplied with the handoff; they do not attest review or CI of the new documentation commits. BR-70 owns the later measured evidence and presentation refresh.
+The validated portable dossier is the presentation reference. Its controls check and Sol GO r3 are source-validation records supplied with the handoff; they do not attest review or CI of the new documentation commits. BR-84 owns the later measured evidence and presentation refresh.
 
 ## 8. Source provenance and reconciliation
 
