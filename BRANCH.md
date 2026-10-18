@@ -118,6 +118,9 @@
 - [x] Lot 1D MINEUR-3 record (2026-10-17): no PR/CI on HEAD as of this commit (N-A, resolved at PR opening); prior cluster-mesh 56/61 files and 415/449 tests are skipped per vitest convention with no failures, re-verified with raw logs in gates below.
 - [x] Rebase onto origin/main 1472d961e (2026-10-17): 91 commits replayed; conflicts resolved keeping main behaviour (muse wonder models, 0.26.1 version, CI seat addendum); judge version test updated to 0.26.1.
 - [x] CI red-job fix (2026-10-18, PR #693): dist/ is ignored so CI Test steps run without it; public-surface tests now build dist in beforeAll when stale/missing and compose test asserts on committed src. Package-bump check stays red by design until conductor-gated TUPLE.
+- [x] Version bump for CI enforce-package-bump (2026-10-18): llm-mesh 0.26.1 to 0.27.0, cluster-mesh 0.18.0 to 0.19.0 with mesh peer range widened to <0.28.0 in package.json, lockfile, catalog LLM_MESH_RANGE and coupled registry/topology-ranges assertions; version test and train literals follow. No publish; TUPLE otherwise still gated.
+- [x] BR96-EX4 (2026-10-18): root package-lock.json mirror entries follow the CI-required bump; rationale: npm ci validates lock sync and CI blocks merge without it; impact: 3 mirror lines, no dependency changes; rollback: revert lockfile with the package.json versions.
+- [x] BR96-EX5 (2026-10-18): llm-gateway mesh dependency follows the bump (^0.26.0 to ^0.27.0) plus lock mirror; rationale: npm ci fails EUSAGE otherwise and gateway is the only mesh consumer with a bound range; impact: 1 range in 2 files, no source changes; rollback: revert range with the mesh version.
 
 
 ## AI Flaky tests
