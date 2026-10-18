@@ -94,7 +94,7 @@ Actions with the following status should be included around tasks only if really
   - [x] Lot gate: copy of Lot 1 gate (`make scope-check`), no UAT (last lot, docs only).
   - [x] Final validation (docs-appropriate): PR body sourced from exact `BRANCH.md` text; branch CI verified on PR #692 (run 39086831064, success); `git diff --check` clean. Merge and BRANCH.md removal: not applicable under the draft-only instruction (Scope / Guardrails).
 
-- [ ] **Lot 3 — Amendment v2: catalogue integration (2026-10-18)**
+- [x] **Lot 3 — Amendment v2: catalogue integration (2026-10-18)**
   - [x] F692-1: catalogue projection of the host registry (typed discovery, five kinds, transverse columns).
   - [x] F692-2: owner-facing permission-filtered catalogue view at the D13 `/catalog` + `/apps` boundary.
   - [x] F692-3: managed-app adoption matrix in §11 (one row per app, evidence status `unverified`).
@@ -102,4 +102,4 @@ Actions with the following status should be included around tasks only if really
   - [x] F692-5: storage and serialization ownership (generic module-storage target; no shared-app DB service).
   - [x] F692-6: annotations and per-app MFA connection (three distinct facts; open owner questions kept in French).
   - [x] F692-7: terminology repair (`SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md:7`) and dated status layer (#688 merged, #689 open).
-  - [ ] Push and amendment-to-commit table in `.h2a/reviews/pr692_amend-v2.md` (gitignored, not committed).
+  - [x] Push and amendment-to-commit table in `.h2a/reviews/pr692_amend-v2.md` (gitignored, not committed).
