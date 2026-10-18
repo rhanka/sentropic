@@ -76,6 +76,7 @@
   - [x] Port sibling-source imports, batch 2: 9 files.
   - [x] Port sibling-source imports, batch 3: 9 files.
   - [x] Port sibling-source imports, batch 4: 9 files.
+  - [x] Port sibling-source imports, batch 5: 1 files.
   - [ ] Refresh affected workspace lock entries through Docker/Make.
   - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
 - [ ] **Lot 2 — Guarded build, pack and web-login bootstrap**
