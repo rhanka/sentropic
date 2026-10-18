@@ -74,6 +74,7 @@
   - [x] Preserve non-NFC opaque candidate identifiers, enforce canonical record IDs and close policy-version projections.
   - [x] Validate the complete public A03 projection and reject open or inconsistent nested receipt/context carriers.
   - [x] Refresh generated root API context declarations and memory contract report, batch 1 within the commit line limit.
+  - [x] Refresh generated memory API contract report, batch 4 within the commit line limit.
   - [x] Refresh generated memory API contract report, batch 3 within the commit line limit.
   - [x] Refresh generated memory API contract report, batch 2 within the commit line limit.
 - [x] L5-LOT1-GATE closed 2026-10-18: #685 publications verified on npm (@sentropic/llm-mesh@0.27.0, @sentropic/llm-gateway@0.21.0, @sentropic/cluster-mesh@0.19.1), CI run 39154603798 on 9ed96eb83 green.
