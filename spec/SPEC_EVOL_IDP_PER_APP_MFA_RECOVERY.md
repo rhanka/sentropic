@@ -534,82 +534,27 @@ non-secret fields, sufficient to re-register the client identically on any
 tier through the existing governed Job. The secret itself never enters the
 declaration; only its variable names do (section 11 lists the fields).
 
-- File target (new): `deploy/oauth-clients/kvm-gateway.yaml` — client id,
-  display name, the single redirect URI, scopes, grant/response types,
-  token-endpoint auth method, PKCE requirement, required level (legacy
-  spelling until Lot 5, then neutral), allowlist placeholder for the owner
-  subject (subject value is tier data, committed as a variable reference,
-  not a personal identifier in prose), tenant, and the secret variable
-  names from `docs/oauth-client-rotation.md`.
-- File targets (existing, reused): the registration Job
-  `deploy/k8s/base/36-oauth-register-client-job.yaml` via
-  `make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`,
-  and the env-driven registration script
-  `api/src/scripts/oauth-register-client.ts`. Lot 1 adds the declaration
-  and a Make-level consistency check that the declaration and a dry
-  registration agree; it does not add a second registration path.
-- Already exists: confidential-client registration, secret hashing,
-  policy parsing, and the rotation runbook
-  (`docs/oauth-client-rotation.md:5` already names `kvm-gateway` as a
-  confidential client) `[EXISTS]`. Missing today: the checked-in
-  declaration file itself and any test that the declared policy survives
-  re-registration.
+- File target (new): `deploy/oauth-clients/kvm-gateway.yaml` — `schema_version`, monotonic `policy_version`, `require_non_empty_allowlist: true`, client id, display name, the single redirect URI, scopes, grant/response types, token-endpoint auth method, PKCE requirement, required level (legacy `passkey-fresh` until Lot 5 M-2, then `mfa`), allowlist variable reference for the owner subject (tier data supplied via the 0600 env file, never a personal identifier in git), tenant, RP contract (`"mfa"` in signed `amr`), and the secret variable names from `docs/oauth-client-rotation.md`.
+- **Fail-closed allowlist rule (normative).** `[TO BUILD Lot 1, weakening gate Lot 6]` Before any database mutation (on initial registration in any tier and on reapply, rotation, or policy update), `api/src/scripts/oauth-register-client.ts` and the declaration apply gate must reject fail-closed if the `kvm-gateway` (or any client declaring `require_non_empty_allowlist: true`) owner subject variable is missing, empty, whitespace-only, an unexpanded placeholder, or does not resolve to an existing enabled user subject in that tier's database; it must **never** fall back to `'{}'` (`api/src/scripts/oauth-register-client.ts:153`, `:210`, which means unrestricted in `packages/auth-hono/src/oauth/authorize-handler.ts:412`). Removing the final entitled subject of a restricted client is rejected unless executed as an explicit client disable/delete operation (which fails closed for all users) or an explicit R-GOV-4 policy-weakening transition to unrestricted mode. Intentionally unrestricted clients (`require_non_empty_allowlist: false`, `allowed_user_ids = '{}'`) retain their existing unrestricted semantics.
+- File targets (existing, reused): the registration Job `deploy/k8s/base/36-oauth-register-client-job.yaml` via `make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`, and `api/src/scripts/oauth-register-client.ts`. Lot 1 adds the declaration, digest/readback check, and fail-closed non-empty owner validation; it does not add a second registration path.
+- Already exists: confidential-client registration, secret hashing, policy parsing, and the rotation runbook (`docs/oauth-client-rotation.md:5` already names `kvm-gateway` as a confidential client) `[EXISTS]`.
 
-### 8.2 IdP non-regression test for the required MFA level
+### 8.2 IdP non-regression and RP amr-membership tests
 
-**Requirement R-KVM-TEST.** `[TO BUILD Lot 1, extended by Lots 2 and 5]`
-Because the gateway performs no `acr`/`amr` check, the IdP authorize
-behaviour for this level is pinned by automated tests. At authorize, a
-magic-link session and a federation (Google-shaped) session each receive
-the forced re-auth and then `access_denied` on resume, and a subject
-outside the allowlist is refused even with a qualifying MFA session.
+**Requirement R-KVM-TEST.** `[TO BUILD Lot 1, extended by Lots 2, 5, and 6]`
+Both the IdP issuance guarantee and the RP `"mfa"`-in-`amr` membership check are pinned by automated tests. At the IdP, a magic-link session and a federation (Google-shaped) session each receive forced re-authentication and then `access_denied` on resume, and a subject outside the allowlist is refused even with a qualifying MFA session. At the RP boundary, an otherwise valid signed ID token lacking `"mfa"` in `amr` is refused and a valid token containing `"mfa"` in `amr` is accepted independently of the qualifying method and `acr` spelling.
 
-- File target (extend): `packages/auth-hono/tests/oauth-client-required-acr.test.ts`.
-  Merged coverage already present `[EXISTS]`: `meetsRequiredAcr` unit
-  cases, bearer forced to login, MFA session through to consent, no-policy
-  client untouched, bearer resume refused with `access_denied` (the test
-  names the magic-link/Google path), passkey-without-UV forced then
-  refused, `prompt=none` returning `login_required`, and fresh-after-reauth
-  acceptance. Lot 1 adds the two missing cases to the same file: a
-  federation-shaped bearer fixture explicitly (distinct session origin,
-  same `mfaVerified=false` expectation) and an allowlist refusal for an
-  MFA session of an unlisted subject. Test names follow the harness-test
-  convention ("should … when …"); scoped run:
-  `make test-auth-hono SCOPE=tests/oauth-client-required-acr.test.ts ENV=test-idp-per-app-mfa-recovery`
-  (the package suite target; `ENV` last, never on `ENV=dev`).
-- File target (extend): `api/tests/api/auth/oauth-client-policy.test.ts`
-  `[EXISTS]` — the API-level twin (real client row, real sessions). Lot 1
-  adds the federation-origin bearer case at this level if the fixture
-  supports it, otherwise records why the package level is the covering
-  level. Lots 2 and 5 extend both files with the freshness (stale MFA
-  session) and neutral-value (alias acceptance, canonical emission) cases.
-- No gateway-side test is specified: asserting a check the owner decided
-  the gateway must not perform would encode the wrong contract.
+- File target (extend): `packages/auth-hono/tests/oauth-client-required-acr.test.ts` `[EXISTS]`. Lot 1 adds a `kvm-gateway` fixture derived from `deploy/oauth-clients/kvm-gateway.yaml`, a federation-shaped bearer refusal case, and an allowlist refusal for an MFA session of an unlisted subject. Scoped run: `make test-auth-hono SCOPE=tests/oauth-client-required-acr.test.ts ENV=test-idp-per-app-mfa-recovery`.
+- File target (extend): `api/tests/api/auth/oauth-client-policy.test.ts` `[EXISTS]` — the API-level twin against a real `kvm-gateway` row derived from the declaration. Lot 1 drives the **actual magic-link (`api/src/routes/namespaces/auth/magic-link.ts:149`, `:197`) and federation (`api/src/routes/namespaces/auth/federation.ts:161` + `api/src/services/auth/federation/broker.ts:218`) session-minting paths** (stubbing only external OAuth provider HTTP verification), followed by `authorize` → `consent` → `token`. Lots 2 and 5 extend both files with freshness, four-leg recheck, and neutral-value/AMR cases.
+- File targets (RP contract, extend + new): `packages/auth-hono/tests/example-oauth-rp.test.ts` `[EXISTS, updated in Lots 1/5]` and `api/tests/unit/auth/kvm-rp-amr-contract.test.ts` `[TO BUILD Lot 1, updated in Lot 5]`, plus the KVM lane's RP verification check in `e2e/tests/02-auth-mfa-recovery.spec.ts` (Lot 6): verify that the RP rejects an otherwise valid signed ID token with absent, empty, or non-MFA `amr` (`['urn:sentropic:amr:email']`, `['urn:sentropic:amr:federation']`, or `['urn:sentropic:amr:webauthn']` from a pending/stale ceremony) and accepts a valid signed ID token containing `"mfa"` in `amr` regardless of qualifying method and legacy (`passkey-fresh`) or canonical (`mfa`) `acr` spelling.
 
 ### 8.3 Closing the email-only re-enrolment path for required-MFA clients
 
-**Requirement R-KVM-CLOSE.** The email-only path is closed by R-REC-1 and
-R-REC-2 (section 6), restated here with its file target and effective lot:
+**Requirement R-KVM-CLOSE.** The email-only path is closed by R-REC-1 and R-REC-2 (section 6), restated here with its file targets and activation gate:
 
-- File target: `api/src/routes/namespaces/auth/magic-link.ts` — the
-  no-devices branch (temporary registration session, lines 194–226 at the
-  baseline) and the enrolment gate consulted by
-  `api/src/routes/namespaces/auth/registration.ts` for existing users.
-  Supporting targets: the registration handlers' hardened-account check
-  (Lot 3) and the session-purpose confinement for enrolment-only sessions.
-- **From when: Lot 3.** The closure is effective for MFA-hardened accounts
-  only, from the Lot 3 deployment. Ordering constraint (normative):
-  `kvm-gateway` may be **registered** from Lot 1, but its MFA-only
-  allowlist enforcement (owner subject actually gated on the required
-  level for production access) goes live only **after** Lot 3, otherwise
-  the email path would still convert mailbox control into access during
-  the interval. Section 10.2 sequences registration, enrolment of the
-  second credential, and enforcement.
-- Already exists `[EXISTS]`: bearer refusal at authorize, the temporary
-  session itself, and email verification marking. Missing today
-  `[TO BUILD Lot 3]`: the hardened-account branch, the enrolment-only
-  session purpose, and the register-surface block for bearer/federation
-  sessions of hardened accounts.
+- File targets: `api/src/routes/namespaces/auth/magic-link.ts` (lines 140–226), `api/src/routes/namespaces/auth/registration.ts`, `packages/auth-hono/src/webauthn-registration-route-handlers.ts`, `api/src/services/webauthn-registration.ts`, `api/src/routes/namespaces/auth/credentials.ts`, `api/src/routes/namespaces/auth/federation.ts`, `api/src/services/auth/federation/broker.ts`, and `packages/auth-hono/src/federation/resolve-user.ts`.
+- **Delivery vs activation gate (normative).** Lot 3 ships the R-REC-1/R-REC-2/P-LINK code gated on stored `is_mfa_protected = true`. **Activating `is_mfa_protected = true` on the first account (the earliest moment email enrolment is disabled) waits for all five prerequisites of section 10.2**: (1) non-circular trust bootstrap, (2) working Lot 4 break-glass Job and `pending-recovery` activation, (3) Lot 2 freshness and four-leg evaluator plus Lot 3 binding/step-up controls, (4) durable transition persistence (`api/src/services/auth/security-transition-store.ts`), and (5) a successful Lot 6 full-loss recovery drill with normal IdP/KVM access unavailable. The existing restrictive `kvm-gateway` production row (`2026-10-18T07:14Z`) is preserved unchanged throughout and never cleared to sequence rollout; pre-activation email exposure is framed explicitly until step 5 of section 10.2 completes.
+- Already exists `[EXISTS]`: bearer refusal at authorize, the temporary session itself, and email verification marking. Missing today `[TO BUILD Lot 3]`: stored `is_mfa_protected` state, `enrolment-only` capability confinement, registration-before-persist authorization, and the register/credential/federation blocks for protected accounts.
 
 ## 9. Governance, audit, and notifications
 
@@ -644,20 +589,7 @@ Normative additions:
   independent: rotation follows the 90-day runbook cycle and never
   requires a policy decision; a policy change never requires a secret
   rotation.
-- **R-GOV-4 (weakening is a distinct operation).** `[TO BUILD Lot 6]`
-  Omission preserves policy `[EXISTS]`, but an explicitly supplied weaker
-  value (lower level, cleared level, wider allowlist, longer freshness)
-  must go through a distinct governed change operation with its own
-  approval, monotonic policy version with compare-and-swap (stale updates
-  refuse), declaration digest, and readback of the persisted result.
-  Policy history needs durable, attributable storage/export beyond the
-  logger adapter; rollback, re-seed, sync, or redeploy must never
-  reinstate an older weaker policy silently, and a downgrade never
-  removes account recovery protection by side effect. The registration
-  Job's mutable image reference and broad service account are acceptable
-  for ordinary registration; security-sensitive operations (policy
-  weakening, break-glass) require the pinned, scoped variant of
-  section 7.
+- **R-GOV-4 (weakening is a distinct operation).** `[TO BUILD Lot 2 store, Lot 1/6 CLI & Job]` Omission preserves policy `[EXISTS]`, but an explicitly supplied weaker value (lower or cleared `required_acr`, wider `allowed_user_ids`, converting a restricted client to unrestricted `'{}'`, longer `max_mfa_age_seconds`, or account de-protection) must go through a distinct governed operation (`--allow-weaken`, `--expected-policy-version`, `--operation-id`, `--approval-ref`, `--declaration-digest`) with compare-and-swap (stale versions refuse), durable history write, and persisted readback. The persistence primitive (`api/src/db/schema.ts`, `api/src/services/auth/security-transition-store.ts`) lands in Lot 2's single migration so Lot 3/4 activation and recovery transitions use it immediately; `api/src/scripts/oauth-register-client.ts` and the pinned-digest Job variant enforce R-GOV-4 across Lot 1 (digest, non-empty owner check, readback) and Lot 6 (weakening approval/CAS/history gate). Rollback, re-seed, sync, or redeploy must never reinstate an older weaker policy, and a client downgrade never clears `is_mfa_protected`.
 
 ### 9.2 Audit
 
@@ -669,28 +601,7 @@ name, actor subject, client id where relevant, outcome, and timestamp —
 never secret, code, token, or full email payloads beyond the account
 address already used for delivery.
 
-`[TO BUILD Lot 6]` Required events (names are normative; field sets are
-Lot 6 work): `oauth.client_policy_changed` (including the R-GOV-2
-downgrade fields), `auth.mfa_stepup_succeeded` / `auth.mfa_stepup_failed`
-(at authorize resume), `auth.credential_created` and
-`auth.credential_revoked` (with the session level that authorized them),
-`auth.recovery_code_created` / `auth.recovery_code_redeemed` /
-`auth.recovery_codes_revoked`, `auth.recovery_attempt_email_blocked`
-(R-REC-1/R-REC-2 refusals), `auth.breakglass_reset_executed` (Job
-identity, target account, counts revoked), and
-`auth.enrolment_only_session_issued` / `auth.enrolment_only_session_used`.
-Failures are recorded with the same names and a refusal outcome. Two
-record classes are distinguished `[TO BUILD Lot 6]`: **best-effort**
-records (ordinary authorization outcomes, notifications) stay
-fire-and-forget as merged; **transition records** (credential-binding
-trust, pending activation, hardening, policy/policy-version change,
-generation bump) are atomically coupled to the state change they record
-— if the transition record cannot persist, the privileged operation
-fails closed. R-REC-7's "atomically with the audit record" means this
-second class. Durable policy history likewise persists as data, not as a
-logger claim. Host target: the audit wiring at
-`api/src/routes/auth/oauth.ts:157` keeps the first class; the state layer
-owns the second.
+`[TO BUILD Lot 2 store, Lot 6 events]` Required events: `oauth.client_policy_changed` (including R-GOV-2/R-GOV-4 fields), `auth.mfa_stepup_succeeded` / `auth.mfa_stepup_failed`, `auth.credential_created` / `auth.credential_revoked`, `auth.recovery_code_created` / `auth.recovery_code_redeemed` / `auth.recovery_codes_revoked`, `auth.recovery_attempt_email_blocked`, `auth.breakglass_reset_executed` / `auth.trust_bootstrap_executed`, and `auth.enrolment_only_session_issued` / `auth.enrolment_only_session_used`. Two record classes are enforced: **best-effort** operational records (`api/src/routes/auth/oauth.ts:157` logger port, telemetry exporters, and email notifications) stay fire-and-forget so logger/exporter/mail outages never undo an already committed transition or alter an ordinary authorization outcome; **durable transition records** (`api/src/services/auth/security-transition-store.ts`, backed by `api/src/db/schema.ts` in Lot 2's migration) execute inside the same database transaction as credential-binding changes, trust bootstrap, pending-recovery activation, `is_mfa_protected` changes, `policy_version` CAS mutations, and `security_generation` bumps — if the durable write fails, the transaction rolls back leaving all state unchanged, and retrying with the same `operationId` is idempotent.
 
 ### 9.3 Notifications
 
