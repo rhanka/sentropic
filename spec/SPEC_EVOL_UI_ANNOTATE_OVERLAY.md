@@ -200,3 +200,83 @@ At dispatch the conductor **updates root `PLAN.md` with all six lanes**, depende
 | F1 · 6–9 | Side-panel composer, isolated selection, capture/redaction, current-tab binding. N: `ui/tests/chrome-ext/annotation-capture.test.ts`; U: `ui/tests/upstream/chrome-host-adapter.test.ts`. N: `e2e/tests/06-ui-annotation-extension.spec.ts`. | GF: explicitly activate second app, lasso/capture/send; tab switch cancels; ordinary tab tools and auth regressions pass. |
 | F2 · deferred, 4–6 excluded | Optional bookmarklet; no files/tests/commands in this dispatch. | Requires a separate scope/decision before implementation. |
 | F3 · 4–6 | Other-app documentation, exact extension build and browser matrix. E: `e2e/tests/03-chat-chrome-extension.spec.ts`, `03-chat-chrome-extension-auth.spec.ts`; extend F browser files. | GF-final: allowed Chrome app qualifies; phone retains embedded flow; no promise of Chrome desktop-extension support on mobile Safari. Document unknown version/opaque DOM and private rollback. |
+
+## 9. Make commands and environments
+
+No command below was executed during planning. All run from their future isolated worktree; `ENV` is last. Slot formula: `9000/5200/1100 + nn*5 + slot`; proposed numbers avoid app-replacement 121–125 and #684's occupied 124/0. Conductor must register ownership, verify free ports and exact OAuth callbacks before starting anything; these are not live availability claims.
+
+| Lane | Proposed nn | Test slot 0 API/UI/Maildev | E2E slot 1 API/UI/Maildev | ENV suffix |
+|---|---:|---|---|---|
+| A | 126 | 9630 / 5830 / 1730 | 9631 / 5831 / 1731 | annotate-package |
+| B | 127 | 9635 / 5835 / 1735 | 9636 / 5836 / 1736 | annotate-dom |
+| C | 128 | 9640 / 5840 / 1740 | 9641 / 5841 / 1741 | ui-annotation-service |
+| D | 129 | 9645 / 5845 / 1745 | 9646 / 5846 / 1746 | ui-annotation-overlay |
+| E | 130 | 9650 / 5850 / 1750 | 9651 / 5851 / 1751 | ui-annotation-routing |
+| F | 131 | 9655 / 5855 / 1755 | 9656 / 5856 / 1756 | ui-annotation-extension |
+
+**Target availability:** main API `test-api-unit/endpoints/security` accept space-separated file lists; UI/package `SCOPE` is one file/pattern per invocation. Existing `test-comments` ignores `SCOPE`, so use it as a full regression gate. UI/API quality/build/test, `build-ext-chrome` and `check-e2e-inventory` exist on main `1472d961e`. #684's `test-cluster-mesh` alone skips PG-gated cases without `CM_PG_URL`; use its `cluster-mesh-pg-test`/`cluster-mesh-comments-test` from `packages/cluster-mesh/tests/storage/postgres.mk` below. **New, blocked until their owning lots implement them:** A's `typecheck-annotate`, `lint-annotate`, `test-annotate`, `build-annotate`, `pack-annotate`, `test-annotate-consumer`; D's `test-ui-annotations-preprod`. New target semantics: Docker-only, TypeScript/Svelte checks, scoped package tests, isolated packed consumer with `E2E_SPEC` selecting B's Chromium/WebKit specs; preprod uses a separate non-seeding runner with strict URL/tier checks. No proposed target is presented as currently runnable.
+
+GA / GU / GB-B, then each remaining B package file listed above with the same one-file `SCOPE` form:
+
+```sh
+make typecheck-annotate lint-annotate test-annotate build-annotate pack-annotate test-annotate-consumer API_PORT=9630 UI_PORT=5830 MAILDEV_UI_PORT=1730 ENV=test-annotate-package
+make test-ui SCOPE=tests/annotations/package-consumer.test.ts API_PORT=9630 UI_PORT=5830 MAILDEV_UI_PORT=1730 ENV=test-annotate-package
+make test-annotate SCOPE=tests/dom-anchor.test.ts API_PORT=9635 UI_PORT=5835 MAILDEV_UI_PORT=1735 ENV=test-annotate-dom
+make test-annotate SCOPE=tests/capture-transform.test.ts API_PORT=9635 UI_PORT=5835 MAILDEV_UI_PORT=1735 ENV=test-annotate-dom
+make typecheck-annotate lint-annotate test-annotate build-annotate pack-annotate API_PORT=9635 UI_PORT=5835 MAILDEV_UI_PORT=1735 ENV=test-annotate-dom
+make test-annotate-consumer E2E_SPEC=tests/components/ui-annotation-capture.spec.ts WORKERS=1 RETRIES=0 API_PORT=9636 UI_PORT=5836 MAILDEV_UI_PORT=1736 ENV=e2e-annotate-dom
+make test-annotate-consumer E2E_SPEC=tests/components/ui-annotation.spec.ts WORKERS=1 RETRIES=0 API_PORT=9636 UI_PORT=5836 MAILDEV_UI_PORT=1736 ENV=e2e-annotate-dom
+```
+
+GC scoped and final gates:
+
+```sh
+make up-api-test test-api-unit SCOPE=tests/unit/ui-annotation-profile.test.ts API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740 ENV=test-ui-annotation-service
+make up-api-test test-api-endpoints SCOPE="tests/api/cluster-mesh-storage.test.ts tests/api/ui-annotations.test.ts tests/api/ui-annotation-recovery.test.ts tests/api/ui-annotation-captures.test.ts tests/api/ui-annotation-seed.test.ts tests/api/comments.test.ts tests/api/comments-wire.test.ts tests/api/auth/oauth-authorize.test.ts tests/api/auth/oauth-token.test.ts tests/api/auth/session.test.ts tests/api/auth/passkey-mfa-session.test.ts" API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740 ENV=test-ui-annotation-service
+make up-api-test test-api-security SCOPE=tests/security/ui-annotations.test.ts API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740 ENV=test-ui-annotation-service
+make test-comments API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740 ENV=test-ui-annotation-service
+make cluster-mesh-pg-test -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk SCOPE=tests/comments-transactions.spec.ts API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740 ENV=test-ui-annotation-service
+make cluster-mesh-pg-test -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk SCOPE=tests/comments-router.spec.ts API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740 ENV=test-ui-annotation-service
+make cluster-mesh-comments-test -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740 ENV=test-ui-annotation-service
+make cluster-mesh-pg-down -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740 ENV=test-ui-annotation-service
+make typecheck-api lint-api test-api API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740 ENV=test-ui-annotation-service
+```
+
+GD / GE / GF; for each evolving UI file use the exact `ui/`-relative file from section 8 as the single `SCOPE`, then run the lane's full UI suite at its final gate:
+
+```sh
+make test-ui SCOPE=tests/annotations/overlay-state.test.ts API_PORT=9645 UI_PORT=5845 MAILDEV_UI_PORT=1745 ENV=test-ui-annotation-overlay
+make typecheck-ui lint-ui test-ui API_PORT=9645 UI_PORT=5845 MAILDEV_UI_PORT=1745 ENV=test-ui-annotation-overlay
+make build-api build-ui-image check-e2e-inventory API_PORT=9646 UI_PORT=5846 MAILDEV_UI_PORT=1746 ENV=e2e-ui-annotation-overlay
+make test-e2e E2E_SPEC=tests/06-ui-annotation-overlay.spec.ts WORKERS=1 RETRIES=0 API_PORT=9646 UI_PORT=5846 MAILDEV_UI_PORT=1746 ENV=e2e-ui-annotation-overlay
+make test-e2e E2E_SPEC=tests/06-ui-annotation-drift.spec.ts WORKERS=1 RETRIES=0 API_PORT=9646 UI_PORT=5846 MAILDEV_UI_PORT=1746 ENV=e2e-ui-annotation-overlay
+make up-api-test test-api-unit SCOPE="tests/unit/ui-annotation-routing.test.ts tests/unit/artifact-feedback-routing.test.ts" API_PORT=9650 UI_PORT=5850 MAILDEV_UI_PORT=1750 ENV=test-ui-annotation-routing
+make up-api-test test-api-endpoints SCOPE="tests/api/ui-annotation-delivery.test.ts tests/api/artifact-feedback.test.ts tests/api/artifact-feedback-mcp.test.ts" API_PORT=9650 UI_PORT=5850 MAILDEV_UI_PORT=1750 ENV=test-ui-annotation-routing
+make up-api-test test-api-security SCOPE=tests/security/ui-annotation-routing.test.ts API_PORT=9650 UI_PORT=5850 MAILDEV_UI_PORT=1750 ENV=test-ui-annotation-routing
+make test-ui SCOPE=tests/annotations/delivery.test.ts API_PORT=9650 UI_PORT=5850 MAILDEV_UI_PORT=1750 ENV=test-ui-annotation-routing
+make typecheck-api lint-api typecheck-ui lint-ui test-api test-ui API_PORT=9650 UI_PORT=5850 MAILDEV_UI_PORT=1750 ENV=test-ui-annotation-routing
+make build-api build-ui-image check-e2e-inventory API_PORT=9651 UI_PORT=5851 MAILDEV_UI_PORT=1751 ENV=e2e-ui-annotation-routing
+make test-e2e E2E_SPEC=tests/06-ui-annotation-routing.spec.ts WORKERS=1 RETRIES=0 API_PORT=9651 UI_PORT=5851 MAILDEV_UI_PORT=1751 ENV=e2e-ui-annotation-routing
+make test-ui SCOPE=tests/chrome-ext/annotation-bridge.test.ts API_PORT=9655 UI_PORT=5855 MAILDEV_UI_PORT=1755 ENV=test-ui-annotation-extension
+make build-ext-chrome typecheck-ui lint-ui test-ui API_PORT=9655 UI_PORT=5855 MAILDEV_UI_PORT=1755 ENV=test-ui-annotation-extension
+make build-api build-ui-image check-e2e-inventory API_PORT=9656 UI_PORT=5856 MAILDEV_UI_PORT=1756 ENV=e2e-ui-annotation-extension
+make test-e2e E2E_SPEC=tests/06-ui-annotation-extension.spec.ts WORKERS=1 RETRIES=0 API_PORT=9656 UI_PORT=5856 MAILDEV_UI_PORT=1756 ENV=e2e-ui-annotation-extension
+```
+
+At each browser lane's final gate run its registered E2E groups plus the explicitly listed regression files; the inventory must include new component/annotation specs and avoid depending on the unnumbered preprod suite being found automatically. Quality/lint before UAT, full affected security scans/CI before closure, no timeout increases. Example local final browser/cleanup block (expand with each lane's mapping at dispatch):
+
+```sh
+make clean test-e2e E2E_GROUPS="02 06" WORKERS=1 RETRIES=0 API_PORT=9646 UI_PORT=5846 MAILDEV_UI_PORT=1746 ENV=e2e-ui-annotation-overlay
+make test-security API_PORT=9646 UI_PORT=5846 MAILDEV_UI_PORT=1746 ENV=e2e-ui-annotation-overlay
+make clean API_PORT=9646 UI_PORT=5846 MAILDEV_UI_PORT=1746 ENV=e2e-ui-annotation-overlay
+make down ps API_PORT=9645 UI_PORT=5845 MAILDEV_UI_PORT=1745 ENV=test-ui-annotation-overlay
+make down ps API_PORT=9646 UI_PORT=5846 MAILDEV_UI_PORT=1746 ENV=e2e-ui-annotation-overlay
+```
+
+**GP, new non-seeding target only after D3:**
+
+```sh
+make test-ui-annotations-preprod UI_BASE_URL=https://preprod.sentropic.sent-tech.ca API_BASE_URL=https://preprod.sentropic.sent-tech.ca QUALIFICATION_ENV_FILE=.env.ui-annotations-preprod E2E_SPEC=tests/qualification/ui-annotations-preprod.spec.ts WORKERS=1 RETRIES=0 API_PORT=9646 UI_PORT=5846 MAILDEV_UI_PORT=1746 ENV=e2e-ui-annotation-overlay
+```
+
+The new runner must not depend on `up-e2e`, `db-seed-test`, ordinary global setup, deploy, reset or clean targets. It consumes protected test-session references without printing them, refuses production hosts, requires expected release/schema/module pins, and creates/deletes only uniquely identified synthetic-owner fixtures. Preprod uses its own enrolled OIDC identity; real phone 2FA stays a witnessed human step. Run Chromium/WebKit mobile projects and real iOS/Android phone UAT; desktop extension tests remain Chromium. Do not transfer a prod cookie into preprod or reuse the root `ENV=dev`.
