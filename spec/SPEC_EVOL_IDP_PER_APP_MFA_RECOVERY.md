@@ -197,3 +197,144 @@ request parameter. Email delivery, the cluster, and the operator channel
 for the governed Job are trusted for **delivery**, never for **assurance**:
 anything that arrives by email is at most email proof, whatever it carries.
 
+## 4. Policy model — required MFA level, per client and per account
+
+### 4.1 Client policy: the level is the policy, the method rides in amr
+
+Owner correction applied: a client requires an **assurance level**, never a
+named method. The normative reading of the existing columns is:
+
+| Column | Normative meaning after this spec | Baseline status |
+|---|---|---|
+| `oauth_clients.required_acr` | Required MFA level for the `authorization_code` flow. `NULL` = no MFA policy (legacy behaviour, byte-identical). The MFA level is satisfied by **any qualifying method** (section 5.1) | Column and authorize enforcement `[EXISTS]`; method-neutral value `[TO BUILD Lot 5]` |
+| `oauth_clients.allowed_user_ids` | Subject allowlist, refused with `access_denied` before consent; empty = no restriction. Independent of MFA: an MFA session for an unlisted subject still fails | `[EXISTS]` |
+| Freshness bound for the MFA level | Per-client maximum age of the MFA ceremony (section 5.3). Stored with the client or applied as a server default for MFA clients; the exact column and default are Lot 2 work | `[TO BUILD Lot 2]` |
+
+Should `urn:sentropic:loa:passkey-fresh` become a method-neutral value?
+**Yes — as the required level, with a backward-compatible alias.** Keeping a
+method name as the level would force every future qualifying method to
+either change every client's stored policy or misreport its method. The
+target vocabulary is:
+
+| Value | Kind | Meaning |
+|---|---|---|
+| `urn:sentropic:loa:bearer` | Session level (emitted) | Authenticated session without a qualifying MFA ceremony. Never satisfies an MFA client |
+| `urn:sentropic:loa:mfa` | Session level (emitted) **and** required level | Session whose ceremony was a qualifying MFA method within the freshness bound. The method is in `amr`, never in this value |
+| `urn:sentropic:loa:passkey-fresh` | Required level (legacy alias) | Deprecated spelling of the same MFA level. Accepted as a requirement during migration (section 10.1); no longer the recommended value for new clients |
+
+Rules:
+
+- **R-POL-1 (method neutrality).** `[TO BUILD Lot 5]` Authorize compares
+  **levels**, not methods: a session at level `mfa` satisfies a client
+  requiring `mfa` and, during migration, a client still requiring
+  `passkey-fresh`. `amr` (`['hwk','user','mfa']` today) is informational
+  for RPs that want the method; the IdP guarantee does not depend on the
+  RP reading it. KVM reads neither (section 11).
+- **R-POL-2 (fail closed).** `[EXISTS]` An unknown required value refuses
+  (`meetsRequiredAcr` returns false). The neutral rename keeps this: any
+  required value outside {`mfa`, `passkey-fresh` alias, `bearer`} refuses.
+- **R-POL-3 (no silent weakening).** Lowering or clearing a client's
+  required level is a governance act (section 9), audited, and never a
+  side effect of secret rotation: rotation already preserves the stored
+  policy unless the operator explicitly supplies a replacement
+  (`docs/oauth-client-rotation.md:49`) `[EXISTS]`.
+
+Backward-compatible migration (summary; steps and lots in section 10.1):
+`kvm-gateway` is created **now** with `passkey-fresh`, the only MFA value
+merged code understands — creating it with an unrecognised `mfa` value
+today would fail closed for everyone, including the owner. Lot 5 teaches
+authorize both spellings, then a governed re-registration moves each MFA
+client's stored value to `mfa`, then the emitted session level switches to
+`mfa`. At no step does a previously refused bearer session become accepted.
+
+### 4.2 Account policy: the floor can only rise
+
+Client policy alone cannot express "this account must never recover by
+email", because the same account also uses non-forced clients where email
+recovery stays legitimate (section 14). The account-side model is therefore
+a **derived hardening set**, not a per-account level the user can lower:
+
+- **Definition.** `[TO BUILD Lot 3]` An account is **MFA-hardened** while
+  it appears in `allowed_user_ids` of at least one client whose required
+  level is MFA (either spelling), or once it has completed enrolment for
+  such a client. The set is derived from client rows; no user-facing toggle
+  creates or removes membership.
+- **Effect.** For an MFA-hardened account, email proof alone never creates
+  a credential and never mints a session above `enrolment-only`
+  (section 6). Non-hardened accounts keep today's behaviour exactly,
+  including magic-link recovery and the "Lost your device?" flow.
+- **Credential-count prerequisite.** `[TO BUILD Lot 4]` Before an account
+  is first allowlisted on an MFA client (KVM first), it must hold **at
+  least two registered credentials** (kvm-lane option (a), adopted in
+  section 7). The check runs at allowlist time and at authorize time as a
+  defence in depth: an account that drops to one credential is prompted to
+  enrol a second at its next MFA sign-in, but is not locked out of the
+  forced application for that reason alone (lockout is governed by
+  section 6, not by the count).
+- **No account-level downgrade.** Removing an account from every MFA
+  allowlist ends hardening prospectively. It never revives credentials,
+  sessions, or recovery codes created under the weaker posture, and the
+  removal itself is audited (section 9).
+
+No new `users` column is required for the hardening set itself. Recovery
+codes (section 7, option (c)) do need storage; that table is specified in
+Lot 4 and holds only hashes.
+
+## 5. Sessions, tokens, freshness, and step-up
+
+### 5.1 Which sessions satisfy a forced-MFA client
+
+Qualifying methods today: **WebAuthn with user verification only**
+(`mfaVerified=true` at mint). Magic link, federation, invite, registration
+finalisation, and a passkey ceremony without UV are non-qualifying. A
+future method qualifies by minting `mfaVerified=true` through its own
+ceremony verification; no client row changes when that happens (R-POL-1).
+
+| Session origin | Level today | Level after this spec | Satisfies an MFA client? |
+|---|---|---|---|
+| Passkey login with UV, within freshness bound | `passkey-fresh` (emitted) | `mfa`, `amr=['hwk','user','mfa']` | Yes `[EXISTS]` for the boolean part; freshness `[TO BUILD Lot 2]`, neutral emission `[TO BUILD Lot 5]` |
+| Passkey login with UV, older than the bound | `passkey-fresh` (still passes today — G-FRESH) | `mfa` ceremony, **stale**: treated as below level at authorize | No — step-up (section 5.3) `[TO BUILD Lot 2]` |
+| Passkey login without UV | `bearer` | `bearer` | No `[EXISTS]` |
+| Magic link (with or without devices) | `bearer` | `bearer`; the no-device variant is additionally restricted to enrolment endpoints (section 6) | No `[EXISTS]` refusal; endpoint restriction `[TO BUILD Lot 3]` |
+| Federation (for example Google) | `bearer` | `bearer` | No `[EXISTS]` |
+| Registration finalisation | `bearer` | `bearer` | No `[EXISTS]` |
+| Recovery-code redemption (option (c)) | — (does not exist) | `enrolment-only`: satisfies no client, may enrol one credential (section 6) | No `[TO BUILD Lot 4]` |
+| Break-glass reset session (option (b)) | — (does not exist) | `enrolment-only`, single-purpose, short-lived | No `[TO BUILD Lot 4]` |
+
+Token contract (unchanged in shape): the authorization code seals `acr`,
+`amr`, and `auth_time` from the session, and both tokens carry them
+(`packages/auth-hono/src/oauth/token-handler.ts:430`) `[EXISTS]`. After
+Lot 5 the sealed `acr` for a qualifying session is the neutral `mfa` value.
+RPs other than KVM may keep reading `acr`/`auth_time`; `kvm-gateway`
+performs no such check and relies on the IdP having refused every
+non-qualifying authorize (the IdP-side guarantee pinned by section 8.2).
+
+### 5.2 Where enforcement lives
+
+All enforcement stays at **authorize** (initial leg and resume leg), reusing
+the merged seams: below-level or stale ⇒ forced re-authentication;
+still below level after re-authentication ⇒ `access_denied` to the RP
+redirect URI; unlisted subject ⇒ `access_denied` before consent
+`[EXISTS]`. No token-endpoint or userinfo change is needed, because a code
+is only ever sealed from a session that already passed authorize.
+
+### 5.3 Freshness and step-up rules
+
+- **R-FRESH-1.** `[TO BUILD Lot 2]` An MFA session satisfies an MFA client
+  only while `now - session.createdAt <= client freshness bound`. The
+  bound is per client (KVM value in section 11); when an MFA client has
+  no explicit bound, the server default for MFA clients applies. The
+  default value is an owner decision (section 15); this spec recommends
+  hours, not days, and never the 7-day session lifetime.
+- **R-FRESH-2 (step-up, not lockout).** A stale MFA session is handled
+  exactly like a below-level session today: authorize redirects to login
+  with the force-reauth continuation sealed; the resume leg refuses with
+  `access_denied` if the new ceremony is still non-qualifying. The old
+  session is not revoked (merged behaviour: the user may abandon the flow
+  and keep it for non-forced clients) `[EXISTS pattern, extended by Lot 2]`.
+- **R-FRESH-3 (request parameters).** `[TO BUILD Lot 2]` Authorize learns
+  the standard `max_age` and `acr_values` request parameters as
+  **hints that can only raise** the requirement: `max_age` tighter than
+  the client bound wins for that request; `acr_values` naming the MFA
+  level on a client without a stored policy triggers the same forced
+  re-auth, but never downgrades a stored policy. `prompt=login` and
