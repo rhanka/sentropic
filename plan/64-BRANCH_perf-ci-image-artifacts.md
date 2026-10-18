@@ -61,6 +61,7 @@
   - [ ] Keep PR transport credential-free through integrity-checked artifacts; include export/load/compression and candidate upload in timing. A small non-browser test must not fetch a large browser/compiler toolbox unnecessarily.
   - [ ] Lot gate: `make test-ci-image-receipts test-ci-api-runtime test-ci-api-tag-guard test-ci-api-tool-runtime ENV=test-ci-image-artifacts` against freshly built artifacts; retain npm-absent runtime and tag-collision assertions.
   - [ ] Real warm/cold runs exercise all four image producers, scanners, and restore consumers; match the consumed digest to the producer receipt.
+  - [ ] Pre-UAT static gate: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=test-ci-image-artifacts`; both impacted image/tooling consumers must pass before Lot 3.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [ ] Verify actual production-image smoke/limits, served IdP screens, and restore still consume the qualified image; UI profile output includes its expected embedded files.
   - [ ] Budget to measure: longest complete image-readiness branch ≤180s warm / 210s cold including embedded prerequisites and transfer; API-case UI branch ≤120/150s. Do not substitute the PR's 495s UI job for the main API-case 138s observation.
@@ -70,6 +71,12 @@
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
+  - [ ] Static: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=test-ci-image-artifacts`; retain image-input/filter fixtures from Lots 1–2.
+  - [ ] Build: `make build-api build-ui-image API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=e2e-ci-image-artifacts` plus the existing API-tool and E2E image producers; verify warm/cold input invalidation and record the exact produced digests.
+  - [ ] API regression: `make test-api API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=test-ci-image-artifacts` and `make test-ci-api-runtime test-ci-api-tool-runtime ENV=test-ci-image-artifacts`; production-runtime and restore lanes must consume the recorded candidate images.
+  - [ ] UI regression: `make test-ui API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=test-ci-image-artifacts`; verify both Vite profiles and embedded extension/desktop assets against their build-input receipts.
+  - [ ] E2E regression: `make clean test-e2e API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=e2e-ci-image-artifacts` and `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=e2e-ci-image-artifacts`; preserve every selected browser group, screen-driven IdP smoke, and restore assertion on the same production-image tuple.
+  - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
   - [ ] Run `make scope-check ENV=test-ci-image-artifacts` before each commit; end isolated service lots with `make down ENV=test-ci-image-artifacts` and `make down ENV=e2e-ci-image-artifacts`.
   - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.
