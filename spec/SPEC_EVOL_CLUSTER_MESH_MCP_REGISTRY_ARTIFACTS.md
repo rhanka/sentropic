@@ -9,7 +9,7 @@
 Related context:
 - `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` — generic application MCP provider platform (manifest/adapter contract, elicitation, session/secret records). This spec records the registry and artifacts provider that landed under that platform framing.
 - `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` — cluster-mesh control plane, namespace contracts and D3 responsibility split.
-- `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md` — cluster-mesh as the single lazy integration surface (optional peers, static leaves, loaders); the MCP composition delivered by #679 follows its E5 contract.
+- `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md` — cluster-mesh as the single lazy integration surface (optional peers, static leaves, loaders). PR #679 delivers a subset of its E5 MCP contract: the registry facade, provider leaves/loaders and the `/mcp` namespace composition over bridge + platform Hono with host-supplied auth (§3, §4). The remaining E5 OAuth composition (`createMcpAuth`, `mcpAuthRoutes`, `createMcpPlatformHono` wiring inside cluster-mesh) is not merged; it is follow-up #689 (§10).
 - `spec/SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md` — `@sentropic/mcp-platform` activation and publication state.
 
 ## Reading convention
@@ -43,7 +43,7 @@ The merged model is the owner model quoted in §9.1: the registry and its parame
 ### 2.1 Sentropic core owns
 
 - The registry facade: provider registration, `select`, `configure`, atomic `compile`, and the compiled registry (`packages/cluster-mesh/src/mcp/registry.ts`).
-- Lazy provider acquisition through the cluster-mesh module registry: a selected provider's code materializes only at compile time, through `modules.load(...)`, never by eager import (`packages/cluster-mesh/src/mcp/registry.ts`; `packages/cluster-mesh/src/loaders/mcp/artifacts.ts`).
+- Two provider-acquisition paths with different timing (see §4.2): separate loaders acquire provider modules on demand through `modules.load(...)` at compile time, while static leaves evaluate the selected peer's module graph at import. Only the loader path and registry-definition construction are deferred; importing a static leaf is itself the selection act (`packages/cluster-mesh/src/loaders/mcp/artifacts.ts`; `packages/cluster-mesh/src/integrations/mcp/artifacts.ts:6,34-37`; `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md`, E2).
 - The generic provider-definition contract: exact `publicName → (providerId, capabilityName)` mapping, duplicate and cross-provider collision rejection without sanitizing, suffixing or silent keep (`packages/artifacts/src/provider-definition.ts:36-84`).
 - The compiled-tool kernel: frozen registry entries, canonical requests, bounded argument validation and unknown-tool rejection before argument inspection (`packages/mcp-platform/src/registry-entry.ts:50-112`).
 - The `sentropic.artifacts` provider package and its 15 tools (§5).
@@ -53,7 +53,7 @@ The merged model is the owner model quoted in §9.1: the registry and its parame
 
 - Which providers are selected and the values each selected provider is configured with; configuring an unselected provider is refused (`packages/cluster-mesh/src/mcp/registry.ts:95-113`).
 - Its own domain MCP providers, registered alongside shipped providers in the same composed registry (Immo registers its own MCP functions; §9.1).
-- All provider parameterization and customizations (for Immo: the web-pages parameterization, shipped as versioned Immo configuration with the Immo image; §9.1).
+- All provider parameterization and customizations (for Immo: the web-pages parameterization; the pre-merge host plan implements the §9.1 owner model as versioned Immo configuration shipped with the Immo image — a host-side arrangement, with no Immo image or configuration delivery receipt in the merged Sentropic tree; §12).
 - Host-supplied runtime resources listed in §7 (identity, storage, content domain, TLS termination, activation secrets and stores).
 - Local configuration-review metadata (`approvalRef`, `revision`, `reviewedBy`): integrity metadata only, never an authorization authority (`packages/artifacts/src/mcp.ts:363-368,391-396`).
 
@@ -61,15 +61,15 @@ The merged model is the owner model quoted in §9.1: the registry and its parame
 
 - No provider code carries host-specific defaults: the artifacts package states "No Immo defaults, URLs or bindings in generic source" (`packages/artifacts/README.md`).
 - Public tool names are exact: collisions across activated providers abort compilation instead of being renamed (`packages/artifacts/src/provider-definition.ts:70-84`).
-- An absent or incompatible selected peer refuses compilation atomically; no stub fallback is installed (`packages/cluster-mesh/src/integrations/mcp/artifacts.ts:17-24`).
+- On the loader path, an absent or incompatible selected peer refuses compilation atomically; no stub fallback is installed (`packages/cluster-mesh/src/integrations/mcp/artifacts.ts:17-24`). On the static-leaf path, a missing peer fails ESM linking at import time instead (§4.2).
 
 ## 3. Component model
 
 | Component | Merged surface at `1472d961e` | Role |
 |---|---|---|
 | Registry facade | `packages/cluster-mesh/src/mcp/registry.ts` (`select`, `configure`, `compile`, `compiled`) | Host-facing selection/configuration/compilation of providers |
-| Module loaders | `packages/cluster-mesh/src/loaders/mcp/{registry,entry,bridge,hono,stdio,artifacts}.ts` | Lazy acquisition of provider modules at compile time |
-| Artifacts builtin leaf | `packages/cluster-mesh/src/integrations/mcp/artifacts.ts` (`createArtifactsBuiltin`) | Static catalog metadata + qualified loader for `sentropic.artifacts` |
+| Module loaders | `packages/cluster-mesh/src/loaders/mcp/{registry,entry,bridge,hono,stdio,artifacts}.ts` | On-demand acquisition of provider modules, invoked at compile time |
+| Artifacts builtin leaf | `packages/cluster-mesh/src/integrations/mcp/artifacts.ts` (`createArtifactsBuiltin`) | Static leaf: importing it evaluates the `@sentropic/artifacts/mcp` peer module; only its `load()` callback defers registry-definition construction |
 | Mesh composition | `packages/cluster-mesh/src/compose/mcp.ts`, `packages/cluster-mesh/src/mesh.ts` | Namespace composition over the compiled registry |
 | Platform kernel | `packages/mcp-platform/src/{registry,registry-entry,registry-canonical,registry-parameters,tool-configuration}.ts` | Frozen entries, canonical requests, bounded schemas, compiled configuration |
 | Artifacts provider | `packages/artifacts/src/{contracts,parameters,provider-definition,mcp}.ts` | Provider definition, parameter schema, manifest, 15 tool specs |
@@ -89,13 +89,13 @@ The host-facing facade is `packages/cluster-mesh/src/mcp/registry.ts`:
 - `select(providerIds)` fixes the selected provider set. Selecting an unknown provider throws `unknown provider selection: <id>`; selecting the same provider twice throws `duplicate provider selection: <id>` (`packages/cluster-mesh/src/mcp/registry.ts:95-103`).
 - `configure(providerId, values)` attaches host-owned parameter values to a selected provider. Configuring an unselected provider throws `unselected provider configuration: <id>`; values must be a record (`packages/cluster-mesh/src/mcp/registry.ts:106-113`).
 - Availability is reported per builtin as `not-selected`, `not-configured` or `available` from the current compiled state (`packages/cluster-mesh/src/mcp/registry.ts:125-144`).
-- `compile(...)` materializes the selected providers and publishes the compiled registry atomically: a refusal publishes nothing and keeps the previous compiled registry intact (`packages/cluster-mesh/src/mcp/registry.ts:150-165`). Selected builtins materialize only at compile time, through the module registry.
+- `compile(...)` acquires the platform kernel fresh, loads each selected builtin through its `load()` callback, registers, selects, configures and compiles; on success it replaces the facade's current registry, and a refusal inside `compile` publishes nothing (`packages/cluster-mesh/src/mcp/registry.ts:150-204`). This atomicity is scoped to the `compile` call: the facade's `register`, `select` and `configure` each clear the current compiled registry through `mutate()` (`packages/cluster-mesh/src/mcp/registry.ts:77-79,93,104,115`). After a successful compile, reconfiguring (even with values a later compile refuses) leaves `compiled()` undefined until the next successful compile; a previously returned compiled object itself is never mutated.
 
 ### 4.2 Names and leaves
 
 - Provider ID: `sentropic.artifacts` (`ARTIFACTS_PROVIDER_ID`, `packages/artifacts/src/mcp.ts:22`). Application ID: `sentropic-artifacts` (`packages/artifacts/src/mcp.ts:23`). Provider version at merge: `0.1.0` (`packages/artifacts/src/mcp.ts:24`).
 - Cluster-mesh leaf: `@sentropic/cluster-mesh/mcp/artifacts` (export `./mcp/artifacts`, `packages/cluster-mesh/package.json:107-109`), backed by `createArtifactsBuiltin` (`packages/cluster-mesh/src/integrations/mcp/artifacts.ts:25-39`).
-- Lazy loader: `loadArtifactsMcp(modules)` resolves the peer through `modules.load('mcp/artifacts')` (`packages/cluster-mesh/src/loaders/mcp/artifacts.ts:11-12`). The peer is optional: `@sentropic/artifacts >=0.1.0 <0.2.0` with `peerDependenciesMeta.optional = true` (`packages/cluster-mesh/package.json:150,160`). An absent or incompatible peer refuses compilation; no stub is substituted.
+- Two entry paths, two failure timings. The separate loader `loadArtifactsMcp(modules)` resolves the peer through `modules.load('mcp/artifacts')` at compile time (`packages/cluster-mesh/src/loaders/mcp/artifacts.ts:11-12`); there, an absent or incompatible optional peer (`@sentropic/artifacts >=0.1.0 <0.2.0`, `peerDependenciesMeta.optional = true`; `packages/cluster-mesh/package.json:150,160`) refuses compilation and no stub is substituted. The static leaf instead statically imports values from `@sentropic/artifacts/mcp` (`packages/cluster-mesh/src/integrations/mcp/artifacts.ts:6-12`): importing `createArtifactsBuiltin` evaluates that peer module before any `select`/`compile`, so a missing peer can fail ESM linking at import rather than produce a compile refusal. Only the leaf's `load()` callback and the `createArtifactsRegistryDefinition` construction behind it are deferred (`packages/cluster-mesh/src/integrations/mcp/artifacts.ts:34-37`).
 - The provider's own MCP subpath is `@sentropic/artifacts/mcp` (export `./mcp`, `packages/artifacts/package.json`), which builds the kernel registry definition (`createArtifactsRegistryDefinition`, `packages/artifacts/src/mcp.ts:372-399`).
 
 ### 4.3 Compiled entries
