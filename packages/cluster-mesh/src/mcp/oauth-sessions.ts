@@ -30,6 +30,7 @@ export function createOAuthSessions(
   }
   const now = options.nowMs ?? Date.now;
   const sessions = new Map<string, Session>();
+  const connections = new Set<Session>();
   const creating = new Set<Promise<Connection>>();
   const closing = new Set<Promise<void>>();
   let closed = false;
@@ -38,6 +39,7 @@ export function createOAuthSessions(
   ]);
   const expired = (session: Session) => now() - session.touched >= idle || now() - session.created >= absolute;
   const retire = (id: string, session: Session) => {
+    if (!connections.delete(session)) return;
     if (sessions.get(id) === session) sessions.delete(id);
     session.lifetime.abort();
     const work = session.close().catch(() => undefined);
@@ -45,7 +47,7 @@ export function createOAuthSessions(
     void work.finally(() => closing.delete(work));
   };
   const sweep = () => {
-    for (const [id, session] of sessions) if (expired(session)) retire(id, session);
+    for (const session of connections) if (expired(session)) retire(session.transport.sessionId ?? '', session);
   };
   const timer = setInterval(sweep, Math.min(idle, absolute, 60_000));
   timer.unref();
@@ -63,13 +65,14 @@ export function createOAuthSessions(
         session.touched = now();
       } else {
         if (request.method !== 'POST') return missing();
-        if (sessions.size + creating.size >= capacity) return unavailable();
+        if (connections.size + creating.size >= capacity) return unavailable();
         const pending = connect();
         creating.add(pending);
         let connection: Connection;
         try { connection = await pending; } catch { return unavailable(); }
         finally { creating.delete(pending); }
         session = { ...connection, owner: owner(authority), created: now(), touched: now(), lifetime: new AbortController() };
+        connections.add(session);
         if (closed || request.signal.aborted) {
           retire('', session);
           return unavailable();
@@ -100,7 +103,7 @@ export function createOAuthSessions(
     async close(): Promise<void> {
       closed = true;
       clearInterval(timer);
-      for (const [id, session] of sessions) retire(id, session);
+      for (const session of connections) retire(session.transport.sessionId ?? '', session);
       // A connection being established when shutdown started is also closed before returning.
       await Promise.allSettled([...creating].map(async (pending) => (await pending).close()));
       await Promise.all([...closing]);

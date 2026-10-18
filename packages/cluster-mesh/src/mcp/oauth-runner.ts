@@ -71,5 +71,6 @@ export async function connectOAuthServer(
     await server.close().catch(() => undefined);
     throw new Error('MCP transport unavailable');
   }
-  return { transport, close: () => server.close() };
+  let closing: Promise<void> | undefined;
+  return { transport, close: () => closing ??= server.close() };
 }
