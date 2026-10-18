@@ -200,6 +200,13 @@ export type McpDurableCall = {
 // ---------------------------------------------------------------------------
 
 export interface StpConnectorContext {
+  /** Authoritative memory bindings supplied by the verified host resolver. */
+  memory?: {
+    binding: import('./memory/frozen-context.js').MemoryInvocationBindingV1;
+    expectedActiveGeneration: string;
+    expectedPolicyEpoch: string;
+    now: string;
+  };
   requestId: string;
   correlationId: string;
   auditId: string;
