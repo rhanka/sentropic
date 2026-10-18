@@ -30,7 +30,7 @@ import type {
   CapabilityGates,
   CapabilityResource,
   CapabilityTool,
-} from '../../mcp-platform/src/manifest.js';
+} from '@sentropic/mcp-platform';
 
 // OOMOL googledocs/scopes.ts literal values (taxonomy-only, recoded).
 const GOOGLE_DOCS_READONLY_SCOPE = 'https://www.googleapis.com/auth/documents.readonly';

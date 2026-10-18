@@ -2,7 +2,7 @@ import type {
   AppMcpProviderManifest,
   CapabilityResource,
   CapabilityTool,
-} from '../../mcp-platform/src/manifest.js';
+} from '@sentropic/mcp-platform';
 
 export const aboutGetCapability: CapabilityResource = {
   kind: 'resource',

@@ -5,11 +5,11 @@ import type {
   AppToolInvocation,
   AppToolResult,
   ConnectorSecretStatus,
-} from '../../mcp-platform/src/runtime.js';
+} from '@sentropic/mcp-platform';
 import type {
   ConnectorTenantContext,
   ConnectorTenantResolutionInput,
-} from '../../mcp-platform/src/manifest.js';
+} from '@sentropic/mcp-platform';
 import { googleDriveManifest } from './manifest.js';
 import {
   aboutFixture,

@@ -17,7 +17,7 @@ import type {
   CapabilityGates,
   CapabilityResource,
   CapabilityTool,
-} from '../../mcp-platform/src/manifest.js';
+} from '@sentropic/mcp-platform';
 
 // Closed read-only gate set: no elicitation/human-confirmation/principal-gate
 // is ever required for a read-only resource or a read-category tool.
