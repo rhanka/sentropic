@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cluster-mesh",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "Injectable Cluster Mesh control-plane contracts, namespace modules, and single-instance runtime.",
   "type": "module",
   "license": "MIT",
@@ -194,7 +194,7 @@
   "peerDependencies": {
     "@sentropic/comments": "^0.3.0",
     "@sentropic/llm-mesh": ">=0.22.0 <0.28.0",
-    "@sentropic/llm-gateway": ">=0.19.0 <0.21.0",
+    "@sentropic/llm-gateway": ">=0.19.0 <0.22.0",
     "@sentropic/mcp-auth": ">=0.2.1 <0.3.0",
     "@sentropic/auth-hono": "^0.15.0 || ^0.16.0",
     "@sentropic/mcp-platform": ">=0.3.0 <0.4.0",
