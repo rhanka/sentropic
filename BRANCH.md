@@ -37,6 +37,7 @@
 ## Feedback Loop
 - [x] `acknowledge` — PR #701 F1: remove explicit forbidden entries that shadow the nine Makefile exceptions and the deterministic-provider Compose overlay; retain bounded conditional paths and profile defaults.
 - [ ] PR #701 F2: distinguish file sequence 62–70 from collision-free branch identities and propagate dependencies, exceptions, and ports.
+  - [x] Allocate canonical BR-76–84 in the study; preserve existing allocations through BR-75 and the requested file sequence.
 - [ ] PR #701 F3: add explicit static gates before runtime UAT and applicable final build/API/UI/E2E regression checklists.
 - [x] `acknowledge` — Owner, 2026-10-18: « écoute je suis en phase avec le plan proposé pour le CI/CD, je le veux commité / fusionné et planifié en branches stp ».
 - [x] `clarification` — Merge GO applies after green CI and review; this author's explicit handoff ends at the opened PR, without merging or deleting this branch plan.
@@ -66,15 +67,15 @@
   - [x] Record evidence, owner constraints, retained architecture, and budget calculations in `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
   - [x] Add the train index, acceptance protocol, rollback policy, and source provenance.
 - [x] **Lot 2 — Executable branch plans**
-  - [x] BR-62: measure and reserve capacity.
-  - [x] BR-63: prepare once and run native static checks.
-  - [x] BR-64: build and transfer less.
-  - [x] BR-65: execute independent work together.
-  - [x] BR-66: one package candidate and independent qualification.
-  - [x] BR-67: deterministic journeys and daily live providers.
-  - [x] BR-68: complete CD on tested bytes.
-  - [x] BR-69: remove unnecessary consumer work with proof.
-  - [x] BR-70: prove the maximum and present the results.
+  - [x] BR-76: measure and reserve capacity.
+  - [x] BR-77: prepare once and run native static checks.
+  - [x] BR-78: build and transfer less.
+  - [x] BR-79: execute independent work together.
+  - [x] BR-80: one package candidate and independent qualification.
+  - [x] BR-81: deterministic journeys and daily live providers.
+  - [x] BR-82: complete CD on tested bytes.
+  - [x] BR-83: remove unnecessary consumer work with proof.
+  - [x] BR-84: prove the maximum and present the results.
 - [ ] **Lot 3 — Final validation and handoff**
   - [x] Check template structure, links, branch order, exact paths, exceptions, and metric provenance.
   - [x] Inspect the entire diff and every commit size; run documentation checks and scope checks.
