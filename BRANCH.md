@@ -13,7 +13,7 @@
 - UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
-- Docs only on this branch: no code, deployment, publication, seed execution, or merge.
+- Authored changes remain docs only: no code, deployment, publication, seed execution, or PR merge; the owner-authorized merge of `origin/main` is recorded as BR695-EX1.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -40,6 +40,7 @@
 
 ## Feedback Loop
 - [ ] No `blocked` / `deferred` / `cancelled` / `attention` item open; raise one here instead of guessing if a prerequisite is unresolved.
+- [x] **BR695-EX1 — Main synchronization (owner-authorized, 2026-10-18):** Reason: merge `origin/main` at `eaddcf2de902f509aeb13c7d65680e6ba3c26dd0` after #699 without rebase or force-push. Impact: inherit upstream content unchanged outside `spec/**` and `BRANCH.md`; authored changes remain within those paths and are checked mechanically against the main parent. The pre-commit local scope check also sees upstream-only staged paths; its advisory findings do not authorize edits to those files. Rollback: revert the merge commit with its first parent selected; no history rewrite.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -67,6 +68,7 @@
 - [x] This branch has no UI change: UAT is an owner read of the new spec and cross-references on the draft PR; no service start and no `ENV=dev` test run.
 
 ## Plan / Todo (lot-based)
+- [x] **Main synchronization after #699 (2026-10-18):** retain both policy cross-references and pin the merged refresh specification at `eaddcf2de902f509aeb13c7d65680e6ba3c26dd0`; refresh-spec bytes match the previously reviewed `0304357583e8af6e3e896da6d42b13cb4329d59f`. D-P1/D-P2/D-P3 quotes and section 15 are unchanged. `track events-contains` passes for both parents (342 events each); `.track` and every non-spec file match main. Branch C1 and main-parent-relative scope C2 pass; pre-commit `make scope-check` reports only upstream inherited paths under BR695-EX1. Whitespace checks pass; no runtime test or full-spec docs-UAT acceptance is claimed. PR #695 stays open.
 - [x] **Owner decisions applied (2026-10-18), receipt**: close D-P1, D-P2 and D-P3 with verbatim answers from `.h2a/reviews/pr695_owner-decisions.md`; retain full-spec docs-UAT as a separate pending receipt.
 - [x] **Owner decisions applied, freshness contract**: specify sliding browser continuity with an immutable 24-hour MFA deadline, downstream expiry, and PR #699's fifth-leg boundary; KVM remains authorization-code-only and refresh never upgrades evidence.
 - [x] **Owner decisions applied, recovery and scope**: require two independent passkeys, the operator Job and pending-binding recovery codes in Lot 4 before protected activation; align schema, UI/API tests and full-loss drills; protect forced-2FA accounts only, with ordinary email recovery unchanged.
