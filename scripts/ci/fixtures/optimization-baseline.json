@@ -1,0 +1,20 @@
+{
+  "schema": "ci-optimization-baseline/1",
+  "studyBaseline": "fb5e92a6ae4928066e181716fdffbfb490b0b4f3",
+  "mainSha": "94a38286eae4dbbff1cde192faa4f332abe60efa",
+  "workflowSha256": "86ad863af18dac568d2aabb709ca6aa74c76167ee89d8fd8c523019470e8c862",
+  "makefileSha256": "a4d325c6ae8120dbf9bba7ebcbe63a55aae41495d242d9a89169aff5c8207999",
+  "acceptance": {
+    "minRuns": 20,
+    "minDays": 7,
+    "gateTargetMinutes": 5,
+    "p95RegressionBudget": 0.1
+  },
+  "cohorts": {
+    "replayDiffs": 554,
+    "pricedSuccesses": 266,
+    "observedGateMedianMinutes": 20.517,
+    "criticalPathFloorMinutes": 13.0,
+    "smokePlacementFloorMinutes": 11.6
+  }
+}
