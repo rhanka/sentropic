@@ -4,7 +4,7 @@
 
 **Status:** consolidated record of merged behavior. This spec describes what PR #679 (`feat: immo-861-mcp-registry (Sentropic consolidation 1a + 2-IdP + 2a)`) merged on `main` at `1472d961e098908e64ef60b83835af357888d031` (merged 2026-10-17). It introduces no new design: every statement is traceable to code at that commit or to a verbatim owner decision quoted in §9. Items not merged at that commit are marked as follow-ups in §10 and are not specified as current behavior.
 
-**Authority:** the owner model quoted verbatim in §9.1. Sentropic owns the generic registry, provider contracts and package releases; each host owns its selection, parameterization and customizations. Immo is the first host. This spec is the repo record for the merged registry/artifacts surface; the scratch planning documents that preceded the merge are sources, not deliverables, and are listed in the source ledger (§14).
+**Authority:** the owner model quoted verbatim in §9.1. Sentropic owns the generic registry, provider contracts and package releases; each host owns its selection, parameterization and customizations. Immo is the first host. This spec is the repo record for the merged registry/artifacts surface; the scratch planning documents that preceded the merge are sources, not deliverables, and are listed in the source ledger (§13).
 
 Related context:
 - `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` — generic application MCP provider platform (manifest/adapter contract, elicitation, session/secret records). This spec records the registry and artifacts provider that landed under that platform framing.
@@ -239,5 +239,51 @@ The launch packet for this branch requires the owner decisions quoted verbatim, 
 > « Tout en artifacts »
 
 Source status: this exact phrase was not found in the scratch sources read for this spec (`spec-v8.md`, `registry-entry-contract-v9.md`, `owner-decisions-T1-T8.md`, owner addendums, O1 plan). It is quoted here from the launch packet itself. No context is added around it; closing this source gap requires the owner's original message reference.
+
+## 10. Follow-ups — not merged at `1472d961e`
+
+These items are open after the #679 merge. They are recorded here so no reader treats them as shipped behavior; their own PRs own their contracts.
+
+| Follow-up | State at writing | Delta vs merged tree |
+|---|---|---|
+| Artifacts `0.1.1` — activation ticket binding (FL-ACT), PR #688 (`fix/artifacts-activation-binding`, "Fix artifact activation ticket binding (FL-ACT)") | OPEN, not merged | Extends the merged ticket binding `{subjectId, artifactId, releaseId?}` (§5.5) to channel-bound tickets `{subject, artifact, release, channel}` and ships as `@sentropic/artifacts 0.1.1`. Until it merges, §5.5 is the binding contract. |
+| O1 — cluster-mesh OAuth composition for Immo, PR #689 (`feat/cluster-mesh-oauth-o1`, "Cluster-mesh OAuth composition for Immo (O1)") | OPEN draft, not merged | Implements the §9.4 cutover decision host-side composition (`/mcp/auth`, `/compose/mcp-oauth` surfaces per its branch plan). Until it merges, no OAuth composition surface is delivered by cluster-mesh beyond what #679 shipped. |
+| `@sentropic/artifacts` first npm publication (§8) | Not present on npm at check | Owner-run bootstrap only; required before any external host installs the provider from the registry. |
+
+## 11. Second host: the Sentropic app
+
+The same host model applies: the Sentropic app, as a host, embeds the registry through cluster-mesh, selects and configures providers, and keeps its customizations host-side (§2, §9.1). No new design is specified here for that host.
+
+## Acceptance
+
+This spec is accepted as the repo record of the #679 delivery when:
+
+- every normative statement above resolves to a file reference at `1472d961e` or to a §9 verbatim quote (spot-checkable from the source ledger, §13);
+- the 15 tool names, the provider/leaf names, the cache/TTL constants and the ticket binding match the merged sources cited in §4–§6;
+- follow-ups are listed only in §10 and nowhere described as merged behavior;
+- `make scope-check` passes for the branch carrying this file (`spec/**` + `BRANCH.md` only).
+
+No runtime gate applies: this branch changes no code, and the merged behavior keeps the test evidence of PR #679.
+
+## 12. Source gaps for independent review
+
+- §9.5: the verbatim phrase « Tout en artifacts » is sourced from this branch's launch packet only; the owner's original message was not located in the scratch sources read. Status: `source-gap`, flagged in place, no context invented.
+- §8: npm state is a point-in-time registry check made while writing this branch; it is not a publication receipt. Consumers must re-check the registry before adoption.
+- Radar/Immo deployment state (which host build runs which tuple) is outside this repo and outside this spec; §9 quotes record decisions, not deployment receipts.
+
+## 13. Source ledger
+
+| Source | What it establishes here |
+|---|---|
+| Merge commit `1472d961e098908e64ef60b83835af357888d031` (PR #679, merged 2026-10-17) | Baseline tree for every code reference |
+| `packages/cluster-mesh/src/mcp/registry.ts`; `packages/cluster-mesh/src/loaders/mcp/*`; `packages/cluster-mesh/src/integrations/mcp/artifacts.ts`; `packages/cluster-mesh/package.json` | Registry facade, lazy loaders, builtin leaf, peer range (§3, §4) |
+| `packages/mcp-platform/src/{registry-entry,registry-canonical,registry-parameters,tool-configuration}.ts` | Frozen entries, canonical requests, bounded validation (§4.3) |
+| `packages/artifacts/src/{mcp,provider-definition,parameters,contracts}.ts`; `packages/artifacts/src/server/*`; `packages/artifacts/src/content/*`; `packages/artifacts/src/adapters/*`; `packages/artifacts/migrations/*`; `packages/artifacts/README.md` | Provider, 15 tools, storage ports, ACL, releases, grants/tickets, host obligations (§5, §7) |
+| `packages/cluster-mesh/src/{token-exchange,trust,trust/token-exchange-http}.ts`; `packages/cluster-mesh/tests/token-exchange-*.spec.ts`; `packages/auth-hono/src/oauth/token-exchange-handler.ts`; `api/drizzle/0043_immo_token_exchange.sql` | RFC 8693 exchange, cache, invalidation, issuer side (§6) |
+| `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md`; `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md`; `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md`; `spec/SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md` | Section-structure conventions and cross-referenced platform context |
+| Pre-merge scratch specifications and decision records (read-only sources, not deliverables): consolidated Immo MCP spec v8 (§1 owner model, Q-A1), registry entry contract v9, owner decisions T1–T8 (2026-10-16), OAuth owner addendum (2026-10-16), O1 branch plan (2026-10-17) | Verbatim owner decisions (§9) and follow-up framing (§10) |
+| GitHub PR state at writing: #679 MERGED; #688 OPEN; #689 OPEN draft | Merge/follow-up status (§8, §10) |
+| npm registry reads at writing (`@sentropic/cluster-mesh 0.18.0`, `@sentropic/mcp-platform 0.3.0`, `@sentropic/auth-hono 0.16.0` present; `@sentropic/artifacts` absent) | Published-version state (§8) |
+
 
 
