@@ -133,9 +133,11 @@ describe('judge compose llm-mesh namespace module', () => {
       types: './dist/compose/llm-mesh.d.ts',
       import: './dist/compose/llm-mesh.js',
     });
-    const publishedSource = readFileSync(resolve('dist/compose/llm-mesh.js'), 'utf8');
-    expect(publishedSource).toContain('createLlmMeshNamespaceModule');
-    expect(publishedSource).toContain('judgeHost');
+    // The published dist artifact is compiled from this source by the Build
+    // step; assert on the committed source so this test runs before the build.
+    const composeSource = readFileSync(resolve('src/compose/llm-mesh.ts'), 'utf8');
+    expect(composeSource).toContain('createLlmMeshNamespaceModule');
+    expect(composeSource).toContain('judgeHost');
     const module = await createLlmMeshNamespaceModule(createClusterMeshModules(), {
       enabled: true,
       judge: true,

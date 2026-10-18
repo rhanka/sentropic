@@ -117,6 +117,7 @@
 - [x] Lot 1.25a MINEUR-2 residual (2026-10-17): README blocks are extracted before compilation with equality guards; published compose/llm-mesh subpath is covered.
 - [x] Lot 1D MINEUR-3 record (2026-10-17): no PR/CI on HEAD as of this commit (N-A, resolved at PR opening); prior cluster-mesh 56/61 files and 415/449 tests are skipped per vitest convention with no failures, re-verified with raw logs in gates below.
 - [x] Rebase onto origin/main 1472d961e (2026-10-17): 91 commits replayed; conflicts resolved keeping main behaviour (muse wonder models, 0.26.1 version, CI seat addendum); judge version test updated to 0.26.1.
+- [x] CI red-job fix (2026-10-18, PR #693): dist/ is ignored so CI Test steps run without it; public-surface tests now build dist in beforeAll when stale/missing and compose test asserts on committed src. Package-bump check stays red by design until conductor-gated TUPLE.
 
 
 ## AI Flaky tests
