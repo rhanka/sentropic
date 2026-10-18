@@ -109,7 +109,7 @@ Declare one `repo-knowledge@1` profile with CI/CD, architecture and shared timin
 | CI/CD | Workflow, Job, JobVariant, Step, TestSuite, BuildArtifact, Environment, ResourcePool | `contains`, `precedes` (predecessor, successor), `awaitsResult` (producer, gate), `executes`, `producesArtifact`, `consumesArtifact`, `deploysTo`, `requiresResource`, `hasTiming` (subject, reference). |
 | Architecture | Component, Package, Service, Interface, Contract, SourceFile, BuildTarget, Image | `dependsOn` (consumer, provider), `implements`, `providesInterface`, `consumesInterface`, `builtFrom`, `validates` (suite anchor, component/contract). |
 
-Every relation has stable identity, named endpoint roles/cardinalities, provenance, source locators, extraction/declaration basis and confidence. Keep runtime/dev/peer/import/test/protocol dependency categories. Explicitly convert the historical extractor's provider-to-consumer direction into the declared role convention. `awaitsResult` remains an execution wait even for an observing gate. Architecture cycles are valid findings; only selected execution predecessors must form a DAG. Proposed controls carry explicit proposed/inferred state and never masquerade as implemented edges. [S1 §5.2; S2:90–94]
+Every relation has stable identity, named endpoint roles/cardinalities, provenance, source locators, extraction/declaration basis and explicit confidence (`EXTRACTED`, `INFERRED` or `AMBIGUOUS`, never defaulted). Keep runtime/dev/peer/import/test/protocol dependency categories. Explicitly convert the historical extractor's provider-to-consumer direction into the declared role convention. `awaitsResult` remains an execution wait even for an observing gate. Architecture cycles are valid findings; only selected execution predecessors must form a DAG. Proposed controls carry explicit proposed/inferred state and never masquerade as implemented edges. [S1 §5.2; S2:90–94]
 
 Timing attributes include metric, mode, support, sample count, p50/p90, quantile method, window and evidence resource. Declare their types and units; missing estimates omit numeric attributes and state why. DS reference validation is complemented by repository checks for regime compatibility, conditional invariants, samples and required validation closure. A valid drawing schema alone proves no CI coverage. [S2:94]
 
@@ -254,3 +254,96 @@ Engram option B is already selected. Source `0.20.0` and the memory-tools facade
 Handoff to gr-conductor: valid reference/lesson, stale reference, denied scope and superseded/forgotten memory fixtures; their identities and memory-side citations; intended host/purpose; expected admission/read/projection behavior; exact qualified release/host prerequisites. Also prove source-digest mismatch rejection, denied-audience export refusal, pending/admitted separation, forgetting invalidation and that rebuilding an old technical snapshot restores no excluded memory metadata. Audit the committed package and derivation, not only text fields. [S2:253; S4 finding 1]
 
 gr-conductor owns Engram conformity/readiness, the repository conductor owns technical facts/refresh, the host owner owns identity/scope/admission, and DS maintainers review profile/mapping. Any required Engram change follows the existing specification circuit (spec author Muse Wonder, review Astra, owner only for real decisions). An optional closed-DTO field needs a dated EVOL amendment and changelog; required or semantic changes need a new versioned DTO. Neither graph import nor rebuilding may capture, admit, mutate or resurrect memory. [S5:6; S6:23–26]
+
+## 8. Delivery lots, acceptance and risks
+
+These proposed implementation lots consolidate the adopted mapping; none is completed by this documentation branch. Each owning branch must use scoped, atomic commits and a template-based plan with concrete file-level verification. Keep the current WP9 ownership; record actual cross-owner outcomes through the designated tracking flow. [S2:285–299; S3 row 55 and final treatments]
+
+| Lot | Accountable owner and deliverable | Dependencies | Observable exit | Rollback boundary |
+|---|---|---|---|---|
+| K0 — Consumer contract | Repository conductor with h2a, DS and gr-conductor: record distinctions, stable identity/profile mapping, phase events/intervals, source pins, owners and fixtures | Approved study; material owner choices only where needed | One contract and seam package; no conflicting authority or assumed host qualification; attributes and phase events explicitly defined | Revise the draft contract before consumers activate. |
+| K1 — Measurement reference | Sentropic CI owner: collector/normalizer, schemas, compact timing data and reproducible historic import | K0 | Seed statistics reproduce with original quantiles; fixtures cover attempts, censoring, empty modes, sample/day/gate minima, absent usage and regime splits; changed samples change digest, identical inputs do not | Disable reference publication; keep evidence and an untimed plan. |
+| K2 — Typed subgraphs and views | Repository tooling owner with DS/Graphify review: profiles, CI/architecture extraction, explicit adapters and view projection | K0; parallel to K1 on disjoint files | Pinned source counts, cross-domain relations, units/references, anchors and relation/incidence conservation pass; workflow/Make/Docker/import/artifact/deploy/dynamic fixtures covered; view changes preserve semantics | Disable adapter/rendering/generation gate; preserve reviewable technical history. |
+| K3 — Deterministic prediction | Harness/planning implementation owner: closure, timing lookup, resource-constrained list scheduler and immutable prediction artifact | K1 + K2 | Serial/parallel/matrix/shared-writer/blocked/base-change/unknown fixtures pass; replay the 554 valid diffs with every closure divergence explained and comparable cohorts; no missing check earns savings | Disable recommendations; retain full current qualification and dependency planning. |
+| K4 — Skill and conductor adoption | h2a harness owner with repository conductor: source skill, launch packets, knowledge lock and replanning | K3 | Sample plan/train reproduce pins and gates; missing reference yields untimed plan; changed inputs create new prediction; the three phase-steering cases pass; normal distribution path used | Revert the source skill consumer and return to qualitative ordering. |
+| K5 — Engram seam | gr-conductor, qualified host owner and repository adapter owner: cited lesson submission, admitted lookup and controlled runtime assembly | K0, stable K1/K2 identities, existing host/transport qualification chain | Exact-candidate valid/stale/denied/pending/superseded/forgotten fixtures pass; D3/D10 package/derivation audit, denied-audience refusal and old-snapshot rebuild test pass; no closed DTO drift | Disable lesson adapter/runtime join; technical files and canonical journal remain independent. |
+| K6 — Pilot and operations | Repository conductor and CI operations: collection/publication cadence, drift attribution, actual-versus-predicted history and merge regeneration | K4; K5 additionally required for hybrid completion | Shadow baseline/candidate comparison demonstrates prediction quality, reproducibility, useful scheduling and preserved current coverage; refresh idempotence, Track containment and fresh acceptance proven | Disable train optimization; retain full qualification, technical reference and evidence. |
+
+Critical path: **K0 → (K1, K2) → K3 → K4 → K6**. Prepare K5 alongside it, subject to its host prerequisites. The Git pilot does not close the hybrid target. Independent CI-optimization lots and S1/S2/S3 activation criteria do not gate this program; no new skip-check policy is required. [S4 finding 3]
+
+Acceptance evidence must show reproducibility of seed statistics and manifests; a Git/CI/Track source for every committed fact; lossless semantic/adapter/view mappings; applicability and phase-steering fixtures; useful scheduling comparisons on comparable observations; and no loss of required checks. For K5, separately prove canonical-journal-only memory authority and audience/lifecycle enforcement. A successful technical pilot alone proves neither host readiness nor hybrid completion.
+
+Pilot metrics: prediction error by cohort, time to required green, time to publication where relevant, runner work, cancelled/repeated work, missing-reference rate and refresh delay. Report unknown money/provider/seat costs. Existing five-minute targets and a 10% p95 regression budget are pinned scenario inputs, not achieved outcomes. Do not claim production savings or a measured 95% success rate before qualification. [S1 §2.5; S2:299]
+
+Remaining risks and bounded follow-up:
+
+- Engram per-repository canonical storage location, deployed host capability tuple, shared live-Git citation resolution and joint re-acceptance of D3/D10 restoration remain unverified in the cited handoff; resolve through K0/K5 with gr-conductor/host owners, without blocking Git-only reads. [S6:8, 18, 26; S2:249–253]
+- Profile attribute sets and identity/anchor mapping require DS review in K0/K2; the prototype's UI package version does not attest diagram-core contract adoption.
+- Missing lanes and unknown timing terms require explicit measurement/coverage work; this study does not repair job performance. Historical LLM-gap populations (335 affected-gap diffs and 486 general-debt diffs, overlapping) require boundary-specific re-audit before any separate CI activation. [S1 §9]
+- Window updates can churn committed files; publish at declared cadence with movement thresholds and semantic diffs. Missing raw evidence limits reproduction. Concrete retention costs beyond policy belong with operations/owner once evidenced.
+
+## 9. Questions ouvertes au propriétaire
+
+**Statut : aucune sélection enregistrée.** Le commit des sous-graphes est déjà demandé et l'option Engram B est déjà choisie dans son programme. Les chemins, unités, identités, contrôles d'intégrité, règles d'invalidation et paramètres réversibles relèvent des responsables techniques ; ils restent visibles dans le plan. La rédaction réversible peut avancer sans attendre D1. Les dossiers ci-dessous remplacent intégralement les anciens votes. [S2:301–321; S4 findings 3, 7 and 8]
+
+### D1
+
+**Jusqu'où financer et coordonner la capitalisation dans cette livraison ?** Le choix porte sur le périmètre interéquipes et la responsabilité durable du raccord.
+
+| Option | Résultat | Conséquences et coût | Quand la préférer |
+|---|---|---|---|
+| A — Paquet Git et planificateur d'abord ; raccord Engram dans une suite séparée | Références mesurées, graphes typés, plans reproductibles et leçons conservées dans le dépôt | Livraison indépendante des hôtes mémoire ; coordination immédiate réduite. Admission/rappel Engram et financement du raccord restent pour la suite. | La priorité est l'intégration rapide, sans responsable disponible pour le raccord mémoire. |
+| B — Cible hybride dans le programme, livrée par étapes | Même première livraison, puis leçons admises dans Engram et références filtrées dans le graphe d'exécution | Coordination gr-conductor/hôte et maintien d'un adaptateur vérifié. Le bénéfice mémoire attend sa qualification ; le premier pilote Git reste livrable avant. | La réutilisation entre sessions est attendue et une responsabilité durable peut être attribuée. |
+| C — Engram comme service principal des références numériques | Cycle de vie centralisé, avec exports typés commités | Contrat numérique supplémentaire, coordination des exports, dépendance au service ; effort/délai non mesurés. Le service complet n'est pas démontré par les contrats inspectés. | Un besoin produit plus large et déjà financé justifie ce service central. |
+
+Recommandation : **B**, avec K1–K4 utilisables avant K5. Son principal coût est une responsabilité d'adaptation durable pour une utilité mémoire encore à mesurer. **A** devient préférable si personne ne peut la porter ou si le pilote ne démontre pas l'intérêt du rappel. **C** demande une justification produit supplémentaire et un contrat distinct. Les coûts sont exprimés en lots/dépendances ; aucun budget financier ou délai humain n'est mesuré. Choix attendu : A/B/C et, pour B/C, attribution du responsable du raccord. Aucun choix ne modifie le calendrier Engram déjà accepté ni les contraintes D3/D10.
+
+### D2
+
+**Quelle priorité quand accélérer le train consomme davantage de ressources ?** À ouvrir seulement si la politique existante ne tranche pas le conflit. Les seuils approuvés restent applicables ; le pilote peut comparer les options sans augmenter la capacité ni transformer une simulation en engagement.
+
+| Option | Bénéfice recherché | Conséquence |
+|---|---|---|
+| A — Délai minimal dans les plafonds autorisés | Réduire l'attente jusqu'au résultat requis grâce au parallélisme disponible | Davantage de travail simultané et de calcul potentiellement perdu après invalidation ; expliciter plafonds et priorité des trains. |
+| B — Moins de travail total, sous une limite d'attente | Regrouper les changements compatibles et réduire les validations répétées | Certains changements attendent ; une invalidation peut affecter un groupe plus large. Aucun contrôle requis n'est supprimé. |
+| C — Capacité actuelle, priorité au chemin bloquant | Améliorer l'ordre et le chevauchement sans nouveau budget de capacité | Gains de délai potentiellement plus faibles ; les contraintes de runner/publication peuvent rester dominantes. |
+
+Recommandation pour le premier pilote : **C**, pour mesurer la valeur de l'information avant de changer les budgets. Un besoin explicite de délai incompatible avec les ressources actuelles peut renverser cette recommandation. Choix attendu seulement si nécessaire : priorité A/B/C et plafonds ou délais applicables. Ce choix n'autorise ni fusion ni publication automatisée.
+
+## 10. Review disposition and source register
+
+Round two approved the paper design with one non-blocking documentation note (R2-P3). It is one review leg, not a consensus or a cross-owner freeze. This repository version applies that note; the source snapshots below remain historical evidence, and this document is the single operative drafting contract. [S4]
+
+| Retained historical material | Operative replacement here |
+|---|---|
+| D-K1–D-K3 votes and D-K4 autonomy/skip-check conflation | Only current French [D1](#d1) and conditional [D2](#d2); technical conventions in §§2–4; current qualification preserved in §8. |
+| F1 wording requiring D1 before lot renumbering | Unified K0–K6 already defined in §8; reversible drafting proceeds. |
+| Stale price presented as a completion bound | Exactly three applicability statuses and permitted uses in §2.3. |
+| SvelteFlow scene as schema; three profiles; flat graph without adapters | Semantic/View documents, one profile and relation-preserving adapters in §4. |
+| Committed memory references or Engram journal as a regenerating authority for technical facts | Git/CI/Track-only technical provenance in §5; memory-side citations and controlled runtime projection in §7. |
+| Old decision offsets | Current source D1 starts at S2:303 and D2 at S2:313; the repository copies above are directly linked from the branch plan. |
+
+S0–S6 below are archived local input locators under `.tmp/ci-knowledge-study/` in the source repository; they are not portable runtime dependencies or files introduced by this PR. Their SHA-256 digests were recomputed during drafting. The operative requirements and French dossiers are carried in full here so readers need no scratch checkout to follow the plan.
+
+| ID | Archived file | SHA-256 |
+|---|---|---|
+| S0 | `OWNER-REQUEST.md` | `4b5a35dad17de2a0ff9b681c9d7dfd6e4ab0c6b39312bedd7043ec208927f72f` |
+| S1 | `study.md` | `f06f608f5e351cb54f5aded1e074747111e05f00eac9c90a9d2ec1c6addf5002` |
+| S2 | `study-astra.md` | `5cbc77162b63ae0526db10ae611f540d6882d5b97bd8078bc2e853195f19bcfc` |
+| S3 | `reconciliation.md` | `7ebe448fa9e8ed16b7302de2ec33cafa30db02116b3b70f98bbfd12a9bf7192a` |
+| S4 | `review-astra-r2.md` | `940707fb06def101e66a575b7099e7d6346f94cecb3a2fe2017fc3f1a9ae87cb` |
+| S5 | `gr-conductor-input.md` | `d4dbdd985361e43b6d09d08b515c131756a3df9825615762bff0a89d1bfe8529` |
+| S6 | `gr-conductor-engram-facts-sol.out` | `d43a602c829d25480a7f087f5a10e0e2f6ad0e14af6eea69be5e928b04c63930` |
+
+Additional source identities from the approved evidence record (source inspection does not imply current deployment qualification):
+
+- **E1** — `.tmp/focus-ci-efficiency-kit/evidence/contract-inputs.json`, freshly hashed `e9255c126c526fb63df510d55a0bd431f400dd7723f110141c7948f37a9fba72`; its `scripts/contract-evidence.mjs:11–22, 26–77, 108–178`, `ci-optimization-implementation-plan.md:16–46` and `strategy-study-astra.md` document populations, prices and scenarios. Source revision and Lot 1 pins are in §1.
+- **E2** — `.tmp/ci-efficiency/graph/analyze.mjs:105, 146, 171, 185`, `graph/replay.mjs:9, 55` and `evidence/normalize.jq:5`; these are historical extractor/normalizer inputs, not new repository executables.
+- **E3** — `.tmp/focus-ci-efficiency-kit/evidence/lot1-reference/scripts/ci/measure-runs.mjs:7, 38, 59–71, 87`, pinned through the separate Lot 1 revision; gap observations concern that inspected snapshot.
+- **G1** — Graphify `8f19554cea3a4397fd66a90c7e9fd5ea54c81626`: `src/graph.ts:13, 33`, `src/validate.ts:21, 42`, `src/types.ts:118`. The later gr-conductor facts independently name `HEAD=d2acfc43` / `origin/main=a88375f0`; do not conflate them.
+- **H1** — h2a `0d6b2eaf5884834ca5a7498477c6efdfba24a3de`: `packages/h2a/skills/harness/plan/SKILL.md:12–35`, `packages/track/src/graph-export.ts:101, 201, 267`, `packages/track/src/cli/index.ts:1273`. Source Track `0.91.0`, observed exporter `0.98.0` and plugin cache `0.98.7` are distinct evidence versions; the observed 234-node/265-edge export is not a current acceptance count.
+- **M1** — Engram normative `SPEC-memory-mcp-v3.2.md`, archived at `graphify/.graphify/scratch/design/memory-mcp/`; recorded SHA-256 `18c697c1cd91287fd9f814c059910ffb4b39ddb1be46af547f384c7d912177b2`. M10 at line 1368 governs metadata/indirect influence; closing M14 at 1706 supersedes the opening's undecided wording. Six-tool/host contracts begin at lines 136–153; publication chain at 1545.
+- **M2** — Engram [memory projection](https://github.com/rhanka/engram/blob/ceb33dae4570ca20c4fbae2a69b065919de17a25/src/graph-memory-projection.ts#L17) and [memory tools](https://github.com/rhanka/engram/blob/ceb33dae4570ca20c4fbae2a69b065919de17a25/src/memory-tools/index.ts#L1), source `ceb33dae4570ca20c4fbae2a69b065919de17a25`, package `0.20.0`; the deployed/qualified host tuple remains K5 evidence.
+- **DS** — Immutable diagram-core source links in §4 pin `25c0f3d33c258fc2b906a4b85219ffce5f67eccc`; the older local DS checkout and prototype Svelte packages establish neither schema absence nor contract qualification at that revision.
+
+Documentation verification checks quote fidelity, source digests, active-vs-historical requirements, current D1/D2 anchors, branch scope and atomic commit sizes. Runtime schemas, prediction correctness, host behavior and pilot performance remain the observable K0–K6 gates above.
