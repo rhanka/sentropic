@@ -108,5 +108,5 @@
   - [x] F694-3 screen vocabulary with named app instance
   - [x] F694-4 portable any-managed-screen target with host adapter contract
   - [x] F694-5 Sentropic serialization lineage for C-storage and DV3
-  - [ ] F694-6 method-neutral MFA consumption with #695 and M-3 qualification
+  - [x] F694-6 method-neutral MFA consumption with #695 and M-3 qualification
   - [ ] F694-7 shared-installation bound and catalogue relationship
