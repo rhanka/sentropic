@@ -39,6 +39,7 @@
   - [x] Verify actual path inventory and run make scope-check before authorized commits.
 
 ## Feedback Loop
+- [x] PR700-R2 contracts: regenerate both API reports through explicit API_EXTRACT_LOCAL=1; keep CI's default strict verification, document effective confirmation and refresh the version-bound installed-consumer fixture.
 - [x] PR700-R2-4: reproduce stale version equality and actual-version snapshot rejection; align the compiler constant with platform 0.3.1, preserving strict equality and resealed configuration validation.
 - [x] PR700-R2-8: reproduce 30 invalid public refusal envelopes across all six tools, including undeclared capabilities; map selection diagnostics to frozen domain codes, assert actual L0 output schemas and preserve constant audit protocol refusal.
 - [x] PR700-R2-3: reproduce strengthened read-tool and host confirmation bypasses; retain effective confirmation policy through selection and the provider envelope, refusing missing elicitation before contact.
