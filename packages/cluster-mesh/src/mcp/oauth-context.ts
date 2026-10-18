@@ -23,7 +23,7 @@ export async function verifyOAuthRequest(
   options: McpOAuthNamespaceOptions,
   request: Request,
 ): Promise<OAuthRequestAuthority> {
-  const verified = await auth.verify(request, { requiredScopes: [...options.requiredIngressScopes] });
+  const verified = await auth.verify(request);
   const claims = verified.claims;
   const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   const invalid = () => new AuthError(401, 'invalid_token', 'Invalid MCP resource identity.');
@@ -42,6 +42,14 @@ export async function verifyOAuthRequest(
     const meets = claims.acr === options.requiredAcr
       || (options.requiredAcr === 'urn:sentropic:loa:bearer' && claims.acr === 'urn:sentropic:loa:passkey-fresh');
     if (!meets) throw new AuthError(401, 'invalid_token', 'insufficient_user_authentication');
+  }
+  // Offer a scope remedy only after the complete resource identity and assurance are valid.
+  const granted = new Set(verified.scopes);
+  const missing = options.requiredIngressScopes.filter((scope) => !granted.has(scope));
+  if (missing.length > 0) {
+    throw new AuthError(403, 'insufficient_scope', `Missing required scope: ${missing.join(' ')}.`, {
+      requiredScopes: missing,
+    });
   }
   const clientId = typeof client === 'string' ? client : typeof azp === 'string' ? azp : undefined;
   const principal: McpOAuthPrincipal = Object.freeze({

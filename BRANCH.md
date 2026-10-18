@@ -15,7 +15,7 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
-  - [x] `BRANCH.md`; `.h2a/build/o1_report.md`; local evidence `.tmp/cluster-mesh-oauth-o1/**`.
+  - [x] `BRANCH.md`; `.h2a/build/o1_report.md`; `.h2a/reviews/pr689_treatment.md`; local evidence `.tmp/cluster-mesh-oauth-o1/**`.
   - [x] `packages/cluster-mesh/src/mcp/auth.ts`; `packages/cluster-mesh/src/mcp/auth/hono.ts`; `packages/cluster-mesh/src/mcp/oauth-*.ts`; `packages/cluster-mesh/src/compose/mcp-oauth.ts`.
   - [x] `packages/cluster-mesh/src/loaders/mcp/auth.ts`; `packages/cluster-mesh/src/loaders/mcp/auth/hono.ts`; `packages/cluster-mesh/src/loaders/mcp/index.ts`.
   - [x] `packages/cluster-mesh/src/modules/contracts.ts`; `packages/cluster-mesh/src/modules/catalog.ts`; `packages/cluster-mesh/src/modules/topology-guard-mcp-auth.ts`.
@@ -37,6 +37,7 @@
   - [x] Record reason, bounded impact and rollback before conditional edits; existing packet authorizations apply. No speculative exceptions.
 
 ## Feedback Loop
+- [x] `acknowledge` PR689 Astra round 1 finding 1 accepted: five combined identity/assurance and missing-scope regressions reproduced 403 instead of 401 before the fix. Scope enforcement now follows complete identity/assurance validation; provider challenge formatting and canonical metadata retained. Treatment: `.h2a/reviews/pr689_treatment.md`.
 - [x] `acknowledge` BR125-D1: reviewed O1 design and R1-R6 binding; no new plan review required. OAUTH-RESTORE-T3 is offline-only; live injection blocked and non-gating; T4/T6 accepted, T8 withdrawn, T7 operational only.
 - [x] `acknowledge` BR125-EX3/R1: three CI cluster-mesh auth peer pins 0.2.1 -> 0.2.2 plus wiring assertion and selected/ OAuth fixture manifests/locks are authorized; reason: new static floor; impact: qualification only; rollback: revert with OAuth leaves. Gateway service-auth floor unchanged.
 - [x] `acknowledge` BR125-EX3 runner activation: registry inventory confirms artifacts E404 and auth-hono latest0.15.0, blocking the full selected train fixture. Add focused OAuth-only qualification/refresh using published auth/platform/SDK/Hono tuple; retain full matrix as required/pending. Impact: new optional test target only; rollback: remove target/flag with OAuth fixture.
@@ -119,6 +120,7 @@
   - [x] Update README, CHANGELOG and existing lazy-surface spec with exact typed API/tuple, Node-only compose leaf, 2FA boundary, secret rotation/custody, policy sync/cache bound, tenant state/restore and R-O1/#865 sequence.
   - [x] Wrote `.h2a/build/o1_report.md`: changes, exact archive/tuple, checks including retained failures, owned feedback, risks, exceptions and read set. Docs match packed types; no duplicate issuer/recovery spec.
 - [ ] **Lot 7 — Final validation**
+  - [x] Astra round 1 treatment GREEN on owner slot: composition RED (five 403/401 failures) -> GREEN (12 tests), independent probes (2), OAuth scope (21), typecheck/lint, full packed matrix (86, including nine OAuth consumers); candidate 0.20.0 > npm 0.19.1; scope PASS C2. Evidence: `.h2a/reviews/pr689_treatment.md`.
   - [x] Rebased source gates GREEN with API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-oauth-o1: typecheck/lint, SCOPE=mcp (45 tests / 11 files), SCOPE=tests/modules (69 tests / five files), full packed matrix, clean qualification and CI wiring (22 tests). No AI-flaky exception.
   - [x] Exactly three cluster-mesh qualification peer pins and matching wiring constant updated to mcp-auth0.2.2; gateway floor unchanged. Focused CI wiring GREEN (22 tests); startup binding preflight GREEN (7 composition tests).
   - [x] `rtk make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1` GREEN: 73 files / 585 tests passed, 9 files / 53 tests intentionally gated (packed fixtures run separately).

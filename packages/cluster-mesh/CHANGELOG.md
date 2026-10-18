@@ -8,6 +8,8 @@
 - Add Node-only `/compose/mcp-oauth`: public metadata/aliases, current-request
   verification and optional human assurance, owner-bound stateful sessions,
   compiled tool policy and live account checks, cancellation and shutdown cleanup.
+- Validate complete resource identity and human assurance before returning an
+  insufficient-scope challenge, including tokens with both defects.
 - Add tool-bound RFC 8693 egress with fixed destination/profile, bounded JSON,
   no redirects or bearer getter, existing cache limits/O2 invalidation and no
   original-token fallback. Existing stateless composition remains unchanged.
