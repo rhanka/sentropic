@@ -5,11 +5,11 @@
 - [x] Deliver cluster-mesh 0.20.0 as draft PR #689; never merge or publish. Immo owns restore and i-cond owns Radar adoption.
 
 ## Scope / Guardrails
-- [x] Branch `feat/cluster-mesh-oauth-o1`, worktree `tmp/worktrees/cluster-mesh-oauth-o1` (existing repository convention); harness branch check passed; base/main `1472d961e098908e64ef60b83835af357888d031` contains #679.
+- [x] Branch `feat/cluster-mesh-oauth-o1`, worktree `tmp/worktrees/cluster-mesh-oauth-o1`; harness branch check passed after rebase onto `origin/main` `9ed96eb83cd77da710f1adeb83a19e425d6c4910`, including #684, #685, #688 and #697.
 - [x] Packet authorizes commits, push and draft PR; selective staging, Conventional Commits via Make, at most 150 changed lines per commit, BRANCH.md updated with each commit.
-- [x] BR-125 slot 0: API 9625, UI 5825, Maildev UI 1725; every Make command ends with `ENV=test-feat-cluster-mesh-oauth-o1` (service proof: `ENV=e2e-feat-cluster-mesh-oauth-o1`). Never ENV=dev.
+- [x] Owner-assigned validation slot: API 9495, UI 5695, Maildev UI 1595; every Make command ends with `ENV=test-oauth-o1`. Prior-lot commands below retain their historical environments. Never ENV=dev.
 - [x] Make/container workflow with rtk prefix; reuse images, one Docker build machine-wide; ps-all checked, disk 93%; no native Node/npm or timeout inflation.
-- [x] #684 is still open at 57eca413; implement isolated contracts first per build packet, then rebase only onto its actual main merge before final qualification. Never merge main, cherry-pick or squash.
+- [x] #684 merged at `886cefc64`; rebase completed on actual main with storage/comments and #685 gateway/mesh ranges retained. Never merge main, cherry-pick or squash.
 - [x] Preserve #679 exchange/O2 and #684 comments/storage; gateway peer widening belongs to #685. One cluster-mesh writer; conductor decides merge order.
 - [x] No secrets, token contents, production changes or Radar edits; synthetic credentials only. No new persistence or issuer/browser-RP migration.
 
@@ -50,6 +50,9 @@
 - [ ] `attention` BR125-FL6, Immo operations: positive exchanged search_signals receipt in each environment before #865 strict activation; tenant restore/DR and existing-connection/browser smoke remain required. Never consumer-rollback to raw bearer after strict activation.
 - [ ] `blocked` BR125-FL7, release maintainer: artifacts0.1.0 is E404 and auth-hono workspace0.16.0 is unpublished (latest0.15.0). Clean qualification imports all new OAuth leaves but fails existing mcp/artifacts. Publish prerequisites and rerun full packed/clean gates; no unrelated base archives may be substituted as same-PR siblings.
 - [x] `acknowledge` Packet review instruction: accepted Opus review and R1-R6 integrated before implementation; "no new review is needed" overrides the generic review skill. No additional peer review or consensus claimed.
+- [x] `acknowledge` CI run 39084048333: only OAuth NodeNext/Bundler full-library compiles failed at Vitest's 5000ms default (~10s each); preserved Muse's unpushed commit setting a local 30s compiler budget. Runtime assertions and full library checks retained.
+- [x] `acknowledge` Registry after rebase: cluster-mesh 0.19.1, artifacts 0.1.1, auth-hono 0.16.0, mcp-auth 0.2.2, mcp-platform 0.3.0, oauth-verify 0.1.0; candidate 0.20.0 exceeds main/npm.
+- [x] `acknowledge` Rebase regression RED -> GREEN: comments selection rejected cluster-mesh 0.20.0 against its inherited `<0.20.0` self-range. Widen only that range to `<0.21.0`; all 69 module tests pass with the new registry regression and #685 ranges retained.
 
 ## AI Flaky tests
 - [x] Accept only non-systematic provider/network/model nondeterminism, with a success on the same commit/command; document signature, command and file and obtain owner sign-off before merge. Never inflate timeouts.

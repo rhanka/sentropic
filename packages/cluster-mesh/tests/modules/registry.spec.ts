@@ -28,6 +28,18 @@ describe('module registry', () => {
     expect(evaluations()).toEqual([]);
   });
 
+  it('should load the comments provider shipped with the OAuth release', async () => {
+    tree.install('app', {
+      name: '@sentropic/cluster-mesh', version: '0.20.0',
+      exports: { './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) } },
+    });
+    tree.install('app', {
+      name: '@sentropic/comments', version: '0.3.0',
+      exports: { '.': { source: moduleSource('comments-peer', ['createAnnotationRevision', 'validateCapacityDescriptor', 'hashRecord']) } },
+    });
+    await expect(registry().load('comments')).resolves.toBeDefined();
+  });
+
   it('should share one pending load per export and cache the namespace', async () => {
     tree.install('app', fakeMesh('mesh'));
     const modules = registry();
