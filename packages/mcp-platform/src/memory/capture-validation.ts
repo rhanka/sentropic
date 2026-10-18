@@ -20,8 +20,13 @@ export function validateCapture(payload: unknown, evidence: unknown): string[] {
   const components = new Set(p.components.map((c: any) => c.component_id));
   if (citations.size !== p.citations.length || components.size !== p.components.length) failures.push('capture: duplicate citation or component');
   if (!components.has(p.primary_component_id) || !citations.has(p.primary_event.citation_id)) failures.push('capture: missing primary anchor');
+  const primary = p.components.find((c: any) => c.component_id === p.primary_component_id);
+  if (!primary?.citation_ids.includes(p.primary_event.citation_id)) failures.push('capture: primary event must cite the primary component');
+  const refs = p.reconciliation.family_refs as string[];
+  if (refs.length > 64 || refs.some((ref, i) => i > 0 && refs[i - 1] >= ref)) failures.push('capture: family references must be sorted and unique, at most 64');
   for (const component of p.components) {
     if (component.citation_ids.some((id: string) => !citations.has(id))) failures.push('capture: uncited component');
+    if (new Set(component.citation_ids).size !== component.citation_ids.length) failures.push('capture: duplicate component citation');
   }
   if (e.citation_ids.some((id: string) => !citations.has(id))) failures.push('capture: evidence citation absent');
   return failures;

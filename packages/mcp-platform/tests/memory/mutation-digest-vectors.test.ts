@@ -13,6 +13,19 @@ describe('P03.platform.a05-mutation-digest-vectors — identical frozen A05 corp
     expect(computeMutationDigest(Object.fromEntries(Object.entries(input).reverse()) as any)).toBe(vector.expected_digest);
   });
   it.each([
+    (p: any) => {
+      const payload = p.effective_input.payload;
+      payload.citations.push({ ...payload.citations[0], citation_id: 'cit_2' });
+      payload.primary_event.citation_id = 'cit_2';
+    },
+    (p: any) => { p.effective_input.payload.reconciliation.family_refs = ['z', 'a']; },
+    (p: any) => { p.effective_input.payload.reconciliation.family_refs = ['a', 'a']; },
+    (p: any) => { p.effective_input.payload.reconciliation.family_refs = Array.from({ length: 65 }, (_, i) => `f${i.toString().padStart(2, '0')}`); },
+    (p: any) => { p.effective_input.payload.components[0].citation_ids.push('cit_1'); },
+    (p: any) => { p.effective_input.payload.derivation = { source_record_ids: ['z', 'a'], transform_ref: 't', transform_receipt_digest: `sha256:${'1'.repeat(64)}` }; },
+    (p: any) => { p.effective_input.payload.valid_time.t = Number.MAX_SAFE_INTEGER + 1; },
+    (p: any) => { p.effective_input.payload.valid_time.t_end = Number.MAX_SAFE_INTEGER + 1; },
+    (p: any) => { p.effective_input.payload.primary_event.at = Number.MAX_SAFE_INTEGER + 1; },
     (p: any) => { p.effective_input.payload = { unexpected: true }; p.effective_input.evidence = {}; },
     (p: any) => { p.effective_input.payload.components[0].extra = true; },
     (p: any) => { p.effective_input.payload.citations[0].locator.extra = true; },
