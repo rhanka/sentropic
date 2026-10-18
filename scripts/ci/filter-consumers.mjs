@@ -49,6 +49,9 @@ export const requiredSuccessJobs = (outputs) => {
   if (ui) ['typecheck-lint-ui', 'build-ui', 'test-e2e', 'e2e-vscode'].forEach((j) => req.add(j));
   if (api || ui) ['security-container', 'build-e2e'].forEach((j) => req.add(j));
   if (t('global')) req.add('security-iac');
-  for (const [job, key] of Object.entries(VALIDATE_OUTPUTS)) if (t(key) || t('global')) req.add(job);
+  // validate-idp-sync enumerates its own inputs and stays global-free by design.
+  for (const [job, key] of Object.entries(VALIDATE_OUTPUTS)) {
+    if (t(key) || (t('global') && key !== 'idp_sync')) req.add(job);
+  }
   return [...req].sort();
 };
