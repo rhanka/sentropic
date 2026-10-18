@@ -68,7 +68,7 @@
   - [x] BR-64: build and transfer less.
   - [x] BR-65: execute independent work together.
   - [x] BR-66: one package candidate and independent qualification.
-  - [ ] BR-67: deterministic journeys and daily live providers.
+  - [x] BR-67: deterministic journeys and daily live providers.
   - [ ] BR-68: complete CD on tested bytes.
   - [ ] BR-69: remove unnecessary consumer work with proof.
   - [ ] BR-70: prove the maximum and present the results.
