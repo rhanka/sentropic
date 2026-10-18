@@ -2,7 +2,7 @@
 
 ## Objective
 - [ ] Deliver additive MCP auth leaves, typed OAuth composition and a qualified twelve-tool consumer contract for Immo; preserve address, issuer, accounts and consent.
-- [ ] Deliver cluster-mesh 0.20.0 as a draft PR; never merge or publish. Immo owns restore and i-cond owns Radar adoption.
+- [x] Deliver cluster-mesh 0.20.0 as draft PR #689; never merge or publish. Immo owns restore and i-cond owns Radar adoption.
 
 ## Scope / Guardrails
 - [x] Branch `feat/cluster-mesh-oauth-o1`, worktree `tmp/worktrees/cluster-mesh-oauth-o1` (existing repository convention); harness branch check passed; base/main `1472d961e098908e64ef60b83835af357888d031` contains #679.
@@ -48,6 +48,7 @@
 - [ ] `attention` BR125-FL4, IdP operator/i-cond: record immo-mcp required_acr values in preprod/prod; optional requiredAcr fails closed at MCP ingress. Exchange drops acr/amr/auth_time; receiver cannot enforce human assurance. Policy changes remain owner decisions.
 - [ ] `attention` BR125-FL5, IdP operator/i-cond: provision via `make oauth-provision-exchange-client`, rotate via `make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload`; distinct per-environment secrets. Record owner-selected cadence and variable/.env custody; rotate after every IdP DB restore. Identity sync copies exchange_policy prod -> preprod with host rewrite, never secret hashes; no sync during quiesce.
 - [ ] `attention` BR125-FL6, Immo operations: positive exchanged search_signals receipt in each environment before #865 strict activation; tenant restore/DR and existing-connection/browser smoke remain required. Never consumer-rollback to raw bearer after strict activation.
+- [ ] `blocked` BR125-FL7, release maintainer: artifacts0.1.0 is E404 and auth-hono workspace0.16.0 is unpublished (latest0.15.0). Clean qualification imports all new OAuth leaves but fails existing mcp/artifacts. Publish prerequisites and rerun full packed/clean gates; no unrelated base archives may be substituted as same-PR siblings.
 - [x] `acknowledge` Packet review instruction: accepted Opus review and R1-R6 integrated before implementation; "no new review is needed" overrides the generic review skill. No additional peer review or consensus claimed.
 
 ## AI Flaky tests
@@ -61,13 +62,13 @@
 
 ## UAT Management (in orchestration context)
 - [ ] Qualify the integrated candidate; bind source SHA, exact SDK/Hono/jose/platform/auth tuple and archive hashes. Keep automated tests in this worktree.
-- [ ] Execute local package UAT in Lot 5; external Radar/IdP/restore receipts remain owned pending items, never completed cutover acceptance.
+- [x] Execute local package UAT in Lot 5; external Radar/IdP/restore receipts remain owned pending items, never completed cutover acceptance.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read current rules (legacy .mdc absent), README, TODO/PLAN, reviewed branch plan and template; verify branch mechanically and check ps-all/disk.
   - [x] Read feasibility v4 and owner decisions; npm cluster-mesh=0.18.0 via container npm view, candidate=0.20.0; original ranges mesh<0.27/gateway<0.21/auth>=0.2.1 retained; #684 rebase dependency recorded. Recheck ports before listeners.
-  - [ ] Prepare manifest-context.json from real branch diff/CI filters before manifest gates. API/UI/E2E test edits: none.
+  - [x] Prepared manifest-context.json from successful CI changes job 117545436005, cross-checked with actual branch diff/current workflow filters (43 package files). API/UI/E2E test edits: none.
 - [x] **Lot 1 — Optional auth leaves and typed loaders**
   - [x] Catalog/capability/namespace/range regressions GREEN (68 tests); auth-owner/verifier-owner jose checks added. Expanded scope braces into literal paths because harness reports unsupported brace patterns as unknown.
   - [x] Auth loader contracts RED -> GREEN; actual provider identity preserved through static leaves and loaders.
@@ -90,7 +91,7 @@
 - [ ] **Lot 4 — Packed API, compatibility and release tuple**
   - [x] Root workspace lock regenerated strictly in Docker with npm --package-lock-only via local Make wrapper; only cluster-mesh's 0.18.0 -> 0.20.0 version changed. Published gateway/auth0.2.1 fixture GREEN; focused packed suite now 9 tests.
   - [x] Selected fixture manifest/lock refreshed through Make/npm --package-lock-only: only candidate version/path changed (six lock lines), all prior train nodes/pins retained and auth0.2.1 preserved. Full selected installation still requires publication. Published gateway-only floor0.2.1 runtime fixture GREEN.
-  - [x] Both normal installations GREEN: SDK1.31.0/Hono4.10.7 and Radar SDK1.32.1/Hono4.13.13, platform0.3.0/auth0.2.2/oauth0.1.0/jose5.10.0; same native HTTP/ACR/restart scenario and full NodeNext/Bundler checks. No peer bypass, shims or unpublished base archives; final archive freeze pending.
+  - [x] Final frozen archive GREEN (9 installed tests): SDK1.31.0/Hono4.10.7 and Radar SDK1.32.1/Hono4.13.13, platform0.3.0/auth0.2.2/oauth0.1.0/jose5.10.0; same native HTTP/ACR/restart scenario and full NodeNext/Bundler checks. No peer bypass, shims or unpublished base archives; exact SHA256 below.
   - [x] Dedicated loader declarations avoid the MCP barrel's unrelated artifacts type edge; barrel runtime identity also tested. Explicit SDK result annotation fixes portable declarations (TS2742); current ordinary Make SDK1.32.1/Hono4.13.0 is supplemented by the isolated lower-bound proof.
   - [x] Added Make-only focused packed runner and fixture staging with full library checks; refresh via `rtk make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock MCP_OAUTH_ONLY=1 API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; candidate digest recorded separately from generated frozen lock.
   - [x] Installed consumer tests written for full NodeNext/Bundler types, native HTTP/ACR/restart, provider identity, bare unused loader, disabled/missing/old-floor/broken-export refusals and root async-hooks isolation.
@@ -98,11 +99,11 @@
   - [x] Selected manifest/lock regenerated with refresh-lazy-package-lock REFRESH_SELECTED_ONLY=1; OAuth frozen lock with MCP_OAUTH_ONLY=1; root lock regenerated in Docker (only version changed). Re-run after actual #684 rebase.
   - [x] Add mcp-oauth fixture manifest/lock and exact typed twelve-tool host adapter; pin SDK/Hono to Radar lock patches 1.32.1/4.13.13; retain SDK1.31.0/Hono4.10.7 and gateway-only auth0.2.1 proofs.
   - [x] New packaging/mcp-oauth-consumer.spec.ts and prepare.sh/types-and-bundlers.spec.ts updates cover strict types, installed HTTP/ESM, bare unused loader and selected auth refusals. Full existing matrix remains required.
-  - [ ] Gate: `rtk make typecheck-cluster-mesh lint-cluster-mesh pack-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`.
-  - [ ] Manifest gate: `rtk make check-publishable-manifests MANIFEST_CONTEXT_FILE=.tmp/cluster-mesh-oauth-o1/manifest-context.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; then pack-candidate-siblings with PACKAGE=cluster-mesh and SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh, same context/ports/env.
-  - [ ] Packed gate: `rtk make -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`.
-  - [ ] Clean qualification: `rtk make qualify-published-install TARBALL=<candidate> SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=<CI-list-with-mcp-auth0.2.2> REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`.
-  - [ ] Comments regression: `rtk make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-test CM_COMMENTS_TARBALL=<candidate> API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`. UI files: none.
+  - [x] Typecheck/lint and real guarded pack GREEN; frozen 0.20.0 archive SHA256=55a604123f4f0dd41df286d8916e9f636ea139f0debaa70628f0a8a7005be10a at tested source checkpoint 0325228a8.
+  - [x] `rtk make check-publishable-manifests MANIFEST_CONTEXT_FILE=.tmp/cluster-mesh-oauth-o1/manifest-context.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1` GREEN: 22 packages, cluster-mesh only BLOCK, zero errors/four unchanged inventory warnings. pack-candidate-siblings GREEN: no same-PR BLOCK dependencies, empty receipts; no base archives substituted.
+  - [ ] Packed gate attempted: `rtk make -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1` FAIL during frozen selected install: registry artifacts-0.1.0.tgz E404. OAuth/baseline installs compile before the failure and reproduce the frozen archive digest; full matrix remains blocked (BR125-FL7).
+  - [ ] Clean qualification attempted with exact CI peer tuple and archive: FAIL, retained in tmp/ci-manifest-guard/qualify-cluster-mesh/qualify-report.json. Core/all new OAuth imports PASS; missing registry artifacts0.1.0 breaks existing mcp/artifacts (BR125-FL7). Rerun `rtk make qualify-published-install TARBALL=<candidate> SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=<CI-list-with-mcp-auth0.2.2> REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1` after publication.
+  - [ ] Comments regression BLOCKED by unmerged #684: tests/storage/postgres.mk does not exist on actual main. After rebase run `rtk make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-test CM_COMMENTS_TARBALL=<candidate> API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`. UI files: none.
 - [ ] **Lot 5 — UAT and consumer/restore handoff**
   - [x] Package HTTP: read PRM and aliases unauthenticated; inspect canonical 308/resource/issuer/scopes; POST without bearer ->401 and insufficient ingress scope ->403 with canonical metadata; mount exactly once at /mcp.
   - [x] Package MCP: initialize approved synthetic user, list twelve tools, exercise search/raw/stub/schema results; change token/scopes, overlap calls, reject foreign-owner POST/GET/DELETE, expire/restart/reconnect.
@@ -110,15 +111,15 @@
   - [ ] i-cond browser: login/renewal/status screens, T1 missing-account no renewal, T5 suspended+pending invitation stays suspended. Existing Radar server.test.ts inventory/scopes, server-http/session, discovery, deployed baseline, raw-data/data-source; new mesh parity/exchange/service tests.
   - [ ] Immo restore: complete manifest/checksum/G1/G2/annotation guards, normal restore then MCP fresh-exchange/raw/login smoke, isolated empty-target DR, reconcile later suspensions/admin removals; record hashes/times. T3 offline recon/flip/wiring proof pending with i-cond; live injection remains blocked/non-gating.
   - [ ] Sentropic web/Chrome/VSCode code/tests unaffected; no application test/build campaign. Gate: local package UAT complete; external receipts explicitly pending.
-- [ ] **Lot 6 — Docs consolidation**
+- [x] **Lot 6 — Docs consolidation**
   - [x] Existing lazy-surface spec consolidated with exact inventory/scopes, 2FA and exchange boundaries, tenant state custody, per-environment mint/rotation and post-IdP-restore rule, current Radar baseline/tests and offline recon/flip defect handoff.
   - [x] Update README, CHANGELOG and existing lazy-surface spec with exact typed API/tuple, Node-only compose leaf, 2FA boundary, secret rotation/custody, policy sync/cache bound, tenant state/restore and R-O1/#865 sequence.
-  - [ ] Write `.h2a/build/o1_report.md`: changes, checks, owned feedback, risks, scope exceptions and read set; no secrets or messages to others. Gate: docs match packed types; no duplicate issuer/recovery spec.
+  - [x] Wrote `.h2a/build/o1_report.md`: changes, exact archive/tuple, checks including retained failures, owned feedback, risks, exceptions and read set. Docs match packed types; no duplicate issuer/recovery spec.
 - [ ] **Lot 7 — Final validation**
   - [x] Exactly three cluster-mesh qualification peer pins and matching wiring constant updated to mcp-auth0.2.2; gateway floor unchanged. Focused CI wiring GREEN (22 tests); startup binding preflight GREEN (7 composition tests).
   - [x] `rtk make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1` GREEN: 73 files / 585 tests passed, 9 files / 53 tests intentionally gated (packed fixtures run separately).
   - [x] `rtk make test-mcp-auth test-oauth-verify API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1` GREEN: mcp-auth 73 tests / 8 files and oauth-verify 21 tests / 3 files, including unchanged service-auth, manifest, JWKS and DPoP tests.
   - [x] Update three CI qualification pins and wiring test; scoped `rtk make test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1` GREEN (22 tests).
   - [x] Before every commit: `rtk make scope-check API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; review every hunk. Accepted Opus review/R1-R6 applied; no new review per packet.
-  - [ ] Push origin feat/cluster-mesh-oauth-o1, create DRAFT PR with exact BRANCH.md body and 3-6 step first comment, monitor CI and fix branch failures. Never merge/publish/remove plan to simulate acceptance.
-  - [ ] Cleanup per lot/final: `rtk make down ps API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; repeat e2e env; leave no owned services.
+  - [x] Pushed origin feat/cluster-mesh-oauth-o1; DRAFT PR https://github.com/rhanka/sentropic/pull/689 with exact BRANCH.md body and five-step first comment. CI changes/package-bump GREEN; remaining jobs queued/running at checkpoint. Full registry qualification remains blocked BR125-FL7; no green CI/merge/publication claim.
+  - [x] Final `rtk make down ps API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1` and e2e equivalent GREEN; no owned services remain. Commit audit: maximum 128 changed lines, no >150-line or >15-file violations.
