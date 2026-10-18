@@ -57,7 +57,7 @@
 - [ ] **Lot 1 — Frozen implementation handoffs**
   - [x] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
   - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
-  - [ ] Pin P canonical verifier, vectors and trust/key authorization contract in `promotion-contract.md` and `verifier-vectors.json`.
+  - [x] Pin P canonical verifier, vectors and trust/key authorization contract in `promotion-contract.md` and `verifier-vectors.json`; actual signer authorization remains B05.
 - [ ] **Lot 2 — Dispatch and authorization register**
   - [ ] Reserve migration IDs, ports, six train slots and shared-file writers in `reservations.md`.
   - [ ] Record pending runtime/operator/key/approval dependencies, owners, deadlines and observable gates in `authorization.md`.
