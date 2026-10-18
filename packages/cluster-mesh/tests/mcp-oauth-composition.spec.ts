@@ -118,13 +118,37 @@ describe('MCP OAuth composition', () => {
     expect((await app.request('/mcp/mcp', post(initialize()))).status).toBe(404);
   });
 
+  it.each([
+    ['multiple audiences', { aud: [resource, 'https://other.example'] }, 'Invalid MCP resource identity.'],
+    ['missing subject', { sub: undefined }, 'Invalid MCP resource identity.'],
+    ['missing expiry', { exp: undefined }, 'Invalid MCP resource identity.'],
+    ['conflicting clients', { azp: 'other-client' }, 'Invalid MCP resource identity.'],
+    ['missing assurance', { acr: undefined }, 'insufficient_user_authentication'],
+  ] as const)('should reject %s before checking ingress scopes', async (_label, invalid, message) => {
+    const { modules, options, token } = await fixture();
+    const requiredAcr = 'urn:sentropic:loa:passkey-fresh';
+    const secured = await createMcpOAuthNamespace(modules, { ...options, requiredAcr }); live.push(secured);
+    const app = new Hono().route('/mcp', secured.mcpRoutes);
+    for (const scope of ['immo:read immo:search', 'immo:search']) {
+      const response = await app.request('/mcp', post(initialize(), await token({ acr: requiredAcr, ...invalid, scope })));
+      expect(response.status).toBe(401);
+      const challenge = response.headers.get('www-authenticate');
+      expect(challenge).toContain('Bearer error="invalid_token"');
+      expect(challenge).toContain(`error_description="${message}"`);
+      expect(challenge).toContain('resource_metadata="https://preprod.immo.example/.well-known/oauth-protected-resource/mcp"');
+      expect(challenge).not.toContain('scope=');
+    }
+  });
+
   it('should distinguish missing scope from invalid or multi-audience tokens', async () => {
     const { modules, options, token } = await fixture();
     const secured = await createMcpOAuthNamespace(modules, options); live.push(secured);
     const app = new Hono().route('/mcp', secured.mcpRoutes);
     const denied = await app.request('/mcp', post(initialize(), await token({ scope: 'immo:search' })));
     expect(denied.status).toBe(403);
+    expect(denied.headers.get('www-authenticate')).toContain('Bearer error="insufficient_scope"');
     expect(denied.headers.get('www-authenticate')).toContain('scope="immo:read"');
+    expect(denied.headers.get('www-authenticate')).toContain('resource_metadata="https://preprod.immo.example/.well-known/oauth-protected-resource/mcp"');
     for (const claims of [{ aud: [resource, 'https://other.example'] }, { iss: 'https://other.example' }, { sub: '' }]) {
       expect((await app.request('/mcp', post(initialize(), await token(claims)))).status).toBe(401);
     }
