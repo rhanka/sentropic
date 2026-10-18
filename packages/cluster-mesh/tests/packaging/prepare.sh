@@ -125,6 +125,34 @@ fixture bare
 (cd "$work/bare" && npm install $quiet "$tgz" >/dev/null)
 fi
 
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
+# OAuth has its own strictly installed graph, pinned to Radar #866's SDK/Hono lock.
+# This proof needs no gateway/artifacts/auth-hono publication or workspace aliases.
+mkdir -p "$work/mcp-oauth"
+cp "$fixtures/mcp-oauth/package.json" "$work/mcp-oauth/"
+if [ "${REFRESH_LOCK:-}" = 1 ]; then
+  (cd "$work/mcp-oauth" && npm install --package-lock-only --ignore-scripts $quiet >/dev/null)
+  node "$fixtures/mcp-oauth/lock.mjs" "$work/mcp-oauth/package-lock.json" "$fixtures/mcp-oauth/package-lock.json"
+fi
+cp "$fixtures/mcp-oauth/package-lock.json" "$work/mcp-oauth/"
+(cd "$work/mcp-oauth" && npm ci --ignore-scripts $quiet >/dev/null)
+for name in host scenario; do
+  sed -e "s#'../../../../src/index.js'#'@sentropic/cluster-mesh'#g" \
+    -e "s#'../../../../src/mcp/registry.js'#'@sentropic/cluster-mesh/mcp/registry'#g" \
+    -e "s#'../../../../src/compose/mcp-oauth.js'#'@sentropic/cluster-mesh/compose/mcp-oauth'#g" \
+    "$fixtures/mcp-oauth/$name.ts" > "$work/mcp-oauth/$name.ts"
+done
+cp "$fixtures/mcp-oauth/consumer.ts" "$fixtures/mcp-oauth/http.ts" "$fixtures/mcp-oauth/tools.json" "$work/mcp-oauth/"
+"$work/tools/node_modules/.bin/tsc" --module NodeNext --target ES2022 --esModuleInterop --strict \
+  --skipLibCheck false --types node --typeRoots "$work/tools/node_modules/@types" \
+  --outDir "$work/mcp-oauth" --rootDir "$work/mcp-oauth" \
+  "$work/mcp-oauth/host.ts" "$work/mcp-oauth/consumer.ts" "$work/mcp-oauth/http.ts" "$work/mcp-oauth/scenario.ts"
+sha256sum "$tgz" > "$work/mcp-oauth/candidate.sha256"
+tuple mcp-oauth
+cat "$work/mcp-oauth/candidate.sha256"
+if [ "${MCP_OAUTH_ONLY:-0}" = 1 ]; then exit 0; fi
+fi
+
 # Selected consumer: start from E8's committed lock, substituting the local artifacts candidate.
 # Candidate/sibling installs are provisional (`npm install`); the committed lock is not rewritten.
 # Verified sibling receipts still require the committed registry URL and sha512 on every sibling run.

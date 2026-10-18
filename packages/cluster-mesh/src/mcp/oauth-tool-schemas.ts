@@ -1,5 +1,5 @@
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv-provider.js';
-import type { JsonSchemaType } from '@modelcontextprotocol/sdk/validation/types.js';
+import type { JsonSchemaType, JsonSchemaValidatorResult } from '@modelcontextprotocol/sdk/validation/types.js';
 import type { BridgeRunner, BridgeTool } from '@sentropic/mcp-platform/transport/bridge';
 
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -43,7 +43,7 @@ export function compileOAuthToolSchemas(tools: readonly BridgeTool[]) {
       ...(tool.description === undefined ? {} : { description: tool.description }),
       inputSchema: { type: 'object' as const, ...(tool.schema as Record<string, unknown>) },
     })),
-    validate(tool: string, args: Parameters<BridgeRunner['run']>[1]) {
+    validate(tool: string, args: Parameters<BridgeRunner['run']>[1]): JsonSchemaValidatorResult<Parameters<BridgeRunner['run']>[1]> {
       const source = tools.find((entry) => entry.name === tool)!;
       return validators.get(tool)!(defaults(source.schema, args));
     },
