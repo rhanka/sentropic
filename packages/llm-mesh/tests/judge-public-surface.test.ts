@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 describe('published judge boundaries', () => {
   it('exports the three exact subpaths without changing package versions', () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
-    expect(pkg.version).toBe('0.25.0');
+    expect(pkg.version).toBe('0.26.1');
     for (const [name, path] of [['judge', 'judge/index'], ['judge/host', 'judge/host'], ['transport/jev', 'transport/jev']]) {
       expect(pkg.exports[`./${name}`]).toEqual({ types: `./dist/${path}.d.ts`, import: `./dist/${path}.js` });
     }
