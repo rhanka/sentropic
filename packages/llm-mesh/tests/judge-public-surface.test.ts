@@ -64,53 +64,25 @@ import { quoteJudge } from '@sentropic/llm-mesh/judge/pricing';
       mkdirSync(join(directory, 'node_modules/@sentropic'), { recursive: true });
       symlinkSync(resolve('.'), join(directory, 'node_modules/@sentropic/llm-mesh'));
       const file = join(directory, 'readme-examples.mts');
-      writeFileSync(file, `// Consumer usage snippet from packages/llm-mesh/README.md
-import { createRemoteJudgeClient } from '@sentropic/llm-mesh/judge';
-
-const client = createRemoteJudgeClient({
-  baseUrl: 'https://llm.sent-tech.ca',
-  authToken: 'secret-bearer-token',
-});
-
-const result = await client.judge({
-  schemaVersion: 1,
-  evaluator: { providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'syn-v1' },
-  inputs: { output: 'Candidate completion', state: null },
-  criterion: { kind: 'binary', instructions: 'Verify output correctness' },
-  decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 },
-  correlationId: 'corr-judge-100',
-  policy: { timeoutMs: 10_000 },
-});
-void [result];
-
-// Host usage snippet from packages/llm-mesh/README.md
-import { createJudgeService, createJevAdapter, jevDescriptor } from '@sentropic/llm-mesh/judge/host';
-import { createJevTransport } from '@sentropic/llm-mesh/transport/jev';
-import { createProviderRegistry } from '@sentropic/llm-mesh';
-
-declare const resolveEvaluator: Parameters<typeof createJudgeService>[0]['resolveEvaluator'];
+      const readme = readFileSync(resolve('README.md'), 'utf8');
+      const blocks = [...readme.matchAll(/```ts\n([\s\S]*?)```/g)].map((m) => m[1]);
+      const consumer = blocks.find((b) => b.includes('createRemoteJudgeClient'));
+      const host = blocks.find((b) => b.includes('createJudgeService'));
+      expect(consumer).toBeDefined();
+      expect(host).toBeDefined();
+      expect(consumer).toContain("authToken: 'secret-bearer-token'");
+      expect(consumer).toContain("evaluatorId: 'jev-1.13.0'");
+      expect(host).toContain('jevDescriptor');
+      expect(host).toContain('createJevTransport({ fetch: globalThis.fetch })');
+      if (!consumer || !host) throw new Error('README judge blocks missing');
+      writeFileSync(file, `${consumer}\nvoid [result];\ndeclare const resolveEvaluator: Parameters<typeof createJudgeService>[0]['resolveEvaluator'];
 declare const resolvePrice: Parameters<typeof createJudgeService>[0]['resolvePrice'];
 declare const authorize: Parameters<typeof createJudgeService>[0]['authorize'];
 declare const budget: Parameters<typeof createJudgeService>[0]['budget'];
 declare const receipts: Parameters<typeof createJudgeService>[0]['receipts'];
 declare const resolveAuth: Parameters<typeof createJudgeService>[0]['resolveAuth'];
 declare const clock: Parameters<typeof createJudgeService>[0]['clock'];
-
-const adapter = createJevAdapter({
-  descriptor: jevDescriptor,
-  transport: createJevTransport({ fetch: globalThis.fetch }),
-});
-const service = createJudgeService({
-  registry: createProviderRegistry([adapter]),
-  resolveEvaluator,
-  resolvePrice,
-  authorize,
-  budget,
-  receipts,
-  resolveAuth,
-  clock,
-});
-void [service];
+${host}\nvoid [service];
 `);
       const program = ts.createProgram([file], {
         target: ts.ScriptTarget.ES2022,
