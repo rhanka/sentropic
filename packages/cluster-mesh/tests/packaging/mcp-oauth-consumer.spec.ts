@@ -11,8 +11,12 @@ describe.skipIf(!enabled)('installed MCP OAuth consumer', () => {
     expect(result.status).toBe(0);
   });
 
-  it('should run real HTTP exchange and existing-client continuity natively on the Radar tuple', () => {
-    expect(nodeJson(fixtureDir('mcp-oauth'), `
+  it.each([['mcp-oauth', '1.32.1', '4.13.13'], ['mcp-oauth-baseline', '1.31.0', '4.10.7']])
+  ('should run native HTTP exchange and client continuity on %s (SDK %s, Hono %s)', (fixture, sdk, hono) => {
+    const dir = fixtureDir(fixture);
+    expect(JSON.parse(read(join(dir, 'node_modules/@modelcontextprotocol/sdk/package.json'))).version).toBe(sdk);
+    expect(JSON.parse(read(join(dir, 'node_modules/hono/package.json'))).version).toBe(hono);
+    expect(nodeJson(dir, `
       import { runHttpScenario } from './scenario.js';
       import { createImmoMcp } from './consumer.js';
       console.log(JSON.stringify(await runHttpScenario(createImmoMcp)));
