@@ -13,17 +13,19 @@ Owner messages (relayed verbatim by `radar-immobilier`, 2026-10-18, recorded in 
 Closed owner decision (2026-10-18, binding):
 
 - Chosen option: **« Refresh OAuth par l'IdP (Recommandé) »**.
-- Exact label: the Sentropic IdP issues a standard OAuth refresh token (rotation on every use, reuse detection, revocation, hashed storage) with a **15-day absolute lifetime**; `claude.ai` handles it natively (silent renewal, relogin every 15 days); access tokens stay short (**1 h**); delivered with the migration to `cluster-mesh`; also serves the other Sentropic MCPs.
+Verbatim closed-decision receipt (`OWNER-DECISION.md:3`):
 
-Companion findings from the `radar-immobilier` investigation (`.tmp/idp-refresh-token/radar-enquete-astra.md`):
+> Closed question, chosen option « Refresh OAuth par l'IdP (Recommandé) », exact label: the sentropic IdP issues a standard OAuth refresh token (rotation on every use, reuse detection, revocation, hashed storage) with a 15-day absolute lifetime; claude.ai handles it natively (silent renewal, relogin every 15 days); access tokens stay short (1 h); delivered with the migration to cluster-mesh; also serves the other sentropic MCPs.
 
-1. **Primary cause (high probability):** `OAUTH_ACCESS_TOKEN_TTL_SEC` defaults to `3600` s (`1 h`) and the IdP neither advertises nor issues nor accepts `refresh_token`, while rejecting `offline_access` at `/authorize` with `invalid_scope`. Hosted MCP connectors (`claude.ai`) hold no IdP browser cookie and therefore cannot silently re-run `/authorize` when the 1-hour bearer expires.
-2. **Scope error mapping (`@sentropic/mcp-auth` `0.1.0` -> `0.2.2`):** in `0.1.0`, `requiredScopes` was forwarded into `@sentropic/oauth-verify`, turning a missing scope into `401 invalid_token` instead of `403 insufficient_scope`, which can trigger an OAuth re-authentication loop on the client. Fixed in `@sentropic/mcp-auth` `0.2.2` (`b9d15ebf6`, `packages/mcp-auth/src/core.ts:154-184` `[EXISTS]`).
-3. **In-memory MCP transport sessions (`radar-immobilier`):** Immo MCP streamable HTTP sessions live in an in-memory `Map` (`30 min` idle timeout, `8 h` max lifetime) and return `HTTP 404` (not `401`) on loss or restart; the client must re-run MCP `initialize` with its still-valid (or freshly renewed) bearer token rather than full OAuth re-consent.
+Companion findings from the `radar-immobilier` investigation (`.tmp/idp-refresh-token/radar-enquete-astra.md`, lines `1-16`, inspecting `radar-immobilier` at commit `89da3c814d3bfa4e5a6929c14838b04ab74d8291` — external repository, distinct from Sentropic `origin/main` `9ed96eb83`):
+
+1. **Primary cause (high probability, `radar-enquete-astra.md:1,7`):** `OAUTH_ACCESS_TOKEN_TTL_SEC` defaults to `3600` s (`1 h`) and the IdP neither advertises nor issues nor accepts `refresh_token`, while rejecting `offline_access` at `/authorize` with `invalid_scope`. Hosted MCP connectors (`claude.ai`) hold no IdP browser cookie and therefore cannot silently re-run `/authorize` when the 1-hour bearer expires.
+2. **Scope error mapping (`@sentropic/mcp-auth` `0.1.0` -> `0.2.2`, `radar-enquete-astra.md:3,8`):** in `0.1.0` (pinned in `radar-immobilier` `package-lock.json:9665` at `89da3c81`), `requiredScopes` was forwarded into `@sentropic/oauth-verify`, turning a missing scope into `401 invalid_token` instead of `403 insufficient_scope`. Fixed in `@sentropic/mcp-auth` `0.2.2` (`b9d15ebf6`, `packages/mcp-auth/src/core.ts:154-184` `[EXISTS]`).
+3. **In-memory MCP transport sessions (`radar-immobilier` `packages/immo-mcp/src/server-http.ts:47,282,292` at `89da3c81`, `radar-enquete-astra.md:9`):** Immo MCP streamable HTTP sessions live in an in-memory `Map` (`30 min` idle timeout, `8 h` max lifetime) and return `HTTP 404` (not `401`) on loss, idle/max expiry, or wrong owner; the client must re-run MCP `initialize` with its still-valid (or freshly renewed) bearer token rather than full OAuth re-consent.
 
 Conventions in this document:
 
-- `[EXISTS]` marks behaviour verified in merged code at baseline `9ed96eb83`, with an exact `file:line` citation.
+- `[EXISTS]` marks behaviour verified in merged Sentropic code at baseline `9ed96eb83cd77da710f1adeb83a19e425d6c4910`, with an exact `file:line` citation. Open specification PRs (`#695`, `#692`) and external `radar-immobilier` citations (`89da3c81`) are explicitly qualified with their own repository/commit and are never marked `[EXISTS]` on Sentropic `origin/main`.
 - `[TO BUILD Lot N]` marks target behaviour assigned to an implementation lot in section 10. Nothing marked `[TO BUILD]` is claimed as merged.
 - No secret value appears in this document. Secrets and configuration keys are named by variable only, following `docs/oauth-client-rotation.md`.
 
@@ -68,11 +70,11 @@ Out of scope (cited, not redesigned):
 
 | Behaviour | Baseline evidence (`9ed96eb83`) |
 |---|---|
-| Per-client `required_acr` and `allowed_user_ids` on `oauth_clients` are enforced at `/authorize`, `/authorize?continue=...`, and `/consent` | `api/drizzle/0042_oauth_clients_mfa_policy.sql:8-10`, `packages/auth-hono/src/oauth/authorize-handler.ts:80,90,253,256`, `consent-decision-handler.ts:110-116` `[EXISTS]` |
+| Per-client `required_acr` and `allowed_user_ids` on `oauth_clients` are enforced at `/authorize`, `/authorize?continue=...`, and `/consent` | `api/drizzle/0042_oauth_clients_mfa_policy.sql:8-10`, `packages/auth-hono/src/oauth/authorize-handler.ts:80,90,253,256,401-415`, `consent-decision-handler.ts:110-116` `[EXISTS]` |
 | `tid` is derived at `/authorize` from an approved membership and re-verified at `/token` via `ports.tenant.isApprovedMember(userId, boundTenantId)` | `packages/auth-hono/src/oauth/authorize-handler.ts:135,182-194`, `token-handler.ts:417-421` `[EXISTS]` |
 | RFC 8707 `resource` is validated against `client.resourceIndicators`, sealed into the authorization code, checked on `/token`, and becomes the access token `aud` | `packages/auth-hono/src/oauth/authorize-handler.ts:424-443`, `token-handler.ts:159-173,429` `[EXISTS]` |
-| Consent grants (`oauth_consents`) are keyed on `(user_id, client_id, tenant_id)` and checked for scope superset coverage (`hasCoveringGrant`) | `api/src/db/schema.ts:392-410`, `packages/auth-hono/src/oauth/authorize-handler.ts:205-218` `[EXISTS]` |
-| Prod-to-preprod identity sync exports `users`, `webauthn_credentials`, `oauth_consents`, and `oauth_clients` (including `allowed_scopes` and `grant_types`), never tokens or codes, and deletes ephemeral auth rows on rekey | `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql:7-10`, `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql:101-106,123` `[EXISTS]` |
+| Consent grants (`oauth_consents`) are keyed on `(user_id, client_id, tenant_id)` and store only `scopes` (no approved `resource` set or offline consent timestamp); `hasCoveringGrant` and `OAuthConsentDetails` inspect only `scopes` | `api/src/db/schema.ts:392-410`, `packages/auth-hono/src/ports.ts:341-350`, `packages/auth-hono/src/oauth/authorize-handler.ts:205-218`, `packages/auth-ui/src/oauth-consent.ts:3-7` `[EXISTS]` |
+| Prod-to-preprod identity sync exports `users`, `webauthn_credentials`, `oauth_consents`, and `oauth_clients`, never tokens or codes; on user rekeying, `import-preprod.sql:101-106` deletes `user_sessions`, `webauthn_challenges`, `magic_links`, `authorization_codes`, `oauth_tokens`, and `oauth_consents`, while `:123-124` classifies those six tables as `'ephemeral-auth'` and all other `users(id)` FKs as `'durable'` | `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql:7-10`, `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql:101-106,114,123-124,178-203` `[EXISTS]` |
 
 ### 2.3 Comparison with the CI seat refresh model (comparison only)
 
@@ -91,7 +93,7 @@ Why the IdP OAuth model wins for MCPs: `claude.ai` and standard MCP hosts alread
 
 ### 3.1 Assets and target security properties
 
-- **A-ACCESS (short-lived resource bearer):** EdDSA-signed JWT access tokens (`1 h` default, `300 s` ceiling for RFC 8693 exchanged tokens) verified locally via JWKS by `@sentropic/mcp-auth` without per-call introspection (`radar-enquete-astra.md:25`).
+- **A-ACCESS (short-lived resource bearer):** EdDSA-signed JWT access tokens (`1 h` default, `300 s` ceiling for RFC 8693 exchanged tokens) verified locally via JWKS by `@sentropic/mcp-auth` without per-call introspection (`radar-enquete-astra.md:26`).
 - **A-REFRESH (long-lived renewal capability):** Opaque high-entropy refresh tokens valid up to **15 days** from initial authorization, redeemable only at the IdP `/token` endpoint.
 - **P-SHORT-BEARER:** Access tokens remain short (`1 h`) so the offline verification window of a leaked bearer stays bounded without requiring synchronous introspection on every MCP tool call.
 - **P-SINGLE-USE-ROTATION:** Every successful `grant_type=refresh_token` request atomically consumes the presented refresh token and issues a new refresh token in the same family (`generation + 1`).
@@ -109,43 +111,50 @@ Why the IdP OAuth model wins for MCPs: `claude.ai` and standard MCP hosts alread
 
 ## 4. Refresh token family data model, lifetime, and storage
 
-### 4.1 Opaque token format and SHA-256 hashed persistence
+### 4.1 Opaque token format and single SHA-256 digest contract
 
-1. **Format (`[TO BUILD Lot 1]`):** Each refresh token is an opaque, cryptographically random string generated via `ports.random.token(32)` (`32` random bytes, `base64url`, `43` chars) prefixed with `srt_` (`Sentropic Refresh Token`, total `47` chars). The `srt_` prefix lets `/revoke` and `/introspect` distinguish an opaque refresh token from a 3-segment JWT (`eyJ...`) in $O(1)$ without attempting `decodeJwt` first, and enables secret-scanner patterns.
-2. **Hashed storage (`[TO BUILD Lot 1]`):** The IdP computes `tokenHash = ports.tokens.hashSecret(rawToken)` (SHA-256 hex, `api/src/routes/auth/oauth.ts:308` `[EXISTS]`) and stores only `tokenHash`. The plaintext `srt_...` value is returned once in the `/token` JSON response and never stored in PostgreSQL, logs, or audit payloads.
+1. **Format (`[TO BUILD Lot 1]`):** Each refresh token is an opaque, cryptographically random string generated via `ports.random.token(32)` (`32` random bytes, `base64url`, `43` chars) prefixed with `srt_` (`Sentropic Refresh Token`, total `47` ASCII chars). The `srt_` prefix lets `/revoke` and `/introspect` distinguish an opaque refresh token from a 3-segment JWT (`eyJ...`) in $O(1)$ without attempting `decodeJwt` first, and enables secret-scanner patterns.
+2. **Single canonical digest contract (`[TO BUILD Lot 1]`):** At initial issuance, rotation, `/revoke`, and `/introspect`, the IdP computes the exact same digest: `tokenHash = ports.tokens.hashSecret(rawToken)` (`createHash('sha256').update(rawToken, 'utf8').digest('hex')`, `64` lowercase hex chars over the full 47-char `srt_...` string, `api/src/routes/auth/oauth.ts:308` `[EXISTS]`). Because `rawToken` carries 256 bits of CSPRNG entropy and the `srt_` prefix, no additional domain-separator string is prepended at issuance or lookup. The plaintext `srt_...` value is returned once in the `/token` JSON response and never stored in PostgreSQL, logs, or audit payloads.
 
-### 4.2 Database schema (`oauth_refresh_tokens`, single migration)
+### 4.2 Database schema (`oauth_refresh_tokens`, `oauth_tokens`, and `oauth_consents`, single migration)
 
-One additive Drizzle migration (`api/drizzle/0044_oauth_refresh_tokens.sql`, `[TO BUILD Lot 1]`) creates `oauth_refresh_tokens` and links `oauth_tokens` to `family_id` for family-wide access-token revocation:
+One additive Drizzle migration (`api/drizzle/0044_oauth_refresh_tokens.sql`, `[TO BUILD Lot 1]`) creates `oauth_refresh_tokens`, links `oauth_tokens` to `family_id`, and adds resource-aware offline consent columns to `oauth_consents`:
 
 | Column (`oauth_refresh_tokens`) | Type & constraints | Semantics |
 |---|---|---|
 | `id` | `text PRIMARY KEY` | UUID (`ports.random.uuid()`) identifying this refresh token generation row |
-| `token_hash` | `text NOT NULL UNIQUE` | `sha256` hex of the opaque `srt_...` token |
-| `family_id` | `text NOT NULL` | UUID set to `id` on generation `0` (`authorization_code` exchange) and copied unchanged to every rotated child |
+| `token_hash` | `text NOT NULL UNIQUE` | Plain `sha256` hex (`ports.tokens.hashSecret(rawToken)`) of the 47-char `srt_...` token |
+| `family_id` | `text NOT NULL REFERENCES oauth_refresh_tokens(id) ON DELETE CASCADE` | Durable family anchor: set to `id` on generation `0` (`authorization_code` exchange) and copied unchanged to every rotated child |
 | `parent_id` | `text REFERENCES oauth_refresh_tokens(id) ON DELETE SET NULL` | `NULL` for generation `0`; parent row `id` for rotated tokens (`generation >= 1`) |
 | `replaced_by_id` | `text` | Set atomically to the child row `id` when consumed by rotation |
 | `generation` | `integer NOT NULL DEFAULT 0` | Monotonic counter (`0` at code exchange, `parent.generation + 1` on each rotation) |
 | `client_id` | `text NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE` | Bound OAuth client; cascade-deletes when the client is deleted |
 | `user_id` | `text NOT NULL REFERENCES users(id) ON DELETE CASCADE` | Bound human subject (`sub`); cascade-deletes when the user is deleted |
 | `tenant_id` | `text` | Sealed tenant (`tid`) from initial authorization (`NULL` when untenantized) |
-| `scope` | `text NOT NULL` | Current granted scope string (space-delimited; downscopable on refresh, never widened) |
-| `Initial / sealed claims` (`resource`, `dpop_jkt`, `acr`, `amr`, `auth_time`, `session_id`) | `resource text`, `dpop_jkt text`, `acr text NOT NULL`, `amr text[] NOT NULL`, `auth_time timestamp NOT NULL`, `session_id text` | Sealed authorization context: `resource` (RFC 8707 `aud`, nullable), `dpop_jkt` (DPoP thumbprint when bound), original `acr`, `amr`, `auth_time` (never bumped on refresh), and originating IdP `session_id` (nullable, for session-linked revocation/audit) |
+| `scope` | `text NOT NULL` | Sealed family grant scope string from initial authorization (space-delimited) |
+| `offline_grant_id` | `text NOT NULL` | Tier-local consent epoch sealed into the code and every generation; withdrawal/reapproval never reuses an epoch |
+| `Initial / sealed claims` (`resource`, `dpop_jkt`, `acr`, `amr`, `auth_time`, `session_id`) | `resource text`, `dpop_jkt text`, `acr text NOT NULL`, `amr text[] NOT NULL`, `auth_time timestamp NOT NULL`, `session_id text` | Sealed authorization context: `resource` (RFC 8707 `aud`, nullable for default userinfo audience), `dpop_jkt` (DPoP thumbprint when bound), original `acr`, `amr`, `auth_time` (never bumped on refresh), and originating IdP `session_id` (nullable, for session-linked revocation/audit) |
 | `created_at` | `timestamp NOT NULL DEFAULT now()` | Mint timestamp of this generation |
 | `expires_at` | `timestamp NOT NULL` | Per-token expiry (`min(now + refreshTokenTtlSec, family_expires_at)`) |
 | `family_expires_at` | `timestamp NOT NULL` | Immutable absolute deadline (`initial_created_at + OAUTH_REFRESH_TOKEN_TTL_SEC`, 15 days) |
 | `consumed_at` | `timestamp` | Set atomically when rotated; `NULL` while active |
-| `revoked_at` | `timestamp` | Set when explicitly revoked, policy-invalidated, or killed by reuse detection |
-| `revoked_reason` | `text` | Nullable audit code: `'explicit_revoke' \| 'reuse_detected' \| 'policy_denied' \| 'user_logout' \| 'consent_revoked'` |
+| `revoked_at` | `timestamp` | Set on the generation-0 anchor and all family rows when revoked, policy-invalidated, or killed by reuse detection |
+| `revoked_reason` | `text` | Nullable audit code: `'explicit_revoke' \| 'reuse_detected' \| 'policy_denied' \| 'user_logout' \| 'consent_revoked' \| 'security_event' \| 'db_restore_invalidation'` |
 
-Indexes and uniqueness constraints on `oauth_refresh_tokens`: `token_hash` (unique), `UNIQUE (family_id, generation)`, partial unique index `ON (family_id) WHERE consumed_at IS NULL AND revoked_at IS NULL` (enforcing at most one active generation per family at the PostgreSQL layer), `(user_id, client_id)`, and `expires_at` (for `purgeExpired()`). In addition, `oauth_tokens` gains a nullable `refresh_family_id text` column indexed on `refresh_family_id` so revoking a refresh family can immediately insert all active `oauth_tokens` of that family into `revoked_tokens`.
+- **Indexes and constraints on `oauth_refresh_tokens`:** `token_hash` (unique), `UNIQUE (family_id, generation)`, partial unique index `ON (family_id) WHERE consumed_at IS NULL AND revoked_at IS NULL` (enforcing at most one active generation per family at the PostgreSQL layer), `(user_id, client_id)`, and `expires_at` (for `purgeExpired()`).
+- **Durable family lock anchor (`generation = 0` row, `id = family_id`):** Retain the anchor until cleanup can remove the entire expired family (`family_expires_at < now` and all family access metadata expired). Every renewal reads the anchor's permanent `revoked_at` under `SELECT ... WHERE id = $familyId FOR UPDATE`; revoking only a snapshot of generation rows is insufficient. All family writers use the ordering below before rereading state.
+- **Serialization protocol (`[TO BUILD Lots 1–3]`):** The persistence port owns one PostgreSQL transaction spanning policy checks, signing, refresh rows and access metadata. Initial family creation, rotation, replay handling and explicit revoke take a shared transaction advisory lock keyed by the registered client; client-policy mutation/deletion takes its exclusive counterpart before changing scopes/resources/grants/MFA/subject allowlists. The lock-key mapping is centralized and deterministic across replicas; hash collisions may only over-serialize. Then lock affected `users` rows in ascending ID order, then existing generation-0 anchors in ascending ID order. Subject/tenant/consent/security writers lock the affected users before reading/changing authorization and before locking anchors; they need no client lock because they do not change client policy. Never acquire a client lock after a user lock.
+- **Revocation ordering:** The user lock exists before any family, so consent withdrawal, membership loss, account/security-generation change and initial creation cannot pass one another unnoticed. Client-policy writers hold the exclusive client guard while locking affected users/anchors and revoking existing families and their active JTIs. After acquiring locks, reread policy/consent/security state and enumerate families using fresh statements (`READ COMMITTED`); never reuse a pre-lock snapshot. Revocation sets the anchor and every generation revoked and inserts all live family JTIs into `revoked_tokens` in the same commit. A rotation that commits first is included; a revocation that commits first prevents issuance. RFC 8693 subject validation/metadata issuance participates in the same client/user/anchor ordering and rechecks family revocation before commit, preventing an in-flight exchange from escaping the issuer cutoff. Already delivered JWTs retain only the residual validity in section 7.3.
+- **Failure atomicity:** No credentials leave the transaction before signing and commit succeed. Signing, insert or commit failure rolls back consumption, successor and access metadata together and returns a retryable server failure. A committed response lost in transit remains consumed; retrying it triggers strict reuse detection. Cleanup and deletion participate in the same lock order; client/user deletion revokes live JTIs before cascading refresh rows.
+- **`oauth_tokens` family link:** `oauth_tokens` (`api/src/db/schema.ts:363` `[EXISTS]`) gains a nullable `refresh_family_id text` column indexed on `refresh_family_id` so family revocation atomically inserts all active `oauth_tokens` JTIs of that family into `revoked_tokens`.
+- **Resource-aware offline consent (`oauth_consents`, baseline `api/src/db/schema.ts:392`, `[TO BUILD Lot 1]`):** Add `offline_grant_id text`, `offline_issuer text`, `offline_scopes text[] NOT NULL DEFAULT '{}'::text[]`, `approved_resources text[] NOT NULL DEFAULT '{}'::text[]`, `default_audience_approved boolean NOT NULL DEFAULT false`, and `offline_consented_at timestamp`. Nullable fields default to `NULL`; legacy rows confer no offline grant. These fields record one explicitly approved scope set for every listed exact resource (plus the default audience only when separately approved), scoped to the local issuer and existing `(user_id, client_id, tenant_id)` key. Section 5.2 defines approval and revocation.
 
 ### 4.3 Lifetime configuration (`15 days` absolute cap, `1 hour` access token)
 
 - `OAUTH_REFRESH_TOKEN_TTL_SEC` (`api/src/config/env.ts` `[TO BUILD Lot 1]`): `z.coerce.number().int().positive().default(1296000)` (`15 * 24 * 60 * 60 = 1,296,000` seconds = **15 days**).
 - `OAUTH_ACCESS_TOKEN_TTL_SEC` (`api/src/config/env.ts:140` `[EXISTS]`): remains `3600` (`1 hour`).
 - At `authorization_code` exchange (`t0`), `family_expires_at = t0 + OAUTH_REFRESH_TOKEN_TTL_SEC` and `expires_at = family_expires_at`.
-- At each rotation (`t_rot < family_expires_at`), the child refresh token inherits `family_expires_at` unchanged and sets `expires_at = family_expires_at`. When `now >= family_expires_at`, refresh is refused with `400 invalid_grant` and the user performs a fresh interactive OAuth login (every 15 days).
+- At each rotation (`t_rot < family_expires_at`), the child refresh token inherits `family_expires_at` unchanged and sets `expires_at = family_expires_at`. When `now >= family_expires_at`, silent refresh on `POST /oauth/token` is refused with `400 invalid_grant` and the client must start a new `/oauth/authorize` flow (whether `/authorize` at day 15 may reuse an active 7-day `user_sessions` browser cookie or requires a fresh human credential ceremony `now - session.auth_time < 15 d` is defined consistently in section 12.2 `D-R1`).
 - The newly minted access token at `t_rot` has `exp` capped at `min(t_rot + OAUTH_ACCESS_TOKEN_TTL_SEC, family_expires_at)` (`expires_in = min(OAUTH_ACCESS_TOKEN_TTL_SEC, Math.floor((family_expires_at - t_rot) / 1000))`, rule `R-TTL-CAP` in section 6.2) so a refresh near day 15 never extends bearer validity past the 15-day family ceiling.
 
 ## 5. Client eligibility, scope semantics, and discovery
@@ -186,7 +195,7 @@ Refresh capability uses a single authoritative eligibility rule (`isRefreshEligi
 When `POST /token` (`grant_type=authorization_code`) succeeds (`token-handler.ts:82` `[TO BUILD Lot 2]`):
 
 1. Check `isRefreshEligibleClient(auth.client)` **and** `codePayload.scope.split(/\s+/).includes('offline_access')`. If either is false, mint only `access_token` (and `id_token` when `openid` is present), byte-identical to baseline `9ed96eb83`.
-2. Otherwise, at `t0 = ports.clock.now()` with `T = addSeconds(t0, refreshTokenTtlSeconds)` (`1,296,000 s` = 15 days), mint raw token `srt_<43-char-base64url>`, compute its domain-separated SHA-256 digest, and persist generation `0` (`family_id = id`, `parent_id = null`, `generation = 0`, `family_expires_at = T`, `expires_at = T`, sealed `client_id`, `user_id`, `tenant_id = boundTenantId`, `scope = codePayload.scope`, `resource = codePayload.resource`, `dpop_jkt = dpopJkt`, `acr`, `amr`, `auth_time`).
+2. Otherwise, at `t0 = ports.clock.now()` with `T = addSeconds(t0, refreshTokenTtlSeconds)` (`1,296,000 s` = 15 days), mint raw token `srt_<43-char-base64url>`, compute `ports.tokens.hashSecret(rawToken)` exactly as section 4.1, and persist generation `0` (`family_id = id`, `parent_id = null`, `generation = 0`, `family_expires_at = T`, `expires_at = T`, sealed `client_id`, `user_id`, `tenant_id = boundTenantId`, `scope = codePayload.scope`, `resource = codePayload.resource`, `dpop_jkt = dpopJkt`, `acr`, `amr`, `auth_time`, `offline_grant_id`).
 3. Persist `oauth_tokens` metadata for `access_token` with `refresh_family_id = family_id`, and return `refresh_token` alongside `access_token`, `token_type`, `expires_in`, and `scope` with headers `Cache-Control: no-store` and `Pragma: no-cache` (`RFC 6749 §5.1`).
 
 ### 6.2 Refresh grant validation, live policy re-evaluation, and atomic rotation
