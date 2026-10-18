@@ -66,6 +66,7 @@ Actions with the following status should be included around tasks only if really
   - Switch back to `tmp/worktrees/spec-mcp-registry-artifacts` after UAT: not applicable.
 
 ## Plan / Todo (lot-based)
+- [x] **Round 1 dossier treatment (2026-10-18), findings 1/2/6/7**: restore the APP_CATALOG Q4 app kind and AppCatalogSource trace; consume host screen and server recipient bindings; pin D-P1/D-P2/D-P3 citations and balance the copied D-P3 tradeoff. Documentation only; no product qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read the relevant rules files (`rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`) and `plan/BRANCH_TEMPLATE.md`.
   - [x] Confirm isolated worktree `tmp/worktrees/spec-mcp-registry-artifacts` and branch `docs/spec-mcp-registry-artifacts` at `1472d961e` via `git -C <worktree> branch --show-current`.
@@ -95,7 +96,7 @@ Actions with the following status should be included around tasks only if really
   - [x] Final validation (docs-appropriate): PR body sourced from exact `BRANCH.md` text; branch CI verified on PR #692 (run 39086831064, success); `git diff --check` clean. Merge and BRANCH.md removal: not applicable under the draft-only instruction (Scope / Guardrails).
 
 - [x] **Lot 3 — Amendment v2: catalogue integration (2026-10-18)**
-  - [x] F692-1: catalogue projection of the host registry (typed discovery, five kinds, transverse columns).
+  - [x] F692-1: catalogue projection of the host registry (five existing kinds plus the APP_CATALOG Q4 app-template kind, transverse columns).
   - [x] F692-2: owner-facing permission-filtered catalogue view at the D13 `/catalog` + `/apps` boundary.
   - [x] F692-3: managed-app adoption matrix in §11 (one row per app, evidence status `unverified`).
   - [x] F692-4: shared glossary and "pages" repair; « Tout en artifacts » recorded from the 2026-10-18 feedback.
