@@ -578,3 +578,133 @@ address already used for delivery.
 
 `[TO BUILD Lot 6]` Required events (names are normative; field sets are
 Lot 6 work): `oauth.client_policy_changed` (including the R-GOV-2
+downgrade fields), `auth.mfa_stepup_succeeded` / `auth.mfa_stepup_failed`
+(at authorize resume), `auth.credential_created` and
+`auth.credential_revoked` (with the session level that authorized them),
+`auth.recovery_code_created` / `auth.recovery_code_redeemed` /
+`auth.recovery_codes_revoked`, `auth.recovery_attempt_email_blocked`
+(R-REC-1/R-REC-2 refusals), `auth.breakglass_reset_executed` (Job
+identity, target account, counts revoked), and
+`auth.enrolment_only_session_issued` / `auth.enrolment_only_session_used`.
+Failures are recorded with the same names and a refusal outcome; a missing
+audit write never changes the authorization outcome (logging is observed,
+not consulted), matching the current fire-and-forget port usage.
+
+### 9.3 Notifications
+
+`[EXISTS]` Transactional email is sent through the existing mail service
+(magic links, verification codes). No push or SMS channel exists, and none
+is added.
+
+`[TO BUILD Lot 6]` The account address is notified (email, delivery-trusted
+only) on: credential created (including via enrolment-only and break-glass
+paths), credential revoked, recovery codes created or revoked, a blocked
+email-recovery attempt on a hardened account, a break-glass reset, and a
+client-policy change that newly hardens or un-hardens the account.
+Notifications state what happened and how to reach the break-glass path;
+they carry no link that itself authorizes enrolment for a hardened
+account. A notification failure never blocks the underlying operation; it
+is logged as its own event.
+
+## 10. Migration of existing clients and accounts
+
+### 10.1 Method-neutral value migration (existing clients)
+
+Applies to every client already carrying `required_acr =
+'urn:sentropic:loa:passkey-fresh'` at Lot 5 time, and to `kvm-gateway`
+once it exists. No step widens acceptance:
+
+| Step | Action | Acceptance effect | Lot |
+|---|---|---|---|
+| M-0 | Clients keep `passkey-fresh`; sessions emit `passkey-fresh` | Baseline | `[EXISTS]` |
+| M-1 | Authorize accepts `mfa` as an equivalent required spelling and a qualifying session satisfies either spelling; unknown values still refuse | Identical accept/refuse set for every existing session origin | `[TO BUILD Lot 5]` |
+| M-2 | Each MFA client is re-registered through the governed Job with `OAUTH_CLIENT_REQUIRED_ACR=urn:sentropic:loa:mfa`; the Job output is checked to show the new value. Secret rotation is not required and not performed by this step | Stored policy now uses the neutral spelling; authorize outcome unchanged | `[TO BUILD Lot 5]` (operator step) |
+| M-3 | Session emission switches to canonical `mfa`; token `acr` follows; `amr` unchanged. Discovery advertises both spellings in `acr_values_supported` during M-1…M-3, then the neutral value (alias retained as accepted requirement) | RPs reading `acr` see the new value only after their client row moved; KVM reads nothing | `[TO BUILD Lot 5]` |
+| M-4 | `passkey-fresh` stays as an accepted required alias for one deprecation window; new declarations (section 8.1) must use `mfa`. Removing the alias is a separate, later decision and is not scheduled here | No client is stranded | — |
+
+Package note: `@sentropic/auth-hono` carries the authorize and resolver
+changes, so each BUILD lot touching `packages/auth-hono/src/**` bumps that
+package version per `rules/workflow.md` (Package Publication). The frozen
+status of `auth-hono` for bootstrap is unaffected; steady-state publication
+rules apply.
+
+### 10.2 Account and KVM sequencing (normative order)
+
+1. **Register** `kvm-gateway` (Lot 1 declaration, governed Job, legacy
+   spelling). The client exists; nobody's access depends on it yet.
+2. **Enrol** the owner account to the prerequisite: at least two distinct
+   credentials under normal signed-in flows (Lot 4 check in advisory
+   mode), optionally recovery codes (owner decision, section 15).
+3. **Close** the email path for hardened accounts (Lot 3 deployed). Only
+   now does R-REC-0 hold.
+4. **Enforce**: the owner subject is allowlisted and production KVM access
+   is gated on the client (Lot 1 row plus Lot 3 guarantee). Reordering
+   steps 3 and 4 reopens G-RECOVERY for the interval and is forbidden.
+5. **Neutralise** (Lot 5, M-1…M-3) at any later time; it does not interact
+   with steps 1–4.
+
+Existing non-KVM clients and accounts need no action: clients with `NULL`
+policy stay legacy; accounts never allowlisted on an MFA client stay
+non-hardened with today's recovery; existing sessions are not revoked by
+any migration step — a stale or bearer session simply fails the next
+forced authorize and steps up (section 5.3). Existing credentials are
+never deleted by migration; only the break-glass Job deletes, on explicit
+operator action.
+
+### 10.3 Tiers
+
+Each tier's IdP holds its own `oauth_clients` rows and its own secrets
+(`spec/SPEC_DECISION_TIER_AUTH_PATTERN.md`, R1/R3). Policy columns are
+tier-local and excluded from prod→preprod sync `[EXISTS]`, so the
+declaration (section 8.1) is applied per tier with that tier's owner
+subject and secret; the preprod KVM gateway, if any, is a distinct client
+(`kvm-gateway-preprod` naming by the R3 pattern) and is not created by
+this spec.
+
+## 11. KVM onboarding as an OAuth client (given)
+
+How KVM authenticates today, from repository evidence: the rotation
+runbook already treats `kvm-gateway` as a confidential OIDC client of the
+IdP alongside `netbird` (`docs/oauth-client-rotation.md:5`), with its
+issuer, client id, and secret carried by the `KVM_GATEWAY_OIDC_*`
+variables. No `oauth_clients` row can be verified from the repository
+(the database is the record), so onboarding means creating or confirming
+that row with the parameters below through the governed Job — it does not
+mean inventing a parallel authentication mechanism for KVM.
+
+Given parameters (kvm lane, 2026-10-18; treated as requirements):
+
+| Field | Value |
+|---|---|
+| `client_id` | `kvm-gateway` (confidential) |
+| RP software | oauth2-proxy v7.15.5 |
+| Flow | `authorization_code` + PKCE S256 (`require_pkce=true`) |
+| Token signing | EdDSA `id_token` (IdP JWKS as published) |
+| `redirect_uris` | Exactly one: `https://kvm.sent-tech.ca/oauth2/callback` |
+| `allowed_scopes` | `openid profile email` |
+| `token_endpoint_auth_method` | `client_secret_basic`; secret minted cluster-side, stored SHA-256 only at the IdP, plaintext only in the RP secret locations named by variable |
+| Required level | MFA level — stored today as `urn:sentropic:loa:passkey-fresh` (only merged spelling), migrated to `urn:sentropic:loa:mfa` by section 10.1 |
+| `allowed_user_ids` | Owner subject only (single entry; the value is tier data supplied in the 0600 file, never in git) |
+| Freshness bound | Per-client bound of section 5.3; the KVM value is an owner decision (section 15) |
+| Gateway check | **None**: oauth2-proxy validates the token (signature, issuer, audience, expiry) and the IdP session it establishes locally; it performs no `acr`/`amr` gate. The MFA guarantee is the IdP authorize decision plus tests R-KVM-TEST |
+
+Onboarding steps (operator, per tier): mint the secret by the runbook
+method; build the 0600 file from the Lot 1 declaration plus the secret and
+owner subject; run the registration Job; verify the Job output shows the
+expected required level and single-subject allowlist; cut the RP over to
+the new secret in the same operation (no grace period); verify a fresh
+owner passkey sign-in reaches KVM, a magic-link session receives
+`access_denied`, and the old secret returns `invalid_client`; record the
+minted-at variables. Rollback is a re-run with the previous secret values
+file, per the runbook.
+
+Compatibility note — Netbird (out of scope): a second client, `netbird`
+(embedded Dex federating to the IdP), may come later and already appears
+in the same runbook as a confidential client. This spec designs nothing
+for it beyond two compatibility constraints: the method-neutral level and
+`amr` vocabulary must remain consumable through a federating Dex without
+renaming, and Dex-side federation must not be mistaken for an IdP MFA
+ceremony (a session minted from Dex federation is `bearer` at the IdP
+unless the IdP itself ran a qualifying ceremony). Its client row, scopes,
+and any required level are a later lane's decision.
+
