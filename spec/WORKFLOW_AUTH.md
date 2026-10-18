@@ -8,6 +8,7 @@
 4. **Magic link (utility, not exposed on login screen)**: API endpoints exist + UI page `/auth/magic-link/verify`, mainly for tests/E2E/ops (not a “product” login method).
 5. **Sessions**: `session` cookie `HttpOnly`, `Secure` in prod, `SameSite=Lax`, persisted in DB (`user_sessions`).
 6. **Access rules**: account status (`accountStatus` + `approvalDueAt`) and `emailVerified` impact access (see `session-manager.ts`).
+7. **Forced-MFA clients**: for accounts hardened by a required-MFA client, device-loss and magic-link enrolment assurance is governed by [SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md](SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md) (email proof alone never enrols a credential there); the flows below describe the non-hardened behaviour.
 
 ## Detailed workflows
 

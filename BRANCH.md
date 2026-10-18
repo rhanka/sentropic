@@ -77,26 +77,27 @@
   - [x] Read merged baseline code and cite `file:line`: `packages/auth-hono/src/oauth/authorize-handler.ts`, `packages/auth-hono/src/oauth/session-resolver.ts`, `api/src/services/session-manager.ts`, `api/src/routes/namespaces/auth/magic-link.ts`, `api/drizzle/0042_oauth_clients_mfa_policy.sql`, `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md`.
   - [x] Read neighbouring specs: `spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md`, `spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md`, `spec/WORKFLOW_AUTH.md`, `docs/oauth-client-rotation.md`.
 - [ ] **Lot 1 — Author `spec/SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md`**
-  - [ ] Record given requirements: KVM registers as an OAuth client of the IdP; first client `kvm-gateway` (confidential, oauth2-proxy, PKCE S256, EdDSA, stated redirect/scopes/policy) is a given, not an option.
-  - [ ] Apply owner correction (2026-10-18, binding): the per-app requirement is a method-agnostic 2FA assurance level; WebAuthn with user verification is one qualifying method; express policy as a required MFA level with `amr` carrying the method.
-  - [ ] Evaluate `urn:sentropic:loa:passkey-fresh` as a method-named value, specify a method-neutral MFA ACR and a backward-compatible migration for existing clients including `kvm-gateway` created now with the only MFA ACR that exists today.
-  - [ ] Document verified baseline with `file:line` at `94a38286e`, including the email-to-new-passkey gap for accounts with and without devices.
-  - [ ] Specify threat model, per-client and per-account policy model, session satisfaction, freshness and step-up, downgrade rules; state that KVM relies on the IdP guarantee and performs no `acr`/`amr` check at the gateway.
-  - [ ] Specify recovery and re-enrolment paths with assurance levels; evaluate kvm-lane options (a) two passkeys, (b) admin Job reset, (c) recovery codes at weak ACR, (d) no email-only recovery, and recommend one combination.
-  - [ ] Specify as normative requirements with file targets and lots: versioned non-secret `kvm-gateway` declaration, IdP non-regression test extending `packages/auth-hono/tests/oauth-client-required-acr.test.ts`, and closure/framing of the email-only re-enrolment path at `api/src/routes/namespaces/auth/magic-link.ts:194-226` with its effective lot; mark what already exists in merged code.
-  - [ ] Specify governance (who may change a client policy), audit and notifications, migration of clients and accounts, KVM onboarding, Netbird compatibility note.
-  - [ ] Specify test plan at file granularity and implementation lots for BUILD branches.
-  - [ ] List only real owner decisions, in French, with options and consequences at the end of the spec.
-  - [ ] **API tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
-  - [ ] **UI tests (TypeScript only)**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
-  - [ ] **E2E tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
+  - [x] Record given requirements: KVM registers as an OAuth client of the IdP; first client `kvm-gateway` (confidential, oauth2-proxy, PKCE S256, EdDSA, stated redirect/scopes/policy) is a given, not an option.
+  - [x] Apply owner correction (2026-10-18, binding): the per-app requirement is a method-agnostic 2FA assurance level; WebAuthn with user verification is one qualifying method; express policy as a required MFA level with `amr` carrying the method.
+  - [x] Evaluate `urn:sentropic:loa:passkey-fresh` as a method-named value, specify a method-neutral MFA ACR and a backward-compatible migration for existing clients including `kvm-gateway` created now with the only MFA ACR that exists today.
+  - [x] Document verified baseline with `file:line` at `94a38286e`, including the email-to-new-passkey gap for accounts with and without devices.
+  - [x] Specify threat model, per-client and per-account policy model, session satisfaction, freshness and step-up, downgrade rules; state that KVM relies on the IdP guarantee and performs no `acr`/`amr` check at the gateway.
+  - [x] Specify recovery and re-enrolment paths with assurance levels; evaluate kvm-lane options (a) two passkeys, (b) admin Job reset, (c) recovery codes at weak ACR, (d) no email-only recovery, and recommend one combination.
+  - [x] Specify as normative requirements with file targets and lots: versioned non-secret `kvm-gateway` declaration, IdP non-regression test extending `packages/auth-hono/tests/oauth-client-required-acr.test.ts`, and closure/framing of the email-only re-enrolment path at `api/src/routes/namespaces/auth/magic-link.ts:194-226` with its effective lot; mark what already exists in merged code.
+  - [x] Specify governance (who may change a client policy), audit and notifications, migration of clients and accounts, KVM onboarding, Netbird compatibility note.
+  - [x] Specify test plan at file granularity and implementation lots for BUILD branches.
+  - [x] List only real owner decisions, in French, with options and consequences at the end of the spec.
+  - [ ] Reconcile the parallel Astra max study (`.h2a/inputs/astra-idp-mfa-study.md`) into the spec when it lands; record each point taken or rejected with reason in `.h2a/reviews/spec-idp-mfa-reconciliation.md`.
+  - [x] **API tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
+  - [x] **UI tests (TypeScript only)**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
+  - [x] **E2E tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
   - [ ] Lot gate: `make scope-check ENV=test-idp-per-app-mfa-recovery` passes with only `spec/**` + `BRANCH.md` changed; no typecheck, lint, build, or test claim is made for this docs lot.
   - [ ] UAT (docs read): owner reads the new spec and confirms the recommended recovery combination and the French owner-decision list.
-- [ ] **Lot 2 — Cross-references in related specs**
-  - [ ] Add a cross-reference from `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` to the new spec (per-client policy extended by recovery/freshness).
-  - [ ] Add a cross-reference from `spec/WORKFLOW_AUTH.md` to the new spec (device-loss and magic-link assurance for forced clients).
-  - [ ] Add a cross-reference from `spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md` to the new spec (tenant claim unchanged; MFA/recovery is orthogonal).
-  - [ ] Check `spec/SPEC.md` for a SPEC_EVOL index and record the finding in this file; edit only if an index exists.
+- [x] **Lot 2 — Cross-references in related specs**
+  - [x] Add a cross-reference from `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` to the new spec (per-client policy extended by recovery/freshness).
+  - [x] Add a cross-reference from `spec/WORKFLOW_AUTH.md` to the new spec (device-loss and magic-link assurance for forced clients).
+  - [x] Add a cross-reference from `spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md` to the new spec (tenant claim unchanged; MFA/recovery is orthogonal).
+  - [x] Check `spec/SPEC.md` for a SPEC_EVOL index and record the finding in this file; edit only if an index exists: no SPEC_EVOL index exists (only inline mentions), so no `spec/SPEC.md` edit is made.
   - [ ] Lot gate: `make scope-check ENV=test-idp-per-app-mfa-recovery` passes; every new link resolves to an existing file in this branch.
   - [ ] UAT (docs read): owner follows each cross-reference to the new spec and back to the policy it extends.
 - [ ] **Lot N-1 — Docs consolidation**
