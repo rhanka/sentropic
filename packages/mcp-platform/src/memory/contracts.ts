@@ -14,6 +14,7 @@
  */
 
 import type { CapabilityTool } from '../manifest.js';
+import { TOOL_SCHEMAS } from './tool-schemas.js';
 
 // ---------------------------------------------------------------------------
 // Frozen identities
@@ -365,8 +366,8 @@ function memoryTool(
     description,
     requiredScopes: ['mcp:tools:invoke'],
     requiredClaims: ['sub', 'tid'],
-    inputSchema: { type: 'object', additionalProperties: false },
-    outputSchema: { type: 'object', additionalProperties: false },
+    inputSchema: TOOL_SCHEMAS[name].inputSchema,
+    outputSchema: TOOL_SCHEMAS[name].outputSchema,
     redactionClass: 'high',
     mutability,
     category,
