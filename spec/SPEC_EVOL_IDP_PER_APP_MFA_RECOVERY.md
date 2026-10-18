@@ -282,6 +282,26 @@ Rules:
   side effect of secret rotation: rotation already preserves the stored
   policy unless the operator explicitly supplies a replacement
   (`docs/oauth-client-rotation.md:49`) `[EXISTS]`.
+- **R-POL-4 (binding to the managed-app inventory).** `[TO BUILD Lot 5]`
+  A client's required level is bound through the chain app template →
+  app instance (template bound to tenant and environment) → OAuth
+  client(s) of that instance's tier. The chain reuses the control-plane
+  model (`control.app_templates`, `control.app_instances`,
+  `control.app_instance_hostnames`, `control.app_workspace_bindings` in
+  `spec/SPEC_EVOL_APP_CATALOG.md:29`) and the per-(project, tier) client
+  rule (`spec/SPEC_DECISION_TIER_AUTH_PATTERN.md:5`): each tier's IdP
+  holds its own `oauth_clients` rows and tier-local policy stays
+  excluded from identity sync (section 10.3). The embedded Sentropic
+  annotation session surface is an instance surface that consumes this
+  policy when it requires MFA; it is not a separate client-policy
+  definition. `kvm-gateway` is the first required client, not the
+  definition of "app". OpenERP's standalone and brokered modes keep
+  their own identity authority; the integration named here is the trust
+  boundary (validated membership and token invariants), not an
+  assumption that a Sentropic account exists
+  (`spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md:5`, `:25`). Tenant claim
+  derivation stays orthogonal to MFA policy
+  (`spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md:5`).
 
 Backward-compatible migration (summary; steps and lots in section 10.1):
 `kvm-gateway` is created **now** with `passkey-fresh`, the only MFA value
@@ -641,7 +661,7 @@ Existing non-KVM clients and accounts need no action: clients with `NULL` policy
 
 ### 10.3 Tiers
 
-Each tier's IdP holds its own `oauth_clients` rows, secrets, and account/credential security state (`spec/SPEC_DECISION_TIER_AUTH_PATTERN.md`, R1/R3). Both OAuth client policy columns (`required_acr`, `allowed_user_ids`, `max_mfa_age_seconds`, `policy_version`, `require_non_empty_allowlist`) and account/credential security state (`users.is_mfa_protected`, `users.security_generation`, `webauthn_credentials.binding_state`, `webauthn_credentials.security_generation`, recovery capabilities/grants/codes, `security_transition_records`) are **tier-local** and excluded from prod→preprod export (`deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql:7-10`, `reader-role.sql:30-37`). As specified in section 4.2, Lot 2 updates `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql`, `client-postcondition.sql`, and `deploy/ci/idp-identity-sync/sql-test.sh` so ordinary sync preserves local protection/generation/trusted bindings, imported keys default to `binding_state = 'unverified_email'`, any collision/re-key touching a protected account fails closed (`protected account rekey forbidden`), new recovery tables drop as `ephemeral-auth` on re-key, and `security_transition_records` is never repointed. The declaration (section 8.1) is applied per tier with that tier's owner subject and secret; the preprod KVM gateway, if any, is a distinct client (`kvm-gateway-preprod` naming by the R3 pattern) and is not created by this spec.
+Each tier's IdP holds its own `oauth_clients` rows, secrets, and account/credential security state (`spec/SPEC_DECISION_TIER_AUTH_PATTERN.md`, R1/R3). The binding in R-POL-4 is read per tier: an app instance's tier determines which tier IdP's `oauth_clients` rows carry its policy. Both OAuth client policy columns (`required_acr`, `allowed_user_ids`, `max_mfa_age_seconds`, `policy_version`, `require_non_empty_allowlist`) and account/credential security state (`users.is_mfa_protected`, `users.security_generation`, `webauthn_credentials.binding_state`, `webauthn_credentials.security_generation`, recovery capabilities/grants/codes, `security_transition_records`) are **tier-local** and excluded from prod→preprod export (`deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql:7-10`, `reader-role.sql:30-37`). As specified in section 4.2, Lot 2 updates `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql`, `client-postcondition.sql`, and `deploy/ci/idp-identity-sync/sql-test.sh` so ordinary sync preserves local protection/generation/trusted bindings, imported keys default to `binding_state = 'unverified_email'`, any collision/re-key touching a protected account fails closed (`protected account rekey forbidden`), new recovery tables drop as `ephemeral-auth` on re-key, and `security_transition_records` is never repointed. The declaration (section 8.1) is applied per tier with that tier's owner subject and secret; the preprod KVM gateway, if any, is a distinct client (`kvm-gateway-preprod` naming by the R3 pattern) and is not created by this spec.
 
 ## 11. KVM onboarding as an OAuth client (given)
 
