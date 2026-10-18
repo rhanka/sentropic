@@ -25,6 +25,7 @@
   - [x] `packages/cluster-mesh/tests/packaging/prepare.sh`; `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts`; `packages/cluster-mesh/tests/packaging/mcp-oauth-consumer.spec.ts`.
   - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`; `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`; `packages/cluster-mesh/tests/packaging/fixtures/mcp-oauth/**` (typed consumer, manifest and generated lock).
   - [x] `.github/workflows/ci.yml` (three cluster-mesh qualification mcp-auth pins only); `scripts/ci/publishable-ci-wiring.test.mjs` (matching peer string only), authorized BR125-EX3/R1.
+  - [x] `packages/cluster-mesh/packaging.mk` (BR125-EX3 focused OAuth fixture qualification/lock refresh; full existing matrix retained).
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`; `docker-compose*.yml`; `.cursor/rules/**`; `rules/**`; agent instructions; other branch plans; `.track/**`; credentials and backup payloads.
   - [x] `packages/cluster-mesh/src/storage/**`; `packages/cluster-mesh/assets/**`; `packages/cluster-mesh/src/comments/**`; `packages/cluster-mesh/src/live*/**`.
@@ -38,6 +39,7 @@
 ## Feedback Loop
 - [x] `acknowledge` BR125-D1: reviewed O1 design and R1-R6 binding; no new plan review required. OAUTH-RESTORE-T3 is offline-only; live injection blocked and non-gating; T4/T6 accepted, T8 withdrawn, T7 operational only.
 - [x] `acknowledge` BR125-EX3/R1: three CI cluster-mesh auth peer pins 0.2.1 -> 0.2.2 plus wiring assertion and selected/ OAuth fixture manifests/locks are authorized; reason: new static floor; impact: qualification only; rollback: revert with OAuth leaves. Gateway service-auth floor unchanged.
+- [x] `acknowledge` BR125-EX3 runner activation: registry inventory confirms artifacts E404 and auth-hono latest0.15.0, blocking the full selected train fixture. Add focused OAuth-only qualification/refresh using published auth/platform/SDK/Hono tuple; retain full matrix as required/pending. Impact: new optional test target only; rollback: remove target/flag with OAuth fixture.
 - [x] `acknowledge` R4: relax new ingress client restriction; bind optional signed azp/client_id when present, reject conflicts, and restrict originating client at exchange only. No new immo-mcp-only ingress denial.
 - [x] `acknowledge` BR125-D3: real Radar schemas failed the bridge's bounded configuration profile (bbox tuple/items, missing string maxima). New leaf-local SDK validation preserves original wire schemas/defaults and numeric/tuple constraints; bridge retains JSON byte budget/result codec. Provider interfaces and Radar remain unchanged. Regression: overlap + schema parity tests.
 - [ ] `attention` BR125-FL1, release maintainer/conductor: #684 merge/publication and single-writer ordering before O1 final rebase; select free minor above main/npm, retain #685 ranges if merged first; closure: base SHA and registry tuple receipts. Local archives are not publication.
@@ -91,6 +93,7 @@
   - [ ] New tests/mcp-oauth-http.spec.ts: loopback issuer/MCP/independent API verifier, real Basic RFC8693 + SDK, positive search, inverse audiences, same client automatic reinitialization after restart. Synthetic keys, port 0 inside container.
   - [ ] Scoped gates: Lot 1 command with SCOPE=tests/mcp-oauth-egress.spec.ts and SCOPE=tests/token-exchange; service gate uses SCOPE=tests/mcp-oauth-http.spec.ts and ENV=e2e-feat-cluster-mesh-oauth-o1. No UI tests.
 - [ ] **Lot 4 — Packed API, compatibility and release tuple**
+  - [x] Added exact SDK1.32.1/Hono4.13.13 fixture manifest and typed public call site; strict installed compilation/runtime gates pending. No base-peer archives substitute for missing publications.
   - [ ] After #684 merge, rebase only onto main; choose target 0.20.0 above registry/main; widen comments self-range only; preserve storage/comments and gateway peer ranges; rerun affected gates.
   - [ ] Update selected manifest and refresh generated lock via `rtk make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; root lock via lock-root only if actual root resolution changes require it.
   - [ ] Add mcp-oauth fixture manifest/lock and exact typed twelve-tool host adapter; pin SDK and Hono to Radar lock patches (^1.32.1 / ^4.13.13). Retain ordinary SDK1.31.0/Hono4.10.7 and gateway-only floor0.2.1 tests.
