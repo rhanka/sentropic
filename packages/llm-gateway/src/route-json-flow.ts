@@ -120,7 +120,7 @@ export const runRouteJsonFlow = async (
       if (error instanceof NativeAttemptRefusal) {
         throw await refuseNativeAttempt(attempt, () => settle('failed'));
       }
-      const classification = classifyRouteError(error, signal?.aborted);
+      let classification = classifyRouteError(error, signal?.aborted);
       if (!observedServedModel && error && typeof error === 'object') {
         const record = error as { observedServedModelId?: unknown; observedServedModelIds?: unknown; providerMetadata?: unknown };
         const candidates = Array.isArray(record.observedServedModelIds)
@@ -137,6 +137,12 @@ export const runRouteJsonFlow = async (
         const chosen = preferred ?? single ?? nested;
         if (chosen && (candidates.length > 0 || chosen !== diagnostic.actualModelId)) observedServedModel = chosen;
         else if (candidates.length === 0 && single && single !== diagnostic.actualModelId) observedServedModel = single;
+      }
+      if (observedServedModel && observedServedModel !== diagnostic.actualModelId && classification.reason !== 'cancelled') {
+        classification = classifyRouteError(
+          Object.assign(new Error('upstream model identity mismatch'), { code: 'model_identity_mismatch' }),
+          signal?.aborted,
+        );
       }
       const termination = signal?.aborted ? 'cancelled' : error instanceof NativeMessagesUpstreamError
         && error.code === 'native_protocol_error' ? 'protocol_error'

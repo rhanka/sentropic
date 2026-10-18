@@ -205,3 +205,84 @@ it.each([['created-first', 'gpt-6-astra', 'gpt-6.1-sol'], ['completed-first', 'g
     }
   },
 );
+it.each(['sse-error', 'transport-failure'] as const)(
+  'terminates without rotating accounts and retains contradictory created identity when Codex stream later fails (%s)',
+  async (failureKind) => {
+    const { CodexRuntimeClient, InMemoryRoutePlanner } = await import('@sentropic/llm-mesh');
+    const stateDir = await mkdtemp(join(tmpdir(), `gw-codex-fail-${failureKind}-`));
+    let dispatches = 0;
+    const base = durableHostFixture();
+    const codexClient = new CodexRuntimeClient({
+      fetch: async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const enc = new TextEncoder();
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'response.created', response: { id: 'r1', model: 'gpt-6-astra' } })}\n\n`));
+          if (failureKind === 'sse-error') {
+            controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'error', error: { message: 'rate limit', code: 'rate_limit_exceeded', retryable: true } })}\n\n`));
+            controller.close();
+          }
+        },
+        pull() {
+          if (failureKind === 'transport-failure') {
+            throw new Error('upstream transport read reset');
+          }
+        },
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    });
+    const contract = { ...routingContract, authorizedAccountRefs: ['internal-a', 'internal-b'], rotateAccounts: true };
+    const host = await startGatewayHost({
+      stateDir,
+      listen: { host: '127.0.0.1', port: 0 },
+      mesh: {
+        ...base.mesh,
+        createRoutePlanner: (options) => new InMemoryRoutePlanner({
+          ...options,
+          directory: {
+            listEligible: async () => ['a', 'b'].map((letter) => ({
+              accountRef: `internal-${letter}`,
+              diagnosticAccountRef: `account-${letter}`,
+              targetProviderId: 'openai',
+              transportProviderId: 'codex',
+              supportedModelIds: [model],
+              enrollmentCompletedAt: '2026-10-01T00:00:00Z',
+              readiness: 'ready' as const,
+              revision: '1',
+            })),
+            prepareAttempt: async (input) => ({
+              attemptRef: `att-${++dispatches}-${input.accountRef}`,
+              generate: (req) => codexClient.generate(req, { auth: { material: { type: 'account-transport', provider: 'codex', accessToken: 'tok', accountId: 'acc' }, descriptor: { sourceType: 'account-transport', accountProviderId: 'codex' } } }),
+              stream: (req) => codexClient.stream(req, { auth: { material: { type: 'account-transport', provider: 'codex', accessToken: 'tok', accountId: 'acc' }, descriptor: { sourceType: 'account-transport', accountProviderId: 'codex' } } }),
+              markCommitted: async () => undefined, complete: async () => undefined,
+              releaseCancelled: async () => undefined, recordOutcome: async () => undefined,
+            }),
+          },
+        }),
+      },
+    });
+    try {
+      const control = createGatewayControlClient({ controlSocket: host.controlSocket });
+      const issued = await control.acquireSession({ ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: `c-fail-${failureKind}`, routingContract: contract });
+      const res = await fetch(`${host.endpoint}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${issued.key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      expect(res.status, failureKind).toBe(404);
+      expect(dispatches, failureKind).toBe(1);
+      const receipt = await control.readReceipt({ ownerScopeRef: 'owner-a', receiptId: res.headers.get('x-sentropic-receipt')! });
+      expect(receipt).toMatchObject({
+        settlement: 'error',
+        attempts: 1,
+        physicalAttempts: [{
+          selectedModel: model,
+          outcome: 'unsupported-model',
+          observedServedModel: 'gpt-6-astra',
+          modelEvidence: 'provider-reported',
+        }],
+      });
+    } finally {
+      await host.stop();
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  },
+);
