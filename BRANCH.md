@@ -106,7 +106,7 @@
 - [ ] **Lot N — Final validation**
   - [x] Run `make scope-check ENV=test-idp-per-app-mfa-recovery` and record its result: PASS C2.
   - [x] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution.
-  - [ ] Push `spec/idp-per-app-mfa-recovery` and open a DRAFT PR whose body is this `BRANCH.md` text; report the PR number and head SHA, then stop without merging.
+  - [x] Push `spec/idp-per-app-mfa-recovery` and open a DRAFT PR whose body is this `BRANCH.md` text; report the PR number and head SHA, then stop without merging: DRAFT PR #695.
   - [x] Retest UI: not applicable, docs only, no UI test claimed.
   - [x] Retest API: not applicable, docs only, no API test claimed.
   - [x] Retest E2E: not applicable, docs only, no E2E test claimed.
