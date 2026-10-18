@@ -42,7 +42,7 @@ beforeAll(() => {
 describe('published judge boundaries', () => {
   it('exports the three exact subpaths without changing package versions', () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
-    expect(pkg.version).toBe('0.26.2');
+    expect(pkg.version).toBe('0.27.0');
     for (const [name, path] of [['judge', 'judge/index'], ['judge/host', 'judge/host'], ['transport/jev', 'transport/jev']]) {
       expect(pkg.exports[`./${name}`]).toEqual({ types: `./dist/${path}.d.ts`, import: `./dist/${path}.js` });
     }
