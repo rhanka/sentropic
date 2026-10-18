@@ -108,8 +108,8 @@ Implement Lot 1 exactly as the reviewed plan defines it.
 - [ ] **Lot 2 — Measure instrumentation**
   - [x] Add `scripts/ci/measure-runs.mjs`, `scripts/ci/measure-runs.test.mjs`, `scripts/ci/fixtures/optimization-baseline.json`.
   - [x] Add Make targets `ci-optimization-collect`, `ci-optimization-compare`.
-  - [ ] Lot gate:
-    - [ ] `make test-ci-optimization SCOPE=scripts/ci/measure-runs.test.mjs ENV=test-ci-opt-lot1`
+  - [x] Lot gate:
+    - [x] `make test-ci-optimization SCOPE=scripts/ci/measure-runs.test.mjs ENV=test-ci-opt-lot1`
 
 - [ ] **Lot 3 — Filter repair**
   - [ ] Add `scripts/ci/filter-consumers.mjs`, `scripts/ci/filter-consumers.test.mjs`, `scripts/ci/fixtures/consumer-regressions.json`.
