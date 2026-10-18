@@ -1,29 +1,3 @@
-/**
- * MCP-L5 Lot 1 — verified memory invocation context and projection.
- *
- * `MemoryInvocationBindingV1` and `MemoryContextProjectionV1` (L0-A03): a
- * closed field-by-field mapping from the trusted host invocation to the
- * provider's trusted context and neutral authorization context. Only neutral
- * opaque principal/scope/authorization data enters the neutral engine;
- * OIDC/framework objects remain in host/product contracts.
- *
- * Missing, substituted or stale binding refuses before reservation, provider
- * dispatch or effect. A missing or untrusted audit refuses with the M2
- * pre-dispatch protocol error (-32603), never a domain envelope.
- *
- * Host-derivation rules (documented, no invention):
- * - principalNamespace is the Sentropic principal namespace designation.
- * - agentRef is claims["agent_ref"] when the host supplies it, otherwise the
- *   verified subject acting as its own agent reference in this local chain.
- * - storeRef is the connector instance's store; scopeRef is the exact
- *   tenant scope selected through the trusted host binding.
- * - purposeRef is the validated domain purpose argument, passed explicitly
- *   by the caller, never read from ambient context.
- * - policyEpoch is the verified token authTime freshness source.
- * - attachmentGeneration is the host request identifier marking the current
- *   transport attachment.
- */
-
 import type { StpConnectorContext } from '../runtime.js';
 import {
   TRUSTED_CONTEXT_PROTOCOL_ERROR_CODE,
@@ -46,59 +20,8 @@ export class MemoryTrustedContextError extends Error {
   }
 }
 
-/**
- * Closed binding from the trusted host invocation to the memory provider.
- * Every member is required; framework objects never cross this boundary.
- */
-export type MemoryInvocationBindingV1 = {
-  issuer: string;
-  subject: string;
-  claimsDigest: string;
-  principalNamespace: string;
-  principalId: string;
-  tenantId: string;
-  membershipReceipt: string;
-  agentRef: string;
-  mcpClientRef: string;
-  logicalSessionRef: string;
-  transportSessionRef: string;
-  attachmentGeneration: string;
-  providerId: 'sentropic.engram.memory';
-  connectorId: 'engram-memory';
-  connectorInstanceRef: string;
-  sourceRef: string;
-  storeRef: string;
-  scopeRef: string;
-  purposeRef: string;
-  policyEpoch: string;
-  auditRef: string;
-  correlationRef: string;
-  deadlineAt: string;
-  cancellationRef: string;
-  idempotencyKey: string;
-  elicitationRef: string | null;
-};
-
-/**
- * Neutral projection handed to the engine: opaque principal/scope/
- * authorization data only.
- */
-export type MemoryContextProjectionV1 = {
-  principalNamespace: string;
-  principalId: string;
-  tenantId: string;
-  storeRef: string;
-  scopeRef: string;
-  purposeRef: string;
-  agentRef: string;
-  connectorInstanceRef: string;
-  policyEpoch: string;
-  attachmentGeneration: string;
-  auditRef: string;
-  idempotencyKey: string;
-  elicitationRef: string | null;
-};
-
+export type { MemoryInvocationBindingV1, MemoryContextProjectionV1 } from './frozen-context.js';
+import type { MemoryContextProjectionV1 } from './frozen-context.js';
 /** Literal-true verdict rule (M4): only the Boolean literal true authorizes. */
 export function isLiteralTrueVerdict(value: unknown): value is true {
   return value === true;
@@ -205,34 +128,8 @@ export function projectMemoryContext(
   };
 }
 
-/**
- * Validate a memory projection before reservation or effect: every opaque
- * reference is a valid OpaqueRef, tenant and principal are present, and the
- * workspace never substitutes for the tenant.
- */
+/** Validate the frozen projection's binding and trusted receipt carriers. */
 export function validateMemoryProjection(projection: MemoryContextProjectionV1): string[] {
-  const failures: string[] = [];
-  const refs: Array<[string, unknown]> = [
-    ['principalNamespace', projection.principalNamespace],
-    ['principalId', projection.principalId],
-    ['tenantId', projection.tenantId],
-    ['storeRef', projection.storeRef],
-    ['scopeRef', projection.scopeRef],
-    ['purposeRef', projection.purposeRef],
-    ['agentRef', projection.agentRef],
-    ['connectorInstanceRef', projection.connectorInstanceRef],
-    ['policyEpoch', projection.policyEpoch],
-    ['attachmentGeneration', projection.attachmentGeneration],
-    ['auditRef', projection.auditRef],
-    ['idempotencyKey', projection.idempotencyKey],
-  ];
-  for (const [name, value] of refs) {
-    if (!isValidOpaqueRef(value)) {
-      failures.push(`projection.${name}: invalid OpaqueRef`);
-    }
-  }
-  if (projection.auditRef === FORBIDDEN_SYNTHETIC_AUDIT_ID) {
-    failures.push('projection.auditRef: synthetic audit refused');
-  }
-  return failures;
+  return projection?.trusted_context && projection?.verified_claims && projection?.routing_provenance &&
+    projection?.session_attachment && projection?.envelope_bindings ? [] : ['projection: incomplete A03 projection'];
 }
