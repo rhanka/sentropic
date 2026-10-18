@@ -1,6 +1,29 @@
 # BR-EX1: reusable library builds live entirely in disposable containers.
 PUBLIC_LIBRARY_SLUGS := ubo-contracts mcp-broker connector-host mcp-connector-airtable mcp-connector-dropbox mcp-connector-github mcp-connector-gmail mcp-connector-google mcp-connector-googlecalendar mcp-connector-googledocs mcp-connector-googledrive mcp-connector-googlesheets mcp-connector-hubspot mcp-connector-linear mcp-connector-notion mcp-connector-slack mcp-connector-stripe skills
 PUBLIC_LIBRARY_IMAGE ?= node:24-bookworm
+PUBLIC_PKGS_GATE = $(if $(strip $(PKGS)),$(if $(filter-out $(PUBLIC_LIBRARY_SLUGS),$(PKGS)),$(error PKGS must contain declared public library slugs)),$(error PKGS is required))
+
+.PHONY: prepare-npm-bootstrap npm-bootstrap-web
+prepare-npm-bootstrap:
+	$(PUBLIC_PKGS_GATE)
+	@git diff --quiet HEAD || { echo "Commit the reviewed package sources before preparing bootstrap archives"; exit 1; }
+	@$(MAKE) build-public-libraries ENV=$(ENV)
+	@set -eu; for slug in $(PKGS); do \
+		$(MAKE) pack-publishable-manifest PACKAGE=$$slug PACK_DESTINATION=tmp/npm-bootstrap \
+			MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=$(ENV); \
+	done
+
+npm-bootstrap-web:
+	$(PUBLIC_PKGS_GATE)
+	@git diff --quiet HEAD || { echo "Bootstrap requires a clean reviewed commit"; exit 1; }
+	@test -t 0 && test -t 1 || { echo "Web login requires an interactive owner terminal"; exit 1; }
+	@docker run --rm --init -it --read-only --tmpfs /session:rw,exec,mode=700 --tmpfs /tmp:rw,exec \
+		-e HOME=/session -e NPM_CONFIG_USERCONFIG=/session/.npmrc -e npm_config_cache=/session/cache \
+		-e BOOTSTRAP_HEAD_SHA="$$(git rev-parse HEAD)" \
+		-v "$(CURDIR)/tmp/npm-bootstrap:/input:ro" -v "$(CURDIR)/scripts:/probe/scripts:ro" \
+		-w /session $(PUBLIC_LIBRARY_IMAGE) sh -lc 'set -eu; \
+		tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --ignore-scripts --no-audit --no-fund semver@7.7.2 >/dev/null; \
+		export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node /probe/scripts/publish/npm-bootstrap-web.mjs $(PKGS)'
 
 # CI-only steady-state publishing: the same exact-artifact guard as existing lanes.
 define publish_public_library

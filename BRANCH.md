@@ -83,9 +83,9 @@
   - [x] Add standalone Docker build/test/lock tooling without host dependencies.
   - [x] Add guarded pack/OIDC publish targets for the first nine libraries.
   - [x] Add build/pack/publish lanes using existing exact-artifact guard and OIDC.
-  - [ ] Add `make npm-bootstrap-web PKGS="..." ENV=test-publish-mcp-packages` over already verified archives.
+  - [x] Add `make npm-bootstrap-web PKGS="..." ENV=test-publish-mcp-packages` over already verified archives.
   - [x] Check hashes, manifests, dependency order and missing archives before web login; never mount host npm credentials.
-  - [ ] Use throwaway node:24 container/session; provenance only in supported CI context; cleanup on failure/interruption.
+  - [x] Use throwaway node:24 container/session; provenance only in supported CI context; cleanup on failure/interruption.
   - [ ] Document owner approval, Trusted Publisher setup and later CI releases in `scripts/publish/README.md`.
   - [ ] Script tests: new `scripts/publish/npm-bootstrap-web.test.mjs`; existing manifest guard tests unchanged unless wiring requires updates.
 - [ ] **Lot 3 — CI publication train**
