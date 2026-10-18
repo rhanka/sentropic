@@ -31,6 +31,7 @@ import {
   MemoryTrustedContextError,
   isMemoryToolName,
   requireTrustedInvocationContext,
+  type PublicMemoryErrorCode,
 } from '@sentropic/mcp-platform/memory';
 import { CompiledMemoryDispatch, MemoryDispatchRefusal } from './memory/compiled-dispatch.js';
 import { CompiledConnectorIndex } from './registry.js';
@@ -207,9 +208,9 @@ export class McpProviderBroker {
       return {
         ok: false,
         auditId: ctx.auditId,
-        redactionClass: 'none',
+        redactionClass: isMemoryToolName(capabilityRef) ? 'high' : 'none',
         error: {
-          code: 'unknown_capability',
+          code: isMemoryToolName(capabilityRef) ? 'CAPABILITY_UNAVAILABLE' : 'unknown_capability',
           message: `McpProviderBroker: connector "${connectorId}" has no capability named "${capabilityRef}".`,
           retriable: false,
         },
@@ -275,7 +276,7 @@ export class McpProviderBroker {
     ctx: StpConnectorContext,
     opts: InvokeOptions,
   ): Promise<AppResultEnvelope<unknown>> {
-    const memoryFailure = (code: string, message: string): AppResultEnvelope<unknown> => ({
+    const memoryFailure = (code: PublicMemoryErrorCode, message: string): AppResultEnvelope<unknown> => ({
       ok: false,
       auditId: ctx.auditId,
       redactionClass: 'high',
@@ -294,8 +295,11 @@ export class McpProviderBroker {
       if (selected.adapter !== adapter) throw new Error('selected adapter mismatch');
     } catch (error) {
       if (error instanceof MemoryTrustedContextError) throw trustedContextRefusal();
-      return memoryFailure(error instanceof MemoryDispatchRefusal ? (error.refusalCode === 'unknown_tool' ? 'unknown_capability' : error.refusalCode) : 'source_binding_mismatch',
-        error instanceof Error ? error.message : 'invalid memory binding');
+      const code: PublicMemoryErrorCode = error instanceof MemoryDispatchRefusal
+        ? error.refusalCode === 'unknown_tool' ? 'CAPABILITY_UNAVAILABLE'
+          : error.refusalCode === 'stale_generation' ? 'AUTHORIZATION_REVOKED' : 'UNAUTHORIZED'
+        : 'UNAUTHORIZED';
+      return memoryFailure(code, 'Memory invocation refused by the current dispatch binding.');
     }
     if (opts.purposeRef === undefined || (purpose !== undefined && purpose !== opts.purposeRef) ||
         (['engram_memory_search', 'engram_memory_get', 'engram_memory_capture'].includes(capabilityRef) && purpose === undefined) ||
