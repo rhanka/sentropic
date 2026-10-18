@@ -123,6 +123,7 @@
 - [x] BR96-EX5 (2026-10-18): llm-gateway mesh dependency returns to ^0.26.0 under the patch approach (mesh 0.26.2 satisfies the existing bound, net matches main); rationale: keeps npm ci green with no gateway change shipping; impact: 1 range in 2 files; rollback: re-apply ^0.27.0 with a mesh minor.
 - [x] BR96-EX6 (2026-10-18, superseded): llm-gateway version bump reverted with the gateway round; no longer in the diff.
 - [x] BR96-EX7 (2026-10-18): B3 selected fixtures point at the 0.19.0 candidate tarball plus mesh peer mirror; rationale: pack-qualify resolves the fixture file: tarball by exact name and CI fails ENOENT otherwise, precedent 529383f43 did the same at 0.18.0; impact: 4 lines in fixtures/selected, registry pins untouched; rollback: revert names with the cluster version.
+- [x] Sol P1 descriptor binding (2026-10-18): preflight now refuses any request-affecting service/adapter descriptor disagreement with PROVIDER_UNAVAILABLE before credentials or spend; regression covers divergent registered rubric instructions with zero sends; settlement overrun fixture aligned to consistent descriptors.
 
 
 ## AI Flaky tests

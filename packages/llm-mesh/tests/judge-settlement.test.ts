@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createJudgeService } from '../src/judge/service.js';
 import { createJudgeError } from '../src/judge/errors.js';
+import { createProviderRegistry } from '../src/registry.js';
+import { createJevAdapter } from '../src/judge/adapter.js';
 import { judgeRequest, judgeServiceFixture, jevResponse, judgePrice } from './judge-fixtures.js';
 
 describe('durable judge settlement without re-evaluation', () => {
@@ -44,7 +46,8 @@ describe('durable judge settlement without re-evaluation', () => {
   });
   it('fully charges an overrun, returns the paid verdict and blocks a restarted service sharing durable state', async () => {
     const f = judgeServiceFixture();
-    f.options.resolveEvaluator = () => ({ ...f.descriptor, maxBillableInputTokens: 1 });
+    f.descriptor.maxBillableInputTokens = 1;
+    f.options.registry = createProviderRegistry([createJevAdapter({ descriptor: f.descriptor, transport: f.transport })]);
     const first = await createJudgeService(f.options).judge(judgeRequest());
     expect(first).toMatchObject({ ok: true, receipt: { cost: { amountMicroUsd: '42' }, budget: { overrun: true, reservedMicroUsd: '1' } } });
     expect(f.budget.settle.mock.calls[0][0].boundViolated).toBe(true);
