@@ -9,6 +9,7 @@ import { validateOAuthOptions, verifyOAuthRequest } from '../mcp/oauth-context.j
 import { createOAuthSessions } from '../mcp/oauth-sessions.js';
 import { createOAuthEgress } from '../mcp/oauth-egress.js';
 import { connectOAuthServer } from '../mcp/oauth-runner.js';
+import { compileOAuthToolSchemas } from '../mcp/oauth-tool-schemas.js';
 import type { McpOAuthNamespace, McpOAuthNamespaceOptions } from '../mcp/oauth-contracts.js';
 
 export type {
@@ -37,7 +38,8 @@ export async function createMcpOAuthNamespace(
     keySource: options.keySource,
   });
   const egress = createOAuthEgress(options);
-  const sessions = createOAuthSessions(options.sessions, options, () => connectOAuthServer(options, bridge, egress));
+  const validation = compileOAuthToolSchemas(options.tools);
+  const sessions = createOAuthSessions(options.sessions, options, () => connectOAuthServer(options, bridge, egress, validation));
   const providerRoutes = adapter.mcpAuthRoutes(auth);
   // Cross the optional adapter boundary as HTTP, allowing compatible Hono patch versions.
   const metadataRoutes = new Hono();

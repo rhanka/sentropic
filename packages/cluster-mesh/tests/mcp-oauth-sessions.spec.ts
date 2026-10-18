@@ -30,7 +30,7 @@ describe('MCP OAuth session authority', () => {
     }, index + 2), bearer, session)));
     await Promise.race([both, ...calls.map(async (pending) => {
       const response = await pending;
-      throw new Error(`Overlap request completed before the barrier: ${await response.text()}`);
+      throw new Error(`Overlap request completed before the barrier: ${await response.clone().text()}`);
     })]);
     release();
     const results = await Promise.all(calls.map(async (pending) => {
