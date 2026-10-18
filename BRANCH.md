@@ -48,6 +48,8 @@ Implement Lot 1 exactly as the reviewed plan defines it.
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR90-EX1` (`attention`): harness-grammar alias for plan exception `BR-CI-OPT-EX1` (no branch number on this line; BR-90 is unassigned in `PLAN.md`).
+- `BR90-EX2` (`attention`): harness-grammar alias for plan exception `BR-CI-OPT-EX2` (same note).
 - `BR-CI-OPT-EX1` (`attention`): `.github/workflows/ci.yml` conditional workflow scope.
   - Reason: Lot 1 needs PR concurrency, repaired filters, smoke dependencies, required gate checks.
   - Impact: PR validation and shared runners affected; publication locks and main/dispatch isolation preserved.
@@ -104,7 +106,7 @@ Implement Lot 1 exactly as the reviewed plan defines it.
     - [ ] Run two different PRs; neither cancels the other; main/dispatch keep locks.
 
 - [ ] **Lot 2 — Measure instrumentation**
-  - [ ] Add `scripts/ci/measure-runs.mjs`, `scripts/ci/measure-runs.test.mjs`, `scripts/ci/fixtures/optimization-baseline.json`.
+  - [x] Add `scripts/ci/measure-runs.mjs`, `scripts/ci/measure-runs.test.mjs`, `scripts/ci/fixtures/optimization-baseline.json`.
   - [x] Add Make targets `ci-optimization-collect`, `ci-optimization-compare`.
   - [ ] Lot gate:
     - [ ] `make test-ci-optimization SCOPE=scripts/ci/measure-runs.test.mjs ENV=test-ci-opt-lot1`
