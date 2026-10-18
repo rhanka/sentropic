@@ -1,5 +1,9 @@
 import { Hono } from 'hono';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { createRequire } from 'node:module';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import type { VerifiedInvocationContextPort } from '@sentropic/contracts';
 import type { InvocationReceiptPort } from '@sentropic/events';
 import { createClusterMeshModules } from '../src/index.js';
@@ -7,8 +11,41 @@ import { createModuleRegistry } from '../src/modules/registry.js';
 import { isClusterMeshModuleUnavailableError } from '../src/modules/errors.js';
 import { createLlmMeshNamespaceModule, type LlmMeshRouterInput } from '../src/compose/llm-mesh.js';
 import { fakeMesh, PackageTree } from './fixtures/package-tree.js';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+
+const tscRequire = createRequire(import.meta.url);
+const tsc = tscRequire('typescript');
+
+function newestSourceMtime(dir: string): number {
+  let newest = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) newest = Math.max(newest, newestSourceMtime(path));
+    else if (entry.name.endsWith('.ts')) newest = Math.max(newest, statSync(path).mtimeMs);
+  }
+  return newest;
+}
+
+function ensureDistFresh(): void {
+  const pkgDir = resolve('.');
+  const marker = join(pkgDir, 'dist', 'compose', 'llm-mesh.js');
+  if (existsSync(marker) && statSync(marker).mtimeMs >= newestSourceMtime(join(pkgDir, 'src'))) return;
+  const configPath = join(pkgDir, 'tsconfig.json');
+  const configFile = tsc.readConfigFile(configPath, tsc.sys.readFile);
+  if (configFile.error) {
+    throw new Error(`Cannot read ${configPath}: ${tsc.flattenDiagnosticMessageText(configFile.error.messageText, '\n')}`);
+  }
+  const parsed = tsc.parseJsonConfigFileContent(configFile.config, tsc.sys, pkgDir);
+  const program = tsc.createProgram(parsed.fileNames, parsed.options);
+  const emitResult = program.emit();
+  const diagnostics = tsc.getPreEmitDiagnostics(program).concat(emitResult.diagnostics);
+  if (emitResult.emitSkipped || diagnostics.length > 0) {
+    throw new Error(diagnostics.map((d) => tsc.flattenDiagnosticMessageText(d.messageText, '\n')).join('\n') || 'emit skipped');
+  }
+}
+
+beforeAll(() => {
+  ensureDistFresh();
+});
 
 describe('judge compose llm-mesh namespace module', () => {
   const dummyContext: VerifiedInvocationContextPort = {
@@ -154,5 +191,32 @@ describe('judge compose llm-mesh namespace module', () => {
     expect(module.enabled).toBe(true);
     const router = module.createRouter({ context: dummyContext, receipts: dummyReceipts });
     expect(router).toBeDefined();
+    // Compile the extracted README block itself through the published
+    // subpath: substring guards cannot catch invalid options or syntax.
+    if (!example) throw new Error('README compose block missing');
+    const directory = mkdtempSync(join(tmpdir(), 'cluster-readme-'));
+    try {
+      mkdirSync(join(directory, 'node_modules/@sentropic'), { recursive: true });
+      symlinkSync(resolve('.'), join(directory, 'node_modules/@sentropic/cluster-mesh'));
+      symlinkSync(resolve('../../node_modules/hono'), join(directory, 'node_modules/hono'));
+      const file = join(directory, 'readme-example.mts');
+      writeFileSync(file, `${example}\nvoid [module];\n`);
+      const program = tsc.createProgram([file], {
+        target: tsc.ScriptTarget.ES2022,
+        module: tsc.ModuleKind.NodeNext,
+        moduleResolution: tsc.ModuleResolutionKind.NodeNext,
+        strict: true,
+        noEmit: true,
+        // Same posture as tsconfig.json: hono's own declarations need a
+        // newer TypeScript than the pinned 5.4.5. The example itself stays
+        // fully checked; only .d.ts files are skipped.
+        skipLibCheck: true,
+        types: [],
+      });
+      const diagnostics = tsc.getPreEmitDiagnostics(program);
+      expect(diagnostics.map((d) => tsc.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
