@@ -16,6 +16,8 @@ import { gunzipSync } from 'node:zlib';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkArtifactManifest } from './receipt.mjs';
+import { packMemoryClosure } from './minimal-pack.mjs';
+import { verifyPreCandidate } from './precandidate.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FROZEN_SPEC_SHA256 = 'f90c927964b44fdf6ad712eee9b894762250239384643a3790931c142d3aeeca';
@@ -92,37 +94,7 @@ function main() {
 
   const archivesDir = resolve(rootDir, 'tools/memory-mcp-l5/artifacts/archives');
   mkdirSync(archivesDir, { recursive: true });
-  const packed = [];
-  for (const [pkgDir, name, version, role] of [
-    ['packages/mcp-platform', platformPkg.name, platformPkg.version, 'platform'],
-    ['packages/mcp-broker', brokerPkg.name, brokerPkg.version, 'broker'],
-  ]) {
-    const out = execFileSync('npm', ['pack', '--pack-destination', archivesDir], {
-      cwd: resolve(rootDir, pkgDir),
-      encoding: 'utf8',
-    }).trim().split('\n').pop();
-    const tarPath = `tools/memory-mcp-l5/artifacts/archives/${out}`;
-    const bytes = assertTarball(rootDir, tarPath, name, version);
-    packed.push({ role, name, version, sha256: sha256Of(bytes), integrity: integrityOf(bytes), sourceHead: l5Head, archive: tarPath });
-  }
-
-  const inventory = [];
-  const track = (relPath, version) => {
-    const bytes = readBytes(rootDir, relPath);
-    inventory.push({ path: relPath, version, sha256: sha256Of(bytes) });
-  };
-  for (const stem of PLATFORM_MEMORY_DTS) track(`packages/mcp-platform/dist/memory/${stem}.d.ts`, platformPkg.version);
-  for (const stem of BROKER_MEMORY_DTS) track(`packages/mcp-broker/dist/memory/${stem}.d.ts`, brokerPkg.version);
-  track('tools/memory-mcp-l5/schemas/checkpoint-v1.schema.json', '1.0.0');
-  track('tools/memory-mcp-l5/schemas/artifact-manifest-v1.schema.json', '1.0.0');
-  track('tools/memory-mcp-l5/proof-catalog-v1.json', '1.0.0');
-  track('tools/memory-mcp-l5/exports-v1.json', '1.0.0');
-  track(
-    `tools/memory-mcp-l5/fixtures/l0/${L0_COMMIT}/index.json`,
-    '1.0.0',
-  );
-  track('packages/mcp-platform/etc/mcp-platform.api.md', platformPkg.version);
-  track('packages/mcp-platform/etc/mcp-platform-memory.api.md', platformPkg.version);
+  const { packed, inventory } = packMemoryClosure(rootDir, archivesDir, l5Head);
 
   const declaredLockSha256 = sha256Of(readBytes(rootDir, 'package-lock.json'));
   const manifest = {
@@ -148,6 +120,7 @@ function main() {
   writeFileSync(resolve(rootDir, manifestPath), bytes);
   const sidecar = `${manifestPath}.sha256`;
   writeFileSync(resolve(rootDir, sidecar), `${sha256Of(bytes)}\n`);
+  verifyPreCandidate(rootDir, manifestPath);
   console.log(
     JSON.stringify(
       { stage, manifest: manifestPath, sidecar, sha256: sha256Of(bytes), artifacts: packed.length, contracts: inventory.length },

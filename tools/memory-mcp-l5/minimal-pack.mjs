@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { scanGraph, graphRoots, readArchive } from './contract-graph.mjs';
@@ -40,10 +40,12 @@ export function packMemoryClosure(root, archivesDir, sourceHead) {
         mkdirSync(dirname(join(stage, member)), { recursive: true });
         writeFileSync(join(stage, member), files.get(path));
       }
-      const receipt = JSON.parse(execFileSync('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', archivesDir], { cwd: stage, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }))[0];
-      const original = join(archivesDir, receipt.filename), bytes = readFileSync(original), digest = sha256(bytes);
-      const destination = original.replace(/\.tgz$/, `-${digest}.tgz`);
-      renameSync(original, destination);
+      const receipt = JSON.parse(execFileSync('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', stage], { cwd: stage, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }))[0];
+      const bytes = readFileSync(join(stage, receipt.filename)), digest = sha256(bytes);
+      const destination = join(archivesDir, receipt.filename.replace(/\.tgz$/, `-${digest}.tgz`));
+      if (existsSync(destination)) {
+        if (!readFileSync(destination).equals(bytes)) throw new Error('immutable archive path occupied by different bytes');
+      } else writeFileSync(destination, bytes, { flag: 'wx' });
       for (const [path, data] of readArchive(bytes)) {
         const full = `${pkg.prefix}/${path}`;
         if (!closure.has(full) || !files.get(full)?.equals(data)) throw new Error(`packed contract drift ${full}`);
