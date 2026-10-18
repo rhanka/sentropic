@@ -331,13 +331,15 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       const snapshot = snapshotBoundedJson(parsed, cap);
       if (!snapshot.ok || !isRecord(snapshot.value)) return fail('MESH_UNAVAILABLE');
       const val = snapshot.value;
+      // Concordance and permissions bind the transmitted snapshot: the live
+      // request may have mutated during auth resolution or transport.
       if (val.kind === 'verdict' && val.ok === true
-        && isValidJudgeReceipt(val.receipt, request, correlationId) && val.receipt.outcome === 'verdict'
-        && isValidJudgeVerdict(val.verdict, request)) {
+        && isValidJudgeReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'verdict'
+        && isValidJudgeVerdict(val.verdict, outgoing.request)) {
         return val as unknown as JudgeResult;
       }
       if (val.kind === 'error' && val.ok === false
-        && isValidJudgeReceipt(val.receipt, request, correlationId) && val.receipt.outcome === 'error') {
+        && isValidJudgeReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'error') {
         const error = rebuildWireError(val.error);
         if (error && (val.receipt as JudgeReceipt).errorCode === error.code) {
           return { kind: 'error', ok: false, error, receipt: val.receipt } as unknown as JudgeResult;
