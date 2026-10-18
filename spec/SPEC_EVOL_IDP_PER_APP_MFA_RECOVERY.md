@@ -748,22 +748,17 @@ This spec is accepted when: every `[EXISTS]` citation resolves at `94a38286e`; P
 
 ## 13. Implementation lots (BUILD branches — not this spec branch)
 
-Each lot is a separate BUILD branch from the then-current `main`, with its
-own `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`, its own `ENV=test-<slug>`
-gates, at most one migration in `api/drizzle/*.sql`, and a version bump for
-every `packages/<pkg>` whose `src/**` it touches. Order is normative where
-stated; Lots 2 and 4 may proceed in parallel after Lot 3's session-purpose
-primitive exists, but KVM enforcement (section 10.2 step 4) waits for Lot 3.
+Each lot is a separate BUILD branch from the then-current `main`, with its own `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`, its own `ENV=test-<slug>` gates, at most one migration in `api/drizzle/*.sql` (consolidated in Lot 2), and a version bump for every `packages/<pkg>` whose `src/**` it touches. Order follows section 10.2: Lot 2 lands the single migration and durable transition store first; Lots 3 and 4 build on it; first `is_mfa_protected = true` activation waits for Lots 1–4, non-circular trust bootstrap, and the Lot 6 full-loss recovery drill.
 
 | Lot | Deliverable | Key file targets | Gate |
 |---|---|---|---|
-| Lot 0 — Contract freeze (design only) | Freeze assurance semantics, evidence fields, binding provenance, security generation, policy version, and recovery authorization on existing ports/adapters; consolidate the single next migration; record age/session limits | Spec delta on this file's sections 4–6; no code | Contract examples cover every section 2 path; no method hidden in the level; rollback never accepts weak evidence |
-| Lot 1 — Declaration and non-regression pin | R-KVM-DECL declaration file plus R-KVM-TEST extensions; `kvm-gateway` registerable with the legacy spelling | `deploy/oauth-clients/kvm-gateway.yaml` (new), `packages/auth-hono/tests/oauth-client-required-acr.test.ts`, `api/tests/api/auth/oauth-client-policy.test.ts`, `api/tests/unit/oauth-register-client.test.ts` | Scoped suites green on `ENV=test-<slug>`; declaration/registration consistency check green |
-| Lot 2 — Freshness and request hints | R-FRESH-1…R-FRESH-3: per-client bound, stale step-up, `max_age`/`acr_values`, discovery `acr_values_supported` | `packages/auth-hono/src/oauth/authorize-handler.ts`, `session-resolver.ts`, `wellknown-handler.ts`, client schema/registration script, the two authorize test files | Stale-session and hint cases green; no-policy clients byte-identical |
-| Lot 3 — Email-path closure and enrolment-only confinement | R-REC-0…R-REC-5, R-STEP-1, R-KVM-CLOSE effective: hardened derivation, register/magic-link gates, session purpose | `api/src/routes/namespaces/auth/magic-link.ts`, `registration.ts`, `credentials.ts`, session-manager purpose handling, new Lot 3 test files, UI register/lost-device suites | G-RECOVERY cases green for hardened accounts; non-hardened magic-link and register behaviour unchanged; KVM enforcement still gated on Lot 4 recovery proof (section 10.2) |
-| Lot 4 — Recovery means | Option (a) independently-recoverable prerequisite, (b) break-glass Job with pending binding (R-REC-6); recovery codes (c) only as a deferred optional sublot | One migration max, credential check, Job-side reset command, new Lot 4 test files | Break-glass cases green; pending key cannot self-approve; codes, if built, never satisfy authorize |
-| Lot 5 — Method-neutral migration | R-POL-1, section 10.1 M-1…M-3: dual spelling, canonical `mfa` emission, declaration switched to `mfa` | `authorize-handler.ts`, `session-resolver.ts`, token emission, discovery, registration script, declaration file, both ACR test files | Alias acceptance matrix green; bearer refusal unchanged at every step |
-| Lot 6 — Governance, audit, notifications, KVM verification | R-GOV-1…R-GOV-3, section 9.2 events, section 9.3 notifications, KVM onboarding verification and E2E suite | Audit wiring at the host ports, notification calls on credential/recovery/policy events, `e2e/tests/` KVM suite | Audit/notification cases green; operator onboarding checklist executed per tier |
+| Lot 0 — Contract freeze (design only) | Freeze assurance semantics, single section 5.1 `acr`/`amr` table, `mfaCompletedAt`, `adminMaxMfaAgeSeconds = 900s`, `binding_state`, `security_generation`, `policy_version`, `is_mfa_protected`, non-circular trust bootstrap, and durable transition store schema on existing ports/adapters; consolidate the single next migration | Spec delta on this file's sections 4–10; no code | Contract examples cover every section 2 path; no method hidden in `acr`; rollback never accepts weak evidence |
+| Lot 1 — Declaration, fail-closed allowlist, and RP `amr` pin | `R-KVM-DECL` (`require_non_empty_allowlist: true`), fail-closed owner allowlist validation in registration CLI, `R-KVM-TEST` real magic-link/federation minting and RP `"mfa"`-in-`amr` contract tests | `deploy/oauth-clients/kvm-gateway.yaml` (new), `api/src/scripts/oauth-register-client.ts`, `packages/auth-hono/tests/oauth-client-required-acr.test.ts`, `packages/auth-hono/tests/oauth-client-allowlist.test.ts`, `api/tests/api/auth/oauth-client-policy.test.ts`, `api/tests/unit/oauth-register-client.test.ts`, `packages/auth-hono/tests/example-oauth-rp.test.ts`, `api/tests/unit/auth/kvm-rp-amr-contract.test.ts` (new) | Scoped suites green on `ENV=test-<slug>`; declaration/registration readback and RP `amr` checks green |
+| Lot 2 — Single migration, durable transition store, 4-leg evaluator, and freshness | Single migration in `api/drizzle/*.sql`, durable transition store, 4-leg evaluator (`authorize`, `consent`, code issue, `token`), `R-FRESH-1…R-FRESH-3`, host refresh preservation, and tier-sync SQL column exclusions | `api/src/db/schema.ts`, `api/src/services/auth/security-transition-store.ts` (new), `packages/auth-hono/src/oauth/authorize-handler.ts`, `consent-decision-handler.ts`, `issue-authorized-code.ts`, `token-handler.ts`, `session-resolver.ts`, `wellknown-handler.ts`, `api/src/services/auth/oauth-state-adapter.ts`, `api/src/routes/namespaces/auth/session-lifecycle.ts`, `api/src/services/auth/session-adapter.ts`, `api/src/services/session-manager.ts`, `deploy/k8s/overlays/preprod/idp-identity-sync/client-postcondition.sql`, `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql` | 4-leg evaluator, exact age boundaries, host refresh, durable rollback, and tier-sync SQL checks green; no-policy clients byte-identical |
+| Lot 3 — Stored account protection, email-path closure, persist-time registration, and federation guards | `R-REC-0…R-REC-5`, `R-STEP-1` (`adminMaxMfaAgeSeconds = 900s`), `R-KVM-CLOSE`, atomic `is_mfa_protected` transitions (`R-REC-1` 5-prerequisite gate), persist-time `/register/verify` recheck, federation link/unlink and protected zero-key shell guards, and UI lost-device confinement | `api/src/routes/namespaces/auth/magic-link.ts`, `registration.ts`, `credentials.ts`, `federation.ts`, `api/src/services/webauthn-registration.ts`, `api/src/services/federation/broker.ts`, `packages/auth-hono/src/webauthn-registration-route-handlers.ts`, `packages/auth-hono/src/federation/resolve-user.ts`, `packages/auth-ui/src/components/AuthLogin.svelte`, `ui/src/routes/auth/login/+page.svelte`, Lot 3 API/unit/UI test suites | Unified `is_mfa_protected` outcome matrix, persist-time registration race, federation shell refusal, and UI suites green |
+| Lot 4 — Non-circular trust bootstrap, break-glass Job, and pending-recovery activation | Option (a) 2-authenticator prerequisite, (b) non-circular trust bootstrap (Mode A/B) and full-loss break-glass reset (`R-REC-6`) with `pending-recovery` activation; recovery codes (c) only as a deferred **optional sublot** conditional on `D-P2` | `api/src/services/auth/mfa-recovery.ts` (new), `api/src/scripts/auth-breakglass-reset.ts` (new), `deploy/k8s/base/37-auth-breakglass-reset-job.yaml` (new), `api/tests/unit/auth/mfa-recovery.test.ts`, `api/tests/api/auth/breakglass.test.ts`, `api/tests/api/auth/mfa-recovery-policy.test.ts` (plus `api/tests/api/auth/recovery-codes.test.ts` and `ui/tests/auth/recovery-codes-settings.test.ts` only if `D-P2` option (ii) is chosen) | Bootstrap, break-glass, and `pending-recovery` 4-leg denial green; conditional code sublot never satisfies protected issuance while `pending-recovery` |
+| Lot 5 — Consumer qualification and method-neutral cutover | `R-POL-1`, section 10.1 `M-1…M-4`: qualify all internal/external consumers, remove ACR-to-AMR fallbacks, switch global emission to `urn:sentropic:loa:mfa` and the section 5.1 `amr` table, and update `kvm-gateway` declaration to `mfa` | `packages/auth-hono/src/oauth/authorize-handler.ts`, `consent-decision-handler.ts`, `issue-authorized-code.ts`, `token-handler.ts`, `session-resolver.ts`, `wellknown-handler.ts`, `api/src/services/auth/oauth-state-adapter.ts`, `api/src/scripts/oauth-register-client.ts`, `deploy/oauth-clients/kvm-gateway.yaml`, Lot 5 test suites | Consumer qualification, single `amr` emission table, legacy code drain, and rollback order green |
+| Lot 6 — Governance weakening gate, notifications, live full-loss drill, and E2E verification | `R-GOV-1…R-GOV-4` complete weakening CLI/Job gate, section 9.2 operational events, section 9.3 notifications, live full-loss recovery drill before first `is_mfa_protected = true` activation (section 10.2 steps 4–5), and E2E verification | `api/src/scripts/oauth-register-client.ts`, `api/src/routes/auth/oauth.ts`, `api/tests/api/auth/audit-notifications.test.ts`, `e2e/tests/02-auth-webauthn.spec.ts`, `e2e/tests/02-auth-devices.spec.ts`, `e2e/tests/02-auth-oauth-authorization-code.spec.ts`, `e2e/tests/02-auth-mfa-recovery.spec.ts` | Weakening CAS/history, notification, E2E suites, and pre-activation full-loss drill green |
 
 Notes: Lot 1 deliberately ships no guarantee change — it pins behaviour so
 Lots 2–5 cannot regress it silently. The Astra max review of this spec and
@@ -781,7 +776,7 @@ endpoints themselves are not removed (their hardened-account enrolment
 effect is what changes).
 
 Non-goals: a new MFA method enrolment (TOTP or other), a policy-editing UI,
-gateway-side `acr` checking for KVM, Netbird client design beyond
+method-specific or `acr`-string gateway policy for KVM beyond checking `"mfa"` in signed `amr`, Netbird client design beyond
 section 11's note, any change to RP session glue, and removal of the
 legacy `passkey-fresh` alias (section 10.1, M-4).
 
@@ -809,15 +804,7 @@ paramètres donnés de `kvm-gateway` (section 11) sont des exigences
 acquises et ne sont pas rouverts. Pour chaque décision : options,
 conséquences, recommandation de la spécification.
 
-**D-P1 — Fenêtre de fraîcheur MFA pour `kvm-gateway`.** Options : (i)
-300 secondes à la décision d'autorisation (proposition de l'étude
-parallèle : étape renforcée presque à chaque accès), (ii) quelques
-heures (recommandé : 8 h), (iii) 24 h. Conséquences : plus la fenêtre est
-courte, plus le vol de session (T-SESS) est contenu, mais plus la
-cérémonie WebAuthn est répétée ; 24 h laisse une journée d'usage à une
-session MFA volée. La valeur choisie devient la borne du client
-(section 5.3) ; elle peut différer par client plus tard sans changer le
-modèle.
+**D-P1 — Fenêtre de fraîcheur MFA pour `kvm-gateway`.** Options : (i) 300 secondes à l'émission OAuth (`authorize`, `consent`, code, `token`) (étape renforcée presque à chaque nouvelle émission OIDC), (ii) quelques heures (recommandé : 8 h), (iii) 24 h. Conséquences : plus la fenêtre `maxMfaAgeSeconds` est courte, plus l'usage d'une session IdP volée (T-SESS) pour obtenir un nouveau jeton est contenu, mais plus la cérémonie WebAuthn est répétée lors d'une ré-émission OIDC ; 24 h laisse une journée de ré-émission à une session IdP volée. Cette borne gouverne uniquement l'émission OIDC côté IdP (section 5.3) et est indépendante de la durée du cookie de session aval de `kvm-gateway` (`oauth2-proxy`, dont la révocation immédiate en cas d'incident relève de la purge de session RP de R-REC-7) ainsi que de `adminMaxMfaAgeSeconds` (fixé séparément à 900 s par défaut au Lot 0 pour les mutations de sécurité IdP).
 
 **D-P2 — Codes de récupération pour le compte propriétaire KVM.**
 Options : (i) différer les codes et livrer d'abord (a)+(b) (recommandé
@@ -830,15 +817,7 @@ récupération dépendante de l'opérateur ; (ii) ajoute une commodité sans
 chaîne directe code-vers-MFA ; (iii) rend le vol du code éventuellement
 suffisant après délai et doit être assumé comme tel.
 
-**D-P3 — Portée du durcissement du compte.** Options : (i) la protection
-stockée activée explicitement (section 4.2 : entrée allowlist, première
-autorisation MFA vers un client sans allowlist, ou activation
-opérateur), (ii) durcir tout compte dès son premier passkey, y
-compris pour les applications non forcées. Conséquences : (i) préserve la
-récupération par email pour les usages non forcés et limite le changement
-aux comptes exposés à KVM ; (ii) simplifie le modèle mental mais dégrade
-la récupération de tous les comptes sans bénéfice pour les applications
-sans exigence MFA. La spécification recommande (i).
+**D-P3 — Portée du durcissement du compte.** Options : (i) la protection stockée `users.is_mfa_protected` activée explicitement après vérification des prérequis de R-REC-1 (sections 4.2 et 6.2 : entrée allowlist, première émission MFA vers un client sans allowlist, ou activation opérateur), (ii) durcir tout compte dès son premier passkey, y compris pour les applications non forcées. Conséquences : (i) préserve la récupération par email pour les usages non forcés et limite le changement aux comptes protégés (dont le propriétaire KVM) une fois P-MFA et P-REC prêts ; (ii) simplifie le modèle mental mais dégrade la récupération de tous les comptes sans bénéfice pour les applications sans exigence MFA. La spécification recommande (i).
 
 Aucune autre décision propriétaire n'est requise pour autoriser les lots :
 le choix des TTL fins (session enrolment-only, grant d'urgence), des noms
