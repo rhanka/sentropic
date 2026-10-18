@@ -62,7 +62,7 @@
   - [x] Read repository rules, template and package publication tooling; verify branch mechanically.
   - [x] Run `make ps-all ENV=test-publish-mcp-packages`; no Compose services.
   - [x] Declare scope, exceptions, isolated environment and commit discipline.
-- [ ] **Lot 1 — Public package manifests and portable source imports**
+- [x] **Lot 1 — Public package manifests and portable source imports**
   - [x] Configure files, exports, provenance, license, repository and semver dependencies for all 18 libraries.
   - [x] Replace connector/broker sibling-source imports with public MCP platform entry points; preserve behavior and experimental boundaries.
   - [x] Add/update README and CHANGELOG per package; retain proof/live limitations.
@@ -84,8 +84,8 @@
   - [x] Include the MIT license in packed libraries: mcp-connector-googlecalendar, mcp-connector-googledocs, mcp-connector-googledrive, mcp-connector-googlesheets.
   - [x] Include the MIT license in packed libraries: mcp-connector-hubspot, mcp-connector-linear, mcp-connector-notion, mcp-connector-slack.
   - [x] Include the MIT license in packed libraries: mcp-connector-stripe.
-  - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
-- [ ] **Lot 2 — Guarded build, pack and web-login bootstrap**
+  - [x] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
+- [x] **Lot 2 — Guarded build, pack and web-login bootstrap**
   - [x] Add standalone Docker build/test/lock tooling without host dependencies.
   - [x] Add guarded pack/OIDC publish targets for the first nine libraries.
   - [x] Add build/pack/publish lanes using existing exact-artifact guard and OIDC.
@@ -96,7 +96,7 @@
   - [x] Expose the bootstrap orchestration to credential-free npm stubs for failure/cleanup testing.
   - [x] Cover stubbed web login, exact archive publication, registry failure and logout-on-failure.
   - [x] Script tests: new `scripts/publish/npm-bootstrap-web.test.mjs`; existing manifest guard tests unchanged unless wiring requires updates.
-- [ ] **Lot 3 — CI publication train**
+- [x] **Lot 3 — CI publication train**
   - [x] Add publication/validation filters, batch 1 (9 packages).
   - [x] Add publication/validation filters, batch 2 (9 packages).
   - [x] Wire validation, consumer smoke, OIDC publisher and gate: ubo-contracts, mcp-broker.
