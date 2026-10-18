@@ -39,6 +39,7 @@
   - [x] Verify actual path inventory and run make scope-check before authorized commits.
 
 ## Feedback Loop
+- [x] PR700-R2-6/7: reproduce and fix insertion-order replay conflicts and authoritative coincident workspace/tenant refusal; retain changed-target and unproven-membership refusals.
 - [x] PR700-R2-2: reproduce all three non-NFC body refusals; preserve exact component/locator bytes and enforce well-formedness, byte bounds and NFC reference fields.
 - [x] PR700-R2-1: frozen A05 capture regressions reproduce missing primary-component linkage, ordered family references and safe epochs; enforce neutral semantic checks before sealing.
 - [x] PR700-R1: all ten round-1 review findings corrected test-first; digest-pinned Lot 1 root gate PASS with immutable packed P1 verification.

@@ -286,7 +286,7 @@ export function checkSameKeyBinding(
 ): SameKeyOutcome {
   if (
     stored.toolName === incoming.toolName &&
-    JSON.stringify(stored.target) === JSON.stringify(incoming.target) &&
+    canonicalJson(stored.target) === canonicalJson(incoming.target) &&
     stored.digest === incoming.digest
   ) {
     return { decision: 'reuse', digest: stored.digest };

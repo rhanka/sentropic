@@ -175,6 +175,17 @@ describe('P02.platform.mutation-guard', () => {
     );
   });
 
+  it('reuses a sealed target reconstructed with a different member order', () => {
+    const first = JSON.parse(corpus.vectors.capture_v1.expected_jcs_utf8);
+    const retry = { ...first, target: Object.fromEntries(Object.entries(first.target).reverse()) };
+    const stored = { toolName: first.tool_name, target: first.target, digest: computeMutationDigest(first) };
+    const incoming = { toolName: retry.tool_name, target: retry.target, digest: computeMutationDigest(retry) };
+    expect(incoming.digest).toBe(stored.digest);
+    expect(checkSameKeyBinding(stored, incoming)).toEqual({ decision: 'reuse', digest: stored.digest });
+    incoming.target.source_ref = 'other-source';
+    expect(checkSameKeyBinding(stored, incoming).decision).toBe('DIGEST_CONFLICT');
+  });
+
   it('P02.platform.mutation-guard: validates the exact policy-version projection', () => {
     expect(
       validatePolicyVersionsProjection(CAPTURE_INPUT, {

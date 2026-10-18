@@ -3,6 +3,20 @@ import { projectMemoryContext, validateMemoryProjection } from '../../src/memory
 import { hostContext } from './host-fixture.js';
 
 describe('co-frozen A03 binding', () => {
+  it('accepts equal workspace and tenant identifiers backed by authoritative membership', () => {
+    const ctx = hostContext();
+    ctx.workspaceRef = ctx.tenantRef;
+    ctx.memory!.binding = { ...ctx.memory!.binding, workspace_id: ctx.tenantRef };
+    const projection = projectMemoryContext(ctx, 'purpose-1');
+    expect(projection.trusted_context.tenant_id).toBe(ctx.tenantRef);
+    expect(validateMemoryProjection(projection)).toEqual([]);
+  });
+  it.each(['tenant_membership_receipt', 'tenant_resolution_source', 'tid'])('refuses an unproven coincident tenant via %s', key => {
+    const ctx = hostContext();
+    ctx.workspaceRef = ctx.tenantRef;
+    ctx.memory!.binding = { ...ctx.memory!.binding, workspace_id: ctx.tenantRef, [key]: 'unverified' };
+    expect(() => projectMemoryContext(ctx, 'purpose-1')).toThrow();
+  });
   it('preserves distinct store, scope, epoch, agent and transport provenance', () => {
     const p = projectMemoryContext(hostContext(), 'purpose-1') as any;
     expect(p.trusted_context).toMatchObject({ store_id: 'store-1', scope_ref: 'scope-1', policy_epoch: '2' });
