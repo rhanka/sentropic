@@ -1,45 +1,47 @@
 # SPEC STUDY — GitHub-backed custody of LLM seat credentials (MEP retrieval, Sentropic-side refresh)
 
-Status: **STUDY / OPEN** — derived from the FROZEN `spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md`. This study does not re-open the broker; it instantiates its catalog class 5 (LLM/dev accounts) and its **GitHub/Google** catalog wave for one concrete capability. New committed decisions spawn a `SPEC_EVOL_*`, not edits here.
+Status: **STUDY / RECONCILED 2026-10-18** — historical study dated 2026-09-20, reconciled with `origin/main` at `1472d961e098908e64ef60b83835af357888d031` and with PR #659 (merged 2026-10-10 as `dc95f7e4f88048e9671002827537cde4cb8149b7`). Derived from the FROZEN `spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md`; this study does not re-open the broker. Current authority for custody consumption is `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` §7 (D7); this study selects no new design and authorizes no production delivery. Owner instruction 2026-10-18: keep PR #596 open (« La garder »).
 
-Owner intent (2026-09-20): *« Je veux que llm-mesh + gw offre une capacité de stocker les sièges sur GitHub, pour les récupérer à la MEP, quitte à ce que le rafraîchissement de device se fasse côté repo sentropic — pour réduire les coûts run. »*
+Reading guide: **Historical (2026-09-20)** marks the original request and options as recorded at that date. **Current (on main)** marks a normative decision, implemented code, or inventory observed at the pinned main above. **Unverified** marks a claim with no live qualification evidence at that baseline. A historical observation is not a current fact.
+
+Owner intent (2026-09-20, historical): *« Je veux que llm-mesh + gw offre une capacité de stocker les sièges sur GitHub, pour les récupérer à la MEP, quitte à ce que le rafraîchissement de device se fasse côté repo sentropic — pour réduire les coûts run. »* This dated request, tying GitHub storage to deployment retrieval and lower run cost, is retained as provenance. The cost model was unproven in the original study and remains unverified (§9).
 
 ## 0. Executive summary
 
-Today the mesh/gateway authenticates each provider with a **metered API key** injected at deploy (k8s secret ← GitHub Actions secret). The owner runs several **seat-based subscriptions** (Codex/ChatGPT, Cloud-Code, Claude, Gemini, Muse) whose quota is **already paid**. Running the mesh on those seats instead of metered keys reduces run cost — the same lever as the enrollment proposal, but with a concrete custody+delivery mechanism:
+Historical (2026-09-20): the mesh/gateway authenticated each provider with a metered API key injected at deploy, while the owner held already-paid seat subscriptions. The study proposed enrolling each seat once, storing the resulting device credential in a GitHub-backed custody store, refreshing it from the Sentropic repository side, and retrieving it at deployment (MEP) so the gateway would run on seat quotas.
 
-1. **Enroll** each seat once via the existing `@sentropic/llm-mesh/enrollment` device-code / OAuth-PKCE flow (providers `codex`, `cloud-code`, `claude-code`, + net-new for Gemini/Muse).
-2. **Store** the resulting seat credential (a "device": access + refresh + expiry) in a **GitHub-backed custody store** — the durable, MEP-reachable vault.
-3. **Refresh** the device on a schedule from the **Sentropic repo side** (a GitHub Action using the refresh token, re-writing the store), so stored credentials stay valid between deploys.
-4. **Retrieve at MEP**: the deploy pipeline pulls the current credentials from the GitHub store into the runtime (k8s → gateway keyring / `LocalAccountTransportService` pool), so `llm-gateway` egresses on seat quotas.
+Current (on main): the deployable-process contract already specifies that capability beyond the Claude-specific scope. D7 records the owner-selected GitHub Secrets approach, full provider/device payloads, and a dedicated Actions-secret API credential (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:13`, `:144-145`). It specifies a sole scheduled refresher, serialized triggers, GitHub-first durable commit, CAS delivery, failure recovery, and an independent freshness monitor (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:147-153`). PR #659 delivered ordinary Claude-seat enrollment, persistence, refresh, and an injected execution bridge; it did not deliver the general GitHub custody service (§2, §6). The custody job, the projection resolver, and live qualification remain implementation gaps already named on main (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:220`, `:263`, `:410`).
 
-**Central tension (the owner decision this study exists to frame).** The broker study **bans raw-secret mirroring by default** (§4.3): refresh tokens and LLM account material must not be copied into a second store; custody is **handle-first**; any exception needs an *explicit owner gate + KMS-to-KMS envelope + audit trail + revocation SLA*. "Store the seats on GitHub" is, literally, mirroring seat refresh tokens into an external store. So this capability is only admissible as a **ratified exception** — and its whole design turns on *how* GitHub holds the material (raw vs ciphertext vs handle).
+Remaining contribution of this study: the dated owner rationale, the explicit O1/O2/O3 comparison retained as decision history (§3), and unresolved operational questions (§7). It is not a separate accepted implementation design.
+
+Central tension (historical framing, still applicable as history): the broker study bans raw-secret mirroring by default and requires an explicit owner gate, a KMS-to-KMS envelope, an audit trail, and a revocation SLA for any exception (`spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md:335`). How the selected design on main relates to that default is stated in §3; no stronger guarantee is claimed there.
 
 ## 1. Goal and non-goals
 
 ### 1.1 Goal
-Give the owner a mono-principal capability to run `llm-gateway` on their own paid seats, with credentials that survive redeploys and refresh unattended, without ever exposing raw seat secrets to agents or to GitHub in cleartext.
+Historical goal: give the owner a mono-principal capability to run `llm-gateway` on their own paid seats, with credentials that survive redeploys and refresh unattended, without exposing raw seat secrets to agents. Current (on main): that objective is carried by the D7 custody lane (§3-§5); this study adds no second delivery mechanism.
 
 ### 1.2 Non-goals (v0)
-- No cross-user / cross-agent seat pooling (broker §2.5: needs owner ToS acceptance + kill-switch). This is the owner's **own** seats, personal-passthrough — ToS-safe by the broker's v0 rule.
-- No agent-visible refresh tokens, cookies, 2FA codes, or security-key material (broker §1.2, §5).
-- No new authorization plane: reuse `AccessGrant` (policy/index) + LLM `AuthorizationGrant` (account-use) + `SecretAuthMaterial` per broker §3.4 / §2.5.
-- No change to the metered-key path: it stays the fallback when a seat is `reauth_required` / `disabled`.
+- No cross-user / cross-agent seat pooling. Scope stays mono-principal, own seats only, personal passthrough with cross-user selection disabled (`spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md:249`). No categorical provider-permission assurance is stated: the later Claude treatment distinguishes the recorded owner continuation decision from provider permission (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:63-75`, `:260`).
+- No agent-visible refresh tokens, cookies, 2FA codes, or security-key material. Policy/index, custody, and human-challenge boundaries are already established on main (`spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md:267`, `:329-335`, `:366-380`; `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_ADMINISTRATION.md:16-44`).
+- No new authorization plane: reuse the existing policy/index and account-administration contracts cited above.
+- No unconditional metered fallback: fallback requires explicit configuration, matching owner/workspace authorization, and reserved budget (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:163`); no implicit fallback follows a seat failure (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:187`, `:258`). The CI-seats lane keeps its own seat-only cost constraint (`spec/SPEC_EVOL_CI_SEATS.md:5-6`); that lane rule is not a blanket rule for every gateway consumer.
 
 ## 2. Grounded map (what exists vs net-new)
 
-Exists (verified in `packages/llm-mesh`):
-- Enrollment: `EnrollmentProvider { start, complete, resolve, refresh }`, providers `codex` / `cloud-code` / `claude-code`, device-code + authorization-url flows, PKCE helper. `PreparedCredential { accountId, accessToken, refreshToken?, expiresAt, authClientConfigVersion, accountEmail? }`.
-- Account pool: `LocalAccountTransportService` + `AccountTransportAccount { accessToken, refreshToken, expiresAt, status: active|cooldown|reauth_required|disabled, cooldownUntil, modelIds, priority }`, acquire→lease→outcome with cooldown/rotation.
-- Keyring: `@sentropic/llm-mesh/node` — `EnvKeyring`, `EncryptedFileKeyring`, `InMemoryKeyring`, OS keychains; `KeyringAdapter { getSecret, setSecret, deleteSecret }`.
-- MEP path: `.github/workflows/ci.yml` → `deploy/k8s` (base + prod overlay) injects secrets into k8s; `llm-gateway` reads them.
-- Precedent: `transpose-cv` PR #37 already routes mesh credentials through a `KeyringAdapter` (EnvKeyring / EncryptedFileKeyring). Same seam extends to the gateway.
+Exists — Current (on main), observed at the pinned main:
+- Enrollment contract and providers, including native Muse and existing Codex/Cloud-Code enrollment (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:16-18`). Muse provider code exists in `packages/llm-mesh/src/enrollment/muse-code.ts`; Muse identity is not a remaining discovery decision (§6).
+- Ordinary Claude-seat enrollment, renewable import, refresh, durable publication, and an access-only injected execution bridge, delivered by PR #659. The contract distinguishes ordinary and custody-managed seats (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:120-135`). Enrollment delivered by PR #659 is not evidence that GitHub custody is operational.
+- Storage contracts as specified on main: durable ordinary envelopes are distinct from custody projections (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:256-257`). The keyring classes named for OS keychains use memory maps at the cited baseline (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:26`); no durable OS-keychain behavior is promised, and no second custody token store is created (§5).
+- Provider inventory: a five-CLI credential envelope for agy, codex, vibe, muse, and claude, with lifecycle qualification explicitly unverified (`spec/SPEC_EVOL_CI_SEATS.md:58-68`).
+- Workflow inventory: only `ci.yml` and `idp-identity-sync.yml` are tracked under `.github/workflows/` at the pinned main. No custody refresh workflow is tracked.
 
-Net-new (this study):
-- A **GitHub-backed custody store** for seat credentials (the "device" vault) — none exists (`github`/`copilot`/`muse` = 0 refs in llm-mesh today).
-- A **Sentropic-side refresh loop** (scheduled GitHub Action in this repo) that renews tokens and rewrites the store.
-- **MEP retrieval** wiring from the GitHub store into the gateway keyring / account pool.
-- Provider coverage for **Gemini** and **Muse** (Muse identity/auth = open, see §6).
+Net-new — still missing on main (existing gaps, not supplied by this study or by PR #659):
+- The scheduled custody job that refreshes custody-managed seats and commits full payloads to GitHub Secrets (D7/G4 prerequisite, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:263`).
+- The projection resolver (`apps/llm-gateway/src/seat-resolver.ts` is absent at the pinned main; delivery is assigned to B4, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:220`).
+- The independent freshness monitor and live provider lifecycle qualification (`spec/SPEC_EVOL_CI_SEATS.md:58-68`).
+
+Historical note: the `transpose-cv` PR #37 keyring precedent and the 2026-09-20 inventory (including the former zero-references statement for Muse) are historical observations. They do not describe the current provider inventory and do not justify a second custody path.
 
 ## 3. Central design problem — how GitHub holds the material
 
