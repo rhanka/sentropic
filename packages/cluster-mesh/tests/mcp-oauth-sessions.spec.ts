@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMcpOAuthNamespace, type McpOAuthNamespace } from '../src/compose/mcp-oauth.js';
 import { fixture, initialize, post, rpc } from './packaging/fixtures/mcp-oauth/host.js';
@@ -7,6 +8,39 @@ const live: McpOAuthNamespace[] = [];
 afterEach(async () => { await Promise.all(live.splice(0).map((secured) => secured.close())); });
 
 describe('MCP OAuth session authority', () => {
+  it('should revoke a running tool capability when the SDK receives a cancellation notification', async () => {
+    const { modules, options, token } = await fixture();
+    let entered!: () => void, release!: () => void, finished!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const complete = new Promise<void>((resolve) => { finished = resolve; });
+    let reason: unknown;
+    const secured = await createMcpOAuthNamespace(modules, { ...options,
+      sessions: { createTransport: () => new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: () => crypto.randomUUID() }) },
+      invoke: async (_tool, _args, call) => {
+        entered(); await gate;
+        try { await call.egress.request('signals', { city: 'longueuil' }); }
+        catch (error) { reason = (error as { reason?: unknown }).reason; }
+        finally { finished(); }
+        return { ok: true, output: null, auditId: call.correlationId, redactionClass: 'low' };
+      },
+    }); live.push(secured);
+    const app = new Hono().route('/mcp', secured.mcpRoutes);
+    const bearer = await token();
+    const init = await app.request('/mcp', post(initialize(), bearer));
+    const session = init.headers.get('mcp-session-id')!; await init.body?.cancel();
+    const response = await app.request('/mcp', post(rpc('tools/call', {
+      name: 'get_zones_geojson', arguments: { city: 'longueuil' },
+    }, 2), bearer, session));
+    try {
+      await started;
+      expect((await app.request('/mcp', post({ jsonrpc: '2.0', method: 'notifications/cancelled',
+        params: { requestId: 2, reason: 'fixture cancellation' } }, bearer, session))).status).toBe(202);
+      release(); await complete;
+      expect(reason).toBe('invocation_inactive');
+    } finally { release(); await response.body?.cancel(); }
+  });
+
   it('should close a transport whose initialization is still in progress during shutdown', async () => {
     const { modules, options, token } = await fixture();
     let entered!: () => void, release!: () => void;
