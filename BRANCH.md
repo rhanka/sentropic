@@ -89,17 +89,17 @@
   - [x] **E2E tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
   - [x] Lot gate: `make scope-check ENV=test-idp-oauth-refresh-token` passes with only `spec/**` + `BRANCH.md` changed; no typecheck, lint, build, or test claim is made for this docs lot.
   - [x] UAT (docs read): owner reads the new spec and confirms the refresh-token contract and lot breakdown.
-- [ ] **Lot 2 — Cross-references in related specs**
-  - [ ] Add a cross-reference from `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` to the new spec (per-client `refresh_token` grant registration and tier-local refresh families).
-  - [ ] Add a cross-reference from `spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md` to the new spec (`grant_types` / `allowed_scopes` client convergence vs tier-local ephemeral refresh token rows).
-  - [ ] Add a cross-reference from `spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md` to the new spec (live `tid` membership revalidation on `refresh_token` grant).
-  - [ ] Add a cross-reference from `spec/WORKFLOW_AUTH.md` to the new spec (distinction between browser session refresh `/auth/session/refresh` and OAuth `refresh_token` grant).
-  - [ ] Check `spec/SPEC.md` for a SPEC_EVOL index and record the finding in this file; edit only if an index exists.
-  - [ ] Lot gate: `make scope-check ENV=test-idp-oauth-refresh-token` passes; every new link resolves to an existing file in this branch.
-  - [ ] UAT (docs read): owner follows each cross-reference to the new spec and back to the policy it extends.
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Confirm the new spec reuses merged mechanisms without duplicating them and contains no secret value, only variable names.
-  - [ ] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
+- [x] **Lot 2 — Cross-references in related specs**
+  - [x] Add a cross-reference from `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` to the new spec (per-client `refresh_token` grant registration and tier-local refresh families).
+  - [x] Add a cross-reference from `spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md` to the new spec (`grant_types` / `allowed_scopes` client convergence vs tier-local ephemeral refresh token rows).
+  - [x] Add a cross-reference from `spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md` to the new spec (live `tid` membership revalidation on `refresh_token` grant).
+  - [x] Add a cross-reference from `spec/WORKFLOW_AUTH.md` to the new spec (distinction between browser session refresh `/auth/session/refresh` and OAuth `refresh_token` grant).
+  - [x] Check `spec/SPEC.md` for a SPEC_EVOL index and record the finding in this file; edit only if an index exists (`spec/SPEC.md` has no `SPEC_EVOL` index; left unchanged).
+  - [x] Lot gate: `make scope-check ENV=test-idp-oauth-refresh-token` passes; every new link resolves to an existing file in this branch.
+  - [x] UAT (docs read): owner follows each cross-reference to the new spec and back to the policy it extends.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Confirm the new spec reuses merged mechanisms without duplicating them and contains no secret value, only variable names.
+  - [x] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
 - [ ] **Lot N — Final validation**
   - [ ] Run `make scope-check ENV=test-idp-oauth-refresh-token` and record its result.
   - [ ] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution.

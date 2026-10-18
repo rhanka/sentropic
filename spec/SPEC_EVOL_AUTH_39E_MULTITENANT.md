@@ -44,6 +44,7 @@ Add a real **tenancy spine** to the standalone IdP (`auth.sent-tech.ca`): model 
 - `(iss,sub)` composite reserved for EXTERNAL issuers (openerp lane). Within-IdP single issuer ⇒ `sub` alone.
 - Per-tenant acceptance: per-membership status, **tenant-scoped approver**, pending cap + rate-limit + anti-enumeration.
 - Tenant lifecycle gates (active/suspended/offboarded) enforced on every flow (authorize, token, userinfo, introspect).
+- On `grant_type=refresh_token`, the sealed `tid` from initial authorization is re-validated against live `tenant_memberships` (`isApprovedMember`) before rotating and minting a new access token; lost membership revokes the refresh family (`400 invalid_grant`) and never drops `tid` to `null` (see [SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md)).
 - Every tenant-scoped query is tenant-filtered; **negative tests A→B** (a member of tenant A must never read/act in tenant B).
 - Optional `org` HINT claim (openerp embedded) is advisory only — apps must treat it as non-authoritative.
 

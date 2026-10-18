@@ -355,6 +355,8 @@ sequenceDiagram
     API->>RP: 401 Unauthorized
 ```
 
+> **OAuth2 refresh token grant (`grant_type=refresh_token`, 15-day absolute family cap):** For clients explicitly registered with `grant_types` containing `'refresh_token'` and `allowed_scopes` containing `'offline_access'` (such as `immo-mcp` and other Sentropic MCP clients), `/oauth/token` issues an opaque `srt_...` refresh token rotated on every use with family-wide reuse detection and revocation. This OAuth grant is distinct from the first-party browser session cookie renewal (`POST /api/v1/auth/session/refresh`, section 4). Full specification: [SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md).
+
 ### 8. DPoP-bound token flow (opt-in per client)
 
 When `dpop_bound_access_tokens=true` on the OAuth client record, the RP must:
@@ -373,6 +375,7 @@ When `dpop_bound_access_tokens=true` on the OAuth client record, the RP must:
 | `OAUTH_ACCESS_TOKEN_TTL_SEC` | Access token lifetime | Optional (default: 3600) |
 | `OAUTH_ID_TOKEN_TTL_SEC` | ID token lifetime | Optional (default: 3600) |
 | `OAUTH_AUTHORIZATION_CODE_TTL_SEC` | Authorization code TTL | Optional (default: 60) |
+| `OAUTH_REFRESH_TOKEN_TTL_SEC` | Refresh token family absolute lifetime (target; see [SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md)) | Optional (default: 1296000 = 15 days) |
 | `OAUTH_DPOP_IAT_SKEW_SEC` | DPoP proof `iat` tolerance | Optional (default: 60) |
 
 ### Key bootstrap and rotation
