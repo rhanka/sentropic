@@ -53,6 +53,26 @@ lock-public-libraries:
 		-v "$(CURDIR):/workspace" -w /workspace $(PUBLIC_LIBRARY_IMAGE) \
 		npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 
+.PHONY: test-publishable-consumers test-publishable-consumer test-publication-scripts
+test-publication-scripts:
+	@$(MAKE) test-publishable-manifests SCOPE=scripts/publish/npm-bootstrap-web.test.mjs ENV=$(ENV)
+
+test-publishable-consumers: build-public-libraries
+	@set -eu; for slug in $(PUBLIC_LIBRARY_SLUGS); do \
+		$(MAKE) pack-publishable-manifest PACKAGE=$$slug PACK_DESTINATION=tmp/npm-bootstrap \
+			MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=$(ENV); \
+	done
+	@$(MAKE) test-publishable-consumer PACKAGE= ENV=$(ENV)
+
+# Also used by a single-package CI validation after its guarded pack.
+test-publishable-consumer:
+	@docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-e PACKAGE="$(PACKAGE)" -e CONSUMER_HEAD_SHA="$$(git rev-parse HEAD)" \
+		-v "$(CURDIR)/scripts:/probe/scripts:ro" -v "$(CURDIR)/tmp/npm-bootstrap:/input:ro" \
+		-w /tmp $(PUBLIC_LIBRARY_IMAGE) sh -lc 'set -eu; \
+		tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; \
+		export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test /probe/scripts/publish/packaged-consumer.test.mjs'
+
 .PHONY: pack-ubo-contracts publish-ubo-contracts
 pack-ubo-contracts:
 	@$(MAKE) build-public-library PACKAGE=ubo-contracts ENV=$(ENV)
