@@ -12,9 +12,9 @@ import {
 } from '../src/routing-targets.js';
 import { modelProfiles } from '../src/catalog.js';
 
-describe('canonical model targets', () => {
-  const resolve = createCanonicalTargetResolver();
-  const resolveCandidates = createCanonicalTargetCandidatesResolver();
+describe('explicitly selected canonical mapping tables', () => {
+  const resolve = createCanonicalTargetResolver({ allowEquivalentModels: true });
+  const resolveCandidates = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true });
 
   it.each(['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
     const target = { providerId: 'openai', transportProviderId: 'codex', model };
@@ -509,9 +509,9 @@ describe('canonical model targets', () => {
     expect(profile).toBeDefined();
     expect(profile?.capabilities.contextWindowTokens).toBe(262_144);
     for (const musePosition of ['off', 'after-claude', 'first', 'claude-last'] as const) {
-      expect(createCanonicalTargetResolver({ musePosition })('mistral-vibe-cli-latest'))
+      expect(createCanonicalTargetResolver({ allowEquivalentModels: true, musePosition })('mistral-vibe-cli-latest'))
         .toEqual(target);
-      expect(createCanonicalTargetCandidatesResolver({ musePosition })('mistral-vibe-cli-latest'))
+      expect(createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true, musePosition })('mistral-vibe-cli-latest'))
         .toEqual([target]);
     }
     expect(describeCanonicalTargetRoutes().filter(({ requestedId }) =>
@@ -610,21 +610,21 @@ describe('canonical model targets', () => {
   });
 
   it('honors the musePosition integrator option (off | after-claude | first)', () => {
-    const off = createCanonicalTargetCandidatesResolver({ musePosition: 'off' });
+    const off = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true, musePosition: 'off' });
     expect(off('claude-opus-5-xhigh').map((target) => target.transportProviderId))
       .toEqual(['claude-code', 'codex', 'cloud-code', 'mistral-vibe']);
 
-    const first = createCanonicalTargetCandidatesResolver({ musePosition: 'first' });
+    const first = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true, musePosition: 'first' });
     expect(first('claude-opus-5-xhigh').map((target) => target.transportProviderId))
       .toEqual(['muse', 'claude-code', 'codex', 'cloud-code', 'mistral-vibe']);
 
-    const afterClaude = createCanonicalTargetCandidatesResolver({ musePosition: 'after-claude' });
+    const afterClaude = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true, musePosition: 'after-claude' });
     expect(afterClaude('claude-opus-5-xhigh').map((target) => target.transportProviderId))
       .toEqual(['claude-code', 'muse', 'codex', 'cloud-code', 'mistral-vibe']);
   });
 
   it('supports the claude-last order (codex, muse, cloud, claude)', () => {
-    const last = createCanonicalTargetCandidatesResolver({ musePosition: 'claude-last' });
+    const last = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true, musePosition: 'claude-last' });
     expect(last('claude-opus-5-xhigh').map((target) => target.transportProviderId))
       .toEqual(['codex', 'muse', 'cloud-code', 'claude-code', 'mistral-vibe']);
     // Every launch alias carries a muse candidate, so claude-last always
@@ -795,7 +795,7 @@ describe('canonical model targets', () => {
 
   it('keeps all four fallback transports for the 5.5 families on every muse position', () => {
     for (const musePosition of ['off', 'after-claude', 'first', 'claude-last'] as const) {
-      const resolveAt = createCanonicalTargetCandidatesResolver({ musePosition });
+      const resolveAt = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true, musePosition });
       for (const alias of ['claude-opus-5-5', 'claude-sonnet-5-5-max']) {
         const transports = resolveAt(alias).map((candidate) => candidate.transportProviderId);
         if (musePosition === 'off') {
@@ -827,4 +827,10 @@ describe('canonical model targets', () => {
       }
     }
   });
+});
+
+it('defaults to exact identity without enabling the cross-model table', () => {
+  const resolve = createCanonicalTargetCandidatesResolver();
+  expect(resolve('claude-opus-5-5')).toEqual([]);
+  expect(resolve('gpt-6.1-sol')).toEqual([{ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol' }]);
 });

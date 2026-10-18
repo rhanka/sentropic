@@ -59,7 +59,7 @@ export const DEFAULT_ROUTE_POLICY: RoutePolicy = {
   preferSameTransport: true,
   stickyAccount: true,
   rotateEquivalentAccounts: false,
-  allowEquivalentModels: true,
+  allowEquivalentModels: false,
 };
 
 export class RoutePolicyError extends Error {
