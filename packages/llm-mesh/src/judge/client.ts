@@ -30,7 +30,7 @@ const connectionError = (code: ConnectionErrorCode, phase: 'preflight' | 'dispat
 
 const BUDGET_STATES = new Set(['not-admitted', 'released', 'settled', 'pending-reconciliation']);
 
-const DECISION_ORIGINS = new Set(['provider-threshold', 'provider-choice', 'provider-capped', 'client-clamp']);
+const DECISION_ORIGINS = new Set(['provider', 'threshold', 'labels']);
 const DISPATCH_STATES = new Set(['not-started', 'started', 'completed', 'unknown']);
 const RAW_FIELDS = ['noul', 'score', 'choice', 'probabilities', 'confidence'] as const;
 
@@ -135,8 +135,9 @@ function isValidJudgeVerdict(v: unknown, request: JudgeRequest): v is JudgeVerdi
   if (!isRecord(v)) return false;
   if (v.criterionKind !== request.criterion.kind) return false;
   if (!['binary', 'graded', 'choice'].includes(v.resolvedCriterionKind as string)) return false;
-  if (!isRecord(v.decision) || typeof v.decision.pass !== 'boolean' || !DECISION_ORIGINS.has(v.decision.origin as string)
-    || (v.decision.rule !== undefined && !isJudgeDecisionRule(v.decision.rule))) return false;
+  if (v.decision !== null && (!isRecord(v.decision) || typeof v.decision.pass !== 'boolean'
+    || !DECISION_ORIGINS.has(v.decision.origin as string)
+    || (v.decision.rule !== undefined && !isJudgeDecisionRule(v.decision.rule)))) return false;
   if (request.criterion.kind === 'binary' && (v.score === null || parseJudgeScore(v.score) === null)) return false;
   if (request.criterion.kind === 'choice' && (v.score !== null || parseJudgeConfidence(v.confidence) === null)) return false;
   if (v.score !== null && parseJudgeScore(v.score) === null) return false;
