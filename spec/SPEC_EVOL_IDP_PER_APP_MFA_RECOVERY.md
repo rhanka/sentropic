@@ -19,20 +19,18 @@ Binding corrections applied to this spec:
   exigence 2fa ok pas sur le mode de 2fa. webauthn est deja du 2fa ». WebAuthn
   with user verification is one qualifying method. Client policy expresses a
   required MFA level; `amr` carries the method that satisfied it.
-- KVM's 2FA guarantee is provided by the **IdP, not the gateway** (kvm lane
-  commitment, owner-decided): `kvm-gateway` performs no `acr`/`amr` check.
-  Correctness therefore rests on IdP authorize enforcement plus the
-  non-regression test in section 8.2.
+- KVM's per-application MFA policy is guaranteed by the **IdP**, and the **RP
+  checks only that signed `amr` contains `"mfa"`** after standard OIDC token
+  validation (`packages/auth-hono/src/oauth/token-handler.ts:472` `[EXISTS]`).
+  `kvm-gateway` never selects an authentication method, never compares `acr`
+  strings (`passkey-fresh` vs `mfa`), and never duplicates the IdP policy
+  evaluator.
 
 Parallel input reconciled: the independent Astra max study
 (`.h2a/inputs/astra-idp-mfa-study.md`, 295 lines, sha256 prefix
-`831fe527b7cf591d`) was reconciled point by point; the taken/rejected record
-with reasons is `.h2a/reviews/spec-idp-mfa-reconciliation.md`. Where this
-spec and that study diverged on an owner-decided point, the owner decision
-governs and the divergence is recorded there (notably the gateway check:
-the owner decision above stands — the gateway performs no `acr`/`amr`
-gate; the study's `amr`-membership check at the RP is recorded as rejected
-for KVM, while its IdP-side evidence corrections are taken).
+`831fe527b7cf591d`) was reconciled point by point in
+`.h2a/reviews/spec-idp-mfa-reconciliation.md`, adopting both the IdP-side
+evidence/recovery rules and the RP `"mfa"`-in-`amr` membership check.
 
 Conventions in this document:
 
@@ -69,8 +67,9 @@ Out of scope (cited, never redesigned here):
 - OAuth client convergence between tiers:
   `spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md` already excludes tier-local policy
   from sync; this spec keeps that exclusion.
-- RP session glue and any gateway-side token check for KVM: explicitly none,
-  by the owner decision above.
+- Method-specific or `acr`-string gateway policy for KVM: after normal OIDC
+  validation, the RP checks only that signed `amr` contains `"mfa"` and
+  performs no method-name or `acr`-spelling comparison.
 - New MFA methods (for example TOTP): the policy model must admit them
   without a client-policy change, but enrolling one is not a lot here. Today
   the only qualifying method is WebAuthn with user verification.
@@ -122,11 +121,11 @@ means a session that may create a credential but satisfies no client.
 
 | Path | What merged code does | Assurance of the resulting session |
 |---|---|---|
-| Passkey login | Verifies the credential, requires verified email and an enabled account, then mints the session with `mfaVerified` from the ceremony (`api/src/routes/namespaces/auth/authentication.ts:84`) | `MFA` when UV present, else `bearer` |
+| Passkey login | Real verifier requires UV for every role (`api/src/services/webauthn-config.ts:59`), rejects UV=false (`api/src/services/webauthn-authentication.ts:173`, `:200`, `:215`), and on verified UV mints the session with `mfaVerified=true` (`api/src/routes/namespaces/auth/authentication.ts:84`) | `MFA` when UV succeeds; real verifier rejects UV=false (no session minted; the `bearer` branch at `authentication.ts:89` is a defence-in-depth fallback reached only when the verifier is stubbed, as in `api/tests/api/auth/passkey-mfa-session.test.ts:12`, `:92`) |
 | Add a device while signed in (credential management) | The credential handlers list, rename, and revoke rows per user behind a validated session (`api/src/routes/namespaces/auth/credentials.ts:52`, `api/src/routes/namespaces/auth/credentials.ts:76`); enrolment itself happens on the register surface, whose finalization deliberately creates a **new** weak session rather than continuing the caller's (`api/src/routes/namespaces/auth/registration.ts:363`) | Enrol via register surface (email or invite proof); manage behind any validated session; no step-up in merged code |
 | Magic link, account **with** devices | Marks the email verified, creates a session with no `mfaVerified` option (so false), and reports the devices as activated (`api/src/routes/namespaces/auth/magic-link.ts:140`) | `bearer` |
 | Magic link, account **without** devices | Creates the same bearer session, flags `requiresDeviceRegistration`, explicitly to allow device registration (`api/src/routes/namespaces/auth/magic-link.ts:196`, `api/src/routes/namespaces/auth/magic-link.ts:224`) | `enrolment-only` in intent, `bearer` in fact (no endpoint restriction) |
-| "Lost your device?" | Login shows the lost-device notice and links to the register surface; the register flow is email code plus WebAuthn enrolment (`packages/auth-ui/src/components/AuthLogin.svelte:102`, `spec/WORKFLOW_AUTH.md:97`) | Email proof alone reaches enrolment |
+| "Lost your device?" | Login exposes the lost-device slot and routes to `/auth/register`, where enrolment uses an email verification code plus WebAuthn ceremony (`packages/auth-ui/src/components/AuthLogin.svelte:102`, `:138`; `ui/src/routes/auth/login/+page.svelte:49`) | Email proof alone reaches enrolment |
 | Register / enrol a credential (existing user) | With a valid email token or invite for that email, an existing verified user receives registration options for the existing `userId`; no signed-in session and no existing credential is required (`api/src/routes/namespaces/auth/registration.ts:136`) | Email proof alone creates the credential |
 | Register finalisation | Persists the credential, then creates a session with no `mfaVerified` option (so false) (`api/src/routes/namespaces/auth/registration.ts:363`) | `bearer`; the **next** passkey login with UV is `MFA` |
 | Invite-token enrolment | A `sit_` invite is checked read-only for routing and consumed atomically at credential persist; invalid states collapse to the generic email-verification outcome (`api/src/routes/namespaces/auth/registration.ts:42`, `api/src/routes/namespaces/auth/registration.ts:440`) | Email-equivalent proof; single-use |
@@ -142,9 +141,18 @@ alone is sufficient to obtain a new `MFA` session for a forced-MFA account:
    for a `passkey-fresh` client now passes, because the new ceremony minted
    `mfaVerified=true`. The pre-existing devices are never revoked by this
    flow.
-2. Account **without** devices: verify a magic link, take the temporary
-   session to the register surface, persist a credential, then sign in with
-   it with UV. Same result, one step shorter.
+2. Account **without** devices: whether starting from the no-device
+   magic-link session (`api/src/routes/namespaces/auth/magic-link.ts:196`)
+   or navigating directly to `/auth/register`, request and verify the
+   separate email verification code
+   (`api/src/services/email-verification.ts:138`, `:174`) to obtain the
+   mandatory `verificationToken`
+   (`packages/auth-hono/src/webauthn-registration-route-handlers.ts:104`,
+   verified at `api/src/routes/namespaces/auth/registration.ts:232`),
+   persist a replacement credential
+   (`api/src/services/webauthn-registration.ts:200`, `:208`), and sign in
+   with it with UV. Zero remaining devices carry no persistent protection
+   state at baseline (`api/src/db/schema.ts:146`, `:168`).
 
 In both cases the forced-2FA application inherits **email security**, which
 is exactly what per-application forced 2FA is meant to avoid. Authorize-side
@@ -179,10 +187,11 @@ Two adjacent gaps follow from section 2.2:
   in `amr`.
 
 What already holds and must not regress: a bearer session (magic link,
-federation, passkey without UV) is refused for a policy client after the
-forced re-auth leg, an unlisted subject is refused before consent, and a
-client with no policy is byte-identical to legacy behaviour. Section 8.2
-pins those behaviours as non-regression tests.
+federation, or the defence-in-depth mocked UV=false route fallback while the
+real verifier rejects UV=false outright) is refused for a policy client
+after the forced re-auth leg, an unlisted subject is refused before consent,
+and a client with no policy is byte-identical to legacy behaviour.
+Section 8.2 pins those behaviours as non-regression tests.
 
 ## 3. Threat model
 
