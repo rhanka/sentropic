@@ -82,7 +82,7 @@
 - [ ] **Lot 2 — Guarded build, pack and web-login bootstrap**
   - [x] Add standalone Docker build/test/lock tooling without host dependencies.
   - [x] Add guarded pack/OIDC publish targets for the first nine libraries.
-  - [ ] Add build/pack/publish lanes using existing exact-artifact guard and OIDC.
+  - [x] Add build/pack/publish lanes using existing exact-artifact guard and OIDC.
   - [ ] Add `make npm-bootstrap-web PKGS="..." ENV=test-publish-mcp-packages` over already verified archives.
   - [ ] Check hashes, manifests, dependency order and missing archives before web login; never mount host npm credentials.
   - [ ] Use throwaway node:24 container/session; provenance only in supported CI context; cleanup on failure/interruption.

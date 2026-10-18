@@ -110,3 +110,84 @@ publish-mcp-connector-googlecalendar:
 	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
 	@$(MAKE) build-public-library PACKAGE=mcp-connector-googlecalendar ENV=$(ENV)
 	$(call publish_public_library,mcp-connector-googlecalendar)
+
+.PHONY: pack-mcp-connector-googledocs publish-mcp-connector-googledocs
+pack-mcp-connector-googledocs:
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-googledocs ENV=$(ENV)
+	$(call manifest_guard_pack,mcp-connector-googledocs)
+publish-mcp-connector-googledocs:
+	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-googledocs ENV=$(ENV)
+	$(call publish_public_library,mcp-connector-googledocs)
+
+.PHONY: pack-mcp-connector-googledrive publish-mcp-connector-googledrive
+pack-mcp-connector-googledrive:
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-googledrive ENV=$(ENV)
+	$(call manifest_guard_pack,mcp-connector-googledrive)
+publish-mcp-connector-googledrive:
+	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-googledrive ENV=$(ENV)
+	$(call publish_public_library,mcp-connector-googledrive)
+
+.PHONY: pack-mcp-connector-googlesheets publish-mcp-connector-googlesheets
+pack-mcp-connector-googlesheets:
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-googlesheets ENV=$(ENV)
+	$(call manifest_guard_pack,mcp-connector-googlesheets)
+publish-mcp-connector-googlesheets:
+	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-googlesheets ENV=$(ENV)
+	$(call publish_public_library,mcp-connector-googlesheets)
+
+.PHONY: pack-mcp-connector-hubspot publish-mcp-connector-hubspot
+pack-mcp-connector-hubspot:
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-hubspot ENV=$(ENV)
+	$(call manifest_guard_pack,mcp-connector-hubspot)
+publish-mcp-connector-hubspot:
+	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-hubspot ENV=$(ENV)
+	$(call publish_public_library,mcp-connector-hubspot)
+
+.PHONY: pack-mcp-connector-linear publish-mcp-connector-linear
+pack-mcp-connector-linear:
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-linear ENV=$(ENV)
+	$(call manifest_guard_pack,mcp-connector-linear)
+publish-mcp-connector-linear:
+	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-linear ENV=$(ENV)
+	$(call publish_public_library,mcp-connector-linear)
+
+.PHONY: pack-mcp-connector-notion publish-mcp-connector-notion
+pack-mcp-connector-notion:
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-notion ENV=$(ENV)
+	$(call manifest_guard_pack,mcp-connector-notion)
+publish-mcp-connector-notion:
+	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-notion ENV=$(ENV)
+	$(call publish_public_library,mcp-connector-notion)
+
+.PHONY: pack-mcp-connector-slack publish-mcp-connector-slack
+pack-mcp-connector-slack:
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-slack ENV=$(ENV)
+	$(call manifest_guard_pack,mcp-connector-slack)
+publish-mcp-connector-slack:
+	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-slack ENV=$(ENV)
+	$(call publish_public_library,mcp-connector-slack)
+
+.PHONY: pack-mcp-connector-stripe publish-mcp-connector-stripe
+pack-mcp-connector-stripe:
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-stripe ENV=$(ENV)
+	$(call manifest_guard_pack,mcp-connector-stripe)
+publish-mcp-connector-stripe:
+	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
+	@$(MAKE) build-public-library PACKAGE=mcp-connector-stripe ENV=$(ENV)
+	$(call publish_public_library,mcp-connector-stripe)
+
+.PHONY: pack-skills publish-skills
+pack-skills:
+	@$(MAKE) build-public-library PACKAGE=skills ENV=$(ENV)
+	$(call manifest_guard_pack,skills)
+publish-skills:
+	@test "$(GITHUB_ACTIONS)" = true && test "$(GITHUB_REF)" = refs/heads/main || { echo "CI trusted publishing only; first publication uses npm-bootstrap-web"; exit 1; }
+	@$(MAKE) build-public-library PACKAGE=skills ENV=$(ENV)
+	$(call publish_public_library,skills)
