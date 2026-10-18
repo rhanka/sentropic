@@ -1,0 +1,14 @@
+{
+  "name": "fixture-mcp-oauth",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.20.0.tgz",
+    "@sentropic/mcp-platform": "0.3.0",
+    "@sentropic/mcp-auth": "0.2.2",
+    "@sentropic/oauth-verify": "0.1.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "hono": "4.13.13",
+    "jose": "5.10.0"
+  }
+}
