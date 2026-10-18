@@ -10,12 +10,36 @@
  * `PACKED_CONSUMER_OK` on success; any failure throws.
  */
 import assert from "node:assert/strict";
+import { readFileSync, statSync } from "node:fs";
 
 let fetchCalls = 0;
 globalThis.fetch = async () => {
   fetchCalls += 1;
   throw new Error("network must not be used");
 };
+
+await import("@sentropic/artifacts");
+const packageRoot = new URL("../", import.meta.resolve("@sentropic/artifacts"));
+const manifest = JSON.parse(readFileSync(new URL("package.json", packageRoot), "utf8"));
+for (const adapter of ["s3", "postgres"]) {
+  const subpath = `./adapters/${adapter}`;
+  assert.equal(import.meta.resolve(`@sentropic/artifacts/adapters/${adapter}`),
+    new URL(`dist/adapters/${adapter}.js`, packageRoot).href);
+  assert.deepEqual(manifest.exports[subpath], {
+    types: `./dist/adapters/${adapter}.d.ts`, import: `./dist/adapters/${adapter}.js`,
+  });
+  for (const target of Object.values(manifest.exports[subpath])) {
+    assert.ok(statSync(new URL(target, packageRoot)).isFile(), `missing ${target}`);
+  }
+}
+for (const migration of ["0001_artifacts.sql", "0002_lifecycle.sql"]) {
+  const sql = readFileSync(new URL(import.meta.resolve(`@sentropic/artifacts/migrations/${migration}`)), "utf8");
+  assert.match(sql, /(?:CREATE|ALTER) TABLE (?:IF NOT EXISTS )?artifacts\./u, `missing SQL in ${migration}`);
+}
+for (const driver of ["@aws-sdk/client-s3", "pg"]) {
+  await assert.rejects(import(driver), { code: "ERR_MODULE_NOT_FOUND" });
+  assert.equal(manifest.peerDependenciesMeta[driver]?.optional, true);
+}
 
 const mcp = await import("@sentropic/artifacts/mcp");
 assert.equal(Object.keys(mcp).some((name) => /WEB_PAGES|WebPages/u.test(name)), false);
