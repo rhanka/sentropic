@@ -173,8 +173,8 @@ live session today `[EXISTS]`, while the authorization-code exchange leg
 performs no fresh policy or account-generation recheck — Lot 2 defines
 that recheck (stale or policy-changed transactions are refused rather
 than minted below policy), preserving one-time code consumption and PKCE.
-There is no OAuth refresh grant to protect (`offline_access` is refused);
-local session refresh is the only refresh in scope.
+At this baseline there is no OAuth refresh grant (`offline_access` is
+refused). PR #699 adds it separately; section 5.4 defines the shared boundary.
 
 Two adjacent gaps follow from section 2.2:
 
@@ -368,7 +368,8 @@ ceremony or bootstrap/recovery `operationId`, an assurance schema version,
 and a monotonically increasing per-account **security generation** that
 bootstrap, recovery, protection activation, and full reset increment.
 Refresh preserves the original ceremony times and generation and can
-never create MFA evidence. Stored protection persists at zero credentials:
+never create MFA evidence; last activity supports session continuity only,
+without moving the absolute MFA deadline (section 5.3). Stored protection persists at zero credentials:
 an account whose keys were all removed remains `is_mfa_protected = true`,
 and zero credentials never re-opens weak bootstrap for it. Lot 0
 (section 13) freezes the exact columns on the existing ports/adapters; no
@@ -410,22 +411,86 @@ enforcement (section 8.2).
 
 AMR correctness rules `[TO BUILD Lot 5]`: `"mfa"` membership in signed `amr` is the only method signal an RP ever needs; `hwk` is emitted only when the verifier holds evidence of hardware binding (never inferred from the label "passkey", transports, or credential count); `user` denotes demonstrated user presence (`up=true`) and is not a synonym for the WebAuthn UV bit — the method detail rides in the documented private method value `urn:sentropic:amr:webauthn`; non-password methods (`urn:sentropic:amr:email`, `urn:sentropic:amr:federation`) never emit `pwd`, and legacy pre-drain sessions or code payloads whose method is unknown emit `amr=[]`. The fallbacks that manufacture `amr` from `acr` in `packages/auth-hono/src/oauth/issue-authorized-code.ts:30`, `packages/auth-hono/src/oauth/token-handler.ts:430`, `:528`, and the host adapter `api/src/services/auth/oauth-state-adapter.ts:282` are removed in Lot 5. A credential in `pending-recovery` or `unverified_email` binding state never yields `"mfa"` in `amr`, even with UV, until its independent activation (section 6) completes.
 
-### 5.2 Where enforcement lives: one evaluator across four legs
+### 5.2 Where enforcement lives: one evaluator across issuance legs
 
 One shared policy evaluator runs across all four OAuth issuance legs — **initial authorize, resumed authorize, consent (including consent-skipping issuance), and authorization-code exchange** — binding client `policy_version`, subject allowlist, account `is_mfa_protected` and `security_generation`, credential `binding_state`, and the actual qualifying ceremony timestamp (`mfaCompletedAt`). At initial and resumed authorize (`packages/auth-hono/src/oauth/authorize-handler.ts:80`, `:90`, `:253`), a below-level or stale session triggers forced re-authentication and a still-insufficient resumed session or unlisted subject returns `access_denied` `[EXISTS seam, extended by Lot 2]`. Consent (`packages/auth-hono/src/oauth/consent-decision-handler.ts:102`, `:118`) must not mint from a stale sealed payload after a cookie swap: it re-evaluates the live session and rebuilds the evidence. Code exchange (`packages/auth-hono/src/oauth/token-handler.ts:59`, `:79`, `:430`) rereads current client policy, account status, and `security_generation` and refuses stale transactions (policy raised, subject removed/disabled/deleted, generation bumped, client missing) while preserving PKCE and one-time consumption. File targets: `authorize-handler.ts`, `consent-decision-handler.ts`, `issue-authorized-code.ts`, and `token-handler.ts` plus `api/src/services/auth/oauth-state-adapter.ts` and the session store adapters; Lot 2 owns the change.
 
+PR #699 adds **OAuth refresh as the fifth issuance leg**, with its live-policy
+predicate and transactional family invalidation (section 5.4). It never
+substitutes a fresh browser cookie for the family's sealed authentication.
+
 ### 5.3 Freshness and step-up rules
 
-- **R-FRESH-1.** `[TO BUILD Lot 2]` An MFA session satisfies an MFA client only while `now - mfaCompletedAt <= maxMfaAgeSeconds`, where `mfaCompletedAt` is the recorded qualifying ceremony time (never session creation, refresh, or last activity; missing or future values fail closed). Sensitive IdP account operations (credential create/revoke, federation link/unlink, account self-deactivation/deletion, recovery management) have no requesting OAuth client and enforce a separate server-side **administrative freshness bound** (`adminMaxMfaAgeSeconds`, default **900 seconds / 15 minutes**, frozen in Lot 0 independently of `D-P1`). For OAuth clients, `maxMfaAgeSeconds` is per client (KVM value chosen in `D-P1`, section 15; server default for other MFA clients when unset) and bounds only how long an IdP MFA ceremony remains eligible to issue a **new** OAuth authorization code — it does not revoke an already established downstream RP session cookie, whose lifetime and purge/logout procedure are bounded separately (R-REC-7, section 11).
+- **R-FRESH-1 (sliding continuity, absolute MFA expiry).** `[TO BUILD Lot 2]`
+  D-P1 fixes KVM `maxMfaAgeSeconds = 86400`. Compute
+  `mfaAbsoluteExpiresAt = mfaCompletedAt + maxMfaAgeSeconds` from the actual
+  qualifying ceremony, never from session creation, token issuance or last
+  activity. Require a live session, current trusted binding/generation,
+  and `mfaCompletedAt <= now < mfaAbsoluteExpiresAt` on every issuance leg.
+  Missing/future evidence fails closed; exactly 24 h requires a new ceremony.
+  Authenticated use or browser-session refresh may slide session continuity
+  to `min(session.expiresAt, mfaAbsoluteExpiresAt)` without another 2FA.
+  KVM introduces no shorter inactivity cutoff: sleeping overnight within
+  the 24-hour period does not require a new ceremony while the session is
+  valid. Staying connected, a background refresh, or a new code/token never
+  resets the 24-hour clock or revives an expired/revoked session. For KVM,
+  the absolute cap therefore wins even under continuous activity.
+  Other MFA clients retain their per-client hard ceremony-age bound.
+  Sensitive IdP mutations retain the independent **900-second**
+  `adminMaxMfaAgeSeconds` bound, measured from the actual ceremony.
+- **R-FRESH-4 (downstream expiry).** `[TO BUILD Lots 1/2/6]` For KVM, cap
+  access/ID-token `exp` at `mfaAbsoluteExpiresAt` as well as their normal TTL.
+  The pinned RP configuration must stop or re-authorize a session by that
+  same deadline, using validated token expiry; reissued cookies cannot
+  extend it. Before the deadline, ordinary browser authorize may reuse the
+  same eligible IdP session without another 2FA; at the deadline it requires
+  a fresh ceremony. Qualify this on the real RP, including overnight return
+  and continuous use. The RP still checks standard OIDC validity and
+  signed `amr` membership only; it gains no `acr` policy evaluator.
 - **R-FRESH-2 (step-up, not lockout).** A stale MFA session is handled
   exactly like a below-level session today: authorize redirects to login
   with the force-reauth continuation sealed; the resume leg refuses with
   `access_denied` if the new ceremony is still non-qualifying. The old
   session is not revoked (merged behaviour: the user may abandon the flow
   and keep it for non-forced clients) `[EXISTS pattern, extended by Lot 2]`.
-- **R-FRESH-3 (request parameters).** `[TO BUILD Lot 2]` Authorize learns the standard `max_age` and `acr_values` request parameters as **hints that can only raise** the requirement, and seals the effective requirement into the signed continuation through forced login and consent: `max_age` tighter than `maxMfaAgeSeconds` wins for that request; `acr_values` naming the MFA level on a client without a stored policy triggers the same forced re-auth, but never downgrades a stored policy. `prompt=login` and `prompt=select_account` keep their merged force-reauth meaning. Discovery advertises `acr_values_supported` with the neutral value (plus the legacy alias during migration).
+- **R-FRESH-3 (request parameters).** `[TO BUILD Lot 2]` Authorize learns the standard `max_age` and `acr_values` request parameters as **hints that can only raise** the requirement, and seals the effective requirement into the signed continuation through forced login and consent: a tighter `max_age` checks original authentication time and ceremony age, never last activity; `acr_values` naming the MFA level on a client without a stored policy triggers the same forced re-auth, but never downgrades a stored policy. `prompt=login` and `prompt=select_account` keep their merged force-reauth meaning. Discovery advertises `acr_values_supported` with the neutral value (plus the legacy alias during migration).
 - **R-STEP-1 (sensitive IdP operations).** `[TO BUILD Lot 3]` Creating or revoking a credential, linking/unlinking a federation identity, or deactivating the account (`POST /api/v1/auth/me/deactivate`, `api/src/routes/namespaces/auth/account.ts:71`) for a protected account (`is_mfa_protected = true`) requires a current `trusted` MFA session within `adminMaxMfaAgeSeconds` (`900s`), except inside the independently authorized `enrolment-only` recovery capabilities of section 6 (`P-BREAK` and optional `P-CODE`), which may create at most one `pending-recovery` credential and nothing else. Self-deletion (`DELETE /api/v1/auth/me`, `api/src/routes/namespaces/auth/account.ts:95`) is refused while `is_mfa_protected = true` (`P-LIFECYCLE`).
 - **R-DOWN-1 (no downgrade path).** No flow converts an MFA session into a weaker one for the same client, no parameter clears a stored policy, and de-protection (section 4.2) never retroactively validates a credential created by email proof. Refresh (`api/src/routes/namespaces/session-lifecycle.ts:50` → `api/src/services/auth/session-adapter.ts:105` → `api/src/services/session-manager.ts:308`, `:320`) reuses the same session row, preserves original `mfaCompletedAt` and `security_generation`, and can never raise its level `[EXISTS, extended by Lot 2]`.
+
+### 5.4 OAuth refresh alignment with PR #699
+
+Reference contract: [PR #699](https://github.com/rhanka/sentropic/pull/699),
+`spec/SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md`, head
+`0304357583e8af6e3e896da6d42b13cb4329d59f`, sections 4–7 and 12.2.
+It is an open target specification, not baseline implementation.
+
+- **R-REFRESH-1 (eligibility).** Every non-null `required_acr` is OAuth
+  refresh-ineligible, including `mfa`, `passkey-fresh`, explicit `bearer`,
+  and unknown values. `kvm-gateway` remains `authorization_code` only,
+  with no `offline_access` and no refresh token. D-P1's session continuity
+  uses the browser session and authorize flow; it grants no offline MFA
+  exception and does not require a new owner decision on #699.
+- **R-REFRESH-2 (never two-factor bypass by refresh).** For eligible
+  non-policy clients only, #699 rotates each token atomically on every use,
+  detects reuse and revokes the family, stores only hashes, and preserves
+  its immutable **15-day** family deadline. Preserve sealed `acr`, `amr`,
+  `auth_time`, `mfaCompletedAt`, binding provenance and generation; refresh
+  never upgrades evidence or resets its ceremony/deadline. A 15-day family
+  neither satisfies nor extends KVM's 24-hour policy; client/audience
+  binding prevents presenting a different client's tokens to KVM.
+- **R-REFRESH-3 (live changes and recovery).** Adding any `required_acr`,
+  removing an allowed subject, changing security generation or completing
+  authorized recovery invalidates affected families and tracked JTIs under
+  #699's client/user/family locks, including races with initial creation or
+  rotation. An authenticated owned stale family returns `invalid_grant`
+  with permanent revocation; restoring policy never revives it. Merely
+  requesting recovery revokes nothing (R-REC-7). Offline MCP families may
+  outlive the browser cookie; that independence never supplies MFA proof.
+
+Lot 2 owns the shared evidence/deadline contract; #699 BUILD Lots 1–3 own
+family persistence, rotation and the fifth leg. Keep KVM refresh disabled
+through both rollouts; any future MFA offline exception requires a separate
+approved amendment, with these ceremony and absolute-expiry guarantees.
 
 ## 6. Recovery and re-enrolment paths (target behaviour)
 
@@ -726,7 +791,8 @@ Given parameters (kvm lane, 2026-10-18; treated as requirements):
 | `token_endpoint_auth_method` | `client_secret_basic`; secret minted cluster-side, stored SHA-256 only at the IdP, plaintext only in the RP secret locations named by variable |
 | Required level | MFA level — stored today as `urn:sentropic:loa:passkey-fresh` (only merged spelling), migrated to `urn:sentropic:loa:mfa` by section 10.1 |
 | `allowed_user_ids` | Owner subject only (`require_non_empty_allowlist: true`; tier value supplied in the 0600 file, never in git). Missing, empty (`""` / `'{}'`), placeholder, or unresolved subjects are rejected before any DB write; removing the last subject is rejected unless explicitly disabling/deleting the client or running R-GOV-4 weakening |
-| Freshness bound | Per-client bound of section 5.3; the KVM value is an owner decision (section 15) |
+| Freshness bound | Sliding browser continuity within the immutable 24-hour ceremony deadline (`maxMfaAgeSeconds = 86400`, D-P1); token and RP expiry bounded by R-FRESH-4 |
+| OAuth refresh | Disabled: `grant_types = ['authorization_code']`, no `offline_access`; PR #699's 15-day rotating families never extend KVM MFA |
 | Gateway check | **Standard OIDC token validation plus `"mfa"` in signed `amr` (`deploy/kvm-gateway/oauth2-proxy-amr-check.yaml`)**: `kvm-gateway` (`oauth2-proxy v7.15.5` + pinned RP `amr` verifier) validates signature, issuer, audience, and expiry and checks that signed `amr` contains `"mfa"`, with no method-name or `acr`-spelling check. Combined with the IdP 4-leg evaluator and real-RP qualification (`deploy/ci/kvm-gateway/verify-rp-amr.sh`, R-KVM-TEST), this enforces P-MFA |
 
 Onboarding steps (operator, per tier): verify the deployed RP matches the pinned `deploy/kvm-gateway/oauth2-proxy-amr-check.yaml` digest and passes `deploy/ci/kvm-gateway/verify-rp-amr.sh` (cutover dependency); mint the secret by the runbook method; build the 0600 file from the Lot 1 declaration plus the secret and resolved owner subject; run the registration Job; verify the persisted DB readback shows the expected required level and non-empty single-subject allowlist; cut the RP over to the new secret in the same operation (no grace period); verify a fresh owner passkey sign-in reaches KVM, a magic-link session receives `access_denied`, an otherwise valid signed token lacking `"mfa"` in `amr` presented to the real RP callback is rejected (`403 Forbidden`), a valid signed token with `"mfa"` in `amr` is accepted under both `passkey-fresh` and `mfa` `acr` spellings, and the old secret returns `invalid_client`; record the minted-at variables. Rollback is a re-run with the previous secret values file, per the runbook.
@@ -753,7 +819,7 @@ exhaustive for the named suites (existing + updated + new).
 
 | File | Status | Cases (observable behaviour) |
 |---|---|---|
-| `packages/auth-hono/tests/oauth-client-required-acr.test.ts` (package ports/fixtures), `api/tests/api/auth/oauth-client-policy.test.ts` (host routes/DB) | existing, updated in Lots 1/2/5 | Lot 1: `oauth-client-required-acr.test.ts` exercises the shared evaluator via package OAuth ports/fixtures (magic-link-shaped bearer, federation-shaped bearer, unlisted MFA subject) without importing `api/src/**` host routes; `oauth-client-policy.test.ts` drives the real host magic-link (`api/src/routes/namespaces/auth/magic-link.ts:149,:197`) and federation (`api/src/routes/namespaces/auth/federation.ts:119,:143,:161` + `api/src/services/auth/federation/broker.ts:218`, stubbing only external provider HTTP) session-minting routes and DB writers into `authorize`/`consent`/`token` against the `kvm-gateway` declaration row. Lot 2: exact MFA age boundary (`== maxMfaAgeSeconds` accepted, `+1s` forced to re-auth then refused if not stepped up), missing/future `mfaCompletedAt` refused, newer session with older `mfaCompletedAt` evaluated by `mfaCompletedAt`, `max_age` and `acr_values` preserved across continuation/consent, unrestricted MFA client first-use transition vs allowlist-restricted client. Lot 5: `mfa` and `passkey-fresh` both accepted by 4-leg evaluator; emitted `acr`/`amr` match section 5.1 table; unknown `required_acr` fails closed; no-policy clients unchanged; legacy code payload without stored method emits `amr: []` and refuses for protected client; rollback safety |
+| `packages/auth-hono/tests/oauth-client-required-acr.test.ts` (package ports/fixtures), `api/tests/api/auth/oauth-client-policy.test.ts` (host routes/DB) | existing, updated in Lots 1/2/5 | Lot 1: `oauth-client-required-acr.test.ts` exercises the shared evaluator via package OAuth ports/fixtures (magic-link-shaped bearer, federation-shaped bearer, unlisted MFA subject) without importing `api/src/**` host routes; `oauth-client-policy.test.ts` drives the real host magic-link (`api/src/routes/namespaces/auth/magic-link.ts:149,:197`) and federation (`api/src/routes/namespaces/auth/federation.ts:119,:143,:161` + `api/src/services/auth/federation/broker.ts:218`, stubbing only external provider HTTP) session-minting routes and DB writers into `authorize`/`consent`/`token` against the `kvm-gateway` declaration row. Lot 2: injected-clock KVM deadline `T = mfaCompletedAt + 86400s` accepts at `T-1s`, requires step-up at `T` and `T+1s` on every leg; repeated browser refresh, continuous use, overnight inactivity, new sessions/codes/tokens and process restart never move T; missing/future evidence and stale code exchange refuse; token `exp <= T`; tighter `max_age` and `acr_values` survive continuation/consent; unrestricted MFA client first-use transition vs allowlist-restricted client. Lot 5: `mfa` and `passkey-fresh` both accepted by 4-leg evaluator; emitted `acr`/`amr` match section 5.1 table; unknown `required_acr` fails closed; no-policy clients unchanged; legacy code payload without stored method emits `amr: []` and refuses for protected client; rollback safety |
 | `packages/auth-hono/tests/example-oauth-rp.test.ts` (`MinimalMockRp` at `:60,:97,:142`, updated Lots 1/5), `api/tests/unit/auth/kvm-rp-amr-contract.test.ts` (new Lot 1, updated Lot 5), `deploy/ci/kvm-gateway/verify-rp-amr.sh` (new Lot 1, updated Lot 5) | existing + new in Lots 1/5 | Mock-RP contract suites (`example-oauth-rp.test.ts`, `kvm-rp-amr-contract.test.ts`) plus real-RP qualification (`deploy/ci/kvm-gateway/verify-rp-amr.sh` launching the pinned `oauth2-proxy v7.15.5` + RP `amr` verifier from `deploy/kvm-gateway/oauth2-proxy-amr-check.yaml` against the test IdP JWK set): presents otherwise valid signed tokens directly to the real RP callback (not blocked earlier at the IdP), requiring `403 Forbidden` for absent, empty (`[]`), or non-MFA `amr` (`["urn:sentropic:amr:email"]`, `["urn:sentropic:amr:federation"]`, `["urn:sentropic:amr:webauthn"]`) and acceptance for signed `amr` containing `"mfa"` under both `passkey-fresh` and `mfa` `acr` spellings and across qualifying method values |
 | `packages/auth-hono/tests/oauth-client-allowlist.test.ts` | existing, updated in Lot 1 | Non-empty allowlist and fail-closed subject evaluation across all 4 issuance legs |
 | `api/tests/unit/oauth-register-client.test.ts` (Lots 1/2/5/6), `deploy/ci/idp-identity-sync/sql-test.sh` + `deploy/ci/idp-identity-sync/fixtures/{prod.sql,preprod.sql,assertions.sql}` (Lot 2) | existing, updated in Lots 1/2/5/6 | `kvm-gateway` declaration round-trip and persisted DB readback; missing/empty (`""` / `'{}'`)/placeholder/unresolved owner subject rejected before any DB write; removing last allowlist entry rejected (never writes `'{}'`); explicit client disable/delete fails closed; R-GOV-4 weakening (`--allow-weaken`, `--expected-policy-version`, `--operation-id`, `--approval-ref`, `--declaration-digest`) CAS/approval/digest/readback. In `sql-test.sh` (`export-prod.sql:7-10`, `reader-role.sql:30-37`, `client-postcondition.sql:7`, `import-preprod.sql:35-154`): client policy and account/credential security columns stay tier-local; ordinary sync preserves local `is_mfa_protected`, `security_generation`, and `trusted` bindings; imported keys insert as `unverified_email` (`security_generation = 0`) and never gain `trusted`; protected-account collision/re-key fails closed (`protected account rekey forbidden`); new recovery tables drop as `ephemeral-auth` on re-key; `security_transition_records` is never repointed or rewritten |
@@ -765,6 +831,7 @@ exhaustive for the named suites (existing + updated + new).
 | `api/tests/unit/auth/mfa-recovery.test.ts`, `api/tests/api/auth/breakglass.test.ts`, `api/tests/api/auth/mfa-recovery-policy.test.ts` | new in Lots 3/4 | Non-circular trust bootstrap from zero `trusted` bindings (legitimate owner key + pre-migration email-enrolled attacker key + active legacy sessions/codes): Mode A confirms named owner keys and revokes attacker key; Mode B issues a 1-key grant that enrolls one `pending-recovery` key (`R-REC-3`, proving a reused grant cannot create a second key), activates key 1 to `trusted` via the independent Job (`R-REC-4`), completes a fresh UV login on key 1, and enrolls key 2 via signed-in `P-ADD` (covering interruption/retry between key 1 and key 2 and refusing premature `is_mfa_protected` activation until both `trusted` keys exist); wrong subject/generation/ceremony, replay & concurrent consume, durable persistence failure rollback, cancellation, weak `admin_app` session refused, deactivated-account reactivation, idempotent retry by `operationId`; full-loss recovery chain through all 4 issuance legs for `kvm-gateway` with no protected token on any shortcut |
 | `api/tests/api/auth/recovery-codes.test.ts` | new in Lot 4 **optional sublot** (conditional on `D-P2`) | Built only if owner selects `D-P2` option (ii): stolen recovery code + attacker WebAuthn enrollment (`pending-recovery`) + fresh UV login + `authorize`/`consent`/code/token for `kvm-gateway` denied at all 4 legs while `pending-recovery`, and accepted only after independent operator activation + fresh UV ceremony |
 | `api/tests/api/auth/audit-notifications.test.ts` | new in Lots 2/6 | Failed durable write in `security-transition-store.ts` rolls back client policy, credential binding, `is_mfa_protected`, account deactivation/reactivation, or `security_generation` mutation; stale CAS and unauthorized weakening refuse; idempotent retry with same `operationId` succeeds; best-effort logger/exporter/mail outage does not undo a durably committed transition or alter ordinary authorize outcomes |
+| `packages/auth-hono/tests/oauth/refresh-token-flow.test.ts`, `api/tests/unit/auth/oauth-state-adapter.refresh.test.ts`, `api/tests/api/auth/oauth-refresh.integration.test.ts` | new in #699 BUILD Lots 1–3; shared contract with Lot 2 here | Every non-null `required_acr` denies initial refresh issuance; KVM gets no refresh token and rejects refresh grants. An eligible no-policy family's two rotations preserve ceremony/evidence and the 15-day deadline; at day 1 it cannot authorize KVM even if still refreshable for its own audience. Raising `required_acr`, generation change and authorized recovery serialize against issuance/rotation, permanently revoke family/JTIs and cannot resurrect on policy restoration; a recovery request alone revokes nothing |
 
 Scoped runs while evolving (one suite at a time), for example: `make test-api SCOPE=tests/api/auth/magic-link-recovery.test.ts ENV=test-idp-per-app-mfa-recovery`. Lot gate for IdP lots: `make test-api ENV=test-idp-per-app-mfa-recovery` plus the package suite invocation used by that lot, recorded in the BUILD branch `BRANCH.md` with exact commands and results.
 
@@ -783,6 +850,12 @@ Scoped runs while evolving (one suite at a time), for example: `make test-api SC
 
 E2E never runs against `ENV=dev` data. AI-flaky acceptance (single success on the same commit plus recorded signature and owner sign-off) applies only to provider nondeterminism, never to the deterministic auth cases above.
 
+Lot 6 additionally runs `e2e/tests/02-auth-mfa-recovery.spec.ts` and
+`deploy/ci/kvm-gateway/verify-rp-amr.sh` with an injected clock: silent browser
+continuation during use and after overnight inactivity before T; RP cookie
+reissue/token renewal still stops at T; fresh UV is required at T and
+resets T only after that ceremony. No 24-hour real-time wait is required.
+
 ### 12.4 Acceptance criteria for the specification itself
 
 This spec is accepted when: every `[EXISTS]` citation resolves at `94a38286e`; P-MFA and P-REC are testable as written; the four kvm-lane options have verdicts; commitments R-KVM-DECL, R-KVM-TEST, and R-KVM-CLOSE name exact files and lots; and section 15 lists only decisions the owner must actually make. Astra max review and the reconciliation record (`.h2a/reviews/spec-idp-mfa-reconciliation.md`, `.h2a/reviews/pr695_treatment.md`) are part of acceptance for this branch, not of BUILD acceptance.
@@ -793,9 +866,9 @@ Each lot is a separate BUILD branch from the then-current `main`, with its own `
 
 | Lot | Deliverable | Key file targets | Gate |
 |---|---|---|---|
-| Lot 0 — Contract freeze (design only) | Freeze assurance semantics, single section 5.1 `acr`/`amr` table, `mfaCompletedAt`, `adminMaxMfaAgeSeconds = 900s`, `binding_state`, `security_generation`, `policy_version`, `is_mfa_protected`, Mode A/B 1-key bootstrap protocol, identity-sync tier rules, and durable transition store schema on existing ports/adapters; consolidate the single next migration | Spec delta on this file's sections 4–10; no code | Contract examples cover every section 2 path; no method hidden in `acr`; rollback never accepts weak evidence |
+| Lot 0 — Contract freeze (design only) | Freeze assurance semantics, single section 5.1 `acr`/`amr` table, `mfaCompletedAt`, D-P1 sliding continuity and immutable 24-hour cap, #699 fifth-leg evidence/eligibility, `adminMaxMfaAgeSeconds = 900s`, `binding_state`, `security_generation`, `policy_version`, `is_mfa_protected`, Mode A/B 1-key bootstrap protocol, identity-sync tier rules, and durable transition store schema on existing ports/adapters; consolidate the single next migration | Spec delta on this file's sections 4–10; no code | Contract examples cover every section 2 path; no method hidden in `acr`; rollback never accepts weak evidence |
 | Lot 1 — Declaration, fail-closed allowlist, and RP `amr` pin | `R-KVM-DECL` (`require_non_empty_allowlist: true`), fail-closed owner allowlist validation in registration CLI, pinned KVM RP `amr` config (`deploy/kvm-gateway/oauth2-proxy-amr-check.yaml`), and `R-KVM-TEST` package/API/RP suites | `deploy/oauth-clients/kvm-gateway.yaml` (new), `deploy/kvm-gateway/oauth2-proxy-amr-check.yaml` (new), `deploy/ci/kvm-gateway/verify-rp-amr.sh` (new), `api/src/scripts/oauth-register-client.ts`, `packages/auth-hono/tests/oauth-client-required-acr.test.ts`, `packages/auth-hono/tests/oauth-client-allowlist.test.ts`, `api/tests/api/auth/oauth-client-policy.test.ts`, `api/tests/unit/oauth-register-client.test.ts`, `packages/auth-hono/tests/example-oauth-rp.test.ts`, `api/tests/unit/auth/kvm-rp-amr-contract.test.ts` (new) | Scoped suites and `verify-rp-amr.sh` green on `ENV=test-<slug>`; declaration/registration readback green |
-| Lot 2 — Single migration, durable transition store, 4-leg evaluator, freshness, and identity-sync guards | Single migration in `api/drizzle/*.sql`, durable transition store, 4-leg evaluator (`authorize`, `consent`, code issue, `token`), `R-FRESH-1…R-FRESH-3`, host refresh preservation, and tier-local identity-sync guards (client exclusions, `unverified_email` import default, protected re-key refusal, FK classification) | `api/src/db/schema.ts`, `api/src/services/auth/security-transition-store.ts` (new), `packages/auth-hono/src/oauth/authorize-handler.ts`, `consent-decision-handler.ts`, `issue-authorized-code.ts`, `token-handler.ts`, `session-resolver.ts`, `wellknown-handler.ts`, `api/src/services/auth/oauth-state-adapter.ts`, `api/src/routes/namespaces/session-lifecycle.ts`, `api/src/services/auth/session-adapter.ts`, `api/src/services/session-manager.ts`, `deploy/k8s/overlays/preprod/idp-identity-sync/client-postcondition.sql`, `import-preprod.sql`, `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql`, `reader-role.sql`, `deploy/ci/idp-identity-sync/sql-test.sh`, `deploy/ci/idp-identity-sync/fixtures/{prod.sql,preprod.sql,assertions.sql}` | 4-leg evaluator, exact age boundaries, host refresh, durable rollback, and `sql-test.sh` sync checks green; no-policy clients byte-identical |
+| Lot 2 — Single migration, durable transition store, 4-leg evaluator, freshness, and identity-sync guards | Single migration in `api/drizzle/*.sql`, durable transition store, 4-leg evaluator (`authorize`, resumed authorize, `consent`, code exchange), `R-FRESH-1…R-FRESH-4`, KVM token expiry cap, host sliding continuity with original evidence preserved, `R-REFRESH-1…R-REFRESH-3` coordination with #699 BUILD Lots 1–3, and tier-local identity-sync guards (client exclusions, `unverified_email` import default, protected re-key refusal, FK classification) | `api/src/db/schema.ts`, `api/src/services/auth/security-transition-store.ts` (new), `packages/auth-hono/src/oauth/authorize-handler.ts`, `consent-decision-handler.ts`, `issue-authorized-code.ts`, `token-handler.ts`, `session-resolver.ts`, `wellknown-handler.ts`, `api/src/services/auth/oauth-state-adapter.ts`, `api/src/routes/namespaces/session-lifecycle.ts`, `api/src/services/auth/session-adapter.ts`, `api/src/services/session-manager.ts`, `deploy/k8s/overlays/preprod/idp-identity-sync/client-postcondition.sql`, `import-preprod.sql`, `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql`, `reader-role.sql`, `deploy/ci/idp-identity-sync/sql-test.sh`, `deploy/ci/idp-identity-sync/fixtures/{prod.sql,preprod.sql,assertions.sql}` | 4-leg evaluator, T−1/T/T+1, overnight/continuous-use and token-cap cases, #699 fifth-leg exclusion/revocation races, host refresh, durable rollback and sync checks green; no-policy clients unchanged except explicit #699 refresh opt-in |
 | Lot 3 — Stored account protection, email-path closure, account-lifecycle & federation guards | `R-REC-0…R-REC-5`, `R-STEP-1` (`adminMaxMfaAgeSeconds = 900s`), `R-KVM-CLOSE`, atomic `is_mfa_protected` transitions (`R-REC-1` 5-prerequisite gate), persist-time `/register/verify` recheck, `P-LIFECYCLE` `/me/deactivate` step-up & `DELETE /me` refusal (API + `apps/auth-idp`), `P-LINK` federation link/unlink & zero-key shell guards, and UI lost-device confinement | `api/src/routes/namespaces/auth/magic-link.ts`, `registration.ts`, `credentials.ts`, `account.ts`, `federation.ts`, `api/src/routes/namespaces/auth.ts`, `apps/auth-idp/idp-app.ts`, `api/src/services/webauthn-registration.ts`, `api/src/services/auth/federation/broker.ts`, `packages/auth-hono/src/webauthn-registration-route-handlers.ts`, `packages/auth-hono/src/federation/resolve-user.ts`, `packages/auth-ui/src/components/AuthLogin.svelte`, `ui/src/routes/auth/login/+page.svelte`, `api/tests/api/auth/account-protection.test.ts` (new), Lot 3 API/unit/UI test suites | Unified `is_mfa_protected` outcome matrix, `account-protection.test.ts`, persist-time registration race, federation shell refusal, and UI suites green |
 | Lot 4 — Non-circular trust bootstrap, break-glass Job, and pending-recovery activation | Option (a) 2-authenticator prerequisite, (b) non-circular trust bootstrap (Mode A and Mode B 1-key grant → Job activation → UV login → `P-ADD` key 2) and full-loss break-glass reset/reactivation (`R-REC-6`); recovery codes (c) only as a deferred **optional sublot** conditional on `D-P2` | `api/src/services/auth/mfa-recovery.ts` (new), `api/src/scripts/auth-breakglass-reset.ts` (new), `deploy/k8s/base/37-auth-breakglass-reset-job.yaml` (new), `api/tests/unit/auth/mfa-recovery.test.ts`, `api/tests/api/auth/breakglass.test.ts`, `api/tests/api/auth/mfa-recovery-policy.test.ts` (plus `api/tests/api/auth/recovery-codes.test.ts` and `ui/tests/auth/recovery-codes-settings.test.ts` only if `D-P2` option (ii) is chosen) | Mode A/B bootstrap, break-glass reactivation, and `pending-recovery` 4-leg denial green; conditional code sublot never satisfies protected issuance while `pending-recovery` |
 | Lot 5 — Consumer qualification and method-neutral cutover | `R-POL-1`, section 10.1 `M-1…M-4`: qualify all internal/external consumers (including `verify-rp-amr.sh` and `sql-test.sh`), remove ACR-to-AMR fallbacks, switch global emission to `urn:sentropic:loa:mfa` and the section 5.1 `amr` table, and update `kvm-gateway` declaration to `mfa` | `packages/auth-hono/src/oauth/authorize-handler.ts`, `consent-decision-handler.ts`, `issue-authorized-code.ts`, `token-handler.ts`, `session-resolver.ts`, `wellknown-handler.ts`, `api/src/services/auth/oauth-state-adapter.ts`, `api/src/scripts/oauth-register-client.ts`, `deploy/oauth-clients/kvm-gateway.yaml`, `deploy/ci/kvm-gateway/verify-rp-amr.sh`, Lot 5 test suites | Consumer qualification, single `amr` emission table, legacy code drain, and rollback order green |
@@ -818,7 +891,7 @@ effect is what changes).
 
 Non-goals: a new MFA method enrolment (TOTP or other), a policy-editing UI,
 method-specific or `acr`-string gateway policy for KVM beyond checking `"mfa"` in signed `amr`, Netbird client design beyond
-section 11's note, any change to RP session glue, and removal of the
+section 11's note, RP session changes beyond the R-FRESH-4 expiry bound, and removal of the
 legacy `passkey-fresh` alias (section 10.1, M-4).
 
 Risks and mitigations: owner lockout if Lot 3 ships before the second

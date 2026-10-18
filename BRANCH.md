@@ -68,6 +68,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] **Owner decisions applied (2026-10-18), receipt**: close D-P1, D-P2 and D-P3 with verbatim answers from `.h2a/reviews/pr695_owner-decisions.md`; retain full-spec docs-UAT as a separate pending receipt.
+- [x] **Owner decisions applied, freshness contract**: specify sliding browser continuity with an immutable 24-hour MFA deadline, downstream expiry, and PR #699's fifth-leg boundary; KVM remains authorization-code-only and refresh never upgrades evidence.
 - [x] **Round 1 dossier treatment (2026-10-18), finding 7**: balance D-P3 account-security benefits and recovery costs; retain trust/recovery prerequisites and explain remaining non-MFA bearer-login exposure. Documentary verification against section 4.2; no product qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `plan/BRANCH_TEMPLATE.md`, and the launch packet baseline at `94a38286e`.
