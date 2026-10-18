@@ -69,7 +69,7 @@
   - [x] BR-65: execute independent work together.
   - [x] BR-66: one package candidate and independent qualification.
   - [x] BR-67: deterministic journeys and daily live providers.
-  - [ ] BR-68: complete CD on tested bytes.
+  - [x] BR-68: complete CD on tested bytes.
   - [ ] BR-69: remove unnecessary consumer work with proof.
   - [ ] BR-70: prove the maximum and present the results.
 - [ ] **Lot 3 — Final validation and handoff**
