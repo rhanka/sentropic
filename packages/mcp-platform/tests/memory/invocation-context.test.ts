@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { StpConnectorContext } from '../../src/runtime.js';
+import { hostContext } from './host-fixture.js';
 import {
   MemoryTrustedContextError,
   isLiteralTrueVerdict,
@@ -16,56 +17,21 @@ import {
 } from '../../src/memory/invocation-context.js';
 
 function makeCtx(overrides: Record<string, unknown> = {}): StpConnectorContext {
-  return {
-    requestId: 'req-1',
-    correlationId: 'corr-1',
-    auditId: 'audit-host-1',
-    principal: {
-      sub: 'user-1',
-      claims: { sub: 'user-1', tid: 'tenant-1' },
-      scopes: ['mcp:tools:invoke'],
-      tenantRef: 'tenant-1',
-      authTime: '2026-10-18T00:00:00.000Z',
-    },
-    surface: 'backend',
-    session: { mcpSessionId: 'session-1' },
-    tenantRef: 'tenant-1',
-    connectorInstanceId: 'ci-1',
-    consentRefs: [],
-    grantRefs: [],
-    getSecret: async () => '',
-    connectorConfig: {},
-    audit: { emit: async () => undefined },
-    logger: undefined,
-    ...overrides,
-  } as StpConnectorContext;
+  return { ...hostContext(), ...overrides } as StpConnectorContext;
 }
 
 describe('P01.platform.invocation-context', () => {
   it('P01.platform.invocation-context: projects a verified host context field by field', () => {
     const projection = projectMemoryContext(makeCtx(), 'purpose-1');
-    expect(projection).toEqual({
-      principalNamespace: 'sentropic.principal',
-      principalId: 'user-1',
-      tenantId: 'tenant-1',
-      storeRef: 'ci-1',
-      scopeRef: 'tenant-1',
-      purposeRef: 'purpose-1',
-      agentRef: 'user-1',
-      connectorInstanceRef: 'ci-1',
-      policyEpoch: '2026-10-18T00:00:00.000Z',
-      attachmentGeneration: 'req-1',
-      auditRef: 'audit-host-1',
-      idempotencyKey: 'corr-1',
-      elicitationRef: null,
-    });
+    expect(projection.trusted_context).toMatchObject({ principal_id: 'user-1', tenant_id: 'tenant-1', store_id: 'store-1', scope_ref: 'scope-1' });
+    expect(projection.routing_provenance).toMatchObject({ active_generation: '1', policy_epoch: '2' });
     expect(validateMemoryProjection(projection)).toEqual([]);
   });
 
-  it('P01.platform.invocation-context: honors a host-supplied agent_ref claim', () => {
+  it('P01.platform.invocation-context: uses only the explicit host agent binding', () => {
     const ctx = makeCtx();
     ctx.principal.claims = { sub: 'user-1', tid: 'tenant-1', agent_ref: 'agent-7' };
-    expect(projectMemoryContext(ctx, 'purpose-1').agentRef).toBe('agent-7');
+    expect(projectMemoryContext(ctx, 'purpose-1').agent_id).toBe('agent-1');
   });
 
   it('P01.platform.invocation-context: keeps two principals and two tenants isolated', () => {
@@ -79,7 +45,7 @@ describe('P01.platform.invocation-context', () => {
           authTime: '2026-10-18T00:00:00.000Z',
         },
         tenantRef: 'tenant-1',
-        auditId: 'audit-tenant-1',
+        auditId: 'audit-host-1',
       }),
       'purpose-1',
     );
@@ -93,13 +59,16 @@ describe('P01.platform.invocation-context', () => {
           authTime: '2026-10-18T00:00:00.000Z',
         },
         tenantRef: 'tenant-2',
-        auditId: 'audit-tenant-2',
+        auditId: 'audit-host-2',
+        memory: { ...hostContext().memory!, binding: { ...hostContext().memory!.binding,
+          sub: 'user-2', principal_id: 'user-2', tid: 'tenant-2', tenant_id: 'tenant-2',
+          audit_id: 'audit-host-2', purpose_ref: 'purpose-2' } },
       }),
       'purpose-2',
     );
-    expect(first.principalId).not.toBe(second.principalId);
-    expect(first.tenantId).not.toBe(second.tenantId);
-    expect(first.auditRef).not.toBe(second.auditRef);
+    expect(first.neutral_principal.principal_id).not.toBe(second.neutral_principal.principal_id);
+    expect(first.neutral_principal.tenant_id).not.toBe(second.neutral_principal.tenant_id);
+    expect(first.envelope_bindings.audit_id).not.toBe(second.envelope_bindings.audit_id);
   });
 
   it('P01.platform.invocation-context: refuses absent, malformed and synthetic audit context', () => {
