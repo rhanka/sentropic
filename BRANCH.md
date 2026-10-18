@@ -81,14 +81,15 @@ Actions with the following status should be included around tasks only if really
   - [x] Copy the section structure of `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` and `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (status/authority header, numbered sections, evidence baseline, owner decisions, acceptance, source ledger).
   - [x] Add cross-references to the new spec from the related SPEC_EVOL files (`SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md`, `SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md`, `SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md`, `SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md`); `spec/SPEC.md` keeps no SPEC_EVOL index (verified: 2 inline mentions only), so no index entry is added there.
   - [x] Trace every statement to merged code at `1472d961e` (file refs) or to a quoted owner decision; mark unmerged items as follow-up.
-  - [ ] Lot gate:
+  - [x] Lot gate (docs-only resolution: runtime/UAT checks marked resolved-none with their explanation; no test or UAT run applies to this branch):
     - [x] `make scope-check` passes (changes limited to `spec/**` + `BRANCH.md`).
-    - [ ] **API tests**: none — existing: none modified; updated: none; new: none (docs only).
-    - [ ] **UI tests**: none — existing: none modified; updated: none; new: none (docs only).
-    - [ ] **E2E tests**: none — existing: none modified; updated: none; new: none (docs only).
-    - [ ] UAT: none (no impacted surface).
+    - [x] **API tests**: none — resolved, not applicable (docs only): — existing: none modified; updated: none; new: none (docs only).
+    - [x] **UI tests**: none — resolved, not applicable (docs only): — existing: none modified; updated: none; new: none (docs only).
+    - [x] **E2E tests**: none — resolved, not applicable (docs only): — existing: none modified; updated: none; new: none (docs only).
+    - [x] UAT: none — resolved, not applicable (no impacted surface).
 
 - [x] **Lot 2 — Delivery**
   - [x] Commit in slices of at most 150 lines via `make commit MSG="docs: ..."` (selective `git add`, `BRANCH.md` checkboxes updated within each commit).
   - [x] Push `docs/spec-mcp-registry-artifacts` and open a draft PR reporting its number.
   - [x] Lot gate: copy of Lot 1 gate (`make scope-check`), no UAT (last lot, docs only).
+  - [x] Final validation (docs-appropriate): PR body sourced from exact `BRANCH.md` text; branch CI verified on PR #692 (run 39086831064, success); `git diff --check` clean. Merge and BRANCH.md removal: not applicable under the draft-only instruction (Scope / Guardrails).
