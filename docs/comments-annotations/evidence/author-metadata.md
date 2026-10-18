@@ -1,5 +1,7 @@
 # Author and reviewer declarations
 
+**Historical evidence.** Verdicts, pending conditions and hashes below describe their recorded revision. The [frozen storage alignment](storage-alignment.md) governs current work: M1 is owner-closed with carried reserves and unprovided handoff evidence; C0/module extensions and selected PG qualification remain separate. No historical proposal authorizes rewriting M1.
+
 This is a header-only extract. Full execution logs are not promoted. Available declarations are recorded with whole-log digests for completed sessions and an explicitly bounded header digest for the active reserves session; neither a role name nor a CLI header proves effective routing.
 
 | Field | AUTHOR-C6 | AUTHOR-2E | AUTHOR-PROMO | AUTHOR-RESERVES |

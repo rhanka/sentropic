@@ -466,9 +466,10 @@ substitutes a fresh browser cookie for the family's sealed authentication.
 ### 5.4 OAuth refresh alignment with PR #699
 
 Reference contract: [PR #699](https://github.com/rhanka/sentropic/pull/699),
-`spec/SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md`, head
-`0304357583e8af6e3e896da6d42b13cb4329d59f`, sections 4–7 and 12.2.
-It is an open target specification, not baseline implementation.
+`spec/SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md`, merged into `origin/main` at
+`eaddcf2de902f509aeb13c7d65680e6ba3c26dd0`, sections 4–7 and 12.2.
+This is a merged specification; refresh runtime implementation remains
+assigned to its BUILD lots.
 
 - **R-REFRESH-1 (eligibility).** Every non-null `required_acr` is OAuth
   refresh-ineligible, including `mfa`, `passkey-fresh`, explicit `bearer`,

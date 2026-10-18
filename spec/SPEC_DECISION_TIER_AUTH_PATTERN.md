@@ -103,6 +103,17 @@ Recovery, method-neutral level, freshness, and the KVM onboarding that
 extend this B3/C1 policy are specified in
 [SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md](SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md).
 
+Per-client OAuth refresh tokens: clients that require silent offline renewal
+(starting with `immo-mcp` / `immo-mcp-preprod` and other Sentropic MCP clients)
+opt in explicitly via `OAUTH_CLIENT_GRANT_TYPES=authorization_code,refresh_token`
+and `offline_access` in `OAUTH_CLIENT_SCOPES`; issued refresh token families
+(`oauth_refresh_tokens`, 15-day absolute ceiling, single-use rotation, reuse
+detection) are strictly tier-local and never cross between prod and non-prod.
+See [SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md).
+Offline consent also stays local to the exact issuer, client, tenant, scopes and
+resource/default audience. A synchronized `offline_access` scope string cannot
+replace local approval; policy removal permanently invalidates affected families.
+
 Hashing the secret by hand: `printf '%s' "$SECRET" | sha256sum`, **never** `echo` — a trailing
 newline yields a different hash, and the symptom is an `invalid_client` indistinguishable from a
 wrong client id.
