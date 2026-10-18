@@ -91,6 +91,7 @@ describe.skipIf(!enabled)('packed declarations and bundlers', () => {
       if (seen.has(file)) return;
       seen.add(file);
       const source = readFileSync(file, 'utf8');
+      expect(source, file).not.toContain('node:async_hooks');
       expect(peer.test(source.replace(/\/\*\*[\s\S]*?\*\//gu, '')), file).toBe(false);
       for (const match of source.matchAll(/from\s+["'](\.[^"']+)["']/gu)) {
         visit(resolve(dirname(file), match[1]!.replace(/\.js$/u, '.d.ts')));
