@@ -1,14 +1,14 @@
-# Feature: BR-64 — Build and transfer fewer image bytes
+# Feature: BR-78 — Build and transfer fewer image bytes
 
 ## Objective
 - [ ] Cache stable tool layers and transport source-correct production artifacts by exact digest.
-- [ ] Branch `perf/ci-image-artifacts`, step 3 of nine; train order 64 → BR-65; dependencies: BR-63 merged; BR-62 timing and BR-63 prepared closures.
+- [ ] Branch `perf/ci-image-artifacts`, step 3 of nine; train order BR-78 → BR-79; dependencies: BR-77 merged; BR-76 timing and BR-77 prepared closures.
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
 - [ ] Work only in `tmp/worktrees/ci-image-artifacts`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
 - [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-image-artifacts` or `ENV=e2e-ci-image-artifacts`, never `dev`; no secrets in evidence.
-- [ ] Slot 0 owner: branch author; API_PORT=9320, UI_PORT=5520, MAILDEV_UI_PORT=1420; verify availability before starting services and pass all three ports to service commands.
+- [ ] Slot 0 owner: branch author; API_PORT=9390, UI_PORT=5590, MAILDEV_UI_PORT=1490; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -25,13 +25,13 @@
   - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR64-EX1; `Makefile` under BR64-EX2.
+  - [ ] `.github/workflows/ci.yml` under BR78-EX1; `Makefile` under BR78-EX2.
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR64-EX1 — Planned workflow exception: change `build-api-image`, `build-api-tool-image`, `build-ui`, `build-e2e`, and their image consumers in `security-container` and `test-smoke-restore`. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR64-EX2 — Planned Makefile exception: change image cache/build/save/load targets and `API_TOOL_VERSION`; add `test-ci-image-receipts`; remove UI forced `--no-cache` without weakening hash inputs. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR78-EX1 — Planned workflow exception: change `build-api-image`, `build-api-tool-image`, `build-ui`, `build-e2e`, and their image consumers in `security-container` and `test-smoke-restore`. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [ ] BR78-EX2 — Planned Makefile exception: change image cache/build/save/load targets and `API_TOOL_VERSION`; add `test-ci-image-receipts`; remove UI forced `--no-cache` without weakening hash inputs. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 

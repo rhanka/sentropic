@@ -1,14 +1,14 @@
-# Feature: BR-65 — Run independent CI work together
+# Feature: BR-79 — Run independent CI work together
 
 ## Objective
 - [ ] Start each runtime consumer at artifact readiness while preserving every quality and security release requirement.
-- [ ] Branch `perf/ci-parallel-dag`, step 4 of nine; train order 65 → BR-66; dependencies: BR-64 artifacts merged; BR-62 expected results and BR-63 preparation.
+- [ ] Branch `perf/ci-parallel-dag`, step 4 of nine; train order BR-79 → BR-80; dependencies: BR-78 artifacts merged; BR-76 expected results and BR-77 preparation.
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
 - [ ] Work only in `tmp/worktrees/ci-parallel-dag`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
 - [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-parallel-dag` or `ENV=e2e-ci-parallel-dag`, never `dev`; no secrets in evidence.
-- [ ] Slot 0 owner: branch author; API_PORT=9325, UI_PORT=5525, MAILDEV_UI_PORT=1425; verify availability before starting services and pass all three ports to service commands.
+- [ ] Slot 0 owner: branch author; API_PORT=9395, UI_PORT=5595, MAILDEV_UI_PORT=1495; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -23,13 +23,13 @@
   - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR65-EX1; `Makefile` under BR65-EX2.
+  - [ ] `.github/workflows/ci.yml` under BR79-EX1; `Makefile` under BR79-EX2.
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR65-EX1 — Planned workflow exception: split `build-ui` children and scans, remove non-runtime prerequisites from `test-e2e`, `e2e-vscode`, `smoke-idp-screens`, and `test-smoke-restore`; keep the complete final join. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR65-EX2 — Planned Makefile exception: expose independent extension, desktop, UI test/profile, scanner, and runtime startup targets; preserve build-input ordering. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR79-EX1 — Planned workflow exception: split `build-ui` children and scans, remove non-runtime prerequisites from `test-e2e`, `e2e-vscode`, `smoke-idp-screens`, and `test-smoke-restore`; keep the complete final join. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [ ] BR79-EX2 — Planned Makefile exception: expose independent extension, desktop, UI test/profile, scanner, and runtime startup targets; preserve build-input ordering. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
@@ -61,7 +61,7 @@
   - [ ] Lot gate: real PR/main runs plus `make check-ci-version-filters check-e2e-inventory ENV=test-ci-parallel-dag`; run existing SAST/SCA/container scans and `test-smoke-restore` through their unchanged assertion sets.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [ ] Inspect served login/consent and web/Chrome/VSCode/desktop packaging on the qualification SHA; verify the embedded files and profile-specific endpoints match the intended consumer.
-  - [ ] Budget to measure: security scan branch ≤90s versus the PR example of 199s; IdP ≤150s; start runtime jobs as soon as their artifact inputs are ready, and preserve BR-62 cumulative scheduling ≤60s. Publish readiness and actual start times.
+  - [ ] Budget to measure: security scan branch ≤90s versus the PR example of 199s; IdP ≤150s; start runtime jobs as soon as their artifact inputs are ready, and preserve BR-76 cumulative scheduling ≤60s. Publish readiness and actual start times.
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
   - [ ] Rollback drill: restore previous dependency edges and build grouping while retaining exact result membership; prove a negative scan still prevents promotion.
 - [ ] **Lot 4 — Docs consolidation**

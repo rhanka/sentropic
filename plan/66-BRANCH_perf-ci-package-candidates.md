@@ -1,14 +1,14 @@
-# Feature: BR-66 — One package candidate and independent qualifications
+# Feature: BR-80 — One package candidate and independent qualifications
 
 ## Objective
 - [ ] Produce each immutable candidate once and preserve storage, crash, installed-consumer, and peer assertions in isolated parallel lanes.
-- [ ] Branch `perf/ci-package-candidates`, step 5 of nine; train order 66 → BR-67; dependencies: BR-65 merged for shared-file order; BR-63 closures and BR-64 receipt contract.
+- [ ] Branch `perf/ci-package-candidates`, step 5 of nine; train order BR-80 → BR-81; dependencies: BR-79 merged for shared-file order; BR-77 closures and BR-78 receipt contract.
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
 - [ ] Work only in `tmp/worktrees/ci-package-candidates`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
 - [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-package-candidates` or `ENV=e2e-ci-package-candidates`, never `dev`; no secrets in evidence.
-- [ ] Slot 0 owner: branch author; API_PORT=9330, UI_PORT=5530, MAILDEV_UI_PORT=1430; verify availability before starting services and pass all three ports to service commands.
+- [ ] Slot 0 owner: branch author; API_PORT=9400, UI_PORT=5600, MAILDEV_UI_PORT=1500; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -30,13 +30,13 @@
   - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR66-EX1; `Makefile` under BR66-EX2.
+  - [ ] `.github/workflows/ci.yml` under BR80-EX1; `Makefile` under BR80-EX2.
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR66-EX1 — Planned workflow exception: refactor `validate-cluster-mesh`, `validate-publishable-manifests`, `validate-llm-mesh`, and `validate-llm-gateway` around shared immutable candidate receipts. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR66-EX2 — Planned Makefile exception: change `cluster-mesh-workspace`, `pack-cluster-mesh`, `manifest_guard_pack`, and `pack-candidate-siblings`; add candidate/DAG fixture test targets without shared mutable state. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR80-EX1 — Planned workflow exception: refactor `validate-cluster-mesh`, `validate-publishable-manifests`, `validate-llm-mesh`, and `validate-llm-gateway` around shared immutable candidate receipts. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [ ] BR80-EX2 — Planned Makefile exception: change `cluster-mesh-workspace`, `pack-cluster-mesh`, `manifest_guard_pack`, and `pack-candidate-siblings`; add candidate/DAG fixture test targets without shared mutable state. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 

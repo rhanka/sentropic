@@ -36,7 +36,7 @@
 
 ## Feedback Loop
 - [x] `acknowledge` — PR #701 F1: remove explicit forbidden entries that shadow the nine Makefile exceptions and the deterministic-provider Compose overlay; retain bounded conditional paths and profile defaults.
-- [ ] PR #701 F2: distinguish file sequence 62–70 from collision-free branch identities and propagate dependencies, exceptions, and ports.
+- [x] PR #701 F2: distinguish file sequence 62–70 from canonical BR-76–84; propagate titles, train order, dependencies, exception IDs, and canonical-ID port slots while retaining unique slug-based environments.
   - [x] Allocate canonical BR-76–84 in the study; preserve existing allocations through BR-75 and the requested file sequence.
 - [ ] PR #701 F3: add explicit static gates before runtime UAT and applicable final build/API/UI/E2E regression checklists.
 - [x] `acknowledge` — Owner, 2026-10-18: « écoute je suis en phase avec le plan proposé pour le CI/CD, je le veux commité / fusionné et planifié en branches stp ».

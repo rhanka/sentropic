@@ -1,14 +1,14 @@
-# Feature: BR-68 — Complete delivery on the tested bytes
+# Feature: BR-82 — Complete delivery on the tested bytes
 
 ## Objective
 - [ ] Publish tested image digests and package archives, then prove preproduction readiness and all selected release receipts.
-- [ ] Branch `perf/cd-tested-artifacts`, step 7 of nine; train order 68 → BR-69; dependencies: BR-64 image receipts, BR-65 complete join, BR-66 candidates, and BR-67 deterministic qualification merged.
+- [ ] Branch `perf/cd-tested-artifacts`, step 7 of nine; train order BR-82 → BR-83; dependencies: BR-78 image receipts, BR-79 complete join, BR-80 candidates, and BR-81 deterministic qualification merged.
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
 - [ ] Work only in `tmp/worktrees/cd-tested-artifacts`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
 - [ ] Make entry points only; `ENV` last; tests on `ENV=test-cd-tested-artifacts` or `ENV=e2e-cd-tested-artifacts`, never `dev`; no secrets in evidence.
-- [ ] Slot 0 owner: branch author; API_PORT=9340, UI_PORT=5540, MAILDEV_UI_PORT=1440; verify availability before starting services and pass all three ports to service commands.
+- [ ] Slot 0 owner: branch author; API_PORT=9410, UI_PORT=5610, MAILDEV_UI_PORT=1510; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -30,14 +30,14 @@
   - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR68-EX1; `Makefile` under BR68-EX2.
-  - [ ] `deploy/k8s/overlays/preprod/kustomization.yaml`, `deploy/k8s/overlays/preprod/patch-api-config.yaml`, and `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml` under BR68-EX3.
+  - [ ] `.github/workflows/ci.yml` under BR82-EX1; `Makefile` under BR82-EX2.
+  - [ ] `deploy/k8s/overlays/preprod/kustomization.yaml`, `deploy/k8s/overlays/preprod/patch-api-config.yaml`, and `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml` under BR82-EX3.
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR68-EX1 — Planned workflow exception: join `publish-api-image`, `publish-ui-image`, every selected package publisher, `verify-train-lock-integrity`, and `deploy-preprod` to complete qualification and release-result receipts. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR68-EX2 — Planned Makefile exception: promote image metadata without rebuilding/reloading layers, publish prequalified tarballs, and instrument `k8s-deploy-preprod`; add release-receipt tests. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
-- [ ] BR68-EX3 — Change only preproduction digest pins/readiness configuration justified by measured startup spans; impact: preproduction rollout; rollback: previous qualified immutable tuple and prior health settings. Production overlays remain forbidden.
+- [ ] BR82-EX1 — Planned workflow exception: join `publish-api-image`, `publish-ui-image`, every selected package publisher, `verify-train-lock-integrity`, and `deploy-preprod` to complete qualification and release-result receipts. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [ ] BR82-EX2 — Planned Makefile exception: promote image metadata without rebuilding/reloading layers, publish prequalified tarballs, and instrument `k8s-deploy-preprod`; add release-receipt tests. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR82-EX3 — Change only preproduction digest pins/readiness configuration justified by measured startup spans; impact: preproduction rollout; rollback: previous qualified immutable tuple and prior health settings. Production overlays remain forbidden.
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
 ## AI Flaky tests
@@ -58,7 +58,7 @@
   - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities.
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
 - [ ] **Lot 1 — Qualified candidate promotion and package train**
-  - [ ] Main builds upload non-deployment candidate layers inside BR-64 image budgets; all consumers verify the same digest. PRs retain artifact transport without registry credentials.
+  - [ ] Main builds upload non-deployment candidate layers inside BR-78 image budgets; all consumers verify the same digest. PRs retain artifact transport without registry credentials.
   - [ ] Add `release-receipt.mjs` and its test: reject missing/failed/cancelled/skipped required checks, wrong source/digest, missing publication, tag collision, mismatched registry integrity/provenance, and stale receipt reuse.
   - [ ] Update the named image/manifest/qualification scripts and tests; every publisher waits for the complete verdict, publishes exact tested bytes, and retains clean registry qualification.
   - [ ] Preserve new-version mesh → gateway → cluster ordering; run unrelated publishers and train-lock verification concurrently only after their actual prerequisites. Record version-visible receipts rather than repacking or repeating registry checks.
