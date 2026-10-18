@@ -108,15 +108,14 @@ describe('migrateOldSessions', () => {
     const { mkdtemp, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
-    const { FileGatewayStateStore } = await import('../src/node/gateway-state-store.js');
     const { startGatewayHost } = await import('../src/node/gateway-host.js');
     const { createGatewayControlClient } = await import('../src/node/control-client.js');
     const { durableHostFixture, model, routingContract } = await import('./helpers/durable-host.js');
     const stateDir = await mkdtemp(join(tmpdir(), 'gw-mig-pinned-'));
     const fixture = durableHostFixture();
-    const host = await startGatewayHost({ stateDir, mesh: fixture.mesh, listen: { host: '127.0.0.1', port: 0 } });
+    let host = await startGatewayHost({ stateDir, mesh: fixture.mesh, listen: { host: '127.0.0.1', port: 0 } });
     try {
-      const control = createGatewayControlClient({ controlSocket: host.controlSocket });
+      let control = createGatewayControlClient({ controlSocket: host.controlSocket });
       const issued = await control.acquireSession({ ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'c-pinned', routingContract });
       const send = () => fetch(`${host.endpoint}/v1/chat/completions`, {
         method: 'POST',
@@ -130,6 +129,40 @@ describe('migrateOldSessions', () => {
       expect(migrated).toMatchObject({ sessionRef: issued.sessionRef, policyRevision: 'p2', expiresAt: issued.expiresAt });
       expect((await send()).status).toBe(200);
       expect(fixture.calls).toHaveLength(2);
+
+      await host.stop();
+      host = await startGatewayHost({ stateDir, mesh: fixture.mesh, listen: { host: '127.0.0.1', port: 0 } });
+      control = createGatewayControlClient({ controlSocket: host.controlSocket });
+      const reacquired = await control.acquireSession({ ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'c-pinned', routingContract: nextContract });
+      expect(reacquired).toMatchObject({
+        sessionRef: issued.sessionRef,
+        key: issued.key,
+        expiresAt: issued.expiresAt,
+        policyRevision: 'p2',
+        reacquired: true,
+      });
+      expect((await send()).status).toBe(200);
+      expect(fixture.calls).toHaveLength(3);
+
+      const unauthorizedContract = { ...routingContract, revision: 'p3', authorizedAccountRefs: ['internal-b'] };
+      await control.migrateSessionPolicy({
+        ownerScopeRef: 'owner-a',
+        sessionRef: issued.sessionRef,
+        routingContract: unauthorizedContract,
+        expectedPolicyRevision: 'p2',
+      });
+      expect((await send()).status).toBe(503);
+      expect(fixture.calls).toHaveLength(3);
+
+      const unpinned = await control.acquireSession({ ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'c-unpinned', routingContract: unauthorizedContract });
+      await control.migrateSessionPolicy({ ownerScopeRef: 'owner-a', sessionRef: unpinned.sessionRef, routingContract: nextContract, expectedPolicyRevision: 'p3' });
+      const resUnpinned = await fetch(`${host.endpoint}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${unpinned.key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      expect(resUnpinned.status).toBe(200);
+      expect(fixture.calls).toHaveLength(4);
     } finally {
       await host.stop();
       await rm(stateDir, { recursive: true, force: true });

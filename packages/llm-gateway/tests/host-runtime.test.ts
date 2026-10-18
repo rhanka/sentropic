@@ -116,4 +116,50 @@ describe('durable published host composition', () => {
       expect(receipts.map((r) => r.settlement)).toEqual(Array(8).fill('stop'));
     } finally { await host.stop(); await rm(stateDir, { recursive: true, force: true }); }
   });
+  it('restarts cleanly after SIGKILL of a live host holder and W1/W2/W3 fence residues without restart blockage', async () => {
+    const { spawn } = await import('node:child_process');
+    const { readdir } = await import('node:fs/promises');
+    const stateDir = await mkdtemp(join(tmpdir(), 'gw-sigkill-restart-'));
+    const base = { stateDir, listen: { host: '127.0.0.1', port: 0 } };
+    const initial = await startGatewayHost({ ...base, mesh: durableHostFixture().mesh });
+    let activeKey = ''; let revokedKey = ''; let receiptId = '';
+    try {
+      const control = createGatewayControlClient({ controlSocket: initial.controlSocket });
+      const active = await control.acquireSession(session);
+      const toRevoke = await control.acquireSession({ ...session, clientSessionRef: 'c-revoked-kill' });
+      activeKey = active.key!; revokedKey = toRevoke.key!;
+      const res = await send(initial.endpoint, activeKey);
+      expect(res.status).toBe(200);
+      receiptId = res.headers.get('x-sentropic-receipt')!;
+      await control.revokeSession({ ownerScopeRef: 'owner-a', sessionRef: toRevoke.sessionRef });
+    } finally { await initial.stop(); }
+    const child = spawn(process.execPath, ['-e', `
+      const fs = require('node:fs');
+      fs.writeFileSync(${JSON.stringify(join(stateDir, '.host-lock'))}, JSON.stringify({ pid: process.pid, token: 'sigkilled-host', startedAt: Date.now() }), { mode: 0o600 });
+      fs.writeFileSync(${JSON.stringify(join(stateDir, '.host-lock.retire-sigkilled-host'))}, JSON.stringify({ pid: process.pid, token: 'sigkilled-fence', startedAt: Date.now() }), { mode: 0o600 });
+      fs.writeFileSync(${JSON.stringify(join(stateDir, '.lock.retire-old-tx'))}, JSON.stringify({ pid: process.pid, token: 'sigkilled-tx-fence', startedAt: Date.now() }), { mode: 0o600 });
+      process.stdout.write('HELD\\n');
+      setInterval(() => {}, 1000);
+    `], { stdio: ['ignore', 'pipe', 'inherit'] });
+    await new Promise<void>((resolve, reject) => {
+      child.once('error', reject);
+      child.stdout.on('data', (chunk: Buffer) => { if (chunk.toString().includes('HELD')) resolve(); });
+    });
+    await expect(startGatewayHost({ ...base, mesh: durableHostFixture().mesh })).rejects.toMatchObject({ code: 'CONFLICT' });
+    child.kill('SIGKILL');
+    await new Promise<void>((resolve) => child.once('exit', () => resolve()));
+    const restarted = await startGatewayHost({ ...base, mesh: durableHostFixture().mesh });
+    try {
+      expect((await restarted.readiness()).ready).toBe(true);
+      const control = createGatewayControlClient({ controlSocket: restarted.controlSocket });
+      expect((await control.readReceipt({ ownerScopeRef: 'owner-a', receiptId })).settlement).toBe('stop');
+      expect((await send(restarted.endpoint, activeKey)).status).toBe(200);
+      expect((await send(restarted.endpoint, revokedKey)).status).toBe(401);
+      const files = await readdir(stateDir);
+      expect(files.filter((f) => f.includes('.retire-'))).toEqual([]);
+    } finally {
+      await restarted.stop();
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
 });
