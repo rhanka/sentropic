@@ -238,14 +238,22 @@ describe('FileGatewayStateStore', () => {
     }
   });
 
-  it('maintains liveness across SIGKILL of a live holder and W1/W2/W3 crash windows without deadlock', async () => {
+  it('maintains liveness across SIGKILL of a live holder, W1/W2/W3 crash windows, and >32 repeated recovery crashes', async () => {
     const { spawn } = await import('node:child_process');
     const { readdir, writeFile } = await import('node:fs/promises');
-    const spawnCrashChild = async (script: string): Promise<number> => {
-      const child = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
+    const ts = await import('typescript');
+    const modDir = freshDir();
+    const compileTs = (rel: string, out: string) => {
+      const src = readFileSync(new URL(rel, import.meta.url), 'utf8').replace('../ports/gateway-state.js', './gateway-state.mjs');
+      return writeFile(join(modDir, out), ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+    };
+    await Promise.all([compileTs('../src/ports/gateway-state.ts', 'gateway-state.mjs'), compileTs('../src/node/gateway-state-store.ts', 'gateway-state-store.mjs')]);
+    const spawnCrashChild = async (script: string, marker = 'READY', ...nodeArgs: string[]): Promise<number> => {
+      const child = spawn(process.execPath, [...nodeArgs, '-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
       await new Promise<void>((resolve, reject) => {
         child.once('error', reject);
-        child.stdout.on('data', (chunk: Buffer) => { if (chunk.toString().includes('READY')) resolve(); });
+        child.once('exit', (code, sig) => reject(new Error(`child exited before ${marker} (${code ?? sig})`)));
+        child.stdout.on('data', (chunk: Buffer) => { if (chunk.toString().includes(marker)) resolve(); });
       });
       const pid = child.pid!; child.kill('SIGKILL');
       await new Promise<void>((resolve) => child.once('exit', () => resolve()));
@@ -274,6 +282,27 @@ describe('FileGatewayStateStore', () => {
         const remaining = await readdir(dir);
         expect(remaining.filter((f) => f.startsWith(`${name}.retire-`)), `${name}:${window}`).toEqual([]);
       }
+      const chainDir = freshDir();
+      await writeFile(join(chainDir, name), JSON.stringify({ pid: 999_999_999, token: 'dead-root', startedAt: 1 }), { mode: 0o600 });
+      const killedPids: number[] = [];
+      for (let i = 0; i < 36; i += 1) {
+        const script = `import * as fs from 'node:fs/promises'; import { FileGatewayStateStore } from ${JSON.stringify(join(modDir, 'gateway-state-store.mjs'))};
+          const store = new FileGatewayStateStore({ stateDir: ${JSON.stringify(chainDir)}, keyring: { getSecret: async () => ${JSON.stringify(dekFor('l'))} }, fsOps: { link: async (s, d) => { await fs.link(s, d); if (String(d).includes('.retire-')) { setInterval(() => {}, 1000); process.stdout.write('FENCE_READY\\n'); await new Promise(() => {}); } } } });
+          ${name === '.host-lock' ? 'await store.claimWriter();' : 'await store.compareAndSet(0, { schemaVersion: 1, revision: 1, sessions: {}, receipts: {} });'}`;
+        killedPids.push(await spawnCrashChild(script, 'FENCE_READY', '--input-type=module'));
+      }
+      expect(killedPids.every((pid) => { try { process.kill(pid, 0); return false; } catch { return true; } }), name).toBe(true);
+      expect((await readdir(chainDir)).filter((f) => f.startsWith(`${name}.retire-`)), name).toHaveLength(36);
+      const stores = [0, 1, 2].map(() => new FileGatewayStateStore({ stateDir: chainDir, keyring: keyringFor(dekFor('l')) }));
+      const results = await Promise.allSettled(stores.map((s) =>
+        name === '.host-lock' ? s.claimWriter() : s.compareAndSet(0, { ...emptyState(), revision: 1 }).then(() => async () => undefined)));
+      const fulfilled = results.filter((r): r is PromiseFulfilledResult<() => Promise<void>> => r.status === 'fulfilled');
+      const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      expect(fulfilled, `${name}:chain36`).toHaveLength(1);
+      expect(rejected, `${name}:chain36`).toHaveLength(2);
+      for (const r of rejected) expect(r.reason).toMatchObject({ code: 'CONFLICT' });
+      await fulfilled[0]!.value();
+      expect((await readdir(chainDir)).filter((f) => f.startsWith(`${name}.retire-`) || f.endsWith('.claim')), name).toEqual([]);
     }
-  });
+  }, 30_000);
 });

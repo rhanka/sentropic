@@ -291,7 +291,7 @@ export class FileGatewayStateStore implements GatewayStateStore {
       let fencePath = join(this.stateDir, `${name}.retire-${fenceKey}`);
       const priorFences: string[] = [];
       let fenced = false; let retryOuter = false;
-      for (let step = 0; step < 32; step += 1) {
+      while (!fenced) {
         try { await fsLink(claimPath, fencePath); fenced = true; break; }
         catch (error) {
           if (!isCode(error, 'EEXIST')) { await fsUnlink(claimPath).catch(() => undefined); throw new GatewayStateError('lock claim failed', 'STORE-FAILED'); }
@@ -316,11 +316,10 @@ export class FileGatewayStateStore implements GatewayStateStore {
           }
           priorFences.push(fencePath);
           const digest = createHash('sha256').update(`${fencePath}\0${fenceRaw}`, 'utf8').digest('hex').slice(0, 16);
-          fencePath = join(this.stateDir, `${name}.retire-${fenceKey}-${digest}`);
+          fencePath = join(this.stateDir, `${name}.retire-${fenceKey}-${priorFences.length}-${digest}`);
         }
       }
       if (retryOuter) { await fsUnlink(claimPath).catch(() => undefined); continue; }
-      if (!fenced) { await fsUnlink(claimPath).catch(() => undefined); throw new GatewayStateError('state store locked by a live writer', 'CONFLICT'); }
       try {
         const currentRaw = (await fsReadFile(path, 'utf8').catch(() => '')) as string;
         const fenceVerify = (await fsReadFile(fencePath, 'utf8').catch(() => '')) as string;

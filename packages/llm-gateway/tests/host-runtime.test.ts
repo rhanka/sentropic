@@ -116,10 +116,17 @@ describe('durable published host composition', () => {
       expect(receipts.map((r) => r.settlement)).toEqual(Array(8).fill('stop'));
     } finally { await host.stop(); await rm(stateDir, { recursive: true, force: true }); }
   });
-  it('restarts cleanly after SIGKILL of a live host holder and W1/W2/W3 fence residues without restart blockage', async () => {
+  it('restarts cleanly after SIGKILL of a live host holder and >32 crashed recovery acquirers without restart blockage', async () => {
     const { spawn } = await import('node:child_process');
-    const { readdir } = await import('node:fs/promises');
+    const { readFile, readdir, writeFile } = await import('node:fs/promises');
+    const ts = await import('typescript');
     const stateDir = await mkdtemp(join(tmpdir(), 'gw-sigkill-restart-'));
+    const modDir = await mkdtemp(join(tmpdir(), 'gw-sigkill-mod-'));
+    const compileTs = async (rel: string, out: string) => {
+      const src = (await readFile(new URL(rel, import.meta.url), 'utf8')).replace('../ports/gateway-state.js', './gateway-state.mjs');
+      await writeFile(join(modDir, out), ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+    };
+    await Promise.all([compileTs('../src/ports/gateway-state.ts', 'gateway-state.mjs'), compileTs('../src/node/gateway-state-store.ts', 'gateway-state-store.mjs')]);
     const base = { stateDir, listen: { host: '127.0.0.1', port: 0 } };
     const initial = await startGatewayHost({ ...base, mesh: durableHostFixture().mesh });
     let activeKey = ''; let revokedKey = ''; let receiptId = '';
@@ -136,7 +143,6 @@ describe('durable published host composition', () => {
     const child = spawn(process.execPath, ['-e', `
       const fs = require('node:fs');
       fs.writeFileSync(${JSON.stringify(join(stateDir, '.host-lock'))}, JSON.stringify({ pid: process.pid, token: 'sigkilled-host', startedAt: Date.now() }), { mode: 0o600 });
-      fs.writeFileSync(${JSON.stringify(join(stateDir, '.host-lock.retire-sigkilled-host'))}, JSON.stringify({ pid: process.pid, token: 'sigkilled-fence', startedAt: Date.now() }), { mode: 0o600 });
       fs.writeFileSync(${JSON.stringify(join(stateDir, '.lock.retire-old-tx'))}, JSON.stringify({ pid: process.pid, token: 'sigkilled-tx-fence', startedAt: Date.now() }), { mode: 0o600 });
       process.stdout.write('HELD\\n');
       setInterval(() => {}, 1000);
@@ -148,6 +154,20 @@ describe('durable published host composition', () => {
     await expect(startGatewayHost({ ...base, mesh: durableHostFixture().mesh })).rejects.toMatchObject({ code: 'CONFLICT' });
     child.kill('SIGKILL');
     await new Promise<void>((resolve) => child.once('exit', () => resolve()));
+    for (let i = 0; i < 36; i += 1) {
+      const script = `import * as fs from 'node:fs/promises'; import { FileGatewayStateStore } from ${JSON.stringify(join(modDir, 'gateway-state-store.mjs'))};
+        const store = new FileGatewayStateStore({ stateDir: ${JSON.stringify(stateDir)}, keyring: { getSecret: async () => ${JSON.stringify(Buffer.alloc(32, 7).toString('hex'))} }, fsOps: { link: async (s, d) => { await fs.link(s, d); if (String(d).includes('.retire-')) { setInterval(() => {}, 1000); process.stdout.write('FENCE_READY\\n'); await new Promise(() => {}); } } } });
+        await store.claimWriter();`;
+      const crasher = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
+      await new Promise<void>((resolve, reject) => {
+        crasher.once('error', reject);
+        crasher.once('exit', (code, sig) => reject(new Error(`crasher exited before FENCE_READY (${code ?? sig})`)));
+        crasher.stdout.on('data', (chunk: Buffer) => { if (chunk.toString().includes('FENCE_READY')) resolve(); });
+      });
+      crasher.kill('SIGKILL');
+      await new Promise<void>((resolve) => crasher.once('exit', () => resolve()));
+    }
+    expect((await readdir(stateDir)).filter((f) => f.startsWith('.host-lock.retire-'))).toHaveLength(36);
     const restarted = await startGatewayHost({ ...base, mesh: durableHostFixture().mesh });
     try {
       expect((await restarted.readiness()).ready).toBe(true);
@@ -156,10 +176,11 @@ describe('durable published host composition', () => {
       expect((await send(restarted.endpoint, activeKey)).status).toBe(200);
       expect((await send(restarted.endpoint, revokedKey)).status).toBe(401);
       const files = await readdir(stateDir);
-      expect(files.filter((f) => f.includes('.retire-'))).toEqual([]);
+      expect(files.filter((f) => f.includes('.retire-') || f.endsWith('.claim'))).toEqual([]);
     } finally {
       await restarted.stop();
       await rm(stateDir, { recursive: true, force: true });
+      await rm(modDir, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });
