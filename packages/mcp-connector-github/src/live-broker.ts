@@ -13,8 +13,8 @@
  * NEVER log or echo the token value — `audit.emit` below only ever receives
  * `{ domain, capabilityRef, uri? }`, never the secret itself.
  */
-import type { RedactionClass } from '../../mcp-platform/src/manifest.js';
-import type { AppResultEnvelope, StpConnectorContext } from '../../mcp-platform/src/runtime.js';
+import type { RedactionClass } from '@sentropic/mcp-platform';
+import type { AppResultEnvelope, StpConnectorContext } from '@sentropic/mcp-platform';
 import { githubLiveAdapter } from './live-adapter.js';
 
 // Capabilities live-implemented in ./live-adapter.ts, by manifest kind
