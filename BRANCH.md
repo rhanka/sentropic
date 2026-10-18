@@ -17,7 +17,6 @@
   - `packages/artifacts/probe/**`
   - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `packages/artifacts/src/**`
@@ -25,12 +24,14 @@
   - `plan/**`
   - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
   - `.github/workflows/**`
 - **Exception process**:
   - [x] Declare rationale, impact, and rollback in Feedback Loop before touching a forbidden path.
 
 ## Feedback Loop
 - [x] BR012-EX1: allow only the existing packed-consumer Makefile recipe to install optional driver peers after proving core-only imports; impact limited to the disposable Docker consumer; rollback restores that recipe and probes together.
+- [x] BR012-EX2: allow one packed-consumer step in `.github/workflows/ci.yml` so adapter/SQL regressions block artifacts CI; impact limited to package validation; rollback removes the added step.
 - [x] Track import belongs to the designated repository writer; this concurrent worktree updates only the mergeable branch plan.
 
 ## AI Flaky tests
@@ -47,14 +48,15 @@
   - [x] Read rules, branch template, package, adapters, migrations, packed probe, and host reference.
   - [x] Verify branch with Git and `harness check branch` before work.
   - [x] Confirm source manifest omits adapter exports and migration files.
-  - [ ] Check published version through Docker/Make before bumping.
-- [ ] **Lot 1 — Publishable package contract**
-  - [ ] Add typed adapter exports and SQL resource export; include migrations; bump to 0.1.2.
-  - [ ] Declare injected driver packages as optional peers and synchronize workspace lock metadata.
-  - [ ] Document driver installation and ordered host-managed SQL execution in README; no package changelog exists.
+  - [x] Docker/Make registry check returned 0.1.1 before the 0.1.2 bump.
+- [x] **Lot 1 — Publishable package contract**
+  - [x] Add typed adapter exports and SQL resource export; include migrations; bump to 0.1.2.
+  - [x] Declare injected driver packages as optional peers and synchronize workspace lock metadata.
+  - [x] Document driver installation and ordered host-managed SQL execution in README; no package changelog exists.
 - [ ] **Lot 2 — Packed-consumer regression**
   - [ ] Extend `packages/artifacts/probe/packed-consumer.mjs` to verify core without drivers and shipped SQL.
   - [ ] Add adapter imports/types resolution checks after explicit driver installation in the existing Make recipe.
+  - [ ] Run the packed-consumer regression in the existing artifacts CI validation job.
   - [ ] Reproduce the packaging failure, then pass `make probe-artifacts-packed-consumer ENV=test-artifacts-012`.
 - [ ] **Lot 3 — Final validation and handoff**
   - [ ] Run `make typecheck-artifacts lint-artifacts test-artifacts ENV=test-artifacts-012`.
