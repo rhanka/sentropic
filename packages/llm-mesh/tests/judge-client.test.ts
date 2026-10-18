@@ -30,6 +30,18 @@ const mockVerdictResult = (correlationId = 'test-corr-1'): JudgeResult => ({
   receipt: mockReceipt(correlationId),
 });
 
+const choiceVerdict = () => ({
+  criterionKind: 'choice', resolvedCriterionKind: 'choice', score: null, decision: null,
+  label: { value: 'a', origin: 'provider' }, rationale: null,
+  confidence: { value: 0.7, min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'r', origin: 'provider' },
+  distribution: [
+    { outcome: 'a', nativeOutcome: 'a', probability: 0.7 },
+    { outcome: 'b', nativeOutcome: 'b', probability: 0.3 },
+  ],
+});
+
+const rawBytes = (data: unknown) => new TextEncoder().encode(JSON.stringify(data)).byteLength;
+
 /** Serve a real service result through the remote client over a JSON wire. */
 const roundTrip = async (request: JudgeRequest) => {
   const service = createJudgeService(judgeServiceFixture().options);
@@ -380,15 +392,6 @@ describe('remote judge client', () => {
   it('binds criterion concordance to the transmitted snapshot', async () => {
     const choiceCriterion = { kind: 'choice' as const, instructions: 'Pick.',
       options: [{ id: 'a', description: 'A' }, { id: 'b', description: 'B' }] };
-    const choiceVerdict = {
-      criterionKind: 'choice', resolvedCriterionKind: 'choice', score: null, decision: null,
-      label: { value: 'a', origin: 'provider' }, rationale: null,
-      confidence: { value: 0.7, min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'r', origin: 'provider' },
-      distribution: [
-        { outcome: 'a', nativeOutcome: 'a', probability: 0.7 },
-        { outcome: 'b', nativeOutcome: 'b', probability: 0.3 },
-      ],
-    };
     const serve = (verdict: unknown) => vi.fn(async () => new Response(
       JSON.stringify({ ...mockVerdictResult('mutkind-corr'), verdict }),
       { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch;
@@ -402,7 +405,7 @@ describe('remote judge client', () => {
     expect(await clientA.judge(requestA)).toMatchObject({ kind: 'verdict', ok: true });
     const requestB = judgeRequest({ correlationId: 'mutkind-corr' });
     const clientB = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
-      fetch: serve(choiceVerdict), authToken: mutatingAuth(requestB) });
+      fetch: serve(choiceVerdict()), authToken: mutatingAuth(requestB) });
     expect(await clientB.judge(requestB)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
   });
 
@@ -495,6 +498,56 @@ describe('remote judge client', () => {
       .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     expect(await client({ ...errorReceipt, providerLatencyMs: -1 }))
       .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+  });
+
+  it('rejects raw native values that disagree with the typed verdict', async () => {
+    const corr = 'rawval-corr';
+    const serve = (verdict: unknown) => createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
+        { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
+    }).judge(judgeRequest({ correlationId: corr, raw: { mode: 'allowlisted' } }));
+    const raw = (data: unknown, truncated: boolean) => ({ ...mockVerdictResult(corr).verdict,
+      providerRaw: { data, bytes: rawBytes(data), truncated } });
+
+    const disagreeing = { noul: 0.99 };
+    expect(await serve(raw(disagreeing, false)))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    const canary = { noul: { echoedInput: 'synthetic-content-canary' } };
+    expect(await serve(raw(canary, false)))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    const excess = { noul: 0.25, choice: 'a' };
+    expect(await serve(raw(excess, false)))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await serve(raw({ noul: 0.25 }, true)))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await serve(raw({}, false)))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await serve(raw({}, true))).toMatchObject({ kind: 'verdict', ok: true });
+  });
+
+  it('checks raw probabilities and truncation against the distribution', async () => {
+    const corr = 'rawprob-corr';
+    const request = judgeRequest({ correlationId: corr, raw: { mode: 'allowlisted' },
+      criterion: { kind: 'choice', instructions: 'Pick.',
+        options: [{ id: 'a', description: 'A' }, { id: 'b', description: 'B' }] } });
+    const serve = (data: unknown, truncated: boolean) => createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr),
+        verdict: { ...choiceVerdict(), providerRaw: { data, bytes: rawBytes(data), truncated } } }),
+        { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
+    }).judge(request);
+    const full = { choice: 'a', probabilities: { a: 0.7, b: 0.3 }, confidence: 0.7 };
+
+    expect(await serve(full, false)).toMatchObject({ kind: 'verdict', ok: true });
+    expect(await serve({ ...full, probabilities: { a: 0.5, b: 0.5 } }, false))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await serve({ ...full, choice: 'b' }, false))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await serve(full, true))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await serve({ choice: 'a', probabilities: { a: 0.7, b: 0.3 } }, true))
+      .toMatchObject({ kind: 'verdict', ok: true });
   });
 
   it('refuses NaN inputs before any egress without inventing a receipt', async () => {
