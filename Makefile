@@ -629,6 +629,7 @@ check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every
 # BRCI-EX1 — publishable manifest guard (spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md).
 # Every npm pack/publish lane inspects the real archive; tools are pinned in ephemeral dirs.
 MANIFEST_GUARD_IMAGE ?= $(LLM_MESH_NODE_IMAGE)
+include scripts/publish/packages.mk
 MANIFEST_REPORT_DIR ?= tmp/ci-manifest-guard/manifests
 MANIFEST_CONTEXT_FILE ?=
 MANIFEST_SEVERITY ?=
