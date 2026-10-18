@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 /** Hermetic fetch-style service on an OS-assigned loopback port, with disconnect cancellation. */
-export async function serve(handler: (request: Request) => Response | Promise<Response>) {
+export async function serve(handler: (request: Request) => Response | Promise<Response>, port = 0) {
   const server = createServer(async (incoming, outgoing) => {
     const controller = new AbortController();
     incoming.once('aborted', () => controller.abort());
@@ -15,6 +15,8 @@ export async function serve(handler: (request: Request) => Response | Promise<Re
         ...(body ? { body } : {}), signal: controller.signal,
       });
       const response = await handler(request);
+      // Fresh connections make listener restart tests independent of a stale pooled socket.
+      outgoing.setHeader('connection', 'close');
       outgoing.writeHead(response.status, Object.fromEntries(response.headers));
       const reader = response.body?.getReader();
       try {
@@ -31,7 +33,7 @@ export async function serve(handler: (request: Request) => Response | Promise<Re
     }
   });
   await new Promise<void>((resolve, reject) => {
-    server.once('error', reject); server.listen(0, '127.0.0.1', resolve);
+    server.once('error', reject); server.listen(port, '127.0.0.1', resolve);
   });
   let closing: Promise<void> | undefined;
   return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,

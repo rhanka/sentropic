@@ -81,7 +81,7 @@
   - [ ] New tests/mcp-oauth-composition.spec.ts and mcp-oauth-sessions.spec.ts: positive/negative ACR, mounts, live scopes/account, owner POST/GET/DELETE uniform 404, overlap, cancellation/SSE, expiry/restart/close. Existing unchanged: mcp-composition.spec.ts and mcp-registry.spec.ts.
   - [ ] Scoped gate: Lot 1 test command with SCOPE=tests/mcp-oauth-composition.spec.ts, then sessions, existing composition and registry; same typecheck/lint gate. UI files: none.
 - [ ] **Lot 3 — Controlled exchange egress and service proof**
-  - [x] Real loopback HTTP issuer/MCP/API + SDK service proof added, with independent API verification and actual Basic RFC8693 exchange; synthetic credentials and OS-assigned container ports only.
+  - [x] Real HTTP exchange proof GREEN; extended with inverse-audience refusals, raw/stub no-exchange and same-client fresh transport after listener/composition restart at the same URL. SDK reports 404; test client reinitializes without new user configuration.
   - [x] Egress RED on missing implementation; frozen profile compiler now validates exact host/method/audience/path and canonical bounded parameters before effects.
   - [x] Egress contracts written before implementation: API-token-only HTTP, tool/scope/path restrictions, bounded outage reuse, retained/cancelled capability refusal.
   - [x] Implemented existing bounded exchange cache + controlled egress; three scoped tests GREEN (positive API token, restrictions, outage/retention/cancellation). No redirects/token getter; bounded JSON and close invalidation.

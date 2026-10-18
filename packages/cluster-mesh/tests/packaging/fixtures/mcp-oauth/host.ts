@@ -17,6 +17,7 @@ export const scopeFor = (name: string): string =>
 export const resource = 'https://preprod.immo.example/mcp';
 export const issuer = 'https://auth.example';
 export const allScopes = ['immo:read', 'immo:search', 'immo:documents:read'];
+export const stubs = ['search_lots', 'get_lot_card', 'get_opportunity_dossier', 'list_documents', 'read_document_excerpt'];
 
 export async function fixture() {
   const keys = await generateKeyPair('RS256');
@@ -55,10 +56,11 @@ export async function fixture() {
       sessionIdGenerator: () => crypto.randomUUID(), enableJsonResponse: true,
     }) },
     resolveAccount: async () => ({ allowed: true }),
-    invoke: async (tool, args, call) => ({
-      ok: true, auditId: call.correlationId, redactionClass: 'low',
-      output: { tool, args, sub: call.principal.sub, scopes: call.principal.scopes },
-    }),
+    invoke: async (tool, args, call) => stubs.includes(tool)
+      ? { ok: false, auditId: call.correlationId, redactionClass: 'low',
+        error: { code: 'not_wired_yet', message: 'not_wired_yet', retriable: false } }
+      : { ok: true, auditId: call.correlationId, redactionClass: 'low',
+        output: { tool, args, sub: call.principal.sub, scopes: call.principal.scopes } },
   };
   const token = (claims: JWTPayload = {}) => new SignJWT({
     sub: 'alice', iss: issuer, aud: resource, iat: Math.floor(Date.now() / 1000),
