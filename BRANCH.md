@@ -104,6 +104,10 @@
   - [x] Correct revocation/cache/JWT windows, source paths and concrete regression/race/expiry acceptance (findings 4 and 6; citation part of 7).
   - [x] Reconcile actual 353-line analysis bytes/provenance in the committed reconciliation amendment and distinguish proposed interaction/logout defaults from owner ratification (findings 7 and 8).
   - [x] Validate scope and prepare `.h2a/reviews/pr699_treatment.md`; final atomic-commit/push/head receipt is recorded there (ignored local artifact), with no merge or new approval claim.
+- [x] **Review round 2 — PR #699 (`pr699_astra_r2.md`, target `c4d82be31ceb0dbcfa8a627b7a5f2e55aba8fba2`)**
+  - [x] Separate existing refresh-credential exclusion from profile-based offline-scope enforcement, correct exchange TTL evidence, and allocate Lot 4 subject/scope assertions (finding 1); update the reconciliation amendment.
+  - [x] Reuse existing consent contract and registration/policy suites, allocate a separate new rendering suite, and preserve existing regressions (finding 2).
+  - [x] Validate scope and unchanged owner receipt; append treatment rows under `Round 2` in `.h2a/reviews/pr699_treatment.md`; final atomic-commit/push/head receipt is recorded there, with no merge or round-3 launch.
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Confirm the new spec reuses merged mechanisms without duplicating them and contains no secret value, only variable names.
   - [x] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
