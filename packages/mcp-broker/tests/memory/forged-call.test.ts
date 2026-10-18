@@ -30,13 +30,13 @@ describe('P01.broker.forged-call', () => {
     const { broker, adapter } = makeBroker();
     const spy = vi.spyOn(adapter, 'invokeTool');
     await expect(
-      broker.invoke('engram-memory', 'engram_memory_search', {}, {
+      broker.invoke('engram-memory', 'engram_memory_search', { purpose_ref: 'purpose-1' }, {
         ctx: undefined as unknown as never,
         ...MEMORY_OPTS,
       }),
     ).rejects.toMatchObject({ code: '-32603' });
     await expect(
-      broker.invoke('engram-memory', 'engram_memory_search', {}, {
+      broker.invoke('engram-memory', 'engram_memory_search', { purpose_ref: 'purpose-1' }, {
         ctx: makeCtx({ auditId: 'audit_mcp_l0_default' }),
         ...MEMORY_OPTS,
       }),
@@ -60,9 +60,9 @@ describe('P01.broker.forged-call', () => {
     const { broker, adapter } = makeBroker();
     const spy = vi.spyOn(adapter, 'invokeTool');
     await expect(
-      broker.invoke('mock', 'engram_memory_search', {}, { ctx: makeCtx(), ...MEMORY_OPTS }),
+      broker.invoke('mock', 'engram_memory_search', { purpose_ref: 'purpose-1' }, { ctx: makeCtx(), ...MEMORY_OPTS }),
     ).rejects.toThrow();
-    const crossPrincipal = await broker.invoke('engram-memory', 'engram_memory_search', {}, {
+    const crossPrincipal = await broker.invoke('engram-memory', 'engram_memory_search', { purpose_ref: 'purpose-1' }, {
       ctx: makeCtx({
         principal: {
           sub: 'user-2',
@@ -73,14 +73,13 @@ describe('P01.broker.forged-call', () => {
         },
       }),
       ...MEMORY_OPTS,
-    });
-    expect(crossPrincipal.ok).toBe(true);
-    expect(crossPrincipal.auditId).toBe('mock-memory-audit');
+    }).catch(error => error);
+    expect(crossPrincipal).toMatchObject({ code: '-32603' });
     const staleSession = makeCtx({ session: {} });
     await expect(
-      broker.invoke('engram-memory', 'engram_memory_search', {}, { ctx: staleSession, ...MEMORY_OPTS }),
+      broker.invoke('engram-memory', 'engram_memory_search', { purpose_ref: 'purpose-1' }, { ctx: staleSession, ...MEMORY_OPTS }),
     ).rejects.toMatchObject({ code: '-32603' });
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('P01.broker.forged-call: compiled selection refuses forged bindings with zero provider contact', () => {

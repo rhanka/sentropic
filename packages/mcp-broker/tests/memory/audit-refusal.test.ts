@@ -51,7 +51,7 @@ describe('P02.broker.audit-refusal-32603', () => {
       makeCtx({ auditId: 'audit_mcp_l0_default' }),
     ] as unknown[]) {
       await expect(
-        broker.invoke('engram-memory', 'engram_memory_search', {}, {
+        broker.invoke('engram-memory', 'engram_memory_search', { purpose_ref: 'purpose-1' }, {
           ctx: ctx as never,
           ...MEMORY_OPTS,
         }),
@@ -81,7 +81,7 @@ describe('P02.broker.audit-refusal-32603', () => {
           sourceId: 'mcp:engram-memory',
           generation: '1',
         });
-        return broker.invoke('engram-memory', 'engram_memory_search', {}, {
+        return broker.invoke('engram-memory', 'engram_memory_search', { purpose_ref: 'purpose-1' }, {
           ctx: makeCtx({ auditId: 'audit_mcp_l0_default' }),
           ...MEMORY_OPTS,
         });
@@ -97,8 +97,9 @@ describe('P02.broker.audit-refusal-32603', () => {
       sourceId: 'mcp:engram-memory',
       generation: '1',
     });
-    const result = await broker.invoke('engram-memory', 'engram_memory_search', {}, {
-      ctx: makeCtx({ auditId: 'audit-survives-1' }),
+    const result = await broker.invoke('engram-memory', 'engram_memory_search', { purpose_ref: 'purpose-1' }, {
+      ctx: makeCtx({ auditId: 'audit-survives-1', memory: { ...makeCtx().memory!,
+        binding: { ...makeCtx().memory!.binding, audit_id: 'audit-survives-1' } } }),
       ...MEMORY_OPTS,
     });
     expect(result.ok).toBe(true);
