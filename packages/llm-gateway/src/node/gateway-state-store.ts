@@ -12,10 +12,12 @@
 import {
   createCipheriv,
   createDecipheriv,
+  createHash,
   randomBytes,
 } from 'node:crypto';
 import {
   chmod,
+  link,
   mkdir,
   open,
   readFile,
@@ -46,6 +48,7 @@ export interface FileStoreOptions {
   readonly stateDir: string;
   readonly keyring: KeyringReader;
   readonly dekKey?: string;
+  readonly fsOps?: Partial<typeof import('node:fs/promises')>;
 }
 
 interface Envelope {
@@ -148,6 +151,7 @@ export class FileGatewayStateStore implements GatewayStateStore {
   private readonly stateDir: string;
   private readonly keyring: KeyringReader;
   private readonly dekKey: string;
+  private readonly fsOps?: Partial<typeof import('node:fs/promises')>;
   private transaction: Promise<unknown> = Promise.resolve();
   private dekCache: string | null = null;
 
@@ -158,6 +162,7 @@ export class FileGatewayStateStore implements GatewayStateStore {
     this.stateDir = options.stateDir;
     this.keyring = options.keyring;
     this.dekKey = options.dekKey ?? 'gateway/state-dek';
+    this.fsOps = options.fsOps;
   }
 
   private async ensureDir(): Promise<void> {
@@ -229,70 +234,106 @@ export class FileGatewayStateStore implements GatewayStateStore {
     try { await directory.sync(); } finally { await directory.close(); }
   }
 
+  private async sweepDeadLockArtifacts(name: string, fsReaddir: typeof readdir, fsReadFile: typeof readFile, fsUnlink: typeof unlink): Promise<void> {
+    const entries = await fsReaddir(this.stateDir).catch(() => [] as string[]);
+    for (const entry of entries) {
+      if (!entry.startsWith(`${name}.retire-`) && !(entry.startsWith(`${name}.`) && (entry.endsWith('.claim') || entry.endsWith('.staging')))) continue;
+      const entryPath = join(this.stateDir, entry);
+      let raw = '';
+      try { raw = (await fsReadFile(entryPath, 'utf8')) as string; } catch { continue; }
+      let entryPid: unknown;
+      try { entryPid = (JSON.parse(raw) as { pid?: unknown }).pid; } catch { entryPid = undefined; }
+      if (typeof entryPid === 'number' && Number.isSafeInteger(entryPid) && entryPid > 0 && pidAlive(entryPid)) continue;
+      await fsUnlink(entryPath).catch(() => undefined);
+    }
+  }
+
   private async acquireLock(name = LOCK_FILE): Promise<string> {
+    const fsReadFile = this.fsOps?.readFile ?? readFile; const fsWriteFile = this.fsOps?.writeFile ?? writeFile;
+    const fsLink = this.fsOps?.link ?? link; const fsUnlink = this.fsOps?.unlink ?? unlink;
+    const fsRename = this.fsOps?.rename ?? rename; const fsReaddir = this.fsOps?.readdir ?? readdir;
     const path = join(this.stateDir, name);
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const token = randomBytes(8).toString('hex');
       const claim = JSON.stringify({ pid: process.pid, token, startedAt: Date.now() });
+      const claimPath = `${path}.${process.pid}.${token}.claim`;
       try {
-        await writeFile(path, claim, { flag: 'wx', mode: 0o600 });
+        await fsWriteFile(claimPath, claim, { flag: 'wx', mode: 0o600 });
+      } catch {
+        throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
+      }
+      try {
+        await fsLink(claimPath, path);
+        await fsUnlink(claimPath).catch(() => undefined);
+        await this.sweepDeadLockArtifacts(name, fsReaddir, fsReadFile, fsUnlink);
         return token;
       } catch (error) {
         if (!isCode(error, 'EEXIST')) {
+          await fsUnlink(claimPath).catch(() => undefined);
           throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
         }
       }
       let held = '{}';
       try {
-        held = await readFile(path, 'utf8');
+        held = (await fsReadFile(path, 'utf8')) as string;
       } catch (error) {
+        await fsUnlink(claimPath).catch(() => undefined);
         if (isCode(error, 'ENOENT')) continue;
         throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
       }
       let parsed: { pid?: unknown; token?: unknown };
-      try { parsed = JSON.parse(held) as { pid?: unknown; token?: unknown }; } catch { throw corrupt('unreadable lock'); }
+      try { parsed = JSON.parse(held) as { pid?: unknown; token?: unknown }; } catch { await fsUnlink(claimPath).catch(() => undefined); throw corrupt('unreadable lock'); }
       const pid = parsed.pid;
       const staleToken = typeof parsed.token === 'string' && parsed.token.length > 0 ? parsed.token : '';
-      if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) throw corrupt('invalid lock owner');
-      if (pidAlive(pid)) throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+      if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) { await fsUnlink(claimPath).catch(() => undefined); throw corrupt('invalid lock owner'); }
+      if (pidAlive(pid)) { await fsUnlink(claimPath).catch(() => undefined); throw new GatewayStateError('state store locked by a live writer', 'CONFLICT'); }
       const fenceKey = (staleToken || String(pid)).replace(/[^a-zA-Z0-9_-]/g, '_');
-      const fencePath = join(this.stateDir, `${name}.retire-${fenceKey}`);
-      try {
-        await writeFile(fencePath, claim, { flag: 'wx', mode: 0o600 });
-      } catch (error) {
-        if (!isCode(error, 'EEXIST')) {
-          throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
+      let fencePath = join(this.stateDir, `${name}.retire-${fenceKey}`);
+      const priorFences: string[] = [];
+      let fenced = false; let retryOuter = false;
+      for (let step = 0; step < 32; step += 1) {
+        try { await fsLink(claimPath, fencePath); fenced = true; break; }
+        catch (error) {
+          if (!isCode(error, 'EEXIST')) { await fsUnlink(claimPath).catch(() => undefined); throw new GatewayStateError('lock claim failed', 'STORE-FAILED'); }
+          let fenceRaw = '';
+          try { fenceRaw = (await fsReadFile(fencePath, 'utf8')) as string; }
+          catch (readError) {
+            if (isCode(readError, 'ENOENT')) {
+              if (((await fsReadFile(path, 'utf8').catch(() => '')) as string) !== held) {
+                await fsUnlink(claimPath).catch(() => undefined);
+                throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+              }
+              retryOuter = true; break;
+            }
+            await fsUnlink(claimPath).catch(() => undefined);
+            throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
+          }
+          let fencePid: unknown;
+          try { fencePid = (JSON.parse(fenceRaw) as { pid?: unknown }).pid; } catch { fencePid = undefined; }
+          if (typeof fencePid === 'number' && Number.isSafeInteger(fencePid) && fencePid > 0 && pidAlive(fencePid)) {
+            await fsUnlink(claimPath).catch(() => undefined);
+            throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
+          }
+          priorFences.push(fencePath);
+          const digest = createHash('sha256').update(`${fencePath}\0${fenceRaw}`, 'utf8').digest('hex').slice(0, 16);
+          fencePath = join(this.stateDir, `${name}.retire-${fenceKey}-${digest}`);
         }
-        let fenceRaw = '';
-        try {
-          fenceRaw = await readFile(fencePath, 'utf8');
-        } catch (readError) {
-          if (isCode(readError, 'ENOENT')) continue;
-          throw new GatewayStateError('lock claim failed', 'STORE-FAILED');
-        }
-        let fencePid: unknown;
-        try { fencePid = (JSON.parse(fenceRaw) as { pid?: unknown }).pid; } catch { fencePid = undefined; }
-        if (typeof fencePid === 'number' && Number.isSafeInteger(fencePid) && fencePid > 0 && pidAlive(fencePid)) {
-          throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
-        }
-        await unlink(fencePath).catch(() => undefined);
-        const currentRaw = await readFile(path, 'utf8').catch(() => '');
-        if (currentRaw !== held) {
-          throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
-        }
-        continue;
       }
+      if (retryOuter) { await fsUnlink(claimPath).catch(() => undefined); continue; }
+      if (!fenced) { await fsUnlink(claimPath).catch(() => undefined); throw new GatewayStateError('state store locked by a live writer', 'CONFLICT'); }
       try {
-        const currentRaw = await readFile(path, 'utf8').catch(() => '');
-        if (currentRaw !== held) {
+        const currentRaw = (await fsReadFile(path, 'utf8').catch(() => '')) as string;
+        const fenceVerify = (await fsReadFile(fencePath, 'utf8').catch(() => '')) as string;
+        if (currentRaw !== held || fenceVerify !== claim) {
           throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
         }
-        const claimPath = `${path}.${token}.claim`;
-        await writeFile(claimPath, claim, { flag: 'wx', mode: 0o600 });
-        await rename(claimPath, path);
+        await fsRename(claimPath, path);
+        for (const oldFence of priorFences) await fsUnlink(oldFence).catch(() => undefined);
+        await this.sweepDeadLockArtifacts(name, fsReaddir, fsReadFile, fsUnlink);
         return token;
       } finally {
-        await unlink(fencePath).catch(() => undefined);
+        await fsUnlink(fencePath).catch(() => undefined);
+        await fsUnlink(claimPath).catch(() => undefined);
       }
     }
     throw new GatewayStateError('state store locked by a live writer', 'CONFLICT');
