@@ -63,9 +63,9 @@
   - [x] Run `make ps-all ENV=test-publish-mcp-packages`; no Compose services.
   - [x] Declare scope, exceptions, isolated environment and commit discipline.
 - [ ] **Lot 1 — Public package manifests and portable source imports**
-  - [ ] Configure files, exports, provenance, license, repository and semver dependencies for all 18 libraries.
-  - [ ] Replace connector/broker sibling-source imports with public MCP platform entry points; preserve behavior and experimental boundaries.
-  - [ ] Add/update README and CHANGELOG per package; retain proof/live limitations.
+  - [x] Configure files, exports, provenance, license, repository and semver dependencies for all 18 libraries.
+  - [x] Replace connector/broker sibling-source imports with public MCP platform entry points; preserve behavior and experimental boundaries.
+  - [x] Add/update README and CHANGELOG per package; retain proof/live limitations.
   - [x] Prepare manifests and release documentation: ubo-contracts, mcp-broker, connector-host.
   - [x] Prepare manifests and release documentation: mcp-connector-airtable, mcp-connector-dropbox, mcp-connector-github.
   - [x] Prepare manifests and release documentation: mcp-connector-gmail, mcp-connector-google, mcp-connector-googlecalendar.
@@ -77,7 +77,7 @@
   - [x] Port sibling-source imports, batch 3: 9 files.
   - [x] Port sibling-source imports, batch 4: 9 files.
   - [x] Port sibling-source imports, batch 5: 1 files.
-  - [ ] Refresh affected workspace lock entries through Docker/Make.
+  - [x] Refresh affected workspace lock entries through Docker/Make.
   - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
 - [ ] **Lot 2 — Guarded build, pack and web-login bootstrap**
   - [x] Add standalone Docker build/test/lock tooling without host dependencies.
