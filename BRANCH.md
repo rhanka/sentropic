@@ -84,20 +84,20 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
   - [x] Push with `--force-with-lease` (rebased head `0ca616db7a26733137bd4ac592bd4f45f5c22d2f`).
   - [x] Confirm the rebased diff vs `origin/main` adds only `spec/SPEC_STUDY_GITHUB_SEAT_CREDENTIAL_CUSTODY.md` (106 lines, no same-file conflict).
 
-- [ ] **Lot 2 — Reconciliation of the study (documentation-only)**
+- [x] **Lot 2 — Reconciliation of the study (documentation-only)**
   - [x] Mark the 2026-09-20 study as historical where superseded; keep the dated owner request and the O1/O2/O3 comparison as decision history; remove O2 as the current recommendation.
   - [x] Replace the current-tense custody, refresh, and MEP delivery descriptions with references to the controlling deployable-process D7 contract (GitHub Secrets, sole refresher, GitHub-first commit, CAS delivery, access-only projection resolver, preprod-first, production deferred).
   - [x] Correct the security boundary wording: the selected Secrets design entrusts full credentials to the GitHub secret/job boundary; no KMS-to-KMS guarantee is claimed for it.
   - [x] Remove the unconditional metered-fallback and categorical terms-safety wording; keep mono-principal personal passthrough and cite the provider-specific qualification on main.
   - [x] Update the factual inventory: Muse enrollment exists on main; the five-CLI envelope (agy, codex, vibe, muse, claude) is the current provider inventory with lifecycle qualification unverified; keep direct Gemini/AI-Studio only as deferred/unverified.
-  - [ ] Separate delivered Claude enrollment (PR #659) from execution/host qualification (h2a runner seam; no runner installed by default; standalone host excludes provider CLI subprocesses).
-  - [ ] Reclassify the seven original questions as decided, historical, deferred, or still unverified, with pinned evidence per question.
-  - [ ] State dependencies precisely: missing custody job/resolver/lifecycle proofs are existing dependencies owned by the custody lane, the h2a owner, and the platform/custody operator; they are not delivered by PR #659 or by this study and are not prerequisites to merging this study.
-  - [ ] Validate every link and `file:line` reference against `origin/main` at `1472d961e098908e64ef60b83835af357888d031`.
+  - [x] Separate delivered Claude enrollment (PR #659) from execution/host qualification (h2a runner seam; no runner installed by default; standalone host excludes provider CLI subprocesses).
+  - [x] Reclassify the seven original questions as decided, historical, deferred, or still unverified, with pinned evidence per question.
+  - [x] State dependencies precisely: missing custody job/resolver/lifecycle proofs are existing dependencies owned by the custody lane, the h2a owner, and the platform/custody operator; they are not delivered by PR #659 or by this study and are not prerequisites to merging this study.
+  - [x] Validate every link and `file:line` reference against `origin/main` at `1472d961e098908e64ef60b83835af357888d031`.
 
-- [ ] **Lot 3 — Docs consolidation**
-  - [ ] Confirm no `spec/BRANCH_SPEC_EVOL.md` exists on this branch (none created; reconciliation lands directly in the study).
-  - [ ] Confirm no other `spec/*.md` file is modified; controlling specs stay read-only references.
+- [x] **Lot 3 — Docs consolidation**
+  - [x] Confirm `spec/BRANCH_SPEC_EVOL.md` is neither created nor modified on this branch (pre-existing file on main, untouched; reconciliation lands directly in the study).
+  - [x] Confirm no other `spec/*.md` file is modified; controlling specs stay read-only references.
 
 - [ ] **Lot 4 — Final validation and handoff**
   - [ ] Run `make scope-check ENV=test-pr596-custody` before each atomic commit (commits of at most 150 lines, via `make commit`, no AI attribution).
