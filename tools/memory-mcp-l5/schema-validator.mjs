@@ -3,8 +3,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+export const PINNED_IMAGE_DIGEST = 'node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6';
 export const sha256Hex = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export const sha512Integrity = (bytes) => `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
 export const CHECKPOINT_SCHEMA_SHA256 = sha256Hex(readFileSync(resolve(HERE, 'schemas/checkpoint-v1.schema.json')));
@@ -12,6 +14,24 @@ export const ARTIFACT_MANIFEST_SCHEMA_SHA256 = sha256Hex(readFileSync(resolve(HE
 export const PROOF_CATALOG_SHA256 = sha256Hex(readFileSync(resolve(HERE, 'proof-catalog-v1.json')));
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 const asArr = (v) => (Array.isArray(v) ? v : []);
+
+function readTarEntries(tgzBytes) {
+  let tar;
+  try { tar = gunzipSync(tgzBytes); } catch { return null; }
+  if (!Buffer.isBuffer(tar) || tar.length < 1024 || tar.length % 512 !== 0) return null;
+  const entries = new Map();
+  for (let off = 0; off + 512 <= tar.length;) {
+    const hdr = tar.subarray(off, off + 512);
+    if (hdr.every((b) => b === 0)) break;
+    if (hdr.subarray(257, 262).toString('ascii') !== 'ustar') return null;
+    const name = hdr.subarray(0, 100).toString('utf8').replace(/\0.*$/, '');
+    const size = parseInt(hdr.subarray(124, 136).toString('ascii').replace(/\0.*$/, '').trim(), 8);
+    if (!name || Number.isNaN(size) || size < 0 || off + 512 + size > tar.length) return null;
+    entries.set(name, tar.subarray(off + 512, off + 512 + size));
+    off += 512 + Math.ceil(size / 512) * 512;
+  }
+  return entries.size > 0 ? entries : null;
+}
 
 export function canonicalizeJson(value) {
   if (Array.isArray(value)) return `[${value.map((v) => canonicalizeJson(v)).join(',')}]`;
@@ -104,11 +124,23 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
     try { return JSON.parse(bytes.toString('utf8')); } catch { failures.push(`${label}: invalid JSON in ${ref.path}`); return null; }
   };
   const src = doc.source || {}, c = doc.contracts || {}, pre = doc.preCandidate || {}, closure = doc.closure || {};
-  readChecked('receipts/source-tree.json', src.sourceTreeSha256, 'source.sourceTreeSha256');
+  const treeDoc = readJson({ path: 'receipts/source-tree.json', sha256: src.sourceTreeSha256 }, 'source.sourceTreeSha256');
+  const treeFiles = asArr(treeDoc?.files), treePaths = new Set();
+  if (!treeDoc || treeDoc.repository !== src.repository || treeDoc.head !== src.head || treeDoc.base !== src.base || treeDoc.merge !== src.merge || treeDoc.checkout !== src.checkout || treeFiles.length === 0) {
+    failures.push('source.sourceTree: tree metadata or empty files mismatch');
+  }
+  for (const tf of treeFiles) {
+    if (!tf?.path || treePaths.has(tf.path)) failures.push(`source.sourceTree: duplicate or invalid file ${tf?.path}`);
+    treePaths.add(tf?.path);
+    readChecked(tf?.path, tf?.sha256, `source.sourceTree/${tf?.path}`);
+  }
+  for (const rp of [...asArr(catalog.importGraphRoots).filter((r) => !String(r).startsWith('@sentropic/')), ...asArr(pre.contractInventory).map((x) => x?.path), ...asArr(c.schemas).map((x) => x?.path), ...asArr(catalog.immutableFixtures)]) {
+    if (rp && !treePaths.has(rp)) failures.push(`source.sourceTree: missing required tracked file ${rp}`);
+  }
   readChecked('packages/mcp-platform/dist/registry.d.ts', c.registrySha256, 'contracts.registrySha256');
   readChecked('packages/cluster-mesh/dist/compose/mcp.d.ts', c.gatewaySha256, 'contracts.gatewaySha256');
   const freezeDoc = readJson(c.l0Freeze, 'contracts.l0Freeze');
-  if (!freezeDoc || freezeDoc.specSha256 !== c.specSha256 || freezeDoc.l0Commit !== c.l0Commit || freezeDoc.checkpointSchemaSha256 !== CHECKPOINT_SCHEMA_SHA256 || freezeDoc.artifactManifestSchemaSha256 !== ARTIFACT_MANIFEST_SCHEMA_SHA256 || freezeDoc.proofCatalogSha256 !== PROOF_CATALOG_SHA256) {
+  if (!freezeDoc || freezeDoc.specSha256 !== c.specSha256 || freezeDoc.l0Commit !== c.l0Commit || freezeDoc.imageDigest !== PINNED_IMAGE_DIGEST || freezeDoc.checkpointSchemaSha256 !== CHECKPOINT_SCHEMA_SHA256 || freezeDoc.artifactManifestSchemaSha256 !== ARTIFACT_MANIFEST_SCHEMA_SHA256 || freezeDoc.proofCatalogSha256 !== PROOF_CATALOG_SHA256) {
     failures.push('contracts.l0Freeze: freeze metadata or schema/catalog hash mismatch');
   }
   for (const reqFix of asArr(catalog.immutableFixtures)) {
@@ -138,20 +170,49 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
   for (const a of asArr(doc.artifacts)) {
     const bytes = readChecked(a?.archiveRef, a?.sha256, `artifacts/${a?.name}`);
     if (bytes && sha512Integrity(bytes) !== a?.integrity) failures.push(`artifacts/${a?.name}: sha512 integrity mismatch`);
+    const entries = bytes ? readTarEntries(bytes) : null;
+    let pkgJson = null;
+    try { pkgJson = entries?.has('package/package.json') ? JSON.parse(entries.get('package/package.json').toString('utf8')) : null; } catch { pkgJson = null; }
+    if (!entries || !pkgJson || pkgJson.name !== a?.name || pkgJson.version !== a?.version) {
+      failures.push(`artifacts/${a?.name}: invalid tar.gz archive or package.json`); continue;
+    }
+    for (const [entryName, entryBytes] of entries.entries()) {
+      if (!entryName.startsWith('package/')) { failures.push(`artifacts/${a?.name}: unexpected tar entry ${entryName}`); continue; }
+      readChecked(`installed/node_modules/${a.name}/${entryName.slice('package/'.length)}`, sha256Hex(entryBytes), `installed/${a.name}/${entryName}`);
+    }
   }
   const rt = doc.runtime || {}, assurance = doc.assurance || {}, ci = doc.ci || {};
-  readChecked('package-lock.json', closure.declaredLockSha256, 'closure.declaredLockSha256');
-  readChecked('receipts/installed-lock.json', closure.installedLockSha256, 'closure.installedLockSha256');
+  const declLock = readJson({ path: 'package-lock.json', sha256: closure.declaredLockSha256 }, 'closure.declaredLockSha256');
+  const instLock = readJson({ path: 'receipts/installed-lock.json', sha256: closure.installedLockSha256 }, 'closure.installedLockSha256');
+  const sdkPkg = declLock?.packages?.['node_modules/@modelcontextprotocol/sdk'], instSdkPkg = instLock?.packages?.['node_modules/@modelcontextprotocol/sdk'];
+  if (!declLock || !instLock || instLock.sdkVersion !== closure.sdkVersion || instLock.sdkRange !== closure.sdkRange || JSON.stringify(instLock.protocolVersions) !== JSON.stringify(closure.protocolVersions) || sdkPkg?.version !== closure.sdkVersion || instSdkPkg?.version !== closure.sdkVersion) {
+    failures.push('closure.installedLock: SDK lock metadata mismatch');
+  }
+  for (const k of [...Object.keys(declLock?.packages || {}), ...Object.keys(instLock?.packages || {})]) {
+    if (k.includes('better-sqlite3')) failures.push(`closure.installedLock: forbidden package ${k}`);
+  }
+  for (const a of asArr(doc.artifacts)) {
+    const lp = instLock?.packages?.[`node_modules/${a?.name}`], dp = declLock?.packages?.[`node_modules/${a?.name}`];
+    if (!lp || !dp || lp.version !== a?.version || dp.version !== a?.version || lp.sha256 !== a?.sha256 || lp.integrity !== a?.integrity || lp.resolved !== a?.archiveRef) {
+      failures.push(`closure.installedLock: package mismatch for ${a?.name}`);
+    }
+  }
+  let instSdkDisk = null;
+  try { instSdkDisk = JSON.parse(readFileSync(resolve(rootDir, 'installed/node_modules/@modelcontextprotocol/sdk/package.json'), 'utf8')); } catch { instSdkDisk = null; }
+  if (!instSdkDisk || instSdkDisk.name !== '@modelcontextprotocol/sdk' || instSdkDisk.version !== closure.sdkVersion) failures.push('closure.installedLock: installed SDK package.json mismatch');
   const instClosure = readJson({ path: 'receipts/installed-closure.json', sha256: closure.installedClosureSha256 }, 'closure.installedClosureSha256');
   if (!instClosure || instClosure.artifactManifestSha256 !== closure.artifactManifestSha256 || instClosure.sdkVersion !== closure.sdkVersion || instClosure.referenceExport !== closure.referenceExport) {
     failures.push('closure.installedClosureSha256: closure report mismatch');
+  } else if (canonicalizeJson(instClosure.artifacts) !== canonicalizeJson(doc.artifacts)) {
+    failures.push('closure.installedClosure: artifacts mismatch');
   }
   readChecked('packages/mcp-broker/dist/memory-reference/index.js', closure.referenceSourceSha256, 'closure.referenceSourceSha256');
   readChecked('tools/memory-mcp-l5/policies/sqlite-fence-profile-v1.json', rt.fenceProfileSha256, 'runtime.fenceProfileSha256');
   let probeRaw = null;
   try { probeRaw = JSON.parse(readFileSync(resolve(rootDir, 'receipts/runtime-probe.json'), 'utf8')); } catch { probeRaw = null; }
-  if (!probeRaw || probeRaw.nodeVersion !== rt.nodeVersion || probeRaw.imageDigest !== rt.imageDigest || probeRaw.sqliteVersion !== rt.sqliteVersion || probeRaw.driver !== 'node:sqlite' || probeRaw.journalMode !== 'WAL' || probeRaw.synchronous !== 'FULL' || probeRaw.fenceProfileSha256 !== rt.fenceProfileSha256 || probeRaw.pythonCount !== 0 || probeRaw.addonBuildCount !== 0) {
-    failures.push('runtime: on-disk runtime-probe.json mismatch');
+  const probeArgs = Array.isArray(probeRaw?.execArgv) ? probeRaw.execArgv.join(' ') : String(probeRaw?.execArgv ?? '');
+  if (!probeRaw || !Array.isArray(probeRaw.execArgv) || typeof probeRaw.nodeOptions !== 'string' || /sqlite/i.test(`${probeArgs} ${probeRaw.nodeOptions}`) || probeRaw.tupleHead !== src.head || probeRaw.artifactManifestSha256 !== closure.artifactManifestSha256 || probeRaw.nodeVersion !== rt.nodeVersion || !/^24\.\d+\.\d+$/.test(String(probeRaw.nodeVersion)) || probeRaw.imageDigest !== rt.imageDigest || probeRaw.imageDigest !== PINNED_IMAGE_DIGEST || probeRaw.platform !== rt.platform || probeRaw.sqliteVersion !== rt.sqliteVersion || probeRaw.driver !== 'node:sqlite' || probeRaw.journalMode !== 'WAL' || probeRaw.synchronous !== 'FULL' || probeRaw.filesystem !== rt.filesystem || probeRaw.filesystemAssumptions !== rt.filesystemAssumptions || probeRaw.fenceProfileSha256 !== rt.fenceProfileSha256 || probeRaw.pythonCount !== 0 || probeRaw.addonBuildCount !== 0) {
+    failures.push('runtime.probe: on-disk runtime-probe.json mismatch');
   }
   readChecked('tools/memory-mcp-l5/policies/sent-tech-assurance-v1.json', assurance.productionPolicySha256, 'assurance.productionPolicySha256');
   readChecked('tools/memory-mcp-l5/policies/qualification-assurance-v1.json', assurance.qualificationPolicySha256, 'assurance.qualificationPolicySha256');
