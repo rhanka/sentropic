@@ -211,12 +211,20 @@ function isValidJudgeVerdict(v: unknown, request: JudgeRequest): v is JudgeVerdi
     confidence: v.confidence, distribution: v.distribution });
 }
 
-/** Wire errors never carry wording or retry metadata: rebuild both from the code and phase. */
-function rebuildWireError(error: unknown): JudgeError | null {
+/** Wire errors never carry wording: rebuild from code, phase and receipt liability evidence. */
+function rebuildWireError(error: unknown, receipt: JudgeReceipt): JudgeError | null {
   if (!isRecord(error) || !isJudgeErrorCode(error.code)
     || !['preflight', 'admission', 'dispatch', 'parse', 'settlement'].includes(error.phase as string)) return null;
-  return createJudgeError(error.code, error.phase as JudgeError['phase'],
-    { retryAfterMs: has(error, 'retryAfterMs') && typeof error.retryAfterMs === 'number' ? error.retryAfterMs : undefined });
+  const unresolved = receipt.budget.state !== 'not-admitted' && receipt.budget.state !== 'released';
+  const nonRetryable = unresolved || error.retryable === false;
+  const rebuilt = createJudgeError(error.code, error.phase as JudgeError['phase'],
+    { retryAfterMs: !nonRetryable && has(error, 'retryAfterMs') && typeof error.retryAfterMs === 'number'
+      ? error.retryAfterMs : undefined });
+  if (nonRetryable) {
+    rebuilt.retryable = false;
+    delete rebuilt.retryAfterMs;
+  }
+  return rebuilt;
 }
 
 /** Remote judge client calling an authenticated mesh endpoint without custody of provider keys. */
@@ -403,8 +411,8 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       }
       if (val.kind === 'error' && val.ok === false
         && isValidJudgeReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'error') {
-        const error = rebuildWireError(val.error);
-        if (error && (val.receipt as JudgeReceipt).errorCode === error.code) {
+        const error = rebuildWireError(val.error, val.receipt);
+        if (error && val.receipt.errorCode === error.code) {
           return { kind: 'error', ok: false, error, receipt: val.receipt } as unknown as JudgeResult;
         }
         return fail('MESH_UNAVAILABLE');
