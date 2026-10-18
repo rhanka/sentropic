@@ -612,6 +612,19 @@ address already used for delivery.
 
 `[TO BUILD Lot 2 store, Lot 6 events]` Required events: `oauth.client_policy_changed` (including R-GOV-2/R-GOV-4 fields), `auth.mfa_stepup_succeeded` / `auth.mfa_stepup_failed`, `auth.credential_created` / `auth.credential_revoked`, `auth.account_deactivated` / `auth.account_deletion_blocked` / `auth.account_reactivated`, `auth.recovery_code_created` / `auth.recovery_code_redeemed` / `auth.recovery_codes_revoked`, `auth.recovery_attempt_email_blocked`, `auth.breakglass_reset_executed` / `auth.trust_bootstrap_executed`, and `auth.enrolment_only_session_issued` / `auth.enrolment_only_session_used`. Two record classes are enforced: **best-effort** operational records (`api/src/routes/auth/oauth.ts:157` logger port, telemetry exporters, and email notifications) stay fire-and-forget so logger/exporter/mail outages never undo an already committed transition or alter an ordinary authorization outcome; **durable transition records** (`api/src/services/auth/security-transition-store.ts`, backed by `api/src/db/schema.ts` in Lot 2's migration) execute inside the same database transaction as credential-binding changes, trust bootstrap, pending-recovery activation, `is_mfa_protected` changes, protected account deactivation/reactivation, `policy_version` CAS mutations, and `security_generation` bumps — if the durable write fails, the transaction rolls back leaving all state unchanged, and retrying with the same `operationId` is idempotent.
 
+Catalogue diagnostics reuse the same two record classes without
+flattening them. The audit/provenance hooks
+(`spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md:102`) and the durable
+correlation references (`auditId`, `correlationId` in
+`spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md:761`) correlate
+client, policy, and operation references into the diagnostics a
+permitted viewer may see. Credentials, tokens, and recovery material
+stay outside shared logs and outside the catalogue. A common
+observability view is not a durable receipt and not a secret store.
+Until the five R-REC-1 prerequisites and the full-loss drill complete
+(section 10.2), the pre-activation state is displayed as "baseline gate
+only"; full `P-MFA` + `P-REC` is claimed only from that point.
+
 ### 9.3 Notifications
 
 `[EXISTS]` Transactional email is sent through the existing mail service
