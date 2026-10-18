@@ -43,6 +43,8 @@ export const redactRun = (run) => {
   const jobs = Array.isArray(run.jobs) ? run.jobs.map(redactJob) : [];
   const gateJob = jobs.find((j) => j.name === 'ci-gate');
   return {
+    workflow: run.workflow ?? run.name ?? 'CI',
+    workflowId: run.workflowId ?? run.workflow_id ?? null,
     runId: run.runId ?? run.id ?? null,
     attempt: run.attempt ?? run.run_attempt ?? 1,
     event: run.event ?? null,
@@ -97,8 +99,12 @@ export const summarizeWindow = (window) => {
         ? (createdTimes[createdTimes.length - 1] - createdTimes[0]) / 86400000
         : 0;
   let runnerSeconds = 0, llmMinutes = 0, failures = 0, cancellations = 0;
-  let emptyJobRuns = 0, missingGateRuns = 0, missingJobResultRuns = 0, maskedFailureRuns = 0;
+  let emptyJobRuns = 0, missingGateRuns = 0, missingJobResultRuns = 0, maskedFailureRuns = 0, nonCiWorkflowRuns = 0;
+  const events = new Set(), classes = new Set();
   for (const run of runs) {
+    if (run.workflow && run.workflow !== 'CI') nonCiWorkflowRuns += 1;
+    if (run.event) events.add(run.event);
+    if (run.changeClass) classes.add(run.changeClass);
     if (run.conclusion === 'failure') failures += 1;
     if (run.conclusion === 'cancelled') cancellations += 1;
     if (run.jobs.length === 0) emptyJobRuns += 1;
@@ -115,7 +121,8 @@ export const summarizeWindow = (window) => {
   return {
     runs: runs.length, spanDays, gateDelays: delays, gateP50: percentile(delays, 50), gateP95: percentile(delays, 95),
     runnerMinutes: runnerSeconds / 60, llmMinutes, failures, cancellations,
-    emptyJobRuns, missingGateRuns, missingJobResultRuns, maskedFailureRuns,
+    emptyJobRuns, missingGateRuns, missingJobResultRuns, maskedFailureRuns, nonCiWorkflowRuns,
+    events: [...events].sort(), classes: [...classes].sort(),
   };
 };
 
@@ -124,6 +131,18 @@ export const compareWindows = (before, after, limits = {}) => {
   const errors = [], pending = [];
   const minRuns = limits.minRuns ?? before.minRuns ?? after.minRuns ?? 20;
   const minDays = limits.minDays ?? before.minDays ?? after.minDays ?? 7;
+  if ((before.window && before.window !== 'before') || (after.window && after.window !== 'after')) {
+    errors.push(`invalid pinned window identity: before=${before.window} after=${after.window}`);
+  }
+  if ((before.workflow && before.workflow !== 'CI') || (after.workflow && after.workflow !== 'CI') || b.nonCiWorkflowRuns > 0 || a.nonCiWorkflowRuns > 0) {
+    errors.push(`non-CI workflow in sample: before=${b.nonCiWorkflowRuns} after=${a.nonCiWorkflowRuns}`);
+  }
+  if (b.events.length > 0 && a.events.length > 0 && !b.events.some((e) => a.events.includes(e))) {
+    errors.push(`incomparable event populations: before=${b.events.join(',')} after=${a.events.join(',')}`);
+  }
+  if (b.classes.length > 0 && a.classes.length > 0 && !b.classes.some((c) => a.classes.includes(c))) {
+    errors.push(`incomparable changeClass populations: before=${b.classes.join(',')} after=${a.classes.join(',')}`);
+  }
   if (b.emptyJobRuns > 0 || a.emptyJobRuns > 0) errors.push(`empty job inventory: before=${b.emptyJobRuns} after=${a.emptyJobRuns}`);
   if (b.missingGateRuns > 0 || a.missingGateRuns > 0) errors.push(`missing gate timestamps on successful runs: before=${b.missingGateRuns} after=${a.missingGateRuns}`);
   if (b.missingJobResultRuns > 0 || a.missingJobResultRuns > 0) errors.push(`missing required results: before=${b.missingJobResultRuns} after=${a.missingJobResultRuns}`);
@@ -162,13 +181,22 @@ const main = () => {
       console.error('error: --runs <file> is required and must exist');
       process.exit(1);
     }
+    const windowName = args.window ?? 'before';
+    if (windowName !== 'before' && windowName !== 'after') {
+      console.error(`error: invalid --window ${windowName} (expected before or after)`);
+      process.exit(1);
+    }
     const input = readJson(args.runs);
     const runs = dedupeRuns(Array.isArray(input) ? input : (input.runs ?? []));
+    if (runs.length === 0) {
+      console.error('error: --runs input contains zero runs');
+      process.exit(1);
+    }
     const minRuns = Number(args['min-runs'] ?? 20);
     const minDays = Number(args['min-days'] ?? 7);
     const summary = summarizeWindow({ runs });
     const window = {
-      schema: WINDOW_SCHEMA, window: args.window ?? 'before', collectedAt: new Date().toISOString(),
+      schema: WINDOW_SCHEMA, window: windowName, workflow: 'CI', collectedAt: new Date().toISOString(),
       studyBaseline: input.studyBaseline ?? 'fb5e92a6ae4928066e181716fdffbfb490b0b4f3',
       minRuns, minDays, spanDays: summary.spanDays,
       complete: runs.length >= minRuns && summary.spanDays >= minDays && summary.emptyJobRuns === 0 && summary.missingGateRuns === 0,

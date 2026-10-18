@@ -124,6 +124,12 @@ test('compare rejects empty job inventories, missing gate timestamps, short wind
   const regResult = compareWindows(validBefore, regressed, { minRuns: 20, minDays: 7 });
   assert.equal(regResult.verdict, 'fail');
   assert.ok(regResult.findings.some((f) => f.includes('p95 regression')));
+
+  assert.equal(compareWindows({ ...validBefore, window: 'after' }, { ...validBefore, window: 'after' }, { minRuns: 20, minDays: 7 }).verdict, 'fail');
+  assert.equal(compareWindows(validBefore, { ...validBefore, workflow: 'Other' }, { minRuns: 20, minDays: 7 }).verdict, 'fail');
+  const prPop = { runs: Array.from({ length: 20 }, (_, i) => mkRun(10, i, { event: 'pull_request', changeClass: 'api' })) };
+  const pushPop = { runs: Array.from({ length: 20 }, (_, i) => mkRun(4, i, { event: 'push', changeClass: 'docs' })) };
+  assert.equal(compareWindows(prPop, pushPop, { minRuns: 20, minDays: 7 }).verdict, 'fail');
 });
 
 test('collect requires --runs and round-trips through compare to pass on complete windows', () => {
