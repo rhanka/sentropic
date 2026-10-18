@@ -162,8 +162,8 @@ test('inventory: snapshot failure is transient only for network/registry errors'
   assert.match(network.out, /re-run, not debt/);
 });
 
-test('inventory: selected public package without a pack lane fails (skills)', async () => {
-  const r = await inventory({ packages: { skills: { name: '@sentropic/skills', version: '0.1.2' } }, env: inventoryEnv(['packages/skills/src/a.ts'], []) });
+test('inventory: selected public package without a pack lane fails', async () => {
+  const r = await inventory({ packages: { unregistered: { name: '@sentropic/unregistered', version: '0.1.0' } }, env: inventoryEnv(['packages/unregistered/src/a.ts'], []) });
   assert.equal(r.code, 1);
   assert.match(r.out, /missing pack lane/);
 });

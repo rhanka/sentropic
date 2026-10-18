@@ -78,6 +78,7 @@
   - [x] Port sibling-source imports, batch 4: 9 files.
   - [x] Port sibling-source imports, batch 5: 1 files.
   - [x] Refresh affected workspace lock entries through Docker/Make.
+  - [x] Run guard/wiring tests; adapt missing-lane regression fixture now that skills has a lane.
   - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
 - [ ] **Lot 2 — Guarded build, pack and web-login bootstrap**
   - [x] Add standalone Docker build/test/lock tooling without host dependencies.
