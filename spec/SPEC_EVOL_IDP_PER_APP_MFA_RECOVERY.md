@@ -768,3 +768,97 @@ name files and lots; and section 15 lists only decisions the owner must
 actually make. Astra max review and the reconciliation record (section 13
 note) are part of acceptance for this branch, not of BUILD acceptance.
 
+## 13. Implementation lots (BUILD branches — not this spec branch)
+
+Each lot is a separate BUILD branch from the then-current `main`, with its
+own `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`, its own `ENV=test-<slug>`
+gates, at most one migration in `api/drizzle/*.sql`, and a version bump for
+every `packages/<pkg>` whose `src/**` it touches. Order is normative where
+stated; Lots 2 and 4 may proceed in parallel after Lot 3's session-purpose
+primitive exists, but KVM enforcement (section 10.2 step 4) waits for Lot 3.
+
+| Lot | Deliverable | Key file targets | Gate |
+|---|---|---|---|
+| Lot 1 — Declaration and non-regression pin | R-KVM-DECL declaration file plus R-KVM-TEST extensions; `kvm-gateway` registerable with the legacy spelling | `deploy/oauth-clients/kvm-gateway.yaml` (new), `packages/auth-hono/tests/oauth-client-required-acr.test.ts`, `api/tests/api/auth/oauth-client-policy.test.ts`, `api/tests/unit/oauth-register-client.test.ts` | Scoped suites green on `ENV=test-<slug>`; declaration/registration consistency check green |
+| Lot 2 — Freshness and request hints | R-FRESH-1…R-FRESH-3: per-client bound, stale step-up, `max_age`/`acr_values`, discovery `acr_values_supported` | `packages/auth-hono/src/oauth/authorize-handler.ts`, `session-resolver.ts`, `wellknown-handler.ts`, client schema/registration script, the two authorize test files | Stale-session and hint cases green; no-policy clients byte-identical |
+| Lot 3 — Email-path closure and enrolment-only confinement | R-REC-0…R-REC-5, R-STEP-1, R-KVM-CLOSE effective: hardened derivation, register/magic-link gates, session purpose | `api/src/routes/namespaces/auth/magic-link.ts`, `registration.ts`, `credentials.ts`, session-manager purpose handling, new Lot 3 test files, UI register/lost-device suites | G-RECOVERY cases green for hardened accounts; non-hardened magic-link and register behaviour unchanged; KVM enforcement may go live after this lot |
+| Lot 4 — Recovery means | Options (a) prerequisite check, (c) recovery codes, (b) break-glass Job grant | One migration max (recovery-code hashes), credential-count check, Job-side reset command, new Lot 4 test files | Recovery-code and break-glass cases green; codes never satisfy authorize |
+| Lot 5 — Method-neutral migration | R-POL-1, section 10.1 M-1…M-3: dual spelling, canonical `mfa` emission, declaration switched to `mfa` | `authorize-handler.ts`, `session-resolver.ts`, token emission, discovery, registration script, declaration file, both ACR test files | Alias acceptance matrix green; bearer refusal unchanged at every step |
+| Lot 6 — Governance, audit, notifications, KVM verification | R-GOV-1…R-GOV-3, section 9.2 events, section 9.3 notifications, KVM onboarding verification and E2E suite | Audit wiring at the host ports, notification calls on credential/recovery/policy events, `e2e/tests/` KVM suite | Audit/notification cases green; operator onboarding checklist executed per tier |
+
+Notes: Lot 1 deliberately ships no guarantee change — it pins behaviour so
+Lots 2–5 cannot regress it silently. The Astra max review of this spec and
+the reconciliation record in `.h2a/reviews/spec-idp-mfa-reconciliation.md`
+gate BUILD authorisation; they are conductor artefacts, not BUILD lots.
+
+## 14. Compatibility, non-goals, and risks
+
+Compatibility kept: clients with no policy keep legacy authorize behaviour
+byte-identically; non-hardened accounts keep magic-link recovery and the
+current lost-device flow; `tid` derivation, consent persistence, DPoP, PKCE
+S256-only, EdDSA signing, and exact-match redirect validation are untouched;
+tier-local policy stays excluded from IdP sync; the magic-link utility
+endpoints themselves are not removed (their hardened-account enrolment
+effect is what changes).
+
+Non-goals: a new MFA method enrolment (TOTP or other), a policy-editing UI,
+gateway-side `acr` checking for KVM, Netbird client design beyond
+section 11's note, any change to RP session glue, and removal of the
+legacy `passkey-fresh` alias (section 10.1, M-4).
+
+Risks and mitigations: owner lockout if Lot 3 ships before the second
+credential exists (mitigated by the section 10.2 order and Lot 4 advisory
+mode); recovery codes stored with the mailbox collapsing to T-MAIL
+(mitigated by the section 7 conditions and the opt-in decision);
+break-glass misuse (bounded by dual possession — cluster plus admin
+account — and full audit); freshness default set so tight that step-up
+friction trains click-through (bounded by the owner decision in
+section 15 and by keeping the bound per client); alias window lingering
+(mitigated by M-4: new declarations must use the neutral value).
+
+Unverified at spec time (stated, not assumed): whether any required-MFA
+client besides the future `kvm-gateway` already exists in a live database,
+the live owner subject value, and the deployed oauth2-proxy version's
+exact token-validation settings. Each is an operator verification in
+Lot 1/Lot 6, not a spec assumption.
+
+## 15. Décisions propriétaire
+
+Seules les décisions qui appartiennent réellement au propriétaire sont
+listées ici. L'inscription de KVM comme client OAuth de l'IdP et les
+paramètres donnés de `kvm-gateway` (section 11) sont des exigences
+acquises et ne sont pas rouverts. Pour chaque décision : options,
+conséquences, recommandation de la spécification.
+
+**D-P1 — Fenêtre de fraîcheur MFA pour `kvm-gateway`.** Options : (i)
+quelques minutes (étape renforcée presque à chaque accès), (ii) quelques
+heures (recommandé : 8 h), (iii) 24 h. Conséquences : plus la fenêtre est
+courte, plus le vol de session (T-SESS) est contenu, mais plus la
+cérémonie WebAuthn est répétée ; 24 h laisse une journée d'usage à une
+session MFA volée. La valeur choisie devient la borne du client
+(section 5.3) ; elle peut différer par client plus tard sans changer le
+modèle.
+
+**D-P2 — Codes de récupération pour le compte propriétaire KVM.**
+Options : (i) activer les codes opt-in (section 7, option (c)) avant
+l'enforcement KVM, (ii) s'appuyer uniquement sur le second passkey et le
+reset d'urgence par Job (options (a)+(b)), (iii) activer les codes plus
+tard. Conséquences : (i) donne une récupération autonome mais crée un
+secret à conserver hors boîte mail ; (ii) garde la surface minimale avec
+une récupération dépendante de l'opérateur ; (iii) est compatible avec
+l'ordre des lots, le Lot 4 restant à construire dans tous les cas.
+
+**D-P3 — Portée du durcissement du compte.** Options : (i) le durcissement
+dérivé actuel (section 4.2 : seuls les comptes allowlistés sur un client
+MFA sont durcis), (ii) durcir tout compte dès son premier passkey, y
+compris pour les applications non forcées. Conséquences : (i) préserve la
+récupération par email pour les usages non forcés et limite le changement
+aux comptes exposés à KVM ; (ii) simplifie le modèle mental mais dégrade
+la récupération de tous les comptes sans bénéfice pour les applications
+sans exigence MFA. La spécification recommande (i).
+
+Aucune autre décision propriétaire n'est requise pour autoriser les lots :
+le choix des TTL fins (session enrolment-only, grant d'urgence), des noms
+d'événements d'audit et du schéma de la table des codes relève des lots
+d'implémentation sous les bornes normatives des sections 6 et 9.
+
