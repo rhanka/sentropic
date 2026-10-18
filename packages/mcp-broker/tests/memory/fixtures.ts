@@ -7,30 +7,9 @@ import type {
 import type { CompiledMcpRegistry } from '@sentropic/mcp-platform/registry';
 import { MEMORY_TOOLS } from '@sentropic/mcp-platform/memory';
 
+import { hostContext } from '../../../mcp-platform/tests/memory/host-fixture.js';
 export function makeCtx(overrides: Record<string, unknown> = {}): StpConnectorContext {
-  return {
-    requestId: 'req-1',
-    correlationId: 'corr-1',
-    auditId: 'audit-host-1',
-    principal: {
-      sub: 'user-1',
-      claims: { sub: 'user-1', tid: 'tenant-1' },
-      scopes: ['mcp:tools:invoke'],
-      tenantRef: 'tenant-1',
-      authTime: '2026-10-18T00:00:00.000Z',
-    },
-    surface: 'backend',
-    session: { mcpSessionId: 'session-1' },
-    tenantRef: 'tenant-1',
-    connectorInstanceId: 'ci-1',
-    consentRefs: [],
-    grantRefs: [],
-    getSecret: async () => '',
-    connectorConfig: {},
-    audit: { emit: async () => undefined },
-    logger: undefined,
-    ...overrides,
-  } as StpConnectorContext;
+  return { ...hostContext(), ...overrides } as StpConnectorContext;
 }
 
 export function makeMemoryAdapter(connectorId = 'engram-memory'): AppConnectorProviderAdapter {
@@ -135,7 +114,7 @@ export function selectInput(overrides: Record<string, unknown> = {}) {
     expectedPrincipalSub: 'user-1',
     expectedTenantRef: 'tenant-1',
     expectedSourceId: 'mcp:engram-memory',
-    expectedGeneration: 'gen-1',
+    expectedGeneration: '1',
     ...overrides,
   };
 }

@@ -20,7 +20,7 @@ function makeBroker() {
     plan: makePlan(['engram_memory_search']),
     adapters: [adapter],
     sourceId: 'mcp:engram-memory',
-    generation: 'gen-1',
+    generation: '1',
   });
   return { broker, adapter };
 }
@@ -90,11 +90,11 @@ describe('P01.broker.forged-call', () => {
       plan: makePlan(),
       adapters: [adapter],
       sourceId: 'mcp:engram-memory',
-      generation: 'gen-1',
+      generation: '1',
     });
     const forged = [
       selectInput({ expectedSourceId: 'mcp:forged' }),
-      selectInput({ expectedGeneration: 'gen-0' }),
+      selectInput({ expectedGeneration: '0' }),
       selectInput({ expectedPrincipalSub: 'forged-user' }),
       selectInput({ expectedTenantRef: 'forged-tenant' }),
       selectInput({ toolName: 'engram_memory_search ', purposeRef: 'purpose-1' }),

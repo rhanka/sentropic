@@ -31,6 +31,8 @@ export type AppInvocationEnvelope<TInput> = {
   ctx: StpConnectorContext;
   idempotencyKey?: string; // REQUIRED when the capability's idempotency.required
   elicitationRef?: string; // satisfied elicitation, REQUIRED when gates.requiresElicitation
+  /** Verified A03 projection for the memory provider, outside tool arguments. */
+  memoryContext?: import('./memory/frozen-context.js').MemoryContextProjectionV1;
 };
 
 export type AppToolInvocation = AppInvocationEnvelope<unknown>;

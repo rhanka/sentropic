@@ -18,7 +18,7 @@ function makeDispatch() {
     plan: makePlan(['engram_memory_search', 'engram_memory_get']),
     adapters: [makeMemoryAdapter()],
     sourceId: 'mcp:engram-memory',
-    generation: 'gen-1',
+    generation: '1',
   });
 }
 
@@ -30,7 +30,7 @@ describe('P01.broker.source-binding', () => {
       plan: makePlan(),
       adapters: [adapter],
       sourceId: 'mcp:engram-memory',
-      generation: 'gen-1',
+      generation: '1',
     });
     const selected = dispatch.select(selectInput());
     expect(selected.adapter).toBe(adapter);
@@ -43,7 +43,7 @@ describe('P01.broker.source-binding', () => {
     expect(() => dispatch.select(selectInput({ expectedSourceId: 'mcp:other' }))).toThrow(
       expect.objectContaining({ refusalCode: 'source_binding_mismatch' }),
     );
-    expect(() => dispatch.select(selectInput({ expectedGeneration: 'gen-0' }))).toThrow(
+    expect(() => dispatch.select(selectInput({ expectedGeneration: '0' }))).toThrow(
       expect.objectContaining({ refusalCode: 'stale_generation' }),
     );
   });
@@ -62,7 +62,7 @@ describe('P01.broker.source-binding', () => {
           plan: makePlan(),
           adapters: [makeMemoryAdapter('other-connector')],
           sourceId: 'mcp:engram-memory',
-          generation: 'gen-1',
+          generation: '1',
         }),
     ).toThrow(MemoryDispatchRefusal);
   });

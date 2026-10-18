@@ -33,7 +33,7 @@ describe('P01.broker.invocation-context', () => {
       plan: makePlan(),
       adapters: [makeMemoryAdapter()],
       sourceId: 'mcp:engram-memory',
-      generation: 'gen-1',
+      generation: '1',
     });
     const first = dispatch.select(selectInput());
     expect(first.selection.capabilityName).toBe('engram_memory_search');
@@ -42,7 +42,7 @@ describe('P01.broker.invocation-context', () => {
       connectorId: 'engram-memory',
       sourceId: 'mcp:engram-memory',
       connectorInstanceRef: 'ci-1',
-      generation: 'gen-1',
+      generation: '1',
     });
     const second = dispatch.select(
       selectInput({
@@ -71,7 +71,7 @@ describe('P01.broker.invocation-context', () => {
       plan: makePlan(),
       adapters: [makeMemoryAdapter()],
       sourceId: 'mcp:engram-memory',
-      generation: 'gen-1',
+      generation: '1',
     });
     expect(() =>
       dispatch.select(selectInput({ ctx: makeCtx({ workspaceRef: 'tenant-1' }) })),
