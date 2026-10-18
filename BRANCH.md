@@ -181,7 +181,7 @@
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Sol 6.1 review remediation — `.h2a/reviews/pr685_sol.md`**
+- [x] **Sol 6.1 review remediation — `.h2a/reviews/pr685_sol.md`**
   - [x] Finding 1 (single-writer stale-lock takeover): fence stale lock retirement by observed token and atomic rename so delayed contenders cannot remove a live successor lock; test contested crash/takeover contention
   - [x] Finding 2 (concurrent inference snapshot contention): serialize and retry snapshot mutations across session/receipt/affinity adapters while preserving semantic revision checks; test 8 concurrent HTTP sessions + concurrent control operations
   - [x] Finding 3 (migration policy binding): forward/bind trusted `routingContract` in `migrateOldSessions` and provide explicit `migrateSessionPolicy` while preserving key bytes and expiry atomically; test migrated-key inference, restart, and rejection of unapproved policy changes

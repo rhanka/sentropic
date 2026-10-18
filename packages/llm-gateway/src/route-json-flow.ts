@@ -134,6 +134,7 @@ export const runRouteJsonFlow = async (
         modelId: diagnostic.actualModelId,
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
+        ...((nativeServedModelId ?? observedServedModel) ? { observedServedModel: nativeServedModelId ?? observedServedModel } : {}),
       });
       const terminal = () => gatewayRequestTooLargeError(error, nativeObserver ? undefined : servedTargetFor(diagnostic))
         ?? (error instanceof NativeMessagesUpstreamError ? error
