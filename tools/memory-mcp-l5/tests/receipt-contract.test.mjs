@@ -406,6 +406,7 @@ const EXPECTED_LOT0_OBLIGATIONS = [
     });
     expect(checkCheckpoint(doc, opts).join(' ')).toMatch(/ci\.evidence: ci-run\.json field mismatch/);
 
+    const origGraph = JSON.parse(readFileSync(join(dir, 'import-graph.json'), 'utf8'));
     const dupResolved = PROOF_CATALOG.importGraphRoots.map(() => ({ root: 'unrelated-root', path: 'tools/memory-mcp-l5/verifier.mjs', sha256: doc.assurance.verifierArtifactSha256 }));
     const dupSha = sha256OfBytes(Buffer.from(canonicalizeJson(dupResolved)));
     const dupGraph = writeRef(dir, 'import-graph.json', { roots: PROOF_CATALOG.importGraphRoots, resolvedFiles: dupResolved, edges: [], resolvedFilesSha256: dupSha, forbiddenHits: 0, unresolvedEdges: 0 });
@@ -413,10 +414,7 @@ const EXPECTED_LOT0_OBLIGATIONS = [
     expect(checkCheckpoint(dupDoc, opts).join(' ')).toMatch(/importGraph: resolvedFiles roots mismatch/);
 
     const badVer = writeRef(dir, 'tools/memory-mcp-l5/verifier.mjs', "export * from '../../cluster-mesh/src/mock/oidc.ts';\n");
-    const forbidResolved = PROOF_CATALOG.importGraphRoots.map((r) => {
-      const p = r.startsWith('@sentropic/') ? `installed/node_modules/${r.replace('/memory-reference', '/dist/memory-reference/index.js').replace('/memory', '/dist/memory/index.js').replace(/^@sentropic\/mcp-broker$/, '@sentropic/mcp-broker/dist/index.js')}` : r;
-      return { root: r, path: p, sha256: sha256OfBytes(readFileSync(join(dir, p))) };
-    });
+    const forbidResolved = origGraph.resolvedFiles.map((rf) => (rf.root === 'tools/memory-mcp-l5/verifier.mjs' ? { ...rf, sha256: badVer.sha256 } : rf));
     const forbidSha = sha256OfBytes(Buffer.from(canonicalizeJson(forbidResolved)));
     const forbidGraph = writeRef(dir, 'import-graph.json', { roots: PROOF_CATALOG.importGraphRoots, resolvedFiles: forbidResolved, edges: [], resolvedFilesSha256: forbidSha, forbiddenHits: 0, unresolvedEdges: 0 });
     const forbidDoc = rebindTuple(dir, {

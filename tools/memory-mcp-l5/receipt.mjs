@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeTupleSha256, sha512Integrity, validateAgainstSchema, verifyOnDiskEvidence } from './schema-validator.mjs';
+import { PINNED_IMAGE_DIGEST, UNESTABLISHED_LOT0_OBLIGATIONS, computeTupleSha256, sha512Integrity, validateAgainstSchema, verifyOnDiskEvidence } from './schema-validator.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const CHECKPOINT_SCHEMA = JSON.parse(readFileSync(resolve(HERE, 'schemas/checkpoint-v1.schema.json'), 'utf8'));
@@ -21,7 +21,7 @@ export const FORBIDDEN_IMPORT_PARTS = [
   'cluster-mesh/src', '/mock/', 'mock/oidc', '/testing', 'experimental/', 'createInMemoryContext',
   '/durable', '/elicitation', '/persistence', '/stores', '/audit', 'MemoryRecordStore', 'FileRecordStore', 'InMemoryAuditSink',
 ];
-export { computeTupleSha256, sha512Integrity, validateAgainstSchema };
+export { PINNED_IMAGE_DIGEST, UNESTABLISHED_LOT0_OBLIGATIONS, computeTupleSha256, sha512Integrity, validateAgainstSchema };
 
 export const isSha256Hex = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v);
 export const isCommitSha = (v) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v);
@@ -143,12 +143,13 @@ export function checkCheckpoint(doc, options = {}) {
   let preMfDoc = null, candMfDoc = null;
   try { preMfDoc = preBytes ? JSON.parse(preBytes.toString('utf8')) : null; } catch { failures.push('preCandidate.manifest: invalid JSON'); }
   try { candMfDoc = candBytes ? JSON.parse(candBytes.toString('utf8')) : null; } catch { failures.push('closure.artifactManifest: invalid JSON'); }
-  if (!preMfDoc || preMfDoc.stage !== 'pre-candidate' || checkArtifactManifest(preMfDoc).length > 0 || JSON.stringify(preMfDoc.contractInventory) !== JSON.stringify(pre.contractInventory) || preMfDoc.source?.specSha256 !== contracts.specSha256 || preMfDoc.source?.l0Commit !== contracts.l0Commit || preMfDoc.source?.declaredLockSha256 !== closure.declaredLockSha256) {
+  if (!preMfDoc || preMfDoc.stage !== 'pre-candidate' || checkArtifactManifest(preMfDoc).length > 0 || JSON.stringify(preMfDoc.contractInventory) !== JSON.stringify(pre.contractInventory) || preMfDoc.source?.specSha256 !== contracts.specSha256 || preMfDoc.source?.l0Commit !== contracts.l0Commit || preMfDoc.source?.br3Commit !== src.base || preMfDoc.source?.sdkRange !== closure.sdkRange || preMfDoc.source?.declaredLockSha256 !== closure.declaredLockSha256) {
     failures.push('preCandidate.manifest: invalid stage, schema, source, or contractInventory');
   }
   const expectedMfArtifacts = asArr(doc.artifacts).map((a) => a && ({ role: a.role, name: a.name, version: a.version, sha256: a.sha256, integrity: a.integrity, sourceHead: a.sourceHead, archive: a.archiveRef }));
-  if (!candMfDoc || candMfDoc.stage !== 'candidate' || checkArtifactManifest(candMfDoc, { retainedContractInventory: pre.contractInventory }).length > 0 || candMfDoc.preCandidateManifestSha256 !== pre.manifestSha256 || JSON.stringify(candMfDoc.l4BuildReceipt) !== JSON.stringify(pre.l4BuildReceipt) || candMfDoc.source?.l5Head !== src.head || candMfDoc.source?.declaredLockSha256 !== closure.declaredLockSha256 || JSON.stringify(candMfDoc.artifacts) !== JSON.stringify(expectedMfArtifacts) || (preMfDoc && asArr(preMfDoc.artifacts).some((pa) => !asArr(candMfDoc.artifacts).some((ca) => JSON.stringify(ca) === JSON.stringify(pa))))) {
-    failures.push('closure.artifactManifest: invalid candidate manifest or checkpoint mismatch');
+  const candSrcOk = candMfDoc?.source && candMfDoc.source.specSha256 === contracts.specSha256 && candMfDoc.source.l0Commit === contracts.l0Commit && candMfDoc.source.br3Commit === src.base && candMfDoc.source.l5Head === src.head && candMfDoc.source.sdkRange === closure.sdkRange && candMfDoc.source.declaredLockSha256 === closure.declaredLockSha256 && (!preMfDoc?.source || (candMfDoc.source.specSha256 === preMfDoc.source.specSha256 && candMfDoc.source.l0Commit === preMfDoc.source.l0Commit && candMfDoc.source.br3Commit === preMfDoc.source.br3Commit && candMfDoc.source.sdkRange === preMfDoc.source.sdkRange && candMfDoc.source.declaredLockSha256 === preMfDoc.source.declaredLockSha256));
+  if (!candMfDoc || candMfDoc.stage !== 'candidate' || checkArtifactManifest(candMfDoc, { retainedContractInventory: pre.contractInventory }).length > 0 || candMfDoc.preCandidateManifestSha256 !== pre.manifestSha256 || JSON.stringify(candMfDoc.l4BuildReceipt) !== JSON.stringify(pre.l4BuildReceipt) || !candSrcOk || JSON.stringify(candMfDoc.artifacts) !== JSON.stringify(expectedMfArtifacts) || (preMfDoc && asArr(preMfDoc.artifacts).some((pa) => !asArr(candMfDoc.artifacts).some((ca) => JSON.stringify(ca) === JSON.stringify(pa))))) {
+    failures.push('closure.artifactManifest: candidateManifest.source mismatch or invalid candidate manifest');
   }
   if (options.l4BuildReceipt && options.l4BuildReceipt.builtAgainstPreCandidateSha256 !== pre.manifestSha256) failures.push('preCandidate.l4BuildReceipt: builtAgainstPreCandidateSha256 mismatch');
   if (options.contractComparison && options.contractComparison.identical !== true) failures.push('preCandidate.contractComparison: contract bytes or inventory changed');
@@ -157,8 +158,8 @@ export function checkCheckpoint(doc, options = {}) {
   for (const dup of findDuplicateKeys(doc.artifacts, (a) => a && a.archiveRef)) failures.push(`artifacts: duplicate archiveRef ${dup}`);
   if (closure.sdkRange !== '^1.31.0' || !checkSdkVersion(closure.sdkVersion)) failures.push('closure.sdkVersion: must satisfy ^1.31.0');
   if (closure.referenceExport !== '@sentropic/mcp-broker/memory-reference') failures.push('closure.referenceExport: invalid');
-  if (!checkNodeFloor(rt.nodeVersion, options.execArgv, options.nodeOptions)) failures.push('runtime.nodeVersion: below floor or flag-dependent SQLite');
-  if (!/^node:24(?:\.[0-9]+)*-bookworm-slim@sha256:[0-9a-f]{64}$/.test(rt.imageDigest || '') || !/^3\.(?:[4-9][0-9]|[1-9][0-9]{2,})\.[0-9]+$/.test(rt.sqliteVersion || '')) failures.push('runtime: invalid imageDigest or sqliteVersion');
+  if (!/^24\.\d+\.\d+$/.test(String(rt.nodeVersion || '')) || !checkNodeFloor(rt.nodeVersion, options.execArgv, options.nodeOptions)) failures.push('runtime.nodeVersion: must be Node 24.x without SQLite flags');
+  if (rt.imageDigest !== PINNED_IMAGE_DIGEST || !/^3\.(?:[4-9][0-9]|[1-9][0-9]{2,})\.[0-9]+$/.test(rt.sqliteVersion || '')) failures.push('runtime: invalid imageDigest or sqliteVersion');
   if (rt.driver !== 'node:sqlite' || rt.journalMode !== 'WAL' || rt.synchronous !== 'FULL' || rt.pythonCount !== 0 || rt.addonBuildCount !== 0) failures.push('runtime: invalid sqlite/build invariants');
   const assurance = doc.assurance || {}, graph = doc.importGraph || {}, ci = doc.ci || {}, uat = doc.ownerUat || {};
   if (assurance.qualificationOnly !== true) failures.push('assurance.qualificationOnly: must be true');
