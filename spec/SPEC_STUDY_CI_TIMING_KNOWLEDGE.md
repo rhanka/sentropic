@@ -115,7 +115,7 @@ Timing attributes include metric, mode, support, sample count, p50/p90, quantile
 
 ### 4.2 Explicit, versioned adapters
 
-Assign collision-checked stable DS slugs/hashes, preserving canonical external keys as typed attributes. Arbitrary slash-bearing graph IDs cannot be copied directly into restricted nominal `EntityRef`s. Cross-document references use declared `ExternalAnchor` entities bound to exact resource, revision and key; unresolved anchors remain visible and cannot justify smaller test selection. Resource resolution belongs to the repository adapter; DS itself does not fetch `artifact:` URIs. [S2:156–158; DS refs.ts:34, 57 at the pin above]
+Assign collision-checked stable DS slugs/hashes, preserving canonical external keys as typed attributes. Arbitrary slash-bearing graph IDs cannot be copied directly into restricted nominal `EntityRef`s. Cross-document references use declared `ExternalAnchor` entities bound to exact resource, revision and key; unresolved anchors remain visible and cannot justify smaller test selection. Resource resolution belongs to the repository adapter; DS itself does not fetch `artifact:` URIs. [S2:163–165; DS refs.ts:34, 57 at the pin above]
 
 The committed semantic documents are the common CI/architecture source for downstream consumers, still derived from pinned Git and reviewed declarations. Timing attributes are generated from `timings.json` in the same publication transaction; the manifest and consistency checks prevent independently maintained prices. Generate Graphify fragments and renderer inputs from these sources. Never maintain parallel handwritten dependency lists. [S2:167]
 
@@ -177,4 +177,80 @@ flowchart LR
   G --> V[DS semantic references and view occurrences]
 ```
 
-Read the committed package at the branch base, validate and predict, then compare actual outcomes. Publish revised technical references through the source/generator review loop. Submit only bounded, reusable lessons through memory admission: for example, an integration underestimated consumer qualification and a shared publication window, with immutable evidence and a scoped revised rule. Avoid creating one memory per job execution; arithmetic always resolves to the pinned numerical reference. [S1 §4.4; S2:234–240]
+Read the committed package at the branch base, validate and predict, then compare actual outcomes. Publish revised technical references through the source/generator review loop. Submit only bounded, reusable lessons through memory admission: for example, an integration underestimated consumer qualification and a shared publication window, with immutable evidence and a scoped revised rule. Avoid creating one memory per job execution; arithmetic always resolves to the pinned numerical reference. [S1 §4.4; S2:241–247]
+
+## 6. Conductor and planning-skill consumption
+
+### 6.1 Read-only prediction contract
+
+Inputs are explicit: cumulative candidate changes and attested candidate/base/tested revisions; graph/timing manifest; current Track cursor, blockers and decisions; integration policy; runner/resource limits; writer, publication and environment constraints. Resolve the dependency graph, not lockfile text alone. Missing capacity yields an unconstrained scenario, never a start-time commitment. [S2:192–210]
+
+```text
+predict(changes, revisions, knowledgeManifest, track, policy, capacity) -> {
+  affectedComponents, selectedJobs, executionPredecessors,
+  criticalPath, gateDelay, releaseDelay, runnerWork,
+  llm: { groups, files, decision, proof },
+  status: applicable | conditional-historical | incomplete,
+  knownSubtotal, unknowns, support, uncertaintyMethod,
+  phases: [{ id, startEvent, endEvent, interval }],
+  resourceAssumptions, policyDigest, timingRevision, evidenceHashes,
+  proposedOrder, alternatives, rationale
+}
+```
+
+Expand the actual union of changes through typed consumer/contract/build relations, accounting for strongly connected architecture components, required suites, all matrix variants, artifact prerequisites and publish/deploy gates. Compatibility must be established from declarations/schemas/consumer fixtures, never a PR label. Unknown parsing, dynamic entry or lineage conservatively expands required execution. Inference or a missing timing observation cannot remove a required check. [S1:128–133; S2:194]
+
+Affected LLM files run completely and block, under the inherited strict policy. LLM impact and compatibility are separate classifications. Reuse earns zero credit until the complete authenticated-receipt path is qualified for actual inputs, suites, dependency artifacts, runtime and provider/model settings. Absent, expired, partial or PR-controlled evidence requires execution. Matching timing fingerprints or graphs are not transferable acceptance. [S1:132–133; S2:216]
+
+For a fixed-duration scenario with unlimited resources, compute a lower bound:
+
+```text
+finish(v) = duration(v) + max(finish(u) for u in executionPredecessors(v))
+gateDelayLowerBound = finish(requiredGate)
+runnerWork = sum(duration(v) for allocated execution nodes v)
+```
+
+Use an empty predecessor maximum of zero. Unknown durations keep named symbolic terms and force `incomplete`, even if a known subtotal is displayed. Matrix work sums variants; completion follows their scheduled finishes. Steps explain whole-job cost and must not be counted twice. [S2:196–204]
+
+Then schedule ready work under runner classes/counts, `max-parallel`, concurrency/cancellation groups, provider limits, environment locks and shared-writer windows. Preserve functional artifact, qualification/release and exclusive-writer precedences as distinct constraints. Compare valid alternatives with stable tie-breakers under the selected objective and a pinned policy. Start with a deterministic list scheduler; more complex search needs replay evidence of benefit. [S2:206–210]
+
+Separate queue and service time; historical lifecycle calibrates the result and is not added on top of simulated queues. Use compatible run-block resampling or explicit correlated scenarios when samples share conditions. Per-job p90/p95 values never establish a plan-tail percentile. The four-branch orchestration cap is not runner capacity. [S2:206, 220]
+
+### 6.2 Train invalidation and phase-matched steering
+
+Each candidate prefix is a newly tested state. Recompute its combined closure and price; standalone PR durations are not additive. Failure, reorder, base advance or conflict resolution invalidates affected downstream predictions and candidates. Artifact consumers wait for the required producer tuple/receipt; independent work may overlap within resource and writer limits. [S2:212–214]
+
+Forecast implementation, review/approval, CI execution and publication propagation separately. Timing steering is allowed only for a named phase with explicit start/end events and a matching measured distribution or explicitly modelled prediction interval. Track item age cannot be compared to a CI job percentile. With no comparable interval, retain existing activity-only steering. K0 must define those events; their instrumentation is not assumed. Mandatory cases: implementation in progress produces no CI timing trigger; executing CI uses its own interval; an unknown tail produces no timing trigger. [S1:142; S4 finding 5]
+
+Preserve the existing urgency ladder and dependency/owner waits before timing-based ranking. Within eligible work, compare critical-path contribution, batching and resource-constrained waves. Missing required results never mean green. Any separate daily-train rollout keeps its own tuple-freeze, attribution and rollback protocol; it is not an implied activation here. [S1:108, 135–151; S4 finding 3]
+
+### 6.3 Source planning-skill change and Track joins
+
+Implement the change in h2a's source `packages/h2a/skills/harness/plan/SKILL.md`, then distribute/install normally. The installed plugin cache is not an authoring surface. Keep the strict checkbox template, scope boundaries, feedback loop and wave cap; harness owns the plan artifact and Track owns realization. [S2:220–233; H1]
+
+1. Resolve exact repo/manifest identity, schema, digests, applicability and missing inputs.
+2. Read Track items, decisions and blockers with their original IDs and ownership.
+3. Derive each lot's affected closure and functional, writer, qualification and publication predecessors.
+4. Compare integration alternatives against an unoptimized reference under explicit objective/capacity assumptions; list all unknowns.
+5. Emit normal `BRANCH.md` checkboxes plus the knowledge lock and prediction artifact; attach gate/evidence and measurement obligations to each lot.
+6. Refresh remaining work after relevant changes, retain prior predictions, reconcile actuals and propose bounded cited lessons.
+
+No package produces a useful untimed plan with `timing: unknown` and a bounded measurement task. Historical-only inputs follow `conditional-historical` restrictions. Optional memory unavailability never prevents direct technical-package reads. Existing h2a discovery, ownership election and launch recommendations stay in place; the new consumer belongs in planning and launch packets. [S2:231–233]
+
+Reuse `track export-graph` read-only. Parent `IMPLEMENTS` links do not establish scheduling precedence. Preserve Track IDs through the identity adapter; repository joins live in the plan/knowledge adapter, not event edits. Pin exporter version and source-derived observation timestamp, distinguish its source hash/cursor from the artifact-byte SHA-256, and avoid time-varying exports over unchanged inputs. [S2:235–237]
+
+Track MCP remains read-only; its designated CLI writer handles authorized imports and transitions. Keep this study under the existing WP9 item, with one owner and explicit dependencies for cross-owner delivery. Do not restructure the backlog or duplicate status. Future merge/closure preserves structural event containment and refreshed acceptance, then rereads after consolidation; knowledge refresh never repairs Track implicitly. [S2:218, 239]
+
+## 7. Qualified Engram seam
+
+Keep the six frozen memory operations: search, exact get, capture, request admission, withdraw and forget. Capture is pending, not admitted; candidate withdrawal differs from forgetting by `tombstone`. The host provides trusted scope, authorization, invocation provenance and admission policy. `scope_ref` is opaque and host-interpreted; a repository name supplies no authorization. Filter before ranking or graph expansion. [S5; S6:8–10, 22–25; M1]
+
+The repository adapter submits a bounded cited lesson through existing DTOs and the qualified host's idempotency contract. Search discovers lessons; exact get verifies known identity, current eligibility and source digests. Deterministic arithmetic and old-plan reproduction use immutable Git/CI/Track artifacts; current-only memory tools do not reconstruct arbitrary historical recall. Verified authenticity does not make a sample of one statistically strong. [S2:243–247]
+
+Only authorized, eligible `accepted_current` envelopes with `projection_eligible === true` enter runtime projection. Envelopes/citation references/metadata are bounded to 52,428,800 raw bytes with deterministic omissions, freshness and invalidation; canonical bodies/history do not enter the graph. Reuse and qualify the existing `memory:` / `memory_about` seam. Authorize the view's audience before export; revocation, expiry, supersession and forgetting invalidate affected views. Shared live-Git citation resolution remains unverified. [S2:249; M1 M10; M2]
+
+Engram option B is already selected. Source `0.20.0` and the memory-tools facade do not prove published-package, installed-host or activation readiness. Preserve the existing L4-candidate → L5-qualification → L4-exit chain and voluntary host activation. No bespoke endpoint, retired shadow protocol, extra CI-knowledge release gate or federation of h2a/Sentropic stores follows from this study. [S2:251; M1 M14]
+
+Handoff to gr-conductor: valid reference/lesson, stale reference, denied scope and superseded/forgotten memory fixtures; their identities and memory-side citations; intended host/purpose; expected admission/read/projection behavior; exact qualified release/host prerequisites. Also prove source-digest mismatch rejection, denied-audience export refusal, pending/admitted separation, forgetting invalidation and that rebuilding an old technical snapshot restores no excluded memory metadata. Audit the committed package and derivation, not only text fields. [S2:253; S4 finding 1]
+
+gr-conductor owns Engram conformity/readiness, the repository conductor owns technical facts/refresh, the host owner owns identity/scope/admission, and DS maintainers review profile/mapping. Any required Engram change follows the existing specification circuit (spec author Muse Wonder, review Astra, owner only for real decisions). An optional closed-DTO field needs a dated EVOL amendment and changelog; required or semantic changes need a new versioned DTO. Neither graph import nor rebuilding may capture, admit, mutate or resurrect memory. [S5:6; S6:23–26]
