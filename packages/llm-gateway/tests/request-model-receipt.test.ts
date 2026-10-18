@@ -146,3 +146,62 @@ it('terminates without retry and records observedServedModel in the error receip
     }
   }
 });
+it.each([['created-first', 'gpt-6-astra', 'gpt-6.1-sol'], ['completed-first', 'gpt-6.1-sol', 'gpt-6-astra']])(
+  'fails JSON when Codex created/completed identities differ (%s)',
+  async (_label, createdModel, completedModel) => {
+    const { CodexRuntimeClient, InMemoryRoutePlanner } = await import('@sentropic/llm-mesh');
+    let dispatches = 0;
+    const base = durableHostFixture();
+    const codexClient = new CodexRuntimeClient({
+      fetch: async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const enc = new TextEncoder();
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'response.created', response: { id: 'r1', model: createdModel } })}\n\n`));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'response.output_text.delta', delta: 'hi' })}\n\n`));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'response.completed', response: { id: 'r1', model: completedModel, usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } })}\n\n`));
+          controller.close();
+        },
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    });
+    const host = await startGatewayHost({
+      stateDir: await mkdtemp(join(tmpdir(), 'gw-codex-order-')),
+      listen: { host: '127.0.0.1', port: 0 },
+      mesh: {
+        ...base.mesh,
+        createRoutePlanner: (options) => new InMemoryRoutePlanner({
+          ...options,
+          directory: {
+            listEligible: async () => [
+              { accountRef: 'internal-a', diagnosticAccountRef: 'account-a', targetProviderId: 'openai', transportProviderId: 'codex', supportedModelIds: [model], enrollmentCompletedAt: '2026-10-01T00:00:00Z', readiness: 'ready', revision: '1' },
+            ],
+            prepareAttempt: async (input) => ({
+              attemptRef: `att-${++dispatches}-${input.accountRef}`,
+              generate: (req) => codexClient.generate(req, { auth: { material: { type: 'account-transport', provider: 'codex', accessToken: 'tok', accountId: 'acc' }, descriptor: { sourceType: 'account-transport', accountProviderId: 'codex' } } }),
+              stream: (req) => codexClient.stream(req, { auth: { material: { type: 'account-transport', provider: 'codex', accessToken: 'tok', accountId: 'acc' }, descriptor: { sourceType: 'account-transport', accountProviderId: 'codex' } } }),
+              markCommitted: async () => undefined, complete: async () => undefined,
+              releaseCancelled: async () => undefined, recordOutcome: async () => undefined,
+            }),
+          },
+        }),
+      },
+    });
+    try {
+      const control = createGatewayControlClient({ controlSocket: host.controlSocket });
+      const issued = await control.acquireSession({ ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: `c-order-${_label}`, routingContract });
+      const res = await fetch(`${host.endpoint}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${issued.key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      expect(res.status, String(_label)).toBe(404);
+      expect(dispatches, String(_label)).toBe(1);
+      const receipt = await control.readReceipt({ ownerScopeRef: 'owner-a', receiptId: res.headers.get('x-sentropic-receipt')! });
+      expect(receipt).toMatchObject({
+        settlement: 'error',
+        physicalAttempts: [{ selectedModel: model, outcome: 'unsupported-model', observedServedModel: 'gpt-6-astra', modelEvidence: 'provider-reported' }],
+      });
+    } finally {
+      await host.stop();
+    }
+  },
+);
