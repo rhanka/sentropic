@@ -37,7 +37,7 @@
   - [x] Verify actual path inventory and run make scope-check before authorized commits.
 
 ## Feedback Loop
-- [ ] PR700-R1: correct all ten review findings test-first; rebuild immutable P1 and verify its packed graph before push.
+- [x] PR700-R1: all ten round-1 review findings corrected test-first; digest-pinned Lot 1 root gate PASS with immutable packed P1 verification.
   - [x] Restore the co-frozen A03 declarations and an explicit host-owned memory binding slot.
   - [x] Validate membership/claims/channel receipts, current generation/epoch and the host lifecycle before projecting A03.
   - [x] Remove the incompatible flat A03 declaration surface.
@@ -110,18 +110,19 @@
   - [x] Update root typecheck-mcp-platform, test-mcp-platform, typecheck-mcp-broker, test-mcp-broker, build-mcp-broker and api-extract-mcp-platform recipes for the public dependency, exports, and SCOPE.
   - [x] Wire .github/workflows/ci.yml pull_request changes filter (memory_l5) and required memory-l5-qualification job running the root gate, no continue-on-error, keeping unrelated jobs and filters intact.
   - [x] Add platform src/memory/contracts.ts, invocation-context.ts, mutation-guard.ts, confirmation.ts, index.ts and broker src/memory/context-projection.ts, compiled-dispatch.ts, contracts.ts, index.ts.
-  - [x] Add public platform ./memory export and broker dependency on @sentropic/mcp-platform (^0.3.0), update package-lock.json under EX1, no better-sqlite3 dependency or peer.
+  - [x] Add public platform ./memory export and broker dependency on @sentropic/mcp-platform (^0.3.1), update package-lock.json under EX1, no better-sqlite3 dependency or peer.
   - [x] Replace broker sibling-source imports with public package contracts, require verified context and audit in broker.ts and context.ts, derive registry.ts only from compiled plan, remove public ConnectorRegistry/DuplicateConnectorError/createInMemoryContext/InMemoryContextOptions with no fallback.
   - [x] Freeze broker root runtime exports as McpProviderBroker, McpBrokerError, UnknownConnectorError plus type exports InvokeOptions, SecretResolver, record all export keys in exports-v1.json with exact equality tests.
   - [x] Apply the seven module dispositions individually from the preparation plan, use new production memory ports and reference only, no dual memory path.
   - [x] Preserve full verified context provenance fields listed in the preparation plan Lot 1, refuse missing or substituted context before reservation or provider or effect.
-  - [x] New platform tests: packages/mcp-platform/tests/memory/invocation-context.test.ts, mutation-guard.test.ts, confirmation.test.ts, mutation-digest-vectors.test.ts.
-  - [x] New broker tests: packages/mcp-broker/tests/memory/invocation-context.test.ts, source-binding.test.ts, forged-call.test.ts, literal-true.test.ts, audit-refusal.test.ts, plus update packages/mcp-broker/tests/broker.test.ts for required trusted context.
+  - [x] Platform suites: packages/mcp-platform/tests/memory/invocation-context.test.ts, frozen-context.test.ts, mutation-guard.test.ts, confirmation.test.ts, frozen-confirmation.test.ts, confirmation-decision.test.ts, mutation-digest-vectors.test.ts, tool-schemas.test.ts; fixtures host-fixture.ts and confirmation-fixture.ts.
+  - [x] Broker suites: packages/mcp-broker/tests/memory/invocation-context.test.ts, source-binding.test.ts, forged-call.test.ts, literal-true.test.ts, audit-refusal.test.ts, real-dispatch.test.ts, plus packages/mcp-broker/tests/broker.test.ts for required trusted context.
   - [x] API tests: existing packages/mcp-platform/tests/request-identity.test.ts and wire-parity.test.ts and registry-dispatch.test.ts verified green, no api/** application tests.
   - [x] UI tests: none.
   - [x] E2E tests: none in Lot 1.
   - [x] Scoped broker command: make test-mcp-broker SCOPE=tests/memory/source-binding.test.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5, repeat per named broker file.
   - [x] Scoped platform command: make test-mcp-platform SCOPE=tests/memory/mutation-digest-vectors.test.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5, repeat per named platform file.
   - [x] Lot gate: make typecheck-mcp-platform typecheck-mcp-broker memory-l5-lint memory-l5-tooling memory-l5-test LOT=1 API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5.
-  - [x] Exit pack: make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5 (sha256 e789412a5df3efee15359494c561ae9f0f7add68969dcf46fa31de16a429ac2a).
+  - [x] Exit pack: make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5 (sha256 4e44e9d969c0b7471763db17bcb64283d674921abf4d094cf875656b3131965a; source efca7c45bcfda8727c2ad44568033ecfc59a53ad; platform 0.3.1, broker 0.1.0, 44 consumed contracts).
+  - [x] Final root gate PASS: make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5; Node 24.21.0 from the pinned Lot 0 digest, no flags.
   - [ ] Hand immutable P1 plus manifest SHA-256 and per-artifact versions and hashes and consumed-contract inventory and fixture and export digests to gr-conductor with the exact handoff text, record receiving owner ACK and Node-matrix alignment and E2 request.
