@@ -32,7 +32,7 @@ import {
   isMemoryToolName,
   requireTrustedInvocationContext,
 } from '@sentropic/mcp-platform/memory';
-import { bindMemoryInvocation } from './memory/context-projection.js';
+import { CompiledMemoryDispatch, MemoryDispatchRefusal } from './memory/compiled-dispatch.js';
 import { CompiledConnectorIndex } from './registry.js';
 
 export class UnknownConnectorError extends Error {
@@ -129,7 +129,7 @@ export type McpProviderBrokerOptions = {
  * bindings carried into every memory selection.
  */
 export class McpProviderBroker {
-  private readonly plan: CompiledMcpRegistry;
+  private readonly memoryDispatch?: CompiledMemoryDispatch;
   private readonly index: CompiledConnectorIndex;
   private readonly sourceId: string;
   private readonly generation: string;
@@ -141,7 +141,8 @@ export class McpProviderBroker {
     if (opts.generation.length === 0) {
       throw new McpBrokerError('stale_generation', 'McpProviderBroker: generation must be nonempty.');
     }
-    this.plan = opts.plan;
+    const memoryAdapters = opts.adapters.filter(a => a.manifest.providerId === MEMORY_PROVIDER_ID);
+    if (memoryAdapters.length) this.memoryDispatch = new CompiledMemoryDispatch({ ...opts, adapters: memoryAdapters });
     this.index = new CompiledConnectorIndex(opts.plan, opts.adapters);
     this.sourceId = opts.sourceId;
     this.generation = opts.generation;
@@ -280,61 +281,29 @@ export class McpProviderBroker {
       redactionClass: 'high',
       error: { code, message, retriable: false },
     });
-    const resolution = this.plan.resolveTool(capabilityRef);
-    if (resolution === undefined) {
-      return memoryFailure(
-        'unknown_capability',
-        `McpProviderBroker: memory tool "${capabilityRef}" is not in the compiled plan.`,
-      );
+    const args = input && typeof input === 'object' ? input as Record<string, any> : {};
+    const purpose = capabilityRef === 'engram_memory_capture' ? args.payload?.purpose_ref : args.purpose_ref;
+    if (opts.purposeRef === undefined || (purpose !== undefined && purpose !== opts.purposeRef) ||
+        (['engram_memory_search', 'engram_memory_get', 'engram_memory_capture'].includes(capabilityRef) && purpose === undefined) ||
+        (args.idempotency_key !== undefined && args.idempotency_key !== opts.idempotencyKey)) {
+      return memoryFailure('INVALID_SCHEMA', 'Memory arguments must match the trusted purpose and envelope bindings.');
     }
-    if (
-      resolution.providerId !== MEMORY_PROVIDER_ID ||
-      adapter.manifest.providerId !== MEMORY_PROVIDER_ID ||
-      adapter.connectorId !== MEMORY_CONNECTOR_ID ||
-      connectorId !== MEMORY_CONNECTOR_ID
-    ) {
-      return memoryFailure(
-        'source_binding_mismatch',
-        `McpProviderBroker: memory tool "${capabilityRef}" is not bound to the memory provider/connector.`,
-      );
-    }
-    const scopes = new Set(ctx.principal.scopes);
-    for (const required of resolution.requiredScopes) {
-      if (!scopes.has(required)) {
-        return memoryFailure('insufficient_scope', `McpProviderBroker: missing scope "${required}".`);
-      }
-    }
-    const claims = new Set(Object.keys(ctx.principal.claims ?? {}));
-    for (const required of resolution.requiredClaims) {
-      if (!claims.has(required)) {
-        return memoryFailure('insufficient_claims', `McpProviderBroker: missing claim "${required}".`);
-      }
-    }
-    if (opts.purposeRef === undefined || opts.idempotencyKey === undefined) {
-      return memoryFailure(
-        'INVALID_SCHEMA',
-        'McpProviderBroker: memory tools require purposeRef and idempotencyKey.',
-      );
-    }
+    let selected;
     try {
-      // Build the neutral context projection before the adapter is
-      // contacted: any binding failure refuses with zero provider contact.
-      bindMemoryInvocation({
-        ctx,
-        purposeRef: opts.purposeRef,
-        idempotencyKey: opts.idempotencyKey,
-        elicitationRef: opts.elicitationRef,
+      if (!this.memoryDispatch || connectorId !== MEMORY_CONNECTOR_ID) throw new Error('memory dispatch unavailable');
+      selected = this.memoryDispatch.select({
+        toolName: capabilityRef, ctx, purposeRef: opts.purposeRef, idempotencyKey: opts.idempotencyKey,
+        elicitationRef: opts.elicitationRef, expectedPrincipalSub: ctx.principal.sub,
+        expectedTenantRef: ctx.tenantRef, expectedSourceId: this.sourceId, expectedGeneration: this.generation,
       });
+      if (selected.adapter !== adapter) throw new Error('selected adapter mismatch');
     } catch (error) {
-      if (error instanceof MemoryTrustedContextError) {
-        throw trustedContextRefusal();
-      }
-      return memoryFailure(
-        'source_binding_mismatch',
-        error instanceof Error ? error.message : 'invalid memory invocation binding',
-      );
+      if (error instanceof MemoryTrustedContextError) throw trustedContextRefusal();
+      return memoryFailure(error instanceof MemoryDispatchRefusal ? error.refusalCode : 'source_binding_mismatch',
+        error instanceof Error ? error.message : 'invalid memory binding');
     }
-    const result = await adapter.invokeTool({ capabilityRef, input, ctx });
+    const result = await selected.adapter.invokeTool({ capabilityRef, input, ctx,
+      idempotencyKey: opts.idempotencyKey, elicitationRef: opts.elicitationRef, memoryContext: selected.projection });
     if (typeof result === 'string') {
       throw new Error(
         `McpProviderBroker: unexpected DurableCallRef "${result}" for memory capability "${capabilityRef}".`,
