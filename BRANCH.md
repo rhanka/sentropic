@@ -81,6 +81,7 @@
   - [x] Run guard/wiring tests; adapt missing-lane regression fixture now that skills has a lane.
   - [x] Include the MIT license in packed libraries: ubo-contracts, mcp-broker, connector-host, mcp-connector-airtable.
   - [x] Include the MIT license in packed libraries: mcp-connector-dropbox, mcp-connector-github, mcp-connector-gmail, mcp-connector-google.
+  - [x] Include the MIT license in packed libraries: mcp-connector-googlecalendar, mcp-connector-googledocs, mcp-connector-googledrive, mcp-connector-googlesheets.
   - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
 - [ ] **Lot 2 — Guarded build, pack and web-login bootstrap**
   - [x] Add standalone Docker build/test/lock tooling without host dependencies.
