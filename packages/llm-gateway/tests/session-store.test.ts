@@ -168,4 +168,112 @@ describe('FileGatewayStateStore', () => {
       await fulfilled[0]!.value();
     }
   });
+
+  it('prevents a delayed recovery contender from deleting a live successor fence or admitting two writers (Sol r3 repro)', async () => {
+    const fsPromises = await import('node:fs/promises');
+    const { AsyncLocalStorage } = await import('node:async_hooks');
+    const als = new AsyncLocalStorage<'A' | 'B'>();
+    const gate = () => { let resolve!: () => void; const promise = new Promise<void>((r) => { resolve = r; }); return { promise, resolve }; };
+    for (const name of ['.host-lock', '.lock'] as const) {
+      const dir = freshDir(); const primary = join(dir, name); const fence = `${primary}.retire-dead`;
+      await fsPromises.writeFile(primary, JSON.stringify({ pid: 999_999_999, token: 'dead', startedAt: 1 }), { mode: 0o600 });
+      await fsPromises.writeFile(fence, JSON.stringify({ pid: 999_999_998, token: 'retirer', startedAt: 1 }), { mode: 0o600 });
+      const readers = new Set<'A' | 'B'>();
+      const bothRead = gate(); const aVerified = gate(); const bFinished = gate();
+      let successorFenceDeleted = false;
+      const fsOps = {
+        ...fsPromises,
+        readFile: (async (path: Parameters<typeof fsPromises.readFile>[0], ...rest: unknown[]) => {
+          const raw = await (fsPromises.readFile as (...args: unknown[]) => Promise<string>)(path, ...rest);
+          const label = als.getStore();
+          if (!label) return raw;
+          if (path === fence && !readers.has(label)) {
+            readers.add(label); if (readers.size === 2) bothRead.resolve();
+            await bothRead.promise; if (label === 'B') await aVerified.promise;
+          } else if (path === primary && label === 'A' && readers.has('A')) {
+            aVerified.resolve(); await bFinished.promise;
+          }
+          return raw;
+        }) as typeof fsPromises.readFile,
+        unlink: (async (path: Parameters<typeof fsPromises.unlink>[0]) => {
+          if (als.getStore() === 'B' && String(path).startsWith(`${primary}.retire-`)) successorFenceDeleted = true;
+          return fsPromises.unlink(path);
+        }) as typeof fsPromises.unlink,
+      };
+      const storeA = new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(dekFor('s')), fsOps });
+      const storeB = new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(dekFor('s')), fsOps });
+      const runContender = (label: 'A' | 'B', store: FileGatewayStateStore) => als.run(label, async () => {
+        try {
+          if (name === '.host-lock') return await store.claimWriter();
+          await store.compareAndSet(0, { ...emptyState(), revision: 1 });
+          return async () => undefined;
+        } finally { if (label === 'B') bFinished.resolve(); }
+      });
+      const results = await Promise.allSettled([runContender('A', storeA), runContender('B', storeB)]);
+      expect(successorFenceDeleted, name).toBe(false);
+      expect(results[0]?.status, name).toBe('fulfilled');
+      expect(results[1]?.status, name).toBe('rejected');
+      if (results[1]?.status === 'rejected') expect(results[1].reason).toMatchObject({ code: 'CONFLICT' });
+      if (results[0]?.status === 'fulfilled') await results[0].value();
+    }
+  });
+
+  it('recovers safely under competing contenders when a pre-existing retirement fence is incomplete or malformed', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    for (const name of ['.host-lock', '.lock'] as const) {
+      for (const badBytes of ['', '{"pid":', 'corrupt-fence-bytes']) {
+        const dir = freshDir(); const primary = join(dir, name);
+        await writeFile(primary, JSON.stringify({ pid: 999_999_999, token: 'dead-inc', startedAt: 1 }), { mode: 0o600 });
+        await writeFile(`${primary}.retire-dead-inc`, badBytes, { mode: 0o600 });
+        const stores = [0, 1, 2].map(() => new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(dekFor('m')) }));
+        const results = await Promise.allSettled(stores.map((s) =>
+          name === '.host-lock' ? s.claimWriter() : s.compareAndSet(0, { ...emptyState(), revision: 1 }).then(() => async () => undefined)));
+        const fulfilled = results.filter((r): r is PromiseFulfilledResult<() => Promise<void>> => r.status === 'fulfilled');
+        const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+        expect(fulfilled, `${name}:${badBytes}`).toHaveLength(1);
+        expect(rejected, `${name}:${badBytes}`).toHaveLength(2);
+        for (const r of rejected) expect(r.reason).toMatchObject({ code: 'CONFLICT' });
+        await fulfilled[0]!.value();
+      }
+    }
+  });
+
+  it('maintains liveness across SIGKILL of a live holder and W1/W2/W3 crash windows without deadlock', async () => {
+    const { spawn } = await import('node:child_process');
+    const { readdir, writeFile } = await import('node:fs/promises');
+    const spawnCrashChild = async (script: string): Promise<number> => {
+      const child = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
+      await new Promise<void>((resolve, reject) => {
+        child.once('error', reject);
+        child.stdout.on('data', (chunk: Buffer) => { if (chunk.toString().includes('READY')) resolve(); });
+      });
+      const pid = child.pid!; child.kill('SIGKILL');
+      await new Promise<void>((resolve) => child.once('exit', () => resolve()));
+      return pid;
+    };
+    for (const name of ['.host-lock', '.lock'] as const) {
+      for (const window of ['LIVE', 'W1', 'W2', 'W3'] as const) {
+        const dir = freshDir(); const primary = join(dir, name);
+        if (window === 'LIVE') {
+          await spawnCrashChild(`const fs = require('node:fs'); fs.writeFileSync(${JSON.stringify(primary)}, JSON.stringify({ pid: process.pid, token: 'live-killed', startedAt: Date.now() }), { mode: 0o600 }); process.stdout.write('READY\\n'); setInterval(() => {}, 1000);`);
+        } else if (window === 'W1') {
+          await writeFile(primary, JSON.stringify({ pid: 999_999_999, token: 'stale-w1', startedAt: 1 }), { mode: 0o600 });
+          await spawnCrashChild(`const fs = require('node:fs'); fs.writeFileSync(${JSON.stringify(`${primary}.retire-stale-w1`)}, JSON.stringify({ pid: process.pid, token: 'w1-fence', startedAt: Date.now() }), { mode: 0o600 }); process.stdout.write('READY\\n'); setInterval(() => {}, 1000);`);
+        } else if (window === 'W2') {
+          await writeFile(primary, JSON.stringify({ pid: 999_999_999, token: 'stale-w2', startedAt: 1 }), { mode: 0o600 });
+          await spawnCrashChild(`const fs = require('node:fs'); const claim = JSON.stringify({ pid: process.pid, token: 'w2-claim', startedAt: Date.now() }); fs.writeFileSync(${JSON.stringify(`${primary}.retire-stale-w2`)}, claim, { mode: 0o600 }); fs.writeFileSync(${JSON.stringify(primary)} + '.' + process.pid + '.w2-claim.claim', claim, { mode: 0o600 }); process.stdout.write('READY\\n'); setInterval(() => {}, 1000);`);
+        } else {
+          await spawnCrashChild(`const fs = require('node:fs'); fs.writeFileSync(${JSON.stringify(`${primary}.retire-old-w3`)}, JSON.stringify({ pid: process.pid, token: 'w3-fence', startedAt: Date.now() }), { mode: 0o600 }); fs.writeFileSync(${JSON.stringify(primary)}, JSON.stringify({ pid: process.pid, token: 'w3-new', startedAt: Date.now() }), { mode: 0o600 }); process.stdout.write('READY\\n'); setInterval(() => {}, 1000);`);
+        }
+        const stores = [0, 1, 2].map(() => new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(dekFor('l')) }));
+        const results = await Promise.allSettled(stores.map((s) =>
+          name === '.host-lock' ? s.claimWriter() : s.compareAndSet(0, { ...emptyState(), revision: 1 }).then(() => async () => undefined)));
+        const fulfilled = results.filter((r): r is PromiseFulfilledResult<() => Promise<void>> => r.status === 'fulfilled');
+        expect(fulfilled, `${name}:${window}`).toHaveLength(1);
+        await fulfilled[0]!.value();
+        const remaining = await readdir(dir);
+        expect(remaining.filter((f) => f.startsWith(`${name}.retire-`)), `${name}:${window}`).toEqual([]);
+      }
+    }
+  });
 });
