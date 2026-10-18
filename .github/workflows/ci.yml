@@ -2525,6 +2525,82 @@ jobs:
       - name: Publish mcp-connector-github with provenance
         run: make publish-mcp-connector-github ENV=test-ci-mcp-connector-github
 
+  validate-mcp-connector-gmail:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_gmail == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-gmail
+        run: make test-public-library PACKAGE=mcp-connector-gmail ENV=test-ci-mcp-connector-gmail
+      - name: Build and guard mcp-connector-gmail archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-gmail PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-gmail
+      - name: Qualify mcp-connector-gmail packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-gmail ENV=test-ci-mcp-connector-gmail
+
+  publish-mcp-connector-gmail:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-gmail, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_gmail_publish == 'true' &&
+      needs.validate-mcp-connector-gmail.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-gmail with provenance
+        run: make publish-mcp-connector-gmail ENV=test-ci-mcp-connector-gmail
+
+  validate-mcp-connector-google:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_google == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-google
+        run: make test-public-library PACKAGE=mcp-connector-google ENV=test-ci-mcp-connector-google
+      - name: Build and guard mcp-connector-google archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-google PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-google
+      - name: Qualify mcp-connector-google packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-google ENV=test-ci-mcp-connector-google
+
+  publish-mcp-connector-google:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-google, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_google_publish == 'true' &&
+      needs.validate-mcp-connector-google.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-google with provenance
+        run: make publish-mcp-connector-google ENV=test-ci-mcp-connector-google
+
   bootstrap-publish:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_publish_target != 'none' && github.ref == 'refs/heads/main'
@@ -2710,6 +2786,8 @@ jobs:
       - validate-mcp-connector-airtable
       - validate-mcp-connector-dropbox
       - validate-mcp-connector-github
+      - validate-mcp-connector-gmail
+      - validate-mcp-connector-google
       - validate-publishable-manifests
       - build-e2e
       - typecheck-lint-ui
