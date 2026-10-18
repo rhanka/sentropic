@@ -57,6 +57,21 @@ describe('exact judge preflight selection', () => {
       decision: { kind: 'labels', passing: ['C'] } }), options)).toEqual({ ok: false, code: 'REQUEST_INVALID' });
     expect(send).not.toHaveBeenCalled();
   });
+  it('refuses registered rubrics whose instructions differ between service and adapter descriptors', async () => {
+    const send = vi.fn();
+    const serviceDescriptor = qualifiedDescriptor();
+    serviceDescriptor.registeredCriteria = [{ criteriaId: 'rubric', revision: 'r1',
+      criterion: { kind: 'binary', instructions: 'Judge according to rule B.' } }];
+    const adapterDescriptor = qualifiedDescriptor();
+    adapterDescriptor.registeredCriteria = [{ criteriaId: 'rubric', revision: 'r1',
+      criterion: { kind: 'binary', instructions: 'Judge according to rule A.' } }];
+    const adapter = createJevAdapter({ descriptor: adapterDescriptor, transport: { send } });
+    const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => serviceDescriptor) };
+    const result = await preflightJudgeRequest(judgeRequest({ criterion: { kind: 'registered',
+      criteriaId: 'rubric', revision: 'r1' } }), options);
+    expect(result).toEqual({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
+    expect(send).not.toHaveBeenCalled();
+  });
   it('refuses when service and adapter descriptors differ before any send', async () => {
     const send = vi.fn();
     const serviceDescriptor = qualifiedDescriptor();

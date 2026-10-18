@@ -26,6 +26,40 @@ export interface JudgeSelectionOptions {
 export type JudgeSelection = { ok: true; request: JudgeRequest; descriptor: EvaluatorDescriptor; adapter: ProviderAdapter }
   | { ok: false; code: JudgeErrorCode };
 
+/** Order-insensitive snapshot comparison for descriptor records. */
+function canonicalJudgeJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJudgeJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJudgeJson((value as Record<string, unknown>)[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+/** Preflight binds one authoritative descriptor: any request-affecting disagreement refuses before credentials or spend. */
+function sameJudgeDescriptor(left: EvaluatorDescriptor, right: EvaluatorDescriptor): boolean {
+  const text = (values: readonly string[]) => canonicalJudgeJson([...values].sort());
+  if (left.evaluator.providerId !== right.evaluator.providerId || left.evaluator.evaluatorId !== right.evaluator.evaluatorId
+    || left.evaluator.revision !== right.evaluator.revision || left.wireModel !== right.wireModel
+    || text(left.acceptedServedModelIds) !== text(right.acceptedServedModelIds)
+    || left.qualification.servedIdentity !== right.qualification.servedIdentity
+    || left.qualification.billingBound !== right.qualification.billingBound
+    || text(left.qualification.evidenceRefs) !== text(right.qualification.evidenceRefs)
+    || left.maxBillableInputTokens !== right.maxBillableInputTokens || left.maxRequestBytes !== right.maxRequestBytes
+    || left.maxStateQuestionBytes !== right.maxStateQuestionBytes || left.probabilityTolerance !== right.probabilityTolerance
+    || left.scoreNativeKeys !== right.scoreNativeKeys || left.nativeDecision !== right.nativeDecision
+    || left.confidence.meaning !== right.confidence.meaning || left.confidence.meaningRef !== right.confidence.meaningRef
+    || left.confidence.min !== right.confidence.min || left.confidence.max !== right.confidence.max
+    || left.registeredCriteria.length !== right.registeredCriteria.length
+    || left.retention.status !== right.retention.status || left.retention.basis !== right.retention.basis
+    || left.retention.retentionDays !== right.retention.retentionDays || left.retention.gap !== right.retention.gap
+    || text(left.retention.evidenceRefs) !== text(right.retention.evidenceRefs)) return false;
+  const rightByKey = new Map(right.registeredCriteria.map((entry) => [JSON.stringify([entry.criteriaId, entry.revision]), entry]));
+  return left.registeredCriteria.every((entry) => {
+    const other = rightByKey.get(JSON.stringify([entry.criteriaId, entry.revision]));
+    return other !== undefined && canonicalJudgeJson(entry.criterion) === canonicalJudgeJson(other.criterion);
+  });
+}
+
 /** The significant-input snapshot stays service-owned through every asynchronous phase. */
 export async function preflightJudgeRequest(candidate: unknown, options: JudgeSelectionOptions): Promise<JudgeSelection> {
   const parsed = parseJudgeRequest(candidate);
@@ -47,9 +81,7 @@ export async function preflightJudgeRequest(candidate: unknown, options: JudgeSe
       || descriptor.evaluator.revision !== request.evaluator.revision) return { ok: false, code: 'PROVIDER_UNAVAILABLE' };
     if ('descriptor' in adapter && adapter.descriptor !== undefined) {
       const adapterDescriptor = parseEvaluatorDescriptor(adapter.descriptor);
-      if (!adapterDescriptor
-        || adapterDescriptor.wireModel !== descriptor.wireModel
-        || adapterDescriptor.qualification.servedIdentity !== descriptor.qualification.servedIdentity) {
+      if (!adapterDescriptor || !sameJudgeDescriptor(adapterDescriptor, descriptor)) {
         return { ok: false, code: 'PROVIDER_UNAVAILABLE' };
       }
     }
