@@ -55,7 +55,7 @@ Implement Lot 1 exactly as the reviewed plan defines it.
   - Impact: PR validation and shared runners affected; publication locks and main/dispatch isolation preserved.
   - Rollback: disable the new policy, run complete required jobs, preserve repaired coverage, restore lint dependency independently.
 - `BR-CI-OPT-EX2` (`attention`): `Makefile` default-forbidden path.
-  - Reason: additive Docker-based CI wiring tests, replay/metrics targets, scoped selector parameters.
+  - Reason: additive Docker-based CI wiring tests, replay/metrics targets, scoped selector parameters, and keeping `API_VERSION`/`UI_VERSION`/`E2E_VERSION` content-hash inputs synchronized with repaired `api`/`ui`/`global` filters.
   - Impact: existing target behavior and ENV isolation preserved.
   - Rollback: remove new entry points after workflow consumers are disabled; retain existing test recipes and full-suite behavior.
 

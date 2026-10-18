@@ -54,7 +54,6 @@ export const hasValidSelectionOutputs = (outputs) =>
 
 export const selectedJobs = (filters, paths, { eventName = 'pull_request' } = {}) => {
   const selected = new Set(selectedFilters(filters, paths));
-  if (hasUnresolvedInput(filters, paths)) selected.add('global');
   const jobs = new Set(['changes', 'validate-publishable-manifests']);
   if (eventName === 'pull_request') jobs.add('enforce-package-bump');
   for (const [job, keys] of Object.entries(JOB_FILTERS)) {

@@ -97,10 +97,52 @@ test('repair additions are present and Finding 1 consumer closures are enforced'
       const q = qualifyHistoricalExclusion(ex.job, { ...c, event: c.event ?? 'pull_request' }, filters);
       assert.equal(q?.rule, ex.rule, `${c.id}: exclusion rule matches for ${ex.job}`);
     }
-    if (c.expectation === 'fallback-complete') {
-      assert.equal(hasUnresolvedInput(filters, c.paths), true, `${c.id}: triggers unknown-input fallback`);
+    if (c.expectation === 'repaired-selects') {
+      assert.equal(hasUnresolvedInput(filters, c.paths), false, `${c.id}: all paths resolved by real YAML filters or safe non-code globs`);
     }
   }
+  assert.equal(hasUnresolvedInput(filters, ['unmapped-surface/new-entrypoint.ts']), true);
+  assert.deepEqual(selectedFilters(filters, ['unmapped-surface/new-entrypoint.ts']), []);
+  assert.deepEqual(selectedJobs(filters, ['unmapped-surface/new-entrypoint.ts'], { eventName: 'pull_request' }), [
+    'changes', 'enforce-package-bump', 'validate-publishable-manifests',
+  ]);
+});
+
+test('image content hashes (API_VERSION, UI_VERSION, E2E_VERSION) stay bidirectionally synchronized with ci.yml filters', () => {
+  const extractHashInputs = (varName) => {
+    const m = makefile.match(new RegExp(`^export ${varName}\\s*\\?=\\s*\\$\\(shell echo "([^"]+)"`, 'm'));
+    assert.ok(m, `Makefile defines ${varName}`);
+    return m[1].trim().split(/\s+/);
+  };
+  const coversPath = (glob, inputPath) =>
+    matchGlob(glob, inputPath) ||
+    (glob.endsWith('/**') && (inputPath === glob.slice(0, -3) || inputPath.startsWith(`${glob.slice(0, -3)}/`)));
+
+  const apiInputs = extractHashInputs('API_VERSION');
+  const uiInputs = extractHashInputs('UI_VERSION');
+  const e2eInputs = extractHashInputs('E2E_VERSION');
+  for (const p of [...apiInputs, ...uiInputs, ...e2eInputs]) {
+    assert.ok(fs.existsSync(path.join(root, p)), `Makefile hash input exists on disk: ${p}`);
+  }
+  for (const glob of filters.api) {
+    assert.ok(apiInputs.some((p) => coversPath(glob, p)), `filters.api glob ${glob} feeds API_VERSION`);
+  }
+  for (const glob of filters.ui) {
+    assert.ok(uiInputs.some((p) => coversPath(glob, p)), `filters.ui glob ${glob} feeds UI_VERSION`);
+  }
+  const withinInputs = (inputs, targetFile) =>
+    inputs.some((p) => p === targetFile || targetFile.startsWith(`${p}/`));
+  for (const f of [
+    '.dockerignore', 'packages/auth-ui/src/components/OAuthConsent.svelte', 'packages/auth-ui/package.json',
+    'packages/auth-hono/src/index.ts', 'packages/mcp-auth/src/core.ts', 'packages/oauth-verify/src/index.ts',
+    'packages/skills/src/index.ts', 'packages/artifacts/src/index.ts', 'apps/llm-gateway/src/index.ts',
+  ]) {
+    assert.ok(withinInputs(apiInputs, f), `API_VERSION hashes ${f}`);
+  }
+  for (const f of ['.dockerignore', 'packages/auth-ui/src/components/OAuthConsent.svelte', 'packages/auth-ui/package.json', 'ui/nginx/default.conf']) {
+    assert.ok(withinInputs(uiInputs, f), `UI_VERSION hashes ${f}`);
+  }
+  assert.ok(withinInputs(e2eInputs, '.dockerignore'), 'E2E_VERSION hashes .dockerignore');
 });
 
 test('strict gate table matches execution predicates for API-only, UI-only, PR bump and missing outputs', () => {

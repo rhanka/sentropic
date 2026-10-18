@@ -189,13 +189,18 @@ jobs:
               - '.github/workflows/ci.yml'
             global:
               - 'Makefile'
+              - '.dockerignore'
               - 'docker-compose.yml'
               - 'docker-compose.dev.yml'
               - 'docker-compose.test.yml'
               - 'docker-compose.ci.yml'
+              - 'docker-compose.e2e-vscode.yml'
+              - 'docker-compose.idp.yml'
               - '.security/**'
               - 'scripts/security/**'
               - 'tools/**'
+              - 'scripts/check-ci-version-filters.sh'
+              - 'scripts/openvscode-dev-entrypoint.sh'
               - 'scripts/test-api-tooling.sh'
               - 'scripts/publish-api-image.sh'
               - 'scripts/test-api-tag-guard.sh'
@@ -206,6 +211,7 @@ jobs:
             # push and that deploy-preprod pins. A path that feeds the sha but is missing here
             # bumps the pinned tag without ever building it -> ImagePullBackOff on preprod.
             api:
+              - '.dockerignore'
               - 'api/**'
               - 'apps/auth-idp/**'
               - 'apps/llm-gateway/**'
@@ -235,6 +241,7 @@ jobs:
               - 'packages/skills/**'
               - 'packages/ubo-contracts/**'
             ui:
+              - '.dockerignore'
               - 'ui/**'
               - '.security/**'
               - 'scripts/security/**'
