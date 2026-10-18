@@ -44,3 +44,105 @@ it('refuses a physical attempt whose durable acknowledgement fails before any pr
   expect((await app.request('/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json' }, body })).status).toBe(503);
   expect(f.calls).toHaveLength(0);
 });
+it('terminates without retry and records observedServedModel in the error receipt when Muse or Codex adapters report a mismatched upstream model across JSON and SSE', async () => {
+  const { CodexRuntimeClient, InMemoryRoutePlanner, MuseRuntimeClient } = await import('@sentropic/llm-mesh');
+  type GenerateRequest = import('@sentropic/llm-mesh').GenerateRequest;
+  type PreparedRouteAttempt = import('@sentropic/llm-mesh').PreparedRouteAttempt;
+  const codexAuth = {
+    auth: {
+      material: { type: 'account-transport' as const, provider: 'codex' as const, accessToken: 'tok', accountId: 'acc' },
+      descriptor: { sourceType: 'account-transport' as const, accountProviderId: 'codex' as const },
+    },
+  };
+  const museAuth = {
+    auth: {
+      material: { type: 'account-transport' as const, provider: 'muse' as const, accessToken: 'tok', accountId: 'acc' },
+      descriptor: { sourceType: 'account-transport' as const, accountProviderId: 'muse' as const },
+    },
+  };
+  for (const mode of ['muse-json', 'muse-stream', 'codex-json', 'codex-stream'] as const) {
+    const stateDir = await mkdtemp(join(tmpdir(), `gw-mismatch-${mode}-`));
+    let dispatches = 0;
+    const base = durableHostFixture();
+    const codexClient = new CodexRuntimeClient({
+      fetch: async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const enc = new TextEncoder();
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'response.created', response: { id: 'r1', model: 'wrong-upstream-model' } })}\n\n`));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'response.output_text.delta', delta: ' Leak' })}\n\n`));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'response.completed', response: { id: 'r1', model: 'wrong-upstream-model', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } })}\n\n`));
+          controller.close();
+        },
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    });
+    const museClient = new MuseRuntimeClient({
+      fetch: async (_url, init) => {
+        const reqBody = JSON.parse(String(init?.body ?? '{}')) as { stream?: boolean };
+        if (reqBody.stream) {
+          return new Response(new ReadableStream<Uint8Array>({
+            start(controller) {
+              const enc = new TextEncoder();
+              controller.enqueue(enc.encode('data: {"model":"wrong-upstream-model","choices":[{"delta":{"content":"leak"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n'));
+              controller.close();
+            },
+          }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+        }
+        return new Response(JSON.stringify({ id: 'm1', model: 'wrong-upstream-model', output_text: 'leak' }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+    const isMuse = mode.startsWith('muse-');
+    const isStream = mode.endsWith('-stream');
+    const targetModel = isMuse ? 'muse-spark-1.3-contributor' : model;
+    const contract = { ...routingContract, exactModels: [targetModel], rotateAccounts: true, authorizedAccountRefs: ['internal-a', 'internal-b'] };
+    const host = await startGatewayHost({
+      stateDir,
+      listen: { host: '127.0.0.1', port: 0 },
+      mesh: {
+        ...base.mesh,
+        createRoutePlanner: (options) => new InMemoryRoutePlanner({
+          ...options,
+          directory: {
+            listEligible: async () => [
+              { accountRef: 'internal-a', diagnosticAccountRef: 'account-a', targetProviderId: isMuse ? 'muse' : 'openai', transportProviderId: isMuse ? 'muse' : 'codex', supportedModelIds: [targetModel], enrollmentCompletedAt: '2026-10-01T00:00:00Z', readiness: 'ready', revision: '1' },
+              { accountRef: 'internal-b', diagnosticAccountRef: 'account-b', targetProviderId: isMuse ? 'muse' : 'openai', transportProviderId: isMuse ? 'muse' : 'codex', supportedModelIds: [targetModel], enrollmentCompletedAt: '2026-10-01T00:00:00Z', readiness: 'ready', revision: '1' },
+            ],
+            prepareAttempt: async (input) => ({
+              attemptRef: `att-${++dispatches}-${input.accountRef}`,
+              generate: (req: GenerateRequest) => isMuse ? museClient.generate(req, museAuth) : codexClient.generate(req, codexAuth),
+              stream: (req: GenerateRequest) => isMuse ? museClient.stream(req, museAuth) : codexClient.stream(req, codexAuth),
+              markCommitted: async () => undefined, complete: async () => undefined,
+              releaseCancelled: async () => undefined, recordOutcome: async () => undefined,
+            }) as unknown as PreparedRouteAttempt,
+          },
+        }),
+      },
+    });
+    try {
+      const control = createGatewayControlClient({ controlSocket: host.controlSocket });
+      const issued = await control.acquireSession({ ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: `c-${mode}`, routingContract: contract });
+      const res = await fetch(`${host.endpoint}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${issued.key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: targetModel, stream: isStream, messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      expect(res.status, mode).toBe(404);
+      expect(dispatches, mode).toBe(1);
+      const receipt = await control.readReceipt({ ownerScopeRef: 'owner-a', receiptId: res.headers.get('x-sentropic-receipt')! });
+      expect(receipt).toMatchObject({
+        settlement: 'error',
+        attempts: 1,
+        physicalAttempts: [{
+          selectedModel: targetModel,
+          outcome: 'unsupported-model',
+          observedServedModel: 'wrong-upstream-model',
+          modelEvidence: 'provider-reported',
+        }],
+      });
+    } finally {
+      await host.stop();
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  }
+});
