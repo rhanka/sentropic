@@ -1,6 +1,7 @@
 import { createTokenExchangeClient, SubjectVerificationError } from '../token-exchange.js';
 import { ACCESS_TOKEN_TYPE, RFC8693_GRANT_TYPE } from '../trust.js';
-import { oauthAuthority, type OAuthRequestAuthority } from './oauth-context.js';
+import type { TokenExchangeResponse } from '../trust.js';
+import { combineOAuthSignals, oauthAuthority, type OAuthRequestAuthority } from './oauth-context.js';
 import { compileOAuthProfiles, McpOAuthEgressError } from './oauth-profiles.js';
 import type { McpOAuthCallContext, McpOAuthNamespaceOptions } from './oauth-contracts.js';
 
@@ -37,7 +38,7 @@ export function createOAuthEgress(options: McpOAuthNamespaceOptions) {
     bind(authority: OAuthRequestAuthority, tool: string) {
       const controller = new AbortController();
       controllers.add(controller);
-      const lifetime = AbortSignal.any([authority.signal, controller.signal]);
+      const lifetime = combineOAuthSignals([authority.signal, controller.signal]);
       let active = true;
       const check = () => {
         if (!active || closed || lifetime.aborted) throw new McpOAuthEgressError('invocation_inactive');
@@ -49,7 +50,7 @@ export function createOAuthEgress(options: McpOAuthNamespaceOptions) {
           if (!client || profile.requiredScopes.some((scope) => !authority.principal.scopes.includes(scope))) {
             throw new McpOAuthEgressError('profile_denied');
           }
-          let token;
+          let token: TokenExchangeResponse;
           try {
             token = await oauthAuthority.run(authority, () => client.exchange({
               grantType: RFC8693_GRANT_TYPE, subjectToken: authority.subjectToken,
@@ -61,7 +62,7 @@ export function createOAuthEgress(options: McpOAuthNamespaceOptions) {
             throw new McpOAuthEgressError('exchange_refused');
           }
           check();
-          const signal = AbortSignal.any([lifetime, AbortSignal.timeout(10_000)]);
+          const signal = combineOAuthSignals([lifetime, AbortSignal.timeout(10_000)]);
           let response: Response;
           try {
             response = await fetchFn(url, { method: profile.method,

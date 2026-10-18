@@ -89,7 +89,8 @@ const mcpAuth = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembe
 });
 
 export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, ProviderDescriptor>> = {
-  'mcp/auth': mcpAuth('mcp/auth', '.', ['createMcpAuth', 'McpAuthError', 'buildWwwAuthenticate']),
+  'mcp/auth': mcpAuth('mcp/auth', '.', ['createMcpAuth', 'McpAuthError', 'buildWwwAuthenticate',
+    'protectedResourceMetadataPath', 'legacyProtectedResourceMetadataPath', 'PROTECTED_RESOURCE_METADATA_PATH']),
   'mcp/auth/hono': mcpAuth('mcp/auth/hono', './hono', ['mcpAuthRoutes', 'requireMcpAuth', 'getMcpAuthContext']),
   'llm-mesh': mesh('llm-mesh', '.', ['createLlmMesh', 'createProviderRegistry'], '/llm-mesh'),
   'llm-mesh/facade': mesh('llm-mesh/facade', './facade', ['createLlmMeshFacade']),

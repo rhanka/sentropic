@@ -10,7 +10,8 @@ afterEach(() => tree.cleanup());
 const registry = (disabled: readonly ('mcp/auth' | 'mcp/auth/hono')[] = []) =>
   createModuleRegistry({ disabled }, { anchorDir: tree.dir('app/node_modules/@sentropic/cluster-mesh/dist') });
 
-function install(version = '0.2.2', members = ['createMcpAuth', 'McpAuthError', 'buildWwwAuthenticate']) {
+function install(version = '0.2.2', members = ['createMcpAuth', 'McpAuthError', 'buildWwwAuthenticate',
+  'protectedResourceMetadataPath', 'legacyProtectedResourceMetadataPath', 'PROTECTED_RESOURCE_METADATA_PATH']) {
   tree.install('app', {
     name: '@sentropic/mcp-auth', version,
     exports: {

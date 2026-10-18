@@ -70,6 +70,7 @@
   - [ ] Scoped gates: `rtk make test-cluster-mesh SCOPE=tests/loaders/mcp-auth.spec.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; repeat for integrations/mcp-auth-surface.spec.ts and tests/modules.
   - [ ] Gate: `rtk make typecheck-cluster-mesh lint-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`. UI/E2E files: none.
 - [ ] **Lot 2 — Metadata, request authority and sessions**
+  - [x] Typecheck repro: TS5.4 DOM lacks AbortSignal.any; Make resolves Hono4.10.7 adapter alongside root4.13.0. Use a typed native signal operation and HTTP forwarding across the adapter boundary; recheck pending. Overlap test now reports early refusals instead of hiding them behind its barrier.
   - [x] Initial composition tests GREEN (4) and owner method tests GREEN (1); extended overlap/current-scope/idle/absolute/SSE/DELETE/shutdown contracts added for focused verification.
   - [x] Platform bridge runner now enforces compiled policy and current account per tool, combines SDK/request cancellation, and redacts thrown host errors; no provider interface changes.
   - [x] Process-local sessions now bind human/client/tenant/resource/environment, enforce bounded capacity and idle/absolute deadlines, and abort/close owned transports on expiry/shutdown; integration pending.

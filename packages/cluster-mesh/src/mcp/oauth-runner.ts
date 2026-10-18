@@ -2,7 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { authorizeDispatch } from '@sentropic/mcp-platform/transport/dispatch';
 import type { AppToolResult } from '@sentropic/mcp-platform/transport/bridge';
 import type { McpOAuthNamespaceOptions } from './oauth-contracts.js';
-import { oauthAuthority } from './oauth-context.js';
+import { combineOAuthSignals, oauthAuthority } from './oauth-context.js';
 import type { createOAuthEgress } from './oauth-egress.js';
 
 function refused(code: string): AppToolResult {
@@ -25,7 +25,7 @@ export async function connectOAuthServer(
     const authority = oauthAuthority.getStore();
     if (!authority) throw new Error('MCP request authority unavailable');
     return oauthAuthority.run(Object.freeze({ ...authority,
-      signal: AbortSignal.any([authority.signal, extra.signal]),
+      signal: combineOAuthSignals([authority.signal, extra.signal]),
     }), () => handler(request, extra));
   });
   bridge.registerBridgeTools(server, options.tools, {
