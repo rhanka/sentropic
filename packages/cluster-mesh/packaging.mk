@@ -17,13 +17,14 @@ ENV ?= test
 SIBLING_ARCHIVES_FILE ?=
 REQUIRE_PUBLISHED ?=
 MCP_OAUTH_ONLY ?= 0
+REFRESH_SELECTED_ONLY ?= 0
 CLUSTER_MESH_SIBLING_RECEIPTS := tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json
 # Receipts must be packed from this commit (same default as the root QUALIFY_HEAD_SHA of qualify-published-install).
 CLUSTER_MESH_HEAD_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 LAZY_SIBLING_ENV = $(if $(SIBLING_ARCHIVES_FILE),$(if $(and $(filter 1,$(words $(SIBLING_ARCHIVES_FILE))),$(filter $(CLUSTER_MESH_SIBLING_RECEIPTS),$(SIBLING_ARCHIVES_FILE))),-e CLUSTER_MESH_SIBLING_RECEIPTS=/workspace/$(CLUSTER_MESH_SIBLING_RECEIPTS) -e CLUSTER_MESH_HEAD_SHA="$(CLUSTER_MESH_HEAD_SHA)",$(error SIBLING_ARCHIVES_FILE must be exactly $(CLUSTER_MESH_SIBLING_RECEIPTS))))
 LAZY_SIBLING_CHECK = $(if $(SIBLING_ARCHIVES_FILE),@test -f "$(CLUSTER_MESH_SIBLING_RECEIPTS)" || { echo "ERROR: $(CLUSTER_MESH_SIBLING_RECEIPTS) is not a file"; exit 1; })
 LAZY_PACKAGE_RUN = docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(LAZY_SIBLING_ENV) \
-	-e MCP_OAUTH_ONLY=$(MCP_OAUTH_ONLY) \
+	-e MCP_OAUTH_ONLY=$(MCP_OAUTH_ONLY) -e REFRESH_SELECTED_ONLY=$(REFRESH_SELECTED_ONLY) \
 	-v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE)
 
 .PHONY: test-lazy-package refresh-lazy-package-lock check-train-lock-integrity

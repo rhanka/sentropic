@@ -4,6 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { cloneFixture, enabled, fixtureDir, nodeJson, read, runNode, tsc } from './helpers.js';
 
 describe.skipIf(!enabled)('installed MCP OAuth consumer', () => {
+  it('should retain gateway service auth on the published 0.2.1 floor without selecting human OAuth', () => {
+    const dir = fixtureDir('gateway-service-baseline');
+    expect(JSON.parse(read(join(dir, 'node_modules/@sentropic/mcp-auth/package.json'))).version).toBe('0.2.1');
+    expect(nodeJson(dir, `
+      import { createClusterMeshModules } from '@sentropic/cluster-mesh';
+      import { loadGatewayAuth } from '@sentropic/cluster-mesh/loaders/gateway/auth';
+      import { ServiceAuthVerifyToken } from '@sentropic/cluster-mesh/gateway/auth';
+      const modules = createClusterMeshModules(); const service = await loadGatewayAuth(modules);
+      console.log(JSON.stringify({ identity: service.ServiceAuthVerifyToken === ServiceAuthVerifyToken,
+        oauth: modules.snapshot()['mcp/auth'].state }));
+    `)).toEqual({ identity: true, oauth: 'unprobed' });
+  });
+
   it.each(['NodeNext', 'Bundler'] as const)('should compile the real typed host and public call site with full library checks (%s)', (module) => {
     const result = tsc(fixtureDir('mcp-oauth'), 'oauth', read(new URL('./fixtures/mcp-oauth/consumer.ts', import.meta.url).pathname),
       { module, skipLibCheck: false });
