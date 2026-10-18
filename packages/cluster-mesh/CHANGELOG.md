@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.19.0
+
+- Add the generic K1–K4 storage port and injected-driver PostgreSQL backend,
+  with immutable boundaries, staged publication, retained receipts, visibility
+  barriers, fenced writers, outbox and qualified purge profiles.
+- Add comments M2 storage, import transport, complete typed receipt recovery,
+  retained export/readback and canonical HTTP composition. Frozen comments M1
+  remains unchanged; `@sentropic/comments@^0.3.0` is an optional peer.
+- Export `./storage`, `./storage/postgres`, `./comments`, `./comments/hono`,
+  `./loaders/comments` and `./compose/comments`; ship `assets/storage`.
+- Pin runtime `@stablelib/sha256@2.0.1` for portable restartable digest state.
+- Require a host-managed stable PostgreSQL cursor key. Verify asset-owned DDL
+  with typed drift errors and explicit operator re-attestation. Core and module
+  migrations have independent local version chains and explicit dependencies.
+- Merge PR #679 first, then rebase this candidate and recheck/re-bump above
+  main and npm before publication.
+
 ## 0.18.0
 
 - Widen optional peer ranges to the #662 union: llm-mesh `>=0.22.0 <0.27.0`, llm-gateway `>=0.19.0 <0.21.0` (V7-M1). The strict published-tuple install test (`tests/packaging/tuple-strict.spec.ts`) proves a plain `npm install` with no `--legacy-peer-deps` escape.

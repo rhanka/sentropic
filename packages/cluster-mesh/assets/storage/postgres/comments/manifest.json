@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "cluster-mesh-pg/comments/001-projections@1",
+      "file": "comments/001-projections.sql",
+      "order": 1,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 0,
+      "toVersion": 1,
+      "requires": [
+        "cluster-mesh-pg/006-staged-coverage@1"
+      ],
+      "schemaRole": "comments",
+      "checksum": "de0689eec0c3c172bc36e4a4a54b6b800fc9f291efcfecd121e9663f9d5cd60b"
+    },
+    {
+      "id": "cluster-mesh-pg/comments/002-transport@1",
+      "file": "comments/002-transport.sql",
+      "order": 2,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 1,
+      "toVersion": 2,
+      "requires": [
+        "cluster-mesh-pg/comments/001-projections@1"
+      ],
+      "schemaRole": "comments",
+      "checksum": "140b56c54aae928937c0214959deec74c4b9acf7d73a9c082f6f17e1e2f91c8e"
+    },
+    {
+      "id": "cluster-mesh-pg/comments/003-exports@1",
+      "file": "comments/003-exports.sql",
+      "order": 3,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 2,
+      "toVersion": 3,
+      "requires": [
+        "cluster-mesh-pg/comments/002-transport@1"
+      ],
+      "schemaRole": "comments",
+      "checksum": "3059a66a5f620eacb8f8f702fd68c9dcfd0aa13edfc8e9c0b7868b7455267ed2"
+    },
+    {
+      "id": "cluster-mesh-pg/comments/004-authority@1",
+      "file": "comments/004-authority.sql",
+      "order": 4,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 3,
+      "toVersion": 4,
+      "requires": [
+        "cluster-mesh-pg/comments/003-exports@1"
+      ],
+      "schemaRole": "comments",
+      "checksum": "4bc12c4aeb4f988fa30a1a5ff28d75059ea1a648c4d6e569fb61fca39842636b"
+    },
+    {
+      "id": "cluster-mesh-pg/comments/005-lifecycle-evidence@1",
+      "file": "comments/005-lifecycle-evidence.sql",
+      "order": 5,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 4,
+      "toVersion": 5,
+      "requires": [
+        "cluster-mesh-pg/comments/004-authority@1"
+      ],
+      "schemaRole": "comments",
+      "checksum": "cd53d617d2f2076456764d3224cee3549d4ee7f4e1c83743361f56682a06b87b"
+    },
+    {
+      "id": "cluster-mesh-pg/comments/006-review-evidence@1",
+      "file": "comments/006-review-evidence.sql",
+      "order": 6,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 5,
+      "toVersion": 6,
+      "requires": [
+        "cluster-mesh-pg/comments/005-lifecycle-evidence@1"
+      ],
+      "schemaRole": "comments",
+      "checksum": "a058e7aebee898368d8f385874425596949e73d008283418bdcf63c6f5c815dd"
+    }
+  ]
+}
