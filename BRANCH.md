@@ -39,6 +39,7 @@
 
 ## Feedback Loop
 - [x] DV3 owner decision closed 2026-10-18: question « quand on recopie la prod vers la preprod pour tester, est-ce qu'on copie aussi tes annotations privées (texte et captures d'écran) ? » — answer « Tout copier » = option B (Inclure); no `blocked` / `attention` item remains on this branch for DV3.
+- [x] Astra max review of PR #694 at `b9895373a` (NO-GO: 2 blocking P2, 2 P3) treated in this branch: canonical discussion-state separation, observed snapshot binding for third-party authoring, S7 source locator with digest and lot map, and commit-count freshness below; treatment table in `.h2a/reviews/spec694_treatment.md`.
 - [ ] No other `blocked` / `deferred` / `cancelled` / `attention` item open; raise one here instead of guessing if a prerequisite is unresolved.
 
 ## AI Flaky tests
@@ -94,8 +95,8 @@
   - [x] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
 - [ ] **Lot N — Final validation**
   - [x] Run `make scope-check ENV=test-spec-ui-annotate-overlay` and record its result: PASS C2 on every lot, including the final tree (`spec/**` + `BRANCH.md` only).
-  - [x] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution: 8 commits, 11–102 changed lines each, no AI trailer.
-  - [ ] Push `docs/spec-ui-annotate-overlay` and open a DRAFT PR whose body is this `BRANCH.md` text; report the PR number and stop without merging.
+  - [x] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution: 9 commits in the reviewed range `origin/main..b9895373a`, 12–102 changed lines each, no AI trailer; treatment commits after that range follow the same rule.
+  - [x] Push `docs/spec-ui-annotate-overlay` and open a DRAFT PR whose body is this `BRANCH.md` text; report the PR number and stop without merging: DRAFT PR #694.
   - [x] Retest UI: not applicable, docs only, no UI test claimed.
   - [x] Retest API: not applicable, docs only, no API test claimed.
   - [x] Retest E2E: not applicable, docs only, no E2E test claimed.
