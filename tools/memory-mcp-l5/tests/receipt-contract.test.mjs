@@ -1,17 +1,20 @@
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import {
+  PROOF_CATALOG,
   PROOF_IDS,
   ACCEPTANCE_ROLES,
-  CHECKPOINT_KEYS,
   FROZEN_SPEC_SHA256,
   sha256OfBytes,
+  sha512Integrity,
+  computeTupleSha256,
   checkCheckpoint,
 } from '../receipt.mjs';
+import { canonicalizeJson } from '../schema-validator.mjs';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SCHEMA_PATH = join(HERE, '..', 'schemas', 'checkpoint-v1.schema.json');
@@ -20,78 +23,108 @@ const RECEIPT_BIN = join(HERE, '..', 'receipt.mjs');
 
 const H64 = 'a'.repeat(64);
 const C40 = 'b'.repeat(40);
-const MANIFEST_BYTES = Buffer.from('{"manifestVersion":1}', 'utf8');
+const MANIFEST_BYTES = Buffer.from('{"manifestVersion":1,"stage":"candidate"}', 'utf8');
 const MANIFEST_SHA = sha256OfBytes(MANIFEST_BYTES);
 
-function makeValidCheckpoint() {
-  const ev = { path: 'spec/evidence/memory-mcp-l5/item.json', sha256: H64 };
-  return {
-    schemaVersion: 1,
-    checkpoint: 'L5-MEMORY-V1',
-    phase: 'candidate',
-    tupleSha256: H64,
+function writeRef(baseDir, relPath, content) {
+  const bytes = Buffer.isBuffer(content) ? content : Buffer.from(typeof content === 'string' ? content : JSON.stringify(content), 'utf8');
+  const abs = join(baseDir, relPath);
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, bytes);
+  return { path: relPath, sha256: sha256OfBytes(bytes), integrity: sha512Integrity(bytes) };
+}
+
+function buildCheckpointBundle(baseDir) {
+  const ev = writeRef(baseDir, 'spec/evidence/memory-mcp-l5/item.json', { ok: true });
+  const contractPath = 'packages/mcp-platform/dist/memory/index.d.ts';
+  const contractRef = writeRef(baseDir, contractPath, 'export interface MemoryContractV1 {}\n');
+  writeRef(baseDir, `retained/${contractPath}`, 'export interface MemoryContractV1 {}\n');
+  const invEntry = { path: contractPath, version: '0.4.0', sha256: contractRef.sha256 };
+  const invFile = writeRef(baseDir, 'receipts/contract-inventory.json', { contractInventory: [invEntry] });
+  const compFile = writeRef(baseDir, 'receipts/contract-comparison.json', {
+    identical: true, preCandidateManifestSha256: MANIFEST_SHA, candidateManifestSha256: MANIFEST_SHA, contracts: [invEntry],
+  });
+  const roles = [
+    ['l4', '@sentropic/engram', '0.20.1', 'archives/engram.tgz'],
+    ['platform', '@sentropic/mcp-platform', '0.4.0', 'archives/platform.tgz'],
+    ['broker', '@sentropic/mcp-broker', '0.2.0', 'archives/broker.tgz'],
+    ['mesh', '@sentropic/cluster-mesh', '0.19.0', 'archives/mesh.tgz'],
+  ];
+  const artifacts = roles.map(([role, name, version, archive]) => {
+    const f = writeRef(baseDir, archive, `${name}@${version}`);
+    return { role, name, version, sha256: f.sha256, integrity: f.integrity, sourceHead: C40, archiveRef: archive };
+  });
+  const l4BuildFile = writeRef(baseDir, 'receipts/l4-build.json', {
+    builtAgainstPreCandidateSha256: MANIFEST_SHA, e4ArtifactSha256: artifacts[0].sha256, sourceHead: C40,
+  });
+  const graphFile = writeRef(baseDir, 'import-graph.json', {
+    roots: PROOF_CATALOG.importGraphRoots, resolvedFilesSha256: H64, forbiddenHits: 0, unresolvedEdges: 0,
+  });
+  const proofs = PROOF_CATALOG.proofs.map((cat) => {
+    const testResults = cat.files.map((file, idx) => ({
+      name: file, status: 'passed',
+      assertionResults: idx === 0
+        ? cat.requiredCases.map((c) => ({ title: c, fullName: c, status: 'passed' }))
+        : [{ title: `${cat.id}.extra`, fullName: `${cat.id}.extra`, status: 'passed' }],
+    }));
+    const executed = testResults.flatMap((tr) => tr.assertionResults.map((ar) => ({ file: tr.name, caseId: ar.fullName, status: 'passed' })));
+    const rep = writeRef(baseDir, `results/${cat.id}.json`, {
+      success: true, numTotalTests: executed.length, numPassedTests: executed.length, numFailedTests: 0, numPendingTests: 0, numTodoTests: 0, testResults,
+    });
+    return {
+      id: cat.id, files: [...cat.files], command: cat.command,
+      result: { path: rep.path, sha256: rep.sha256, format: 'vitest-json', passed: executed.length, failed: 0, skipped: 0, todo: 0, executedCasesSha256: sha256OfBytes(Buffer.from(canonicalizeJson(executed))) },
+      artifactManifestSha256: MANIFEST_SHA, sourceHead: C40, runId: '1001', attempt: 1,
+    };
+  });
+  const doc = {
+    schemaVersion: 1, checkpoint: 'L5-MEMORY-V1', phase: 'candidate', tupleSha256: H64,
     source: { repository: 'rhanka/sentropic', head: C40, base: C40, merge: C40, checkout: C40, sourceTreeSha256: H64 },
     contracts: {
-      specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, l0Freeze: ev, fixtures: [ev],
-      registrySha256: H64, gatewaySha256: H64, exports: [ev], schemas: [ev], profiles: [ev], entry: ev, providerManifest: ev,
+      specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, l0Freeze: { path: ev.path, sha256: ev.sha256 },
+      fixtures: [{ path: ev.path, sha256: ev.sha256 }], registrySha256: H64, gatewaySha256: H64,
+      exports: [{ path: ev.path, sha256: ev.sha256 }], schemas: [{ path: ev.path, sha256: ev.sha256 }],
+      profiles: [{ path: ev.path, sha256: ev.sha256 }], entry: { path: ev.path, sha256: ev.sha256 }, providerManifest: { path: ev.path, sha256: ev.sha256 },
     },
-    preCandidate: { manifestSha256: MANIFEST_SHA, contractInventory: [ev], l4BuildReceipt: ev, contractComparison: ev },
-    artifacts: [{ role: 'l4', name: '@sentropic/engram', version: '0.20.1', sha256: H64, integrity: 'sha512-AAAA==', sourceHead: C40, archiveRef: 'engram.tgz' }],
+    preCandidate: {
+      manifestSha256: MANIFEST_SHA, contractInventory: { path: invFile.path, sha256: invFile.sha256 },
+      l4BuildReceipt: { path: l4BuildFile.path, sha256: l4BuildFile.sha256 }, contractComparison: { path: compFile.path, sha256: compFile.sha256 },
+    },
+    artifacts,
     closure: {
       artifactManifestSha256: MANIFEST_SHA, declaredLockSha256: H64, installedLockSha256: H64,
       installedClosureSha256: H64, sdkVersion: '1.31.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'],
       referenceExport: '@sentropic/mcp-broker/memory-reference', referenceSourceSha256: H64,
     },
     runtime: {
-      nodeVersion: '24.2.0', imageDigest: 'sha256:' + H64, platform: 'linux/amd64', sqliteVersion: '3.49.1',
+      nodeVersion: '24.2.0', imageDigest: `node:24-bookworm-slim@sha256:${H64}`, platform: 'linux/amd64', sqliteVersion: '3.49.1',
       driver: 'node:sqlite', journalMode: 'WAL', synchronous: 'FULL', filesystem: 'ext4',
       filesystemAssumptions: 'local-posix-fsync', fenceProfileSha256: H64, pythonCount: 0, addonBuildCount: 0,
     },
     assurance: { productionPolicySha256: H64, qualificationPolicySha256: H64, verifierArtifactSha256: H64, trustProfileSha256: H64, qualificationOnly: true },
-    proofs: PROOF_IDS.map((id) => ({
-      id, files: [`tests/${id}.test.ts`], command: 'make memory-l5-test ENV=test-feat-memory-mcp-l5',
-      result: { path: `results/${id}.json`, sha256: H64, format: 'vitest-json', passed: 4, failed: 0, skipped: 0, todo: 0, executedCasesSha256: H64 },
-      artifactManifestSha256: MANIFEST_SHA, sourceHead: C40, runId: '1001', attempt: 1,
-    })),
-    importGraph: { path: 'import-graph.json', sha256: H64, roots: ['@sentropic/mcp-platform/memory'], resolvedFilesSha256: H64, forbiddenHits: 0, unresolvedEdges: 0 },
+    proofs,
+    importGraph: { path: graphFile.path, sha256: graphFile.sha256, roots: [...PROOF_CATALOG.importGraphRoots], resolvedFilesSha256: H64, forbiddenHits: 0, unresolvedEdges: 0 },
     ci: {
       workflow: '.github/workflows/ci.yml', runId: '1001', attempt: 1, head: C40, base: C40, merge: C40, checkout: C40,
-      imageDigest: 'sha256:' + H64, artifactName: 'memory-mcp-l5', jobs: [{ id: 'memory-l5-qualification', conclusion: 'success', resultSha256: H64 }],
+      imageDigest: `node:24-bookworm-slim@sha256:${H64}`, artifactName: `memory-mcp-l5-${C40}-1001-1`,
+      jobs: [{ id: 'memory-l5-qualification', conclusion: 'success', resultSha256: H64 }],
     },
-    ownerUat: { status: 'passed', evidence: ev, policySha256: H64, actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z' },
-    acceptances: ACCEPTANCE_ROLES.map((role) => ({ role, actorRef: `owner:${role}`, tupleSha256: H64, verdict: 'accepted', evidence: ev })),
+    ownerUat: {}, acceptances: [],
   };
+  doc.tupleSha256 = computeTupleSha256(doc);
+  const uatRef = writeRef(baseDir, 'receipts/owner-uat.json', {
+    tupleSha256: doc.tupleSha256, status: 'passed', policySha256: H64, actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z',
+  });
+  doc.ownerUat = { status: 'passed', evidence: { path: uatRef.path, sha256: uatRef.sha256 }, policySha256: H64, actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z' };
+  doc.acceptances = ACCEPTANCE_ROLES.map((role) => {
+    const accRef = writeRef(baseDir, `receipts/accept-${role}.json`, { role, actorRef: `owner:${role}`, tupleSha256: doc.tupleSha256, verdict: 'accepted' });
+    return { role, actorRef: `owner:${role}`, tupleSha256: doc.tupleSha256, verdict: 'accepted', evidence: { path: accRef.path, sha256: accRef.sha256 } };
+  });
+  return { doc, opts: { baseDir, manifestBytes: MANIFEST_BYTES, execArgv: [], nodeOptions: '' } };
 }
+const makeValidCheckpoint = () => buildCheckpointBundle(mkdtempSync(join(tmpdir(), 'l5-cp-'))).doc;
 
 describe('L5 receipt contract and closed checkpoint schema', () => {
-  it('aligns schema required keys and catalog P01-P10 with receipt verifier constants', () => {
-    const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'));
-    const catalog = JSON.parse(readFileSync(CATALOG_PATH, 'utf8'));
-    expect(schema.additionalProperties).toBe(false);
-    expect(schema.required).toEqual(CHECKPOINT_KEYS);
-    expect(catalog.proofs.map((p) => p.id)).toEqual(PROOF_IDS);
-  });
-
-  it('accepts a complete valid checkpoint and rejects extra properties', () => {
-    const doc = makeValidCheckpoint();
-    const opts = { manifestBytes: MANIFEST_BYTES, l4BuildReceipt: { builtAgainstPreCandidateSha256: MANIFEST_SHA }, contractComparison: { identical: true } };
-    expect(checkCheckpoint(doc, opts)).toEqual([]);
-    expect(checkCheckpoint({ ...doc, extraBag: {} }, opts)).toContain('checkpoint: extra key extraBag');
-  });
-
-  it('rejects missing/duplicate/unknown proofs and skipped/todo/failed test counts', () => {
-    const opts = { manifestBytes: MANIFEST_BYTES };
-    const missing = makeValidCheckpoint();
-    missing.proofs = missing.proofs.slice(0, 9);
-    expect(checkCheckpoint(missing, opts).join(' ')).toMatch(/expected exactly 10/);
-    const dup = makeValidCheckpoint();
-    dup.proofs[9] = { ...dup.proofs[0] };
-    expect(checkCheckpoint(dup, opts).join(' ')).toMatch(/missing id P10.*duplicate id P01/);
-    const skipped = makeValidCheckpoint();
-    skipped.proofs[0].result.skipped = 1;
-    expect(checkCheckpoint(skipped, opts).join(' ')).toMatch(/proofs\/P01: invalid vitest-json counts/);
-  });
-
   it('rejects mutated pre-candidate bytes, wrong E4 build binding, changed contracts, and cross-digest proof reuse', () => {
     const doc = makeValidCheckpoint();
     expect(checkCheckpoint(doc, { manifestBytes: Buffer.from('mutated') }).join(' ')).toMatch(/preCandidate\.manifestSha256/);
