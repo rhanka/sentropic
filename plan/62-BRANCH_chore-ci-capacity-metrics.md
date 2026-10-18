@@ -20,7 +20,7 @@
   - [ ] `scripts/ci/ci-expected-results.test.mjs`
   - [ ] `spec/ci-cd-ten-minutes/capacity.md`
 - [ ] **Forbidden Paths (must not change in this branch)**:
-  - [ ] `Makefile` except BR62-EX2; `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
+  - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [ ] `.github/workflows/ci.yml` under BR62-EX1; `Makefile` under BR62-EX2.

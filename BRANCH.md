@@ -35,6 +35,9 @@
 - [x] **Exception process**: record reason, impact, and rollback under `Feedback Loop` before any scope change; none required for this documentation branch.
 
 ## Feedback Loop
+- [x] `acknowledge` — PR #701 F1: remove explicit forbidden entries that shadow the nine Makefile exceptions and the deterministic-provider Compose overlay; retain bounded conditional paths and profile defaults.
+- [ ] PR #701 F2: distinguish file sequence 62–70 from collision-free branch identities and propagate dependencies, exceptions, and ports.
+- [ ] PR #701 F3: add explicit static gates before runtime UAT and applicable final build/API/UI/E2E regression checklists.
 - [x] `acknowledge` — Owner, 2026-10-18: « écoute je suis en phase avec le plan proposé pour le CI/CD, je le veux commité / fusionné et planifié en branches stp ».
 - [x] `clarification` — Merge GO applies after green CI and review; this author's explicit handoff ends at the opened PR, without merging or deleting this branch plan.
 - [x] `clarification` — The superseded acceleration branch is not an implementation dependency; the nine-step plan is the retained source.
