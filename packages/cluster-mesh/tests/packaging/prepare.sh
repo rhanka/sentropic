@@ -136,19 +136,30 @@ if [ "${REFRESH_LOCK:-}" = 1 ]; then
 fi
 cp "$fixtures/mcp-oauth/package-lock.json" "$work/mcp-oauth/"
 (cd "$work/mcp-oauth" && npm ci --ignore-scripts $quiet >/dev/null)
-for name in host scenario; do
-  sed -e "s#'../../../../src/index.js'#'@sentropic/cluster-mesh'#g" \
-    -e "s#'../../../../src/mcp/registry.js'#'@sentropic/cluster-mesh/mcp/registry'#g" \
-    -e "s#'../../../../src/compose/mcp-oauth.js'#'@sentropic/cluster-mesh/compose/mcp-oauth'#g" \
-    "$fixtures/mcp-oauth/$name.ts" > "$work/mcp-oauth/$name.ts"
+# Also exercise the SDK peer floor in a separate normal installation. The ordinary
+# pre-#684 runner can resolve a newer host workspace SDK despite its tool pins.
+for variant in mcp-oauth mcp-oauth-baseline; do
+  oauth_dir="$work/$variant"
+  if [ "$variant" = mcp-oauth-baseline ]; then
+    mkdir -p "$oauth_dir"
+    cp "$fixtures/mcp-oauth/package.json" "$oauth_dir/"
+    consumer "$oauth_dir" "@modelcontextprotocol/sdk=1.31.0" "hono=4.10.7"
+    (cd "$oauth_dir" && npm install --ignore-scripts $quiet >/dev/null)
+  fi
+  for name in host scenario; do
+    sed -e "s#'../../../../src/index.js'#'@sentropic/cluster-mesh'#g" \
+      -e "s#'../../../../src/mcp/registry.js'#'@sentropic/cluster-mesh/mcp/registry'#g" \
+      -e "s#'../../../../src/compose/mcp-oauth.js'#'@sentropic/cluster-mesh/compose/mcp-oauth'#g" \
+      "$fixtures/mcp-oauth/$name.ts" > "$oauth_dir/$name.ts"
+  done
+  cp "$fixtures/mcp-oauth/consumer.ts" "$fixtures/mcp-oauth/http.ts" "$fixtures/mcp-oauth/tools.json" "$oauth_dir/"
+  "$work/tools/node_modules/.bin/tsc" --module NodeNext --target ES2022 --esModuleInterop --strict \
+    --skipLibCheck false --types node --typeRoots "$work/tools/node_modules/@types" \
+    --outDir "$oauth_dir" --rootDir "$oauth_dir" \
+    "$oauth_dir/host.ts" "$oauth_dir/consumer.ts" "$oauth_dir/http.ts" "$oauth_dir/scenario.ts"
+  sha256sum "$tgz" > "$oauth_dir/candidate.sha256"
+  tuple "$variant"
 done
-cp "$fixtures/mcp-oauth/consumer.ts" "$fixtures/mcp-oauth/http.ts" "$fixtures/mcp-oauth/tools.json" "$work/mcp-oauth/"
-"$work/tools/node_modules/.bin/tsc" --module NodeNext --target ES2022 --esModuleInterop --strict \
-  --skipLibCheck false --types node --typeRoots "$work/tools/node_modules/@types" \
-  --outDir "$work/mcp-oauth" --rootDir "$work/mcp-oauth" \
-  "$work/mcp-oauth/host.ts" "$work/mcp-oauth/consumer.ts" "$work/mcp-oauth/http.ts" "$work/mcp-oauth/scenario.ts"
-sha256sum "$tgz" > "$work/mcp-oauth/candidate.sha256"
-tuple mcp-oauth
 cat "$work/mcp-oauth/candidate.sha256"
 if [ "${MCP_OAUTH_ONLY:-0}" = 1 ]; then exit 0; fi
 fi
