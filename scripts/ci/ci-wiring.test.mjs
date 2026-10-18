@@ -8,6 +8,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { SELECTION_KEYS, VALIDATE_OUTPUTS, matchGlob, requiredSuccessJobs } from './filter-consumers.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -16,7 +17,6 @@ const jobs = ci.jobs;
 const fixture = JSON.parse(
   fs.readFileSync(path.join(root, 'scripts', 'ci', 'fixtures', 'consumer-regressions.json'), 'utf8'),
 );
-import { VALIDATE_OUTPUTS, matchGlob } from './filter-consumers.mjs';
 export const needsOf = (job) => [jobs[job].needs ?? []].flat();
 
 // Every lane job the gate must observe: PR-visible jobs minus main-only publishers.
@@ -45,11 +45,12 @@ test('needs graph is acyclic', () => {
   for (const name of Object.keys(jobs)) visit(name, []);
 });
 
-test('final head alone decides: gate reads only the current run needs', () => {
+test('final head alone decides: gate reads only the current run needs and event', () => {
   const steps = jobs['ci-gate'].steps;
   const run = steps.map((s) => s.run ?? '').join('\n');
   const env = steps.map((s) => Object.values(s.env ?? {}).join(' ')).join(' ');
   assert.match(env, /toJSON\(needs\)/, 'gate evaluates the current run only');
+  assert.match(env, /github\.event_name/, 'gate receives the current event name');
   assert.ok(!run.includes('github.run_id') && !run.includes('github.run_attempt'), 'no reliance on prior attempts');
   assert.ok(String(ci.concurrency.group).includes('pull_request.number'), 'superseded pushes share one group');
 });
@@ -64,16 +65,11 @@ test('repaired filter outputs reach the jobs and the gate', () => {
   for (const [name, globs] of Object.entries(fixture.repairMap)) {
     for (const glob of globs) assert.ok(filters[name].includes(glob), `${name} outputs ${glob}`);
   }
-  // Change kind never matters: additions, deletions and both rename sides match on path strings.
   assert.ok(matchGlob('packages/mcp-auth/**', 'packages/mcp-auth/src/core.ts'), 'addition matches');
   assert.ok(matchGlob('packages/mcp-auth/**', 'packages/mcp-auth/src/removed.ts'), 'deletion matches');
   assert.ok(matchGlob('packages/mcp-auth/**', 'packages/mcp-auth/src/old.ts'), 'rename old side matches');
-  // Global and Make changes fan out to complete suites.
   assert.ok(filters.global.includes('Makefile'), 'Makefile is global');
   assert.ok(filters.global.includes('.github/workflows/ci.yml'), 'workflow file is global');
-  // Every validation job gates on its own output; package lanes also fan out on global.
-  // validate-idp-sync is intentionally global-free: its filter already enumerates
-  // every input it consumes (deploy, auth-hono, drizzle, Makefile, sync workflows).
   for (const [job, key] of Object.entries(VALIDATE_OUTPUTS)) {
     const cond = String(jobs[job].if ?? '');
     assert.ok(cond.includes(`needs.changes.outputs.${key} == 'true'`), `${job} gates on ${key}`);
@@ -81,9 +77,7 @@ test('repaired filter outputs reach the jobs and the gate', () => {
   }
 });
 
-test('gate scenarios on the committed shell: failed AI denied, selected-but-skipped denied, clean allowed', () => {
-  // Faithful jq stand-in: implements exactly the queries the gate script uses.
-  // The shell under test is the real committed script; only jq is stubbed.
+test('gate scenarios on the committed shell with all 39 dependencies: negative and positive cases', () => {
   const stub = [
     '#!/usr/bin/env node',
     'const fs = require("node:fs");',
@@ -108,9 +102,23 @@ test('gate scenarios on the committed shell: failed AI denied, selected-but-skip
     '    const vals = Object.values(data);',
     '    process.exit(vals.length > 0 && vals.every((v) => ok.includes(v.result)) ? 0 : 1);',
     '  }',
+    '  if (prog.includes("$deps | split")) {',
+    '    process.exit(args.deps.split(" ").every((d) => ok.includes((data[d] || {}).result)) ? 0 : 1);',
+    '  }',
+    '  if (prog.includes("$keys | split")) {',
+    '    process.exit(args.keys.split(" ").every((k) => data[k] === "true" || data[k] === "false") ? 0 : 1);',
+    '  }',
     '  if (prog.includes(".changes.outputs")) { console.log(JSON.stringify((data.changes || {}).outputs || {})); return; }',
-    '  if (prog.includes(".[$k]")) { console.log(String(data[args.k] !== undefined ? data[args.k] : "false")); return; }',
-    '  if (prog.includes(".[$j].result")) { console.log(String((data[args.j] || {}).result !== undefined ? data[args.j].result : "missing")); return; }',
+    '  if (prog.includes(".[$k]")) {',
+    '    const fallback = prog.includes(\'"missing"\') ? "missing" : "false";',
+    '    console.log(String(data[args.k] !== undefined && data[args.k] !== null ? data[args.k] : fallback));',
+    '    return;',
+    '  }',
+    '  if (prog.includes(".[$j].result")) {',
+    '    const r = (data[args.j] || {}).result;',
+    '    console.log(String(r !== undefined && r !== null ? r : "missing"));',
+    '    return;',
+    '  }',
     '  console.error("stub jq: unknown program " + prog); process.exit(2);',
     '});',
   ].join('\n');
@@ -119,26 +127,66 @@ test('gate scenarios on the committed shell: failed AI denied, selected-but-skip
     const script = `${jobs['ci-gate'].steps.map((s) => s.run ?? '').join('\n').trim()}\n`;
     fs.writeFileSync(path.join(dir, 'gate.sh'), script, { mode: 0o755 });
     fs.writeFileSync(path.join(dir, 'jq'), stub, { mode: 0o755 });
-    const run = (needs) =>
+    const run = (needs, eventName = 'pull_request') =>
       spawnSync('bash', [path.join(dir, 'gate.sh')], {
         encoding: 'utf8',
-        env: { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}`, CI_NEEDS: JSON.stringify(needs) },
+        env: { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}`, CI_NEEDS: JSON.stringify(needs), CI_EVENT_NAME: eventName },
       });
-    const apiLane = ['test-api-unit-integration', 'typecheck-lint-api', 'build-api-image', 'build-api-tool-image', 'smoke-idp-screens', 'security-sast-sca', 'test-smoke-restore', 'security-container', 'build-e2e'];
-    const laneOk = Object.fromEntries(apiLane.map((j) => [j, { result: 'success' }]));
-    const off = { api: 'false', global: 'false', ui: 'false' };
-    const base = (outputs, extra = {}) => ({ changes: { result: 'success', outputs }, 'validate-publishable-manifests': { result: 'success' }, ...extra });
-    // A failed affected AI shard can never be accepted as complete evidence.
-    const failed = run(base({ ...off, api: 'true' }, { ...laneOk, 'test-api-unit-integration': { result: 'failure' } }));
-    assert.notEqual(failed.status, 0, `failed AI shard denies green: ${failed.stdout}${failed.stderr}`);
-    // A selected-but-skipped required result is a false green: denied by the strict block.
-    const skipped = run(base({ ...off, api: 'true' }, { ...laneOk, 'test-api-unit-integration': { result: 'skipped' } }));
-    assert.notEqual(skipped.status, 0, `selected-but-skipped denies green: ${skipped.stdout}${skipped.stderr}`);
-    assert.match(skipped.stdout, /strict selection requires test-api-unit-integration result=success \(got skipped\)/, `status=${skipped.status} stderr=${skipped.stderr}`);
-    // Complete affected evidence with legitimate skips elsewhere is allowed.
-    const clean = run(base({ ...off, api: 'true' }, { ...laneOk, 'typecheck-lint-ui': { result: 'skipped' } }));
-    assert.equal(clean.status, 0, `clean run allows green: ${clean.stdout}${clean.stderr}`);
-    assert.match(clean.stdout, /CI gate passed/);
+
+    const allOff = Object.fromEntries(SELECTION_KEYS.map((k) => [k, 'false']));
+    const buildNeeds = (outputs, overrides = {}, eventName = 'pull_request') => {
+      const req = new Set(outputs ? requiredSuccessJobs({ ...allOff, ...outputs }, { eventName }) : []);
+      const base = Object.fromEntries(PR_JOBS.map((j) => [j, { result: req.has(j) ? 'success' : 'skipped' }]));
+      base.changes = { result: 'success', ...(outputs ? { outputs } : {}) };
+      return { ...base, ...overrides };
+    };
+
+    // 1. Clean API-only PR: all 15 required jobs succeed (including build-ui, test-e2e, e2e-vscode, enforce-package-bump).
+    const cleanApi = run(buildNeeds({ ...allOff, api: 'true' }));
+    assert.equal(cleanApi.status, 0, `clean API-only PR passes: ${cleanApi.stdout}${cleanApi.stderr}`);
+
+    // 2. Reproduction from Finding 2: API-only PR where build-ui, test-e2e or e2e-vscode is skipped or neutral MUST fail.
+    for (const omitted of ['build-ui', 'test-e2e', 'e2e-vscode']) {
+      for (const badResult of ['skipped', 'neutral']) {
+        const res = run(buildNeeds({ ...allOff, api: 'true' }, { [omitted]: { result: badResult } }));
+        assert.notEqual(res.status, 0, `API-only ${omitted}=${badResult} must fail`);
+        assert.match(res.stdout, new RegExp(`strict selection requires ${omitted} result=success \\(got ${badResult}\\)`));
+      }
+    }
+
+    // 3. UI-only PR where build-api-image or security-sast-sca is skipped MUST fail; clean UI-only passes.
+    for (const omitted of ['build-api-image', 'security-sast-sca']) {
+      const res = run(buildNeeds({ ...allOff, ui: 'true' }, { [omitted]: { result: 'skipped' } }));
+      assert.notEqual(res.status, 0, `UI-only ${omitted}=skipped must fail`);
+    }
+    assert.equal(run(buildNeeds({ ...allOff, ui: 'true' })).status, 0, 'clean UI-only PR passes');
+
+    // 4. enforce-package-bump=skipped on pull_request MUST fail, but on push is allowed.
+    const bumpSkippedPr = run(buildNeeds({ ...allOff, api: 'true' }, { 'enforce-package-bump': { result: 'skipped' } }, 'pull_request'), 'pull_request');
+    assert.notEqual(bumpSkippedPr.status, 0, 'PR with enforce-package-bump=skipped must fail');
+    const bumpSkippedPush = run(buildNeeds({ ...allOff, api: 'true' }, { 'enforce-package-bump': { result: 'skipped' } }, 'push'), 'push');
+    assert.equal(bumpSkippedPush.status, 0, 'push with enforce-package-bump=skipped passes');
+
+    // 5. Missing changes.outputs or missing selection key MUST fail even when all optional jobs are skipped.
+    const noOutputs = run(buildNeeds(null));
+    assert.notEqual(noOutputs.status, 0, 'missing changes.outputs must fail');
+    assert.match(noOutputs.stdout, /missing or invalid changes\.outputs boolean filter keys/);
+    const partialOutputs = { ...allOff };
+    delete partialOutputs.cluster_mesh;
+    const missingKey = run(buildNeeds(partialOutputs));
+    assert.notEqual(missingKey.status, 0, 'missing filter key must fail');
+    assert.match(missingKey.stdout, /missing or invalid changes\.outputs boolean filter keys/);
+
+    // 6. Missing dependency entry or null result in CI_NEEDS MUST fail.
+    const incompleteNeeds = buildNeeds({ ...allOff, api: 'true' });
+    delete incompleteNeeds['smoke-idp-screens'];
+    const missingDep = run(incompleteNeeds);
+    assert.notEqual(missingDep.status, 0, 'missing dependency in CI_NEEDS must fail');
+    assert.match(missingDep.stdout, /missing or unacceptable dependency in CI_NEEDS/);
+
+    // 7. Failed AI shard denies green.
+    const failedAi = run(buildNeeds({ ...allOff, api: 'true' }, { 'test-api-unit-integration': { result: 'failure' } }));
+    assert.notEqual(failedAi.status, 0, 'failed AI shard denies green');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -148,7 +196,7 @@ test('strict gate: a selected job must succeed, never skip or go neutral', () =>
   const run = jobs['ci-gate'].steps.map((s) => s.run ?? '').join('\n');
   assert.match(run, /strict selection requires/, 'strict block present');
   assert.match(run, /result=success \(got \$result\)/, 'non-success is rejected with the offending job');
-  for (const job of ['test-api-unit-integration', 'smoke-idp-screens', 'typecheck-lint-api', 'security-iac', 'validate-llm-mesh']) {
+  for (const job of ['test-api-unit-integration', 'smoke-idp-screens', 'typecheck-lint-api', 'security-iac', 'validate-llm-mesh', 'enforce-package-bump']) {
     assert.ok(run.includes(job), `strict table covers ${job}`);
   }
   assert.match(run, /validate-idp-sync.*global-free/, 'idp-sync exception documented');
