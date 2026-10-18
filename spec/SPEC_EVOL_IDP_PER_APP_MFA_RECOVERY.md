@@ -708,3 +708,63 @@ ceremony (a session minted from Dex federation is `bearer` at the IdP
 unless the IdP itself ran a qualifying ceremony). Its client row, scopes,
 and any required level are a later lane's decision.
 
+## 12. Test plan (BUILD branches; nothing here runs on this spec branch)
+
+Conventions for every BUILD lot: tests run only on `ENV=test-<slug>` or
+`ENV=e2e-<slug>`, never `ENV=dev`; `ENV` is the last `make` argument; no
+timeout is raised to make a test pass; a failure against a green `main` is
+a branch failure to fix, not a pre-existing condition. File lists are
+exhaustive for the named suites (existing + updated + new).
+
+### 12.1 API and package tests
+
+| File | Status | Cases (observable behaviour) |
+|---|---|---|
+| `packages/auth-hono/tests/oauth-client-required-acr.test.ts` | existing, updated in Lots 1/2/5 | Lot 1: federation-shaped bearer refused after re-auth; MFA session of unlisted subject refused. Lot 2: stale MFA session forced to re-auth then refused if still stale; `max_age` tighter bound honoured. Lot 5: `mfa` requirement accepts qualifying session; `passkey-fresh` requirement still accepts it during migration; unknown value still refuses |
+| `packages/auth-hono/tests/oauth-client-allowlist.test.ts` | existing, read in Lot 1 | Confirm allowlist semantics are reused unchanged; update only if Lot 1 exposes a gap, otherwise no edit |
+| `api/tests/api/auth/oauth-client-policy.test.ts` | existing, updated in Lots 1/2/5 | Mirror the package cases against a real client row: bearer (magic-link origin) forced then refused; federation-origin bearer refused; unlisted MFA subject refused; stale-session step-up; neutral-value row accepts qualifying session |
+| `api/tests/unit/oauth-register-client.test.ts` | existing, updated in Lots 1/5 | Declaration Job values: `kvm-gateway` non-secret fields round-trip; policy preserved when policy variables are omitted; explicit `mfa` value accepted after Lot 5 and rejected (fail-closed guidance) before it |
+| `api/tests/api/auth/magic-link-recovery.test.ts` | new in Lot 3 | Hardened account with devices: magic-link session cannot enrol (register surface refuses, no credential row created). Hardened account without devices: no temporary session is minted and the generic notice is returned. Non-hardened accounts: both branches byte-identical to today |
+| `api/tests/api/auth/registration-hardened.test.ts` | new in Lot 3 | Existing-user email-code enrolment refused for a hardened account from bearer and federation sessions; enrolment inside an enrolment-only session creates exactly one credential and a second create refuses; enrolment-only session refused at authorize, consent, and credential-revoke endpoints |
+| `api/tests/api/auth/recovery-codes.test.ts` | new in Lot 4 | Codes are created only under a fresh MFA session, stored hashed, single-use, rate-limited at redemption; redemption mints enrolment-only (authorize still refuses); revoking all credentials revokes codes; prerequisite check counts distinct credentials |
+| `api/tests/api/auth/breakglass.test.ts` | new in Lot 4 | Job-side reset revokes all credentials, sessions, and codes and issues a single-purpose grant; grant enrols exactly once, expires, and is audited; a non-admin invocation refuses |
+| `api/tests/api/auth/audit-notifications.test.ts` | new in Lot 6 | Each section 9.2 event is emitted once with actor, client, and outcome; a blocked email-recovery attempt notifies without authorising enrolment; audit-write failure does not change the authorization outcome |
+
+Scoped runs while evolving (one suite at a time), for example:
+`make test-api SCOPE=tests/api/auth/magic-link-recovery.test.ts ENV=test-idp-per-app-mfa-recovery`.
+Lot gate for IdP lots: `make test-api ENV=test-idp-per-app-mfa-recovery`
+plus the package suite invocation used by that lot, recorded in the BUILD
+branch `BRANCH.md` with exact commands and results.
+
+### 12.2 UI tests (TypeScript only)
+
+| File | Status | Cases |
+|---|---|---|
+| `ui/tests/` auth/register suites (exact files named in the BUILD `BRANCH.md` after reading the current tree) | existing, updated in Lot 3 | Hardened-account "Lost your device?" shows the recovery notice with P-CODE/P-BREAK choices and no direct enrolment; non-hardened flow unchanged; enrolment-only session shows single-enrolment confinement (no authorize/consent navigation) |
+| Recovery-code management UI suite | new in Lot 4 (only if Lot 4 ships the enrolment UX in the existing settings surface) | Codes are generated only from an MFA session view; codes are shown once; revocation requires step-up |
+
+No UI test is invented file-by-file here beyond these rows: the BUILD
+branch names the exact existing files it touches, per the planning-depth
+rule, and this spec forbids UI changes outside the register, login
+lost-device, and credential-settings surfaces.
+
+### 12.3 E2E tests
+
+| File | Status | Cases |
+|---|---|---|
+| `e2e/tests/` OAuth/KVM suite (exact file named in the BUILD `BRANCH.md`) | new in the KVM enforcement lot (Lot 3 completion / Lot 6 verification) | Owner passkey sign-in reaches the RP callback; magic-link session receives `access_denied` at the RP redirect; unlisted subject receives `access_denied`; stale-session step-up succeeds only after a fresh UV ceremony. Prepared with `make build-api build-ui-image API_PORT=<lot ports> ENV=e2e-idp-per-app-mfa-recovery` and run scoped by `E2E_SPEC` before any full-group gate |
+
+E2E never runs against `ENV=dev` data. AI-flaky acceptance (single success
+on the same commit plus recorded signature and owner sign-off) applies
+only to provider nondeterminism, never to the deterministic auth cases
+above.
+
+### 12.4 Acceptance criteria for the specification itself
+
+This spec is accepted when: every `[EXISTS]` citation resolves at
+`94a38286e`; P-MFA and P-REC are testable as written; the four kvm-lane
+options have verdicts; commitments R-KVM-DECL, R-KVM-TEST, and R-KVM-CLOSE
+name files and lots; and section 15 lists only decisions the owner must
+actually make. Astra max review and the reconciliation record (section 13
+note) are part of acceptance for this branch, not of BUILD acceptance.
+
