@@ -53,7 +53,7 @@
   - [x] Preserve the A03 envelope projection in the broker seam and check verified source/generation; use explicit host fixtures and canonical generations.
   - [x] Route the real broker through CompiledMemoryDispatch and deliver the bound projection/envelope to the selected adapter.
   - [x] Bound the P1 public memory entry closure to memory schemas/types/seams without root runtime or registry imports.
-  - [x] Select platform 0.4.0 above npm 0.3.0 for the new public memory entry; align broker dependency and root lock.
+  - [x] Select platform 0.3.1 above npm 0.3.0 for the corrected memory contracts; preserve Artifacts' frozen >=0.3.0 <0.4.0 peer range and align broker/lock.
   - [x] Add real negative graph fixtures and a shared runtime/declaration traversal with strict archive parsing.
   - [x] Add immutable P1 verification for manifest/sidecar, archives, exact dependency/public-entry closure and complete consumed-contract inventory.
   - [x] Make packed graph mode require and verify its manifest; drive fixture mode through the same transitive scanner.
