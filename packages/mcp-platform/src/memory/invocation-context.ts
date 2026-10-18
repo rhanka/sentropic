@@ -72,10 +72,6 @@ export function requireTrustedInvocationContext(
       (ctx.principal.claims?.sub !== undefined && sub !== ctx.principal.claims.sub)) {
     throw new MemoryTrustedContextError('authorized tenant missing');
   }
-  const workspace = (ctx as { workspaceRef?: unknown }).workspaceRef;
-  if (workspace !== undefined && workspace === tenant) {
-    throw new MemoryTrustedContextError('workspace must not substitute for tenant');
-  }
   return ctx;
 }
 
