@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.20.0 (unreleased)
+
+- Add optional `/mcp/auth`, `/mcp/auth/hono`, dedicated typed loaders and MCP
+  barrel exports. Preserve provider identities; selected OAuth requires mcp-auth
+  0.2.2 while gateway service auth retains its 0.2.1 floor.
+- Add Node-only `/compose/mcp-oauth`: public metadata/aliases, current-request
+  verification and optional human assurance, owner-bound stateful sessions,
+  compiled tool policy and live account checks, cancellation and shutdown cleanup.
+- Add tool-bound RFC 8693 egress with fixed destination/profile, bounded JSON,
+  no redirects or bearer getter, existing cache limits/O2 invalidation and no
+  original-token fallback. Existing stateless composition remains unchanged.
+- Qualify original twelve-tool Radar schemas/defaults and native HTTP exchange,
+  assurance, inverse-audience refusal and existing-client restart continuity on
+  SDK 1.31.0/Hono 4.10.7 and SDK 1.32.1/Hono 4.13.13, with strict installed types.
+- Release follows #684's 0.19.0; publication, Radar adoption and tenant restore
+  acceptance retain their separate owners and receipts.
+
 ## 0.19.1
 
 - Widen optional peer ranges to the PR1 durable/exact routing union:
