@@ -491,52 +491,57 @@ export interface MemoryInvocationBindingV1 {
     readonly mcp_client_id: OpaqueRef;
     // (undocumented)
     readonly neutral_context_ref?: OpaqueRef;
-// @public
-export type MemoryContextProjectionV1 = {
-    principalNamespace: string;
-    principalId: string;
-    tenantId: string;
-    storeRef: string;
-    scopeRef: string;
-    purposeRef: string;
-    agentRef: string;
-    connectorInstanceRef: string;
-    policyEpoch: string;
-    attachmentGeneration: string;
-    auditRef: string;
-    idempotencyKey: string;
-    elicitationRef: string | null;
-};
+    // (undocumented)
+    readonly neutral_credential: string;
+    // (undocumented)
+    readonly policy_epoch: Cursor;
+    // (undocumented)
+    readonly principal_id: OpaqueRef;
+    // (undocumented)
+    readonly principal_namespace: OpaqueRef;
+    // (undocumented)
+    readonly provider_id: 'sentropic.engram.memory';
+    // (undocumented)
+    readonly publisher_id: 'sentropic.engram.memory';
+    // (undocumented)
+    readonly purpose_ref: OpaqueRef;
+    // (undocumented)
+    readonly scope_ref: OpaqueRef;
+    // (undocumented)
+    readonly selected_source_id: 'mcp:engram-memory';
+    // (undocumented)
+    readonly store_id: OpaqueRef;
+    // (undocumented)
+    readonly sub: OpaqueRef;
+    // (undocumented)
+    readonly tenant_id: OpaqueRef;
+    // (undocumented)
+    readonly tenant_membership_receipt: Digest;
+    // (undocumented)
+    readonly tenant_resolution_source: 'authoritative_membership';
+    // (undocumented)
+    readonly tid: OpaqueRef;
+    // (undocumented)
+    readonly transport_attachment_ref: OpaqueRef;
+    // (undocumented)
+    readonly transport_scopes: readonly ('mcp:discover' | 'mcp:tools:invoke')[];
+    // (undocumented)
+    readonly workspace_id?: OpaqueRef;
+}
 
-// @public
-export type MemoryInvocationBindingV1 = {
-    issuer: string;
-    subject: string;
-    claimsDigest: string;
-    principalNamespace: string;
-    principalId: string;
-    tenantId: string;
-    membershipReceipt: string;
-    agentRef: string;
-    mcpClientRef: string;
-    logicalSessionRef: string;
-    transportSessionRef: string;
-    attachmentGeneration: string;
-    providerId: 'sentropic.engram.memory';
-    connectorId: 'engram-memory';
-    connectorInstanceRef: string;
-    sourceRef: string;
-    storeRef: string;
-    scopeRef: string;
-    purposeRef: string;
-    policyEpoch: string;
-    auditRef: string;
-    correlationRef: string;
-    deadlineAt: string;
-    cancellationRef: string;
-    idempotencyKey: string;
-    elicitationRef: string | null;
-};
+// @public (undocumented)
+export interface MemoryLogicalSessionReattachmentProofV1 {
+    // (undocumented)
+    readonly admitted_generation: Cursor_2;
+    // (undocumented)
+    readonly current_attachment_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly previous_attachment_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly reattachment_receipt_digest: Digest_2;
+    // (undocumented)
+    readonly verified: boolean;
+}
 
 // @public (undocumented)
 export type MemoryMutationPolicyVersionsV1 = {
@@ -638,8 +643,6 @@ export const MUTATING_MEMORY_TOOL_NAMES: readonly ["engram_memory_capture", "eng
 // @public (undocumented)
 export type MutatingMemoryToolName = (typeof MUTATING_MEMORY_TOOL_NAMES)[number];
 
-// Warning: (ae-forgotten-export) The symbol "StpConnectorContext" needs to be exported by the entry point index.d.ts
-//
 // @public
 export function projectMemoryContext(ctx: StpConnectorContext, purposeRef: string): MemoryContextProjectionV1;
 
@@ -663,6 +666,34 @@ export type SameKeyOutcome = {
 // @public (undocumented)
 export function sha256HexBytes(bytes: Uint8Array): string;
 
+// @public (undocumented)
+export interface StpConnectorContext {
+    // (undocumented)
+    audit: {
+        emit(event: unknown): Promise<void>;
+    };
+    // (undocumented)
+    auditId: string;
+    // (undocumented)
+    connectorConfig: Record<string, unknown>;
+    // (undocumented)
+    connectorInstanceId: string;
+    // (undocumented)
+    consentRefs: string[];
+    // (undocumented)
+    correlationId: string;
+    // (undocumented)
+    getSecret(name: string): Promise<string>;
+    // (undocumented)
+    grantRefs: string[];
+    // (undocumented)
+    logger: unknown;
+    // (undocumented)
+    mandateRef?: string;
+    // (undocumented)
+    mcpClient?: {
+        clientId: string;
+        client: 'claude.ai' | 'claude-code' | 'codex' | string;
 // @public
 export const TRUSTED_CONTEXT_PROTOCOL_ERROR_CODE = -32603;
 
