@@ -100,9 +100,9 @@
   - [x] Wire validation, consumer smoke, OIDC publisher and gate: mcp-connector-hubspot, mcp-connector-linear.
   - [x] Wire validation, consumer smoke, OIDC publisher and gate: mcp-connector-notion, mcp-connector-slack.
   - [x] Wire validation, consumer smoke, OIDC publisher and gate: mcp-connector-stripe, skills.
-  - [ ] Add all 18 filters, validate/publish jobs, dispatch choices and ci-gate needs; package-only publication triggers.
+  - [x] Add all 18 filters, validate/publish jobs, dispatch choices and ci-gate needs; package-only publication triggers.
   - [ ] Register mappings in `scripts/ci/publishable-manifests.mjs`; update `scripts/ci/publishable-ci-wiring.test.mjs`.
-  - [ ] Newly public packages have web bootstrap only, never token bootstrap steps.
+  - [x] Newly public packages have web bootstrap only, never token bootstrap steps.
   - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
 - [ ] **Lot 4 — Packaged consumer qualification**
   - [x] New `scripts/publish/packaged-consumer.test.mjs`: install real guarded archives and import every public Node entry point, including experimental/hono entries.

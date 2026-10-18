@@ -8,12 +8,30 @@ on:
   workflow_dispatch:
     inputs:
       bootstrap_publish_target:
-        description: 'Bootstrap-publish target: exactly one explicit package is required, there is no "all" option (uses NPM_TOKEN; first publish only before OIDC trusted publishers are attached)'
+        description: 'Bootstrap target: exactly one explicit package is required; new libraries require owner web login, legacy targets use NPM_TOKEN (no all option)'
         required: true
         default: 'none'
         type: choice
         options:
           - none
+          - ubo-contracts
+          - mcp-broker
+          - connector-host
+          - mcp-connector-airtable
+          - mcp-connector-dropbox
+          - mcp-connector-github
+          - mcp-connector-gmail
+          - mcp-connector-google
+          - mcp-connector-googlecalendar
+          - mcp-connector-googledocs
+          - mcp-connector-googledrive
+          - mcp-connector-googlesheets
+          - mcp-connector-hubspot
+          - mcp-connector-linear
+          - mcp-connector-notion
+          - mcp-connector-slack
+          - mcp-connector-stripe
+          - skills
           - contracts
           - events
           - chat-core
@@ -2992,6 +3010,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
+            ubo-contracts|mcp-broker|connector-host|mcp-connector-airtable|mcp-connector-dropbox|mcp-connector-github|mcp-connector-gmail|mcp-connector-google|mcp-connector-googlecalendar|mcp-connector-googledocs|mcp-connector-googledrive|mcp-connector-googlesheets|mcp-connector-hubspot|mcp-connector-linear|mcp-connector-notion|mcp-connector-slack|mcp-connector-stripe|skills) echo "::error title=Web bootstrap required::Run make prepare-npm-bootstrap then make npm-bootstrap-web in an owner terminal; this package has no token bootstrap"; exit 1 ;;
             contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac

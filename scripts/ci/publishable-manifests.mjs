@@ -18,8 +18,31 @@ export const FORBIDDEN_SPEC =
 export const MAX_MANIFEST_BYTES = 1024 * 1024;
 export const TRANSIENT_HINT = 're-run, not debt: transient registry or tooling failure';
 
+// Web bootstrap only: these new libraries have no token publication lane.
+export const WEB_BOOTSTRAP_TARGETS = [
+  "ubo-contracts",
+  "mcp-broker",
+  "connector-host",
+  "mcp-connector-airtable",
+  "mcp-connector-dropbox",
+  "mcp-connector-github",
+  "mcp-connector-gmail",
+  "mcp-connector-google",
+  "mcp-connector-googlecalendar",
+  "mcp-connector-googledocs",
+  "mcp-connector-googledrive",
+  "mcp-connector-googlesheets",
+  "mcp-connector-hubspot",
+  "mcp-connector-linear",
+  "mcp-connector-notion",
+  "mcp-connector-slack",
+  "mcp-connector-stripe",
+  "skills"
+];
+
 // Steady-state npm publisher jobs in ci.yml (slug -> `<slug_with_underscores>_publish` filter).
 export const STEADY_STATE_PUBLISHERS = [
+  ...WEB_BOOTSTRAP_TARGETS,
   'llm-mesh', 'llm-gateway', 'cluster-mesh', 'chat-ui', 'cited-source-viewer', 'cowork-bridge',
   'cowork-desktop', 'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-hono', 'auth-client', 'auth-ui',
   'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'harness', 'artifacts',
@@ -33,6 +56,7 @@ export const BOOTSTRAP_TARGETS = [
 ];
 // Explicit full candidate pack lanes (`make pack-<slug>`).
 export const PACK_TARGETS = [
+  ...WEB_BOOTSTRAP_TARGETS,
   'cluster-mesh', 'llm-mesh', 'llm-gateway', 'chat-ui', 'cited-source-viewer', 'auth-hono', 'auth-client',
   'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-ui', 'cowork-bridge', 'cowork-desktop',
   'harness', 'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'artifacts',
@@ -416,7 +440,7 @@ export function normalizeContext({ outputs, event, bootstrap, changesResult, sha
   const packageFiles = parseJsonList(outputs.package_files, 'package_files');
   const matchedFilters = parseJsonList(outputs.matched_filters, 'matched_filters');
   let target = event === 'workflow_dispatch' ? (bootstrap || 'none') : 'none';
-  if (target !== 'none' && target !== 'all' && !BOOTSTRAP_TARGETS.includes(target)) {
+  if (target !== 'none' && target !== 'all' && !BOOTSTRAP_TARGETS.includes(target) && !WEB_BOOTSTRAP_TARGETS.includes(target)) {
     throw new GuardError(`unknown bootstrap target "${target}"`);
   }
   return { event, bootstrapTarget: target, packageFiles, matchedFilters, shas, manifestGuardFilter: outputs.manifest_guard ?? null };
