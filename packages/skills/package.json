@@ -23,11 +23,12 @@
     "dist/bundles/**/*.md",
     "src/bundles/**/*.md",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "publishConfig": {
-    "provenance": true,
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "sideEffects": false,
   "scripts": {
