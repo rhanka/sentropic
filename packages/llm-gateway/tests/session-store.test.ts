@@ -116,4 +116,30 @@ describe('FileGatewayStateStore', () => {
     );
     await expect(writer.load()).rejects.toMatchObject({ code: 'CORRUPT' });
   });
+
+  it('fences stale-lock takeover so two contenders cannot both claim writer ownership', async () => {
+    const { writeFile, readFile } = await import('node:fs/promises');
+    for (let round = 0; round < 15; round += 1) {
+      const dir = freshDir();
+      const lockPath = join(dir, '.host-lock');
+      await writeFile(lockPath, JSON.stringify({ pid: 999_999_999, token: `dead-${round}`, startedAt: 1 }), { mode: 0o600 });
+      const stores = Array.from({ length: 16 }, () => new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(dekFor('g')) }));
+      const launches = stores.map(async (s, idx) => {
+        if (idx >= 4) {
+          await Promise.all(Array.from({ length: idx * 2 }, () => readFile(lockPath, 'utf8').catch(() => undefined)));
+        }
+        return s.claimWriter();
+      });
+      const results = await Promise.allSettled(launches);
+      const fulfilled = results.filter((r): r is PromiseFulfilledResult<() => Promise<void>> => r.status === 'fulfilled');
+      const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(stores.length - 1);
+      for (const r of rejected) expect(r.reason).toMatchObject({ code: 'CONFLICT' });
+      const heldAfterRace = JSON.parse(await readFile(lockPath, 'utf8')) as { pid: number; token: string };
+      expect(heldAfterRace.pid).toBe(process.pid);
+      expect(heldAfterRace.token).not.toBe(`dead-${round}`);
+      await fulfilled[0]!.value();
+    }
+  });
 });
