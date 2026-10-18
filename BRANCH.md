@@ -81,17 +81,17 @@ Implement Lot 1 exactly as the reviewed plan defines it.
   - No UI changes in Lot 1; CI UAT runs on real PR runs.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Record current main SHA `94a38286eae4dbbff1cde192faa4f332abe60efa`, workflow/Make hashes, required check names, publication locks, image prerequisites.
-  - [ ] Read `scripts/ci/publishable-ci-wiring.test.mjs` before extending wiring coverage.
-  - [ ] Reconcile workflow/Make/test drift vs study baseline `fb5e92a6ae4928066e181716fdffbfb490b0b4f3`.
-  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last; `ENV=test-ci-opt-lot1`.
-  - [ ] Confirm scope and guardrails; exceptions `BR-CI-OPT-EX1`/`BR-CI-OPT-EX2` declared above.
-  - [ ] Baseline facts: `ci.yml` sha256 `86ad863a`, `Makefile` sha256 `a4d325c6`.
-  - [ ] Publication locks preserved: `api-image-publication`, `npm-publish-train` (`cancel-in-progress: false`).
-  - [ ] Image prerequisites: `api-image` + `api-tool-image` artifacts feed smoke/test jobs.
-  - [ ] Required check: `ci-gate` aggregates every PR job; stays unconditional leaf.
-  - [ ] No application ports needed: pure script/CI wiring targets only.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Record current main SHA `94a38286eae4dbbff1cde192faa4f332abe60efa`, workflow/Make hashes, required check names, publication locks, image prerequisites.
+  - [x] Read `scripts/ci/publishable-ci-wiring.test.mjs` before extending wiring coverage.
+  - [x] Reconcile workflow/Make/test drift vs study baseline `fb5e92a6ae4928066e181716fdffbfb490b0b4f3`.
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last; `ENV=test-ci-opt-lot1`.
+  - [x] Confirm scope and guardrails; exceptions `BR-CI-OPT-EX1`/`BR-CI-OPT-EX2` declared above.
+  - [x] Baseline facts: `ci.yml` sha256 `86ad863a`, `Makefile` sha256 `a4d325c6`.
+  - [x] Publication locks preserved: `api-image-publication`, `npm-publish-train` (`cancel-in-progress: false`).
+  - [x] Image prerequisites: `api-image` + `api-tool-image` artifacts feed smoke/test jobs.
+  - [x] Required check: `ci-gate` aggregates every PR job; stays unconditional leaf.
+  - [x] No application ports needed: pure script/CI wiring targets only.
 
 - [x] **Lot 1 — PR concurrency**
   - [x] Add workflow-level concurrency group `github.workflow`-`pr-N`/`run-ID`, `cancel-in-progress` on `pull_request` only.
@@ -105,13 +105,13 @@ Implement Lot 1 exactly as the reviewed plan defines it.
     - [ ] Run a PR revision, then a second revision while jobs run; only the first is cancelled; the second yields complete affected results + blocking gate.
     - [ ] Run two different PRs; neither cancels the other; main/dispatch keep locks.
 
-- [ ] **Lot 2 — Measure instrumentation**
+- [x] **Lot 2 — Measure instrumentation**
   - [x] Add `scripts/ci/measure-runs.mjs`, `scripts/ci/measure-runs.test.mjs`, `scripts/ci/fixtures/optimization-baseline.json`.
   - [x] Add Make targets `ci-optimization-collect`, `ci-optimization-compare`.
   - [x] Lot gate:
     - [x] `make test-ci-optimization SCOPE=scripts/ci/measure-runs.test.mjs ENV=test-ci-opt-lot1`
 
-- [ ] **Lot 3 — Filter repair**
+- [x] **Lot 3 — Filter repair**
   - [x] Add `scripts/ci/filter-consumers.mjs`, `scripts/ci/filter-consumers.test.mjs`, `scripts/ci/fixtures/consumer-regressions.json`.
   - [x] Extend `ci.yml` filters with omitted consumers incl. `mcp-auth` file-dependency propagation into API/AI.
   - [x] Keep `make check-ci-version-filters`; supplement with consumer regression test.
@@ -120,11 +120,11 @@ Implement Lot 1 exactly as the reviewed plan defines it.
   - [x] API test files created/updated: none. UI test files created/updated: none. E2E test files created/updated: none.
   - [x] Lot gate:
     - [x] `make test-ci-optimization SCOPE=scripts/ci/filter-consumers.test.mjs ENV=test-ci-opt-lot1`
-    - [ ] `make check-ci-version-filters check-ci-optimization test-ci-optimization ENV=test-ci-opt-lot1`
+    - [x] `make check-ci-version-filters check-ci-optimization test-ci-optimization ENV=test-ci-opt-lot1`
   - [ ] CI UAT:
     - [ ] Exercise an omitted-consumer fixture (incl. mcp-auth to API to affected AI), plus doc-only and global-change cases; inspect selected jobs + complete LLM evidence.
 
-- [ ] **Lot 4 — Smoke placement and gate hardening**
+- [x] **Lot 4 — Smoke placement and gate hardening**
   - [x] Remove only `typecheck-lint-api` from `smoke-idp-screens.needs`; retain `changes`, `build-api-image`, `build-api-tool-image`, `security-sast-sca`.
   - [x] Verify no lint outputs/artifacts are consumed by smoke; retain both as mandatory gate dependencies.
   - [x] Add `scripts/ci/smoke-placement.test.mjs` (DAG acyclic, overlap, required deps stay, failure blocks green, missing/cancelled blocks green).
@@ -138,15 +138,15 @@ Implement Lot 1 exactly as the reviewed plan defines it.
     - [ ] Inspect lint/smoke overlap on real runs; image/security predecessors satisfied; lint or smoke failure prevents green; no false green after cancellation/missing/failed AI shard.
     - [ ] Compare failed-lint work before/after plus successful-run delay; record extra smoke work; roll back smoke independently if cost outweighs delay benefit.
 
-- [ ] **Lot 5 — Make targets and final gates**
+- [x] **Lot 5 — Make targets and final gates**
   - [x] Add Make targets `test-ci-optimization` and `check-ci-optimization` (Node test runner in pinned image, pinned YAML parser, `SCOPE` file paths, fail on empty/missing selection).
-  - [ ] Wire tests into a required CI job so CI-only changes cannot bypass them.
-  - [ ] Lot gate:
-    - [ ] `make check-ci-optimization test-ci-optimization ENV=test-ci-opt-lot1`
-    - [ ] `make scope-check ENV=test-ci-opt-lot1`
+  - [x] Wire tests into a required CI job so CI-only changes cannot bypass them.
+  - [x] Lot gate:
+    - [x] `make check-ci-optimization test-ci-optimization ENV=test-ci-opt-lot1`
+    - [x] `make scope-check ENV=test-ci-opt-lot1`
 
 - [ ] **Lot 6 — Push and DRAFT PR**
-  - [ ] Push branch, open DRAFT PR with before/after measurement protocol from the plan as body.
+  - [x] Push branch, open DRAFT PR with before/after measurement protocol from the plan as body.
   - [ ] Watch CI, fix branch-caused red jobs, report PR number, head SHA and CI state, then stop.
   - [ ] Never merge.
 
