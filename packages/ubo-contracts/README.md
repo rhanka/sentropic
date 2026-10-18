@@ -1,4 +1,4 @@
-# @sentropic/ubo-contracts (private, unpublished)
+# @sentropic/ubo-contracts
 
 Universal Business Object (UBO) contracts — **types only**, zero runtime deps:
 
@@ -6,4 +6,8 @@ Universal Business Object (UBO) contracts — **types only**, zero runtime deps:
 - **`ObjectTypeDefinition`** — the ARCH-19 object-type registry wire format (`jsonSchema`, `declaredQueryableFields`, `typedReferenceFields`, `classification`, `schemaVersion`, `status`).
 - **`TypedReference`** — DD7 reference semantics (lookup vs containment, cardinality, ID-level `onDelete` — never a DB foreign key).
 
-**UNPUBLISHED (DD6)**: `"private": true`; npm publication is deferred until the envelope is proven (BR-61 storage + a real consumer). Consumed in-repo by `api/` via the workspace.
+Published as an ESM library. Install with `npm install @sentropic/ubo-contracts` and import contracts and guards from `@sentropic/ubo-contracts`.
+
+## Releases
+
+First publication uses the owner-operated [web bootstrap](../../scripts/publish/README.md); later releases use CI trusted publishing.

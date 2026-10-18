@@ -66,6 +66,7 @@
   - [ ] Configure files, exports, provenance, license, repository and semver dependencies for all 18 libraries.
   - [ ] Replace connector/broker sibling-source imports with public MCP platform entry points; preserve behavior and experimental boundaries.
   - [ ] Add/update README and CHANGELOG per package; retain proof/live limitations.
+  - [x] Prepare manifests and release documentation: ubo-contracts, mcp-broker, connector-host.
   - [ ] Refresh affected workspace lock entries through Docker/Make.
   - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
 - [ ] **Lot 2 — Guarded build, pack and web-login bootstrap**

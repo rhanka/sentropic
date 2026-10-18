@@ -1,8 +1,7 @@
 {
   "name": "@sentropic/ubo-contracts",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Universal Business Object (UBO) contracts: the object envelope (DD10), the object-type registry wire format (ARCH-19), and typed references (DD7). UNPUBLISHED (DD6) — npm publication deferred until the envelope is proven.",
+  "version": "0.1.0",
+  "description": "Universal Business Object envelopes, registry wire formats, typed references and runtime guards.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -20,7 +19,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "sideEffects": false,
   "scripts": {
@@ -31,5 +31,9 @@
   "devDependencies": {
     "@types/node": "^22.10.10",
     "typescript": "5.4.5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
