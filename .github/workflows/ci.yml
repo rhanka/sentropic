@@ -190,8 +190,11 @@ jobs:
             global:
               - 'Makefile'
               - 'docker-compose.yml'
+              - 'docker-compose.dev.yml'
               - 'docker-compose.test.yml'
               - 'docker-compose.ci.yml'
+              - '.security/**'
+              - 'scripts/security/**'
               - 'tools/**'
               - 'scripts/test-api-tooling.sh'
               - 'scripts/publish-api-image.sh'
@@ -205,8 +208,16 @@ jobs:
             api:
               - 'api/**'
               - 'apps/auth-idp/**'
+              - 'apps/llm-gateway/**'
+              - '.security/**'
+              - 'scripts/security/**'
+              - 'scripts/llm-model-equivalences/**'
               - 'package.json'
               - 'package-lock.json'
+              - 'packages/artifacts/**'
+              - 'packages/auth-client/**'
+              - 'packages/auth-hono/**'
+              - 'packages/auth-ui/**'
               - 'packages/cluster-mesh/**'
               - 'packages/llm-mesh/**'
               - 'packages/flow/**'
@@ -215,17 +226,18 @@ jobs:
               - 'packages/events/**'
               - 'packages/contracts/**'
               - 'packages/comments/**'
-              - 'packages/auth-client/**'
-              - 'packages/auth-hono/**'
               - 'packages/connector-host/**'
               - 'packages/llm-gateway/**'
               - 'packages/mcp-auth/**'
               - 'packages/mcp-connector-google/**'
               - 'packages/mcp-platform/**'
               - 'packages/oauth-verify/**'
+              - 'packages/skills/**'
               - 'packages/ubo-contracts/**'
             ui:
               - 'ui/**'
+              - '.security/**'
+              - 'scripts/security/**'
               - 'packages/chat-ui/**'
               - 'packages/cowork-desktop/**'
               - 'packages/cowork-bridge/**'
@@ -237,11 +249,13 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
+              - 'scripts/llm-model-equivalences/**'
               - '.github/workflows/ci.yml'
             cluster_mesh:
               - 'Makefile'
               - 'package.json'
               - 'package-lock.json'
+              - 'apps/llm-gateway/**'
               - 'packages/cluster-mesh/**'
               - 'packages/contracts/**'
               - 'packages/events/**'
@@ -249,8 +263,10 @@ jobs:
               - 'packages/llm-gateway/**'
               - 'packages/mcp-auth/**'
               - 'packages/auth-hono/**'
+              - 'packages/oauth-verify/**'
               - 'packages/mcp-platform/**'
               - 'packages/artifacts/**'
+              - 'scripts/llm-model-equivalences/**'
               - '.github/workflows/ci.yml'
             cluster_mesh_publish:
               - 'packages/cluster-mesh/**'
@@ -258,10 +274,13 @@ jobs:
               - 'Makefile'
               - 'package.json'
               - 'package-lock.json'
+              - 'apps/llm-gateway/**'
               - 'packages/llm-gateway/**'
               - 'packages/llm-mesh/**'
               - 'packages/mcp-auth/**'
               - 'packages/auth-hono/**'
+              - 'packages/oauth-verify/**'
+              - 'scripts/llm-model-equivalences/**'
               - '.github/workflows/ci.yml'
             llm_mesh_publish:
               - 'packages/llm-mesh/**'
@@ -288,6 +307,7 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/cowork-bridge/**'
+              - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
             cowork_bridge_publish:
               - 'packages/cowork-bridge/**'
@@ -340,6 +360,8 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/auth-client/**'
+              - 'packages/auth-hono/**'
+              - 'packages/oauth-verify/**'
               - '.github/workflows/ci.yml'
             auth_client_publish:
               - 'packages/auth-client/**'
@@ -348,6 +370,8 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/auth-ui/**'
+              - 'packages/auth-hono/**'
+              - 'packages/oauth-verify/**'
               - '.github/workflows/ci.yml'
             auth_ui_publish:
               - 'packages/auth-ui/**'
@@ -366,6 +390,9 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/chat-server/**'
+              - 'packages/chat-core/**'
+              - 'packages/events/**'
+              - 'packages/contracts/**'
               - '.github/workflows/ci.yml'
             chat_server_publish:
               - 'packages/chat-server/**'
@@ -408,6 +435,7 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/artifacts/**'
+              - 'packages/mcp-platform/**'
               - '.github/workflows/ci.yml'
             artifacts_publish:
               - 'packages/artifacts/**'
@@ -488,8 +516,18 @@ jobs:
       - name: Build e2e image
         if: steps.check-e2e-image.outcome == 'failure' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
         run: make build-e2e
-      - name: Publish API image
+      - name: Save e2e image as artifact
         if: steps.check-e2e-image.outcome == 'failure' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
+        run: make save-e2e
+      - name: Upload e2e image artifact
+        if: steps.check-e2e-image.outcome == 'failure' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-image
+          path: e2e-image.tar
+          compression-level: 0
+      - name: Publish e2e image
+        if: github.ref == 'refs/heads/main' && steps.check-e2e-image.outcome == 'failure' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
         run: make publish-e2e-image
 
   typecheck-lint-ui:
@@ -1319,8 +1357,19 @@ jobs:
       - name: Load UI image from artifact
         if: steps.check-ui-image.outcome == 'failure'
         run: make load-ui
-      - name: Pull e2e image artifact
+      - name: Pull if e2e image is up to date
+        id: check-e2e-image
         run: make pull-e2e-image
+        continue-on-error: true
+      - name: Download e2e image artifact
+        if: steps.check-e2e-image.outcome == 'failure'
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-image
+          path: .
+      - name: Load e2e image from artifact
+        if: steps.check-e2e-image.outcome == 'failure'
+        run: make load-e2e
       - name: Test e2e API & UI (${{ matrix.group }})
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -1368,8 +1417,19 @@ jobs:
       - name: Load UI image from artifact
         if: steps.check-ui-image-vscode.outcome == 'failure'
         run: make load-ui
-      - name: Pull e2e image artifact
+      - name: Pull if e2e image is up to date
+        id: check-e2e-image-vscode
         run: make pull-e2e-image
+        continue-on-error: true
+      - name: Download e2e image artifact
+        if: steps.check-e2e-image-vscode.outcome == 'failure'
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-image
+          path: .
+      - name: Load e2e image from artifact
+        if: steps.check-e2e-image-vscode.outcome == 'failure'
+        run: make load-e2e
       - name: Test VSCode E2E lane
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -2348,6 +2408,7 @@ jobs:
         shell: bash
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
+          CI_EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
@@ -2356,22 +2417,40 @@ jobs:
             echo '::error::CI gate failed: required results are missing or unacceptable.'
             exit 1
           fi
+          ALL_NEEDS="enforce-package-bump changes validate-publishable-manifests build-e2e typecheck-lint-ui typecheck-lint-api validate-idp-sync validate-llm-mesh validate-cluster-mesh validate-llm-gateway validate-chat-ui validate-cited-source-viewer validate-cowork-bridge validate-oauth-verify validate-mcp-auth validate-mcp-platform validate-auth-hono validate-auth-client validate-auth-ui validate-cowork-desktop validate-contracts validate-events validate-chat-core validate-chat-server validate-comments validate-flow validate-artifacts validate-harness build-api-image build-api-tool-image test-api-unit-integration build-ui test-e2e e2e-vscode smoke-idp-screens security-sast-sca security-iac security-container test-smoke-restore"
+          if ! printf '%s' "$CI_NEEDS" | jq -e --arg deps "$ALL_NEEDS" '. as $n | ($deps | split(" ")) | all(.[]; ($n[.].result // "missing") as $r | $r == "success" or $r == "skipped" or $r == "neutral")' > /dev/null; then
+            echo '::error title=CI gate::missing or unacceptable dependency in CI_NEEDS'
+            exit 1
+          fi
           # Lot 1 strict selection check: a selected lane must succeed, never skip.
           # A required LLM result that is absent, skipped, neutral, failed or
           # cancelled cannot satisfy strict green; unaffected jobs skip only with
           # a selection reason (their filter output is false). Mirrors the
           # requiredSuccessJobs table in scripts/ci/filter-consumers.mjs.
           CHANGES="$(printf '%s' "$CI_NEEDS" | jq -c '.changes.outputs // {}')"
+          SELECTION_KEYS="api ui global idp_sync llm_mesh cluster_mesh llm_gateway chat_ui cited_source_viewer cowork_bridge oauth_verify mcp_auth mcp_platform auth_hono auth_client auth_ui cowork_desktop contracts events chat_core chat_server comments flow artifacts harness"
+          if ! printf '%s' "$CHANGES" | jq -e --arg keys "$SELECTION_KEYS" '. as $c | ($keys | split(" ")) | all(.[]; ($c[.] // "missing") as $v | $v == "true" or $v == "false")' > /dev/null; then
+            echo '::error title=CI gate::missing or invalid changes.outputs boolean filter keys'
+            exit 1
+          fi
+          EVENT_NAME="${CI_EVENT_NAME:-pull_request}"
+          case "$EVENT_NAME" in
+            pull_request|push|workflow_dispatch) ;;
+            *) echo "::error title=CI gate::unsupported CI_EVENT_NAME=$EVENT_NAME"; exit 1 ;;
+          esac
           selected() { [ "$(printf '%s' "$CHANGES" | jq -r --arg k "$1" '.[$k] // "false"')" = "true" ]; }
           REQUIRED="changes validate-publishable-manifests"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            REQUIRED="$REQUIRED enforce-package-bump"
+          fi
           if selected api || selected global; then
-            REQUIRED="$REQUIRED test-api-unit-integration typecheck-lint-api build-api-image build-api-tool-image smoke-idp-screens security-sast-sca test-smoke-restore"
+            REQUIRED="$REQUIRED test-api-unit-integration typecheck-lint-api build-api-tool-image smoke-idp-screens test-smoke-restore"
           fi
           if selected ui || selected global; then
-            REQUIRED="$REQUIRED typecheck-lint-ui build-ui test-e2e e2e-vscode"
+            REQUIRED="$REQUIRED typecheck-lint-ui"
           fi
           if selected api || selected ui || selected global; then
-            REQUIRED="$REQUIRED security-container build-e2e"
+            REQUIRED="$REQUIRED build-api-image build-ui build-e2e test-e2e e2e-vscode security-sast-sca security-container"
           fi
           if selected global; then REQUIRED="$REQUIRED security-iac"; fi
           # validate-idp-sync enumerates its own inputs and stays global-free by design.

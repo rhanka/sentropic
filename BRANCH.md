@@ -149,4 +149,3 @@ Implement Lot 1 exactly as the reviewed plan defines it.
   - [x] Push branch, open DRAFT PR with before/after measurement protocol from the plan as body.
   - [ ] Watch CI, fix branch-caused red jobs, report PR number, head SHA and CI state, then stop.
   - [ ] Never merge.
-
