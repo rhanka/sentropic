@@ -40,8 +40,8 @@ export function validateBinding(value: unknown, generation: string, epoch: strin
       b.connector_id !== 'engram-memory' || b.selected_source_id !== 'mcp:engram-memory') failures.push('binding.routing: invalid');
   if (!isValidCursor(generation) || !isValidCursor(b.active_generation) || b.active_generation !== generation) failures.push('binding.active_generation: stale');
   if (!isValidCursor(epoch) || !isValidCursor(b.policy_epoch) || b.policy_epoch !== epoch) failures.push('binding.policy_epoch: stale');
-  if (!isValidOpaqueRef(b.neutral_credential) && !(typeof b.neutral_credential === 'string' &&
-      b.neutral_credential.trim().length > 0 && utf8ByteLength(b.neutral_credential) <= 4096)) failures.push('binding.neutral_credential: invalid');
+  if (typeof b.neutral_credential !== 'string' || b.neutral_credential.trim().length === 0 ||
+      utf8ByteLength(b.neutral_credential) > 4096) failures.push('binding.neutral_credential: invalid');
   if (b.neutral_context_ref !== undefined && !isValidOpaqueRef(b.neutral_context_ref)) failures.push('binding.neutral_context_ref: invalid');
   if (b.idempotency_key !== undefined && !isValidIdempotencyKey(b.idempotency_key)) failures.push('binding.idempotency_key: invalid');
   if (b.elicitation_ref !== undefined && !isValidOpaqueRef(b.elicitation_ref)) failures.push('binding.elicitation_ref: invalid');

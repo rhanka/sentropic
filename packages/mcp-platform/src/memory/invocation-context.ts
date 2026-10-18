@@ -1,3 +1,4 @@
+import { projectVerifiedMemoryContext } from './context-projection.js';
 import type { StpConnectorContext } from '../runtime.js';
 import {
   TRUSTED_CONTEXT_PROTOCOL_ERROR_CODE,
@@ -65,7 +66,7 @@ export function requireTrustedInvocationContext(
     throw new MemoryTrustedContextError('authentication freshness source missing');
   }
   const tenant = (ctx as { tenantRef?: unknown }).tenantRef;
-  if (!isNonEmptyString(tenant)) {
+  if (!isNonEmptyString(tenant) || tenant !== tenantRef || tenant !== ctx.principal.claims?.tid || sub !== ctx.principal.claims?.sub) {
     throw new MemoryTrustedContextError('authorized tenant missing');
   }
   const workspace = (ctx as { workspaceRef?: unknown }).workspaceRef;
@@ -75,57 +76,11 @@ export function requireTrustedInvocationContext(
   return ctx;
 }
 
-/**
- * Project a verified host context plus the validated domain purpose onto the
- * closed memory projection. The context MUST already satisfy
- * `requireTrustedInvocationContext`; the purpose MUST be the validated
- * `purpose_ref` domain argument. Value-by-value copy: nothing is invented,
- * defaulted or reinterpreted beyond the documented host-derivation rules.
- */
-export function projectMemoryContext(
-  ctx: StpConnectorContext,
-  purposeRef: string,
-): MemoryContextProjectionV1 {
-  const verified = requireTrustedInvocationContext(ctx);
-  if (!isValidOpaqueRef(purposeRef)) {
-    throw new MemoryTrustedContextError('purpose reference invalid');
-  }
-  const principal = verified.principal;
-  const claims =
-    principal.claims !== undefined && principal.claims !== null && typeof principal.claims === 'object'
-      ? (principal.claims as Record<string, unknown>)
-      : {};
-  const claimedAgent = claims['agent_ref'];
-  const agentRef =
-    isValidOpaqueRef(claimedAgent) && typeof claimedAgent === 'string'
-      ? claimedAgent
-      : principal.sub;
-  const session = verified.session as { mcpSessionId?: unknown } | undefined;
-  const sessionId =
-    session !== undefined && session !== null && typeof session === 'object'
-      ? session.mcpSessionId
-      : undefined;
-  if (!isNonEmptyString(sessionId)) {
-    throw new MemoryTrustedContextError('logical session missing');
-  }
-  if (!isNonEmptyString(verified.connectorInstanceId)) {
-    throw new MemoryTrustedContextError('connector instance missing');
-  }
-  return {
-    principalNamespace: 'sentropic.principal',
-    principalId: principal.sub,
-    tenantId: verified.tenantRef,
-    storeRef: verified.connectorInstanceId,
-    scopeRef: verified.tenantRef,
-    purposeRef,
-    agentRef,
-    connectorInstanceRef: verified.connectorInstanceId,
-    policyEpoch: principal.authTime as string,
-    attachmentGeneration: verified.requestId,
-    auditRef: verified.auditId,
-    idempotencyKey: verified.correlationId,
-    elicitationRef: null,
-  };
+/** Preserve the accepted A03 projection from explicit verified host bindings. */
+export function projectMemoryContext(ctx: StpConnectorContext, purposeRef: string): MemoryContextProjectionV1 {
+  requireTrustedInvocationContext(ctx);
+  try { return projectVerifiedMemoryContext(ctx, purposeRef); }
+  catch (error) { throw new MemoryTrustedContextError(error instanceof Error ? error.message : 'invalid binding'); }
 }
 
 /** Validate the frozen projection's binding and trusted receipt carriers. */
