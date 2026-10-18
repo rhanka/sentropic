@@ -10,6 +10,13 @@ throws the M2 pre-dispatch protocol error (-32603) before any provider
 contact. The pure memory contract entry ships under `./memory`; the
 durable reference store arrives under `./memory-reference` in Lot 2.
 
+Memory selection combines the compiled tool's human-confirmation/elicitation
+gates, the host's `ctx.memory.confirmationRequired` and mandatory destructive
+confirmation. A required elicitation reference is checked before provider contact.
+The selection and `AppInvocationEnvelope.memoryConfirmationRequired` retain that
+effective policy alongside the unchanged A03 projection. Selection refusals use
+the frozen public error codes; missing trusted audit remains protocol `-32603`.
+
 ## What's here
 
 - `src/registry.ts` — **internal** plan-derived connector index (not a
