@@ -919,4 +919,47 @@ describe('remote judge client', () => {
       receipt: null, callStatus: 'unknown',
     });
   });
+
+  it('retains non-retryable timeout across service-to-client round trip when admitted liability is pending reconciliation', async () => {
+    const f = judgeServiceFixture();
+    f.transport.send.mockImplementationOnce(() => new Promise(() => {}));
+    const service = createJudgeService({ ...f.options, policy: { timeoutMs: 5 } });
+    const request = judgeRequest({ correlationId: 'rt-pending-timeout', policy: { timeoutMs: 5 } });
+    const served = await service.judge(request);
+    expect(served).toMatchObject({
+      kind: 'error', ok: false,
+      error: { code: 'TIMEOUT', phase: 'dispatch', retryable: false },
+      receipt: { budget: { state: 'pending-reconciliation', reservedMicroUsd: '2753' }, outcome: 'error', errorCode: 'TIMEOUT' },
+    });
+    const fetch = vi.fn(async () => new Response(JSON.stringify(served),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+    const result = await client.judge(request);
+    expect(result).toMatchObject({
+      kind: 'error', ok: false,
+      error: { code: 'TIMEOUT', phase: 'dispatch', retryable: false },
+      receipt: { budget: { state: 'pending-reconciliation', reservedMicroUsd: '2753' }, outcome: 'error', errorCode: 'TIMEOUT' },
+    });
+    if (!result.ok) expect(result.error.retryAfterMs).toBeUndefined();
+
+    const forgedPending = {
+      ...served,
+      error: { code: 'TIMEOUT', message: 'forged', phase: 'dispatch', retryable: true, retryAfterMs: 250 },
+    };
+    const forgedClient = createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: vi.fn(async () => new Response(JSON.stringify(forgedPending),
+        { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
+    });
+    const forgedResult = await forgedClient.judge(request);
+    expect(forgedResult).toMatchObject({
+      kind: 'error', ok: false,
+      error: { code: 'TIMEOUT', phase: 'dispatch', retryable: false },
+    });
+    if (!forgedResult.ok) expect(forgedResult.error.retryAfterMs).toBeUndefined();
+  });
 });
+
