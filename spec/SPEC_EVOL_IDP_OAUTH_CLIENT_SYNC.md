@@ -77,6 +77,14 @@ Counts are mandatory nonnegative safe integers in the CI whitelist. Failure
 messages contain only known codes. No CSV, URI, hash or arbitrary SQL diagnostic
 is published. No prod run, publishing or merge is authorized by this task.
 
+Refresh token evolution: `clients.csv` already exports `grant_types` and
+`allowed_scopes` (D1), so per-client opt-in to `refresh_token` and
+`offline_access` converges through the same relay, whereas issued refresh token
+families (`oauth_refresh_tokens`) are tier-local ephemeral auth rows (never
+exported by `export-prod.sql`, and classified under `'ephemeral-auth'` deletion
+in `import-preprod.sql` during user rekeying). See
+[SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md).
+
 ## Acceptance and checks
 
 Fixtures export public immo-mcp with scopes immo:read, immo:search,
