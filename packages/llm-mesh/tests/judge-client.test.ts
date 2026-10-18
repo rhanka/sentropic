@@ -344,6 +344,84 @@ describe('remote judge client', () => {
     }
   });
 
+  it('binds response validation to the transmitted evaluator snapshot', async () => {
+    const serve = (receipt: unknown) => vi.fn(async () => new Response(
+      JSON.stringify({ ...mockVerdictResult('mutrev-corr'), receipt }),
+      { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch;
+    const mutatingAuth = (request: JudgeRequest) => async () => {
+      request.evaluator.revision = 'different-revision';
+      return 'token';
+    };
+    // Receipt bound to the transmitted revision is accepted despite the mutation.
+    const original = mockVerdictResult('mutrev-corr').receipt;
+    const requestA = judgeRequest({ correlationId: 'mutrev-corr' });
+    const clientA = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: serve(original),
+      authToken: mutatingAuth(requestA) });
+    expect(await clientA.judge(requestA)).toMatchObject({ kind: 'verdict', ok: true });
+    // Receipt matching only the mutation is refused.
+    const mutated = { ...mockReceipt('mutrev-corr'),
+      evaluator: { ...mockReceipt('mutrev-corr').evaluator, revision: 'different-revision' } };
+    const requestB = judgeRequest({ correlationId: 'mutrev-corr' });
+    const clientB = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: serve(mutated),
+      authToken: mutatingAuth(requestB) });
+    expect(await clientB.judge(requestB)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    // Mutation during transport is equally ignored.
+    const requestC = judgeRequest({ correlationId: 'mutrev-corr' });
+    const transportMutant = vi.fn(async () => {
+      requestC.evaluator.revision = 'transport-revision';
+      return new Response(JSON.stringify(mockVerdictResult('mutrev-corr')),
+        { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof globalThis.fetch;
+    const clientC = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: transportMutant });
+    expect(await clientC.judge(requestC)).toMatchObject({ kind: 'verdict', ok: true });
+  });
+
+  it('binds criterion concordance to the transmitted snapshot', async () => {
+    const choiceCriterion = { kind: 'choice' as const, instructions: 'Pick.',
+      options: [{ id: 'a', description: 'A' }, { id: 'b', description: 'B' }] };
+    const choiceVerdict = {
+      criterionKind: 'choice', resolvedCriterionKind: 'choice', score: null, decision: null,
+      label: { value: 'a', origin: 'provider' }, rationale: null,
+      confidence: { value: 0.7, min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'r', origin: 'provider' },
+      distribution: [
+        { outcome: 'a', nativeOutcome: 'a', probability: 0.7 },
+        { outcome: 'b', nativeOutcome: 'b', probability: 0.3 },
+      ],
+    };
+    const serve = (verdict: unknown) => vi.fn(async () => new Response(
+      JSON.stringify({ ...mockVerdictResult('mutkind-corr'), verdict }),
+      { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch;
+    const mutatingAuth = (request: JudgeRequest) => async () => {
+      request.criterion = choiceCriterion;
+      return 'token';
+    };
+    const requestA = judgeRequest({ correlationId: 'mutkind-corr' });
+    const clientA = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+      fetch: serve(mockVerdictResult('mutkind-corr').verdict), authToken: mutatingAuth(requestA) });
+    expect(await clientA.judge(requestA)).toMatchObject({ kind: 'verdict', ok: true });
+    const requestB = judgeRequest({ correlationId: 'mutkind-corr' });
+    const clientB = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+      fetch: serve(choiceVerdict), authToken: mutatingAuth(requestB) });
+    expect(await clientB.judge(requestB)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+  });
+
+  it('binds raw permission to the transmitted snapshot', async () => {
+    const rawVerdict = { ...mockVerdictResult('mutraw-corr').verdict,
+      providerRaw: { data: { noul: 0.25 }, bytes: 13, truncated: false } };
+    const serve = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult('mutraw-corr'), verdict: rawVerdict }),
+      { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch;
+    // Mutation enabling raw after the snapshot does not authorize returned raw data.
+    const requestA = judgeRequest({ correlationId: 'mutraw-corr' });
+    const clientA = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: serve,
+      authToken: async () => { requestA.raw = { mode: 'allowlisted' }; return 'token'; } });
+    expect(await clientA.judge(requestA)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    // Mutation disabling raw after the snapshot does not revoke the transmitted permission.
+    const requestB = judgeRequest({ correlationId: 'mutraw-corr', raw: { mode: 'allowlisted' } });
+    const clientB = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: serve,
+      authToken: async () => { requestB.raw = { mode: 'none' }; return 'token'; } });
+    expect(await clientB.judge(requestB)).toMatchObject({ kind: 'verdict', ok: true });
+  });
+
   it('refuses NaN inputs before any egress without inventing a receipt', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('nan-corr')),
       { status: 200, headers: { 'content-type': 'application/json' } }));
