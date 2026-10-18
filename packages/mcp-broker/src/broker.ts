@@ -303,6 +303,7 @@ export class McpProviderBroker {
       return memoryFailure('INVALID_SCHEMA', 'Memory arguments must match the trusted purpose and envelope bindings.');
     }
     const result = await selected.adapter.invokeTool({ capabilityRef, input, ctx,
+      memoryConfirmationRequired: selected.selection.confirmationRequired,
       idempotencyKey: opts.idempotencyKey, elicitationRef: opts.elicitationRef, memoryContext: selected.projection });
     if (typeof result === 'string') {
       throw new Error(
