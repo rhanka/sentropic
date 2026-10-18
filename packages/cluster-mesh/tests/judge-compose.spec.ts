@@ -7,6 +7,8 @@ import { createModuleRegistry } from '../src/modules/registry.js';
 import { isClusterMeshModuleUnavailableError } from '../src/modules/errors.js';
 import { createLlmMeshNamespaceModule, type LlmMeshRouterInput } from '../src/compose/llm-mesh.js';
 import { fakeMesh, PackageTree } from './fixtures/package-tree.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 describe('judge compose llm-mesh namespace module', () => {
   const dummyContext: VerifiedInvocationContextPort = {
@@ -120,6 +122,20 @@ describe('judge compose llm-mesh namespace module', () => {
   });
 
   it('typechecks and verifies the public README composition example', async () => {
+    const readme = readFileSync(resolve('README.md'), 'utf8');
+    const blocks = [...readme.matchAll(/```ts\n([\s\S]*?)```/g)].map((m) => m[1]);
+    const example = blocks.find((b) => b.includes('createLlmMeshNamespaceModule'));
+    expect(example).toBeDefined();
+    expect(example).toContain('@sentropic/cluster-mesh/compose/llm-mesh');
+    expect(example).toContain('judge: true');
+    const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
+    expect(pkg.exports['./compose/llm-mesh']).toEqual({
+      types: './dist/compose/llm-mesh.d.ts',
+      import: './dist/compose/llm-mesh.js',
+    });
+    const publishedSource = readFileSync(resolve('dist/compose/llm-mesh.js'), 'utf8');
+    expect(publishedSource).toContain('createLlmMeshNamespaceModule');
+    expect(publishedSource).toContain('judgeHost');
     const module = await createLlmMeshNamespaceModule(createClusterMeshModules(), {
       enabled: true,
       judge: true,

@@ -114,6 +114,7 @@
 - [x] Lot 1.23 review resolution - MINEUR-1 (2026-10-12): fixed line 79 empty assertion by asserting result.ok === true and decision.pass === false independently; removed redundant test helper effectRef return in judge-receipts.spec.ts.
 - [x] Lot 1.23 MINEUR-1 residual (2026-10-17): test-constructed effectRef echo and mock-provided dedup remain test-only pending 2.08; privacy assertions are verdict-anchored and scope is recorded in spec section 4.
 - [x] Lot 1.25a review resolution - MAJEUR-1 tests (2026-10-12): added doc-example compilation test via TypeScript compiler in judge-public-surface.test.ts and public README composition test in judge-compose.spec.ts; fixed evaluatorId in README example.
+- [x] Lot 1.25a MINEUR-2 residual (2026-10-17): README blocks are extracted before compilation with equality guards; published compose/llm-mesh subpath is covered.
 
 
 ## AI Flaky tests
