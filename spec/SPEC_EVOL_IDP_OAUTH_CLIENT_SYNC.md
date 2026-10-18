@@ -85,6 +85,18 @@ exported by `export-prod.sql`, and classified under `'ephemeral-auth'` deletion
 in `import-preprod.sql` during user rekeying). See
 [SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md).
 
+Offline consent is tier-local evidence, distinct from synchronized generic
+`oauth_consents.scopes`. A copied `offline_access` string never authorizes a
+preprod offline grant. The refresh BUILD Lots 1–2 extend the consent schema/port/UI
+with local issuer, consent epoch, offline scopes, exact approved resources or
+explicit default audience, and approval timestamp. Export excludes these fields;
+import never synthesizes them or translates prod consent into preprod resource
+approval. Scope/resource removal and consent deletion invalidate affected local
+families under the shared client/user/family locking protocol, including on
+rekey; additive generic sync preserves separately approved local offline evidence.
+Acceptance covers legacy/imported scope-only consent, resource A versus B,
+withdrawal/reapproval without resurrection, and sync racing renewal/creation.
+
 ## Acceptance and checks
 
 Fixtures export public immo-mcp with scopes immo:read, immo:search,
