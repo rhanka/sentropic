@@ -43,7 +43,7 @@ describe('P02.broker.audit-refusal-32603', () => {
       plan: makePlan(['engram_memory_search']),
       adapters: [makeAuditedAdapter(calls)],
       sourceId: 'mcp:engram-memory',
-      generation: 'gen-1',
+      generation: '1',
     });
     for (const ctx of [
       undefined,
@@ -79,7 +79,7 @@ describe('P02.broker.audit-refusal-32603', () => {
           plan: makePlan(['engram_memory_search']),
           adapters: [makeAuditedAdapter(calls)],
           sourceId: 'mcp:engram-memory',
-          generation: 'gen-1',
+          generation: '1',
         });
         return broker.invoke('engram-memory', 'engram_memory_search', {}, {
           ctx: makeCtx({ auditId: 'audit_mcp_l0_default' }),
@@ -95,7 +95,7 @@ describe('P02.broker.audit-refusal-32603', () => {
       plan: makePlan(['engram_memory_search']),
       adapters: [makeAuditedAdapter(calls)],
       sourceId: 'mcp:engram-memory',
-      generation: 'gen-1',
+      generation: '1',
     });
     const result = await broker.invoke('engram-memory', 'engram_memory_search', {}, {
       ctx: makeCtx({ auditId: 'audit-survives-1' }),

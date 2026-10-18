@@ -19,7 +19,7 @@ import {
 export type BindMemoryInvocationInput = {
   ctx: StpConnectorContext;
   purposeRef: string;
-  idempotencyKey: string;
+  idempotencyKey?: string;
   elicitationRef?: string;
 };
 
@@ -36,16 +36,23 @@ export type BoundMemoryInvocationV1 = {
  */
 export function bindMemoryInvocation(input: BindMemoryInvocationInput): BoundMemoryInvocationV1 {
   const verified = requireTrustedInvocationContext(input.ctx);
-  if (!isValidIdempotencyKey(input.idempotencyKey)) {
+  if (input.idempotencyKey !== undefined && !isValidIdempotencyKey(input.idempotencyKey)) {
     throw new Error('bindMemoryInvocation: idempotencyKey must be a valid IdempotencyKey');
   }
   if (input.elicitationRef !== undefined && !isValidOpaqueRef(input.elicitationRef)) {
     throw new Error('bindMemoryInvocation: elicitationRef must be a valid OpaqueRef');
   }
   const projection = projectMemoryContext(verified, input.purposeRef);
-  projection.idempotencyKey = input.idempotencyKey;
-  projection.elicitationRef = input.elicitationRef ?? null;
-  return { projection, auditRef: verified.auditId };
+  const prior = projection.envelope_bindings;
+  if ((prior.idempotency_key !== undefined && prior.idempotency_key !== input.idempotencyKey) ||
+      (prior.elicitation_ref !== undefined && prior.elicitation_ref !== input.elicitationRef)) {
+    throw new Error('bindMemoryInvocation: envelope differs from the verified host binding');
+  }
+  return { projection: { ...projection, envelope_bindings: {
+    ...prior,
+    ...(input.idempotencyKey !== undefined ? { idempotency_key: input.idempotencyKey } : {}),
+    ...(input.elicitationRef !== undefined ? { elicitation_ref: input.elicitationRef } : {}),
+  } }, auditRef: verified.auditId };
 }
 
 export { projectMemoryContext, requireTrustedInvocationContext };

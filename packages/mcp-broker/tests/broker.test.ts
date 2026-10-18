@@ -203,7 +203,7 @@ describe('McpProviderBroker (L5 Lot 1, plan-bound, explicit trusted context)', (
       plan: makePlan(),
       adapters: [makeMockAdapter('mock')],
       sourceId: 'mcp:mock',
-      generation: 'gen-0',
+      generation: '0',
     });
   }
 
@@ -214,7 +214,7 @@ describe('McpProviderBroker (L5 Lot 1, plan-bound, explicit trusted context)', (
           plan: makePlan(),
           adapters: [makeMockAdapter('mock'), makeMockAdapter('mock')],
           sourceId: 'mcp:mock',
-          generation: 'gen-0',
+          generation: '0',
         }),
     ).toThrow(DuplicateConnectorError);
   });
