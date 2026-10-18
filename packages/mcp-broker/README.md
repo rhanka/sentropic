@@ -1,7 +1,7 @@
 # @sentropic/mcp-broker
 
-BR-72 DEPTH Lot 2 proof: a **minimal, connector-AGNOSTIC MCP provider broker** — private,
-not published. It generalizes the "mount + invoke" seam proven per-connector in
+BR-72 DEPTH Lot 2 proof: a **minimal, connector-AGNOSTIC MCP provider broker**.
+It generalizes the "mount + invoke" seam proven per-connector in
 `@sentropic/mcp-connector-github`'s live broker (BR-72 DEPTH Lot 1,
 `../mcp-connector-github/src/live-broker.ts`) into a small library any
 `@sentropic/mcp-platform` `AppConnectorProviderAdapter` can be mounted into and invoked

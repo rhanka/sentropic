@@ -1,6 +1,6 @@
 # @sentropic/mcp-connector-google
 
-Private Google Drive and Gmail read-only adapters against the frozen
+Google Drive and Gmail read-only adapters against the frozen
 `@sentropic/mcp-platform` contract. The fixture adapters remain hermetic; separate live
 adapters use a token resolved only by `ctx.getSecret('googleOAuthAccessToken')` to call the
 real Google APIs. There is no OAuth runtime, API dependency, gateway, or migration.
