@@ -128,7 +128,7 @@
   - [ ] Update README, CHANGELOG and existing lazy-surface spec with exact typed API/tuple, Node-only compose leaf, 2FA boundary, secret rotation/custody, policy sync/cache bound, tenant state/restore and R-O1/#865 sequence.
   - [ ] Write `.h2a/build/o1_report.md`: changes, checks, owned feedback, risks, scope exceptions and read set; no secrets or messages to others. Gate: docs match packed types; no duplicate issuer/recovery spec.
 - [ ] **Lot 7 — Final validation**
-  - [x] Updated exactly the three cluster-mesh qualification peer pins and matching CI wiring constant to mcp-auth0.2.2; gateway service-auth range remains unchanged. Focused CI wiring test pending.
+  - [x] Exactly three cluster-mesh qualification peer pins and matching wiring constant updated to mcp-auth0.2.2; gateway floor unchanged. Focused CI wiring GREEN (22 tests); startup binding preflight GREEN (7 composition tests).
   - [ ] Run `rtk make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; reuse final-SHA passing gates, document intentional environment gating.
   - [ ] Run `rtk make test-mcp-auth test-oauth-verify API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; auth core/hono/prm/challenge/scopes/application-scopes/service-auth/manifest and oauth verifier/JWKS/DPoP existing tests unchanged.
   - [ ] Update three CI qualification pins and wiring test; scoped `rtk make test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`.
