@@ -23,7 +23,7 @@ import type {
   AppMcpProviderManifest,
   CapabilityGates,
   CapabilityTool,
-} from '../../mcp-platform/src/manifest.js';
+} from '@sentropic/mcp-platform';
 
 // Every write tool shares the principal-gate + policy baseline (WAVE2_WRITE_PLAN.md
 // §2.2 intro); only destructive/irreversible or authz-state-changing tools add

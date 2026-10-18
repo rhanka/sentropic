@@ -15,13 +15,13 @@
  * connector (production connector residence is an architect D4 decision,
  * deferred).
  */
-import { invokeGuardedTool } from '../../mcp-platform/src/experimental/mutation-gate.js';
+import { invokeGuardedTool } from '@sentropic/mcp-platform/experimental';
 import type {
   AuditSinkPort,
   GuardedInvokeDeps,
-} from '../../mcp-platform/src/experimental/mutation-gate.js';
-import type { ElicitationManager } from '../../mcp-platform/src/elicitation.js';
-import type { AppToolInvocation, AppToolResult } from '../../mcp-platform/src/runtime.js';
+} from '@sentropic/mcp-platform/experimental';
+import type { ElicitationManager } from '@sentropic/mcp-platform/experimental';
+import type { AppToolInvocation, AppToolResult } from '@sentropic/mcp-platform';
 import { getWriteToolFixture } from './write-fixtures.js';
 import { githubWriteManifest, githubWriteToolsByName } from './write-manifest.js';
 

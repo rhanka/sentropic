@@ -26,3 +26,7 @@ invocation missing its gate or idempotency key is rejected fail-closed. Syntheti
 fixtures only; no real network call. This EXPERIMENTAL surface is published but
 NOT frozen (no semver guarantee), mirroring `@sentropic/mcp-platform`'s own
 root/experimental split.
+
+## Releases
+
+First publication uses the owner-operated [web bootstrap](../../scripts/publish/README.md); later releases use CI trusted publishing.

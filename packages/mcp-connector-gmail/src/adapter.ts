@@ -13,7 +13,7 @@ import type {
   AppCapability,
   ConnectorTenantContext,
   ConnectorTenantResolutionInput,
-} from '../../mcp-platform/src/manifest.js';
+} from '@sentropic/mcp-platform';
 import type {
   AppConnectorProviderAdapter,
   AppResourceRead,
@@ -22,7 +22,7 @@ import type {
   AppToolResult,
   ConnectorSecretStatus,
   DurableCallRef,
-} from '../../mcp-platform/src/runtime.js';
+} from '@sentropic/mcp-platform';
 import { getDraft, getMessage, gmailManifest, listDrafts, searchThreads } from './manifest.js';
 import {
   getDraftFixture,

@@ -7,12 +7,12 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, publishFilter } from './publishable-manifests.mjs';
+import { BOOTSTRAP_TARGETS, WEB_BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, publishFilter } from './publishable-manifests.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
 const ci = YAML.parse(fs.readFileSync(path.join(root, '.github', 'workflows', 'ci.yml'), 'utf8'));
-const makefile = fs.readFileSync(path.join(root, 'Makefile'), 'utf8');
+const makefile = fs.readFileSync(path.join(root, 'Makefile'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'scripts/publish/packages.mk'), 'utf8');
 const jobs = ci.jobs;
 const CTX = {
   CI_MANIFEST_CONTEXT: '${{ toJSON(needs.changes.outputs) }}',
@@ -109,7 +109,7 @@ test('steady-state publisher mapping and bootstrap expansion match ci.yml', () =
   const bootstrapSteps = jobs['bootstrap-publish'].steps.map((s) => s.run?.match(/^make publish-([a-z-]+)-token /)?.[1]).filter(Boolean);
   assert.deepEqual(bootstrapSteps, BOOTSTRAP_TARGETS);
   const options = ci.on.workflow_dispatch.inputs.bootstrap_publish_target.options.filter((o) => o !== 'none');
-  assert.deepEqual([...options].sort(), [...BOOTSTRAP_TARGETS].sort());
+  assert.deepEqual([...options].sort(), [...BOOTSTRAP_TARGETS, ...WEB_BOOTSTRAP_TARGETS].sort());
   assert.ok(!needsOf('bootstrap-publish').length, 'bootstrap keeps its existing (absent) needs');
 });
 
@@ -117,7 +117,7 @@ test('bootstrap publish requires exactly one explicit target: no all option, one
   const input = ci.on.workflow_dispatch.inputs.bootstrap_publish_target;
   assert.ok(!input.options.includes('all'), 'no all option');
   assert.match(input.description, /exactly one explicit package/);
-  const declared = input.options.filter((o) => o !== 'none');
+  const declared = input.options.filter((o) => o !== 'none' && !WEB_BOOTSTRAP_TARGETS.includes(o));
   const job = jobs['bootstrap-publish'];
   for (const cond of [job.if, ...job.steps.map((s) => s.if)]) assert.ok(!String(cond ?? '').includes("'all'"), `no condition references all: ${cond}`);
   const guard = job.steps[0];
@@ -311,9 +311,15 @@ test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publis
   assert.match(recipe('pack-chat-ui'), /manifest_guard_pack,chat-ui,\$\(MANIFEST_DIST_FORM\)/);
   assert.match(recipe('pack-cited-source-viewer'), /manifest_guard_pack,cited-source-viewer,\$\(MANIFEST_DIST_FORM\)/);
   const publishRecipes = [...makefile.matchAll(/^(publish-[a-z-]+):[^\n]*\n((?:\t[^\n]*\n?)+)/gm)].filter(([, n]) => !/-image$/.test(n));
-  assert.equal(publishRecipes.length, STEADY_STATE_PUBLISHERS.length * 2, 'OIDC + token recipe per package');
+  assert.equal(publishRecipes.length, STEADY_STATE_PUBLISHERS.length * 2 - WEB_BOOTSTRAP_TARGETS.length, 'legacy OIDC/token pairs and new OIDC-only recipes');
   for (const [, name, body] of publishRecipes) {
     const slug = name.replace(/^publish-/, '').replace(/-token$/, '');
+    if (WEB_BOOTSTRAP_TARGETS.includes(slug)) {
+      assert.ok(!name.endsWith('-token'), 'new packages have no token recipe');
+      assert.ok(body.includes(`$(call publish_public_library,${slug})`));
+      assert.match(body, /CI trusted publishing only/);
+      continue;
+    }
     assert.match(body, new RegExp(`\\$\\(call manifest_guard_publish,${slug},--access public`), name);
     assert.ok(!/npm publish/.test(body), `${name} never publishes a directory`);
     if (name.endsWith('-token')) assert.match(body, /NPM_TOKEN_FILE/);
@@ -467,4 +473,23 @@ test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () =>
   assert.ok(!mesh.includes('npm view'), 'no cached npm view poll');
   assert.match(recipe('wait-llm-gateway-auth-dependencies'), /npm_config_prefer_online=true node scripts\/auth-registry\.mjs/);
   assert.match(makefile, /^manifest_guard_publish = .* publish --slug \$\(1\) --wait-attempts "\$\(LLM_MESH_REGISTRY_WAIT_ATTEMPTS\)" --wait-delay "\$\(LLM_MESH_REGISTRY_WAIT_SECONDS\)" -- \$\(2\)$/m, 'publish conflict re-read uses the Make wait budget');
+});
+
+
+test('new reusable libraries have strict packs, clean consumer validation and web-only bootstrap', () => {
+  const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
+  const bootstrap = jobs['bootstrap-publish'];
+  assert.match(bootstrap.steps[0].run, /Web bootstrap required/);
+  for (const slug of WEB_BOOTSTRAP_TARGETS) {
+    assert.ok(ci.on.workflow_dispatch.inputs.bootstrap_publish_target.options.includes(slug));
+    assert.ok(bootstrap.steps[0].run.includes(slug));
+    assert.ok(!bootstrap.steps.some((s) => s.run?.startsWith(`make publish-${slug}-token `)));
+    assert.ok(filters[slug.replaceAll('-', '_')].includes('scripts/publish/**'));
+    const steps = jobs[`validate-${slug}`].steps;
+    assert.ok(steps.some((s) => s.run === `make test-public-library PACKAGE=${slug} ENV=test-ci-${slug}`));
+    assert.ok(steps.some((s) => s.run === `make test-publishable-consumer PACKAGE=${slug} ENV=test-ci-${slug}`));
+    assert.ok(steps.some((s) => s.run?.includes('MANIFEST_SEVERITY=block')));
+  }
+  assert.match(makefile, /-e ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
+  assert.match(makefile, /manifest_guard_publish,\$\(1\),--access public --provenance/);
 });

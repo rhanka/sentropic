@@ -1,7 +1,7 @@
 # @sentropic/mcp-broker
 
-BR-72 DEPTH Lot 2 proof: a **minimal, connector-AGNOSTIC MCP provider broker** — private,
-not published. It generalizes the "mount + invoke" seam proven per-connector in
+BR-72 DEPTH Lot 2 proof: a **minimal, connector-AGNOSTIC MCP provider broker**.
+It generalizes the "mount + invoke" seam proven per-connector in
 `@sentropic/mcp-connector-github`'s live broker (BR-72 DEPTH Lot 1,
 `../mcp-connector-github/src/live-broker.ts`) into a small library any
 `@sentropic/mcp-platform` `AppConnectorProviderAdapter` can be mounted into and invoked
@@ -68,3 +68,7 @@ package is a proof, not the shipped runtime.
 - No durable-call tracking — a tool capability returning a `DurableCallRef` (string) is
   guarded and rejected, not queued/polled.
 - No production wiring, no publishing, no connector-specific logic outside the smoke script.
+
+## Releases
+
+First publication uses the owner-operated [web bootstrap](../../scripts/publish/README.md); later releases use CI trusted publishing.

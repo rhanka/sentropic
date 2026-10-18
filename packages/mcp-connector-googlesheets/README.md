@@ -6,3 +6,7 @@ against in-repo SYNTHETIC fixtures (no real network call, no secrets, no PII). C
 taxonomy-grounded in the OOMOL `googlesheets` provider's read-only action set but recoded
 independently — no OOMOL code is vendored or wrapped. This is NOT a shipped production
 connector, and the production connector's residence is an architect D4 decision, deferred.
+
+## Releases
+
+First publication uses the owner-operated [web bootstrap](../../scripts/publish/README.md); later releases use CI trusted publishing.

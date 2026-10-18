@@ -49,7 +49,7 @@ while IFS= read -r slug; do
     status=1
     continue
   fi
-  if ! grep -Eq "^pack-${slug}:" Makefile; then
+  if ! grep -Eq "^pack-${slug}:" Makefile scripts/publish/packages.mk; then
     echo "::error file=packages/${slug}/package.json,title=Publishable manifest::missing pack lane: make pack-${slug} does not exist"
     status=1
     continue

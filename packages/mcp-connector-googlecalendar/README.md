@@ -9,3 +9,7 @@ is an architect D4 decision, deferred.
 
 The root entry (`.` / `src/index.ts`) is READ-ONLY and FROZEN — no write/mutation capability,
 no `./experimental` subpath.
+
+## Releases
+
+First publication uses the owner-operated [web bootstrap](../../scripts/publish/README.md); later releases use CI trusted publishing.

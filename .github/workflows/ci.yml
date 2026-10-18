@@ -8,12 +8,30 @@ on:
   workflow_dispatch:
     inputs:
       bootstrap_publish_target:
-        description: 'Bootstrap-publish target: exactly one explicit package is required, there is no "all" option (uses NPM_TOKEN; first publish only before OIDC trusted publishers are attached)'
+        description: 'Bootstrap target: exactly one explicit package is required; new libraries require owner web login, legacy targets use NPM_TOKEN (no all option)'
         required: true
         default: 'none'
         type: choice
         options:
           - none
+          - ubo-contracts
+          - mcp-broker
+          - connector-host
+          - mcp-connector-airtable
+          - mcp-connector-dropbox
+          - mcp-connector-github
+          - mcp-connector-gmail
+          - mcp-connector-google
+          - mcp-connector-googlecalendar
+          - mcp-connector-googledocs
+          - mcp-connector-googledrive
+          - mcp-connector-googlesheets
+          - mcp-connector-hubspot
+          - mcp-connector-linear
+          - mcp-connector-notion
+          - mcp-connector-slack
+          - mcp-connector-stripe
+          - skills
           - contracts
           - events
           - chat-core
@@ -142,6 +160,42 @@ jobs:
       artifacts_publish: ${{ steps.filter.outputs.artifacts_publish }}
       harness: ${{ steps.filter.outputs.harness }}
       harness_publish: ${{ steps.filter.outputs.harness_publish }}
+      ubo_contracts: ${{ steps.filter.outputs.ubo_contracts }}
+      ubo_contracts_publish: ${{ steps.filter.outputs.ubo_contracts_publish }}
+      mcp_broker: ${{ steps.filter.outputs.mcp_broker }}
+      mcp_broker_publish: ${{ steps.filter.outputs.mcp_broker_publish }}
+      connector_host: ${{ steps.filter.outputs.connector_host }}
+      connector_host_publish: ${{ steps.filter.outputs.connector_host_publish }}
+      mcp_connector_airtable: ${{ steps.filter.outputs.mcp_connector_airtable }}
+      mcp_connector_airtable_publish: ${{ steps.filter.outputs.mcp_connector_airtable_publish }}
+      mcp_connector_dropbox: ${{ steps.filter.outputs.mcp_connector_dropbox }}
+      mcp_connector_dropbox_publish: ${{ steps.filter.outputs.mcp_connector_dropbox_publish }}
+      mcp_connector_github: ${{ steps.filter.outputs.mcp_connector_github }}
+      mcp_connector_github_publish: ${{ steps.filter.outputs.mcp_connector_github_publish }}
+      mcp_connector_gmail: ${{ steps.filter.outputs.mcp_connector_gmail }}
+      mcp_connector_gmail_publish: ${{ steps.filter.outputs.mcp_connector_gmail_publish }}
+      mcp_connector_google: ${{ steps.filter.outputs.mcp_connector_google }}
+      mcp_connector_google_publish: ${{ steps.filter.outputs.mcp_connector_google_publish }}
+      mcp_connector_googlecalendar: ${{ steps.filter.outputs.mcp_connector_googlecalendar }}
+      mcp_connector_googlecalendar_publish: ${{ steps.filter.outputs.mcp_connector_googlecalendar_publish }}
+      mcp_connector_googledocs: ${{ steps.filter.outputs.mcp_connector_googledocs }}
+      mcp_connector_googledocs_publish: ${{ steps.filter.outputs.mcp_connector_googledocs_publish }}
+      mcp_connector_googledrive: ${{ steps.filter.outputs.mcp_connector_googledrive }}
+      mcp_connector_googledrive_publish: ${{ steps.filter.outputs.mcp_connector_googledrive_publish }}
+      mcp_connector_googlesheets: ${{ steps.filter.outputs.mcp_connector_googlesheets }}
+      mcp_connector_googlesheets_publish: ${{ steps.filter.outputs.mcp_connector_googlesheets_publish }}
+      mcp_connector_hubspot: ${{ steps.filter.outputs.mcp_connector_hubspot }}
+      mcp_connector_hubspot_publish: ${{ steps.filter.outputs.mcp_connector_hubspot_publish }}
+      mcp_connector_linear: ${{ steps.filter.outputs.mcp_connector_linear }}
+      mcp_connector_linear_publish: ${{ steps.filter.outputs.mcp_connector_linear_publish }}
+      mcp_connector_notion: ${{ steps.filter.outputs.mcp_connector_notion }}
+      mcp_connector_notion_publish: ${{ steps.filter.outputs.mcp_connector_notion_publish }}
+      mcp_connector_slack: ${{ steps.filter.outputs.mcp_connector_slack }}
+      mcp_connector_slack_publish: ${{ steps.filter.outputs.mcp_connector_slack_publish }}
+      mcp_connector_stripe: ${{ steps.filter.outputs.mcp_connector_stripe }}
+      mcp_connector_stripe_publish: ${{ steps.filter.outputs.mcp_connector_stripe_publish }}
+      skills: ${{ steps.filter.outputs.skills }}
+      skills_publish: ${{ steps.filter.outputs.skills_publish }}
       manifest_guard: ${{ steps.filter.outputs.manifest_guard }}
       # Publishable manifest guard context (spec section 6): JSON lists, never booleans.
       package_files: ${{ steps.publishable_files.outputs.publishable_package_files_files }}
@@ -393,6 +447,168 @@ jobs:
               - '.github/workflows/ci.yml'
             harness_publish:
               - 'packages/harness/**'
+            ubo_contracts:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/ubo-contracts/**'
+              - '.github/workflows/ci.yml'
+            ubo_contracts_publish:
+              - 'packages/ubo-contracts/**'
+            mcp_broker:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-broker/**'
+              - '.github/workflows/ci.yml'
+            mcp_broker_publish:
+              - 'packages/mcp-broker/**'
+            connector_host:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/connector-host/**'
+              - '.github/workflows/ci.yml'
+            connector_host_publish:
+              - 'packages/connector-host/**'
+            mcp_connector_airtable:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-airtable/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_airtable_publish:
+              - 'packages/mcp-connector-airtable/**'
+            mcp_connector_dropbox:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-dropbox/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_dropbox_publish:
+              - 'packages/mcp-connector-dropbox/**'
+            mcp_connector_github:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-github/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_github_publish:
+              - 'packages/mcp-connector-github/**'
+            mcp_connector_gmail:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-gmail/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_gmail_publish:
+              - 'packages/mcp-connector-gmail/**'
+            mcp_connector_google:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-google/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_google_publish:
+              - 'packages/mcp-connector-google/**'
+            mcp_connector_googlecalendar:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-googlecalendar/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_googlecalendar_publish:
+              - 'packages/mcp-connector-googlecalendar/**'
+            mcp_connector_googledocs:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-googledocs/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_googledocs_publish:
+              - 'packages/mcp-connector-googledocs/**'
+            mcp_connector_googledrive:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-googledrive/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_googledrive_publish:
+              - 'packages/mcp-connector-googledrive/**'
+            mcp_connector_googlesheets:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-googlesheets/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_googlesheets_publish:
+              - 'packages/mcp-connector-googlesheets/**'
+            mcp_connector_hubspot:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-hubspot/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_hubspot_publish:
+              - 'packages/mcp-connector-hubspot/**'
+            mcp_connector_linear:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-linear/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_linear_publish:
+              - 'packages/mcp-connector-linear/**'
+            mcp_connector_notion:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-notion/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_notion_publish:
+              - 'packages/mcp-connector-notion/**'
+            mcp_connector_slack:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-slack/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_slack_publish:
+              - 'packages/mcp-connector-slack/**'
+            mcp_connector_stripe:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-stripe/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_stripe_publish:
+              - 'packages/mcp-connector-stripe/**'
+            skills:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/skills/**'
+              - '.github/workflows/ci.yml'
+            skills_publish:
+              - 'packages/skills/**'
             # Dedicated guard filter: never part of global, api/ui/e2e or _publish fanout.
             manifest_guard:
               - 'scripts/ci/**'
@@ -428,6 +644,8 @@ jobs:
         run: make check-eradicated-packages ENV=test-ci-manifests
       - name: Test publishable manifest guard and consumer qualification
         run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
+      - name: Test disposable web bootstrap without credentials
+        run: make test-publication-scripts ENV=test-ci-manifests
       - name: Check publishable manifests
         run: make check-publishable-manifests ENV=test-ci-manifests
       - name: Upload publishable manifest reports
@@ -2123,6 +2341,688 @@ jobs:
           if [ "$LLM_GATEWAY_PUBLISH_RESULT" = success ]; then required="${required:+$required }@sentropic/llm-gateway"; fi
           make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity REQUIRE_PUBLISHED="$required" ENV=test-ci-cluster-mesh
 
+  validate-ubo-contracts:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.ubo_contracts == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test ubo-contracts
+        run: make test-public-library PACKAGE=ubo-contracts ENV=test-ci-ubo-contracts
+      - name: Build and guard ubo-contracts archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-ubo-contracts PACK_DESTINATION=tmp/npm-bootstrap/ubo-contracts MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-ubo-contracts
+      - name: Qualify ubo-contracts packaged consumer
+        run: make test-publishable-consumer PACKAGE=ubo-contracts ENV=test-ci-ubo-contracts
+
+  publish-ubo-contracts:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-ubo-contracts]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.ubo_contracts_publish == 'true' &&
+      needs.validate-ubo-contracts.result == 'success' &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish ubo-contracts with provenance
+        run: make publish-ubo-contracts ENV=test-ci-ubo-contracts
+
+  validate-mcp-broker:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_broker == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-broker
+        run: make test-public-library PACKAGE=mcp-broker ENV=test-ci-mcp-broker
+      - name: Build and guard mcp-broker archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-broker PACK_DESTINATION=tmp/npm-bootstrap/mcp-broker MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-broker
+      - name: Qualify mcp-broker packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-broker ENV=test-ci-mcp-broker
+
+  publish-mcp-broker:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-broker, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_broker_publish == 'true' &&
+      needs.validate-mcp-broker.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-broker with provenance
+        run: make publish-mcp-broker ENV=test-ci-mcp-broker
+
+  validate-connector-host:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.connector_host == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test connector-host
+        run: make test-public-library PACKAGE=connector-host ENV=test-ci-connector-host
+      - name: Build and guard connector-host archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-connector-host PACK_DESTINATION=tmp/npm-bootstrap/connector-host MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-connector-host
+      - name: Qualify connector-host packaged consumer
+        run: make test-publishable-consumer PACKAGE=connector-host ENV=test-ci-connector-host
+
+  publish-connector-host:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-connector-host, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.connector_host_publish == 'true' &&
+      needs.validate-connector-host.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish connector-host with provenance
+        run: make publish-connector-host ENV=test-ci-connector-host
+
+  validate-mcp-connector-airtable:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_airtable == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-airtable
+        run: make test-public-library PACKAGE=mcp-connector-airtable ENV=test-ci-mcp-connector-airtable
+      - name: Build and guard mcp-connector-airtable archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-airtable PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-airtable MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-airtable
+      - name: Qualify mcp-connector-airtable packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-airtable ENV=test-ci-mcp-connector-airtable
+
+  publish-mcp-connector-airtable:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-airtable, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_airtable_publish == 'true' &&
+      needs.validate-mcp-connector-airtable.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-airtable with provenance
+        run: make publish-mcp-connector-airtable ENV=test-ci-mcp-connector-airtable
+
+  validate-mcp-connector-dropbox:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_dropbox == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-dropbox
+        run: make test-public-library PACKAGE=mcp-connector-dropbox ENV=test-ci-mcp-connector-dropbox
+      - name: Build and guard mcp-connector-dropbox archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-dropbox PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-dropbox MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-dropbox
+      - name: Qualify mcp-connector-dropbox packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-dropbox ENV=test-ci-mcp-connector-dropbox
+
+  publish-mcp-connector-dropbox:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-dropbox, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_dropbox_publish == 'true' &&
+      needs.validate-mcp-connector-dropbox.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-dropbox with provenance
+        run: make publish-mcp-connector-dropbox ENV=test-ci-mcp-connector-dropbox
+
+  validate-mcp-connector-github:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_github == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-github
+        run: make test-public-library PACKAGE=mcp-connector-github ENV=test-ci-mcp-connector-github
+      - name: Build and guard mcp-connector-github archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-github PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-github MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-github
+      - name: Qualify mcp-connector-github packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-github ENV=test-ci-mcp-connector-github
+
+  publish-mcp-connector-github:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-github, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_github_publish == 'true' &&
+      needs.validate-mcp-connector-github.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-github with provenance
+        run: make publish-mcp-connector-github ENV=test-ci-mcp-connector-github
+
+  validate-mcp-connector-gmail:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_gmail == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-gmail
+        run: make test-public-library PACKAGE=mcp-connector-gmail ENV=test-ci-mcp-connector-gmail
+      - name: Build and guard mcp-connector-gmail archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-gmail PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-gmail MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-gmail
+      - name: Qualify mcp-connector-gmail packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-gmail ENV=test-ci-mcp-connector-gmail
+
+  publish-mcp-connector-gmail:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-gmail, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_gmail_publish == 'true' &&
+      needs.validate-mcp-connector-gmail.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-gmail with provenance
+        run: make publish-mcp-connector-gmail ENV=test-ci-mcp-connector-gmail
+
+  validate-mcp-connector-google:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_google == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-google
+        run: make test-public-library PACKAGE=mcp-connector-google ENV=test-ci-mcp-connector-google
+      - name: Build and guard mcp-connector-google archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-google PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-google MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-google
+      - name: Qualify mcp-connector-google packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-google ENV=test-ci-mcp-connector-google
+
+  publish-mcp-connector-google:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-google, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_google_publish == 'true' &&
+      needs.validate-mcp-connector-google.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-google with provenance
+        run: make publish-mcp-connector-google ENV=test-ci-mcp-connector-google
+
+  validate-mcp-connector-googlecalendar:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_googlecalendar == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-googlecalendar
+        run: make test-public-library PACKAGE=mcp-connector-googlecalendar ENV=test-ci-mcp-connector-googlecalendar
+      - name: Build and guard mcp-connector-googlecalendar archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-googlecalendar PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-googlecalendar MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googlecalendar
+      - name: Qualify mcp-connector-googlecalendar packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-googlecalendar ENV=test-ci-mcp-connector-googlecalendar
+
+  publish-mcp-connector-googlecalendar:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-googlecalendar, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_googlecalendar_publish == 'true' &&
+      needs.validate-mcp-connector-googlecalendar.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-googlecalendar with provenance
+        run: make publish-mcp-connector-googlecalendar ENV=test-ci-mcp-connector-googlecalendar
+
+  validate-mcp-connector-googledocs:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_googledocs == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-googledocs
+        run: make test-public-library PACKAGE=mcp-connector-googledocs ENV=test-ci-mcp-connector-googledocs
+      - name: Build and guard mcp-connector-googledocs archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-googledocs PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-googledocs MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googledocs
+      - name: Qualify mcp-connector-googledocs packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-googledocs ENV=test-ci-mcp-connector-googledocs
+
+  publish-mcp-connector-googledocs:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-googledocs, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_googledocs_publish == 'true' &&
+      needs.validate-mcp-connector-googledocs.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-googledocs with provenance
+        run: make publish-mcp-connector-googledocs ENV=test-ci-mcp-connector-googledocs
+
+  validate-mcp-connector-googledrive:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_googledrive == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-googledrive
+        run: make test-public-library PACKAGE=mcp-connector-googledrive ENV=test-ci-mcp-connector-googledrive
+      - name: Build and guard mcp-connector-googledrive archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-googledrive PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-googledrive MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googledrive
+      - name: Qualify mcp-connector-googledrive packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-googledrive ENV=test-ci-mcp-connector-googledrive
+
+  publish-mcp-connector-googledrive:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-googledrive, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_googledrive_publish == 'true' &&
+      needs.validate-mcp-connector-googledrive.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-googledrive with provenance
+        run: make publish-mcp-connector-googledrive ENV=test-ci-mcp-connector-googledrive
+
+  validate-mcp-connector-googlesheets:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_googlesheets == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-googlesheets
+        run: make test-public-library PACKAGE=mcp-connector-googlesheets ENV=test-ci-mcp-connector-googlesheets
+      - name: Build and guard mcp-connector-googlesheets archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-googlesheets PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-googlesheets MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googlesheets
+      - name: Qualify mcp-connector-googlesheets packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-googlesheets ENV=test-ci-mcp-connector-googlesheets
+
+  publish-mcp-connector-googlesheets:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-googlesheets, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_googlesheets_publish == 'true' &&
+      needs.validate-mcp-connector-googlesheets.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-googlesheets with provenance
+        run: make publish-mcp-connector-googlesheets ENV=test-ci-mcp-connector-googlesheets
+
+  validate-mcp-connector-hubspot:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_hubspot == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-hubspot
+        run: make test-public-library PACKAGE=mcp-connector-hubspot ENV=test-ci-mcp-connector-hubspot
+      - name: Build and guard mcp-connector-hubspot archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-hubspot PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-hubspot MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-hubspot
+      - name: Qualify mcp-connector-hubspot packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-hubspot ENV=test-ci-mcp-connector-hubspot
+
+  publish-mcp-connector-hubspot:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-hubspot, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_hubspot_publish == 'true' &&
+      needs.validate-mcp-connector-hubspot.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-hubspot with provenance
+        run: make publish-mcp-connector-hubspot ENV=test-ci-mcp-connector-hubspot
+
+  validate-mcp-connector-linear:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_linear == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-linear
+        run: make test-public-library PACKAGE=mcp-connector-linear ENV=test-ci-mcp-connector-linear
+      - name: Build and guard mcp-connector-linear archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-linear PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-linear MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-linear
+      - name: Qualify mcp-connector-linear packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-linear ENV=test-ci-mcp-connector-linear
+
+  publish-mcp-connector-linear:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-linear, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_linear_publish == 'true' &&
+      needs.validate-mcp-connector-linear.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-linear with provenance
+        run: make publish-mcp-connector-linear ENV=test-ci-mcp-connector-linear
+
+  validate-mcp-connector-notion:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_notion == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-notion
+        run: make test-public-library PACKAGE=mcp-connector-notion ENV=test-ci-mcp-connector-notion
+      - name: Build and guard mcp-connector-notion archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-notion PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-notion MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-notion
+      - name: Qualify mcp-connector-notion packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-notion ENV=test-ci-mcp-connector-notion
+
+  publish-mcp-connector-notion:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-notion, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_notion_publish == 'true' &&
+      needs.validate-mcp-connector-notion.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-notion with provenance
+        run: make publish-mcp-connector-notion ENV=test-ci-mcp-connector-notion
+
+  validate-mcp-connector-slack:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_slack == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-slack
+        run: make test-public-library PACKAGE=mcp-connector-slack ENV=test-ci-mcp-connector-slack
+      - name: Build and guard mcp-connector-slack archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-slack PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-slack MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-slack
+      - name: Qualify mcp-connector-slack packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-slack ENV=test-ci-mcp-connector-slack
+
+  publish-mcp-connector-slack:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-slack, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_slack_publish == 'true' &&
+      needs.validate-mcp-connector-slack.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-slack with provenance
+        run: make publish-mcp-connector-slack ENV=test-ci-mcp-connector-slack
+
+  validate-mcp-connector-stripe:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_stripe == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-stripe
+        run: make test-public-library PACKAGE=mcp-connector-stripe ENV=test-ci-mcp-connector-stripe
+      - name: Build and guard mcp-connector-stripe archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-stripe PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-stripe MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-stripe
+      - name: Qualify mcp-connector-stripe packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-stripe ENV=test-ci-mcp-connector-stripe
+
+  publish-mcp-connector-stripe:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-stripe, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_stripe_publish == 'true' &&
+      needs.validate-mcp-connector-stripe.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-stripe with provenance
+        run: make publish-mcp-connector-stripe ENV=test-ci-mcp-connector-stripe
+
+  validate-skills:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test skills
+        run: make test-public-library PACKAGE=skills ENV=test-ci-skills
+      - name: Build and guard skills archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-skills PACK_DESTINATION=tmp/npm-bootstrap/skills MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-skills
+      - name: Qualify skills packaged consumer
+        run: make test-publishable-consumer PACKAGE=skills ENV=test-ci-skills
+
+  publish-skills:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-skills]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.skills_publish == 'true' &&
+      needs.validate-skills.result == 'success' &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish skills with provenance
+        run: make publish-skills ENV=test-ci-skills
+
   bootstrap-publish:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_publish_target != 'none' && github.ref == 'refs/heads/main'
@@ -2135,6 +3035,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
+            ubo-contracts|mcp-broker|connector-host|mcp-connector-airtable|mcp-connector-dropbox|mcp-connector-github|mcp-connector-gmail|mcp-connector-google|mcp-connector-googlecalendar|mcp-connector-googledocs|mcp-connector-googledrive|mcp-connector-googlesheets|mcp-connector-hubspot|mcp-connector-linear|mcp-connector-notion|mcp-connector-slack|mcp-connector-stripe|skills) echo "::error title=Web bootstrap required::Run make prepare-npm-bootstrap then make npm-bootstrap-web in an owner terminal; this package has no token bootstrap"; exit 1 ;;
             contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac
@@ -2302,6 +3203,24 @@ jobs:
     needs:
       - enforce-package-bump
       - changes
+      - validate-ubo-contracts
+      - validate-mcp-broker
+      - validate-connector-host
+      - validate-mcp-connector-airtable
+      - validate-mcp-connector-dropbox
+      - validate-mcp-connector-github
+      - validate-mcp-connector-gmail
+      - validate-mcp-connector-google
+      - validate-mcp-connector-googlecalendar
+      - validate-mcp-connector-googledocs
+      - validate-mcp-connector-googledrive
+      - validate-mcp-connector-googlesheets
+      - validate-mcp-connector-hubspot
+      - validate-mcp-connector-linear
+      - validate-mcp-connector-notion
+      - validate-mcp-connector-slack
+      - validate-mcp-connector-stripe
+      - validate-skills
       - validate-publishable-manifests
       - build-e2e
       - typecheck-lint-ui
