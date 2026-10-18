@@ -53,9 +53,9 @@
 - [x] **Lot 1 — Evidence and timing contract**
   - [x] Add the binding request, pinned evidence, record types, regime applicability and refresh rules to the study.
   - [x] Gate: verify quoted populations and measured/modelled/unknown distinctions against the approved inputs.
-- [ ] **Lot 2 — Typed knowledge and authority boundaries**
-  - [ ] Add one DS profile, explicit lossless adapters, package layout and the technical-package/memory boundary.
-  - [ ] Gate: preserve relation conservation, provenance, separate views and exclusion of memory metadata from committed facts.
+- [x] **Lot 2 — Typed knowledge and authority boundaries**
+  - [x] Add one DS profile, explicit lossless adapters, package layout and the technical-package/memory boundary.
+  - [x] Gate: preserve relation conservation, provenance, separate views and exclusion of memory metadata from committed facts.
 - [ ] **Lot 3 — Conductor and capitalisation contracts**
   - [ ] Add deterministic scheduling, phase-matched steering, source-skill adoption, Track joins and the qualified Engram seam.
   - [ ] Gate: retain coverage, zero unqualified reuse credit, historical/incomplete fallbacks and host prerequisites.
