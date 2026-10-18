@@ -421,69 +421,29 @@ One shared policy evaluator runs across all four OAuth issuance legs — **initi
 
 ## 6. Recovery and re-enrolment paths (target behaviour)
 
-Normative principle **R-REC-0**: for an MFA-hardened account, **email proof
-alone never creates a credential and never mints a session above
-enrolment-only**. Email stays in the system as a notification channel and
-as the recovery path for non-hardened accounts. The table is the complete
-inventory; any new path must be added here before it ships.
+Normative principle **R-REC-0**: for a protected account (`is_mfa_protected = true`), **email proof alone never creates a credential, never mints an `enrolment-only` recovery capability, and never mints any session when the account has no devices** (when the account has devices, magic link may mint only a `bearer` session for non-MFA applications, with credential enrolment, credential revocation, and federation-linking endpoints refused). `enrolment-only` capabilities are reserved exclusively for independently authorized protected recovery (`P-BREAK` and optional `P-CODE`). Email remains a notification channel and the recovery path for non-protected accounts (`is_mfa_protected = false`). The table is the complete inventory; any new path must be added here before it ships.
 
-| ID | Path | Target behaviour for an MFA-hardened account | Level granted |
+| ID | Path | Target behaviour for a protected account (`is_mfa_protected = true`) | Level granted |
 |---|---|---|---|
-| P-NORM | Sign in with an existing credential (UV) | Unchanged | `MFA` (fresh) `[EXISTS]` |
-| P-ADD | Add a credential while signed in | Requires a fresh `MFA` session (R-STEP-1); the new credential is usable immediately; all sessions and the account address are notified (section 9) | Caller's `MFA` session continues `[TO BUILD Lot 3]` |
-| P-REVOKE | Revoke a credential while signed in | Requires a fresh `MFA` session; revoking the last credential of a hardened account warns and requires re-confirmation, and revokes recovery codes with it | — `[TO BUILD Lot 3]` |
-| P-MAGIC-HAS | Magic link, account has devices | Session stays `bearer` and is refused by MFA clients (unchanged). It **cannot** enrol a credential: the register surface for a hardened account rejects email-only enrolment and directs to P-ADD (sign in first), P-CODE, or P-BREAK | `bearer` only `[EXISTS]` refusal; enrolment block `[TO BUILD Lot 3]` |
-| P-MAGIC-NONE | Magic link, account has **no** devices (`api/src/routes/namespaces/auth/magic-link.ts:194` temporary session) | For a protected account it is not issued on email proof at all (see R-REC-1). For a non-protected account the merged behaviour is preserved exactly: an ordinary bearer session for first-device enrolment after email proof (no new confinement, no endpoint restriction) | `enrolment-only` `[TO BUILD Lot 3]` |
-| P-LOST | "Lost your device?" (email code → register) | For a hardened account, email code alone stops at a recovery notice (choose P-CODE or P-BREAK); the current direct-to-enrolment behaviour is retained only for non-hardened accounts | None for hardened accounts `[TO BUILD Lot 3]` |
-| P-INVITE | Invite-token enrolment (new account) | Unchanged for account creation. An invite never allowlists the new account on an MFA client by itself; allowlisting still passes the two-credential prerequisite (section 4.2) | `bearer` at finalisation `[EXISTS]` |
-| P-FED | Federation sign-in (for example Google) | Unchanged `bearer`; cannot enrol a credential for a hardened account (same block as P-MAGIC-HAS) | `bearer` only `[EXISTS]` refusal; enrolment block `[TO BUILD Lot 3]` |
-| P-LINK | Link/unlink a federation identity while signed in | For a protected account (including a protected zero-credential account, which is not a fresh shell), link and unlink require recent trusted authority (administrative bound, section 5.3) or explicit recovery authority; an ordinary bearer session cannot attach a persistent new sign-in foothold. No silent email merge (unchanged) | No level change `[TO BUILD Lot 3]` |
-| P-CODE | Recovery code → restricted request (option (c), deferred optional sublot) | A single-use code enrolled earlier under an `MFA` session opens a restricted recovery request and one `pending-recovery` enrolment (R-REC-6); activation still needs a surviving trusted ceremony or the Job, then a fresh qualifying sign-in. Codes never satisfy a client directly | `enrolment-only`, pending binding `[TO BUILD Lot 4 optional]` |
-| P-BREAK | Break-glass reset (option (b)) | Governed Job run with the IdP admin account revokes **all** credentials, sessions, and recovery codes of the account and issues a single-purpose enrolment-only grant; the owner enrols a fresh credential and signs in. Fully audited and notified (section 9) | `enrolment-only` grant `[TO BUILD Lot 4]` |
+| P-NORM | Sign in with an existing `trusted` credential (UV) | Unchanged when within freshness bound | `MFA` (`urn:sentropic:loa:mfa`, fresh) `[EXISTS]` |
+| P-ADD | Add a credential while signed in | Requires a fresh `trusted` `MFA` session within `adminMaxMfaAgeSeconds` (R-STEP-1); the new credential is bound as `trusted` immediately; all sessions and the account address are notified (section 9) | Caller's `MFA` session continues `[TO BUILD Lot 3]` |
+| P-REVOKE | Revoke a credential while signed in | Requires a fresh `trusted` `MFA` session within `adminMaxMfaAgeSeconds`; revoking the last credential of a protected account warns, requires re-confirmation, and revokes recovery codes with it | — `[TO BUILD Lot 3]` |
+| P-MAGIC-HAS | Magic link, account has devices (`api/src/routes/namespaces/auth/magic-link.ts:140`) | Mints an ordinary `bearer` session for permitted weak/non-MFA applications (`amr=['urn:sentropic:amr:email']`), refused by all MFA clients. It **cannot** enrol or revoke a credential or link/unlink federation: `/register/*`, credential delete, and federation link/unlink refuse it and direct to P-ADD, P-CODE, or P-BREAK | `bearer` only (protected endpoints blocked) `[EXISTS]` refusal; endpoint blocks `[TO BUILD Lot 3]` |
+| P-MAGIC-NONE | Magic link, account has **no** devices (`api/src/routes/namespaces/auth/magic-link.ts:194`) | For a protected account (`is_mfa_protected = true`), mints **no session and no recovery grant at all**, returns the generic recovery notice, and notifies the account address (R-REC-1). For a non-protected account (`is_mfa_protected = false`), preserves merged behaviour byte-identically: an ordinary 7-day `bearer` session (`api/src/services/session-manager.ts:93`) with no endpoint restriction | `None` for protected accounts; `bearer` (unchanged) for non-protected accounts `[TO BUILD Lot 3]` |
+| P-LOST | "Lost your device?" (email code → register) | For a protected account, email code alone stops at a recovery notice (choose P-BREAK or optional P-CODE); direct-to-enrolment behaviour is retained only for non-protected accounts | `None` for protected accounts `[TO BUILD Lot 3]` |
+| P-INVITE | Invite-token enrolment (new account) | Unchanged for initial account creation (`is_mfa_protected = false`, credential marked `unverified_email`). An invite never protects or allowlists the account on an MFA client and cannot rebind an already protected account | `bearer` at finalisation `[EXISTS]` |
+| P-FED | Federation sign-in (for example Google) | Unchanged `bearer` (`amr=['urn:sentropic:amr:federation']`); cannot enrol/revoke a credential or link/unlink federation for a protected account (same endpoint blocks as P-MAGIC-HAS) | `bearer` only `[EXISTS]` refusal; endpoint blocks `[TO BUILD Lot 3]` |
+| P-LINK | Link/unlink a federation identity while signed in | For a protected account (including a protected zero-credential account, which is never treated as a fresh shell), link and unlink require a fresh `trusted` MFA session within `adminMaxMfaAgeSeconds` (section 5.3) or explicit recovery authority; an ordinary `bearer` session cannot attach or detach a sign-in foothold. No silent email merge (unchanged) | No level change `[TO BUILD Lot 3]` |
+| P-CODE | Recovery code → restricted request (option (c), deferred optional sublot) | A single-use code enrolled earlier under a `trusted` `MFA` session opens a restricted recovery request and one `pending-recovery` enrolment (R-REC-6); activation to `trusted` still requires a surviving `trusted` ceremony or the break-glass Job, then a fresh qualifying sign-in. Codes never satisfy a client directly | `enrolment-only` capability, `pending-recovery` binding `[TO BUILD Lot 4 optional]` |
+| P-BREAK | Break-glass reset (option (b)) | Governed Job run with the independent cluster admin identity revokes **all** credentials, sessions, and recovery codes of the account and issues a single-purpose `enrolment-only` grant bound to subject, generation, and ceremony (R-REC-4/R-REC-6); the owner enrols a fresh credential, completes bound activation, and signs in. Fully audited and notified (section 9) | `enrolment-only` grant `[TO BUILD Lot 4]` |
 
 Rules that cut across the table:
 
-- **R-REC-1 (closing the no-device email path).** `[TO BUILD Lot 3]`
-  For an MFA-hardened account, the handler at
-  `api/src/routes/namespaces/auth/magic-link.ts:194` must not mint the
-  temporary registration session on email proof alone. It returns the
-  generic recovery notice (no account-state signal beyond what the caller
-  already proved by holding the link) and notifies the account address
-  that a recovery was attempted. **Effective from Lot 3**, which is the
-  lot that makes KVM's required-MFA guarantee true; before Lot 3 lands,
-  `kvm-gateway` must not be allowlist-enforced as an MFA-only client
-  (section 10.2 orders the two). The non-hardened branch of the same
-  handler is unchanged.
-- **R-REC-2 (with-devices case).** The with-devices magic-link session
-  (`magic-link.ts:140`) already mints `bearer` and is already refused by
-  MFA clients; Lot 3 adds only the enrolment block (P-MAGIC-HAS), so email
-  proof cannot be converted into a credential from that session either.
-  Together R-REC-1 and R-REC-2 close both halves of G-RECOVERY.
-- **R-REC-3 (enrolment-only confinement).** An enrolment-only session (or
-  break-glass grant) authorizes exactly: create one credential for its own
-  account, list that the enrolment completed, and sign out. Authorize,
-  consent, credential revoke, recovery-code management, and every other
-  authenticated endpoint refuse it. It expires in minutes (Lot 3/4 sets
-  the exact TTL, single-digit minutes for the break-glass grant), is
-  single-enrolment (a second create attempt refuses), and its use is
-  audited. Confinement is enforced server-side by session purpose, never
-  by hiding UI links.
-- **R-REC-4 (activation is a state transition).** A credential created
-  while already trusted (signed-in P-ADD under a fresh MFA session) is
-  trusted at once. A credential created under a recovery capability
-  (P-CODE/P-BREAK, or the protected no-device path) starts
-  `pending-recovery` per R-REC-6: its next UV sign-in proves control of
-  the new key only and does **not** reach `MFA` until independent
-  activation completes. Enrolment itself never seals an authorization
-  code and never marks the enrolment session as `MFA`. The Job either
-  authorizes one named future binding (target subject, generation, and
-  ceremony bound, single-use) or performs a separate activation step;
-  retry reuses the same operation id and cannot widen the binding.
-- **R-REC-5 (first enrolment of a brand-new account).** A new account is
-  not hardened until it is allowlisted (section 4.2), so initial
-  enrolment by email code or invite stays as merged. Hardening, the
-  two-credential prerequisite, and the email block all engage at
-  allowlist time, in that order (section 10.2).
+- **R-REC-1 (closing the no-device email path and gating first activation).** `[TO BUILD Lot 3]` For a protected account (`is_mfa_protected = true`), `api/src/routes/namespaces/auth/magic-link.ts:194` mints no session and no recovery grant on email proof alone: it returns the generic recovery notice and notifies the account address. While Lot 3 ships this code path, **transitioning the first account to `is_mfa_protected = true` (which activates R-REC-1/R-REC-2 for that account) is gated on all five prerequisites of section 10.2**: (1) non-circular trust bootstrap, (2) working Lot 4 break-glass Job and `pending-recovery` activation, (3) Lot 2 freshness and four-leg evaluator plus Lot 3 binding/step-up gates, (4) durable transition persistence (`security-transition-store.ts`), and (5) a successful Lot 6 full-loss recovery drill with normal IdP/KVM access unavailable. The existing restrictive `kvm-gateway` production row is preserved throughout (never cleared to sequence rollout), and full `P-MFA` + `P-REC` is claimed only once that activation gate completes. The non-protected branch (`is_mfa_protected = false`) is unchanged.
+- **R-REC-2 (with-devices case).** The with-devices magic-link session (`magic-link.ts:140`) already mints `bearer` and is already refused by MFA clients; Lot 3 adds the credential-enrolment, credential-revocation, and federation-linking blocks (`P-MAGIC-HAS`) for protected accounts. Together R-REC-1 and R-REC-2 close both halves of G-RECOVERY.
+- **R-REC-3 (enrolment-only confinement).** An `enrolment-only` capability (`P-BREAK` grant or optional `P-CODE` restricted request) authorizes exactly: create one `pending-recovery` credential for its bound subject and generation, read that the enrolment completed, and sign out. Authorize, consent, token exchange, credential revoke, federation link/unlink, recovery-code management, and every other authenticated endpoint refuse it. It expires in single-digit minutes, is single-enrolment (a second create attempt refuses atomically), and is enforced server-side by capability purpose, never by hiding UI links.
+- **R-REC-4 (activation is a state transition).** A credential created via signed-in P-ADD under a fresh `trusted` MFA session is `trusted` at once. A credential created under a recovery capability (`P-BREAK` or optional `P-CODE`) starts `pending-recovery` per R-REC-6: its next UV sign-in proves control of the new key only and does **not** reach `MFA` until independent activation completes. Enrolment itself never seals an authorization code and never marks the enrolment session as `MFA`. The Job either authorizes one named future binding (target subject, generation, and ceremony bound, single-use) or performs a separate activation step; retry reuses the same `operationId` and cannot widen the binding.
+- **R-REC-5 (first enrolment and stored-protection transition).** A brand-new account starts with `is_mfa_protected = false`, so initial first-device enrolment by email code or invite stays as merged for non-protected use. Credentials enrolled by email or invite carry `unverified_email` provenance and can never supply their own bootstrap authority for an MFA client. Stored protection (`is_mfa_protected = true`), the two-trusted-credential prerequisite, and the R-REC-1/R-REC-2 email block engage atomically at the protected-activation transition (allowlist binding, first protected authorization to an unrestricted MFA client after section 10.2 trust bootstrap, or explicit operator activation) before any protected authorization code can be issued.
 - **R-REC-6 (pending binding, no self-approval).** `[TO BUILD Lot 4]` A
   credential created under P-CODE or P-BREAK starts as `pending-recovery`:
   its own UV proves control of the new key, not continuity with the owner.
@@ -498,10 +458,10 @@ Rules that cut across the table:
   anyone can lock the owner out repeatedly. Invalidation (sessions, local
   refresh material, continuations, authorization codes, tracked tokens,
   security-generation increment) happens only once sufficient recovery
-  authority is established, atomically with the audit record. Self-contained
-  JWTs and RP cookies that never recheck remain usable until their own
-  expiry: Lot 6 documents the bounded RP session lifetime and the KVM
-  purge/logout operation instead of claiming instant global revocation.
+  authority is established, atomically with the durable transition record.
+  Self-contained JWTs and RP cookies that never recheck remain usable until
+  their own expiry: Lot 6 documents the bounded RP session lifetime and the
+  KVM purge/logout operation instead of claiming instant global revocation.
 - **R-REC-8 (prerequisite means independently recoverable).** The
   two-authenticator prerequisite (section 4.2) means two **independently
   recoverable** authenticators (for example a platform/synced passkey
@@ -520,10 +480,10 @@ first client.
 
 | Option | T-MAIL | T-DEVLOSS | Cost / failure mode | Verdict |
 |---|---|---|---|---|
-| (a) At least 2 registered passkeys before forced 2FA is enabled on an account | Neutral: does not stop email enrolment by itself | Strong improvement: loss of one device is a normal P-ADD, not a recovery | Enrolment friction once; a synced passkey and a hardware key count as two rows only if they are two distinct credentials | **Adopt** as the allowlist prerequisite (section 4.2, Lot 4) |
-| (b) Emergency reset only by a k8s Job run with the admin account | Strong: requires cluster access plus the admin account; email plays no role | Available only while the independent administrator route and its recovery material are retained; slow and total (all credentials revoked) | Rare, deliberate, fully audited; unusable as a self-service path | **Adopt** as the break-glass floor (P-BREAK, Lot 4) |
-| (c) Optional recovery codes that only give a weak level and force re-enrolment | Sound **only** under three conditions: codes are generated solely under an `MFA` session, stored hashed and single-use, and redemption grants enrolment-only (never `MFA`). A code mailed or stored with the mailbox collapses to T-MAIL | Self-service recovery without an operator; loss of codes plus devices falls back to (b) | Needs enrolment UX, hash storage, rate limiting, and revocation on credential changes | **Adopt as opt-in** per hardened account (P-CODE, Lot 4); whether KVM's owner enrols codes is an owner decision (section 15) |
-| (d) No recovery by email alone | This is property P-MFA restated for recovery; without it every other option is bypassed by the register flow | Removes the familiar path, so (a)+(b) and optionally (c) must land with it | Breaks the current "Lost your device?" expectation for hardened accounts only | **Adopt as the invariant** R-REC-0 (Lot 3) |
+| (a) At least 2 independently recoverable authenticators before protected activation | Neutral: does not stop email enrolment by itself | Strong improvement: loss of one device is a normal P-ADD, not a recovery | Enrolment friction once; a synced passkey and a hardware key count as two rows only if they are two distinct credentials | **Adopt** as the protected-activation prerequisite (section 4.2, Lot 4) |
+| (b) Emergency reset only by a k8s Job run with the independent admin identity | Strong: requires cluster access plus the scoped admin Job; email plays no role | Available only while the independent administrator route and its recovery material are retained; slow and total (all credentials revoked) | Rare, deliberate, durably audited; unusable as a self-service path | **Adopt** as the break-glass floor (P-BREAK, Lot 4) |
+| (c) Optional recovery codes opening a restricted request and `pending-recovery` binding | Sound **only** when high-entropy codes are minted under a fresh `trusted` MFA session, stored as subject- and generation-bound hashes, consumed atomically once, and redemption creates only a `pending-recovery` credential (R-REC-6) whose next UV login remains below `MFA` until independent activation (surviving `trusted` factor or break-glass Job) | Pre-stages replacement credential enrolment, but full-loss activation still requires the independent operator Job (unless the owner selects the weaker autonomous code-plus-delay alternative in D-P2, which requires a spec amendment) | Needs enrolment UX, hash storage, rate limiting, and atomic consume; does not eliminate operator involvement on total loss under P-MFA | **Defer** to an optional Lot 4 sublot (not a KVM prerequisite); if built, enforce R-REC-6 pending binding (section 15, D-P2) |
+| (d) No recovery by email alone | This is property P-MFA restated for recovery; without it every other option is bypassed by the register flow | Removes the familiar path, so (a)+(b) and the full-loss drill must pass before first protected activation | Replaces the "Lost your device?" flow for protected accounts only | **Adopt as the invariant** R-REC-0 (Lot 3) |
 | Baseline: keep email-code enrolment for everyone (status quo) | Fails: G-RECOVERY converts mailbox control into `MFA` in two steps | Convenient | Leaves forced 2FA as email security with extra steps | **Rejected** |
 
 **Recommendation (normative).** First release: **(d) as the invariant,
@@ -535,28 +495,30 @@ activation still needs a surviving trusted ceremony or the Job), with
 high-entropy single-use codes stored only as subject- and
 generation-bound verifiers — never the short email-code mechanism. An
 owner choice for autonomous code-plus-delay activation instead records a
-weaker recovery root explicitly (section 15, D-P2). Lot 3 enforces (d)
-and the enrolment-only confinement; Lot 4 adds (a) and (b). No single
-option is sufficient alone: (a) without (d) still lets email enrol a third
-credential; (d) without (a)/(b) risks owner lockout; (c) without the
-pending-binding bound would reintroduce a bearer-equivalent secret. The
-break-glass Job contract is normative: it identifies the cluster identity
-and the target subject separately (an `admin_app` role from a weak web
-session is never sufficient), uses a versioned purpose-specific Job with
-an immutable image digest, a scoped service account, exact target,
-reason, operation id, expected generation, and dry-run/readback; it
-issues a short-lived single-use binding authorization through the
-administrative channel and never sets `mfaVerified`, clears a client
-policy, or returns a long-lived session. The independent administrator
-route (with its own recovery material, separate from the passkey sync
-account) is prepared and rehearsed before KVM enforcement.
+weaker recovery root explicitly (section 15, D-P2). Lot 3 implements (d)
+and the `enrolment-only` confinement; Lot 4 adds (a), the non-circular trust
+bootstrap, and (b). No single option is sufficient alone: (a) without (d)
+still lets email enrol a third credential; (d) without (a)/(b) risks owner
+lockout; (c) without the pending-binding bound would reintroduce a
+bearer-equivalent secret. The break-glass Job contract is normative: it
+identifies the cluster identity and the target subject separately (an
+`admin_app` role from a weak web session is never sufficient), uses a
+versioned purpose-specific Job with an immutable image digest, a scoped
+service account, exact target, reason, `operationId`, expected
+`security_generation`, and dry-run/readback; it issues a short-lived
+single-use binding authorization through the administrative channel and
+never sets `mfaVerified`, clears a client policy, or returns a long-lived
+session. The independent administrator route (with its own recovery
+material, separate from the passkey sync account) is prepared and rehearsed
+before the first account is transitioned to `is_mfa_protected = true`.
 
 Explicitly rejected alternatives: email link plus a waiting period (delay
 does not change who holds the mailbox; T-MAIL waits too), email plus
 notification with veto window as the **sole** control (same reason;
 notification remains required, but as detection, not authorization), and
-requiring the RP to check `acr` for KVM (owner-decided: the gateway
-performs no check; the guarantee is the IdP's).
+requiring the RP to check a passkey-specific `acr` string or method name for
+KVM (the IdP guarantees the policy; the RP checks only that signed `amr`
+contains `"mfa"`).
 
 ## 8. Normative commitments requested by the kvm lane
 
