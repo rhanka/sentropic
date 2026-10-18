@@ -100,19 +100,19 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
   - [x] Confirm no other `spec/*.md` file is modified; controlling specs stay read-only references.
 
 - [ ] **Lot 4 — Final validation and handoff**
-  - [ ] Run `make scope-check ENV=test-pr596-custody` before each atomic commit (commits of at most 150 lines, via `make commit`, no AI attribution).
-  - [ ] Review the final diff vs `origin/main` and run `git diff --check`.
-  - [ ] **API tests**: existing: none impacted; updated: none; new: none. No API test run applies (documentation-only).
-  - [ ] **UI tests**: existing: none impacted; updated: none; new: none. No UI test run applies (documentation-only).
-  - [ ] **E2E tests**: existing: none impacted; updated: none; new: none. No E2E run applies (documentation-only).
-  - [ ] Document UAT (reviewer checklist, on the pushed head):
-    - [ ] Open the study and confirm the status line distinguishes the 2026-09-20 historical study from the 2026-10-18 reconciliation.
-    - [ ] Confirm O1/O2/O3 read as historical options and no current recommendation points to O2.
-    - [ ] Confirm refresh and delivery wording matches D7 (sole refresher, GitHub-first commit, CAS, access-only projection, no runtime refresh of custody seats).
-    - [ ] Confirm fallback and terms wording carry no unconditional promise.
-    - [ ] Confirm the provider table matches the five-CLI envelope and marks lifecycle qualification unverified.
-    - [ ] Confirm each of the seven questions carries a disposition with a pinned reference.
-    - [ ] Confirm dependency owners (custody/G4, h2a, platform/custody operator) and the production-deferred boundary are stated.
+  - [x] Run `make scope-check ENV=test-pr596-custody` before each atomic commit (commits of at most 150 lines, via `make commit`, no AI attribution).
+  - [x] Review the final diff vs `origin/main` and run `git diff --check`.
+  - [x] **API tests**: existing: none impacted; updated: none; new: none. No API test run applies (documentation-only).
+  - [x] **UI tests**: existing: none impacted; updated: none; new: none. No UI test run applies (documentation-only).
+  - [x] **E2E tests**: existing: none impacted; updated: none; new: none. No E2E run applies (documentation-only).
+  - [x] Document UAT (reviewer checklist, on the pushed head):
+    - [x] Open the study and confirm the status line distinguishes the 2026-09-20 historical study from the 2026-10-18 reconciliation.
+    - [x] Confirm O1/O2/O3 read as historical options and no current recommendation points to O2.
+    - [x] Confirm refresh and delivery wording matches D7 (sole refresher, GitHub-first commit, CAS, access-only projection, no runtime refresh of custody seats).
+    - [x] Confirm fallback and terms wording carry no unconditional promise.
+    - [x] Confirm the provider table matches the five-CLI envelope and marks lifecycle qualification unverified.
+    - [x] Confirm each of the seven questions carries a disposition with a pinned reference.
+    - [x] Confirm dependency owners (custody/G4, h2a, platform/custody operator) and the production-deferred boundary are stated.
   - [ ] Update PR #596 title/body to reflect the reconciled study (PR body: exact text of this `BRANCH.md`).
   - [ ] Push, verify PR CI is green on the final head, record the head SHA, and stop.
   - [ ] Deferred to the conductor after handoff (not executed on this branch): two independent reviews (mesh/Claude/runtime and custody/deployment/security), then the `BRANCH.md` removal commit, then merge. Never merge on this branch.
