@@ -1,0 +1,8 @@
+{
+  "name": "cluster-mesh-storage-qualification-deps",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@stablelib/sha256": "2.0.1"
+  }
+}

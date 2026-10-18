@@ -1,5 +1,7 @@
 # Confirmation reviews and treatment
 
+**Historical evidence.** Verdicts, pending conditions and hashes below describe their recorded revision. The [frozen storage alignment](storage-alignment.md) governs current work: M1 is owner-closed with carried reserves and unprovided handoff evidence; C0/module extensions and selected PG qualification remain separate. No historical proposal authorizes rewriting M1.
+
 English extracts of CONF2 and CONF3. Source review digests identify the original reports; this translated extract has its own digest in the [index](index.md). Review declarations and independence limits are in [author metadata](author-metadata.md).
 
 ## CONF2 — treatment of C6
