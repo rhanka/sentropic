@@ -2905,6 +2905,81 @@ jobs:
       - name: Publish mcp-connector-slack with provenance
         run: make publish-mcp-connector-slack ENV=test-ci-mcp-connector-slack
 
+  validate-mcp-connector-stripe:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_stripe == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-stripe
+        run: make test-public-library PACKAGE=mcp-connector-stripe ENV=test-ci-mcp-connector-stripe
+      - name: Build and guard mcp-connector-stripe archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-stripe PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-stripe
+      - name: Qualify mcp-connector-stripe packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-stripe ENV=test-ci-mcp-connector-stripe
+
+  publish-mcp-connector-stripe:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-stripe, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_stripe_publish == 'true' &&
+      needs.validate-mcp-connector-stripe.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-stripe with provenance
+        run: make publish-mcp-connector-stripe ENV=test-ci-mcp-connector-stripe
+
+  validate-skills:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test skills
+        run: make test-public-library PACKAGE=skills ENV=test-ci-skills
+      - name: Build and guard skills archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-skills PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-skills
+      - name: Qualify skills packaged consumer
+        run: make test-publishable-consumer PACKAGE=skills ENV=test-ci-skills
+
+  publish-skills:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-skills]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.skills_publish == 'true' &&
+      needs.validate-skills.result == 'success' &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish skills with provenance
+        run: make publish-skills ENV=test-ci-skills
+
   bootstrap-publish:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_publish_target != 'none' && github.ref == 'refs/heads/main'
@@ -3100,6 +3175,8 @@ jobs:
       - validate-mcp-connector-linear
       - validate-mcp-connector-notion
       - validate-mcp-connector-slack
+      - validate-mcp-connector-stripe
+      - validate-skills
       - validate-publishable-manifests
       - build-e2e
       - typecheck-lint-ui
