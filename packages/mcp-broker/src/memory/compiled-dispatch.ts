@@ -22,6 +22,9 @@ import {
   MEMORY_CONNECTOR_ID,
   MEMORY_PROVIDER_ID,
   isMemoryToolName,
+  isMutatingMemoryToolName,
+  isValidIdempotencyKey,
+  isValidOpaqueRef,
   requireTrustedInvocationContext,
   type MemoryContextProjectionV1,
 } from '@sentropic/mcp-platform/memory';
@@ -62,7 +65,7 @@ export type SelectMemoryToolInput = {
   toolName: string;
   ctx: StpConnectorContext;
   purposeRef: string;
-  idempotencyKey: string;
+  idempotencyKey?: string;
   elicitationRef?: string;
   expectedPrincipalSub: string;
   expectedTenantRef: string;
@@ -132,6 +135,18 @@ export class CompiledMemoryDispatch {
     }
     if (input.expectedGeneration !== this.generation) {
       throw new MemoryDispatchRefusal('stale_generation', 'observed generation differs from the active generation');
+    }
+    if (verified.memory?.binding.selected_source_id !== this.sourceId) {
+      throw new MemoryDispatchRefusal('source_binding_mismatch', 'verified source differs from the bound source');
+    }
+    if (verified.memory.binding.active_generation !== this.generation) {
+      throw new MemoryDispatchRefusal('stale_generation', 'verified generation differs from the active generation');
+    }
+    if (isMutatingMemoryToolName(input.toolName) && !isValidIdempotencyKey(input.idempotencyKey)) {
+      throw new MemoryDispatchRefusal('source_binding_mismatch', 'mutation requires an envelope idempotency key');
+    }
+    if ((input.toolName === 'engram_memory_withdraw' || input.toolName === 'engram_memory_forget') && !isValidOpaqueRef(input.elicitationRef)) {
+      throw new MemoryDispatchRefusal('source_binding_mismatch', 'destructive mutation requires an elicitation reference');
     }
     if (!isMemoryToolName(input.toolName)) {
       throw new MemoryDispatchRefusal('unknown_tool', `no memory tool named "${input.toolName}"`);
