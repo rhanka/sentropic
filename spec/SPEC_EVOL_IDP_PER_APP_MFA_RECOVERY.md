@@ -833,30 +833,39 @@ section 15 and by keeping the bound per client); alias window lingering
 
 Unverified at spec time (stated, not assumed): whether any required-MFA client besides `kvm-gateway` already exists in a live database, the live owner subject value, and whether the currently deployed tier RP instance already matches the pinned `deploy/kvm-gateway/oauth2-proxy-amr-check.yaml` digest (verified and enforced via `deploy/ci/kvm-gateway/verify-rp-amr.sh` before Lot 5/Lot 6 cutover). Each is an operator verification in Lot 1/Lot 6, not a spec assumption.
 
-## 15. Décisions propriétaire
+## 15. Closed owner decisions (2026-10-18, binding)
 
-Seules les décisions qui appartiennent réellement au propriétaire sont
-listées ici. L'inscription de KVM comme client OAuth de l'IdP et les
-paramètres donnés de `kvm-gateway` (section 11) sont des exigences
-acquises et ne sont pas rouverts. Pour chaque décision : options,
-conséquences, recommandation de la spécification.
+Source: `.h2a/reviews/pr695_owner-decisions.md`. The answers below are
+verbatim; the English application notes define their effect on this design.
+They close D-P1, D-P2 and D-P3 without claiming approval of later amendments,
+implementation, deployment, or the complete specification's docs-UAT.
 
-**D-P1 — Fenêtre de fraîcheur MFA pour `kvm-gateway`.** Options : (i) 300 secondes à l'émission OAuth (`authorize`, `consent`, code, `token`) (étape renforcée presque à chaque nouvelle émission OIDC), (ii) quelques heures (recommandé : 8 h), (iii) 24 h. Conséquences : plus la fenêtre `maxMfaAgeSeconds` est courte, plus l'usage d'une session IdP volée (T-SESS) pour obtenir un nouveau jeton est contenu, mais plus la cérémonie WebAuthn est répétée lors d'une ré-émission OIDC ; 24 h laisse une journée de ré-émission à une session IdP volée. Cette borne gouverne uniquement l'émission OIDC côté IdP (section 5.3) et est indépendante de la durée du cookie de session aval de `kvm-gateway` (`oauth2-proxy`, dont la révocation immédiate en cas d'incident relève de la purge de session RP de R-REC-7) ainsi que de `adminMaxMfaAgeSeconds` (fixé séparément à 900 s par défaut au Lot 0 pour les mutations de sécurité IdP).
+**D-P1 — MFA freshness for `kvm-gateway`: CLOSED.** Owner answer:
 
-**D-P2 — Codes de récupération pour le compte propriétaire KVM.**
-Options : (i) différer les codes et livrer d'abord (a)+(b) (recommandé
-par la spécification et l'étude parallèle), (ii) construire le sous-lot
-codes avec liaison en attente (R-REC-6 : le code ouvre la demande, il
-n'active jamais seul un accès MFA), (iii) choisir une activation
-autonome code-plus-délai, qui consigne une racine de récupération plus
-faible. Conséquences : (i) garde la surface minimale avec une
-récupération dépendante de l'opérateur ; (ii) ajoute une commodité sans
-chaîne directe code-vers-MFA ; (iii) rend le vol du code éventuellement
-suffisant après délai et doit être assumé comme tel.
+> « il faut un mécanisme de rafraîchissement. tant que j'utilise / que je suis connecté pas de 2fa à nouveau, et expiration au bout de 24h (me permettre de dormir sans relogin) »
 
-**D-P3 — Portée du durcissement du compte.** Options : (i) la protection stockée `users.is_mfa_protected` activée explicitement après vérification des prérequis de R-REC-1 (sections 4.2 et 6 : entrée allowlist, première émission MFA vers un client sans allowlist, ou activation opérateur), (ii) étendre la protection à tout compte dès son premier passkey, y compris pour les applications non forcées, avec une migration qui établit d'abord la confiance indépendante et les moyens de récupération requis. Conséquences : (i) préserve la récupération par email des comptes non protégés et limite le changement aux comptes protégés (dont le propriétaire KVM) une fois P-MFA et P-REC prêts ; (ii) ferme pour davantage de comptes la création de credentials et l'ouverture de session sans appareil par email seul, et protège les mutations de credentials et de compte (section 4.2), réduisant ces voies de prise de contrôle même sans exigence MFA applicative. Cette protection élargie augmente les préparatifs de récupération et le risque de perte d'accès ; elle exige d'adapter les déclencheurs et la migration, sans supprimer les prérequis de confiance ni de récupération. Dans les deux options, la protection du compte ne force pas chaque connexion : pour un compte protégé avec appareils, une preuve email peut encore ouvrir une session `bearer` vers un client non-MFA, sans autoriser les mutations protégées ; l'exposition de cette connexion demeure. La spécification recommande (i).
+Application: sliding session continuity without another 2FA before the
+24-hour absolute MFA deadline, including overnight inactivity (section 5.3).
+Refresh never moves the ceremony time or absolute deadline; PR #699's
+15-day OAuth families do not enable refresh for `kvm-gateway` (section 5.4).
+Sensitive IdP mutations retain their separate 900-second step-up bound.
 
-Aucune autre décision propriétaire n'est requise pour autoriser les lots :
-le choix des TTL fins (session enrolment-only, grant d'urgence), des noms
-d'événements d'audit et du schéma de la table des codes relève des lots
-d'implémentation sous les bornes normatives des sections 6 et 9.
+**D-P2 — Recovery after loss of every passkey: CLOSED.** Owner answer:
+
+> « ok pour 2 passkeys+job opérateur + code de récup merci »
+
+Application: two independently recoverable passkeys, the operator Kubernetes
+Job, and recovery codes are all required in Lot 4. A code opens a request
+and creates at most one `pending-recovery` binding; independent activation
+and a fresh UV sign-in remain mandatory (R-REC-6). No autonomous
+code-plus-delay activation is authorized.
+
+**D-P3 — Account-hardening scope: CLOSED.** Owner answer:
+
+> « Comptes des apps à 2FA forcée (Recommandé) »
+
+Application: stored protection is activated for accounts of forced-2FA
+applications through the section 4.2 guarded transitions, or by their
+operator. A first passkey alone never activates protection; other accounts
+retain email recovery. Protection remains stored after entitlement removal
+until deliberate governed de-protection (R-GOV-4).

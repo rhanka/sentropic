@@ -67,6 +67,7 @@
 - [x] This branch has no UI change: UAT is an owner read of the new spec and cross-references on the draft PR; no service start and no `ENV=dev` test run.
 
 ## Plan / Todo (lot-based)
+- [x] **Owner decisions applied (2026-10-18), receipt**: close D-P1, D-P2 and D-P3 with verbatim answers from `.h2a/reviews/pr695_owner-decisions.md`; retain full-spec docs-UAT as a separate pending receipt.
 - [x] **Round 1 dossier treatment (2026-10-18), finding 7**: balance D-P3 account-security benefits and recovery costs; retain trust/recovery prerequisites and explain remaining non-MFA bearer-login exposure. Documentary verification against section 4.2; no product qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `plan/BRANCH_TEMPLATE.md`, and the launch packet baseline at `94a38286e`.
