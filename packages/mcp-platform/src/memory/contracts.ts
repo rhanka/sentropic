@@ -15,6 +15,7 @@
 
 import type { CapabilityTool } from '../manifest.js';
 import { TOOL_SCHEMAS } from './tool-schemas.js';
+import type { CandidatePayloadV2, EvidenceBundleV1, LifecycleEventAnchorV1 } from './neutral-dtos.js';
 
 // ---------------------------------------------------------------------------
 // Frozen identities
@@ -259,8 +260,8 @@ export type MemoryMutationTargetV1 =
 export type EffectiveMemoryMutationInputV1 =
   | {
       tool_name: 'engram_memory_capture';
-      payload: Record<string, unknown>;
-      evidence: Record<string, unknown>;
+      payload: CandidatePayloadV2;
+      evidence: EvidenceBundleV1;
       capture_policy_version: string;
     }
   | {
@@ -273,14 +274,14 @@ export type EffectiveMemoryMutationInputV1 =
       candidate_id: string;
       reason_ref: string;
       event_id: string;
-      event_anchor: Record<string, unknown>;
+      event_anchor: LifecycleEventAnchorV1;
     }
   | {
       tool_name: 'engram_memory_forget';
       record_id: string;
       reason_ref: string;
       event_id: string;
-      event_anchor: Record<string, unknown>;
+      event_anchor: LifecycleEventAnchorV1;
     };
 
 export type MemoryMutationPolicyVersionsV1 =
