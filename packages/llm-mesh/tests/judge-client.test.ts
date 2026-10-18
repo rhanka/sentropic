@@ -12,7 +12,8 @@ const mockReceipt = (correlationId = 'test-corr-1'): JudgeReceipt => ({
   finishedAt: '2026-10-12T00:00:01.000Z', latencyMs: 1000, dispatch: 'completed', attempts: 1,
   usage: { tokens: { input: { value: 100, source: 'provider' }, output: { value: 10, source: 'provider' },
     total: { value: 110, source: 'derived-sum' } }, evaluatorCalls: 1, explanations: 0 },
-  cost: { status: 'actual', amountMicroUsd: '42', source: 'provider', rounding: 'ceil-micro-usd' },
+  cost: { status: 'estimated', amountMicroUsd: '42', source: 'reported-usage-times-rate',
+    priceRevision: 'fixture-price-v1', rounding: 'ceil-micro-usd' },
   retention: { status: 'not-evaluated', basis: 'none', evidenceRefs: [], retentionDays: null },
   budget: { state: 'settled', overrun: false }, outcome: 'verdict',
 });
@@ -420,6 +421,80 @@ describe('remote judge client', () => {
     const clientB = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: serve,
       authToken: async () => { requestB.raw = { mode: 'none' }; return 'token'; } });
     expect(await clientB.judge(requestB)).toMatchObject({ kind: 'verdict', ok: true });
+  });
+
+  it('rejects verdicts with unbound or absent identities', async () => {
+    const corr = 'ident-corr';
+    const client = (receipt: unknown) => createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
+        { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
+    }).judge(judgeRequest({ correlationId: corr }));
+
+    expect(await client({ ...mockReceipt(corr), evaluator: null }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...mockReceipt(corr), servedEvaluator: null }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...mockReceipt(corr), servedModelId: null }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...mockReceipt(corr), servedModelId: '' }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+  });
+
+  it('rejects verdicts that claim no execution took place', async () => {
+    const corr = 'exec-corr';
+    const client = (receipt: unknown) => createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
+        { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
+    }).judge(judgeRequest({ correlationId: corr }));
+
+    expect(await client({ ...mockReceipt(corr), attempts: 0 }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...mockReceipt(corr), dispatch: 'not-started' }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...mockReceipt(corr), dispatch: 'started' }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+  });
+
+  it('rejects verdicts without admitted accounting', async () => {
+    const corr = 'acct-corr';
+    const client = (receipt: unknown) => createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
+        { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
+    }).judge(judgeRequest({ correlationId: corr }));
+
+    expect(await client({ ...mockReceipt(corr), budget: { state: 'not-admitted', overrun: false } }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...mockReceipt(corr), cost: { status: 'not-incurred', amountMicroUsd: '0', source: 'no-dispatch' } }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...mockReceipt(corr),
+      usage: { ...mockReceipt(corr).usage, evaluatorCalls: 0 } }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...mockReceipt(corr),
+      usage: { tokens: { input: { value: null, source: 'not-reported' }, output: { value: null, source: 'not-reported' },
+        total: { value: null, source: 'not-reported' } }, evaluatorCalls: null, explanations: null } }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+  });
+
+  it('rejects error envelopes with malformed identity evidence', async () => {
+    const corr = 'errident-corr';
+    const client = (receipt: unknown) => createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: vi.fn(async () => new Response(JSON.stringify({ kind: 'error', ok: false,
+        error: { code: 'TIMEOUT', message: 'Judge deadline exceeded.', phase: 'dispatch', retryable: true },
+        receipt }),
+        { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
+    }).judge(judgeRequest({ correlationId: corr }));
+    const errorReceipt = { ...mockReceipt(corr), outcome: 'error' as const, errorCode: 'TIMEOUT' };
+
+    expect(await client({ ...errorReceipt, servedModelId: { invalid: true } }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...errorReceipt, providerRequestId: 42 }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await client({ ...errorReceipt, providerLatencyMs: -1 }))
+      .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
   });
 
   it('refuses NaN inputs before any egress without inventing a receipt', async () => {
