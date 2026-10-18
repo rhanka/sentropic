@@ -25,6 +25,7 @@
   - [x] L5-EX1 mesh: `packages/cluster-mesh/src/compose/mcp.ts`, `packages/cluster-mesh/package.json`, `packages/cluster-mesh/README.md`, `packages/cluster-mesh/CHANGELOG.md`, `packages/cluster-mesh/tests/mcp-composition.spec.ts`, `packages/cluster-mesh/tests/verified-invocation-context.spec.ts`, `packages/cluster-mesh/tests/memory-context.spec.ts`.
   - [x] L5-EX1 shared tooling: root `Makefile`, `package-lock.json`, `.github/workflows/ci.yml` only.
   - [x] L5-EX2 round-2 corrections: `packages/mcp-platform/src/tool-configuration.ts`, `packages/mcp-platform/tests/tool-configuration.test.ts`, `.h2a/reviews/pr700_treatment.md` only.
+  - [x] L5-EX2 selected-consumer fixture: `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` only, platform version/registry URL/integrity from the guarded full candidate; preserve all other pinned peers and entries.
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `docker-compose*.yml`, `.cursor/rules/**`, `rules/**`, `PLAN.md`, `plan/**`, `.track/**`, `.security/**`, `scripts/**`, root `package.json`.
   - [x] `api/**`, `ui/**`, `apps/**`, `deploy/**`, `packages/llm-mesh/**`, `packages/llm-gateway/**`, `packages/auth-hono/**`, `packages/auth-ui/**`, `packages/mcp-auth/**`, `packages/artifacts/**`, `packages/connector-host/**`, `packages/skills/**`, `packages/harness/**`.
@@ -36,9 +37,11 @@
 - [x] **Exception process**:
   - [x] L5-EX1 declared in L5-preparation-plan-v2.1.md with rationale, impact and rollback, activation pending entry gate only, no second approval invented.
   - [x] L5-EX2 authorized by the owner's round-2 fix request: align the stale platform constant and its compiler regression, repair existing CI sibling-archive selection, append the requested local treatment. Impact: full-platform configuration version becomes 0.3.1; mesh consumes the verified unpublished full candidate without changing frozen peers or P1 scope. Rollback: revert the version/CI correction commits and rebuild P1; no publication or merge.
+  - [x] L5-EX2 installed-gate extension: the unmodified lock-integrity guard rejects platform 0.3.1 against the committed 0.3.0 identity; update only that exact candidate entry. Impact: retain sibling/registry byte equality without relaxing any guard. Rollback: restore the prior lock entry alongside the platform version rollback.
   - [x] Verify actual path inventory and run make scope-check before authorized commits.
 
 ## Feedback Loop
+- [x] PR700-R2-5 installed gate PASS: full platform 0.3.1 archive e465ad5ccedf285f22c07ca9d8317333bdba1647e714ae7a8f550c7c34aa5666 verified against the selected lock, existing mesh packaging suite passes, no peer-range or guard changes.
 - [x] PR700-R2 history: retain the reviewed 4e44e9d969c0b7471763db17bcb64283d674921abf4d094cf875656b3131965a manifest and sidecar byte-for-byte, with both digest-named archives unchanged.
 - [x] PR700-R2 contracts: regenerate both API reports through explicit API_EXTRACT_LOCAL=1; keep CI's default strict verification, document effective confirmation and refresh the version-bound installed-consumer fixture.
 - [x] PR700-R2-4: reproduce stale version equality and actual-version snapshot rejection; align the compiler constant with platform 0.3.1, preserving strict equality and resealed configuration validation.
