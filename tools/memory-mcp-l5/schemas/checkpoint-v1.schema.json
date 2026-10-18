@@ -61,7 +61,7 @@
       "nodeVersion": { "type": "string", "minLength": 5, "maxLength": 32 },
       "imageDigest": { "$ref": "#/$defs/imageDigest" },
       "platform": { "type": "string", "minLength": 1, "maxLength": 64 },
-      "sqliteVersion": { "type": "string", "minLength": 5, "maxLength": 32, "pattern": "^3\\.[0-9]+\\.[0-9]+$" },
+      "sqliteVersion": { "type": "string", "minLength": 6, "maxLength": 32, "pattern": "^3\\.(?:[4-9][0-9]|[1-9][0-9]{2,})\\.[0-9]+$" },
       "driver": { "const": "node:sqlite" }, "journalMode": { "const": "WAL" }, "synchronous": { "const": "FULL" },
       "filesystem": { "type": "string", "minLength": 1, "maxLength": 128 },
       "filesystemAssumptions": { "type": "string", "minLength": 1, "maxLength": 512 },
@@ -95,7 +95,7 @@
     "importGraph": { "type": "object", "additionalProperties": false, "required": ["path", "sha256", "roots", "resolvedFilesSha256", "forbiddenHits", "unresolvedEdges"], "properties": {
       "path": { "$ref": "#/$defs/relPath" },
       "sha256": { "$ref": "#/$defs/sha256" },
-      "roots": { "type": "array", "minItems": 4, "maxItems": 16, "items": { "type": "string", "minLength": 1, "maxLength": 256 } },
+      "roots": { "type": "array", "minItems": 10, "maxItems": 16, "items": { "type": "string", "minLength": 1, "maxLength": 256 } },
       "resolvedFilesSha256": { "$ref": "#/$defs/sha256" },
       "forbiddenHits": { "const": 0 }, "unresolvedEdges": { "const": 0 }
     } },
@@ -137,7 +137,7 @@
     "commit": { "type": "string", "minLength": 40, "maxLength": 40, "pattern": "^[0-9a-f]{40}$" },
     "sha512Integrity": { "type": "string", "minLength": 95, "maxLength": 95, "pattern": "^sha512-[A-Za-z0-9+/]{86}==$" },
     "semver": { "type": "string", "minLength": 5, "maxLength": 64, "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$" },
-    "imageDigest": { "type": "string", "minLength": 71, "maxLength": 256, "pattern": "^(?:node:24(?:\\.[0-9]+)*-bookworm-slim@)?sha256:[0-9a-f]{64}$" },
+    "imageDigest": { "type": "string", "minLength": 94, "maxLength": 256, "pattern": "^node:24(?:\\.[0-9]+)*-bookworm-slim@sha256:[0-9a-f]{64}$" },
     "dateTime": { "type": "string", "format": "date-time", "minLength": 20, "maxLength": 64, "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$" },
     "relPath": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?:\\.[A-Za-z0-9_@-]+|[A-Za-z0-9_@][A-Za-z0-9._@-]*)(?:/(?:\\.[A-Za-z0-9_@-]+|[A-Za-z0-9_@][A-Za-z0-9._@-]*))*$" },
     "evidence": { "type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": { "path": { "$ref": "#/$defs/relPath" }, "sha256": { "$ref": "#/$defs/sha256" } } },
