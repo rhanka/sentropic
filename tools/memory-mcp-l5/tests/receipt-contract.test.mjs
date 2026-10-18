@@ -18,32 +18,53 @@ import { canonicalizeJson } from '../schema-validator.mjs';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SCHEMA_PATH = join(HERE, '..', 'schemas', 'checkpoint-v1.schema.json');
+const MANIFEST_SCHEMA_PATH = join(HERE, '..', 'schemas', 'artifact-manifest-v1.schema.json');
 const CATALOG_PATH = join(HERE, '..', 'proof-catalog-v1.json');
 const RECEIPT_BIN = join(HERE, '..', 'receipt.mjs');
 
 const H64 = 'a'.repeat(64);
 const C40 = 'b'.repeat(40);
-const MANIFEST_BYTES = Buffer.from('{"manifestVersion":1,"stage":"candidate"}', 'utf8');
-const MANIFEST_SHA = sha256OfBytes(MANIFEST_BYTES);
+const PINNED_IMAGE = `node:24-bookworm-slim@sha256:${H64}`;
 
 function writeRef(baseDir, relPath, content) {
   const bytes = Buffer.isBuffer(content) ? content : Buffer.from(typeof content === 'string' ? content : JSON.stringify(content), 'utf8');
   const abs = join(baseDir, relPath);
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, bytes);
-  return { path: relPath, sha256: sha256OfBytes(bytes), integrity: sha512Integrity(bytes) };
+  return { path: relPath, bytes, sha256: sha256OfBytes(bytes), integrity: sha512Integrity(bytes) };
 }
 
 function buildCheckpointBundle(baseDir) {
   const ev = writeRef(baseDir, 'spec/evidence/memory-mcp-l5/item.json', { ok: true });
-  const contractPath = 'packages/mcp-platform/dist/memory/index.d.ts';
-  const contractRef = writeRef(baseDir, contractPath, 'export interface MemoryContractV1 {}\n');
-  writeRef(baseDir, `retained/${contractPath}`, 'export interface MemoryContractV1 {}\n');
-  const invEntry = { path: contractPath, version: '0.4.0', sha256: contractRef.sha256 };
-  const invFile = writeRef(baseDir, 'receipts/contract-inventory.json', { contractInventory: [invEntry] });
-  const compFile = writeRef(baseDir, 'receipts/contract-comparison.json', {
-    identical: true, preCandidateManifestSha256: MANIFEST_SHA, candidateManifestSha256: MANIFEST_SHA, contracts: [invEntry],
+  const cpSchemaRef = writeRef(baseDir, 'tools/memory-mcp-l5/schemas/checkpoint-v1.schema.json', readFileSync(SCHEMA_PATH));
+  const mfSchemaRef = writeRef(baseDir, 'tools/memory-mcp-l5/schemas/artifact-manifest-v1.schema.json', readFileSync(MANIFEST_SCHEMA_PATH));
+  const catFileRef = writeRef(baseDir, 'tools/memory-mcp-l5/proof-catalog-v1.json', readFileSync(CATALOG_PATH));
+  const c1 = writeRef(baseDir, 'packages/mcp-platform/dist/memory/index.d.ts', 'export interface PlatformMemoryV1 {}\n');
+  const c2 = writeRef(baseDir, 'packages/mcp-broker/dist/memory/index.d.ts', 'export interface BrokerMemoryV1 {}\n');
+  for (const r of [c1, c2, cpSchemaRef]) writeRef(baseDir, `retained/${r.path}`, r.bytes);
+  const contractInventory = [
+    { path: c1.path, version: '0.4.0', sha256: c1.sha256 },
+    { path: c2.path, version: '0.2.0', sha256: c2.sha256 },
+    { path: cpSchemaRef.path, version: '1.0.0', sha256: cpSchemaRef.sha256 },
+  ];
+  const immRefs = (PROOF_CATALOG.immutableFixtures || []).map((p) => ({ path: p, sha256: writeRef(baseDir, p, `// immutable fixture ${p}\n`).sha256 }));
+  for (const m of PROOF_CATALOG.pendingPredecessorMappings || []) writeRef(baseDir, m.file.endsWith('.ts') ? m.file : `${m.file}/index.json`, '// predecessor\n');
+  const lockRef = writeRef(baseDir, 'package-lock.json', { lockfileVersion: 3, packages: { 'node_modules/@modelcontextprotocol/sdk': { version: '1.31.0', range: '^1.31.0' } } });
+  const instLockRef = writeRef(baseDir, 'receipts/installed-lock.json', { sdkVersion: '1.31.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'] });
+  const refSrcRef = writeRef(baseDir, 'packages/mcp-broker/dist/memory-reference/index.js', 'export class SqliteMemoryWorkflowStoreV1 { static driver = "node:sqlite"; }\n');
+  const treeRef = writeRef(baseDir, 'receipts/source-tree.json', { repository: 'rhanka/sentropic', head: C40, base: C40, merge: C40, checkout: C40, files: [{ path: c1.path, sha256: c1.sha256 }] });
+  const regRef = writeRef(baseDir, 'packages/mcp-platform/dist/registry.d.ts', 'export interface RegistryV1 {}\n');
+  const gwRef = writeRef(baseDir, 'packages/cluster-mesh/dist/compose/mcp.d.ts', 'export interface MeshMcpV1 {}\n');
+  const fenceRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/sqlite-fence-profile-v1.json', { driver: 'node:sqlite', journalMode: 'WAL', synchronous: 'FULL' });
+  writeRef(baseDir, 'receipts/runtime-probe.json', {
+    tupleHead: C40, nodeVersion: '24.2.0', imageDigest: PINNED_IMAGE, platform: 'linux/amd64', sqliteVersion: '3.49.1',
+    driver: 'node:sqlite', journalMode: 'WAL', synchronous: 'FULL', filesystem: 'ext4', filesystemAssumptions: 'local-posix-fsync',
+    fenceProfileSha256: fenceRef.sha256, pythonCount: 0, addonBuildCount: 0, execArgv: [], nodeOptions: '',
   });
+  const prodPolRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/sent-tech-assurance-v1.json', { issuer: 'https://auth.sent-tech.ca', qualificationOnly: false });
+  const qualPolRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/qualification-assurance-v1.json', { issuer: 'https://qual.local', qualificationOnly: true });
+  const verRef = writeRef(baseDir, 'tools/memory-mcp-l5/verifier.mjs', 'export const verifyAssurance = () => true;\n');
+  const trustRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/trust-profile-v1.json', { productionPolicySha256: prodPolRef.sha256, qualificationPolicySha256: qualPolRef.sha256 });
   const roles = [
     ['l4', '@sentropic/engram', '0.20.1', 'archives/engram.tgz'],
     ['platform', '@sentropic/mcp-platform', '0.4.0', 'archives/platform.tgz'],
@@ -54,73 +75,121 @@ function buildCheckpointBundle(baseDir) {
     const f = writeRef(baseDir, archive, `${name}@${version}`);
     return { role, name, version, sha256: f.sha256, integrity: f.integrity, sourceHead: C40, archiveRef: archive };
   });
-  const l4BuildFile = writeRef(baseDir, 'receipts/l4-build.json', {
-    builtAgainstPreCandidateSha256: MANIFEST_SHA, e4ArtifactSha256: artifacts[0].sha256, sourceHead: C40,
+  const mfSource = { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: lockRef.sha256 };
+  const toMfItem = (a) => ({ role: a.role, name: a.name, version: a.version, sha256: a.sha256, integrity: a.integrity, sourceHead: a.sourceHead, archive: a.archiveRef });
+  const preMf = writeRef(baseDir, 'tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json', {
+    manifestVersion: 1, stage: 'pre-candidate', source: mfSource, artifacts: [toMfItem(artifacts[1]), toMfItem(artifacts[2])], contractInventory,
   });
+  const l4BuildFile = writeRef(baseDir, 'receipts/l4-build.json', {
+    builtAgainstPreCandidateSha256: preMf.sha256, e4ArtifactSha256: artifacts[0].sha256, sourceHead: C40,
+  });
+  const candMf = writeRef(baseDir, 'tools/memory-mcp-l5/artifacts/candidate-manifest.json', {
+    manifestVersion: 1, stage: 'candidate', preCandidateManifestSha256: preMf.sha256, e4ArtifactSha256: artifacts[0].sha256,
+    l4BuildReceipt: { path: l4BuildFile.path, sha256: l4BuildFile.sha256 }, source: mfSource, artifacts: artifacts.map(toMfItem), contractInventory,
+  });
+  const compFile = writeRef(baseDir, 'receipts/contract-comparison.json', {
+    identical: true, preCandidateManifestSha256: preMf.sha256, candidateManifestSha256: candMf.sha256, contracts: contractInventory,
+  });
+  const instClosureRef = writeRef(baseDir, 'receipts/installed-closure.json', {
+    artifactManifestSha256: candMf.sha256, sdkVersion: '1.31.0', referenceExport: '@sentropic/mcp-broker/memory-reference',
+    artifacts: artifacts.map((a) => ({ name: a.name, version: a.version, sha256: a.sha256 })),
+  });
+  const resolvedFiles = PROOF_CATALOG.importGraphRoots.map((root) => {
+    const p = root.startsWith('@sentropic/') ? `packages/${root.replace('@sentropic/', '')}/dist/index.js` : root;
+    const f = writeRef(baseDir, p, 'export const clean = true;\n');
+    return { root, path: f.path, sha256: f.sha256 };
+  });
+  const resolvedFilesSha256 = sha256OfBytes(Buffer.from(canonicalizeJson(resolvedFiles)));
   const graphFile = writeRef(baseDir, 'import-graph.json', {
-    roots: PROOF_CATALOG.importGraphRoots, resolvedFilesSha256: H64, forbiddenHits: 0, unresolvedEdges: 0,
+    roots: PROOF_CATALOG.importGraphRoots, resolvedFiles, edges: [], resolvedFilesSha256, forbiddenHits: 0, unresolvedEdges: 0,
+  });
+  const freezeRef = writeRef(baseDir, 'spec/evidence/memory-mcp-l5/l0-freeze.json', {
+    specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, checkpointSchemaSha256: cpSchemaRef.sha256,
+    artifactManifestSchemaSha256: mfSchemaRef.sha256, proofCatalogSha256: catFileRef.sha256,
+    immutableFixtures: immRefs, authorizedOwners: PROOF_CATALOG.authorizedOwners || {
+      ownerUat: ['owner:antoinefa'],
+      acceptances: { l4: ['owner:l4', 'owner:antoinefa'], platform: ['owner:platform', 'owner:antoinefa'], broker: ['owner:broker', 'owner:antoinefa'], transport: ['owner:transport', 'owner:antoinefa'] },
+    },
   });
   const proofs = PROOF_CATALOG.proofs.map((cat) => {
-    const testResults = cat.files.map((file, idx) => ({
-      name: file, status: 'passed',
-      assertionResults: idx === 0
-        ? cat.requiredCases.map((c) => ({ title: c, fullName: c, status: 'passed' }))
-        : [{ title: `${cat.id}.extra`, fullName: `${cat.id}.extra`, status: 'passed' }],
-    }));
+    const testResults = cat.files.map((file) => {
+      const cases = (cat.fileCases && cat.fileCases[file]) || [cat.requiredCases[0]];
+      return { name: file, status: 'passed', assertionResults: cases.map((c) => ({ title: c, fullName: c, status: 'passed' })) };
+    });
     const executed = testResults.flatMap((tr) => tr.assertionResults.map((ar) => ({ file: tr.name, caseId: ar.fullName, status: 'passed' })));
     const rep = writeRef(baseDir, `results/${cat.id}.json`, {
-      success: true, numTotalTests: executed.length, numPassedTests: executed.length, numFailedTests: 0, numPendingTests: 0, numTodoTests: 0, testResults,
+      success: true, runId: '1001', attempt: 1, sourceHead: C40, artifactManifestSha256: candMf.sha256,
+      numTotalTests: executed.length, numPassedTests: executed.length, numFailedTests: 0, numPendingTests: 0, numTodoTests: 0, testResults,
     });
     return {
       id: cat.id, files: [...cat.files], command: cat.command,
       result: { path: rep.path, sha256: rep.sha256, format: 'vitest-json', passed: executed.length, failed: 0, skipped: 0, todo: 0, executedCasesSha256: sha256OfBytes(Buffer.from(canonicalizeJson(executed))) },
-      artifactManifestSha256: MANIFEST_SHA, sourceHead: C40, runId: '1001', attempt: 1,
+      artifactManifestSha256: candMf.sha256, sourceHead: C40, runId: '1001', attempt: 1,
     };
   });
   const doc = {
     schemaVersion: 1, checkpoint: 'L5-MEMORY-V1', phase: 'candidate', tupleSha256: H64,
-    source: { repository: 'rhanka/sentropic', head: C40, base: C40, merge: C40, checkout: C40, sourceTreeSha256: H64 },
+    source: { repository: 'rhanka/sentropic', head: C40, base: C40, merge: C40, checkout: C40, sourceTreeSha256: treeRef.sha256 },
     contracts: {
-      specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, l0Freeze: { path: ev.path, sha256: ev.sha256 },
-      fixtures: [{ path: ev.path, sha256: ev.sha256 }], registrySha256: H64, gatewaySha256: H64,
-      exports: [{ path: ev.path, sha256: ev.sha256 }], schemas: [{ path: ev.path, sha256: ev.sha256 }],
+      specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, l0Freeze: { path: freezeRef.path, sha256: freezeRef.sha256 },
+      fixtures: [{ path: ev.path, sha256: ev.sha256 }], registrySha256: regRef.sha256, gatewaySha256: gwRef.sha256,
+      exports: [{ path: ev.path, sha256: ev.sha256 }],
+      schemas: [
+        { path: cpSchemaRef.path, sha256: cpSchemaRef.sha256 },
+        { path: mfSchemaRef.path, sha256: mfSchemaRef.sha256 },
+        { path: catFileRef.path, sha256: catFileRef.sha256 },
+      ],
       profiles: [{ path: ev.path, sha256: ev.sha256 }], entry: { path: ev.path, sha256: ev.sha256 }, providerManifest: { path: ev.path, sha256: ev.sha256 },
     },
     preCandidate: {
-      manifestSha256: MANIFEST_SHA, contractInventory: [invEntry],
+      manifestSha256: preMf.sha256, contractInventory,
       l4BuildReceipt: { path: l4BuildFile.path, sha256: l4BuildFile.sha256 }, contractComparison: { path: compFile.path, sha256: compFile.sha256 },
     },
     artifacts,
     closure: {
-      artifactManifestSha256: MANIFEST_SHA, declaredLockSha256: H64, installedLockSha256: H64,
-      installedClosureSha256: H64, sdkVersion: '1.31.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'],
-      referenceExport: '@sentropic/mcp-broker/memory-reference', referenceSourceSha256: H64,
+      artifactManifestSha256: candMf.sha256, declaredLockSha256: lockRef.sha256, installedLockSha256: instLockRef.sha256,
+      installedClosureSha256: instClosureRef.sha256, sdkVersion: '1.31.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'],
+      referenceExport: '@sentropic/mcp-broker/memory-reference', referenceSourceSha256: refSrcRef.sha256,
     },
     runtime: {
-      nodeVersion: '24.2.0', imageDigest: `node:24-bookworm-slim@sha256:${H64}`, platform: 'linux/amd64', sqliteVersion: '3.49.1',
+      nodeVersion: '24.2.0', imageDigest: PINNED_IMAGE, platform: 'linux/amd64', sqliteVersion: '3.49.1',
       driver: 'node:sqlite', journalMode: 'WAL', synchronous: 'FULL', filesystem: 'ext4',
-      filesystemAssumptions: 'local-posix-fsync', fenceProfileSha256: H64, pythonCount: 0, addonBuildCount: 0,
+      filesystemAssumptions: 'local-posix-fsync', fenceProfileSha256: fenceRef.sha256, pythonCount: 0, addonBuildCount: 0,
     },
-    assurance: { productionPolicySha256: H64, qualificationPolicySha256: H64, verifierArtifactSha256: H64, trustProfileSha256: H64, qualificationOnly: true },
+    assurance: {
+      productionPolicySha256: prodPolRef.sha256, qualificationPolicySha256: qualPolRef.sha256,
+      verifierArtifactSha256: verRef.sha256, trustProfileSha256: trustRef.sha256, qualificationOnly: true,
+    },
     proofs,
-    importGraph: { path: graphFile.path, sha256: graphFile.sha256, roots: [...PROOF_CATALOG.importGraphRoots], resolvedFilesSha256: H64, forbiddenHits: 0, unresolvedEdges: 0 },
+    importGraph: { path: graphFile.path, sha256: graphFile.sha256, roots: [...PROOF_CATALOG.importGraphRoots], resolvedFilesSha256, forbiddenHits: 0, unresolvedEdges: 0 },
     ci: {
       workflow: '.github/workflows/ci.yml', runId: '1001', attempt: 1, head: C40, base: C40, merge: C40, checkout: C40,
-      imageDigest: `node:24-bookworm-slim@sha256:${H64}`, artifactName: `memory-mcp-l5-${C40}-1001-1`,
-      jobs: [{ id: 'memory-l5-qualification', conclusion: 'success', resultSha256: H64 }],
+      imageDigest: PINNED_IMAGE, artifactName: `memory-mcp-l5-${C40}-1001-1`,
+      jobs: [],
     },
     ownerUat: {}, acceptances: [],
   };
   doc.tupleSha256 = computeTupleSha256(doc);
-  const uatRef = writeRef(baseDir, 'receipts/owner-uat.json', {
-    tupleSha256: doc.tupleSha256, status: 'passed', policySha256: H64, actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z',
+  const jobRef = writeRef(baseDir, 'receipts/ci-job-memory-l5-qualification.json', {
+    jobId: 'memory-l5-qualification', runId: '1001', attempt: 1, head: C40, tupleSha256: doc.tupleSha256, conclusion: 'success',
+    proofResultSha256s: proofs.map((p) => ({ id: p.id, sha256: p.result.sha256 })),
   });
-  doc.ownerUat = { status: 'passed', evidence: { path: uatRef.path, sha256: uatRef.sha256 }, policySha256: H64, actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z' };
+  doc.ci.jobs = [{ id: 'memory-l5-qualification', conclusion: 'success', resultSha256: jobRef.sha256 }];
+  writeRef(baseDir, 'receipts/ci-run.json', {
+    workflow: '.github/workflows/ci.yml', status: 'completed', conclusion: 'success', runId: '1001', attempt: 1,
+    head: C40, base: C40, merge: C40, checkout: C40, imageDigest: PINNED_IMAGE, artifactName: `memory-mcp-l5-${C40}-1001-1`, tupleSha256: doc.tupleSha256,
+  });
+  const uatRef = writeRef(baseDir, 'receipts/owner-uat.json', {
+    tupleSha256: doc.tupleSha256, authoritySourceSha256: freezeRef.sha256, ciRunId: '1001', status: 'passed', policySha256: prodPolRef.sha256, actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z',
+  });
+  doc.ownerUat = { status: 'passed', evidence: { path: uatRef.path, sha256: uatRef.sha256 }, policySha256: prodPolRef.sha256, actorRef: 'owner:antoinefa', recordedAt: '2026-10-18T00:00:00Z' };
   doc.acceptances = ACCEPTANCE_ROLES.map((role) => {
-    const accRef = writeRef(baseDir, `receipts/accept-${role}.json`, { role, actorRef: `owner:${role}`, tupleSha256: doc.tupleSha256, verdict: 'accepted' });
+    const accRef = writeRef(baseDir, `receipts/accept-${role}.json`, {
+      role, actorRef: `owner:${role}`, tupleSha256: doc.tupleSha256, authoritySourceSha256: freezeRef.sha256, ciRunId: '1001', verdict: 'accepted',
+    });
     return { role, actorRef: `owner:${role}`, tupleSha256: doc.tupleSha256, verdict: 'accepted', evidence: { path: accRef.path, sha256: accRef.sha256 } };
   });
-  return { doc, opts: { baseDir, manifestBytes: MANIFEST_BYTES, execArgv: [], nodeOptions: '' } };
+  return { doc, preMf, candMf, opts: { baseDir, manifestBytes: candMf.bytes, preCandidateManifestBytes: preMf.bytes, execArgv: [], nodeOptions: '' } };
 }
 function withBundle(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'l5-cp-'));
