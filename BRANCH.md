@@ -63,7 +63,7 @@
   - [x] Align existing platform/broker context regressions with A03 and explicit two-principal/two-tenant provenance.
   - [x] Remove obsolete miniature digest literals now superseded by the identical frozen A05 corpus.
   - [x] Retire obsolete camel-case confirmation fixtures before rebuilding the boundary suite against A06.
-  - [x] Remove the superseded local-vector suite; frozen-mutations.test.ts executes all eight exact A05 vectors plus nine rejection cases.
+  - [x] Replace the superseded local vectors; mutation-digest-vectors.test.ts executes all eight exact A05 vectors and the closed-contract rejection corpus.
   - [x] Rebuild the existing confirmation boundary suite for A06 TTL, expiry, execution deadline and authenticated reattachment.
   - [x] Replace invalid mutation-guard success fixtures with the frozen capture DTO and canonical lifecycle instants.
   - [x] Require immutable packed verification at the root Lot 1 gate and execute the complete memory suites, including all new regressions.
@@ -74,6 +74,8 @@
   - [x] Preserve non-NFC opaque candidate identifiers, enforce canonical record IDs and close policy-version projections.
   - [x] Validate the complete public A03 projection and reject open or inconsistent nested receipt/context carriers.
   - [x] Refresh generated root API context declarations and memory contract report, batch 1 within the commit line limit.
+  - [x] Preserve the P03 proof-catalog path and case anchor while replacing its implementation with the frozen A05 corpus.
+  - [x] Refuse replacing an existing P1 manifest with different bytes and retain one digest record per inventory line.
   - [x] Refresh generated memory API contract report, batch 5 within the commit line limit.
   - [x] Refresh generated memory API contract report, batch 4 within the commit line limit.
   - [x] Refresh generated memory API contract report, batch 3 within the commit line limit.
