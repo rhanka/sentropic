@@ -39,6 +39,7 @@
   - [x] Verify actual path inventory and run make scope-check before authorized commits.
 
 ## Feedback Loop
+- [x] PR700-R2-3: reproduce strengthened read-tool and host confirmation bypasses; retain effective confirmation policy through selection and the provider envelope, refusing missing elicitation before contact.
 - [x] PR700-R2-5: reproduce the mesh-WARN suppression regression; always run the existing dependency classifier/full sibling packer before installed mesh qualification, preserving peer and receipt guards.
 - [x] PR700-R2-6/7: reproduce and fix insertion-order replay conflicts and authoritative coincident workspace/tenant refusal; retain changed-target and unproven-membership refusals.
 - [x] PR700-R2-2: reproduce all three non-NFC body refusals; preserve exact component/locator bytes and enforce well-formedness, byte bounds and NFC reference fields.

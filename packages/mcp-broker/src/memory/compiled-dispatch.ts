@@ -65,6 +65,7 @@ export type CompiledMemoryDispatchOptions = {
 type MemoryDispatchPlanV1 = {
   resolveTool(name: string): {
     providerId: string; capabilityName: string; requiredScopes: readonly string[]; requiredClaims: readonly string[];
+    entry: { gates: { requiresHumanConfirmation: boolean; requiresElicitation: boolean } };
   } | undefined;
 };
 
@@ -152,15 +153,17 @@ export class CompiledMemoryDispatch {
     if (isMutatingMemoryToolName(input.toolName) && !isValidIdempotencyKey(input.idempotencyKey)) {
       throw new MemoryDispatchRefusal('source_binding_mismatch', 'mutation requires an envelope idempotency key');
     }
-    if ((input.toolName === 'engram_memory_withdraw' || input.toolName === 'engram_memory_forget') && !isValidOpaqueRef(input.elicitationRef)) {
-      throw new MemoryDispatchRefusal('source_binding_mismatch', 'destructive mutation requires an elicitation reference');
-    }
     if (!isMemoryToolName(input.toolName)) {
       throw new MemoryDispatchRefusal('unknown_tool', `no memory tool named "${input.toolName}"`);
     }
     const resolution = this.plan.resolveTool(input.toolName);
     if (resolution === undefined) {
       throw new MemoryDispatchRefusal('unknown_tool', `"${input.toolName}" is not in the compiled plan`);
+    }
+    const confirmationRequired = input.toolName === 'engram_memory_withdraw' || input.toolName === 'engram_memory_forget' ||
+      resolution.entry.gates.requiresHumanConfirmation || resolution.entry.gates.requiresElicitation || verified.memory.confirmationRequired === true;
+    if (confirmationRequired && !isValidOpaqueRef(input.elicitationRef)) {
+      throw new MemoryDispatchRefusal('source_binding_mismatch', 'confirmation-gated tool requires an elicitation reference');
     }
     if (resolution.providerId !== MEMORY_PROVIDER_ID) {
       throw new MemoryDispatchRefusal(
@@ -220,6 +223,7 @@ export class CompiledMemoryDispatch {
         sourceBinding,
         requiredScopes: [...resolution.requiredScopes],
         requiredClaims: [...resolution.requiredClaims],
+        confirmationRequired,
       },
       projection: bound.projection,
       auditRef: bound.auditRef,

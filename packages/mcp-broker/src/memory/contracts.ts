@@ -51,4 +51,5 @@ export type MemoryDispatchSelectionV1 = {
   sourceBinding: MemorySourceBindingV1;
   requiredScopes: string[];
   requiredClaims: string[];
+  confirmationRequired: boolean;
 };
