@@ -59,9 +59,9 @@
   - [x] Add adapter imports/types resolution checks after explicit driver installation in the existing Make recipe.
   - [x] Run the packed-consumer regression in the existing artifacts CI validation job; 22 CI-wiring fixture tests pass.
   - [x] Reproduce 0.1.1 `ERR_PACKAGE_PATH_NOT_EXPORTED`, then pass `make probe-artifacts-packed-consumer ENV=test-artifacts-012` on 0.1.2 (15 tools, two adapters, two SQL resources).
-- [ ] **Lot 3 — Final validation and handoff**
+- [x] **Lot 3 — Final validation and handoff**
   - [x] Run `make typecheck-artifacts lint-artifacts test-artifacts ENV=test-artifacts-012`: typecheck, lint, 128 tests in 24 files pass.
   - [x] Capture all 67 files from the 0.1.2 `npm pack --dry-run` through a temporary Docker Make target.
   - [x] Review final diff, run `make scope-check` before each atomic commit under 150 changed lines.
-  - [ ] Push, open English PR using this plan, add execution-plan comment, inspect CI, report PR/head/files.
-  - [ ] Owner-controlled merge and npm publication remain pending.
+  - [x] Push and open PR #703 using this plan; execution-plan comment includes all 67 packed files; inspect CI (queued at handoff).
+  - [x] Leave merge and npm publication for the owner's GO.
