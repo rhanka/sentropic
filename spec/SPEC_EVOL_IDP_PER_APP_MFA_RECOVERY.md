@@ -688,6 +688,19 @@ Existing non-KVM clients and accounts need no action: clients with `NULL` policy
 
 Each tier's IdP holds its own `oauth_clients` rows, secrets, and account/credential security state (`spec/SPEC_DECISION_TIER_AUTH_PATTERN.md`, R1/R3). The binding in R-POL-4 is read per tier: an app instance's tier determines which tier IdP's `oauth_clients` rows carry its policy. Both OAuth client policy columns (`required_acr`, `allowed_user_ids`, `max_mfa_age_seconds`, `policy_version`, `require_non_empty_allowlist`) and account/credential security state (`users.is_mfa_protected`, `users.security_generation`, `webauthn_credentials.binding_state`, `webauthn_credentials.security_generation`, recovery capabilities/grants/codes, `security_transition_records`) are **tier-local** and excluded from prod→preprod export (`deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql:7-10`, `reader-role.sql:30-37`). As specified in section 4.2, Lot 2 updates `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql`, `client-postcondition.sql`, and `deploy/ci/idp-identity-sync/sql-test.sh` so ordinary sync preserves local protection/generation/trusted bindings, imported keys default to `binding_state = 'unverified_email'`, any collision/re-key touching a protected account fails closed (`protected account rekey forbidden`), new recovery tables drop as `ephemeral-auth` on re-key, and `security_transition_records` is never repointed. The declaration (section 8.1) is applied per tier with that tier's owner subject and secret; the preprod KVM gateway, if any, is a distinct client (`kvm-gateway-preprod` naming by the R3 pattern) and is not created by this spec.
 
+Copy/restore compatibility is explicit across this spec and the
+annotation and data contracts. A data copy or restore keeps tier-local
+protection, generations, and policy as target-tier state: imported
+credentials insert as `unverified_email` and never acquire `trusted`
+provenance from the copy (section 4.2, Lot 2 sync rules; DL-13 signed
+archive and DL-17 deletion re-application in
+`spec/SPEC_EVOL_DATA_LIFECYCLE.md:127`, `:153`). Annotation content
+copied under DV3 (« Tout copier », option B) carries no grant,
+session, routing right, or MFA trust with it; projections are rebuilt
+for the target tier and any send from the target tier is
+re-authorized there (DV3 closed record in the annotation overlay
+specification).
+
 ## 11. KVM onboarding as an OAuth client (given)
 
 How KVM authenticates today, from repository evidence: the rotation
