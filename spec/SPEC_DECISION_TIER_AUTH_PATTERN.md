@@ -106,6 +106,9 @@ and `offline_access` in `OAUTH_CLIENT_SCOPES`; issued refresh token families
 (`oauth_refresh_tokens`, 15-day absolute ceiling, single-use rotation, reuse
 detection) are strictly tier-local and never cross between prod and non-prod.
 See [SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md).
+Offline consent also stays local to the exact issuer, client, tenant, scopes and
+resource/default audience. A synchronized `offline_access` scope string cannot
+replace local approval; policy removal permanently invalidates affected families.
 
 Hashing the secret by hand: `printf '%s' "$SECRET" | sha256sum`, **never** `echo` — a trailing
 newline yields a different hash, and the symptom is an `invalid_client` indistinguishable from a
