@@ -127,11 +127,16 @@ test('gate scenarios on the committed shell with all 39 dependencies: negative a
     const script = `${jobs['ci-gate'].steps.map((s) => s.run ?? '').join('\n').trim()}\n`;
     fs.writeFileSync(path.join(dir, 'gate.sh'), script, { mode: 0o755 });
     fs.writeFileSync(path.join(dir, 'jq'), stub, { mode: 0o755 });
-    const run = (needs, eventName = 'pull_request') =>
-      spawnSync('bash', [path.join(dir, 'gate.sh')], {
-        encoding: 'utf8',
-        env: { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}`, CI_NEEDS: JSON.stringify(needs), CI_EVENT_NAME: eventName },
-      });
+    const realDir = path.join(dir, 'real');
+    fs.mkdirSync(realDir);
+    if (fs.existsSync('/host-bin/jq') && fs.existsSync('/host-lib/ld-linux-x86-64.so.2')) {
+      fs.writeFileSync(path.join(realDir, 'jq'), '#!/bin/sh\nexec /host-lib/ld-linux-x86-64.so.2 --library-path /host-lib /host-bin/jq "$@"\n', { mode: 0o755 });
+    }
+    const realPath = `${realDir}${path.delimiter}${process.env.PATH}`;
+    const hasRealJq = spawnSync('jq', ['--version'], { env: { ...process.env, PATH: realPath } }).status === 0;
+    if (process.env.CI_OPTIMIZATION_REQUIRE_REAL_JQ === '1') {
+      assert.ok(hasRealJq, 'real jq binary is available for gate scenario verification');
+    }
 
     const allOff = Object.fromEntries(SELECTION_KEYS.map((k) => [k, 'false']));
     const buildNeeds = (outputs, overrides = {}, eventName = 'pull_request') => {
@@ -141,52 +146,58 @@ test('gate scenarios on the committed shell with all 39 dependencies: negative a
       return { ...base, ...overrides };
     };
 
-    // 1. Clean API-only PR: all 15 required jobs succeed (including build-ui, test-e2e, e2e-vscode, enforce-package-bump).
-    const cleanApi = run(buildNeeds({ ...allOff, api: 'true' }));
-    assert.equal(cleanApi.status, 0, `clean API-only PR passes: ${cleanApi.stdout}${cleanApi.stderr}`);
+    const jqPaths = hasRealJq ? [realPath, `${dir}${path.delimiter}${process.env.PATH}`] : [`${dir}${path.delimiter}${process.env.PATH}`];
+    for (const jqPath of jqPaths) {
+      const run = (needs, eventName = 'pull_request') =>
+        spawnSync('bash', [path.join(dir, 'gate.sh')], {
+          encoding: 'utf8',
+          env: { ...process.env, PATH: jqPath, CI_NEEDS: JSON.stringify(needs), CI_EVENT_NAME: eventName },
+        });
 
-    // 2. Reproduction from Finding 2: API-only PR where build-ui, test-e2e or e2e-vscode is skipped or neutral MUST fail.
-    for (const omitted of ['build-ui', 'test-e2e', 'e2e-vscode']) {
-      for (const badResult of ['skipped', 'neutral']) {
-        const res = run(buildNeeds({ ...allOff, api: 'true' }, { [omitted]: { result: badResult } }));
-        assert.notEqual(res.status, 0, `API-only ${omitted}=${badResult} must fail`);
-        assert.match(res.stdout, new RegExp(`strict selection requires ${omitted} result=success \\(got ${badResult}\\)`));
+      // 1. Clean API-only PR: all 15 required jobs succeed (including build-ui, test-e2e, e2e-vscode, enforce-package-bump).
+      const cleanApi = run(buildNeeds({ ...allOff, api: 'true' }));
+      assert.equal(cleanApi.status, 0, `clean API-only PR passes: ${cleanApi.stdout}${cleanApi.stderr}`);
+
+      // 2. Reproduction from Finding 2: API-only PR where build-ui, test-e2e or e2e-vscode is skipped or neutral MUST fail.
+      for (const omitted of ['build-ui', 'test-e2e', 'e2e-vscode']) {
+        for (const badResult of ['skipped', 'neutral']) {
+          const res = run(buildNeeds({ ...allOff, api: 'true' }, { [omitted]: { result: badResult } }));
+          assert.notEqual(res.status, 0, `API-only ${omitted}=${badResult} must fail`);
+          assert.match(res.stdout, new RegExp(`strict selection requires ${omitted} result=success \\(got ${badResult}\\)`));
+        }
       }
+
+      // 3. UI-only PR where build-api-image or security-sast-sca is skipped MUST fail; clean UI-only passes.
+      for (const omitted of ['build-api-image', 'security-sast-sca']) {
+        const res = run(buildNeeds({ ...allOff, ui: 'true' }, { [omitted]: { result: 'skipped' } }));
+        assert.notEqual(res.status, 0, `UI-only ${omitted}=skipped must fail`);
+      }
+      assert.equal(run(buildNeeds({ ...allOff, ui: 'true' })).status, 0, 'clean UI-only PR passes');
+
+      // 4. enforce-package-bump=skipped on pull_request MUST fail, but on push is allowed.
+      assert.notEqual(run(buildNeeds({ ...allOff, api: 'true' }, { 'enforce-package-bump': { result: 'skipped' } }, 'pull_request'), 'pull_request').status, 0);
+      assert.equal(run(buildNeeds({ ...allOff, api: 'true' }, { 'enforce-package-bump': { result: 'skipped' } }, 'push'), 'push').status, 0);
+
+      // 5. Missing changes.outputs or missing selection key MUST fail even when all optional jobs are skipped.
+      const noOutputs = run(buildNeeds(null));
+      assert.notEqual(noOutputs.status, 0, 'missing changes.outputs must fail');
+      assert.match(noOutputs.stdout, /missing or invalid changes\.outputs boolean filter keys/);
+      const partialOutputs = { ...allOff };
+      delete partialOutputs.cluster_mesh;
+      const missingKey = run(buildNeeds(partialOutputs));
+      assert.notEqual(missingKey.status, 0, 'missing filter key must fail');
+      assert.match(missingKey.stdout, /missing or invalid changes\.outputs boolean filter keys/);
+
+      // 6. Missing dependency entry or null result in CI_NEEDS MUST fail.
+      const incompleteNeeds = buildNeeds({ ...allOff, api: 'true' });
+      delete incompleteNeeds['smoke-idp-screens'];
+      const missingDep = run(incompleteNeeds);
+      assert.notEqual(missingDep.status, 0, 'missing dependency in CI_NEEDS must fail');
+      assert.match(missingDep.stdout, /missing or unacceptable dependency in CI_NEEDS/);
+
+      // 7. Failed AI shard denies green.
+      assert.notEqual(run(buildNeeds({ ...allOff, api: 'true' }, { 'test-api-unit-integration': { result: 'failure' } })).status, 0);
     }
-
-    // 3. UI-only PR where build-api-image or security-sast-sca is skipped MUST fail; clean UI-only passes.
-    for (const omitted of ['build-api-image', 'security-sast-sca']) {
-      const res = run(buildNeeds({ ...allOff, ui: 'true' }, { [omitted]: { result: 'skipped' } }));
-      assert.notEqual(res.status, 0, `UI-only ${omitted}=skipped must fail`);
-    }
-    assert.equal(run(buildNeeds({ ...allOff, ui: 'true' })).status, 0, 'clean UI-only PR passes');
-
-    // 4. enforce-package-bump=skipped on pull_request MUST fail, but on push is allowed.
-    const bumpSkippedPr = run(buildNeeds({ ...allOff, api: 'true' }, { 'enforce-package-bump': { result: 'skipped' } }, 'pull_request'), 'pull_request');
-    assert.notEqual(bumpSkippedPr.status, 0, 'PR with enforce-package-bump=skipped must fail');
-    const bumpSkippedPush = run(buildNeeds({ ...allOff, api: 'true' }, { 'enforce-package-bump': { result: 'skipped' } }, 'push'), 'push');
-    assert.equal(bumpSkippedPush.status, 0, 'push with enforce-package-bump=skipped passes');
-
-    // 5. Missing changes.outputs or missing selection key MUST fail even when all optional jobs are skipped.
-    const noOutputs = run(buildNeeds(null));
-    assert.notEqual(noOutputs.status, 0, 'missing changes.outputs must fail');
-    assert.match(noOutputs.stdout, /missing or invalid changes\.outputs boolean filter keys/);
-    const partialOutputs = { ...allOff };
-    delete partialOutputs.cluster_mesh;
-    const missingKey = run(buildNeeds(partialOutputs));
-    assert.notEqual(missingKey.status, 0, 'missing filter key must fail');
-    assert.match(missingKey.stdout, /missing or invalid changes\.outputs boolean filter keys/);
-
-    // 6. Missing dependency entry or null result in CI_NEEDS MUST fail.
-    const incompleteNeeds = buildNeeds({ ...allOff, api: 'true' });
-    delete incompleteNeeds['smoke-idp-screens'];
-    const missingDep = run(incompleteNeeds);
-    assert.notEqual(missingDep.status, 0, 'missing dependency in CI_NEEDS must fail');
-    assert.match(missingDep.stdout, /missing or unacceptable dependency in CI_NEEDS/);
-
-    // 7. Failed AI shard denies green.
-    const failedAi = run(buildNeeds({ ...allOff, api: 'true' }, { 'test-api-unit-integration': { result: 'failure' } }));
-    assert.notEqual(failedAi.status, 0, 'failed AI shard denies green');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

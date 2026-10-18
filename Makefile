@@ -753,17 +753,18 @@ CI_OPTIMIZATION_TESTS ?= scripts/ci/measure-runs.test.mjs scripts/ci/concurrency
 CI_OPTIMIZATION_WINDOW ?= before
 CI_OPTIMIZATION_MIN_RUNS ?= 20
 CI_OPTIMIZATION_MIN_DAYS ?= 7
+CI_OPTIMIZATION_JQ_MOUNT = $(if $(and $(wildcard /usr/bin/jq),$(wildcard /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2)),-e CI_OPTIMIZATION_REQUIRE_REAL_JQ=1 -v /usr/bin/jq:/host-bin/jq:ro -v /lib/x86_64-linux-gnu:/host-lib:ro,)
 
 .PHONY: test-ci-optimization
 test-ci-optimization: ## Run CI optimization Lot 1 wiring tests in Docker (scope with SCOPE=<files>)
 	@for f in $(or $(SCOPE),$(CI_OPTIMIZATION_TESTS)); do test -f "$$f" || { echo "ERROR: SCOPE file $$f is missing"; exit 1; }; done
 	@test -n "$(strip $(or $(SCOPE),$(CI_OPTIMIZATION_TESTS)))" || { echo "ERROR: empty test selection"; exit 1; }
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(CI_OPTIMIZATION_JQ_MOUNT) -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),$(CI_OPTIMIZATION_TESTS))'
 
 .PHONY: check-ci-optimization
 check-ci-optimization: ## Parse the real ci.yml YAML: concurrency fixtures, acyclic needs, mandatory result paths
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(CI_OPTIMIZATION_JQ_MOUNT) -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test scripts/ci/ci-wiring.test.mjs'
 
 .PHONY: ci-optimization-collect
