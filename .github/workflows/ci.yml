@@ -602,7 +602,7 @@ jobs:
         if: always()
         run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-cluster-mesh-pg
       - name: Pack Cluster Mesh same-PR BLOCK siblings
-        if: steps.pack.outputs.manifest_mode == 'block'
+        # Dependencies classify independently: unchanged mesh can consume an unpublished platform candidate.
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
