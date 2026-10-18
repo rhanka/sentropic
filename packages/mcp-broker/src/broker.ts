@@ -14,14 +14,14 @@
  * Production residence of a broker like this one (in-process library vs. a
  * hosted service, real secret-store / EnrollmentStore wiring, tenant
  * resolution policy) is an architect D4 decision, deferred — this package is
- * a proof (`"private": true`, not published), not a shipped runtime.
+ * a reusable broker proof with injectable host ports.
  */
-import type { AppCapability, CapabilityResource } from '../../mcp-platform/src/manifest.js';
+import type { AppCapability, CapabilityResource } from '@sentropic/mcp-platform';
 import type {
   AppConnectorProviderAdapter,
   AppResultEnvelope,
   StpConnectorContext,
-} from '../../mcp-platform/src/runtime.js';
+} from '@sentropic/mcp-platform';
 import { createInMemoryContext, type InMemoryContextOptions } from './context.js';
 import { ConnectorRegistry } from './registry.js';
 

@@ -26,7 +26,7 @@ import type {
   ConnectorTenantContext,
   ConnectorTenantResolutionInput,
   RedactionClass,
-} from '../../mcp-platform/src/manifest.js';
+} from '@sentropic/mcp-platform';
 import type {
   AppConnectorProviderAdapter,
   AppResourceRead,
@@ -36,7 +36,7 @@ import type {
   AppToolResult,
   ConnectorSecretStatus,
   DurableCallRef,
-} from '../../mcp-platform/src/runtime.js';
+} from '@sentropic/mcp-platform';
 import {
   getCurrentUserLive,
   getFileContentsLive,
