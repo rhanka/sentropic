@@ -769,8 +769,9 @@ check-ci-optimization: ## Parse the real ci.yml YAML: concurrency fixtures, acyc
 .PHONY: ci-optimization-collect
 ci-optimization-collect: ## Collect redacted GitHub run/job records into OUT=<file> (RUNS_FILE=<json>, WINDOW=<before|after>)
 	@test -n "$(OUT)" || { echo "ERROR: OUT=<file> is required"; exit 1; }
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(if $(RUNS_FILE),-v "$(abspath $(RUNS_FILE)):/input/runs.json:ro") -v "$(CURDIR):/workspace" -w /workspace $(MANIFEST_GUARD_IMAGE) \
-		node scripts/ci/measure-runs.mjs collect $(if $(RUNS_FILE),--runs /input/runs.json) --window "$(or $(WINDOW),$(CI_OPTIMIZATION_WINDOW))" --min-runs "$(or $(MIN_RUNS),$(CI_OPTIMIZATION_MIN_RUNS))" --min-days "$(or $(MIN_DAYS),$(CI_OPTIMIZATION_MIN_DAYS))" --out "$(OUT)"
+	@test -n "$(RUNS_FILE)" && test -f "$(RUNS_FILE)" || { echo "ERROR: RUNS_FILE=<file> is required and must exist"; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(abspath $(RUNS_FILE)):/input/runs.json:ro" -v "$(CURDIR):/workspace" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		node scripts/ci/measure-runs.mjs collect --runs /input/runs.json --window "$(or $(WINDOW),$(CI_OPTIMIZATION_WINDOW))" --min-runs "$(or $(MIN_RUNS),$(CI_OPTIMIZATION_MIN_RUNS))" --min-days "$(or $(MIN_DAYS),$(CI_OPTIMIZATION_MIN_DAYS))" --out "$(OUT)"
 
 .PHONY: ci-optimization-compare
 ci-optimization-compare: ## Compare BEFORE=<file> AFTER=<file> windows, write OUT=<file>, nonzero on correctness/rollout-threshold failure
