@@ -9,6 +9,8 @@ import { createClusterMeshModules } from '../../src/index.js';
 import { createModuleRegistry } from '../../src/modules/registry.js';
 import { createClusterMeshRuntime } from '../../src/runtime/generation.js';
 import { evaluations, PackageTree } from '../fixtures/package-tree.js';
+import { createMcpOAuthNamespace } from '../../src/compose/mcp-oauth.js';
+import { fixture } from '../packaging/fixtures/mcp-oauth/host.js';
 
 const context = { async verify() { throw new Error('not invoked'); } };
 const receipts = { append: vi.fn(async () => undefined) };
@@ -30,6 +32,13 @@ function emptyRegistry() {
 }
 
 describe('lazy namespace preparation', () => {
+  it('should refuse missing OAuth leaves before a namespace can bind', async () => {
+    const { options } = await fixture();
+    const bind = vi.fn();
+    await expect(createMcpOAuthNamespace(emptyRegistry(), options).then(bind))
+      .rejects.toMatchObject({ code: 'cluster_mesh_module_unavailable', reason: 'not_installed' });
+    expect(bind).not.toHaveBeenCalled();
+  });
   it('should prepare /llm-mesh with the injected router and mount it through the existing plugin', async () => {
     const createRouter = vi.fn((input: { llmMesh: typeof meshProvider }) => {
       expect(input.llmMesh.createLlmMesh).toBe(meshProvider.createLlmMesh);

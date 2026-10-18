@@ -48,6 +48,9 @@ describe('module capability reporting', () => {
   it('should create an unprobed public registry without resolving providers', () => {
     const modules = createClusterMeshModules();
     expect(modules.snapshot().gateway).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(modules.snapshot()['mcp/auth']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(modules.isEnabled('mcp/auth')).toBe(true);
+    expect(createClusterMeshModules({ disabled: ['mcp/auth'] }).isEnabled('mcp/auth')).toBe(false);
     expect(modules.isEnabled('gateway')).toBe(true);
     expect(createClusterMeshModules({ disabled: ['gateway'] }).isEnabled('gateway')).toBe(false);
   });

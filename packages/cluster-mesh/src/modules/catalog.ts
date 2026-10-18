@@ -82,6 +82,7 @@ const mcpAuth = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembe
   id, owner: 'mcp-auth', packageName: '@sentropic/mcp-auth', subpath, range: MCP_OAUTH_AUTH_RANGE,
   requiredMembers, namespace: '/mcp', meshCoherence: false,
   authPeers: [
+    { packageName: 'jose', subpath: '.', range: JOSE_RANGE, requiredMembers: ['jwtVerify'] },
     { packageName: '@sentropic/oauth-verify', subpath: '.', range: '>=0.1.0 <0.2.0', requiredMembers: ['verifyAccessToken'] },
     { packageName: 'jose', subpath: '.', range: JOSE_RANGE, requiredMembers: ['jwtVerify'], resolveFrom: '@sentropic/oauth-verify' },
     ...(subpath === './hono' ? [{ packageName: 'hono', subpath: '.', range: '^4.10.7', requiredMembers: ['Hono'] }] : []),
