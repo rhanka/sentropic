@@ -16,7 +16,7 @@
 - [x] No real provider tokens or real JEV calls; synthetic fixtures/injected transports only. Live qualification needs conductor-relayed owner GO.
 - [x] Atomic commits at most 149 changed lines/15 files including BRANCH.md; selective staging, separate add/commit, `make commit MSG="type: description"`; no attribution trailers.
 - [x] Stop after every lot and write `.h2a/build/lotN_report.md`; conductor's Opus 5.5 high review must resolve blocking findings before the next lot.
-- [x] No version bumps, packaging tuple/lock changes, publish, push, PR or merge until conductor GO after the /gw train lands.
+- [x] No version bumps, packaging tuple/lock changes, publish, push, PR or merge until conductor GO after the /gw train lands; carve-outs: Sol P2 0.27.0 version/range/lockfile edits under active BR96-EX4/EX7/EX8, no publish.
 - [x] Product durable-host §10.3, later providers/local serving and §9.3 architecture are outside this execution; portable client 2.09 is the explicit §10.2 cluster prerequisite.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -26,7 +26,7 @@
   - [x] `packages/llm-mesh/src/providers.ts`, `packages/llm-mesh/src/capabilities.ts`, `packages/llm-mesh/src/catalog.ts`, `packages/llm-mesh/src/registry.ts`
   - [x] `packages/llm-mesh/tests/judge-*.test.ts`, `packages/llm-mesh/tests/transport/jev*.test.ts`, `packages/llm-mesh/tests/muse.test.ts`, `packages/llm-mesh/tests/gcp.test.ts`
   - [x] `packages/llm-mesh/tests/judge-fixtures.ts` (shared synthetic descriptors/requests; no live qualification or credentials)
-  - [x] `packages/llm-mesh/package.json` (judge export-map additions only; no version/dependency changes)
+  - [x] `packages/llm-mesh/package.json` (judge export-map additions plus the 0.27.0 feature version; BR96-EX8 cascade)
   - [x] `packages/cluster-mesh/src/modules/contracts.ts`, `packages/cluster-mesh/src/modules/catalog.ts`, `packages/cluster-mesh/src/compose/llm-mesh.ts`
   - [x] `packages/cluster-mesh/src/integrations/llm-mesh/judge.ts`, `packages/cluster-mesh/src/integrations/llm-mesh/judge/**`, `packages/cluster-mesh/src/integrations/llm-mesh/transport/jev.ts`
   - [x] `packages/cluster-mesh/src/loaders/llm-mesh/judge.ts`, `packages/cluster-mesh/src/loaders/llm-mesh/judge/**`, `packages/cluster-mesh/src/loaders/llm-mesh/transport/jev.ts`
@@ -41,12 +41,17 @@
   - [x] `packages/llm-mesh/README.md`, `packages/cluster-mesh/README.md`, `spec/SPEC_EVOL_LLM_MESH.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` (judge semantics only)
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `.github/workflows/**`, `plan/**`, `.track/**`
-  - [x] `packages/llm-gateway/**`, `packages/contracts/**`, `packages/events/**`, `packages/cluster-mesh/tests/packaging/**`, `package.json`, `package-lock.json`
+  - [x] `packages/contracts/**`, `packages/events/**`, `package.json`
+- [x] `packages/llm-gateway/src/**`, `packages/llm-gateway/tests/**`, `packages/llm-gateway/scripts/**`, `packages/llm-gateway/README.md`, `packages/llm-gateway/CHANGELOG.md`, `packages/llm-gateway/LICENSE`, `packages/llm-gateway/tsconfig.json`, `packages/llm-gateway/tsconfig.test.json`
+- [x] `packages/cluster-mesh/tests/packaging/*.spec.ts`, `packages/cluster-mesh/tests/packaging/*.mjs`, `packages/cluster-mesh/tests/packaging/*.ts`, `packages/cluster-mesh/tests/packaging/*.sh`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer/**`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer-pinned/**`, `packages/cluster-mesh/tests/packaging/fixtures/separate-runtime/**`
   - [x] `ui/**`, `apps/**`, `deploy/**`, `api/src/db/**`, `api/drizzle/**`, `api/src/services/llm-metering/**`
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [x] `api/vitest.config.ts` (judge-subpath aliases only; declare a numeric branch exception before editing)
   - [x] `api/src/routes/namespaces/llm-mesh.ts` (only aiSettingsSchema/updateUserSettings if the existing typesafe refusal needs a source edit)
-- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; no concrete exception ID is active.
+  - [x] `package-lock.json` (root lock mirrors for the 0.27.0 cascade only; BR96-EX4)
+  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (B3 0.19.0 fixture pins only; BR96-EX7)
+  - [x] `packages/llm-gateway/package.json` (mesh range ^0.27.0 only; BR96-EX8)
+- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8.
 
 ## Feedback Loop
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
@@ -125,6 +130,7 @@
 - [x] BR96-EX7 (2026-10-18): B3 selected fixtures point at the 0.19.0 candidate tarball plus mesh peer mirror; rationale: pack-qualify resolves the fixture file: tarball by exact name and CI fails ENOENT otherwise, precedent 529383f43 did the same at 0.18.0; impact: 4 lines in fixtures/selected, registry pins untouched; rollback: revert names with the cluster version.
 - [x] Sol P1 descriptor binding (2026-10-18): preflight now refuses any request-affecting service/adapter descriptor disagreement with PROVIDER_UNAVAILABLE before credentials or spend; regression covers divergent registered rubric instructions with zero sends; settlement overrun fixture aligned to consistent descriptors.
 - [x] Sol P2 feature version (2026-10-18): llm-mesh placeholder 0.26.2 replaced by feature minor 0.27.0 per rules/workflow.md:116; gateway mesh range re-applied to ^0.27.0 (BR96-EX5 rollback), workspace-linked so npm ci still resolves without a published 0.27.0; lockfile mirrors, train literal and version test follow; rollback: revert the five version lines with the manifests.
+- [x] BR96-EX8 (2026-10-18): llm-gateway mesh dependency ^0.26.0 to ^0.27.0 for the Sol P2 feature minor, superseding BR96-EX5 per its rollback clause; rationale: release coherence, the gateway must admit the feature mesh while workspace linkage keeps npm ci green without a published 0.27.0; impact: 1 range in package.json plus the lock mirror; rollback: revert the range with the mesh version.
 
 
 ## AI Flaky tests
