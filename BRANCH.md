@@ -67,6 +67,7 @@
 - [x] This branch has no UI change: UAT is an owner read of the new spec and cross-references on the draft PR; no service start and no `ENV=dev` test run.
 
 ## Plan / Todo (lot-based)
+- [x] **Round 1 dossier treatment (2026-10-18), finding 7**: balance D-P3 account-security benefits and recovery costs; retain trust/recovery prerequisites and explain remaining non-MFA bearer-login exposure. Documentary verification against section 4.2; no product qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `plan/BRANCH_TEMPLATE.md`, and the launch packet baseline at `94a38286e`.
   - [x] Confirm isolated worktree `/home/antoinefa/src/sentropic/tmp/worktrees/idp-per-app-mfa-recovery` on `spec/idp-per-app-mfa-recovery` with `git -C <worktree> branch --show-current`.
