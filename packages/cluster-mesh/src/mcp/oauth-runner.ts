@@ -1,9 +1,11 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { authorizeDispatch } from '@sentropic/mcp-platform/transport/dispatch';
 import type { AppToolResult } from '@sentropic/mcp-platform/transport/bridge';
 import type { McpOAuthNamespaceOptions } from './oauth-contracts.js';
 import { combineOAuthSignals, oauthAuthority } from './oauth-context.js';
 import type { createOAuthEgress } from './oauth-egress.js';
+import type { compileOAuthToolSchemas } from './oauth-tool-schemas.js';
 
 function refused(code: string): AppToolResult {
   return { ok: false, auditId: 'mcp-oauth', redactionClass: 'low',
@@ -15,6 +17,7 @@ export async function connectOAuthServer(
   options: McpOAuthNamespaceOptions,
   bridge: typeof import('@sentropic/mcp-platform/transport/bridge'),
   egress: ReturnType<typeof createOAuthEgress>,
+  validation: ReturnType<typeof compileOAuthToolSchemas>,
 ) {
   const server = new Server({ name: '@sentropic/cluster-mesh/mcp-oauth', version: '0.20.0' },
     { capabilities: { tools: {} } });
@@ -28,10 +31,12 @@ export async function connectOAuthServer(
       signal: combineOAuthSignals([authority.signal, extra.signal]),
     }), () => handler(request, extra));
   });
-  bridge.registerBridgeTools(server, options.tools, {
+  bridge.registerBridgeTools(server, validation.bridgeTools, {
     async run(tool, args) {
       const authority = oauthAuthority.getStore();
       if (!authority || authority.signal.aborted) return refused('invocation_inactive');
+      const argumentsResult = validation.validate(tool, args);
+      if (!argumentsResult.valid) return refused('invalid_parameters');
       const { principal } = authority;
       const policy = authorizeDispatch({ registry: options.registry, toolName: tool, principal: {
         sub: principal.sub, clientId: principal.clientId ?? '', scopes: [...principal.scopes], claims: [],
@@ -46,7 +51,7 @@ export async function connectOAuthServer(
       if (authority.signal.aborted) return refused('invocation_inactive');
       const bound = egress.bind(authority, tool);
       try {
-        const result = await options.invoke(tool, args, Object.freeze({
+        const result = await options.invoke(tool, argumentsResult.data, Object.freeze({
           principal, correlationId: authority.correlationId, egress: bound.capability,
         }));
         return authority.signal.aborted ? refused('invocation_inactive') : result;
@@ -58,6 +63,7 @@ export async function connectOAuthServer(
       }
     },
   });
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: validation.list() }));
   const transport = options.sessions.createTransport();
   try {
     await server.connect(transport);
