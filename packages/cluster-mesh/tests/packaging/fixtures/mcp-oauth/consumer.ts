@@ -4,7 +4,8 @@ import type {
 } from '@sentropic/cluster-mesh/compose/mcp-oauth';
 import { createMcpAuth, McpAuthError } from '@sentropic/cluster-mesh/mcp/auth';
 import { mcpAuthRoutes } from '@sentropic/cluster-mesh/mcp/auth/hono';
-import { loadMcpAuth, loadMcpAuthHono } from '@sentropic/cluster-mesh/loaders/mcp';
+import { loadMcpAuth } from '@sentropic/cluster-mesh/loaders/mcp/auth';
+import { loadMcpAuthHono } from '@sentropic/cluster-mesh/loaders/mcp/auth/hono';
 
 /** The real twelve-tool host adapter supplies the compiled registry and domain invocation. */
 export async function createImmoMcp(modules: ClusterMeshModules, host: McpOAuthNamespaceOptions) {
