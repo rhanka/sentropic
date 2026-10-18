@@ -46,7 +46,8 @@
   "files": [
     "dist",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "dependencies": {
     "@sentropic/mcp-platform": "^0.3.0"
