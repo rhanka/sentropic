@@ -43,6 +43,7 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `acknowledge` (2026-10-18): Two independent reviews of head `1019ef6020b8add72a66bf017e0dbe98e629f333` returned REQUEST_CHANGES for one shared P2 finding: the retained cost-risk instruction at study §9 read as a current pre-build gate. Fixed by marking that instruction historical and superseded (D7 no-reapproval-gate and Claude decided-continuation references); the unverified cost/terms risk is retained. Treatment record: `.h2a/reviews/pr596_treatment.md`. No other finding was raised by either review.
 - `deferred`: Custody job, resolver, and live qualification remain open on main (deployable-process custody/G4 and B4). Owner: custody maintainer/conductor for G4 reconciliation; h2a owner for Claude execution qualification; platform/custody operator for preprod delivery and per-device revocation evidence. Status: recorded as existing dependencies in the study; not blockers for merging this documentation-only reconciliation. Production stays deferred under O-D3.
 - No `blocked` or `attention` item is open for this branch.
 
