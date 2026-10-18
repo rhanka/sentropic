@@ -41,6 +41,10 @@
       "types": "./dist/registry-entry.d.ts",
       "import": "./dist/registry-entry.js"
     },
+    "./memory": {
+      "types": "./dist/memory/index.d.ts",
+      "import": "./dist/memory/index.js"
+    },
     "./transport/bridge": {
       "types": "./dist/transport/bridge.d.ts",
       "import": "./dist/transport/bridge.js"
@@ -70,6 +74,9 @@
       ],
       "registry": [
         "./dist/registry.d.ts"
+      ],
+      "memory": [
+        "./dist/memory/index.d.ts"
       ]
     }
   },
