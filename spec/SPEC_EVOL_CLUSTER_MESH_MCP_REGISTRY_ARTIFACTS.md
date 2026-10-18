@@ -169,7 +169,9 @@ Minted material never carries refresh material (`packages/cluster-mesh/src/token
 
 ### 6.3 Invalidation
 
-`invalidateTokenExchangeCache(filter | 'all')` evicts matching entries and in-flight exchanges and returns the evicted count (`packages/cluster-mesh/src/token-exchange.ts:205-214,519-538`). Every invalidation bumps a global generation: work invalidated mid-flight can neither insert into the cache nor return success, including invalidation landed during subject verification (`exchange_invalidated`; `packages/cluster-mesh/src/token-exchange.ts:317-320,439-486`).
+`invalidateTokenExchangeCache(filter | 'all')` evicts matching cached entries and detaches matching in-flight exchanges (`packages/cluster-mesh/src/token-exchange.ts:205-214,519-560`). Its return value is not a uniform total: it counts evicted cached entries, and counts detached flights only for global invalidation (`'all'` or the omitted argument) and for the bounded-history collapse into a global invalidation. A subject- or tenant-scoped invalidation can therefore cancel a pending mint and return `0`; zero is not evidence that no pending work was invalidated (`packages/cluster-mesh/src/token-exchange.ts:521-555`; asserted by `packages/cluster-mesh/tests/token-exchange-cache.spec.ts:290,320,350`).
+
+The mid-flight guarantee is scoped to the supported cases. For `'all'`, the omitted argument, a subject filter, or a tenant filter, an invalidation landed during subject verification or during the mint makes the pending exchange refuse with `exchange_invalidated` and admit nothing into the cache (`packages/cluster-mesh/src/token-exchange.ts:317-324,397-401,441-486`). **Baseline limitation:** an empty filter object `{}` matches every cached entry for eviction and detaches in-flight registrations, but advances neither the global nor any scoped invalidation floor (`packages/cluster-mesh/src/token-exchange.ts:338-346,527-537`), so an outstanding mint still succeeds and repopulates the cache. A caller requiring global in-flight invalidation uses `'all'` or omits the argument; an empty object does not provide that guarantee.
 
 ## 7. What a host must supply
 
