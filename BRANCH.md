@@ -85,9 +85,9 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
   - [x] Confirm the rebased diff vs `origin/main` adds only `spec/SPEC_STUDY_GITHUB_SEAT_CREDENTIAL_CUSTODY.md` (106 lines, no same-file conflict).
 
 - [ ] **Lot 2 — Reconciliation of the study (documentation-only)**
-  - [ ] Mark the 2026-09-20 study as historical where superseded; keep the dated owner request and the O1/O2/O3 comparison as decision history; remove O2 as the current recommendation.
-  - [ ] Replace the current-tense custody, refresh, and MEP delivery descriptions with references to the controlling deployable-process D7 contract (GitHub Secrets, sole refresher, GitHub-first commit, CAS delivery, access-only projection resolver, preprod-first, production deferred).
-  - [ ] Correct the security boundary wording: the selected Secrets design entrusts full credentials to the GitHub secret/job boundary; no KMS-to-KMS guarantee is claimed for it.
+  - [x] Mark the 2026-09-20 study as historical where superseded; keep the dated owner request and the O1/O2/O3 comparison as decision history; remove O2 as the current recommendation.
+  - [x] Replace the current-tense custody, refresh, and MEP delivery descriptions with references to the controlling deployable-process D7 contract (GitHub Secrets, sole refresher, GitHub-first commit, CAS delivery, access-only projection resolver, preprod-first, production deferred).
+  - [x] Correct the security boundary wording: the selected Secrets design entrusts full credentials to the GitHub secret/job boundary; no KMS-to-KMS guarantee is claimed for it.
   - [x] Remove the unconditional metered-fallback and categorical terms-safety wording; keep mono-principal personal passthrough and cite the provider-specific qualification on main.
   - [x] Update the factual inventory: Muse enrollment exists on main; the five-CLI envelope (agy, codex, vibe, muse, claude) is the current provider inventory with lifecycle qualification unverified; keep direct Gemini/AI-Studio only as deferred/unverified.
   - [ ] Separate delivered Claude enrollment (PR #659) from execution/host qualification (h2a runner seam; no runner installed by default; standalone host excludes provider CLI subprocesses).

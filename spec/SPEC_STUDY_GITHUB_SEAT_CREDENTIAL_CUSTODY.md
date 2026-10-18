@@ -43,38 +43,40 @@ Net-new — still missing on main (existing gaps, not supplied by this study or 
 
 Historical note: the `transpose-cv` PR #37 keyring precedent and the 2026-09-20 inventory (including the former zero-references statement for Muse) are historical observations. They do not describe the current provider inventory and do not justify a second custody path.
 
-## 3. Central design problem — how GitHub holds the material
+## 3. Central design problem — how GitHub holds the material (historical comparison)
 
-Three custody shapes, in increasing alignment with the broker's handle-first default:
+Historical (2026-09-20): three custody shapes were compared, in increasing alignment with the broker handle-first default. The comparison and its original tradeoffs are retained as decision history only. Main records the selected GitHub Secrets design and rejects the older ciphertext/materializer model, but does not reproduce this three-way comparison (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:13`, `:144`).
 
-### O1 — GitHub-encrypted secrets (repo/environment secrets via API)
-GitHub stores the seat tokens as **GitHub Actions secrets** (encrypted at rest by GitHub, sealed-box on write). The deploy workflow reads them at MEP; the refresh Action rewrites them.
-- **Pro:** simplest; reuses the exact MEP path (ci.yml already consumes GH secrets); no extra KMS.
-- **Con:** GitHub can decrypt at use time → custody is **delegated to GitHub**, and the material is *recoverable secret* in a second store. This is precisely the mirroring the broker bans by default; admissible only under the owner exception, and it puts seat-account trust in GitHub's secret plane.
+### O1 — GitHub-encrypted secrets (repo/environment secrets via API) — historical option
+GitHub stores the seat tokens as GitHub Actions secrets (encrypted at rest by GitHub, sealed-box on write); the refresh job rewrites them and the deployment consumes the delivered projection.
+- Historical pro: simplest path; reuses the existing secret-delivery pattern; no extra KMS.
+- Historical con: GitHub can decrypt at use time, so custody is delegated to GitHub and the material is a recoverable secret in a second store — the mirroring the broker bans by default (`spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md:335`).
 
-### O2 — Envelope-encrypted blobs in a private repo (key in Sentropic KMS) — recommended
-GitHub stores only **ciphertext** (age / SOPS / sealed-secret), encrypted to a key held by **Sentropic KMS**, never by GitHub. Refresh Action and MEP both decrypt with the KMS key made available to that step.
-- **Pro:** GitHub never holds a decryptable secret → satisfies the **KMS-to-KMS envelope** exception cleanly; GitHub is a dumb durable transport; audit + revocation stay Sentropic-owned.
-- **Con:** the KMS key must be reachable by the refresh Action and the deploy — key-distribution problem (one bootstrap secret still lives in GH to unwrap). Slightly more moving parts.
+### O2 — Envelope-encrypted blobs in a private repo (key in Sentropic KMS) — historical option, formerly recommended
+GitHub stores only ciphertext encrypted to a key held by Sentropic KMS; the refresh job and deployment decrypt with that key.
+- Historical pro: GitHub holds no decryptable secret; audit and revocation stay Sentropic-owned.
+- Historical con: the KMS key must be reachable by the refresh job and the deployment, which leaves a key-distribution and bootstrap problem.
 
-### O3 — Handle-only on GitHub, secret in Sentropic KMS
-GitHub stores only a **reference/handle**; the raw seat token lives solely in Sentropic KMS. The GitHub-side refresh triggers a Sentropic endpoint that does the actual token refresh; GitHub never holds token material.
-- **Pro:** fullest alignment with broker handle-first default; smallest blast radius.
-- **Con:** "store the seats on GitHub" becomes "store a handle on GitHub" — arguably not what the owner asked; requires a reachable Sentropic KMS/endpoint at MEP anyway, which weakens the "GitHub is the store I retrieve from" intent.
+### O3 — Handle-only on GitHub, secret in Sentropic KMS — historical option
+GitHub stores only a reference/handle; the raw seat token lives solely in Sentropic KMS and the GitHub side triggers a Sentropic endpoint for refresh.
+- Historical pro: fullest alignment with the broker handle-first default; smallest blast radius.
+- Historical con: GitHub stores a handle rather than the seats, and a reachable Sentropic KMS/endpoint is still required at deployment.
 
-**Study lean:** **O2** — it honors the owner's "GitHub is the store I retrieve at MEP" literally (GitHub holds the bytes) while keeping the decryptable secret out of GitHub, which is the only way the broker's raw-secret-mirroring exception is defensible. O1 is the fast path if the owner accepts delegating seat-token custody to GitHub's secret plane. Owner call in §7.
+Decision recorded on main (current): the later owner decisions supersede the ciphertext/materializer model with GitHub Secrets updated by API, one scheduled Actions refresher that also delivers to preprod, and provider revocation per device (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:13`). Full provider/device payloads and the dedicated Actions-secret API credential are specified at `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:144-145`. Preprod delivery is ratified and production delivery is deferred (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:155`, `:263`). The O2 recommendation is therefore superseded and is not the current recommendation; the bounded decision and its provisioning prerequisites are carried forward without reopening them and without treating them as production authorization.
+
+Security boundary (current, corrected): encryption at rest and a runner ability to decrypt are different boundaries. The selected Secrets design entrusts full credentials to the GitHub secret/job boundary (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:144-147`). The former statement that GitHub never holds a decryptable secret under O2 does not hold as a current guarantee for the selected design, in particular where a GitHub-hosted refresh step obtains the unwrap material. The broker stricter default remains at `spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md:335`; the selected Secrets design is not claimed to automatically demonstrate that KMS-to-KMS condition.
 
 ## 4. Refresh loop (Sentropic-repo side)
 
-- A scheduled workflow in this repo (e.g. `.github/workflows/seat-refresh.yml`, cron) iterates enrolled seats, calls `EnrollmentProvider.refresh({ accountId, refreshToken, credentialVersion })`, re-encrypts (O2) and rewrites the store, bumping a version.
-- On refresh failure → mark the seat `reauth_required` and raise a **human escalation** (broker §5: transaction-bound challenge on a trusted surface; agents never see codes). Device/OAuth seats periodically need a human reauth; the loop must degrade to metered-key fallback, never hard-fail the gateway.
-- Replay/version guard: a newer handle never silently overwrites an active one without version check (broker §4.5 conflict policy).
+Current (on main): the scheduled GitHub Actions job is the sole refresher of custody-managed seats. All scheduled and manual refresh and redelivery triggers are serialized, the GitHub Secret update is the durable commit point, delivery uses Kubernetes CAS, post-commit failure retries the same generation without a second rotation, and an independent freshness monitor is required (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:147-153`). Refresh-family identity, authority, epoch, and generation lineage are frozen by the CI-seats contract (`spec/SPEC_EVOL_CI_SEATS.md:18-40`). Failure before a confirmed GitHub commit sets `reauth_required` and alerts the custody operator; operator alerts, freshness refusal, and per-device provider revocation are specified at `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:151-165`.
+
+The simpler 2026-09-20 loop (iterate seats, refresh, re-encrypt, rewrite with a generic version check) is historical and is not retained as an alternative normative workflow. Schema reconciliation within these established contracts remains the custody lane responsibility (§8).
 
 ## 5. MEP retrieval → gateway
 
-- Extend the deploy step: pull current seat credentials from the store → k8s secret → gateway `KeyringAdapter` (`EncryptedFileKeyring` directory) and/or seed `LocalAccountTransportService` accounts (`status: active`, `modelIds`, `priority`).
-- Gateway then acquires a seat per request (existing acquire/lease/outcome), with **metered API key as fallback** when no seat is `active`.
-- Reuses the `transpose-cv` PR #37 keyring seam; the gateway is the second consumer that justifies promoting it.
+Current (on main): delivery is job-only. The custody job creates or updates the Kubernetes seat Secret and delivers an access-only projection; a resolver reads that projection in custody-managed mode and supplies access material only inside the mesh credential boundary. Runtime never refreshes custody-managed seats, no persistent custody token copy is stored, and removed or revoked seats lose local eligibility (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:143`, `:149-163`). Custody projections must not be imported into the ordinary local account service (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:135`).
+
+The 2026-09-20 description (deploy pulls full credentials into a keyring/pool and seeds active accounts) is superseded and is not retained. Ordinary local seats and custody-managed seats stay distinct; the pool-versus-keyring retrieval choice is decided by the projection resolver above and is no longer open (§7, question 6).
 
 ## 6. Provider coverage — open
 
