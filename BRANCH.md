@@ -35,6 +35,8 @@
   - `packages/llm-mesh/src/ports/route-affinity-store.ts`
   - `packages/llm-mesh/src/transport/muse-runtime-client.ts`
   - `packages/llm-mesh/src/transport/muse-native-responses-client.ts`
+  - `packages/llm-mesh/src/transport/codex-runtime-client.ts` (BR120-EX11)
+  - `packages/llm-mesh/src/transport/codex-runtime-wire.ts` (BR120-EX11)
   - `packages/llm-mesh/src/execution-features.ts`
   - `packages/llm-mesh/src/service/facade.ts`
   - `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts`
@@ -97,6 +99,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR120-EX11`: bounded upstream model-observation plumbing in `packages/llm-mesh/src/transport/codex-runtime-client.ts` and `packages/llm-mesh/src/transport/codex-runtime-wire.ts` for Sol review Finding 4. Reason: `route-json-flow.ts` and `route-stream-flow.ts` verify `observedServedModelId`, and Codex/Muse runtime adapters must surface the provider-reported `response.model` / `model` field separately from the request-derived `modelId` so contradictory upstream identities fail without retry and record in the failure receipt. Impact: attaches `observedServedModelId` metadata when present on Codex/Muse responses and stream events while keeping absent evidence unknown (`selection-only`). Rollback: remove `observedServedModelId` metadata forwarding in those two files.
 - `BR120-EX10`: minimal cluster-mesh peer widening and train version sync for the PR #685 CI repair. Reason: post-rebase `make lock-root` reproduces ERESOLVE on cluster-mesh peer caps (mesh `>=0.22.0 <0.27.0`, gateway `>=0.19.0 <0.21.0`) against candidates mesh 0.27.0 / gateway 0.21.0; immo #679 (`1472d961e`), #684 (`886cefc64`) and #688 (`441453966`) are MERGED so the FL-24 timing constraint is lifted and merge-train slot 3 is active. Impact: two range replacements in `packages/cluster-mesh/package.json` and `src/modules/catalog.ts`, cluster version 0.19.0 to 0.19.1 (above main/npm 0.19.0 while staying within comments `>=0.19.0 <0.20.0`), CHANGELOG entry, aligned range/version assertions in seven cluster-mesh test files, `selected` packaging fixture tarball/lock refresh (`0.19.1`), `api/package.json` gateway range `^0.21.0` + `gateway-package-version.test.ts` (`0.21.0`) so workspace resolution links the single 0.21.0/0.27.0 tuple without nested registry copies, regenerated root lock through `make lock-root`, no workflow/AI change. Rollback: restore ranges, versions, CHANGELOG, test strings, fixture lock and root lock rows. No merge or publication on this branch.
 - `FL-24-blocked-ci-peer-window` (2026-10-17): owner gateway/release maintainer. Root lock regeneration reproduces ERESOLVE on cluster-mesh's gateway peer cap. Both current gateway/mesh candidates exceed the manifest/catalog caps. The minimal widening is documented in `.h2a/build/gw_pr1_report.md`; v9 L8/9 schedules it after immo #679 merge/publication, which is still absent at ba5165c9. Resolve that timing constraint before changing the shared cluster paths; acceptance requires plain dependency resolution and train lock-sync, without peer or CI bypasses.
 - `BR120-EX9`: root lock refresh for the owner-requested PR #685 CI repair. Reason: run 39042373493 fails `changes` because mesh 0.27.0 is locked as 0.26.1; manifest classification and ci-gate then fail. Impact: dependency metadata generated through `make lock-root`, without publication or peer bypass. Rollback: restore the previous lock together with its compatible package tuple. Cluster-mesh shared-writer changes remain deferred pending evidence that they block this repair.
@@ -178,7 +181,13 @@
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **CI repair — PR #685 run 39042373493**
+- [ ] **Sol 6.1 review remediation — `.h2a/reviews/pr685_sol.md`**
+  - [x] Finding 1 (single-writer stale-lock takeover): fence stale lock retirement by observed token and atomic rename so delayed contenders cannot remove a live successor lock; test contested crash/takeover contention
+  - [ ] Finding 2 (concurrent inference snapshot contention): serialize and retry snapshot mutations across session/receipt/affinity adapters while preserving semantic revision checks; test 8 concurrent HTTP sessions + concurrent control operations
+  - [ ] Finding 3 (migration policy binding): forward/bind trusted `routingContract` in `migrateOldSessions` and provide explicit `migrateSessionPolicy` while preserving key bytes and expiry atomically; test migrated-key inference, restart, and rejection of unapproved policy changes
+  - [ ] Finding 4 (upstream model-identity observation): propagate provider-reported model identity separately from request-derived `modelId` in Muse and Codex adapters (JSON + SSE) and retain contradictory observations in failed receipts without retry; test adapter-to-host mismatches
+
+- [x] **CI repair — PR #685 run 39042373493**
   - [x] Verify branch mechanically, inspect failed job logs and check `make ps-all`
   - [x] CI filter coverage, all 56 numbered E2E specs, fresh registry version check and full changed-package manifest gate pass; both packed archive digests are unchanged
   - [x] Record original run completion: enforce-package-bump passes; changes, manifest classification and ci-gate fail; all remaining jobs including AI are skipped, with no workaround
@@ -342,4 +351,3 @@
 - Test ENV `test-gw-durable-vibe-muse`; native E2E ENV `e2e-gw-durable-vibe-muse`; owner UAT host `dev-gw-durable-vibe-muse` after qualification
 - Companion h2a `feat/gw-thin-consumer-pr1` at `/home/antoinefa/src/h2a/tmp/gw-thin-consumer-pr1` (h-cond); immo `feat/immo-861-mcp-registry` at `tmp/worktrees/immo-861-mcp-registry`
 - Spec `spec-gateway-evolutions-v8.md` sha256 `a530321eb43171ee3b11605b90aa81699bb2758a0020e43f389a59156642eaf9`; challenge `challenge-opus-gw-evol-v8.md` VALIDÉ; shared block `b46d3c3c10873b8f5742fd8a4c6349f607d480b907dea899c38f0e8bb4e3b332`
-
