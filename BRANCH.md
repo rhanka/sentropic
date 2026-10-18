@@ -115,7 +115,7 @@ Implement Lot 1 exactly as the reviewed plan defines it.
   - [x] Add `scripts/ci/filter-consumers.mjs`, `scripts/ci/filter-consumers.test.mjs`, `scripts/ci/fixtures/consumer-regressions.json`.
   - [x] Extend `ci.yml` filters with omitted consumers incl. `mcp-auth` file-dependency propagation into API/AI.
   - [x] Keep `make check-ci-version-filters`; supplement with consumer regression test.
-  - [ ] Add filter-output assertions to `scripts/ci/ci-wiring.test.mjs` (additions/deletions/renames, global/Make changes).
+  - [x] Add filter-output assertions to `scripts/ci/ci-wiring.test.mjs` (additions/deletions/renames, global/Make changes).
   - [x] Cover 74 non-fallback / 181 incl. fallback omissions, four LLM cases explicit, beyond PR #675.
   - [x] API test files created/updated: none. UI test files created/updated: none. E2E test files created/updated: none.
   - [x] Lot gate:
