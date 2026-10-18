@@ -211,6 +211,97 @@ describe('remote judge client', () => {
     expect(r5).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' } });
   });
 
+  it('rejects a verdict whose receipt evaluator does not bind the request', async () => {
+    const corr = 'bind-corr';
+    const receipt = { ...mockReceipt(corr), evaluator: { ...mockReceipt(corr).evaluator, evaluatorId: 'foreign-evaluator' } };
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a not-incurred cost carrying a nonzero amount', async () => {
+    const corr = 'cost-corr';
+    const receipt = { ...mockReceipt(corr), cost: { status: 'not-incurred', amountMicroUsd: '42', source: 'no-dispatch' } };
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('rebuilds static error wording and drops forged retry metadata', async () => {
+    const corr = 'retry-corr';
+    const forged = {
+      kind: 'error', ok: false,
+      error: { code: 'TIMEOUT', message: { text: 'late' }, phase: 'settlement', retryable: true, retryAfterMs: 1000000000 },
+      receipt: { ...mockReceipt(corr), outcome: 'error' as const, errorCode: 'TIMEOUT' },
+    };
+    const fetch = vi.fn(async () => new Response(JSON.stringify(forged),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    expect(result).toEqual({
+      kind: 'error', ok: false,
+      error: { code: 'TIMEOUT', message: 'Judge deadline exceeded.', phase: 'settlement', retryable: false },
+      receipt: forged.receipt,
+    });
+  });
+
+  it('rejects unsolicited providerRaw when raw evidence was not allowlisted', async () => {
+    const corr = 'raw-corr';
+    const verdict = { ...mockVerdictResult(corr).verdict, providerRaw: { data: { noul: 0.05 }, bytes: 13, truncated: false } };
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('rejects providerRaw whose byte claim disagrees with the bounded payload', async () => {
+    const corr = 'rawbytes-corr';
+    const verdict = { ...mockVerdictResult(corr).verdict, providerRaw: { data: { noul: 0.05 }, bytes: 999999, truncated: false } };
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const request = judgeRequest({ correlationId: corr, raw: { mode: 'allowlisted' } });
+    const result = await client.judge(request);
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('rejects verdicts with invalid confidence or an unbalanced distribution', async () => {
+    const corr = 'dist-corr';
+    const client = (verdict: unknown) => createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
+        { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
+    }).judge(judgeRequest({ correlationId: corr }));
+
+    const badConfidence = { ...mockVerdictResult(corr).verdict,
+      confidence: { value: 'high', min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'x', origin: 'provider' } };
+    expect(await client(badConfidence)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+
+    const badSum = { ...mockVerdictResult(corr).verdict,
+      distribution: [{ outcome: 'a', nativeOutcome: 'a', probability: 0.25 }] };
+    expect(await client(badSum)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+  });
+
+  it('rejects a verdict whose criterionKind disagrees with the request', async () => {
+    const corr = 'kind-corr';
+    const verdict = { ...mockVerdictResult(corr).verdict, criterionKind: 'choice' };
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('never retries the call automatically on 502/503/429 status', async () => {
     for (const status of [429, 502, 503, 504]) {
       const fetch = vi.fn(async () => new Response('HTML Gateway Error', { status }));
