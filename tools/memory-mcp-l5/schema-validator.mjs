@@ -106,6 +106,66 @@ export function validateAgainstSchema(value, rootSchema, node = rootSchema, path
   return failures;
 }
 
+export const UNESTABLISHED_LOT0_OBLIGATIONS = Object.freeze([
+  'provenance.predecessors: pendingPredecessorMappings remain unresolved (BR3/L5-F1)',
+  'importGraph.resolver: tools/memory-mcp-l5/import-graph.mjs is not yet implemented (Lot 1 obligation)',
+  'assurance.verifier: tools/memory-mcp-l5/verifier.mjs is not yet implemented (Lot 2 obligation)',
+  'ci.provenance: trusted CI run provenance is not established by local evidence files',
+  'ownerUat.provenance: authenticated owner decision provenance is not established by local actorRef strings',
+  'acceptances.provenance: authenticated co-owner acceptance provenance is not established by local actorRef strings',
+]);
+
+function resolvePkgSubpath(rootDir, spec) {
+  const parts = String(spec || '').split('/');
+  if (parts.length < 2) return null;
+  const pkgName = `${parts[0]}/${parts[1]}`, sub = parts.length > 2 ? `./${parts.slice(2).join('/')}` : '.';
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(rootDir, `installed/node_modules/${pkgName}/package.json`), 'utf8'));
+    const exp = pkg?.exports?.[sub], relTarget = typeof exp === 'string' ? exp : (exp?.import || exp?.default);
+    return typeof relTarget === 'string' ? `installed/node_modules/${pkgName}/${relTarget.replace(/^\.?\//, '')}` : null;
+  } catch { return null; }
+}
+
+function scanImportGraphFiles(rootDir, startFiles, failures) {
+  const queue = [...startFiles], visited = new Set(), edges = [];
+  const exts = ['', '.ts', '.js', '.mjs', '.d.ts', '/index.ts', '/index.js', '/index.mjs', '/index.d.ts'];
+  while (queue.length > 0) {
+    const fp = queue.shift();
+    if (!fp || visited.has(fp) || !existsSync(resolve(rootDir, fp))) continue;
+    visited.add(fp);
+    const code = readFileSync(resolve(rootDir, fp), 'utf8');
+    if (/\bimport\s*\(\s*(?!['"][^'"]+['"]\s*\))/.test(code)) failures.push(`importGraph: computed dynamic import in ${fp}`);
+    const specs = [
+      ...[...code.matchAll(/\b(?:import|export)\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/g)].map((m) => m[1]),
+      ...[...code.matchAll(/\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]),
+    ];
+    for (const sp of specs) {
+      if (/mock|fixture|test-helper|in-memory|fake|stub|better-sqlite3/i.test(sp) || /^@sentropic\/[^/]+\/src(?:\/|$)/.test(sp)) {
+        failures.push(`importGraph: forbidden import ${sp} in ${fp}`);
+      }
+      if (sp.startsWith('.')) {
+        const hit = exts.map((ext) => resolve(dirname(resolve(rootDir, fp)), `${sp}${ext}`)).find((cand) => {
+          const r = relative(rootDir, cand);
+          return !r.startsWith('..') && !r.startsWith('/') && existsSync(cand);
+        });
+        if (!hit) { failures.push(`importGraph: unresolved import ${sp} in ${fp}`); continue; }
+        const toRel = relative(rootDir, hit).replace(/\\/g, '/');
+        if (fp.startsWith('packages/') && toRel.startsWith('packages/') && fp.split('/')[1] !== toRel.split('/')[1]) {
+          failures.push(`importGraph: sibling source import ${sp} in ${fp}`);
+        }
+        edges.push({ from: fp, specifier: sp, to: toRel });
+        queue.push(toRel);
+      } else if (sp.startsWith('@sentropic/')) {
+        const toPkg = resolvePkgSubpath(rootDir, sp);
+        if (!toPkg || !existsSync(resolve(rootDir, toPkg))) { failures.push(`importGraph: unresolved package import ${sp} in ${fp}`); continue; }
+        edges.push({ from: fp, specifier: sp, to: toPkg });
+        queue.push(toPkg);
+      }
+    }
+  }
+  return edges;
+}
+
 export function verifyOnDiskEvidence(doc, catalog, options = {}) {
   const baseDir = options.baseDir;
   if (typeof baseDir !== 'string' || baseDir.length === 0) return ['evidence: baseDir is required to verify on-disk proof files'];
@@ -219,11 +279,20 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
   readChecked('tools/memory-mcp-l5/verifier.mjs', assurance.verifierArtifactSha256, 'assurance.verifierArtifactSha256');
   readChecked('tools/memory-mcp-l5/policies/trust-profile-v1.json', assurance.trustProfileSha256, 'assurance.trustProfileSha256');
   const graphDoc = readJson(doc.importGraph, 'importGraph');
-  const resFiles = asArr(graphDoc?.resolvedFiles);
-  if (!graphDoc || graphDoc.forbiddenHits !== 0 || graphDoc.unresolvedEdges !== 0 || resFiles.length !== asArr(catalog.importGraphRoots).length || sha256Hex(Buffer.from(canonicalizeJson(resFiles))) !== doc.importGraph?.resolvedFilesSha256 || JSON.stringify(graphDoc.roots) !== JSON.stringify(catalog.importGraphRoots)) {
+  const resFiles = asArr(graphDoc?.resolvedFiles), expectedRoots = asArr(catalog.importGraphRoots);
+  if (!graphDoc || graphDoc.forbiddenHits !== 0 || graphDoc.unresolvedEdges !== 0 || resFiles.length !== expectedRoots.length || sha256Hex(Buffer.from(canonicalizeJson(resFiles))) !== doc.importGraph?.resolvedFilesSha256 || JSON.stringify(graphDoc.roots) !== JSON.stringify(expectedRoots)) {
     failures.push('importGraph: on-disk report mismatch');
   }
-  for (const rf of resFiles) readChecked(rf?.path, rf?.sha256, `importGraph.resolvedFiles/${rf?.root}`);
+  if (JSON.stringify(resFiles.map((r) => r?.root)) !== JSON.stringify(expectedRoots) || new Set(resFiles.map((r) => r?.path)).size !== resFiles.length) {
+    failures.push('importGraph: resolvedFiles roots mismatch');
+  }
+  for (const rf of resFiles) {
+    const expPath = String(rf?.root || '').startsWith('@sentropic/') ? resolvePkgSubpath(rootDir, rf.root) : rf?.root;
+    if (!expPath || rf?.path !== expPath) failures.push(`importGraph: resolvedFiles path mismatch for ${rf?.root}`);
+    readChecked(rf?.path, rf?.sha256, `importGraph.resolvedFiles/${rf?.root}`);
+  }
+  const scannedEdges = scanImportGraphFiles(rootDir, resFiles.map((r) => r?.path), failures);
+  if (graphDoc && canonicalizeJson(asArr(graphDoc.edges)) !== canonicalizeJson(scannedEdges)) failures.push('importGraph: edges mismatch with scanned files');
   const normPath = (fp) => {
     if (typeof fp !== 'string') return '';
     const s = fp.replace(/\\/g, '/'), rp = `${rootDir.replace(/\\/g, '/')}/`;
@@ -260,12 +329,12 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
   }
   let ciRun = null;
   try { ciRun = JSON.parse(readFileSync(resolve(rootDir, 'receipts/ci-run.json'), 'utf8')); } catch { ciRun = null; }
-  if (!ciRun || ciRun.workflow !== ci.workflow || ciRun.status !== 'completed' || ciRun.conclusion !== 'success' || ciRun.runId !== ci.runId || ciRun.attempt !== ci.attempt || ciRun.head !== ci.head || ciRun.tupleSha256 !== doc.tupleSha256) {
-    failures.push('ci: on-disk ci-run.json mismatch');
+  if (!ciRun || ciRun.workflow !== ci.workflow || ciRun.status !== 'completed' || ciRun.conclusion !== 'success' || ciRun.runId !== ci.runId || ciRun.attempt !== ci.attempt || ciRun.head !== ci.head || ciRun.base !== ci.base || ciRun.merge !== ci.merge || ciRun.checkout !== ci.checkout || ciRun.imageDigest !== ci.imageDigest || ciRun.imageDigest !== PINNED_IMAGE_DIGEST || ciRun.artifactName !== ci.artifactName || ciRun.tupleSha256 !== doc.tupleSha256) {
+    failures.push('ci.evidence: ci-run.json field mismatch');
   }
   for (const j of asArr(ci.jobs)) {
     const jDoc = readJson({ path: `receipts/ci-job-${j?.id}.json`, sha256: j?.resultSha256 }, `ci.jobs/${j?.id}`);
-    if (!jDoc || jDoc.jobId !== j?.id || jDoc.runId !== ci.runId || jDoc.attempt !== ci.attempt || jDoc.head !== ci.head || jDoc.tupleSha256 !== doc.tupleSha256 || jDoc.conclusion !== 'success' || (j?.id === 'memory-l5-qualification' && JSON.stringify(jDoc.proofResultSha256s) !== JSON.stringify(asArr(doc.proofs).map((p) => ({ id: p?.id, sha256: p?.result?.sha256 }))))) {
+    if (!jDoc || jDoc.jobId !== j?.id || jDoc.runId !== ci.runId || jDoc.attempt !== ci.attempt || jDoc.head !== ci.head || jDoc.base !== ci.base || jDoc.merge !== ci.merge || jDoc.checkout !== ci.checkout || jDoc.imageDigest !== ci.imageDigest || jDoc.imageDigest !== PINNED_IMAGE_DIGEST || jDoc.artifactName !== ci.artifactName || jDoc.tupleSha256 !== doc.tupleSha256 || jDoc.conclusion !== 'success' || (j?.id === 'memory-l5-qualification' && JSON.stringify(jDoc.proofResultSha256s) !== JSON.stringify(asArr(doc.proofs).map((p) => ({ id: p?.id, sha256: p?.result?.sha256 }))))) {
       failures.push(`ci.jobs/${j?.id}: on-disk job evidence mismatch`);
     }
   }
@@ -279,5 +348,9 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
     const accDoc = readJson(a?.evidence, `acceptances/${a?.role}.evidence`);
     if (!accDoc || accDoc.role !== a?.role || accDoc.actorRef !== a?.actorRef || accDoc.tupleSha256 !== doc.tupleSha256 || accDoc.authoritySourceSha256 !== c.l0Freeze?.sha256 || accDoc.ciRunId !== ci.runId || accDoc.verdict !== 'accepted') failures.push(`acceptances/${a?.role}: on-disk disposition mismatch`);
   }
+  if (asArr(catalog.pendingPredecessorMappings).some((m) => m?.status === 'pending-predecessor-integration')) failures.push(UNESTABLISHED_LOT0_OBLIGATIONS[0]);
+  if (!existsSync(resolve(HERE, 'import-graph.mjs'))) failures.push(UNESTABLISHED_LOT0_OBLIGATIONS[1]);
+  if (!existsSync(resolve(HERE, 'verifier.mjs'))) failures.push(UNESTABLISHED_LOT0_OBLIGATIONS[2]);
+  failures.push(...UNESTABLISHED_LOT0_OBLIGATIONS.slice(3));
   return failures;
 }
