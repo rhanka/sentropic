@@ -40,6 +40,7 @@
 ## Feedback Loop
 - [x] DV3 owner decision closed 2026-10-18: question « quand on recopie la prod vers la preprod pour tester, est-ce qu'on copie aussi tes annotations privées (texte et captures d'écran) ? » — answer « Tout copier » = option B (Inclure); no `blocked` / `attention` item remains on this branch for DV3.
 - [x] Astra max review of PR #694 at `b9895373a` (NO-GO: 2 blocking P2, 2 P3) treated in this branch: canonical discussion-state separation, observed snapshot binding for third-party authoring, S7 source locator with digest and lot map, and commit-count freshness below; treatment table in `.h2a/reviews/spec694_treatment.md`.
+- [x] Astra max re-review r2 of PR #694 at `df769d99a` (GO, 1 new P3) treated in this branch: Lot N-1 checkbox qualified for the intentional S7 provenance reference; findings #1–#4 remain closed.
 - [ ] No other `blocked` / `deferred` / `cancelled` / `attention` item open; raise one here instead of guessing if a prerequisite is unresolved.
 
 ## AI Flaky tests
@@ -91,7 +92,7 @@
   - [x] Lot gate: `make scope-check ENV=test-spec-ui-annotate-overlay` passes; every new link resolves to an existing file in this branch.
   - [ ] UAT (docs read): owner follows each cross-reference from the two related specs to the promoted spec and back to the canonical comments model.
 - [x] **Lot N-1 — Docs consolidation**
-  - [x] Confirm the promoted spec contains no scratch-only path, no pending DV3 question, and no forbidden wording; confirm lane, lot, Make-command, and acceptance content matches v2.
+  - [x] Confirm the promoted spec contains no scratch-only path except the intentional, digest-pinned external S7 provenance reference (Replace-Claude v2.1 plan, sha256 recorded in spec section 1), no pending DV3 question, and no forbidden wording; confirm lane, lot, Make-command, and acceptance content matches v2.
   - [x] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
 - [ ] **Lot N — Final validation**
   - [x] Run `make scope-check ENV=test-spec-ui-annotate-overlay` and record its result: PASS C2 on every lot, including the final tree (`spec/**` + `BRANCH.md` only).
