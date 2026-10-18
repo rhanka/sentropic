@@ -1,14 +1,14 @@
-# Feature: BR-69 — Prove consumer boundaries before skipping work
+# Feature: BR-83 — Prove consumer boundaries before skipping work
 
 ## Objective
 - [ ] Omit consumer integration/deployment only when qualified package contracts and unchanged installed application tuples prove it unnecessary.
-- [ ] Branch `feat/ci-consumer-contracts`, step 8 of nine; train order 69 → BR-70; dependencies: BR-68 merged; BR-66 qualified candidates and BR-67 required deterministic integration.
+- [ ] Branch `feat/ci-consumer-contracts`, step 8 of nine; train order BR-83 → BR-84; dependencies: BR-82 merged; BR-80 qualified candidates and BR-81 required deterministic integration.
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
 - [ ] Work only in `tmp/worktrees/ci-consumer-contracts`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
 - [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-consumer-contracts` or `ENV=e2e-ci-consumer-contracts`, never `dev`; no secrets in evidence.
-- [ ] Slot 0 owner: branch author; API_PORT=9345, UI_PORT=5545, MAILDEV_UI_PORT=1445; verify availability before starting services and pass all three ports to service commands.
+- [ ] Slot 0 owner: branch author; API_PORT=9415, UI_PORT=5615, MAILDEV_UI_PORT=1515; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -41,13 +41,13 @@
   - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR69-EX1; `Makefile` under BR69-EX2.
+  - [ ] `.github/workflows/ci.yml` under BR83-EX1; `Makefile` under BR83-EX2.
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR69-EX1 — Planned workflow exception: extend `changes`, `enforce-package-bump`, compatibility classification, candidate-first consumer contracts, immutable tuple verification, missing owning validations, and the complete verdict. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR69-EX2 — Planned Makefile exception: add classifier/contract/tuple test targets and isolated consumer install/build contexts; retain version-bump and image hash/filter guards. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR83-EX1 — Planned workflow exception: extend `changes`, `enforce-package-bump`, compatibility classification, candidate-first consumer contracts, immutable tuple verification, missing owning validations, and the complete verdict. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [ ] BR83-EX2 — Planned Makefile exception: add classifier/contract/tuple test targets and isolated consumer install/build contexts; retain version-bump and image hash/filter guards. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
@@ -70,7 +70,7 @@
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
 - [ ] **Lot 1 — Consumer graph and candidate-owned contracts**
   - [ ] Create the named classifier/contracts scripts and tests plus `consumer-boundaries.json` (new); start comments → API, then cluster-mesh → API/IdP/gateway, retaining comments → cluster peer qualification.
-  - [ ] Create the four named consumer-owned candidate tests (new); contracts consume BR-66 qualified tarballs and verify public exports, wire shape, auth/storage/streaming behavior as relevant, not just semver declarations.
+  - [ ] Create the four named consumer-owned candidate tests (new); contracts consume BR-80 qualified tarballs and verify public exports, wire shape, auth/storage/streaming behavior as relevant, not just semver declarations.
   - [ ] Re-inventory all 43 study components and dynamic/protocol/configuration edges; wire existing missing owning validations before any affected fast path. Include `test-pkg-chat-core`, gateway-host `test-llm-gateway-process`, and real API integration for ubo-contracts; a delegated or absent test script is not a passing package test.
   - [ ] Lot gate: new `make test-ci-compatibility test-ci-consumer-contracts ENV=test-ci-consumer-contracts`; run the four named test files in isolated candidate installations and retain all newly wired validation receipts.
 - [ ] **Lot 2 — Immutable installed tuples and conservative selection**

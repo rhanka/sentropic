@@ -1,14 +1,14 @@
-# Feature: BR-67 — Deterministic journeys and daily live providers
+# Feature: BR-81 — Deterministic journeys and daily live providers
 
 ## Objective
 - [ ] Keep complete application journeys blocking on PR/merge without live provider variability, and preserve live qualification once daily.
-- [ ] Branch `test/ci-deterministic-journeys`, step 6 of nine; train order 67 → BR-68; dependencies: BR-66 merged for train order; BR-64 image identity and BR-65 scheduling.
+- [ ] Branch `test/ci-deterministic-journeys`, step 6 of nine; train order BR-81 → BR-82; dependencies: BR-80 merged for train order; BR-78 image identity and BR-79 scheduling.
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
 - [ ] Work only in `tmp/worktrees/ci-deterministic-journeys`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
 - [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-deterministic-journeys` or `ENV=e2e-ci-deterministic-journeys`, never `dev`; no secrets in evidence.
-- [ ] Slot 0 owner: branch author; API_PORT=9335, UI_PORT=5535, MAILDEV_UI_PORT=1435; verify availability before starting services and pass all three ports to service commands.
+- [ ] Slot 0 owner: branch author; API_PORT=9405, UI_PORT=5605, MAILDEV_UI_PORT=1505; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -43,15 +43,15 @@
   - [ ] `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR67-EX1; `Makefile` under BR67-EX2.
-  - [ ] `.github/workflows/llm-live-daily.yml` under BR67-EX3; `docker-compose.ci-provider.yml` under BR67-EX4 (both new).
+  - [ ] `.github/workflows/ci.yml` under BR81-EX1; `Makefile` under BR81-EX2.
+  - [ ] `.github/workflows/llm-live-daily.yml` under BR81-EX3; `docker-compose.ci-provider.yml` under BR81-EX4 (both new).
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR67-EX1 — Planned workflow exception: replace PR/merge AI `continue-on-error` with required deterministic results and adjust API/browser/VSCode matrices. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR67-EX2 — Planned Makefile exception: change `test-api-*`, `test-e2e`, and `test-e2e-vscode` startup; add fixture, shard-manifest, and live-receipt tests; one Playwright process per shard. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
-- [ ] BR67-EX3 — Add daily live workflow for the exact selected tuple; impact: daily calls/cost and schedule monitoring; rollback: restore prior live execution ownership with visible schedule status.
-- [ ] BR67-EX4 — Add isolated provider fixture service overlay; impact: test networks only; rollback: remove the overlay and restore prior test startup, with no production endpoint bypass.
+- [ ] BR81-EX1 — Planned workflow exception: replace PR/merge AI `continue-on-error` with required deterministic results and adjust API/browser/VSCode matrices. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [ ] BR81-EX2 — Planned Makefile exception: change `test-api-*`, `test-e2e`, and `test-e2e-vscode` startup; add fixture, shard-manifest, and live-receipt tests; one Playwright process per shard. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR81-EX3 — Add daily live workflow for the exact selected tuple; impact: daily calls/cost and schedule monitoring; rollback: restore prior live execution ownership with visible schedule status.
+- [ ] BR81-EX4 — Add isolated provider fixture service overlay; impact: test networks only; rollback: remove the overlay and restore prior test startup, with no production endpoint bypass.
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
 ## AI Flaky tests

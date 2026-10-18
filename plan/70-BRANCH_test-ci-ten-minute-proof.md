@@ -1,14 +1,14 @@
-# Feature: BR-70 — Prove ten-minute delivery and publish the evidence
+# Feature: BR-84 — Prove ten-minute delivery and publish the evidence
 
 ## Objective
 - [ ] Qualify the complete nine-step train on real executions and present source-linked outcomes in the validated single-diagram format.
-- [ ] Branch `test/ci-ten-minute-proof`, step 9 of nine; train order 70 → train completion; dependencies: BR-62 through BR-69 merged and their acceptance receipts available.
+- [ ] Branch `test/ci-ten-minute-proof`, step 9 of nine; train order BR-84 → train completion; dependencies: BR-76 through BR-83 merged and their acceptance receipts available.
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
 - [ ] Work only in `tmp/worktrees/ci-ten-minute-proof`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
 - [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-ten-minute-proof` or `ENV=e2e-ci-ten-minute-proof`, never `dev`; no secrets in evidence.
-- [ ] Slot 0 owner: branch author; API_PORT=9350, UI_PORT=5550, MAILDEV_UI_PORT=1450; verify availability before starting services and pass all three ports to service commands.
+- [ ] Slot 0 owner: branch author; API_PORT=9420, UI_PORT=5620, MAILDEV_UI_PORT=1520; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -40,13 +40,13 @@
   - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR70-EX1; `Makefile` under BR70-EX2.
+  - [ ] `.github/workflows/ci.yml` under BR84-EX1; `Makefile` under BR84-EX2.
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR70-EX1 — Planned workflow exception: finalize `changes`, `ci-gate`, and `deploy-preprod` evidence publication and performance acceptance without substituting timeout for success. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR70-EX2 — Planned Makefile exception: add `test-ci-performance-report`, `ci-performance-report`, `build-ci-dossier`, and `test-ci-dossier`; build/test the portable presentation in pinned isolated tooling. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR84-EX1 — Planned workflow exception: finalize `changes`, `ci-gate`, and `deploy-preprod` evidence publication and performance acceptance without substituting timeout for success. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [ ] BR84-EX2 — Planned Makefile exception: add `test-ci-performance-report`, `ci-performance-report`, `build-ci-dossier`, and `test-ci-dossier`; build/test the portable presentation in pinned isolated tooling. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
