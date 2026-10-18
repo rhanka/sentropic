@@ -64,7 +64,7 @@
   - [x] Add the train index, acceptance protocol, rollback policy, and source provenance.
 - [ ] **Lot 2 — Executable branch plans**
   - [x] BR-62: measure and reserve capacity.
-  - [ ] BR-63: prepare once and run native static checks.
+  - [x] BR-63: prepare once and run native static checks.
   - [ ] BR-64: build and transfer less.
   - [ ] BR-65: execute independent work together.
   - [ ] BR-66: one package candidate and independent qualification.
