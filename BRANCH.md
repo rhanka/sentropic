@@ -1,7 +1,7 @@
 # Feature: Document the ten-minute CI/CD study and nine-branch implementation train
 
 ## Objective
-- [ ] Preserve the validated CI/CD study in English and turn its nine steps into executable branch plans, with E2E and CD included in the measured acceptance endpoints.
+- [x] Preserve the validated CI/CD study in English and turn its nine steps into executable branch plans, with E2E and CD included in the measured acceptance endpoints.
 
 ## Scope / Guardrails
 - [x] Documentation only: `spec/**`, `plan/**`, and `BRANCH.md`; no workflow, runtime, deployment, or Track-state changes.
@@ -62,7 +62,7 @@
 - [x] **Lot 1 — Study consolidation**
   - [x] Record evidence, owner constraints, retained architecture, and budget calculations in `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
   - [x] Add the train index, acceptance protocol, rollback policy, and source provenance.
-- [ ] **Lot 2 — Executable branch plans**
+- [x] **Lot 2 — Executable branch plans**
   - [x] BR-62: measure and reserve capacity.
   - [x] BR-63: prepare once and run native static checks.
   - [x] BR-64: build and transfer less.
@@ -73,7 +73,7 @@
   - [x] BR-69: remove unnecessary consumer work with proof.
   - [x] BR-70: prove the maximum and present the results.
 - [ ] **Lot 3 — Final validation and handoff**
-  - [ ] Check template structure, links, branch order, exact paths, exceptions, and metric provenance.
-  - [ ] Inspect the entire diff and every commit size; run documentation checks and scope checks.
+  - [x] Check template structure, links, branch order, exact paths, exceptions, and metric provenance.
+  - [x] Inspect the entire diff and every commit size; run documentation checks and scope checks.
   - [ ] Push, create a non-draft PR using this file as its body, and inspect the initial CI state.
   - [ ] Report PR number, exact head SHA, and the nine-branch list; stop before merge.

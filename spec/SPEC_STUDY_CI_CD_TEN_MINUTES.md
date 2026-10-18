@@ -41,6 +41,8 @@ Selected anchors below are seconds. Main denotes [run 39113919235](https://githu
 | Full UI build | PR, [117667798508](https://github.com/rhanka/sentropic/actions/runs/39124873217/job/117667798508): 495 | 180 warm / 210 cold | Extensions, desktop, UI tests, image, and static profile serialized. |
 | UI job in API case | Main, [117635700635](https://github.com/rhanka/sentropic/actions/runs/39113919235/job/117635700635): 138 | 120 warm / 150 cold | Different scope from the 495-second PR job; image action 107 seconds. |
 | IdP screen smoke | Main, [117637085537](https://github.com/rhanka/sentropic/actions/runs/39113919235/job/117637085537): 222 | 150 | Browser action 6; image/tool transfer, loading, startup, and teardown dominate. |
+| Browser E2E group A | Main, [117637085633](https://github.com/rhanka/sentropic/actions/runs/39113919235/job/117637085633): 255 | 180 per complete shard | Image retrieval and repeated global setup inside the 141-second Make test action. |
+| Container scans | PR, [117669569949](https://github.com/rhanka/sentropic/actions/runs/39124873217/job/117669569949): 199 | 90 | Independent API/toolbox/UI scans plus image retrieval and loading. |
 | API image publication | Main, [117640722484](https://github.com/rhanka/sentropic/actions/runs/39113919235/job/117640722484): 203 | 40 after candidate upload | Download/load 82; fresh layers 93; alias push 22. |
 | Preproduction | Main, [117641371250](https://github.com/rhanka/sentropic/actions/runs/39113919235/job/117641371250): 116 | 75 | Real API readiness dominates the 101-second deploy action. |
 
