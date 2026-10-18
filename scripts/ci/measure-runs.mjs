@@ -1,10 +1,26 @@
 // CI optimization Lot 1 measurement: read-only run/job records plus emitted artifacts.
 // Deduplicates by run ID, attempt and job ID; strips credentials and payload content;
-// fails closed on missing job inventories, missing gate timestamps or masked shard failures.
+// fails closed on incomplete job/test inventories, non-success ci-gate, missing identities, reused runs or skewed cohorts.
 import fs from 'node:fs';
 import path from 'node:path';
+import { SELECTION_KEYS, requiredSuccessJobs } from './filter-consumers.mjs';
 
 const WINDOW_SCHEMA = 'ci-optimization-window/1';
+const ALL_FALSE_OUTPUTS = Object.freeze(Object.fromEntries(SELECTION_KEYS.map((k) => [k, 'false'])));
+const TEST_EVIDENCE_JOBS = new Set(['test-api-unit-integration', 'test-e2e', 'e2e-vscode']);
+
+export const outputsForChangeClass = (changeClass) => {
+  if (typeof changeClass !== 'string' || changeClass.trim() === '') return null;
+  const tokens = changeClass.split(/[+,]/).map((s) => s.trim()).filter(Boolean);
+  if (tokens.length === 0) return null;
+  const outputs = { ...ALL_FALSE_OUTPUTS };
+  for (const token of tokens) {
+    if (token === 'docs') continue;
+    if (!SELECTION_KEYS.includes(token)) return null;
+    outputs[token] = 'true';
+  }
+  return outputs;
+};
 
 export const redactJob = (job) => {
   const startedAt = job.startedAt ?? job.started_at ?? null;
@@ -42,8 +58,9 @@ export const redactJob = (job) => {
 export const redactRun = (run) => {
   const jobs = Array.isArray(run.jobs) ? run.jobs.map(redactJob) : [];
   const gateJob = jobs.find((j) => j.name === 'ci-gate');
+  const validGateAt = gateJob?.conclusion === 'success' ? (run.gateAt ?? run.gate_at ?? gateJob.completedAt ?? null) : (run.gateAt ?? run.gate_at ?? null);
   return {
-    workflow: run.workflow ?? run.name ?? 'CI',
+    workflow: run.workflow ?? run.name ?? null,
     workflowId: run.workflowId ?? run.workflow_id ?? null,
     runId: run.runId ?? run.id ?? null,
     attempt: run.attempt ?? run.run_attempt ?? 1,
@@ -54,7 +71,7 @@ export const redactRun = (run) => {
     changeClass: run.changeClass ?? run.class ?? null,
     conclusion: run.conclusion ?? null,
     createdAt: run.createdAt ?? run.created_at ?? run.run_started_at ?? null,
-    gateAt: run.gateAt ?? run.gate_at ?? gateJob?.completedAt ?? null,
+    gateAt: validGateAt,
     jobs,
   };
 };
@@ -70,7 +87,7 @@ export const dedupeRuns = (runs) => {
       if (!target.jobs.some((j) => `${key}/${j.jobId ?? j.name}` === id)) target.jobs.push(job);
     }
     if (!target.gateAt) {
-      const gateJob = target.jobs.find((j) => j.name === 'ci-gate');
+      const gateJob = target.jobs.find((j) => j.name === 'ci-gate' && j.conclusion === 'success');
       if (gateJob?.completedAt) target.gateAt = gateJob.completedAt;
     }
   }
@@ -81,6 +98,22 @@ export const gateDelayMinutes = (run) => {
   if (!run.createdAt || !run.gateAt) return null;
   const ms = Date.parse(run.gateAt) - Date.parse(run.createdAt);
   return Number.isFinite(ms) && ms >= 0 ? ms / 60000 : null;
+};
+
+const hasCompleteRunInventory = (run) => {
+  const outputs = outputsForChangeClass(run.changeClass);
+  if (!outputs || (run.event !== 'pull_request' && run.event !== 'push')) return false;
+  const required = [...requiredSuccessJobs(outputs, { eventName: run.event }), 'ci-gate'];
+  for (const reqJob of required) {
+    const matching = run.jobs.filter((j) => j.name === reqJob || (typeof j.name === 'string' && j.name.startsWith(`${reqJob} (`)));
+    if (matching.length === 0 || matching.some((j) => j.conclusion !== 'success')) return false;
+    if (TEST_EVIDENCE_JOBS.has(reqJob)) {
+      const hasCounts = matching.every((j) => Number.isInteger(j.selectedTests) && j.selectedTests > 0 && Number.isInteger(j.executedTests) && j.executedTests >= j.selectedTests);
+      const hasLlm = matching.some((j) => typeof j.llmMinutes === 'number' && j.llmMinutes > 0);
+      if (!hasCounts || !hasLlm) return false;
+    }
+  }
+  return true;
 };
 
 const percentile = (sorted, p) => {
@@ -100,18 +133,34 @@ export const summarizeWindow = (window) => {
         : 0;
   let runnerSeconds = 0, llmMinutes = 0, failures = 0, cancellations = 0;
   let emptyJobRuns = 0, missingGateRuns = 0, missingJobResultRuns = 0, maskedFailureRuns = 0, nonCiWorkflowRuns = 0;
-  const events = new Set(), classes = new Set();
+  let missingIdentityRuns = 0, incompleteInventoryRuns = 0;
+  const events = new Set(), classes = new Set(), eventCounts = {}, classCounts = {}, runIds = [];
   for (const run of runs) {
-    if (run.workflow && run.workflow !== 'CI') nonCiWorkflowRuns += 1;
-    if (run.event) events.add(run.event);
-    if (run.changeClass) classes.add(run.changeClass);
+    if (run.runId !== null && run.runId !== undefined) runIds.push(String(run.runId));
+    if (run.workflow !== 'CI') nonCiWorkflowRuns += 1;
+    const validIdentity =
+      run.runId !== null && run.runId !== undefined && run.workflow === 'CI' &&
+      (run.event === 'pull_request' || run.event === 'push') &&
+      typeof run.testedSha === 'string' && run.testedSha.length >= 7 &&
+      typeof run.baseSha === 'string' && run.baseSha.length >= 7 &&
+      outputsForChangeClass(run.changeClass) !== null &&
+      typeof run.createdAt === 'string' && Number.isFinite(Date.parse(run.createdAt));
+    if (!validIdentity) missingIdentityRuns += 1;
+    if (run.event) { events.add(run.event); eventCounts[run.event] = (eventCounts[run.event] ?? 0) + 1; }
+    if (run.changeClass) { classes.add(run.changeClass); classCounts[run.changeClass] = (classCounts[run.changeClass] ?? 0) + 1; }
     if (run.conclusion === 'failure') failures += 1;
     if (run.conclusion === 'cancelled') cancellations += 1;
     if (run.jobs.length === 0) emptyJobRuns += 1;
-    if (run.conclusion === 'success' && gateDelayMinutes(run) === null) missingGateRuns += 1;
+    const gateJob = run.jobs.find((j) => j.name === 'ci-gate');
+    if (run.conclusion === 'success' && (gateDelayMinutes(run) === null || !gateJob || gateJob.conclusion !== 'success')) {
+      missingGateRuns += 1;
+    }
     if (run.jobs.some((j) => j.conclusion === null)) missingJobResultRuns += 1;
-    if (run.conclusion === 'success' && run.jobs.some((j) => j.conclusion === 'failure' || j.conclusion === 'cancelled')) {
+    if (run.conclusion === 'success' && run.jobs.some((j) => j.conclusion !== 'success')) {
       maskedFailureRuns += 1;
+    }
+    if (run.conclusion === 'success' && !hasCompleteRunInventory(run)) {
+      incompleteInventoryRuns += 1;
     }
     for (const job of run.jobs) {
       if (typeof job.runnerSeconds === 'number') runnerSeconds += job.runnerSeconds;
@@ -122,32 +171,50 @@ export const summarizeWindow = (window) => {
     runs: runs.length, spanDays, gateDelays: delays, gateP50: percentile(delays, 50), gateP95: percentile(delays, 95),
     runnerMinutes: runnerSeconds / 60, llmMinutes, failures, cancellations,
     emptyJobRuns, missingGateRuns, missingJobResultRuns, maskedFailureRuns, nonCiWorkflowRuns,
-    events: [...events].sort(), classes: [...classes].sort(),
+    missingIdentityRuns, incompleteInventoryRuns, runIds,
+    minCreatedMs: createdTimes[0] ?? null, maxCreatedMs: createdTimes[createdTimes.length - 1] ?? null,
+    events: [...events].sort(), classes: [...classes].sort(), eventCounts, classCounts,
   };
 };
+
+const hasComparableMix = (bCounts, bTotal, aCounts, aTotal, keys) =>
+  bTotal > 0 && aTotal > 0 && keys.length > 0 &&
+  keys.every((k) => Math.abs(((bCounts[k] ?? 0) / bTotal) - ((aCounts[k] ?? 0) / aTotal)) <= 0.2);
 
 export const compareWindows = (before, after, limits = {}) => {
   const b = summarizeWindow(before), a = summarizeWindow(after);
   const errors = [], pending = [];
   const minRuns = limits.minRuns ?? before.minRuns ?? after.minRuns ?? 20;
   const minDays = limits.minDays ?? before.minDays ?? after.minDays ?? 7;
-  if ((before.window && before.window !== 'before') || (after.window && after.window !== 'after')) {
+  if (before.window !== 'before' || after.window !== 'after') {
     errors.push(`invalid pinned window identity: before=${before.window} after=${after.window}`);
   }
-  if ((before.workflow && before.workflow !== 'CI') || (after.workflow && after.workflow !== 'CI') || b.nonCiWorkflowRuns > 0 || a.nonCiWorkflowRuns > 0) {
+  if (before.workflow !== 'CI' || after.workflow !== 'CI' || b.nonCiWorkflowRuns > 0 || a.nonCiWorkflowRuns > 0) {
     errors.push(`non-CI workflow in sample: before=${b.nonCiWorkflowRuns} after=${a.nonCiWorkflowRuns}`);
   }
-  if (b.events.length > 0 && a.events.length > 0 && !b.events.some((e) => a.events.includes(e))) {
-    errors.push(`incomparable event populations: before=${b.events.join(',')} after=${a.events.join(',')}`);
+  if (b.missingIdentityRuns > 0 || a.missingIdentityRuns > 0) {
+    errors.push(`missing required run identity fields: before=${b.missingIdentityRuns} after=${a.missingIdentityRuns}`);
   }
-  if (b.classes.length > 0 && a.classes.length > 0 && !b.classes.some((c) => a.classes.includes(c))) {
-    errors.push(`incomparable changeClass populations: before=${b.classes.join(',')} after=${a.classes.join(',')}`);
+  const sharedRunIds = b.runIds.filter((id) => a.runIds.includes(id));
+  if (sharedRunIds.length > 0 || (b.minCreatedMs !== null && a.minCreatedMs !== null && a.minCreatedMs <= b.minCreatedMs)) {
+    errors.push(`reused or overlapping runs between before and after windows: shared=${sharedRunIds.length}`);
+  }
+  const allEvents = [...new Set([...b.events, ...a.events])].sort();
+  if (b.events.join(',') !== a.events.join(',') || !hasComparableMix(b.eventCounts, b.runs, a.eventCounts, a.runs, allEvents)) {
+    errors.push(`incomparable event populations: before=${JSON.stringify(b.eventCounts)} after=${JSON.stringify(a.eventCounts)}`);
+  }
+  const allClasses = [...new Set([...b.classes, ...a.classes])].sort();
+  if (b.classes.join(',') !== a.classes.join(',') || !hasComparableMix(b.classCounts, b.runs, a.classCounts, a.runs, allClasses)) {
+    errors.push(`incomparable changeClass populations: before=${JSON.stringify(b.classCounts)} after=${JSON.stringify(a.classCounts)}`);
   }
   if (b.emptyJobRuns > 0 || a.emptyJobRuns > 0) errors.push(`empty job inventory: before=${b.emptyJobRuns} after=${a.emptyJobRuns}`);
   if (b.missingGateRuns > 0 || a.missingGateRuns > 0) errors.push(`missing gate timestamps on successful runs: before=${b.missingGateRuns} after=${a.missingGateRuns}`);
   if (b.missingJobResultRuns > 0 || a.missingJobResultRuns > 0) errors.push(`missing required results: before=${b.missingJobResultRuns} after=${a.missingJobResultRuns}`);
   if (b.maskedFailureRuns > 0 || a.maskedFailureRuns > 0) errors.push(`failed or cancelled job behind successful run: before=${b.maskedFailureRuns} after=${a.maskedFailureRuns}`);
-  if (before.studyBaseline && after.studyBaseline && before.studyBaseline !== after.studyBaseline) {
+  if (b.incompleteInventoryRuns > 0 || a.incompleteInventoryRuns > 0) {
+    errors.push(`incomplete required job/test inventory: before=${b.incompleteInventoryRuns} after=${a.incompleteInventoryRuns}`);
+  }
+  if (!before.studyBaseline || !after.studyBaseline || before.studyBaseline !== after.studyBaseline) {
     errors.push(`mismatched studyBaseline: before=${before.studyBaseline} after=${after.studyBaseline}`);
   }
   if (a.failures > 0 && b.failures === 0) errors.push(`after window introduces failures: ${a.failures}`);
@@ -199,7 +266,9 @@ const main = () => {
       schema: WINDOW_SCHEMA, window: windowName, workflow: 'CI', collectedAt: new Date().toISOString(),
       studyBaseline: input.studyBaseline ?? 'fb5e92a6ae4928066e181716fdffbfb490b0b4f3',
       minRuns, minDays, spanDays: summary.spanDays,
-      complete: runs.length >= minRuns && summary.spanDays >= minDays && summary.emptyJobRuns === 0 && summary.missingGateRuns === 0,
+      complete:
+        runs.length >= minRuns && summary.spanDays >= minDays && summary.emptyJobRuns === 0 &&
+        summary.missingGateRuns === 0 && summary.missingIdentityRuns === 0 && summary.incompleteInventoryRuns === 0,
       runs,
     };
     fs.mkdirSync(path.dirname(args.out), { recursive: true });
