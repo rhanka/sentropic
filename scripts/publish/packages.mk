@@ -9,8 +9,7 @@ prepare-npm-bootstrap:
 	@git diff --quiet HEAD || { echo "Commit the reviewed package sources before preparing bootstrap archives"; exit 1; }
 	@$(MAKE) build-public-libraries ENV=$(ENV)
 	@set -eu; for slug in $(PKGS); do \
-		$(MAKE) pack-publishable-manifest PACKAGE=$$slug PACK_DESTINATION=tmp/npm-bootstrap \
-			MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=$(ENV); \
+		$(MAKE) pack-public-library-archive PACKAGE=$$slug ENV=$(ENV); \
 	done
 
 npm-bootstrap-web:
@@ -59,10 +58,17 @@ test-publication-scripts:
 
 test-publishable-consumers: build-public-libraries
 	@set -eu; for slug in $(PUBLIC_LIBRARY_SLUGS); do \
-		$(MAKE) pack-publishable-manifest PACKAGE=$$slug PACK_DESTINATION=tmp/npm-bootstrap \
-			MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=$(ENV); \
+		$(MAKE) pack-public-library-archive PACKAGE=$$slug ENV=$(ENV); \
 	done
 	@$(MAKE) test-publishable-consumer PACKAGE= ENV=$(ENV)
+
+.PHONY: pack-public-library-archive
+pack-public-library-archive:
+	$(if $(filter $(PACKAGE),$(PUBLIC_LIBRARY_SLUGS)),,$(error PACKAGE must be one declared public library slug))
+	@mkdir -p "tmp/npm-bootstrap/$(PACKAGE)"
+	@rm -f "tmp/npm-bootstrap/$(PACKAGE)/"*.tgz
+	@$(MAKE) pack-publishable-manifest PACKAGE=$(PACKAGE) PACK_DESTINATION=tmp/npm-bootstrap/$(PACKAGE) \
+		MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=$(ENV)
 
 # Also used by a single-package CI validation after its guarded pack.
 test-publishable-consumer:
