@@ -89,6 +89,7 @@
   - [ ] Document owner approval, Trusted Publisher setup and later CI releases in `scripts/publish/README.md`.
   - [ ] Script tests: new `scripts/publish/npm-bootstrap-web.test.mjs`; existing manifest guard tests unchanged unless wiring requires updates.
 - [ ] **Lot 3 — CI publication train**
+  - [x] Add publication/validation filters, batch 1 (9 packages).
   - [ ] Add all 18 filters, validate/publish jobs, dispatch choices and ci-gate needs; package-only publication triggers.
   - [ ] Register mappings in `scripts/ci/publishable-manifests.mjs`; update `scripts/ci/publishable-ci-wiring.test.mjs`.
   - [ ] Newly public packages have web bootstrap only, never token bootstrap steps.

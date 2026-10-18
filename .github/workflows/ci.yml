@@ -142,6 +142,24 @@ jobs:
       artifacts_publish: ${{ steps.filter.outputs.artifacts_publish }}
       harness: ${{ steps.filter.outputs.harness }}
       harness_publish: ${{ steps.filter.outputs.harness_publish }}
+      ubo_contracts: ${{ steps.filter.outputs.ubo_contracts }}
+      ubo_contracts_publish: ${{ steps.filter.outputs.ubo_contracts_publish }}
+      mcp_broker: ${{ steps.filter.outputs.mcp_broker }}
+      mcp_broker_publish: ${{ steps.filter.outputs.mcp_broker_publish }}
+      connector_host: ${{ steps.filter.outputs.connector_host }}
+      connector_host_publish: ${{ steps.filter.outputs.connector_host_publish }}
+      mcp_connector_airtable: ${{ steps.filter.outputs.mcp_connector_airtable }}
+      mcp_connector_airtable_publish: ${{ steps.filter.outputs.mcp_connector_airtable_publish }}
+      mcp_connector_dropbox: ${{ steps.filter.outputs.mcp_connector_dropbox }}
+      mcp_connector_dropbox_publish: ${{ steps.filter.outputs.mcp_connector_dropbox_publish }}
+      mcp_connector_github: ${{ steps.filter.outputs.mcp_connector_github }}
+      mcp_connector_github_publish: ${{ steps.filter.outputs.mcp_connector_github_publish }}
+      mcp_connector_gmail: ${{ steps.filter.outputs.mcp_connector_gmail }}
+      mcp_connector_gmail_publish: ${{ steps.filter.outputs.mcp_connector_gmail_publish }}
+      mcp_connector_google: ${{ steps.filter.outputs.mcp_connector_google }}
+      mcp_connector_google_publish: ${{ steps.filter.outputs.mcp_connector_google_publish }}
+      mcp_connector_googlecalendar: ${{ steps.filter.outputs.mcp_connector_googlecalendar }}
+      mcp_connector_googlecalendar_publish: ${{ steps.filter.outputs.mcp_connector_googlecalendar_publish }}
       manifest_guard: ${{ steps.filter.outputs.manifest_guard }}
       # Publishable manifest guard context (spec section 6): JSON lists, never booleans.
       package_files: ${{ steps.publishable_files.outputs.publishable_package_files_files }}
@@ -393,6 +411,87 @@ jobs:
               - '.github/workflows/ci.yml'
             harness_publish:
               - 'packages/harness/**'
+            ubo_contracts:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/ubo-contracts/**'
+              - '.github/workflows/ci.yml'
+            ubo_contracts_publish:
+              - 'packages/ubo-contracts/**'
+            mcp_broker:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-broker/**'
+              - '.github/workflows/ci.yml'
+            mcp_broker_publish:
+              - 'packages/mcp-broker/**'
+            connector_host:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/connector-host/**'
+              - '.github/workflows/ci.yml'
+            connector_host_publish:
+              - 'packages/connector-host/**'
+            mcp_connector_airtable:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-airtable/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_airtable_publish:
+              - 'packages/mcp-connector-airtable/**'
+            mcp_connector_dropbox:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-dropbox/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_dropbox_publish:
+              - 'packages/mcp-connector-dropbox/**'
+            mcp_connector_github:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-github/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_github_publish:
+              - 'packages/mcp-connector-github/**'
+            mcp_connector_gmail:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-gmail/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_gmail_publish:
+              - 'packages/mcp-connector-gmail/**'
+            mcp_connector_google:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-google/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_google_publish:
+              - 'packages/mcp-connector-google/**'
+            mcp_connector_googlecalendar:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-googlecalendar/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_googlecalendar_publish:
+              - 'packages/mcp-connector-googlecalendar/**'
             # Dedicated guard filter: never part of global, api/ui/e2e or _publish fanout.
             manifest_guard:
               - 'scripts/ci/**'
