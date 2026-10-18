@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { modelProfiles } from '../src/catalog.js';
 import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js';
 import * as mesh from '../src/index.js';
-import { InMemoryRoutePlanner } from '../src/route-planner.js';
+import { InMemoryRoutePlanner, type InMemoryRoutePlannerOptions } from '../src/route-planner.js';
 import { RoutePlanError } from '../src/route-planner-state.js';
 import { MAX_ROUTE_QUOTE_CANDIDATES, quoteRoute, RouteQuoteError } from '../src/route-quote.js';
 import type {
@@ -17,6 +17,14 @@ const ceiling = { inputTokens: 1_000, outputTokens: 100_000 } as const;
 const quoteInput = (requestedModel: string, extra: Partial<RouteQuoteInput> = {}): RouteQuoteInput => ({
   requestedModel, ceiling, now: NOW, ...extra,
 });
+// These legacy table/council scenarios explicitly select equivalence; default exact routing has separate coverage.
+const selectedTableProfiles = () => {
+  const profiles = new InMemoryRoutePolicyProfiles([{ name: 'selected-table', revision: 'selected-v1',
+    policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true, rotateEquivalentAccounts: true } }]);
+  profiles.activate('selected-table'); return profiles;
+};
+const selectedTablePlanner = (options: InMemoryRoutePlannerOptions) => new InMemoryRoutePlanner({ profiles: selectedTableProfiles(), ...options });
+const selectedTableQuote = (...[input, options]: Parameters<typeof quoteRoute>) => quoteRoute(input, { profiles: selectedTableProfiles(), ...options });
 const fixedClock = { now: () => new Date(NOW.getTime()) };
 const SKEWED = new Date('2026-09-27T00:00:00Z');
 const skewedClock = { now: () => new Date(SKEWED.getTime()) };
@@ -173,8 +181,8 @@ describe('pure route quote', () => {
       ],
     };
     const council = { ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL, groups: [group] };
-    const fresh = quoteRoute(quoteInput('gemini-3.5-flash'), { council });
-    const expired = quoteRoute(
+    const fresh = selectedTableQuote(quoteInput('gemini-3.5-flash'), { council });
+    const expired = selectedTableQuote(
       quoteInput('gemini-3.5-flash', { now: new Date('2026-10-02T00:00:00Z') }), { council },
     );
     expect(fresh.candidates.map((candidate) => [candidate.modelId, candidate.reason])).toEqual([
@@ -187,12 +195,12 @@ describe('pure route quote', () => {
     const override = (count: number) => Array.from({ length: count }, (_, index) => ({
       providerId: 'gemini', transportProviderId: 'cloud-code', model: `fixture-model-${index}`,
     }));
-    const policyOverride = { allowEquivalentModels: false };
+    const policyOverride = { allowEquivalentModels: true };
     expect(MAX_ROUTE_QUOTE_CANDIDATES).toBe(16);
-    expect(quoteRoute(quoteInput('gemini-3.5-flash', {
+    expect(selectedTableQuote(quoteInput('gemini-3.5-flash', {
       targetCandidatesOverride: override(16), policyOverride,
     })).candidates).toHaveLength(16);
-    expectQuoteError(() => quoteRoute(quoteInput('gemini-3.5-flash', {
+    expectQuoteError(() => selectedTableQuote(quoteInput('gemini-3.5-flash', {
       targetCandidatesOverride: override(17), policyOverride,
     })), 'too-many-candidates');
   });
@@ -217,8 +225,8 @@ describe('pure route quote', () => {
   });
 
   it('raises each quote error code', () => {
-    expectQuoteError(() => quoteRoute(quoteInput('unknown-contract-model')), 'unknown-model');
-    expectQuoteError(() => quoteRoute(quoteInput('gemini-3.5-flash', {
+    expectQuoteError(() => selectedTableQuote(quoteInput('unknown-contract-model')), 'unknown-model');
+    expectQuoteError(() => selectedTableQuote(quoteInput('gemini-3.5-flash', {
       requiredCapabilities: ['input:audio'],
     })), 'capabilities-unmet');
     const invalid: RouteQuoteInput['ceiling'][] = [
@@ -232,22 +240,22 @@ describe('pure route quote', () => {
       { inputTokens: 0, outputTokens: 10, toolCalls: -2 },
     ];
     invalid.forEach((entry) => expectQuoteError(
-      () => quoteRoute(quoteInput('gemini-3.5-flash', { ceiling: entry })), 'invalid-ceiling',
+      () => selectedTableQuote(quoteInput('gemini-3.5-flash', { ceiling: entry })), 'invalid-ceiling',
     ));
-    expectQuoteError(() => quoteRoute(quoteInput('gemini-3.5-flash', {
+    expectQuoteError(() => selectedTableQuote(quoteInput('gemini-3.5-flash', {
       now: new Date(Number.NaN),
     })), 'invalid-ceiling');
-    expectQuoteError(() => quoteRoute(quoteInput('gemini-3.7-flash', {
+    expectQuoteError(() => selectedTableQuote(quoteInput('gemini-3.7-flash', {
       ceiling: { inputTokens: 1_000_001, outputTokens: 10 },
     })), 'invalid-ceiling');
-    expect(quoteRoute(quoteInput('gemini-3.7-flash', {
+    expect(selectedTableQuote(quoteInput('gemini-3.7-flash', {
       ceiling: { inputTokens: 1_000_000, outputTokens: 10 },
     })).candidates[0]!.allowance.inputTokens).toBe(1_000_000);
-    expectQuoteError(() => quoteRoute(quoteInput('gemini-3.5-flash', {
+    expectQuoteError(() => selectedTableQuote(quoteInput('gemini-3.5-flash', {
       targetCandidatesOverride: Array.from({ length: 17 }, (_, index) => ({
         providerId: 'gemini', transportProviderId: 'cloud-code', model: `m-${index}`,
       })),
-      policyOverride: { allowEquivalentModels: false },
+      policyOverride: { allowEquivalentModels: true },
     })), 'too-many-candidates');
   });
 
@@ -260,7 +268,7 @@ describe('pure route quote', () => {
 
   it('quotes the 5.5 alias as standard candidates with codex unenforced', async () => {
     const directory = new SpyDirectory(new FakeRouteDirectory([]));
-    const planner = new InMemoryRoutePlanner({ directory, clock: fixedClock });
+    const planner = selectedTablePlanner({ directory, clock: fixedClock });
     const quote = planner.quote(quoteInput('claude-opus-5-5'));
 
     expect(directory.calls).toEqual([]);
@@ -318,12 +326,12 @@ describe('pure route quote', () => {
     const conflicting = [{
       providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
     }];
-    const overridden = quoteRoute(quoteInput('claude-opus-5-5', {
-      targetCandidatesOverride: conflicting, policyOverride: { allowEquivalentModels: false },
+    const overridden = selectedTableQuote(quoteInput('claude-opus-5-5', {
+      targetCandidatesOverride: conflicting, policyOverride: { allowEquivalentModels: true },
     }), { council });
     expect(overridden.candidates.map((candidate) => `${candidate.providerId}/${candidate.modelId}`))
       .toEqual(['gemini/gemini-3.8-flash']);
-    const expanded = quoteRoute(quoteInput('claude-opus-5-5'), { council });
+    const expanded = selectedTableQuote(quoteInput('claude-opus-5-5'), { council });
     expect(expanded.candidates.map((candidate) => `${candidate.providerId}/${candidate.modelId}`))
       .toEqual([
         'muse/muse-wonder-1.0',
@@ -335,7 +343,7 @@ describe('pure route quote', () => {
   });
 
   it('covers every alias plan diagnostic with its quote', async () => {
-    const planner = new InMemoryRoutePlanner({
+    const planner = selectedTablePlanner({
       directory: new FakeRouteDirectory(broadAccounts()), clock: fixedClock,
     });
     for (const variant of [
@@ -409,7 +417,7 @@ describe('pure route quote', () => {
       { policyOverride: { maxAttempts: 8 } },
       { policyOverride: { maxAttempts: 8, fallbackMode: 'one-way' as const } },
       { policyOverride: { maxAttempts: 8, strategy: { kind: 'round-robin' as const, scope: 'new-affinity' as const } } },
-      { policyOverride: { maxAttempts: 8, allowEquivalentModels: false } },
+      { policyOverride: { maxAttempts: 8, allowEquivalentModels: true } },
       { policyOverride: { maxAttempts: 8 }, requiredCapabilities: ['tools' as const] },
     ];
     const routes = (plan: RoutePlan) => plan.diagnostics.map((entry) => `${entry.actualProviderId}/`
@@ -417,11 +425,11 @@ describe('pure route quote', () => {
     let plansChecked = 0; let equivalentsPlanned = 0;
     for (const requestedModel of requestedModels) {
       for (const variant of variants) {
-        const planner = new InMemoryRoutePlanner({
+        const planner = selectedTablePlanner({
           directory: new FakeRouteDirectory(broadAccounts()), clock: fixedClock, council: SUPERSET_COUNCIL,
         });
         // Planner clock after the expiring group: the pinned plan must still follow the quote.
-        const skewed = new InMemoryRoutePlanner({
+        const skewed = selectedTablePlanner({
           directory: new FakeRouteDirectory(broadAccounts()), clock: skewedClock, council: SUPERSET_COUNCIL,
         });
         let quote: RouteQuote;
@@ -516,8 +524,8 @@ describe('pure route quote', () => {
       },
     ];
     const directory = new FakeRouteDirectory(accounts);
-    const planner = new InMemoryRoutePlanner({ directory, clock: fixedClock });
-    const policyOverride = { allowEquivalentModels: false };
+    const planner = selectedTablePlanner({ directory, clock: fixedClock });
+    const policyOverride = { allowEquivalentModels: true };
     const first = await planner.plan(routingSubject(), {
       requestedModel: 'gemini-3.7-flash', affinityKey: 'session', policyOverride,
     });
@@ -529,7 +537,7 @@ describe('pure route quote', () => {
     const unpinned = await planner.plan(routingSubject(), {
       requestedModel: 'gemini-3.5-flash', affinityKey: 'session', policyOverride,
     });
-    expect(unpinned.diagnostics.map((entry) => entry.actualModelId)).toEqual(['gemini-3.7-flash']);
+    expect(unpinned.diagnostics.map((entry) => entry.actualModelId)).toEqual(['gemini-3.5-flash']);
 
     const quote = planner.quote(quoteInput('gemini-3.5-flash', { policyOverride }));
     expect(quote.candidates.map((candidate) => candidate.modelId)).toEqual(['gemini-3.5-flash']);
@@ -563,7 +571,7 @@ describe('pure route quote', () => {
   });
 
   it('evaluates council freshness at the quote instant, not the planner clock', async () => {
-    const planner = new InMemoryRoutePlanner({
+    const planner = selectedTablePlanner({
       directory: new FakeRouteDirectory(broadAccounts()), clock: skewedClock, council: SUPERSET_COUNCIL,
     });
     const input = quoteInput('mistral-small-2603', { policyOverride: { maxAttempts: 8 } });
@@ -586,14 +594,14 @@ describe('pure route quote', () => {
 
   it('caps pinned attempts at the quoted maximum when the policy grows', async () => {
     const profiles = new InMemoryRoutePolicyProfiles([
-      { name: 'p', revision: 'rev-1', policy: { ...DEFAULT_ROUTE_POLICY, maxAttempts: 3 } },
+      { name: 'p', revision: 'rev-1', policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true, rotateEquivalentAccounts: true, maxAttempts: 3 } },
     ]);
-    const planner = new InMemoryRoutePlanner({
+    const planner = selectedTablePlanner({
       directory: new FakeRouteDirectory(broadAccounts()), profiles, clock: fixedClock,
     });
     const quote = planner.quote(quoteInput('gemini-3.5-flash', { policyProfile: 'p' }));
     expect(quote.maxAttempts).toBe(3);
-    profiles.set({ name: 'p', revision: 'rev-1', policy: { ...DEFAULT_ROUTE_POLICY, maxAttempts: 8 } });
+    profiles.set({ name: 'p', revision: 'rev-1', policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true, rotateEquivalentAccounts: true, maxAttempts: 8 } });
     const unpinned = await planner.plan(routingSubject(), {
       requestedModel: 'gemini-3.5-flash', policyProfile: 'p',
     });

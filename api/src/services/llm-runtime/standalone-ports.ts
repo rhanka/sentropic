@@ -1,20 +1,40 @@
 // Standalone gateway route-plane ports (BRDP-EX7). Pure bookkeeping over injected
 // ports: no product runtime, database, registry or cluster-mesh import, so the
 // standalone gateway host and the product `/gw` namespace share one factory.
-import type {
-  GenerateRequest,
-  GenerateResponse,
-  PlannedRouteTarget,
-  PreparedRouteAttempt,
-  RoutePlan,
-  RoutePlanInput,
-  RoutePlanner,
-  StreamRequest,
-  StreamResult,
-  VerifiedRoutingSubject,
+import {
+  freezeLaunchRoutingContract,
+  isExactModelTarget,
+  isNativeMessagesTarget,
+  launchTargets,
+  LaunchRoutingContractError,
+  RoutePlanError,
+  type GenerateRequest,
+  type GenerateResponse,
+  type LaunchRoutingContract,
+  type PlannedRouteTarget,
+  type PreparedNativeMessages,
+  type PreparedRouteAttempt,
+  type RoutePlan,
+  type RoutePlanInput,
+  type RoutePlanner,
+  type StreamRequest,
+  type StreamResult,
+  type VerifiedRoutingSubject,
 } from '@sentropic/llm-mesh';
-import { isNativeMessagesTarget, RoutePlanError } from '@sentropic/llm-mesh';
-import type { AnthropicNativePort } from './anthropic-native';
+
+export interface GatewayNativeMessagesPort {
+  readonly modelIds: readonly string[];
+  available(
+    subject: VerifiedRoutingSubject,
+    workspaceId: string | undefined,
+    target: { providerId: string; modelId: string },
+  ): Promise<boolean>;
+  prepare(
+    subject: VerifiedRoutingSubject,
+    workspaceId: string | undefined,
+    target: { providerId: string; modelId: string },
+  ): Promise<PreparedNativeMessages | undefined>;
+}
 
 export interface GatewayRouteIntentEvidence {
   readonly requestedModel: string;
@@ -22,6 +42,8 @@ export interface GatewayRouteIntentEvidence {
   readonly modelId: string;
   readonly transportProviderId: string;
   readonly requiredCapabilities: readonly unknown[];
+  readonly mappingRevision?: string;
+  readonly policyRevision?: string;
 }
 
 /** Resolves the one executable target for a verified subject and requested model. */
@@ -50,7 +72,7 @@ export interface GatewayRouteDispatchPort {
 }
 
 export interface GatewayRoutePlanePorts {
-  readonly nativeMessages?: AnthropicNativePort;
+  readonly nativeMessages?: GatewayNativeMessagesPort;
   readonly targets: GatewayRouteTargetPort;
   readonly catalog: GatewayModelCatalogPort;
   readonly dispatch: GatewayRouteDispatchPort;
@@ -58,6 +80,8 @@ export interface GatewayRoutePlanePorts {
   readonly name: string;
   readonly councilRevision: string;
   readonly observeShadow?: (evidence: GatewayRouteIntentEvidence) => void;
+  /** Required for a launch policy: verifies the selected account against its grant. */
+  readonly authorizeTarget?: (subject: VerifiedRoutingSubject, contract: LaunchRoutingContract, target: PlannedRouteTarget) => Promise<boolean>;
 }
 
 const policy = {
@@ -69,21 +93,23 @@ const policy = {
   preferSameTransport: true,
   stickyAccount: true,
   rotateEquivalentAccounts: false,
-  allowEquivalentModels: true,
+  allowEquivalentModels: false,
 };
 
 const subjectKey = (subject: VerifiedRoutingSubject, input: RoutePlanInput): string =>
   [subject.principalRef, subject.ownerScopeRef, input.affinityKey ?? '', input.requestedModel,
-    input.nativeMessages ? 'native' : 'canonical'].join('\u001f');
+    input.nativeMessages ? 'native' : 'canonical', input.workspaceId ?? '', JSON.stringify(input.launchRoutingContract ?? null)].join('\u001f');
 
 const evidenceFor = (
   target: PlannedRouteTarget,
-  route: Pick<RoutePlanInput, 'requestedModel' | 'requiredCapabilities'>,
+  route: Pick<RoutePlanInput, 'requestedModel' | 'requiredCapabilities' | 'launchRoutingContract'>,
 ): GatewayRouteIntentEvidence => ({
   requestedModel: route.requestedModel,
   providerId: target.providerId,
   modelId: target.modelId,
   transportProviderId: target.transportProviderId,
+  ...(route.launchRoutingContract ? { policyRevision: route.launchRoutingContract.revision,
+    mappingRevision: route.launchRoutingContract.mapping?.revision } : {}),
   requiredCapabilities: [...(route.requiredCapabilities ?? [])].sort((left, right) =>
     JSON.stringify(left).localeCompare(JSON.stringify(right))),
 });
@@ -105,6 +131,25 @@ export const createGatewayRoutePlane = (ports: GatewayRoutePlanePorts): {
     nativeRequired: boolean;
   }>();
   let sequence = 0;
+  const resolveTarget = async (subject: VerifiedRoutingSubject, input: RoutePlanInput) => {
+    const contract = input.launchRoutingContract ? freezeLaunchRoutingContract(input.launchRoutingContract) : undefined;
+    if (contract && contract.ownerScopeRef !== subject.ownerScopeRef) throw new LaunchRoutingContractError();
+    if (input.policyOverride?.allowEquivalentModels || input.policyOverride?.rotateEquivalentAccounts) throw new LaunchRoutingContractError();
+    const selected = contract ? launchTargets(contract, input.requestedModel) : undefined;
+    if (input.targetCandidatesOverride && JSON.stringify(input.targetCandidatesOverride) !== JSON.stringify(selected)) throw new LaunchRoutingContractError();
+    const chosen = selected?.[0];
+    const target = await ports.targets.resolve(subject, chosen?.model ?? input.requestedModel);
+    if (chosen ? target.providerId !== chosen.providerId || target.modelId !== chosen.model || target.transportProviderId !== chosen.transportProviderId
+      : !isExactModelTarget(input.requestedModel, { providerId: target.providerId, model: target.modelId })) {
+      throw new RoutePlanError('Exact requested model is unavailable', 'no-route');
+    }
+    if (contract && !await ports.authorizeTarget?.(subject, contract, target)) throw new RoutePlanError('Launch account grant is unavailable', 'no-route');
+    if (input.quote && (input.quote.requestedModel !== input.requestedModel || !input.quote.candidates.some((row) =>
+      row.providerId === target.providerId && row.modelId === target.modelId && (!row.transportProviderId || row.transportProviderId === target.transportProviderId)))) {
+      throw new RoutePlanError('Selected target is outside the quote', 'quote-mismatch');
+    }
+    return { ...target, requestedModel: input.requestedModel, ...(chosen?.effort ? { effort: chosen.effort } : {}) };
+  };
   const feasible = async (subject: VerifiedRoutingSubject, input: RoutePlanInput, target: PlannedRouteTarget) => {
     if (!input.nativeMessages) return;
     if (target.modelId !== input.requestedModel || !ports.nativeMessages
@@ -126,7 +171,7 @@ export const createGatewayRoutePlane = (ports: GatewayRoutePlanePorts): {
     readonly route: RoutePlanInput;
   }): Promise<void> => {
     validateRequired(input.route);
-    const target = await ports.targets.resolve(input.subject, input.route.requestedModel);
+    const target = await resolveTarget(input.subject, input.route);
     await feasible(input.subject, input.route, target);
     shadowTargets.set(subjectKey(input.subject, input.route), target);
     ports.observeShadow?.(evidenceFor(target, input.route));
@@ -143,11 +188,15 @@ export const createGatewayRoutePlane = (ports: GatewayRoutePlanePorts): {
       const key = subjectKey(subject, input);
       let target = shadowTargets.get(key);
       if (!target) {
-        target = await ports.targets.resolve(subject, input.requestedModel);
+        target = await resolveTarget(subject, input);
         await feasible(subject, input, target);
         ports.observeShadow?.(evidenceFor(target, input));
       }
-      else await feasible(subject, input, target);
+      else {
+        const checked = await resolveTarget(subject, input);
+        if (JSON.stringify(checked) !== JSON.stringify(target)) throw new RoutePlanError('Shadow target changed', 'stale-candidate');
+        await feasible(subject, input, target);
+      }
       shadowTargets.delete(key);
       sequence += 1;
       const planRef = `${name}-gateway-plan-${sequence}`;
@@ -182,11 +231,18 @@ export const createGatewayRoutePlane = (ports: GatewayRoutePlanePorts): {
         plans.delete(planRef);
         throw new RoutePlanError('Native Messages target is unavailable', 'native-unavailable');
       }
+      const executionRequest = <T extends GenerateRequest>(request: T): T => {
+        const effort = planned.target.effort;
+        if (effort && (!['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(effort)
+          || (request.reasoning?.effort && request.reasoning.effort !== effort))) throw new LaunchRoutingContractError();
+        return { ...request, providerId: planned.target.providerId, modelId: planned.target.modelId,
+          ...(effort ? { reasoning: { ...request.reasoning, effort: effort as NonNullable<GenerateRequest['reasoning']>['effort'] } } : {}) };
+      };
       return {
         ...(native ? { nativeMessages: native } : {}),
         attemptRef: `${candidateRef}:attempt`,
-        generate: (request) => dispatch.generate(subject, planned.workspaceId, planned.target, request),
-        stream: (request) => dispatch.stream(subject, planned.workspaceId, planned.target, request),
+        generate: (request) => dispatch.generate(subject, planned.workspaceId, planned.target, executionRequest(request)),
+        stream: (request) => dispatch.stream(subject, planned.workspaceId, planned.target, executionRequest(request)),
         async recordOutcome() { plans.delete(planRef); },
         async markCommitted() {},
         async complete() { plans.delete(planRef); },

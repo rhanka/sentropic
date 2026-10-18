@@ -16,6 +16,8 @@ export * from './responses-wire.js';
 export * from './routing-targets.js';
 export * from './routing-policy.js';
 export * from './routing-contracts.js';
+export * from './launch-routing-contract.js';
+export * from './ports/route-affinity-store.js';
 export * from './route-selection.js';
 export * from './route-planner.js';
 export {

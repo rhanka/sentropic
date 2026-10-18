@@ -515,6 +515,8 @@ export const createStaticTargetResolver = (options: {
 }): ModelTargetResolver => (model) => options.mappings[model];
 
 export interface CanonicalTargetResolverOptions {
+  /** Explicit library opt-in; gateway sessions additionally require a frozen mapping. */
+  readonly allowEquivalentModels?: boolean;
   readonly musePosition?: MusePosition;
 }
 
@@ -540,9 +542,28 @@ const canonicalTargetMappingsFor = (
 
 export const createCanonicalTargetResolver = (
   options: CanonicalTargetResolverOptions = {},
-): ModelTargetResolver => createStaticTargetResolver({
-  mappings: canonicalTargetMappingsFor(options.musePosition ?? DEFAULT_MUSE_POSITION),
-});
+): ModelTargetResolver => {
+  if (options.allowEquivalentModels === true) return createStaticTargetResolver({
+    mappings: canonicalTargetMappingsFor(options.musePosition ?? DEFAULT_MUSE_POSITION),
+  });
+  const candidates = createCanonicalTargetCandidatesResolver(options);
+  return (model) => candidates(model)[0];
+};
+
+/** Identity-only aliases preserve provider/model; effort suffixes are controls. */
+export const normalizeExactModelId = (model: string): string => {
+  if (model === VIBE_CLI_WIRE_MODEL) return 'mistral-medium-3.5';
+  if (modelProfiles.some((profile) => profile.modelId === model)) return model;
+  const base = model.replace(/-(?:low|medium|high|xhigh|max)$/, '');
+  return modelProfiles.some((profile) => profile.modelId === base)
+    || STANDARD_ROUTE_DEFINITIONS.some((definition) => definition.requestedId === base) ? base : model;
+};
+export const isExactModelTarget = (requested: string, target: Pick<TargetMapping, 'providerId' | 'model'>): boolean => {
+  const model = normalizeExactModelId(requested);
+  const provider = modelProfiles.find((profile) => profile.modelId === model)?.providerId
+    ?? (model.startsWith('claude-') ? 'anthropic' : undefined);
+  return target.model === model && (!provider || target.providerId === provider);
+};
 
 export const createCanonicalTargetCandidatesResolver = (
   options: CanonicalTargetResolverOptions = {},
@@ -558,7 +579,10 @@ export const createCanonicalTargetCandidatesResolver = (
       ([requestedId, targets]) => [requestedId, targets],
     )),
   };
-  return (model) => merged[model] ?? [];
+  return (model) => {
+    const targets = merged[model] ?? [];
+    return options.allowEquivalentModels === true ? targets : targets.filter((target) => isExactModelTarget(model, target));
+  };
 };
 
 export const describeTargetRoutes = (
