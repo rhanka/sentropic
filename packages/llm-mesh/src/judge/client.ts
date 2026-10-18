@@ -4,6 +4,7 @@ import { parseJudgeUsage, resolveJudgeCorrelationId, unreportedJudgeUsage } from
 import type { JudgeError } from './errors.js';
 import { createJudgeError, isJudgeErrorCode } from './errors.js';
 import { isJudgeDecisionRule } from './criterion.js';
+import { sanitizeJevId } from './jev-response.js';
 import type { JudgeCost } from './receipt.js';
 import { parseJudgeConfidence, parseJudgeScore } from './verdict.js';
 import type { JudgeVerdict } from './verdict.js';
@@ -62,17 +63,23 @@ function isValidWireRetention(retention: unknown): boolean {
   return retention.gap === undefined || retention.gap === 'unknown (source-gap)';
 }
 
+const bindsEvaluator = (candidate: unknown, request: JudgeRequest): boolean =>
+  isRecord(candidate) && candidate.providerId === request.evaluator.providerId
+  && candidate.evaluatorId === request.evaluator.evaluatorId
+  && candidate.revision === request.evaluator.revision;
+
 function isValidJudgeReceipt(r: unknown, request: JudgeRequest, expectedCorrelationId: string): r is JudgeReceipt {
   if (!isRecord(r)) return false;
   if (r.schemaVersion !== 1 || typeof r.callId !== 'string' || !r.callId) return false;
   if (r.correlationId !== expectedCorrelationId) return false;
-  if (r.evaluator !== null) {
-    if (!isRecord(r.evaluator) || r.evaluator.providerId !== request.evaluator.providerId
-      || r.evaluator.evaluatorId !== request.evaluator.evaluatorId
-      || r.evaluator.revision !== request.evaluator.revision) return false;
-  }
-  if (r.servedEvaluator !== null && (!isRecord(r.servedEvaluator) || typeof r.servedEvaluator.providerId !== 'string'
-    || typeof r.servedEvaluator.evaluatorId !== 'string' || typeof r.servedEvaluator.revision !== 'string')) return false;
+  if (r.evaluator !== null && !bindsEvaluator(r.evaluator, request)) return false;
+  if (r.servedEvaluator !== null && (!isRecord(r.servedEvaluator)
+    || typeof r.servedEvaluator.providerId !== 'string' || typeof r.servedEvaluator.evaluatorId !== 'string'
+    || typeof r.servedEvaluator.revision !== 'string')) return false;
+  if (r.servedModelId !== null && sanitizeJevId(r.servedModelId) !== r.servedModelId) return false;
+  if (has(r, 'providerRequestId') && sanitizeJevId(r.providerRequestId) !== r.providerRequestId) return false;
+  if (has(r, 'providerLatencyMs') && (typeof r.providerLatencyMs !== 'number'
+    || !Number.isFinite(r.providerLatencyMs) || r.providerLatencyMs < 0)) return false;
   if (typeof r.startedAt !== 'string' || Number.isNaN(Date.parse(r.startedAt))) return false;
   if (typeof r.finishedAt !== 'string' || Number.isNaN(Date.parse(r.finishedAt))) return false;
   if (typeof r.latencyMs !== 'number' || !Number.isFinite(r.latencyMs) || r.latencyMs < 0) return false;
@@ -81,11 +88,24 @@ function isValidJudgeReceipt(r: unknown, request: JudgeRequest, expectedCorrelat
   if (!isValidWireRetention(r.retention)) return false;
   if (!isRecord(r.budget) || !BUDGET_STATES.has(r.budget.state as string) || typeof r.budget.overrun !== 'boolean'
     || (r.budget.reservedMicroUsd !== undefined && !isMicroUsd(r.budget.reservedMicroUsd))) return false;
-  if (!isValidWireCost(r.cost)) return false;
+  const cost = r.cost;
+  if (!isValidWireCost(cost)) return false;
   if (r.outcome !== 'verdict' && r.outcome !== 'error') return false;
   if (r.outcome === 'error' && (typeof r.errorCode !== 'string' || !r.errorCode)) return false;
   if (r.outcome === 'verdict' && r.errorCode !== undefined) return false;
-  return parseJudgeUsage(r.usage) !== null;
+  const usage = parseJudgeUsage(r.usage);
+  if (!usage) return false;
+  // A verdict proves dispatch: identities served, one attempt completed,
+  // provider counters reported, liability estimated under a held budget.
+  if (r.outcome === 'verdict') {
+    if (r.evaluator === null || r.servedEvaluator === null || r.servedModelId === null) return false;
+    if (r.attempts !== 1 || r.dispatch !== 'completed') return false;
+    if (usage.tokens.input.source !== 'provider' || usage.tokens.output.source !== 'provider'
+      || usage.evaluatorCalls !== 1 || usage.explanations !== 0) return false;
+    if (cost.status !== 'estimated') return false;
+    if (r.budget.state !== 'settled' && r.budget.state !== 'pending-reconciliation') return false;
+  }
+  return true;
 }
 
 const wireDistributionEntries = (distribution: unknown): { outcome: string; probability: number }[] | null => {
