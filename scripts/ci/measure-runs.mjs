@@ -3,11 +3,37 @@
 // fails closed on incomplete job/test inventories, non-success ci-gate, missing identities, reused runs or skewed cohorts.
 import fs from 'node:fs';
 import path from 'node:path';
-import { SELECTION_KEYS, requiredSuccessJobs } from './filter-consumers.mjs';
+import { JOB_FILTERS, SELECTION_KEYS, VALIDATE_OUTPUTS, requiredSuccessJobs } from './filter-consumers.mjs';
 
 const WINDOW_SCHEMA = 'ci-optimization-window/1';
 const ALL_FALSE_OUTPUTS = Object.freeze(Object.fromEntries(SELECTION_KEYS.map((k) => [k, 'false'])));
-const TEST_EVIDENCE_JOBS = new Set(['test-api-unit-integration', 'test-e2e', 'e2e-vscode']);
+const OPTIONAL_PR_JOBS = new Set([...Object.keys(JOB_FILTERS), ...Object.keys(VALIDATE_OUTPUTS), 'enforce-package-bump']);
+
+export const API_MATRIX_VARIANTS = [
+  { id: 'smoke', isAi: false, re: /^test-api-unit-integration\s*\(smoke\)$/ },
+  { id: 'unit', isAi: false, re: /^test-api-unit-integration\s*\(unit\)$/ },
+  { id: 'queue', isAi: false, re: /^test-api-unit-integration\s*\(queue\)$/ },
+  { id: 'ai-1', isAi: true, re: /^test-api-unit-integration\s*(?:\(ai(?:,\s*chat-sync,executive-summary-auto,comment-assistant|[,\s#-]+1)\)|#3)$/ },
+  { id: 'ai-2', isAi: true, re: /^test-api-unit-integration\s*(?:\(ai(?:,\s*initiative-generation-async,executive-summary-sync|[,\s#-]+2)\)|#4)$/ },
+  { id: 'ai-3', isAi: true, re: /^test-api-unit-integration\s*(?:\(ai(?:,\s*chat-tools,company-enrichment-sync,documents-tool,initiative-generation-sync|[,\s#-]+3)\)|#5)$/ },
+  { id: 'security', isAi: false, re: /^test-api-unit-integration\s*\(security\)$/ },
+  { id: 'limit', isAi: false, re: /^test-api-unit-integration\s*\(limit\)$/ },
+  { id: 'artifact-store', isAi: false, re: /^test-api-unit-integration\s*\(artifact-store\)$/ },
+  { id: 'object-registry', isAi: false, re: /^test-api-unit-integration\s*\(object-registry\)$/ },
+  { id: 'outbox', isAi: false, re: /^test-api-unit-integration\s*\(outbox\)$/ },
+  { id: 'endpoints-1', isAi: false, re: /^test-api-unit-integration\s*\(endpoints(?:[,\s-]+(?:shard\s*)?1)\)$/ },
+  { id: 'endpoints-2', isAi: false, re: /^test-api-unit-integration\s*\(endpoints(?:[,\s-]+(?:shard\s*)?2)\)$/ },
+  { id: 'endpoints-3', isAi: false, re: /^test-api-unit-integration\s*\(endpoints(?:[,\s-]+(?:shard\s*)?3)\)$/ },
+  { id: 'endpoints-4', isAi: false, re: /^test-api-unit-integration\s*\(endpoints(?:[,\s-]+(?:shard\s*)?4)\)$/ },
+];
+
+export const E2E_MATRIX_VARIANTS = [
+  { id: 'group-a', re: /^test-e2e\s*\(group-a(?:,\s*00 02 06 10)?\)$/ },
+  { id: 'group-b', re: /^test-e2e\s*\(group-b(?:,\s*01 04)?\)$/ },
+  { id: 'group-c', re: /^test-e2e\s*\(group-c(?:,\s*03)?\)$/ },
+  { id: 'group-d', re: /^test-e2e\s*\(group-d(?:,\s*08 09)?\)$/ },
+  { id: 'group-e', re: /^test-e2e\s*\(group-e(?:,\s*05 07)?\)$/ },
+];
 
 export const outputsForChangeClass = (changeClass) => {
   if (typeof changeClass !== 'string' || changeClass.trim() === '') return null;
@@ -100,17 +126,51 @@ export const gateDelayMinutes = (run) => {
   return Number.isFinite(ms) && ms >= 0 ? ms / 60000 : null;
 };
 
+const hasPositiveCounts = (j, needLlm = false) =>
+  Number.isInteger(j.selectedTests) && j.selectedTests > 0 &&
+  Number.isInteger(j.executedTests) && j.executedTests >= j.selectedTests &&
+  (!needLlm || (typeof j.llmMinutes === 'number' && j.llmMinutes > 0));
+
+const jobBaseName = (name) => (typeof name === 'string' ? name.replace(/\s*\(.*\)$|#\d+$/, '') : '');
+
+const isJustifiedSkip = (job, run, outputs, requiredSet) => {
+  const base = jobBaseName(job.name);
+  if (!base || base === 'ci-gate' || requiredSet.has(base)) return false;
+  if (OPTIONAL_PR_JOBS.has(base)) return true;
+  if (base === 'bootstrap-publish') return run.event === 'pull_request' || run.event === 'push';
+  if (run.event === 'pull_request') {
+    return base.startsWith('publish-') || base === 'deploy-preprod' || base === 'verify-train-lock-integrity';
+  }
+  if (run.event === 'push' && outputs) {
+    const api = outputs.api === 'true' || outputs.global === 'true';
+    const ui = outputs.ui === 'true' || outputs.global === 'true';
+    if (base === 'publish-api-image' || base === 'publish-api-main-image') return !api;
+    if (base === 'publish-ui-image') return !ui;
+    if (base === 'deploy-preprod') return !api && !ui;
+    if (base.startsWith('publish-') || base === 'verify-train-lock-integrity') return true;
+  }
+  return false;
+};
+
 const hasCompleteRunInventory = (run) => {
   const outputs = outputsForChangeClass(run.changeClass);
   if (!outputs || (run.event !== 'pull_request' && run.event !== 'push')) return false;
   const required = [...requiredSuccessJobs(outputs, { eventName: run.event }), 'ci-gate'];
   for (const reqJob of required) {
-    const matching = run.jobs.filter((j) => j.name === reqJob || (typeof j.name === 'string' && j.name.startsWith(`${reqJob} (`)));
-    if (matching.length === 0 || matching.some((j) => j.conclusion !== 'success')) return false;
-    if (TEST_EVIDENCE_JOBS.has(reqJob)) {
-      const hasCounts = matching.every((j) => Number.isInteger(j.selectedTests) && j.selectedTests > 0 && Number.isInteger(j.executedTests) && j.executedTests >= j.selectedTests);
-      const hasLlm = matching.some((j) => typeof j.llmMinutes === 'number' && j.llmMinutes > 0);
-      if (!hasCounts || !hasLlm) return false;
+    if (reqJob === 'test-api-unit-integration') {
+      for (const v of API_MATRIX_VARIANTS) {
+        const m = run.jobs.filter((j) => typeof j.name === 'string' && v.re.test(j.name));
+        if (m.length === 0 || m.some((j) => j.conclusion !== 'success' || !hasPositiveCounts(j, v.isAi))) return false;
+      }
+    } else if (reqJob === 'test-e2e') {
+      for (const v of E2E_MATRIX_VARIANTS) {
+        const m = run.jobs.filter((j) => typeof j.name === 'string' && v.re.test(j.name));
+        if (m.length === 0 || m.some((j) => j.conclusion !== 'success' || !hasPositiveCounts(j, true))) return false;
+      }
+    } else {
+      const m = run.jobs.filter((j) => j.name === reqJob);
+      if (m.length === 0 || m.some((j) => j.conclusion !== 'success')) return false;
+      if (reqJob === 'e2e-vscode' && m.some((j) => !hasPositiveCounts(j, true))) return false;
     }
   }
   return true;
@@ -138,12 +198,13 @@ export const summarizeWindow = (window) => {
   for (const run of runs) {
     if (run.runId !== null && run.runId !== undefined) runIds.push(String(run.runId));
     if (run.workflow !== 'CI') nonCiWorkflowRuns += 1;
+    const outputs = outputsForChangeClass(run.changeClass);
     const validIdentity =
       run.runId !== null && run.runId !== undefined && run.workflow === 'CI' &&
       (run.event === 'pull_request' || run.event === 'push') &&
       typeof run.testedSha === 'string' && run.testedSha.length >= 7 &&
       typeof run.baseSha === 'string' && run.baseSha.length >= 7 &&
-      outputsForChangeClass(run.changeClass) !== null &&
+      outputs !== null &&
       typeof run.createdAt === 'string' && Number.isFinite(Date.parse(run.createdAt));
     if (!validIdentity) missingIdentityRuns += 1;
     if (run.event) { events.add(run.event); eventCounts[run.event] = (eventCounts[run.event] ?? 0) + 1; }
@@ -156,7 +217,12 @@ export const summarizeWindow = (window) => {
       missingGateRuns += 1;
     }
     if (run.jobs.some((j) => j.conclusion === null)) missingJobResultRuns += 1;
-    if (run.conclusion === 'success' && run.jobs.some((j) => j.conclusion !== 'success')) {
+    const requiredSet = new Set(
+      outputs && (run.event === 'pull_request' || run.event === 'push')
+        ? [...requiredSuccessJobs(outputs, { eventName: run.event }), 'ci-gate']
+        : ['ci-gate'],
+    );
+    if (run.conclusion === 'success' && run.jobs.some((j) => j.conclusion !== 'success' && !(j.conclusion === 'skipped' && isJustifiedSkip(j, run, outputs, requiredSet)))) {
       maskedFailureRuns += 1;
     }
     if (run.conclusion === 'success' && !hasCompleteRunInventory(run)) {
