@@ -961,5 +961,35 @@ describe('remote judge client', () => {
     });
     if (!forgedResult.ok) expect(forgedResult.error.retryAfterMs).toBeUndefined();
   });
+
+  it('completes without hanging when an oversized response stream has an unresponsive cancel hook', async () => {
+    let cancelCalls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      start(ctrl) {
+        ctrl.enqueue(new Uint8Array(600));
+      },
+      cancel() {
+        cancelCalls += 1;
+        return new Promise<void>(() => {});
+      },
+    });
+    const fetch = vi.fn(async () => new Response(stream, { status: 200 }));
+    const client = createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      maxResponseBytes: 500,
+      timeoutMs: 5,
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+    const result = await failAfterHang(client.judge(judgeRequest({ correlationId: 'oversize-cancel-hang' })));
+    expect(result).toMatchObject({
+      kind: 'connection-failure', ok: false,
+      error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+      correlationId: 'oversize-cancel-hang',
+    });
+    expect(cancelCalls).toBe(1);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
 });
+
 
