@@ -39,6 +39,7 @@
 ## Feedback Loop
 - [ ] PR700-R1: correct all ten review findings test-first; rebuild immutable P1 and verify its packed graph before push.
   - [x] Restore the co-frozen A03 declarations and an explicit host-owned memory binding slot.
+  - [x] Validate membership/claims/channel receipts, current generation/epoch and the host lifecycle before projecting A03.
 - [x] L5-LOT1-GATE closed 2026-10-18: #685 publications verified on npm (@sentropic/llm-mesh@0.27.0, @sentropic/llm-gateway@0.21.0, @sentropic/cluster-mesh@0.19.1), CI run 39154603798 on 9ed96eb83 green.
 - [x] L5-F1 closed for Lot 1 implementation contract acceptance: amended co-signed L0 commit 60a8bfa828b5eabd360232ea5865391c23f99f48 bound in spec/evidence/memory-mcp-l5/l0-freeze.json and tools/memory-mcp-l5/fixtures/l0/60a8bfa828b5eabd360232ea5865391c23f99f48/index.json, independently derived vectors and fixtures, exact context/assurance/public declarations, policy mappings, and provenance-bound fixture bundle verified.
 - [x] L5-F3 attention closed for environment: make ps-all shows zero running containers, slot BR-125 ports free, ENV=test-feat-memory-mcp-l5 reserved.
