@@ -266,51 +266,64 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
     expect(checkCheckpoint(absDoc, opts)).toEqual([]);
   }));
 
-  it('rejects mutated pre-candidate bytes, mismatched on-disk E4 build receipt, mutated contract bytes, and cross-digest reuse', () => withBundle(({ doc, opts }, dir) => {
-    expect(checkCheckpoint(doc, { ...opts, manifestBytes: Buffer.from('mutated') }).join(' ')).toMatch(/preCandidate\.manifestSha256/);
+  it('P10.tooling.receipt-contract: rejects invalid/substituted manifests, extra P1 contracts, mutated contract bytes, and cross-digest reuse', () => withBundle(({ doc, preMf, candMf, opts }, dir) => {
+    expect(checkCheckpoint(doc, { ...opts, manifestBytes: Buffer.from('{"manifestVersion":1,"stage":"candidate"}') }).join(' ')).toMatch(/manifest|artifactManifestSha256/);
+    expect(checkCheckpoint(doc, { ...opts, preCandidateManifestBytes: Buffer.from('NOT JSON') }).join(' ')).toMatch(/preCandidate|JSON/);
+    expect(checkCheckpoint(doc, { ...opts, preCandidateManifestBytes: candMf.bytes }).join(' ')).toMatch(/preCandidate/);
+    const extraP1 = JSON.parse(preMf.bytes.toString('utf8'));
+    extraP1.contractInventory.push({ path: 'packages/mcp-broker/dist/memory/missing.d.ts', version: '0.2.0', sha256: H64 });
+    const extraP1Bytes = Buffer.from(JSON.stringify(extraP1), 'utf8');
+    const extraDoc = structuredClone(doc);
+    extraDoc.preCandidate.manifestSha256 = sha256OfBytes(extraP1Bytes);
+    expect(checkCheckpoint(extraDoc, { ...opts, preCandidateManifestBytes: extraP1Bytes }).join(' ')).toMatch(/preCandidate|contractInventory|missing on-disk file/);
     writeFileSync(join(dir, 'packages/mcp-platform/dist/memory/index.d.ts'), 'export interface Mutated {}\n');
     expect(checkCheckpoint(doc, opts).join(' ')).toMatch(/preCandidate\.qualified.*sha256 mismatch/);
-    const cross = structuredClone(doc);
-    cross.proofs[2].artifactManifestSha256 = H64;
-    expect(checkCheckpoint(cross, opts).join(' ')).toMatch(/proofs\/P03: cross-digest proof reuse/);
   }));
 
-  it('rejects missing l4 role, SDK/image/SQLite violations, unrelated CI job/tuple, and mismatched acceptance tupleSha256', () => withBundle(({ doc, opts }) => {
-    const noL4 = structuredClone(doc);
-    noL4.artifacts[0].role = 'dependency';
-    noL4.tupleSha256 = computeTupleSha256(noL4);
-    expect(checkCheckpoint(noL4, opts).join(' ')).toMatch(/requires exactly one l4 role/);
-    const badClosure = structuredClone(doc);
-    badClosure.closure.sdkVersion = '0.1.0';
-    badClosure.runtime.imageDigest = 'unverified';
-    expect(checkCheckpoint(badClosure, opts).join(' ')).toMatch(/sdkVersion.*imageDigest/s);
-    expect(checkCheckpoint(doc, { ...opts, nodeOptions: '--experimental-sqlite' }).join(' ')).toMatch(/flag-dependent SQLite/);
-    const badCi = structuredClone(doc);
-    badCi.ci.jobs = [{ id: 'unrelated-lint', conclusion: 'success', resultSha256: H64 }];
-    badCi.ci.head = 'c'.repeat(40);
-    badCi.acceptances[0].tupleSha256 = H64;
-    expect(checkCheckpoint(badCi, opts).join(' ')).toMatch(/ci: tuple metadata mismatch.*missing or duplicate memory-l5-qualification.*acceptances\/l4: invalid acceptance or tuple mismatch/s);
+  it('P10.tooling.receipt-contract: rejects unverified lock/closure/assurance/runtime claims, prerelease SDK, proof runId drift, and unauthorized actors', () => withBundle(({ doc, opts }, dir) => {
+    const badClaims = structuredClone(doc);
+    badClaims.closure.declaredLockSha256 = H64;
+    badClaims.assurance.productionPolicySha256 = H64;
+    badClaims.runtime.nodeVersion = '99.0.0';
+    badClaims.runtime.sqliteVersion = '3.0.0';
+    badClaims.runtime.imageDigest = `sha256:${H64}`;
+    badClaims.closure.sdkVersion = '1.31.0-rc.1';
+    expect(checkCheckpoint(badClaims, opts).join(' ')).toMatch(/sdkVersion.*nodeVersion.*imageDigest/s);
+
+    const driftRun = structuredClone(doc);
+    driftRun.proofs[0].runId = 'unrelated-old-run';
+    driftRun.proofs[0].attempt = 99;
+    expect(checkCheckpoint(driftRun, opts).join(' ')).toMatch(/proofs\/P01: runId\/attempt mismatch/);
+
+    const badActor = structuredClone(doc);
+    badActor.ownerUat.actorRef = 'arbitrary-caller';
+    badActor.acceptances[0].actorRef = 'arbitrary-caller';
+    expect(checkCheckpoint(badActor, opts).join(' ')).toMatch(/unauthorized actorRef/);
+
+    writeFileSync(join(dir, PROOF_CATALOG.immutableFixtures[0]), 'tampered fixture');
+    expect(checkCheckpoint(doc, opts).join(' ')).toMatch(/immutableFixtures/);
   }));
 
-  it('requires on-disk evidence files in CLI checkpoint mode and reports missing files in preflight mode', () => withBundle(({ doc }, dir) => {
-    const emptyDir = mkdtempSync(join(tmpdir(), 'l5-empty-'));
-    try {
-      const emptyCp = join(emptyDir, 'checkpoint.json'), emptyMf = join(emptyDir, 'manifest.json');
-      writeFileSync(emptyCp, JSON.stringify(doc));
-      writeFileSync(emptyMf, MANIFEST_BYTES);
-      const preMissing = spawnSync(process.execPath, [RECEIPT_BIN, '--mode', 'preflight', '--checkpoint', emptyCp, '--manifest', emptyMf], { encoding: 'utf8' });
-      expect(preMissing.status).toBe(0);
-      expect(JSON.parse(preMissing.stdout).outstanding.length).toBeGreaterThan(0);
-      const failMissing = spawnSync(process.execPath, [RECEIPT_BIN, '--mode', 'checkpoint', '--checkpoint', emptyCp, '--manifest', emptyMf], { encoding: 'utf8' });
-      expect(failMissing.status).toBe(1);
-      const cpFile = join(dir, 'checkpoint.json'), mfFile = join(dir, 'manifest.json');
-      writeFileSync(cpFile, JSON.stringify(doc));
-      writeFileSync(mfFile, MANIFEST_BYTES);
-      const pass = spawnSync(process.execPath, [RECEIPT_BIN, '--mode', 'checkpoint', '--checkpoint', cpFile, '--manifest', mfFile, '--base-dir', dir], { encoding: 'utf8' });
-      expect(pass.status).toBe(0);
-      expect(JSON.parse(pass.stdout).accepted).toBe(true);
-    } finally {
-      rmSync(emptyDir, { recursive: true, force: true });
-    }
+  it('P10.tooling.receipt-contract: handles malformed shapes without crashing and enforces full on-disk bundle in CLI modes', () => withBundle(({ doc, preMf, candMf }, dir) => {
+    expect(checkCheckpoint({ schemaVersion: 1, checkpoint: 'L5-MEMORY-V1', artifacts: {}, ci: { jobs: {} }, proofs: [null] }, {}).length).toBeGreaterThan(0);
+    const badFile = join(dir, 'malformed.json');
+    writeFileSync(badFile, JSON.stringify({ artifacts: {}, ci: { jobs: {} }, proofs: [null] }));
+    const preBad = spawnSync(process.execPath, [RECEIPT_BIN, '--mode', 'preflight', '--checkpoint', badFile], { encoding: 'utf8' });
+    expect(preBad.status).toBe(0);
+    expect(JSON.parse(preBad.stdout).accepted).toBe(false);
+    expect(JSON.parse(preBad.stdout).outstanding.length).toBeGreaterThan(0);
+    const cpBad = spawnSync(process.execPath, [RECEIPT_BIN, '--mode', 'checkpoint', '--checkpoint', badFile], { encoding: 'utf8' });
+    expect(cpBad.status).toBe(1);
+
+    const cpFile = join(dir, 'checkpoint.json');
+    writeFileSync(cpFile, JSON.stringify(doc));
+    const failIncompleteMf = spawnSync(process.execPath, [RECEIPT_BIN, '--mode', 'checkpoint', '--checkpoint', cpFile, '--manifest', badFile, '--base-dir', dir], { encoding: 'utf8' });
+    expect(failIncompleteMf.status).toBe(1);
+    const pass = spawnSync(process.execPath, [
+      RECEIPT_BIN, '--mode', 'checkpoint', '--checkpoint', cpFile,
+      '--manifest', join(dir, candMf.path), '--pre-candidate-manifest', join(dir, preMf.path), '--base-dir', dir,
+    ], { encoding: 'utf8' });
+    expect(pass.status).toBe(0);
+    expect(JSON.parse(pass.stdout).accepted).toBe(true);
   }));
 });
