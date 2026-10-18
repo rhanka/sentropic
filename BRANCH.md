@@ -36,6 +36,7 @@
 ## Feedback Loop
 - [ ] `attention`: Tenant operator must supply read-only live image/config/frontier/author/legacy-data and restore receipts; unknown fields remain pending and gate dispatch.
 - [ ] `attention`: SC must confirm named infra/promotion operators, shared-file ownership, signer authorization and owner/operator windows; logical reservations do not establish availability.
+- [x] `clarification`: D2 owns control 0012–0016 and O1 owns 9495/5695/1595; W1 reserves 0017, with app test ports 9710–9717 and e2e 9720–9727 (full triples in reservations.md).
 - [x] Track import belongs to the designated root writer; this concurrent worktree updates mergeable source records only (`track-operation` contract).
 
 ## AI Flaky tests
@@ -59,9 +60,9 @@
   - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
   - [x] Pin P canonical verifier, vectors and trust/key authorization contract in `promotion-contract.md` and `verifier-vectors.json`; actual signer authorization remains B05.
 - [ ] **Lot 2 — Dispatch and authorization register**
-  - [ ] Reserve migration IDs, ports, six train slots and shared-file writers in `reservations.md`.
-  - [ ] Record pending runtime/operator/key/approval dependencies, owners, deadlines and observable gates in `authorization.md`.
-  - [ ] Consolidate findings into the bounded downstream branch handoffs, including W3/T3 EX1 and P/TG EX2.
+  - [x] Reserve migration IDs, ports, six train slots and shared-file writer roles in `reservations.md`; SC confirms personal assignments/availability under B06.
+  - [x] Record pending runtime/operator/key/approval dependencies, owners, deadlines and observable gates in `authorization.md`.
+  - [x] Consolidate findings into the bounded downstream branch handoffs, including W3/T3 EX1 and P/TG EX2.
 - [ ] **Lot 3 — Final validation and draft delivery**
   - [ ] Check JSON, source citations, secret hygiene, reservations, prototype/verifier evidence and every diff hunk; run `make scope-check` before each commit.
   - [x] API/UI/E2E/security suites: not applicable to documentation-only W0; downstream file-level gates are retained in handoffs.
