@@ -73,15 +73,15 @@
   - [x] Confirm docs-only scope: no Makefile target starts services; verification is `make scope-check ENV=test-spec-ui-annotate-overlay` with `ENV` last; no API, UI, or Maildev port is allocated or started.
   - [x] Confirm scope and guardrails: `spec/**` + `BRANCH.md` only, commits at most 150 lines via `make commit`, no AI attribution, draft PR only, never merge.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed: none required.
-- [ ] **Lot 1 — Promote v2 into `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md`**
-  - [ ] Copy the section structure of `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md` and `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md` (authority/baseline header, numbered sections, tables, lots, acceptance) and carry the v2 content without changing its design.
-  - [ ] Record provenance: source scratch spec v2 sha256 above, Astra GO review, pinned baseline `origin/main = 1472d961e098908e64ef60b83835af357888d031`, and PR #684 M2 dependency as future gates.
-  - [ ] Record DV3 = B verbatim as a closed owner decision (2026-10-18, « Tout copier »); remove the pending owner question and options A/C as undecided choices.
-  - [ ] Keep the B consequences and controls: access controls qualified before any copy; projections rebuilt for the target tier; no active grant, session, pending delivery, or prod routing right copied; re-seed overwrites preprod annotations.
-  - [ ] **API tests**: existing `none`, updated `none`, new `none` on this branch; future C/E lane suites stay specified in spec sections 8–9 and are not executed here.
-  - [ ] **UI tests (TypeScript only)**: existing `none`, updated `none`, new `none` on this branch; future B/D/F lane suites stay specified in spec sections 8–9 and are not executed here.
-  - [ ] **E2E tests**: existing `none`, updated `none`, new `none` on this branch; future component and deployed-qualification suites stay specified in spec sections 8–9 and are not executed here.
-  - [ ] Lot gate: `make scope-check ENV=test-spec-ui-annotate-overlay` passes with only `spec/**` + `BRANCH.md` changed; no typecheck, lint, build, or test claim is made for this docs lot.
+- [x] **Lot 1 — Promote v2 into `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md`**
+  - [x] Copy the section structure of `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md` and `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md` (authority/baseline header, numbered sections, tables, lots, acceptance) and carry the v2 content without changing its design.
+  - [x] Record provenance: source scratch spec v2 sha256 above, Astra GO review, pinned baseline `origin/main = 1472d961e098908e64ef60b83835af357888d031`, and PR #684 M2 dependency as future gates.
+  - [x] Record DV3 = B verbatim as a closed owner decision (2026-10-18, « Tout copier »); remove the pending owner question and options A/C as undecided choices.
+  - [x] Keep the B consequences and controls: access controls qualified before any copy; projections rebuilt for the target tier; no active grant, session, pending delivery, or prod routing right copied; re-seed overwrites preprod annotations.
+  - [x] **API tests**: existing `none`, updated `none`, new `none` on this branch; future C/E lane suites stay specified in spec sections 8–9 and are not executed here.
+  - [x] **UI tests (TypeScript only)**: existing `none`, updated `none`, new `none` on this branch; future B/D/F lane suites stay specified in spec sections 8–9 and are not executed here.
+  - [x] **E2E tests**: existing `none`, updated `none`, new `none` on this branch; future component and deployed-qualification suites stay specified in spec sections 8–9 and are not executed here.
+  - [x] Lot gate: `make scope-check ENV=test-spec-ui-annotate-overlay` passes with only `spec/**` + `BRANCH.md` changed; no typecheck, lint, build, or test claim is made for this docs lot.
   - [ ] UAT (docs read): owner opens the promoted spec, confirms the DV3 = B paragraph states the closed decision with its controls, and confirms no pending DV3 question remains.
 - [ ] **Lot 2 — Cross-references**
   - [ ] Add a cross-reference from `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md` to `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md` (canonical model consumed; UI overlay is a separate consumer spec).
