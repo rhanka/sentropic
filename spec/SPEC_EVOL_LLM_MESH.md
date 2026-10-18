@@ -855,3 +855,7 @@ Generic evaluation contracts, portable client execution, and trusted JEV hosting
 - **Post-dispatch timeout**: If the server deadline expires during or after dispatch:
   - If deadline expires before or during provider dispatch/settlement, the service persists a durable `TIMEOUT` receipt and records `TIMEOUT` in the settlement ledger.
   - If deadline expires while persisting a settled verdict (persist completes after the deadline), the durable receipt and settlement ledger retain `verdict/settled`, while the returned receipt to the caller is mapped to `error/TIMEOUT` with `budget.state: 'pending-reconciliation'` and `retryable: false` sharing the same `callId`.
+
+### 4. Receipt Correlation Test-Only Scope
+- In lot 1.23 integration tests, `effectRef` (`receipt:${callId}:metadata`) is constructed by the test helper and echoed by the emitter, and dedup is provided by the mock port; the real surface under test is the deterministic `receiptId` and generation-policy refusal.
+- Production `effectRef` derivation and routing remain assigned to future host lot 2.08.
