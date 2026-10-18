@@ -44,6 +44,14 @@ if [ -n "$receipt" ]; then
   cp "$receipt" "$tgz"
 fi
 
+# Artifacts is an unpublished candidate, also exercised by the dedicated consumer below.
+# Reuse these exact bytes in every consumer that selects it, preferring a verified receipt.
+(cd ../artifacts && npm pack --silent --pack-destination "$work/src" >/dev/null)
+artifacts_tgz="$(ls "$work"/src/sentropic-artifacts-*.tgz)"
+receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/artifacts "$ARTIFACTS")"
+if [ -n "$receipt" ]; then cp "$receipt" "$artifacts_tgz"; fi
+echo "[artifacts candidate] sha256 $(sha256sum "$artifacts_tgz" | cut -d' ' -f1)"
+
 # src NAME VERSION: a verified sibling archive (`file:`) for exactly NAME@VERSION, else the registry version.
 src() {
   node "$here/siblings.mjs" spec "$siblings" "$1" "$2"
@@ -111,19 +119,22 @@ stage() {
 fixture bare
 (cd "$work/bare" && npm install $quiet "$tgz" >/dev/null)
 
-# Selected consumer: E8's public service-mode tuple, frozen by the committed lockfile. With siblings the
-# install is provisional (same pins, sibling archives + overrides, `npm install`); the committed lock then
-# carries the registry URL and the sibling bytes' sha512, asserted on every sibling run.
+# Selected consumer: start from E8's committed lock, substituting the local artifacts candidate.
+# Candidate/sibling installs are provisional (`npm install`); the committed lock is not rewritten.
+# Verified sibling receipts still require the committed registry URL and sha512 on every sibling run.
 mkdir -p "$work/selected"
 cp "$fixtures/selected/package.json" "$work/selected/"
 cp "$fixtures/selected/package-lock.json" "$work/selected/committed-lock.json"
+artifacts_spec="file:$artifacts_tgz"
+# Lock refresh retains the registry/verified-sibling contract of check-lock-integrity.mjs.
+if [ "${REFRESH_LOCK:-}" = 1 ]; then artifacts_spec="$(src @sentropic/artifacts "$ARTIFACTS")"; fi
 consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
   "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" \
   "@sentropic/auth-hono=$(src @sentropic/auth-hono "$AHONO")" \
   "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")" \
-  "@sentropic/artifacts=$(src @sentropic/artifacts "$ARTIFACTS")"
+  "@sentropic/artifacts=$artifacts_spec"
 sources "$work/selected"
-if grep -q ' sibling ' "$work/selected/sources.txt"; then
+if grep -q ' sibling ' "$work/selected/sources.txt" || [ "$artifacts_spec" = "file:$artifacts_tgz" ]; then
   [ "${REFRESH_LOCK:-}" = 1 ] || cp "$fixtures/selected/package-lock.json" "$work/selected/"
   (cd "$work/selected" && npm install $quiet >/dev/null)
 elif [ "${REFRESH_LOCK:-}" = 1 ]; then
@@ -159,10 +170,8 @@ consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mc
 tuple mcp-consumer
 
 # Web-pages consumer: the MCP consumer tuple plus the locally-packed artifacts sibling
-# (unpublished 0.1.0 candidate; dist built by the packaging.mk prerequisite). The leaf must
+# (dist built by the packaging.mk prerequisite). The leaf must
 # load only when selected; the installed artifacts version must satisfy the declared range.
-(cd ../artifacts && npm pack --silent --pack-destination "$work/src" >/dev/null)
-artifacts_tgz="$(ls "$work"/src/sentropic-artifacts-*.tgz)"
 consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz" "@sentropic/artifacts=file:$artifacts_tgz"
 sources "$work/artifacts-consumer"
 (cd "$work/artifacts-consumer" && npm install $quiet >/dev/null)
@@ -198,7 +207,7 @@ for sib in llm-mesh llm-gateway auth-hono mcp-platform mcp-auth oauth-verify con
   sib_spec="$(src @sentropic/"$sib" "$sib_ver")"
   case "$sib_spec" in file:*) latest_overrides="$latest_overrides @sentropic/$sib=$sib_spec" ;; esac
 done
-consumer "$work/latest" $latest_overrides
+consumer "$work/latest" $latest_overrides "@sentropic/artifacts=file:$artifacts_tgz"
 sources "$work/latest"
 : > "$work/latest/npm-install-detail"
 attempt "$work/latest" plain
