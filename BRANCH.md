@@ -26,8 +26,9 @@
   - [x] L5-EX1 shared tooling: root `Makefile`, `package-lock.json`, `.github/workflows/ci.yml` only.
   - [x] L5-EX2 round-2 corrections: `packages/mcp-platform/src/tool-configuration.ts`, `packages/mcp-platform/tests/tool-configuration.test.ts`, `.h2a/reviews/pr700_treatment.md` only.
   - [x] L5-EX2 selected-consumer fixture: `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` only, platform version/registry URL/integrity from the guarded full candidate; preserve all other pinned peers and entries.
+  - [x] L5-EX3 CI repair: `scripts/ci/publishable-ci-wiring.test.mjs` only.
 - [x] **Forbidden Paths (must not change in this branch)**:
-  - [x] `docker-compose*.yml`, `.cursor/rules/**`, `rules/**`, `PLAN.md`, `plan/**`, `.track/**`, `.security/**`, `scripts/**`, root `package.json`.
+  - [x] `docker-compose*.yml`, `.cursor/rules/**`, `rules/**`, `PLAN.md`, `plan/**`, `.track/**`, `.security/**`, `scripts/**` except the exact L5-EX3 test, root `package.json`.
   - [x] `api/**`, `ui/**`, `apps/**`, `deploy/**`, `packages/llm-mesh/**`, `packages/llm-gateway/**`, `packages/auth-hono/**`, `packages/auth-ui/**`, `packages/mcp-auth/**`, `packages/artifacts/**`, `packages/connector-host/**`, `packages/skills/**`, `packages/harness/**`.
   - [x] `packages/mcp-platform/src/registry*.ts`, `packages/mcp-platform/src/authz.ts`, `packages/mcp-platform/src/hono.ts`, `packages/mcp-platform/src/durable.ts`, `packages/mcp-platform/src/elicitation.ts`, `packages/mcp-platform/src/persistence.ts`, `packages/mcp-platform/src/stores.ts`, `packages/mcp-platform/src/audit.ts`, `packages/mcp-platform/src/experimental/**`, `packages/mcp-platform/src/mock/**`, `packages/mcp-platform/src/testing.ts`.
   - [x] `tools/gateway-evolution/**`, `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`, frozen memory v3.1 file, Graphify and h2a repositories, every predecessor worktree and BRANCH.md; `.h2a/**` except the exact L5-EX2 treatment file.
@@ -38,9 +39,11 @@
   - [x] L5-EX1 declared in L5-preparation-plan-v2.1.md with rationale, impact and rollback, activation pending entry gate only, no second approval invented.
   - [x] L5-EX2 authorized by the owner's round-2 fix request: align the stale platform constant and its compiler regression, repair existing CI sibling-archive selection, append the requested local treatment. Impact: full-platform configuration version becomes 0.3.1; mesh consumes the verified unpublished full candidate without changing frozen peers or P1 scope. Rollback: revert the version/CI correction commits and rebuild P1; no publication or merge.
   - [x] L5-EX2 installed-gate extension: the unmodified lock-integrity guard rejects platform 0.3.1 against the committed 0.3.0 identity; update only that exact candidate entry. Impact: retain sibling/registry byte equality without relaxing any guard. Rollback: restore the prior lock entry alongside the platform version rollback.
+  - [x] L5-EX3 authorized by the owner's CI repair request: adapt the stale wiring assertion to independently classified Cluster Mesh siblings. Impact: assert exact commands, classification context, execution order and separate conditions; preserve workflow behavior and P1 bytes. Rollback: revert this CI test repair commit.
   - [x] Verify actual path inventory and run make scope-check before authorized commits.
 
 ## Feedback Loop
+- [x] PR700-CI: reproduced CI run 39174580054 at publishable-ci-wiring.test.mjs:245; assert unconditional Cluster Mesh sibling classification before BLOCK-only candidate qualification and retain mcp-auth's BLOCK condition. Validation: 22 scoped wiring tests, 86 manifest guard tests and 18 consumer qualification tests PASS; memory-l5-verify PASS with unchanged P1 sha256 72612820f2ef5669c1d648008838f232bdc0ba28f601a5062873de6cb51a6751.
 - [x] PR700-R2 complete: all eight findings treated test-first; full platform 332 tests, broker 66 tests, installed mesh packaging 77 tests and final digest-pinned Lot 1 gate 225 tests across 28 files PASS; packed graph 30 files/54 edges and closed inventory 44 contracts.
 - [x] PR700-R2-5 installed gate PASS: full platform 0.3.1 archive e465ad5ccedf285f22c07ca9d8317333bdba1647e714ae7a8f550c7c34aa5666 verified against the selected lock, existing mesh packaging suite passes, no peer-range or guard changes.
 - [x] PR700-R2 history: retain the reviewed 4e44e9d969c0b7471763db17bcb64283d674921abf4d094cf875656b3131965a manifest and sidecar byte-for-byte, with both digest-named archives unchanged.
