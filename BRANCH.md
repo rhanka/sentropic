@@ -71,7 +71,7 @@
   - [x] BR-67: deterministic journeys and daily live providers.
   - [x] BR-68: complete CD on tested bytes.
   - [x] BR-69: remove unnecessary consumer work with proof.
-  - [ ] BR-70: prove the maximum and present the results.
+  - [x] BR-70: prove the maximum and present the results.
 - [ ] **Lot 3 — Final validation and handoff**
   - [ ] Check template structure, links, branch order, exact paths, exceptions, and metric provenance.
   - [ ] Inspect the entire diff and every commit size; run documentation checks and scope checks.
