@@ -124,6 +124,7 @@
 - [x] BR96-EX6 (2026-10-18, superseded): llm-gateway version bump reverted with the gateway round; no longer in the diff.
 - [x] BR96-EX7 (2026-10-18): B3 selected fixtures point at the 0.19.0 candidate tarball plus mesh peer mirror; rationale: pack-qualify resolves the fixture file: tarball by exact name and CI fails ENOENT otherwise, precedent 529383f43 did the same at 0.18.0; impact: 4 lines in fixtures/selected, registry pins untouched; rollback: revert names with the cluster version.
 - [x] Sol P1 descriptor binding (2026-10-18): preflight now refuses any request-affecting service/adapter descriptor disagreement with PROVIDER_UNAVAILABLE before credentials or spend; regression covers divergent registered rubric instructions with zero sends; settlement overrun fixture aligned to consistent descriptors.
+- [x] Sol P2 feature version (2026-10-18): llm-mesh placeholder 0.26.2 replaced by feature minor 0.27.0 per rules/workflow.md:116; gateway mesh range re-applied to ^0.27.0 (BR96-EX5 rollback), workspace-linked so npm ci still resolves without a published 0.27.0; lockfile mirrors, train literal and version test follow; rollback: revert the five version lines with the manifests.
 
 
 ## AI Flaky tests
