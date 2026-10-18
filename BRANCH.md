@@ -123,5 +123,5 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
   - [x] Record the owner requirement verbatim in study §11.1, with the multi-repo and library-based target in §11.2.
   - [x] State the built / specified / missing status explicitly with `file:line` evidence in study §11.3, including the cluster-mesh invocation-custody distinction.
   - [x] Record the recommendation and lots C1-C5 in study §11.4.
-  - [ ] Reconcile the independent Astra analysis (`.h2a/inputs/astra-custody-allrepos.md`) point by point in `.h2a/reviews/custody-allrepos-reconciliation.md` (exception `BR596-EX1`; local record, gitignored).
-  - [ ] Commit in slices of at most 150 lines via `make commit`, push, record the head SHA, and stop. Never merge.
+  - [x] Reconcile the independent Astra analysis (`.h2a/inputs/astra-custody-allrepos.md`) point by point in `.h2a/reviews/custody-allrepos-reconciliation.md` (exception `BR596-EX1`; local record, gitignored).
+  - [x] Commit in slices of at most 150 lines via `make commit`, push, record the head SHA, and stop. Never merge.
