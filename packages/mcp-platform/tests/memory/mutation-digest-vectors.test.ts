@@ -31,11 +31,30 @@ describe('P03.platform.a05-mutation-digest-vectors — identical frozen A05 corp
     (p: any) => { p.effective_input.payload.citations[0].locator.extra = true; },
     (p: any) => { p.target.sequence = '18446744073709551616'; },
     (p: any) => { p.effective_input.payload.retention.expires_at = '2026-02-30T00:00:00.000Z'; },
-    (p: any) => { p.effective_input.payload.components[0].text = 'e\u0301'; },
+    (p: any) => { p.effective_input.payload.purpose_ref = 'e\u0301'; },
+    (p: any) => { p.effective_input.payload.citations[0].source_ref = 'e\u0301'; },
   ])('refuses invalid nested DTOs and primitive boundaries', mutate => {
     const input = capture(); mutate(input);
     expect(validateMutationPreimage(input).length).toBeGreaterThan(0);
     expect(() => computeMutationDigest(input)).toThrow();
+  });
+  it.each(['text', 'scheme', 'value'])('preserves non-NFC %s body bytes when sealing', field => {
+    const input = capture(), payload = input.effective_input.payload;
+    const body = field === 'text' ? payload.components[0] : payload.citations[0].locator;
+    body[field] = 'e\u0301';
+    expect(validateMutationPreimage(input)).toEqual([]);
+    expect(canonicalJson(input)).toContain('e\u0301');
+    const digest = computeMutationDigest(input);
+    body[field] = 'é';
+    expect(computeMutationDigest(input)).not.toBe(digest);
+  });
+  it.each(['text', 'scheme', 'value'])('enforces %s well-formedness and UTF-8 byte bounds', field => {
+    for (const value of ['\ud800', 'é'.repeat(field === 'text' ? 32769 : 257)]) {
+      const input = capture(), payload = input.effective_input.payload;
+      (field === 'text' ? payload.components[0] : payload.citations[0].locator)[field] = value;
+      expect(validateMutationPreimage(input).length).toBeGreaterThan(0);
+      expect(() => computeMutationDigest(input)).toThrow();
+    }
   });
   it.each([42, 'x', '2026-02-30T00:00:00.000Z'])('refuses invalid lifecycle instant %s', occurred_at => {
     const input = JSON.parse(corpus.vectors.withdraw_v1.expected_jcs_utf8);

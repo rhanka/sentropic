@@ -33,8 +33,10 @@ export function validateSchema(value: unknown, schema: any, path = '$', seen = n
     }
   } else if (schema.type === 'string') {
     if (typeof value !== 'string') return [`${path}: string required`];
-    if (!isWellFormed(value) || !isNfc(value)) failures.push(`${path}: well-formed NFC required`);
-    if (utf8ByteLength(value) < (schema.minLength ?? 0) || utf8ByteLength(value) > (schema.maxLength ?? Infinity)) failures.push(`${path}: UTF-8 bounds`);
+    const body = /\.components\[\d+\]\.text$|\.citations\[\d+\]\.locator\.(scheme|value)$/.test(path);
+    if (!isWellFormed(value) || (!body && !isNfc(value))) failures.push(`${path}: well-formed${body ? '' : ' NFC'} required`);
+    const maxBytes = schema.maxLength ?? (/\.locator\.(scheme|value)$/.test(path) ? 512 : Infinity);
+    if (utf8ByteLength(value) < (schema.minLength ?? 0) || utf8ByteLength(value) > maxBytes) failures.push(`${path}: UTF-8 bounds`);
     if (schema.pattern && !new RegExp(schema.pattern, 'u').test(value)) failures.push(`${path}: pattern mismatch`);
     if (/(_at|occurred_at|observed_at)$/.test(path) && !isValidInstant(value)) failures.push(`${path}: canonical instant required`);
     if (/cursor|sequence/.test(path) && schema.pattern === '^(0|[1-9][0-9]*)$' && !isValidCursor(value)) failures.push(`${path}: unsigned u64 required`);
