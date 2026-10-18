@@ -14,7 +14,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { canonicalJson } from '../tool-configuration.js';
+import { canonicalMemoryJson as canonicalJson } from './canonical-json.js';
 import { validateCapture } from './capture-validation.js';
 import {
   MEMORY_MUTATION_DIGEST_PROFILE_ID,
