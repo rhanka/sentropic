@@ -27,8 +27,9 @@ export function validateAgainstSchema(value, rootSchema, node = rootSchema, path
   }
   const failures = [];
   if (node.oneOf) {
-    const matches = node.oneOf.filter((branch) => validateAgainstSchema(value, rootSchema, branch, path).length === 0);
-    if (matches.length !== 1) failures.push(`${path}: must match exactly one oneOf branch (matched ${matches.length})`);
+    const branchErrors = node.oneOf.map((branch) => validateAgainstSchema(value, rootSchema, branch, path));
+    const matches = branchErrors.filter((errs) => errs.length === 0);
+    if (matches.length !== 1) failures.push(`${path}: must match exactly one oneOf branch (matched ${matches.length}): ${branchErrors.flat().join('; ')}`);
     return failures;
   }
   if (node.type === 'object') {
@@ -92,9 +93,8 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
   for (const listKey of ['fixtures', 'exports', 'schemas', 'profiles']) {
     for (const item of c[listKey] || []) readChecked(item?.path, item?.sha256, `contracts.${listKey}/${item?.path}`);
   }
-  const invDoc = readJson(pre.contractInventory, 'preCandidate.contractInventory');
-  const retainedInv = Array.isArray(invDoc?.contractInventory) ? invDoc.contractInventory : null;
-  if (!retainedInv || retainedInv.length === 0) failures.push('preCandidate.contractInventory: missing contractInventory entries');
+  const retainedInv = Array.isArray(pre.contractInventory) ? pre.contractInventory : readJson(pre.contractInventory, 'preCandidate.contractInventory')?.contractInventory;
+  if (!Array.isArray(retainedInv) || retainedInv.length === 0) failures.push('preCandidate.contractInventory: missing contractInventory entries');
   for (const item of retainedInv || []) {
     const retainedBytes = readChecked(`retained/${item.path}`, item.sha256, `preCandidate.retained/${item.path}`);
     const qualifiedBytes = readChecked(item.path, item.sha256, `preCandidate.qualified/${item.path}`);
