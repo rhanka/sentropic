@@ -76,6 +76,12 @@
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
+  - [ ] Static: application typecheck/lint is unchanged; `make test-ci-release-receipts test-publishable-manifests test-qualify-published-install ENV=test-cd-tested-artifacts` covers changed release scripts and negative receipt/registry/provenance cases.
+  - [ ] Build: verify the final API/UI and package producer receipts, tested/scanned digests, and qualified tarball hashes; publishers and deployment must consume those bytes without rebuilding or repacking.
+  - [ ] API regression: require complete `make test-api API_PORT=9410 UI_PORT=5610 MAILDEV_UI_PORT=1510 ENV=test-cd-tested-artifacts` results on the selected candidate tuple before promotion, plus production-runtime/limits/restore receipts.
+  - [ ] UI regression: require `make test-ui API_PORT=9410 UI_PORT=5610 MAILDEV_UI_PORT=1510 ENV=test-cd-tested-artifacts` and both selected UI/IdP consumer results; UI-only delivery must retain the unchanged API digest.
+  - [ ] E2E regression: require `make clean test-e2e API_PORT=9410 UI_PORT=5610 MAILDEV_UI_PORT=1510 ENV=e2e-cd-tested-artifacts` and `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=9410 UI_PORT=5610 MAILDEV_UI_PORT=1510 ENV=e2e-cd-tested-artifacts` on the recorded images, screen-driven IdP smoke, and real preproduction readiness/rollback; keep daily live qualification separate.
+  - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
   - [ ] Run `make scope-check ENV=test-cd-tested-artifacts` before each commit; end isolated service lots with `make down ENV=test-cd-tested-artifacts` and `make down ENV=e2e-cd-tested-artifacts`.
   - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.

@@ -75,6 +75,12 @@
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
+  - [ ] Static: `make lint-cluster-mesh typecheck-cluster-mesh ENV=test-ci-package-candidates`; rerun the manifest, install, candidate, and qualification-DAG fixture targets from Lots 1–2.
+  - [ ] Build: `make pack-cluster-mesh ENV=test-ci-package-candidates` and the selected sibling candidate targets produce one archive per tuple; all final qualifiers consume those exact receipts without repacking.
+  - [ ] API regression: product HTTP tests are not changed; `make test-cluster-mesh ENV=test-ci-package-candidates` and the five named PostgreSQL/comments/crash/installed/major-upgrade lanes remain required with isolated databases and exact candidate bytes.
+  - [ ] UI regression: not applicable; no UI code, build recipe, or test membership changes.
+  - [ ] E2E regression: product browser lanes are unchanged; rerun `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-ci-package-candidates` and all named installed-consumer suites, preserving seed → crash → verify ordering.
+  - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
   - [ ] Run `make scope-check ENV=test-ci-package-candidates` before each commit; end isolated service lots with `make down ENV=test-ci-package-candidates` and `make down ENV=e2e-ci-package-candidates`.
   - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.

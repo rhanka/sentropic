@@ -59,6 +59,7 @@
   - [ ] Reuse a Vite output only when every profile input matches; retain separate application/static-site builds when API base URLs differ.
   - [ ] Dispatch browser/VSCode/IdP/restore at artifact readiness; keep real IdP native form POST, redirects/codes, restore, and production runtime assertions.
   - [ ] Lot gate: real PR/main runs plus `make check-ci-version-filters check-e2e-inventory ENV=test-ci-parallel-dag`; run existing SAST/SCA/container scans and `test-smoke-restore` through their unchanged assertion sets.
+  - [ ] Pre-UAT static gate: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-parallel-dag`; independent scheduling must preserve both consumers' compiler/linter verdicts before Lot 3.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [ ] Inspect served login/consent and web/Chrome/VSCode/desktop packaging on the qualification SHA; verify the embedded files and profile-specific endpoints match the intended consumer.
   - [ ] Budget to measure: security scan branch ≤90s versus the PR example of 199s; IdP ≤150s; start runtime jobs as soon as their artifact inputs are ready, and preserve BR-76 cumulative scheduling ≤60s. Publish readiness and actual start times.
@@ -68,6 +69,12 @@
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
+  - [ ] Static: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-parallel-dag`; `make test-ci-dag test-ci-expected-results test-security-parser ENV=test-ci-parallel-dag` must still reject failed or missing static/security results.
+  - [ ] Build: `make build-api build-ui-image API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=e2e-ci-parallel-dag`; verify separate Chrome/VSCode/desktop outputs and that UI image assembly waits for every embedded prerequisite.
+  - [ ] API regression: `make test-api API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-parallel-dag`; preserve production runtime/limits and restore membership when dispatch edges change.
+  - [ ] UI regression: `make test-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-parallel-dag`; retain independent unit/DOM and profile-build results in the required verdict.
+  - [ ] E2E regression: `make clean test-e2e API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=e2e-ci-parallel-dag` and `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=e2e-ci-parallel-dag`; reconcile exact browser/VSCode/IdP/restore membership and image receipts, then repeat the negative scan that blocks promotion.
+  - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
   - [ ] Run `make scope-check ENV=test-ci-parallel-dag` before each commit; end isolated service lots with `make down ENV=test-ci-parallel-dag` and `make down ENV=e2e-ci-parallel-dag`.
   - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.

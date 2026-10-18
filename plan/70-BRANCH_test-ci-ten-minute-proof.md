@@ -46,7 +46,7 @@
 
 ## Feedback Loop
 - [ ] BR84-EX1 — Planned workflow exception: finalize `changes`, `ci-gate`, and `deploy-preprod` evidence publication and performance acceptance without substituting timeout for success. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR84-EX2 — Planned Makefile exception: add `test-ci-performance-report`, `ci-performance-report`, `build-ci-dossier`, and `test-ci-dossier`; build/test the portable presentation in pinned isolated tooling. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR84-EX2 — Planned Makefile exception: add `test-ci-performance-report`, `ci-performance-report`, `build-ci-dossier`, and `test-ci-dossier`; include TypeScript/Svelte and lint gates, then build/test the portable presentation in pinned isolated tooling. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
@@ -77,7 +77,7 @@
   - [ ] Use one model for path calculation and rendering; controls for before/after, case, event, and groups stay inside the canvas. Every plan step highlights changed nodes while case/event selection remains usable.
   - [ ] Preserve expandable matrix/job/step detail, internal package train order, selected cache effects, semantic duration heatmap, source links, and explicit budget-to-measure / to-measure labels; each sampled element >60s has an optimization and acceptance link.
   - [ ] Add `controls.spec.ts` and `path-calculation.test.mjs` (new): all case/event/step combinations, keyboard interaction, preserved viewport, incomplete data, shared assets, package-only cold paths, verdict-before-publication, and non-additive isolated gains.
-  - [ ] Lot gate: `make build-ci-dossier test-ci-dossier ENV=test-ci-ten-minute-proof`; inspect the exported portable artifact at wide/narrow widths and verify controls are within the graph.
+  - [ ] Lot gate before UAT: `make build-ci-dossier test-ci-dossier ENV=test-ci-ten-minute-proof` must pass TypeScript/Svelte checks, lint, build, and both named test files; inspect the exported portable artifact at wide/narrow widths and verify controls are within the graph.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [ ] Open the exported dossier and switch every case/event/before-after combination, expand matrices, select all nine steps, and follow measured sources; product qualification receipts stay tied to their exact SHAs.
   - [ ] Budget to measure: API/CD 555s warm and 585s cold including 60s cumulative scheduling; complete selected endpoints ≤600s for every claimed case. Publish n, median, p90, p95, maximum, runner-minutes, provider cost, and all failures/breaches; mixed fresh trains and new validation lanes must be counted.
@@ -87,6 +87,12 @@
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
+  - [ ] Static: require complete TypeScript/Svelte checks and lint of the listed dossier sources inside `make build-ci-dossier ENV=test-ci-ten-minute-proof`, before producing the portable artifact; application compiler/linter programs are unchanged.
+  - [ ] Build: `make build-ci-dossier ENV=test-ci-ten-minute-proof` and `make test-ci-performance-report ci-performance-report ENV=test-ci-ten-minute-proof`; preserve final report/model input hashes and each campaign run's production-artifact receipts.
+  - [ ] API regression: no new application API tests; each sampled product run still needs every selected API result, including deterministic AI groups, tied to its own exact source/artifact tuple.
+  - [ ] UI regression: no product UI source edits; campaign UI results remain required, and the dossier's path-calculation assertions must pass against the exported model.
+  - [ ] E2E regression: `make test-ci-dossier ENV=test-ci-ten-minute-proof` runs the named controls and path-calculation tests; reconcile every sampled browser/VSCode/IdP group and production-image identity. Keep daily live outcomes separate; missing results invalidate a sample.
+  - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
   - [ ] Run `make scope-check ENV=test-ci-ten-minute-proof` before each commit; end isolated service lots with `make down ENV=test-ci-ten-minute-proof` and `make down ENV=e2e-ci-ten-minute-proof`.
   - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.

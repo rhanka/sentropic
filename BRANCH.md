@@ -38,7 +38,7 @@
 - [x] `acknowledge` — PR #701 F1: remove explicit forbidden entries that shadow the nine Makefile exceptions and the deterministic-provider Compose overlay; retain bounded conditional paths and profile defaults.
 - [x] PR #701 F2: distinguish file sequence 62–70 from canonical BR-76–84; propagate titles, train order, dependencies, exception IDs, and canonical-ID port slots while retaining unique slug-based environments.
   - [x] Allocate canonical BR-76–84 in the study; preserve existing allocations through BR-75 and the requested file sequence.
-- [ ] PR #701 F3: add explicit static gates before runtime UAT and applicable final build/API/UI/E2E regression checklists.
+- [x] PR #701 F3: require API typecheck/lint before BR-81 UAT; enumerate applicable static/build/API/UI/E2E final gates in all nine plans, explicit unchanged surfaces, isolated ports, exact artifacts, and separate daily live results.
 - [x] `acknowledge` — Owner, 2026-10-18: « écoute je suis en phase avec le plan proposé pour le CI/CD, je le veux commité / fusionné et planifié en branches stp ».
 - [x] `clarification` — Merge GO applies after green CI and review; this author's explicit handoff ends at the opened PR, without merging or deleting this branch plan.
 - [x] `clarification` — The superseded acceleration branch is not an implementation dependency; the nine-step plan is the retained source.
