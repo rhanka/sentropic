@@ -4,7 +4,7 @@ Source authority: `9ed96eb83cd77da710f1adeb83a19e425d6c4910` (initial HEAD = ori
 
 ## Evidence boundary
 
-Observations below were collected at 23:26–23:40 UTC by registry/GitHub GETs, unauthenticated HTTPS GETs and reads of the pinned source. No production credential was opened or used. No reader kubeconfig for this tenant was identified among local kubeconfig names; the default operator config was not substituted. Live pod/database/object inventories remain **pending**, not empty. This record does not qualify W0 for downstream dispatch until the operator receipts in [authorization.md](authorization.md) close.
+Observations below were collected beginning at 23:26 UTC by registry/GitHub GETs, unauthenticated HTTPS GETs and reads of the pinned source. No production credential was opened or used. No reader kubeconfig for this tenant was identified among local kubeconfig names; the default operator config was not substituted. Live pod/database/object inventories remain **pending**, not empty. This record does not qualify W0 for downstream dispatch until the operator receipts in [authorization.md](authorization.md) close.
 
 | Required runtime fact | Frozen value / receipt |
 |---|---|
