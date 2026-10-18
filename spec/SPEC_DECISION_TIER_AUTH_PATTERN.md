@@ -99,6 +99,10 @@ refused at authorize with `access_denied`) and optionally
 before consent). Absent both, the client keeps the legacy behavior. Rotation:
 `docs/oauth-client-rotation.md` (90-day cycle, immediate cutover).
 
+Recovery, method-neutral level, freshness, and the KVM onboarding that
+extend this B3/C1 policy are specified in
+[SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md](SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md).
+
 Hashing the secret by hand: `printf '%s' "$SECRET" | sha256sum`, **never** `echo` — a trailing
 newline yields a different hash, and the symptom is an `invalid_client` indistinguishable from a
 wrong client id.
