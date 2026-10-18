@@ -6,6 +6,7 @@
  * cross-tool conflict, and version-omission refusal before hashing.
  */
 import { describe, expect, it } from 'vitest';
+import { A05_MUTATION_DIGEST_VECTORS_SPEC_RULE as corpus } from '../../../../tools/memory-mcp-l5/fixtures/l0/60a8bfa828b5eabd360232ea5865391c23f99f48/memory-mcp-spec-rules.js';
 import {
   checkSameKeyBinding,
   computeMutationDigest,
@@ -21,8 +22,8 @@ import type {
 
 const CAPTURE_INPUT: EffectiveMemoryMutationInputV1 = {
   tool_name: 'engram_memory_capture',
-  payload: { schema_version: 1, purpose_ref: 'purpose-1' },
-  evidence: { source: 'host' },
+  payload: { ...corpus.vectors.capture_v1.preimage.effective_input.payload, scope_ref: 'tenant-1' },
+  evidence: corpus.vectors.capture_v1.preimage.effective_input.evidence,
   capture_policy_version: 'capture-policy/v1',
 };
 
@@ -64,7 +65,7 @@ describe('P02.platform.mutation-guard', () => {
         reason_ref: 'reason-1',
         event_id: 'event-1',
         event_anchor: {
-          occurred_at: 'x',
+          occurred_at: '2026-10-18T00:00:00.000Z',
           kind_ref: 'withdraw',
           provenance_ref: 'prov-1',
           provenance_digest: 'sha256:' + 'a'.repeat(64),
@@ -78,7 +79,7 @@ describe('P02.platform.mutation-guard', () => {
         reason_ref: 'reason-1',
         event_id: 'event-1',
         event_anchor: {
-          occurred_at: 'x',
+          occurred_at: '2026-10-18T00:00:00.000Z',
           kind_ref: 'tombstone',
           provenance_ref: 'prov-1',
           provenance_digest: 'sha256:' + 'b'.repeat(64),
@@ -106,7 +107,7 @@ describe('P02.platform.mutation-guard', () => {
         reason_ref: 'reason-1',
         event_id: 'event-1',
         event_anchor: {
-          occurred_at: 'x',
+          occurred_at: '2026-10-18T00:00:00.000Z',
           kind_ref: 'tombstone',
           provenance_ref: 'prov-1',
           provenance_digest: 'sha256:' + 'b'.repeat(64),
