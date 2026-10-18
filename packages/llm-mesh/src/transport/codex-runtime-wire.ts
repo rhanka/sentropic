@@ -167,10 +167,12 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
   const type = typeof record?.type === 'string' ? record.type : '';
   if (type === 'response.created') {
     const response = asRecord(record?.response);
+    const observedServedModelId = typeof response?.model === 'string' && response.model.length > 0 ? response.model : undefined;
     return [{
       type: 'status', data: {
         status: 'started', providerId: 'openai',
         ...(typeof response?.id === 'string' ? { providerResponseId: response.id } : {}),
+        ...(observedServedModelId ? { metadata: { observedServedModelId } } : {}),
       },
     }];
   }
@@ -220,11 +222,13 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
   }
   if (type === 'response.completed') {
     const response = asRecord(record?.response); const usage = asRecord(response?.usage);
+    const observedServedModelId = typeof response?.model === 'string' && response.model.length > 0 ? response.model : undefined;
     const hasToolCall = Array.isArray(response?.output)
       && response.output.some((item) => asRecord(item)?.type === 'function_call');
     return [{ type: 'done', data: {
       finishReason: hasToolCall ? 'tool_calls' : 'stop', providerId: 'openai',
       ...(typeof response?.id === 'string' ? { providerResponseId: response.id } : {}),
+      ...(observedServedModelId ? { metadata: { observedServedModelId } } : {}),
       usage: {
         inputTokens: Number(usage?.input_tokens ?? 0),
         outputTokens: Number(usage?.output_tokens ?? 0),
@@ -236,12 +240,14 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
     // An incomplete terminal is served, never success: map the provider
     // reason onto the canonical finish vocabulary and keep usage + id.
     const response = asRecord(record?.response); const usage = asRecord(response?.usage);
+    const observedServedModelId = typeof response?.model === 'string' && response.model.length > 0 ? response.model : undefined;
     const reason = asRecord(response?.incomplete_details)?.reason;
     const finishReason = reason === 'max_output_tokens' ? 'length'
       : reason === 'content_filter' ? 'content_filter' : 'unknown';
     return [{ type: 'done', data: {
       finishReason, providerId: 'openai',
       ...(typeof response?.id === 'string' ? { providerResponseId: response.id } : {}),
+      ...(observedServedModelId ? { metadata: { observedServedModelId } } : {}),
       usage: {
         inputTokens: Number(usage?.input_tokens ?? 0),
         outputTokens: Number(usage?.output_tokens ?? 0),

@@ -8,6 +8,7 @@ import type {
   VerifiedRoutingSubject,
 } from './routing-contracts.js';
 import type { RoutePolicy } from './routing-policy.js';
+import type { RouteAffinityKey } from './ports/route-affinity-store.js';
 
 export interface StoredCandidate extends RankedRouteCandidate {
   readonly candidateRef: string;
@@ -17,7 +18,8 @@ export interface StoredPlan {
   readonly plan: RoutePlan;
   readonly subjectRef: string;
   readonly affinityRef?: string;
-  readonly affinityRevision?: number;
+  readonly affinityStoreKey?: RouteAffinityKey;
+  affinityRevision?: number;
   readonly policyProfileName?: string;
   readonly policyProfileRevision?: string;
   readonly hadAffinity: boolean;
@@ -29,6 +31,7 @@ export interface StoredPlan {
 
 export interface StoredAffinity extends AffinityDescription {
   readonly accountRef: string;
+  readonly accountEpoch?: number;
   readonly workspaceId?: string;
 }
 

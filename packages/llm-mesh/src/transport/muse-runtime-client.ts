@@ -279,6 +279,11 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     accept: string,
     stream = false,
   ): Promise<Response> {
+    if (request.reasoning && Object.keys(request.reasoning).length > 0) {
+      throw Object.assign(new Error('Muse Chat cannot preserve required reasoning controls'), {
+        status: 400, code: 'unsupported_projection', param: 'reasoning',
+      });
+    }
     const auth = getSecretAuthMaterial(context?.auth);
     if (!auth || !('accessToken' in auth) || !auth.accessToken) {
       throw Object.assign(new Error('Muse account token is missing'), { status: 401 });
@@ -351,9 +356,20 @@ export class MuseRuntimeClient implements MuseAdapterClient {
       let sawToolCalls = false;
       let rawFinish: string | undefined;
       let stashedUsage: TokenUsage | undefined;
+      let observedServedModelId: string | undefined;
       const sseState: { sawCleanEnd?: boolean } = {};
       const toolCallIds = new Map<number, string>();
       for await (const raw of parseSseJson(response.body!, sseState)) {
+        const rawModel = raw && typeof raw === 'object'
+          ? textOf((raw as Record<string, unknown>).model)
+          : null;
+        if (rawModel && rawModel !== observedServedModelId) {
+          observedServedModelId = rawModel;
+          yield {
+            type: 'status',
+            data: { status: 'started', providerId: 'muse', metadata: { observedServedModelId } },
+          };
+        }
         const text = extractText(raw);
         const usage = extractUsage(raw);
         const finish = rawFinishOf(raw);
@@ -407,6 +423,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
               finishReason: terminalFinish({ sawToolCalls, rawFinish, sawText }),
               ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
               usage,
+              ...(observedServedModelId ? { metadata: { observedServedModelId } } : {}),
             },
           };
           return;
@@ -418,6 +435,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
           finishReason: terminalFinish({ sawToolCalls, rawFinish, sawText, sawCleanEnd: sseState.sawCleanEnd }),
           ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
           ...(stashedUsage ? { usage: stashedUsage } : {}),
+          ...(observedServedModelId ? { metadata: { observedServedModelId } } : {}),
         },
       };
     })();
@@ -430,6 +448,9 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     const usage = extractUsage(payload);
     const rawId = payload && typeof payload === 'object'
       ? textOf((payload as Record<string, unknown>).id)
+      : null;
+    const observedServedModelId = payload && typeof payload === 'object'
+      ? textOf((payload as Record<string, unknown>).model)
       : null;
     const id = rawId ?? 'muse_response';
     const firstChoice = payload && typeof payload === 'object'
@@ -463,6 +484,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
         : text ? 'stop' : 'unknown',
       ...(usage ? { usage } : {}),
       ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
+      ...(observedServedModelId ? { providerMetadata: { observedServedModelId } } : {}),
     };
   }
 }
