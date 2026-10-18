@@ -94,9 +94,13 @@ export class CodexRuntimeClient implements OpenAIAdapterClient {
   async generate(request: GenerateRequest, context?: ProviderRuntimeContext): Promise<GenerateResponse> {
     const stream = await this.stream(request, context);
     let text = ''; let usage: TokenUsage | undefined; let responseId = 'codex_response';
+    let observedServedModelId: string | undefined;
     let finishReason: GenerateResponse['finishReason'] = 'unknown';
     const toolCalls = new Map<string, ToolCall>();
     for await (const event of stream) {
+      if ('metadata' in event.data && event.data.metadata && typeof event.data.metadata.observedServedModelId === 'string') {
+        observedServedModelId = event.data.metadata.observedServedModelId;
+      }
       if (event.type === 'content_delta') text += event.data.delta;
       else if (event.type === 'tool_call_start') {
         // A repeated start carries the done-item argument snapshot: its
@@ -133,6 +137,7 @@ export class CodexRuntimeClient implements OpenAIAdapterClient {
         ...(calls.length > 0 ? { toolCalls: calls } : {}),
       },
       text, toolCalls: calls, finishReason, ...(usage ? { usage } : {}),
+      ...(observedServedModelId ? { providerMetadata: { observedServedModelId } } : {}),
     };
   }
 }

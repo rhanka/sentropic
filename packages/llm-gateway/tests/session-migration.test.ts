@@ -103,4 +103,51 @@ describe('migrateOldSessions', () => {
     const caller = await service.resolveCaller({ sessionRef: live.sessionRef, key: live.key as string });
     expect(caller.ownerScopeRef).toBe('owner-a');
   });
+
+  it('serves real host inference with migrated keys and upgrades policyless legacy sessions while rejecting unapproved policy changes', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { FileGatewayStateStore } = await import('../src/node/gateway-state-store.js');
+    const { startGatewayHost } = await import('../src/node/gateway-host.js');
+    const { createGatewayControlClient } = await import('../src/node/control-client.js');
+    const { durableHostFixture, model, routingContract } = await import('./helpers/durable-host.js');
+    const stateDir = await mkdtemp(join(tmpdir(), 'gw-mig-host-'));
+    const fixture = durableHostFixture();
+    const preService = new GatewaySessionService(new FileGatewayStateStore({ stateDir, keyring: fixture.mesh.keyring }));
+    const [readyKey, legacyKey, expiry] = ['M'.repeat(43), 'L'.repeat(43), new Date(Date.now() + 86_400_000).toISOString()];
+    const migrated = await migrateOldSessions({
+      service: preService,
+      entries: [
+        oldEntry({ workspaceRef: 'w', clientSessionRef: 'c-ready', keyMaterial: readyKey, expiresAt: expiry, models: [model], routingContract }),
+        oldEntry({ workspaceRef: 'w', clientSessionRef: 'c-legacy', keyMaterial: legacyKey, expiresAt: expiry, models: [model] }),
+      ],
+    });
+    expect(migrated.imported).toHaveLength(2);
+    const host = await startGatewayHost({ stateDir, mesh: fixture.mesh, listen: { host: '127.0.0.1', port: 0 } });
+    try {
+      const send = (key: string) => fetch(`${host.endpoint}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      expect((await send(readyKey)).status).toBe(200);
+      const control = createGatewayControlClient({ controlSocket: host.controlSocket });
+      const reacquired = await control.acquireSession({ ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'c-ready', routingContract });
+      expect(reacquired).toMatchObject({ key: readyKey, expiresAt: expiry, reacquired: true });
+      expect((await send(legacyKey)).status).toBe(401);
+      await expect(
+        control.acquireSession({ ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'c-legacy', routingContract }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      await expect(
+        control.migrateSessionPolicy({ ownerScopeRef: 'owner-a', sessionRef: migrated.imported[1]!, routingContract: { ...routingContract, exactModels: ['unapproved-model'] } }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      const upgraded = await control.migrateSessionPolicy({ ownerScopeRef: 'owner-a', sessionRef: migrated.imported[1]!, routingContract });
+      expect(upgraded).toMatchObject({ expiresAt: expiry, policyRevision: routingContract.revision });
+      expect((await send(legacyKey)).status).toBe(200);
+    } finally {
+      await host.stop();
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
 });
