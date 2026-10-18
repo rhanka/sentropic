@@ -69,6 +69,7 @@
 - [x] This branch has no UI change: UAT is an owner read of the promoted spec and cross-references on the draft PR; no service start and no `ENV=dev` test run.
 
 ## Plan / Todo (lot-based)
+- [x] **Round 1 dossier treatment (2026-10-18), findings 6/7**: replace stale D-P1/D-P2/D-P3 references with revision-pinned section/line citations; carry the corrected account-protection benefit, recovery prerequisites and remaining non-MFA login exposure. Namespace and host-mapping contracts stay intact.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `plan/BRANCH_TEMPLATE.md`, the scratch spec v2 (sha256 `5717b057b5d4ea78c78ffb7d77c71e50c198012b1219662b599c624e87543b11`), and the Astra re-review (verdict GO).
   - [x] Confirm isolated worktree `/home/antoinefa/src/sentropic/tmp/worktrees/spec-ui-annotate-overlay` on `docs/spec-ui-annotate-overlay` from `origin/main` (`1472d961e098908e64ef60b83835af357888d031`) with `git -C <worktree> branch --show-current` and `harness check branch`.
