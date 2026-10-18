@@ -2,27 +2,32 @@
 // receipt.mjs — L5-MEMORY-V1 receipt & contract verifier. Lot 0 specifies it; Lot 1 wires it.
 // preflight: report outstanding obligations, never emit an accepted checkpoint.
 // checkpoint: strict post-run gate, exits nonzero on any failure, never downgrades one.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { computeTupleSha256, sha512Integrity, validateAgainstSchema, verifyOnDiskEvidence } from './schema-validator.mjs';
 
-export const PROOF_IDS = ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08', 'P09', 'P10'];
+const HERE = dirname(fileURLToPath(import.meta.url));
+export const CHECKPOINT_SCHEMA = JSON.parse(readFileSync(resolve(HERE, 'schemas/checkpoint-v1.schema.json'), 'utf8'));
+export const ARTIFACT_MANIFEST_SCHEMA = JSON.parse(readFileSync(resolve(HERE, 'schemas/artifact-manifest-v1.schema.json'), 'utf8'));
+export const PROOF_CATALOG = JSON.parse(readFileSync(resolve(HERE, 'proof-catalog-v1.json'), 'utf8'));
+export const PROOF_IDS = PROOF_CATALOG.proofs.map((p) => p.id);
 export const ACCEPTANCE_ROLES = ['l4', 'platform', 'broker', 'transport'];
 export const ARTIFACT_ROLES = ['l4', 'platform', 'broker', 'mesh', 'dependency'];
+export const SINGLETON_ARTIFACT_ROLES = ['l4', 'platform', 'broker', 'mesh'];
 export const FROZEN_SPEC_SHA256 = 'f90c927964b44fdf6ad712eee9b894762250239384643a3790931c142d3aeeca';
-export const CHECKPOINT_KEYS = [
-  'schemaVersion', 'checkpoint', 'phase', 'tupleSha256', 'source', 'contracts', 'preCandidate',
-  'artifacts', 'closure', 'runtime', 'assurance', 'proofs', 'importGraph', 'ci', 'ownerUat', 'acceptances',
-];
 export const FORBIDDEN_IMPORT_PARTS = [
   'cluster-mesh/src', '/mock/', 'mock/oidc', '/testing', 'experimental/', 'createInMemoryContext',
   '/durable', '/elicitation', '/persistence', '/stores', '/audit', 'MemoryRecordStore', 'FileRecordStore', 'InMemoryAuditSink',
 ];
+export { computeTupleSha256, sha512Integrity, validateAgainstSchema };
 
 export const isSha256Hex = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v);
 export const isCommitSha = (v) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v);
-export const isSha512Integrity = (v) => typeof v === 'string' && /^sha512-[A-Za-z0-9+/]+={0,2}$/.test(v);
-export const hasPathTraversal = (v) => typeof v !== 'string' || v.length === 0 || v.includes('\0') || v.startsWith('/') || /(^|\/)\.\.(\/|$)/.test(v);
-export const hasExternalSourceAlias = (v) => typeof v === 'string' && /^(file:|link:|portal:|workspace:|git\+|github:|https?:)/.test(v.trim());
+export const isSha512Integrity = (v) => typeof v === 'string' && /^sha512-[A-Za-z0-9+/]{86}==$/.test(v);
+export const hasExternalSourceAlias = (v) => typeof v === 'string' && (/^(file:|link:|portal:|workspace:|git\+|github:|https?:|npm:)/i.test(v.trim()) || v.includes('://'));
+export const hasPathTraversal = (v) => typeof v !== 'string' || v.length === 0 || v.length > 256 || v.includes('\0') || v.includes(':') || v.startsWith('/') || /(^|\/)\.\.(\/|$)/.test(v) || hasExternalSourceAlias(v);
 export const sha256OfBytes = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 export function findDuplicateKeys(records, keyFn) {
@@ -36,9 +41,15 @@ export function isForbiddenImport(specifier) {
   return FORBIDDEN_IMPORT_PARTS.some((part) => specifier.includes(part));
 }
 
-export function checkNodeFloor(version, execArgv = []) {
+export function checkSdkVersion(version) {
+  const m = typeof version === 'string' ? version.match(/^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/) : null;
+  return Boolean(m && Number(m[1]) === 1 && Number(m[2]) >= 31);
+}
+
+export function checkNodeFloor(version, execArgv = process.execArgv, nodeOptions = process.env.NODE_OPTIONS || '') {
   if (Array.isArray(execArgv) && execArgv.some((arg) => typeof arg === 'string' && arg.includes('sqlite'))) return false;
-  const m = typeof version === 'string' ? version.replace(/^v/, '').match(/^(\d+)\.(\d+)\.(\d+)/) : null;
+  if (typeof nodeOptions === 'string' && nodeOptions.includes('sqlite')) return false;
+  const m = typeof version === 'string' ? version.replace(/^v/, '').match(/^(\d+)\.(\d+)\.(\d+)$/) : null;
   if (!m) return false;
   const [maj, min] = [Number(m[1]), Number(m[2])];
   return maj === 22 ? min >= 13 : maj === 23 ? min >= 4 : maj > 23;
@@ -69,31 +80,43 @@ export function checkFixtureProvenance(doc) {
 }
 
 export function checkArtifactManifest(doc, options = {}) {
-  if (!doc || typeof doc !== 'object') return ['manifest: not an object'];
-  const failures = [];
-  for (const k of Object.keys(doc)) if (!['manifestVersion', 'artifacts', 'contractInventory'].includes(k)) failures.push(`manifest: extra key ${k}`);
-  if (doc.manifestVersion !== 1) failures.push('manifest.manifestVersion: must be 1');
-  if (!Array.isArray(doc.artifacts) || doc.artifacts.length === 0) failures.push('manifest.artifacts: must be nonempty');
-  if (!Array.isArray(doc.contractInventory) || doc.contractInventory.length === 0) failures.push('manifest.contractInventory: must be nonempty');
+  const failures = validateAgainstSchema(doc, ARTIFACT_MANIFEST_SCHEMA);
+  if (!doc || typeof doc !== 'object') return failures;
   for (const dup of findDuplicateKeys(doc.artifacts, (a) => a && a.name)) failures.push(`manifest.artifacts: duplicate name ${dup}`);
   for (const dup of findDuplicateKeys(doc.artifacts, (a) => a && a.archive)) failures.push(`manifest.artifacts: duplicate archive ${dup}`);
-  for (const a of doc.artifacts || []) if (!a || !a.name || !a.version || hasExternalSourceAlias(a.version) || hasPathTraversal(a.archive) || !isSha256Hex(a.sha256) || !isSha512Integrity(a.integrity)) failures.push(`manifest.artifacts/${a && a.name}: invalid artifact record`);
+  for (const a of doc.artifacts || []) {
+    if (!a || hasExternalSourceAlias(a.name) || hasExternalSourceAlias(a.version) || hasPathTraversal(a.archive) || !isSha256Hex(a.sha256) || !isSha512Integrity(a.integrity) || !isCommitSha(a.sourceHead)) {
+      failures.push(`manifest.artifacts/${a && a.name}: invalid artifact record`);
+    }
+  }
+  const roles = (doc.artifacts || []).map((a) => a && a.role);
+  if (doc.stage === 'pre-candidate' && (!roles.includes('platform') || !roles.includes('broker') || roles.includes('l4') || roles.includes('mesh'))) failures.push('manifest.stage: pre-candidate must carry platform and broker only');
+  if (doc.stage === 'lot2') {
+    const e2 = (doc.artifacts || []).filter((a) => a && a.role === 'e2');
+    if (e2.length !== 1 || e2[0].sha256 !== doc.e2ArtifactSha256) failures.push('manifest.stage: lot2 must bind exact e2 artifact');
+  }
+  if (doc.stage === 'candidate') {
+    for (const r of SINGLETON_ARTIFACT_ROLES) if (roles.filter((x) => x === r).length !== 1) failures.push(`manifest.stage: candidate requires exactly one ${r} artifact`);
+    const l4 = (doc.artifacts || []).find((a) => a && a.role === 'l4');
+    if (!l4 || l4.sha256 !== doc.e4ArtifactSha256) failures.push('manifest.stage: candidate e4ArtifactSha256 must match l4 artifact sha256');
+  }
   for (const dup of findDuplicateKeys(doc.contractInventory, (c) => c && c.path)) failures.push(`manifest.contractInventory: duplicate path ${dup}`);
-  for (const c of doc.contractInventory || []) if (!c || hasPathTraversal(c.path) || !isSha256Hex(c.sha256)) failures.push(`manifest.contractInventory/${c && c.path}: invalid contract record`);
+  for (const c of doc.contractInventory || []) if (!c || hasPathTraversal(c.path) || hasExternalSourceAlias(c.version) || !isSha256Hex(c.sha256)) failures.push(`manifest.contractInventory/${c && c.path}: invalid contract record`);
   if (options.retainedContractInventory && JSON.stringify(doc.contractInventory || []) !== JSON.stringify(options.retainedContractInventory)) failures.push('manifest.contractInventory: differs from retained pre-candidate');
   return failures;
 }
 
-export function checkProofRecords(proofs, expectedManifestSha256, expectedSourceHead) {
-  if (!Array.isArray(proofs) || proofs.length !== PROOF_IDS.length) return [`proofs: expected exactly ${PROOF_IDS.length} records`];
-  const failures = [], ids = proofs.map((p) => p && p.id);
-  for (const id of ids) if (!PROOF_IDS.includes(id)) failures.push(`proofs: unknown id ${JSON.stringify(id)}`);
-  for (const id of PROOF_IDS) if (!ids.includes(id)) failures.push(`proofs: missing id ${id}`);
+export function checkProofRecords(proofs, expectedManifestSha256, expectedSourceHead, catalog = PROOF_CATALOG) {
+  const catProofs = catalog.proofs || [];
+  if (!Array.isArray(proofs) || proofs.length !== catProofs.length) return [`proofs: expected exactly ${catProofs.length} records`];
+  const failures = [], ids = proofs.map((p) => p && p.id), expectedIds = catProofs.map((p) => p.id);
+  for (const id of ids) if (!expectedIds.includes(id)) failures.push(`proofs: unknown id ${JSON.stringify(id)}`);
+  for (const id of expectedIds) if (!ids.includes(id)) failures.push(`proofs: missing id ${id}`);
   for (const dup of findDuplicateKeys(proofs, (p) => p && p.id)) failures.push(`proofs: duplicate id ${dup}`);
   for (const p of proofs) {
-    const label = (p && p.id) || '?', r = p && p.result;
-    if (!p || !Array.isArray(p.files) || p.files.length === 0 || typeof p.command !== 'string' || p.command.length === 0) failures.push(`proofs/${label}: files and command must be nonempty`);
-    if (!r || r.format !== 'vitest-json' || !(Number.isInteger(r.passed) && r.passed > 0) || r.failed !== 0 || r.skipped !== 0 || r.todo !== 0) failures.push(`proofs/${label}: invalid vitest-json counts`);
+    const label = (p && p.id) || '?', r = p && p.result, cat = catProofs.find((x) => x.id === label);
+    if (!p || !cat || JSON.stringify(p.files) !== JSON.stringify(cat.files) || p.command !== cat.command || checkMakeCommand(p.command).length > 0) failures.push(`proofs/${label}: files or command mismatch against catalog`);
+    if (!r || r.format !== 'vitest-json' || !(Number.isInteger(r.passed) && r.passed >= (cat ? cat.requiredCases.length : 1)) || r.failed !== 0 || r.skipped !== 0 || r.todo !== 0) failures.push(`proofs/${label}: invalid vitest-json counts`);
     if (!r || !isSha256Hex(r.sha256) || !isSha256Hex(r.executedCasesSha256) || !isSha256Hex(p.artifactManifestSha256) || !isCommitSha(p.sourceHead)) failures.push(`proofs/${label}: bad digest or binding`);
     if (isSha256Hex(expectedManifestSha256) && p && p.artifactManifestSha256 !== expectedManifestSha256) failures.push(`proofs/${label}: cross-digest proof reuse`);
     if (isCommitSha(expectedSourceHead) && p && p.sourceHead !== expectedSourceHead) failures.push(`proofs/${label}: stale sourceHead`);
