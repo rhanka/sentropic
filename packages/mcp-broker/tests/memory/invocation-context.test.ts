@@ -22,10 +22,10 @@ describe('P01.broker.invocation-context', () => {
       idempotencyKey: '0123456789abcdef',
     });
     expect(bound.auditRef).toBe('audit-host-1');
-    expect(bound.projection.principalId).toBe('user-1');
-    expect(bound.projection.tenantId).toBe('tenant-1');
-    expect(bound.projection.idempotencyKey).toBe('0123456789abcdef');
-    expect(bound.projection.elicitationRef).toBeNull();
+    expect(bound.projection.neutral_principal.principal_id).toBe('user-1');
+    expect(bound.projection.neutral_principal.tenant_id).toBe('tenant-1');
+    expect(bound.projection.envelope_bindings.idempotency_key).toBe('0123456789abcdef');
+    expect(bound.projection.envelope_bindings.elicitation_ref).toBeUndefined();
   });
 
   it('P01.broker.invocation-context: selects the exact planned tool for two principals and two tenants', () => {
@@ -56,13 +56,15 @@ describe('P01.broker.invocation-context', () => {
           },
           tenantRef: 'tenant-2',
           auditId: 'audit-host-2',
+          memory: { ...makeCtx().memory!, binding: { ...makeCtx().memory!.binding,
+            sub: 'user-2', principal_id: 'user-2', tid: 'tenant-2', tenant_id: 'tenant-2', audit_id: 'audit-host-2' } },
         }),
         expectedPrincipalSub: 'user-2',
         expectedTenantRef: 'tenant-2',
       }),
     );
-    expect(second.projection.principalId).toBe('user-2');
-    expect(second.projection.tenantId).toBe('tenant-2');
+    expect(second.projection.neutral_principal.principal_id).toBe('user-2');
+    expect(second.projection.neutral_principal.tenant_id).toBe('tenant-2');
     expect(second.auditRef).toBe('audit-host-2');
   });
 
@@ -92,6 +94,6 @@ describe('P01.broker.invocation-context', () => {
         }),
       }),
     );
-    expect(claimed.projection.agentRef).toBe('agent-9');
+    expect(claimed.projection.agent_id).toBe('agent-1');
   });
 });
