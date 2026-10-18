@@ -454,6 +454,8 @@ jobs:
         run: make check-eradicated-packages ENV=test-ci-manifests
       - name: Test publishable manifest guard and consumer qualification
         run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
+      - name: Check CI optimization wiring and regressions
+        run: make check-ci-optimization test-ci-optimization ENV=test-ci-manifests
       - name: Check publishable manifests
         run: make check-publishable-manifests ENV=test-ci-manifests
       - name: Upload publishable manifest reports
