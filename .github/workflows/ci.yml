@@ -2449,6 +2449,82 @@ jobs:
       - name: Publish mcp-connector-airtable with provenance
         run: make publish-mcp-connector-airtable ENV=test-ci-mcp-connector-airtable
 
+  validate-mcp-connector-dropbox:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_dropbox == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-dropbox
+        run: make test-public-library PACKAGE=mcp-connector-dropbox ENV=test-ci-mcp-connector-dropbox
+      - name: Build and guard mcp-connector-dropbox archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-dropbox PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-dropbox
+      - name: Qualify mcp-connector-dropbox packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-dropbox ENV=test-ci-mcp-connector-dropbox
+
+  publish-mcp-connector-dropbox:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-dropbox, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_dropbox_publish == 'true' &&
+      needs.validate-mcp-connector-dropbox.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-dropbox with provenance
+        run: make publish-mcp-connector-dropbox ENV=test-ci-mcp-connector-dropbox
+
+  validate-mcp-connector-github:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_connector_github == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-connector-github
+        run: make test-public-library PACKAGE=mcp-connector-github ENV=test-ci-mcp-connector-github
+      - name: Build and guard mcp-connector-github archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-connector-github PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-github
+      - name: Qualify mcp-connector-github packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-connector-github ENV=test-ci-mcp-connector-github
+
+  publish-mcp-connector-github:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-connector-github, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_connector_github_publish == 'true' &&
+      needs.validate-mcp-connector-github.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-connector-github with provenance
+        run: make publish-mcp-connector-github ENV=test-ci-mcp-connector-github
+
   bootstrap-publish:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_publish_target != 'none' && github.ref == 'refs/heads/main'
@@ -2632,6 +2708,8 @@ jobs:
       - validate-mcp-broker
       - validate-connector-host
       - validate-mcp-connector-airtable
+      - validate-mcp-connector-dropbox
+      - validate-mcp-connector-github
       - validate-publishable-manifests
       - build-e2e
       - typecheck-lint-ui
