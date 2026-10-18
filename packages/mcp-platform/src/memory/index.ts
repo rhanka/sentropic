@@ -8,6 +8,10 @@
  * entry never loads this module implicitly.
  */
 
+export type { AppConnectorProviderAdapter, StpConnectorContext } from '../runtime.js';
+export type { ExpectedConfirmationContinuationBindingV1, MemoryLogicalSessionReattachmentProofV1 } from './frozen-confirmation.js';
+export type { ChannelBindingKindV1, DelegationBindingV1, TrustedInvocationContextV1 } from './frozen-context.js';
+
 export {
   MEMORY_WIRE_PROFILE_ID,
   MEMORY_TOOLS_PROFILE_ID,

@@ -7,7 +7,7 @@
  * purpose, idempotency key or elicitation binding is missing or untrusted.
  */
 
-import type { StpConnectorContext } from '@sentropic/mcp-platform';
+import type { StpConnectorContext } from '@sentropic/mcp-platform/memory';
 import {
   isValidIdempotencyKey,
   isValidOpaqueRef,
