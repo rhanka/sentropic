@@ -9,7 +9,7 @@
  */
 
 export type { AppConnectorProviderAdapter, StpConnectorContext } from '../runtime.js';
-export type { ExpectedConfirmationContinuationBindingV1, MemoryLogicalSessionReattachmentProofV1 } from './frozen-confirmation.js';
+export type { ConfirmationContinuationDecisionV1, ExpectedConfirmationContinuationBindingV1, MemoryLogicalSessionReattachmentProofV1 } from './frozen-confirmation.js';
 export type { ChannelBindingKindV1, DelegationBindingV1, TrustedInvocationContextV1 } from './frozen-context.js';
 
 export {
@@ -87,6 +87,7 @@ export type { SameKeyOutcome } from './mutation-guard.js';
 
 export {
   checkOperationConfirmation,
+  verifyMemoryConfirmationContinuationV1,
   isWithinExecutionBudget,
 } from './confirmation.js';
 export type {

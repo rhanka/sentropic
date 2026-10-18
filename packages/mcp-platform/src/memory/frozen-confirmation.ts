@@ -89,3 +89,9 @@ export interface ExpectedConfirmationContinuationBindingV1 {
   readonly host_deployment_qualified: unknown;
   readonly reservation_state: 'uncommitted' | 'committed' | 'unknown';
 }
+
+export type ConfirmationContinuationDecisionV1 =
+  | { readonly ok: true; readonly decision: 'execute_confirmed' | 'disclose_committed_without_repeat_effect';
+      readonly continuation: MemoryConfirmationContinuationV1 }
+  | { readonly ok: false; readonly error_code: 'gate_failed' | 'UNAUTHORIZED' | 'NOT_FOUND' | 'MUTATION_OUTCOME_UNKNOWN';
+      readonly reason: string };

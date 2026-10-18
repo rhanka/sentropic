@@ -68,6 +68,7 @@
       "TRUSTED_CONTEXT_PROTOCOL_ERROR_CODE",
       "TRUSTED_CONTEXT_UNAVAILABLE_MESSAGE",
       "checkOperationConfirmation",
+      "verifyMemoryConfirmationContinuationV1",
       "checkSameKeyBinding",
       "computeMutationDigest",
       "findMemoryTool",
@@ -96,6 +97,7 @@
     ],
     "types": [
       "AppConnectorProviderAdapter",
+      "ConfirmationContinuationDecisionV1",
       "StpConnectorContext",
       "ExpectedConfirmationContinuationBindingV1",
       "MemoryLogicalSessionReattachmentProofV1",
