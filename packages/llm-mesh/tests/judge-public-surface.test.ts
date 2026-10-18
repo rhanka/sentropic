@@ -1,8 +1,43 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+const tscRequire = createRequire(import.meta.url);
+const tsc = tscRequire('typescript');
+
+function newestSourceMtime(dir: string): number {
+  let newest = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) newest = Math.max(newest, newestSourceMtime(path));
+    else if (entry.name.endsWith('.ts')) newest = Math.max(newest, statSync(path).mtimeMs);
+  }
+  return newest;
+}
+
+function ensureDistFresh(): void {
+  const pkgDir = resolve('.');
+  const marker = join(pkgDir, 'dist', 'judge', 'index.js');
+  if (existsSync(marker) && statSync(marker).mtimeMs >= newestSourceMtime(join(pkgDir, 'src'))) return;
+  const configPath = join(pkgDir, 'tsconfig.json');
+  const configFile = tsc.readConfigFile(configPath, tsc.sys.readFile);
+  if (configFile.error) {
+    throw new Error(`Cannot read ${configPath}: ${tsc.flattenDiagnosticMessageText(configFile.error.messageText, '\n')}`);
+  }
+  const parsed = tsc.parseJsonConfigFileContent(configFile.config, tsc.sys, pkgDir);
+  const program = tsc.createProgram(parsed.fileNames, parsed.options);
+  const emitResult = program.emit();
+  const diagnostics = tsc.getPreEmitDiagnostics(program).concat(emitResult.diagnostics);
+  if (emitResult.emitSkipped || diagnostics.length > 0) {
+    throw new Error(diagnostics.map((d) => tsc.flattenDiagnosticMessageText(d.messageText, '\n')).join('\n') || 'emit skipped');
+  }
+}
+
+beforeAll(() => {
+  ensureDistFresh();
+});
 
 describe('published judge boundaries', () => {
   it('exports the three exact subpaths without changing package versions', () => {
