@@ -3,7 +3,7 @@ type OpaqueRef = string;
 type Digest = `sha256:${string}`;
 type Instant = string;
 type Cursor = string;
-type AuthorizationContextV1 = { readonly credential: string; readonly context_ref?: OpaqueRef };
+type AuthorizationContextV1 = { credential: string; context_ref?: OpaqueRef };
 export type ChannelBindingKindV1 = 'in_process_verified' | 'stdio_host_managed_verified' |
   'http_mcp_auth_dpop_verified' | 'http_mcp_auth_bearer_verified';
 export interface DelegationBindingV1 {
