@@ -55,4 +55,65 @@ describe('durable published host composition', () => {
       expect(await readFile(join(stateDir, 'gateway-state.enc'), 'utf8')).toBe('corrupt');
     } finally { await host.stop().catch(() => undefined); await rm(stateDir, { recursive: true, force: true }); }
   });
+  it('fences stale host-lock takeover so concurrent restarts elect one writer and preserve durable state', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'gw-takeover-'));
+    const base = { stateDir, listen: { host: '127.0.0.1', port: 0 } };
+    const initial = await startGatewayHost({ ...base, mesh: durableHostFixture().mesh });
+    let activeKey = ''; let revokedKey = ''; let receiptId = '';
+    try {
+      const control = createGatewayControlClient({ controlSocket: initial.controlSocket });
+      const active = await control.acquireSession(session);
+      const toRevoke = await control.acquireSession({ ...session, clientSessionRef: 'c-revoked' });
+      activeKey = active.key!; revokedKey = toRevoke.key!;
+      const res = await send(initial.endpoint, activeKey);
+      expect(res.status).toBe(200);
+      receiptId = res.headers.get('x-sentropic-receipt')!;
+      await control.revokeSession({ ownerScopeRef: 'owner-a', sessionRef: toRevoke.sessionRef });
+    } finally { await initial.stop(); }
+    await writeFile(join(stateDir, '.host-lock'), JSON.stringify({ pid: 999_999_999, token: 'crashed-host', startedAt: 1 }), { mode: 0o600 });
+    const contenders = await Promise.allSettled([
+      startGatewayHost({ ...base, mesh: durableHostFixture().mesh }),
+      startGatewayHost({ ...base, mesh: durableHostFixture().mesh }),
+      startGatewayHost({ ...base, mesh: durableHostFixture().mesh }),
+    ]);
+    const winners = contenders.filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof startGatewayHost>>> => r.status === 'fulfilled');
+    const losers = contenders.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    try {
+      expect(winners).toHaveLength(1);
+      expect(losers).toHaveLength(2);
+      for (const loser of losers) expect(loser.reason).toMatchObject({ code: 'CONFLICT' });
+      const winner = winners[0]!.value;
+      const control = createGatewayControlClient({ controlSocket: winner.controlSocket });
+      expect((await control.readReceipt({ ownerScopeRef: 'owner-a', receiptId })).settlement).toBe('stop');
+      expect((await send(winner.endpoint, activeKey)).status).toBe(200);
+      expect((await send(winner.endpoint, revokedKey)).status).toBe(401);
+    } finally {
+      await Promise.all(winners.map((w) => w.value.stop().catch(() => undefined)));
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+  it('completes 8 concurrent multi-session HTTP inferences and control operations without CAS exhaustion', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'gw-concurrent-'));
+    const fixture = durableHostFixture();
+    const host = await startGatewayHost({ stateDir, mesh: fixture.mesh, listen: { host: '127.0.0.1', port: 0 } });
+    try {
+      const control = createGatewayControlClient({ controlSocket: host.controlSocket });
+      const sessions = await Promise.all(
+        Array.from({ length: 8 }, (_, idx) => control.acquireSession({ ...session, clientSessionRef: `c-${idx}` })),
+      );
+      const extraSessionPromise = control.acquireSession({ ...session, clientSessionRef: 'c-control' });
+      const responses = await Promise.all(sessions.map((s) => send(host.endpoint, s.key!)));
+      const extraSession = await extraSessionPromise;
+      expect(extraSession.key).toBeTruthy();
+      for (const res of responses) {
+        const body = await res.text();
+        expect(res.status, body).toBe(200);
+      }
+      expect(fixture.calls).toHaveLength(8);
+      const receipts = await Promise.all(
+        responses.map((res) => control.readReceipt({ ownerScopeRef: 'owner-a', receiptId: res.headers.get('x-sentropic-receipt')! })),
+      );
+      expect(receipts.map((r) => r.settlement)).toEqual(Array(8).fill('stop'));
+    } finally { await host.stop(); await rm(stateDir, { recursive: true, force: true }); }
+  });
 });

@@ -90,3 +90,27 @@ export class GatewayStateError<Code extends string = GatewayStateErrorCode> exte
     this.code = code;
   }
 }
+
+const storeQueues = new WeakMap<GatewayStateStore, Promise<unknown>>();
+
+export const runGatewayStateTransaction = async <T>(
+  store: GatewayStateStore,
+  fn: () => Promise<T>,
+  maxAttempts = 64,
+): Promise<T> => {
+  const prior = storeQueues.get(store) ?? Promise.resolve();
+  const run = prior.then(async () => {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (!(error instanceof GatewayStateError) || error.name !== 'GatewayStateError' || error.code !== 'CONFLICT') {
+          throw error;
+        }
+      }
+    }
+    throw new GatewayStateError('concurrent write', 'CONFLICT');
+  });
+  storeQueues.set(store, run.catch(() => undefined));
+  return run;
+};

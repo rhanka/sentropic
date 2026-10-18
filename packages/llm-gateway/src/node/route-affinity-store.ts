@@ -1,5 +1,5 @@
 import { routeAffinityRef, RoutePlanError, type RouteAffinityKey, type RouteAffinityStore } from '@sentropic/llm-mesh';
-import { GatewayStateError, type GatewayStateStore, type StoredState } from '../ports/gateway-state.js';
+import { GatewayStateError, runGatewayStateTransaction, type GatewayStateStore, type StoredState } from '../ports/gateway-state.js';
 const sessionFor = (state: StoredState, key: RouteAffinityKey) => Object.values(state.sessions).find((session) =>
   session.ownerScopeRef === key.ownerScopeRef && session.workspaceRef === key.workspaceRef
   && session.clientSessionRef === key.clientSessionRef && session.policyRevision === key.policyRevision);
@@ -17,21 +17,22 @@ export const createGatewayRouteAffinityStore = (store: GatewayStateStore): Route
   },
   async compareAndSet(key, expectedRevision, next) {
     if (routeAffinityRef(key) !== routeAffinityRef(next) || next.revision !== expectedRevision + 1) throw new RoutePlanError('Affinity revision changed', 'conflict');
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const state = await store.load();
-      const ref = routeAffinityRef(key);
-      if ((state.affinities?.[ref]?.revision ?? 0) !== expectedRevision) throw new RoutePlanError('Affinity revision changed', 'conflict');
-      const session = sessionFor(state, key);
-      if (!session || session.revokedAt || Date.parse(session.expiresAt) <= Date.now()) throw new RoutePlanError('Affinity session is unavailable', 'no-route');
-      try {
+    try {
+      await runGatewayStateTransaction(store, async () => {
+        const state = await store.load();
+        const ref = routeAffinityRef(key);
+        if ((state.affinities?.[ref]?.revision ?? 0) !== expectedRevision) throw new RoutePlanError('Affinity revision changed', 'conflict');
+        const session = sessionFor(state, key);
+        if (!session || session.revokedAt || Date.parse(session.expiresAt) <= Date.now()) throw new RoutePlanError('Affinity session is unavailable', 'no-route');
         await store.compareAndSet(state.revision, { ...state, revision: state.revision + 1,
           affinities: { ...state.affinities, [ref]: structuredClone(next) },
           sessions: { ...state.sessions, [session.sessionRef]: { ...session, affinityRequired: true } } });
-        return;
-      } catch (error) {
-        if (!(error instanceof GatewayStateError) || error.code !== 'CONFLICT') throw error;
+      });
+    } catch (error) {
+      if (error instanceof GatewayStateError && error.code === 'CONFLICT') {
+        throw new RoutePlanError('Affinity transaction conflicted', 'conflict');
       }
+      throw error;
     }
-    throw new RoutePlanError('Affinity transaction conflicted', 'conflict');
   },
 });
