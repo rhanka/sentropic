@@ -87,8 +87,8 @@
   - [x] Add `make npm-bootstrap-web PKGS="..." ENV=test-publish-mcp-packages` over already verified archives.
   - [x] Check hashes, manifests, dependency order and missing archives before web login; never mount host npm credentials.
   - [x] Use throwaway node:24 container/session; provenance only in supported CI context; cleanup on failure/interruption.
-  - [ ] Document owner approval, Trusted Publisher setup and later CI releases in `scripts/publish/README.md`.
-  - [ ] Script tests: new `scripts/publish/npm-bootstrap-web.test.mjs`; existing manifest guard tests unchanged unless wiring requires updates.
+  - [x] Document owner approval, Trusted Publisher setup and later CI releases in `scripts/publish/README.md`.
+  - [x] Script tests: new `scripts/publish/npm-bootstrap-web.test.mjs`; existing manifest guard tests unchanged unless wiring requires updates.
 - [ ] **Lot 3 — CI publication train**
   - [x] Add publication/validation filters, batch 1 (9 packages).
   - [x] Add publication/validation filters, batch 2 (9 packages).
