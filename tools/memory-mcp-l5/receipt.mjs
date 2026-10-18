@@ -125,44 +125,52 @@ export function checkProofRecords(proofs, expectedManifestSha256, expectedSource
 }
 
 export function checkCheckpoint(doc, options = {}) {
-  if (!doc || typeof doc !== 'object') return ['checkpoint: not an object'];
-  const failures = [], src = doc.source || {}, contracts = doc.contracts || {}, pre = doc.preCandidate || {}, closure = doc.closure || {}, rt = doc.runtime || {};
-  for (const k of Object.keys(doc)) if (!CHECKPOINT_KEYS.includes(k)) failures.push(`checkpoint: extra key ${k}`);
-  if (doc.schemaVersion !== 1 || doc.checkpoint !== 'L5-MEMORY-V1') failures.push('checkpoint: must be L5-MEMORY-V1 schemaVersion 1');
-  if (doc.phase !== 'candidate' && doc.phase !== 'published') failures.push('phase: must be candidate or published');
-  if (!isSha256Hex(doc.tupleSha256)) failures.push('tupleSha256: must be full lowercase SHA-256');
-  for (const k of ['head', 'base', 'merge', 'checkout']) if (!isCommitSha(src[k])) failures.push(`source.${k}: must be a 40-hex commit`);
-  if (!isSha256Hex(src.sourceTreeSha256) || !isCommitSha(contracts.l0Commit)) failures.push('source/contracts: invalid tree or l0Commit');
-  for (const k of ['specSha256', 'registrySha256', 'gatewaySha256']) if (!isSha256Hex(contracts[k])) failures.push(`contracts.${k}: bad digest`);
-  if (!isSha256Hex(pre.manifestSha256) || !options.manifestBytes || sha256OfBytes(options.manifestBytes) !== pre.manifestSha256) failures.push('preCandidate.manifestSha256: mismatch or absent manifestBytes');
+  const failures = validateAgainstSchema(doc, CHECKPOINT_SCHEMA);
+  if (!doc || typeof doc !== 'object') return failures;
+  const src = doc.source || {}, contracts = doc.contracts || {}, pre = doc.preCandidate || {}, closure = doc.closure || {}, rt = doc.runtime || {};
+  if (doc.tupleSha256 !== computeTupleSha256(doc)) failures.push('tupleSha256: does not match canonical tuple digest');
+  if (contracts.specSha256 !== FROZEN_SPEC_SHA256) failures.push('contracts.specSha256: must match frozen v3.1 digest');
+  const preBytes = options.preCandidateManifestBytes || options.manifestBytes;
+  const candBytes = options.candidateManifestBytes || options.manifestBytes;
+  if (!isSha256Hex(pre.manifestSha256) || !preBytes || sha256OfBytes(preBytes) !== pre.manifestSha256) failures.push('preCandidate.manifestSha256: mismatch or absent manifestBytes');
+  if (!isSha256Hex(closure.artifactManifestSha256) || !candBytes || sha256OfBytes(candBytes) !== closure.artifactManifestSha256) failures.push('closure.artifactManifestSha256: mismatch or absent candidate manifestBytes');
   if (options.l4BuildReceipt && options.l4BuildReceipt.builtAgainstPreCandidateSha256 !== pre.manifestSha256) failures.push('preCandidate.l4BuildReceipt: builtAgainstPreCandidateSha256 mismatch');
   if (options.contractComparison && options.contractComparison.identical !== true) failures.push('preCandidate.contractComparison: contract bytes or inventory changed');
-  if (!Array.isArray(doc.artifacts) || doc.artifacts.length === 0) failures.push('artifacts: must be nonempty');
-  for (const dup of findDuplicateKeys(doc.artifacts, (a) => `${a && a.role}:${a && a.name}`)) failures.push(`artifacts: duplicate role/name ${dup}`);
-  for (const k of ['artifactManifestSha256', 'declaredLockSha256', 'installedLockSha256', 'installedClosureSha256', 'referenceSourceSha256']) if (!isSha256Hex(closure[k])) failures.push(`closure.${k}: bad digest`);
-  if (closure.sdkRange !== '^1.31.0') failures.push('closure.sdkRange: must be ^1.31.0');
-  if (!checkNodeFloor(rt.nodeVersion, options.execArgv)) failures.push('runtime.nodeVersion: below floor or flag-dependent SQLite');
+  for (const r of SINGLETON_ARTIFACT_ROLES) if ((doc.artifacts || []).filter((a) => a && a.role === r).length !== 1) failures.push(`artifacts: requires exactly one ${r} role`);
+  for (const dup of findDuplicateKeys(doc.artifacts, (a) => a && a.name)) failures.push(`artifacts: duplicate name ${dup}`);
+  for (const dup of findDuplicateKeys(doc.artifacts, (a) => a && a.archiveRef)) failures.push(`artifacts: duplicate archiveRef ${dup}`);
+  if (closure.sdkRange !== '^1.31.0' || !checkSdkVersion(closure.sdkVersion)) failures.push('closure.sdkVersion: must satisfy ^1.31.0');
+  if (closure.referenceExport !== '@sentropic/mcp-broker/memory-reference') failures.push('closure.referenceExport: invalid');
+  if (!checkNodeFloor(rt.nodeVersion, options.execArgv, options.nodeOptions)) failures.push('runtime.nodeVersion: below floor or flag-dependent SQLite');
+  if (!/^(?:node:24(?:\.[0-9]+)*-bookworm-slim@)?sha256:[0-9a-f]{64}$/.test(rt.imageDigest || '') || !/^3\.\d+\.\d+$/.test(rt.sqliteVersion || '')) failures.push('runtime: invalid imageDigest or sqliteVersion');
   if (rt.driver !== 'node:sqlite' || rt.journalMode !== 'WAL' || rt.synchronous !== 'FULL' || rt.pythonCount !== 0 || rt.addonBuildCount !== 0) failures.push('runtime: invalid sqlite/build invariants');
   const assurance = doc.assurance || {}, graph = doc.importGraph || {}, ci = doc.ci || {}, uat = doc.ownerUat || {};
-  for (const k of ['productionPolicySha256', 'qualificationPolicySha256', 'verifierArtifactSha256', 'trustProfileSha256']) if (!isSha256Hex(assurance[k])) failures.push(`assurance.${k}: bad digest`);
   if (assurance.qualificationOnly !== true) failures.push('assurance.qualificationOnly: must be true');
   failures.push(...checkProofRecords(doc.proofs, closure.artifactManifestSha256, src.head));
-  if (graph.forbiddenHits !== 0 || graph.unresolvedEdges !== 0) failures.push('importGraph: forbiddenHits and unresolvedEdges must both be zero');
-  if (ci.workflow !== '.github/workflows/ci.yml' || !Array.isArray(ci.jobs) || ci.jobs.length === 0) failures.push('ci: invalid workflow or empty jobs');
-  for (const j of ci.jobs || []) if (j.conclusion !== 'success' || !isSha256Hex(j.resultSha256)) failures.push(`ci job ${j && j.id}: must succeed with a result digest`);
+  if (graph.forbiddenHits !== 0 || graph.unresolvedEdges !== 0 || JSON.stringify(graph.roots) !== JSON.stringify(PROOF_CATALOG.importGraphRoots)) failures.push('importGraph: forbiddenHits/unresolvedEdges/roots mismatch');
+  const expectedArtifactName = `memory-mcp-l5-${src.head}-${ci.runId}-${ci.attempt}`;
+  if (ci.workflow !== '.github/workflows/ci.yml' || ci.head !== src.head || ci.base !== src.base || ci.merge !== src.merge || ci.checkout !== src.checkout || ci.imageDigest !== rt.imageDigest || ci.artifactName !== expectedArtifactName) failures.push('ci: tuple metadata mismatch');
+  const jobIds = (ci.jobs || []).map((j) => j && j.id);
+  if (!jobIds.includes('memory-l5-qualification') || findDuplicateKeys(ci.jobs, (j) => j && j.id).length > 0) failures.push('ci.jobs: missing or duplicate memory-l5-qualification');
+  for (const j of ci.jobs || []) if (!j || j.conclusion !== 'success' || !isSha256Hex(j.resultSha256)) failures.push(`ci job ${j && j.id}: must succeed with a result digest`);
   if (uat.status === 'passed' ? !isSha256Hex(uat.policySha256) : uat.status === 'owner-deferred' ? !['L6', 'L8'].includes(uat.owningLot) : true) failures.push('ownerUat: invalid decision record');
   const roles = (doc.acceptances || []).map((a) => a && a.role);
   for (const role of ACCEPTANCE_ROLES) if (!roles.includes(role)) failures.push(`acceptances: missing ${role} disposition`);
-  for (const a of doc.acceptances || []) if (a.verdict !== 'accepted' || !isSha256Hex(a.tupleSha256)) failures.push(`acceptances/${a && a.role}: invalid acceptance`);
+  for (const dup of findDuplicateKeys(doc.acceptances, (a) => a && a.role)) failures.push(`acceptances: duplicate ${dup} disposition`);
+  for (const a of doc.acceptances || []) if (!a || a.verdict !== 'accepted' || a.tupleSha256 !== doc.tupleSha256) failures.push(`acceptances/${a && a.role}: invalid acceptance or tuple mismatch`);
+  failures.push(...verifyOnDiskEvidence(doc, PROOF_CATALOG, options));
   return failures;
 }
 
 if (process.argv[1] && process.argv[1].endsWith('/receipt.mjs')) {
   const argv = process.argv.slice(2), arg = (flag) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : null; };
-  const mode = arg('--mode'), checkpointPath = arg('--checkpoint'), manifestPath = arg('--manifest');
-  if ((mode !== 'preflight' && mode !== 'checkpoint') || !checkpointPath) { console.error('usage: receipt.mjs --mode preflight|checkpoint --checkpoint <path> [--manifest <path>]'); process.exit(2); }
+  const mode = arg('--mode'), checkpointPath = arg('--checkpoint'), manifestPath = arg('--manifest'), preManifestPath = arg('--pre-candidate-manifest');
+  if ((mode !== 'preflight' && mode !== 'checkpoint') || !checkpointPath) { console.error('usage: receipt.mjs --mode preflight|checkpoint --checkpoint <path> [--manifest <path>] [--pre-candidate-manifest <path>] [--base-dir <dir>]'); process.exit(2); }
+  const baseDir = arg('--base-dir') || dirname(resolve(checkpointPath));
   const doc = JSON.parse(readFileSync(checkpointPath, 'utf8'));
-  const failures = checkCheckpoint(doc, { manifestBytes: manifestPath ? readFileSync(manifestPath) : null });
+  const manifestBytes = manifestPath && existsSync(manifestPath) ? readFileSync(manifestPath) : null;
+  const preCandidateManifestBytes = preManifestPath && existsSync(preManifestPath) ? readFileSync(preManifestPath) : manifestBytes;
+  const failures = checkCheckpoint(doc, { baseDir, manifestBytes, preCandidateManifestBytes, execArgv: process.execArgv, nodeOptions: process.env.NODE_OPTIONS || '' });
   if (mode === 'preflight') { console.log(JSON.stringify({ mode: 'preflight', accepted: false, outstanding: failures }, null, 2)); process.exit(0); }
   if (failures.length > 0) { console.log(JSON.stringify({ mode: 'checkpoint', accepted: false, failures }, null, 2)); process.exit(1); }
   console.log(JSON.stringify({ mode: 'checkpoint', accepted: true, checkpoint: 'L5-MEMORY-V1', tupleSha256: doc.tupleSha256 }, null, 2));
