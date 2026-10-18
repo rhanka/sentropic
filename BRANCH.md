@@ -93,6 +93,7 @@
   - [ ] New tests/mcp-oauth-http.spec.ts: loopback issuer/MCP/independent API verifier, real Basic RFC8693 + SDK, positive search, inverse audiences, same client automatic reinitialization after restart. Synthetic keys, port 0 inside container.
   - [ ] Scoped gates: Lot 1 command with SCOPE=tests/mcp-oauth-egress.spec.ts and SCOPE=tests/token-exchange; service gate uses SCOPE=tests/mcp-oauth-http.spec.ts and ENV=e2e-feat-cluster-mesh-oauth-o1. No UI tests.
 - [ ] **Lot 4 — Packed API, compatibility and release tuple**
+  - [x] Installed consumer tests written for full NodeNext/Bundler types, native HTTP/ACR/restart, provider identity, bare unused loader, disabled/missing/old-floor/broken-export refusals and root async-hooks isolation.
   - [x] Shared native HTTP scenario now drives the ordinary service test and is prepared for installed Radar SDK/Hono qualification, including configured ACR, audience isolation, raw/stubs and fresh objects after restart.
   - [x] Added exact SDK1.32.1/Hono4.13.13 fixture manifest and typed public call site; strict installed compilation/runtime gates pending. No base-peer archives substitute for missing publications.
   - [ ] After #684 merge, rebase only onto main; choose target 0.20.0 above registry/main; widen comments self-range only; preserve storage/comments and gateway peer ranges; rerun affected gates.
