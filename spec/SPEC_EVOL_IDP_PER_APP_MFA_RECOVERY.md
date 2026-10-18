@@ -24,6 +24,16 @@ Binding corrections applied to this spec:
   Correctness therefore rests on IdP authorize enforcement plus the
   non-regression test in section 8.2.
 
+Parallel input reconciled: the independent Astra max study
+(`.h2a/inputs/astra-idp-mfa-study.md`, 295 lines, sha256 prefix
+`831fe527b7cf591d`) was reconciled point by point; the taken/rejected record
+with reasons is `.h2a/reviews/spec-idp-mfa-reconciliation.md`. Where this
+spec and that study diverged on an owner-decided point, the owner decision
+governs and the divergence is recorded there (notably the gateway check:
+the owner decision above stands — the gateway performs no `acr`/`amr`
+gate; the study's `amr`-membership check at the RP is recorded as rejected
+for KVM, while its IdP-side evidence corrections are taken).
+
 Conventions in this document:
 
 - `[EXISTS]` marks behaviour verified in merged code at the baseline, with a
@@ -142,6 +152,22 @@ refusal (`access_denied` for a bearer resume) does not close the gap: it
 refuses the bearer session, but the attacker first converts email proof into
 a credential and only then asks for authorization.
 
+Precision bounds on the gap (taken from the parallel study, verified
+against the same sources): the magic-link cookie alone is not the
+`verificationToken` that registration requires — the chain assumes mailbox
+control, which supplies the separate email code; a stolen bearer cookie
+alone cannot complete registration, but it **can** already delete
+credentials (section 6, P-REVOKE step-up closes that). The
+`requiresDeviceRegistration` flag is a UI signal, not a server-side
+authorization boundary, and must never be treated as one. Two issuance
+legs also need the shared evaluator of section 5.2: consent rechecks the
+live session today `[EXISTS]`, while the authorization-code exchange leg
+performs no fresh policy or account-generation recheck — Lot 2 defines
+that recheck (stale or policy-changed transactions are refused rather
+than minted below policy), preserving one-time code consumption and PKCE.
+There is no OAuth refresh grant to protect (`offline_access` is refused);
+local session refresh is the only refresh in scope.
+
 Two adjacent gaps follow from section 2.2:
 
 - **Gap G-FRESH.** No freshness window: `meetsRequiredAcr` compares strings
@@ -189,6 +215,13 @@ next sign-in.
 | T-SUBJ | Valid account, wrong subject | Authenticates correctly but is not on the client's allowlist | — |
 | T-OPER | Break-glass operator | Holds cluster access and the IdP admin account used by the governed Job | A malicious operator with both is trusted; the control is audit, not prevention |
 | T-RP | RP compromise (including the KVM gateway host) | Sees tokens the RP legitimately receives | Cannot mint IdP sessions; exact-match redirect URIs and client authentication bound the blast radius |
+| T-ROOT | IdP database writer, signing-key holder, privileged cluster administrator | Can rewrite policy, bindings, or keys directly | Trust root: no design protects the IdP from its own roots. Controls are narrowed routine authority, attributable operations, and an independent owner recovery route (sections 7, 9) |
+| T-STALE | Holder of an old invite, enrolment challenge, authorization code, or pre-change session | Replays material minted before a policy or recovery transition | Bounded by single-use consumption, security generation (section 4.2), and the token-leg recheck (section 5.2) |
+
+Authentication is never authorization for KVM: open registration and a
+pending-approval account can still authenticate at the OAuth host, so the
+stable-subject allowlist (and the tier rules it sits under) is a load-bearing
+part of P-MFA, not an optional extra.
 
 Assumptions carried from merged code: WebAuthn ceremonies require user
 verification for every role; the IdP stores a client secret only as its
@@ -280,6 +313,23 @@ No new `users` column is required for the hardening set itself. Recovery
 codes (section 7, option (c)) do need storage; that table is specified in
 Lot 4 and holds only hashes.
 
+**Evidence and generation (normative, Lot 0 design then Lots 2–3).** The
+`mfaVerified` boolean stays as the merged mint flag, but BUILD lots must
+not treat it as the whole evidence record. The target evidence for a
+qualifying session is: authentication method(s) and MFA completion time
+(distinct from session creation and from last activity), the credential
+identifier that participated, credential binding state (`trusted`,
+`pending-recovery`, `revoked`) with its authorizing ceremony, an assurance
+schema version, and a monotonically increasing per-account **security
+generation** that recovery, policy hardening, and full reset increment.
+Refresh preserves the original ceremony times and generation and can
+never create MFA evidence. Hardening persists at zero credentials: an
+account whose keys were all removed is still hardened, and zero
+credentials never re-opens weak bootstrap for it. Lot 0 (section 13)
+freezes the exact columns (the branch's single migration) on the existing
+ports/adapters; no parallel authentication subsystem is created and
+migration 0042 is not edited.
+
 ## 5. Sessions, tokens, freshness, and step-up
 
 ### 5.1 Which sessions satisfy a forced-MFA client
@@ -308,6 +358,19 @@ Lot 5 the sealed `acr` for a qualifying session is the neutral `mfa` value.
 RPs other than KVM may keep reading `acr`/`auth_time`; `kvm-gateway`
 performs no such check and relies on the IdP having refused every
 non-qualifying authorize (the IdP-side guarantee pinned by section 8.2).
+
+AMR correctness rules `[TO BUILD Lot 5]`: `mfa` membership is the only
+method signal an RP ever needs; `hwk` is emitted only when the verifier
+holds evidence of hardware binding (never inferred from the label
+"passkey", transports, or credential count); `user` denotes demonstrated
+user presence and is not a synonym for the WebAuthn UV bit — the method
+detail rides in a documented private method value (for example
+`urn:sentropic:amr:webauthn`); non-password methods (email, federation)
+must not be labelled `pwd` — they emit their documented method value or an
+omitted list when the method is unknown, and the merged fallbacks that
+manufacture `amr` from `acr` are removed in the same lot. A credential in
+`pending-recovery` binding state never yields `mfa`, even with UV, until
+its activation conditions (section 6) complete.
 
 ### 5.2 Where enforcement lives
 
@@ -411,6 +474,32 @@ Rules that cut across the table:
   enrolment by email code or invite stays as merged. Hardening, the
   two-credential prerequisite, and the email block all engage at
   allowlist time, in that order (section 10.2).
+- **R-REC-6 (pending binding, no self-approval).** `[TO BUILD Lot 4]` A
+  credential created under P-CODE or P-BREAK starts as `pending-recovery`:
+  its own UV proves control of the new key, not continuity with the owner.
+  It cannot satisfy any client, mint recovery codes, link a federation
+  identity, or approve itself. Activation to `trusted` requires the
+  capability's independent condition — a surviving trusted MFA ceremony
+  (P-ADD path) or the break-glass Job's activation step — followed by a
+  fresh qualifying sign-in. This rule is what keeps a stolen recovery code
+  from becoming a direct code-to-MFA chain.
+- **R-REC-7 (request is not invalidation).** A recovery request alone
+  revokes nothing and changes no email or allowlist entry; otherwise
+  anyone can lock the owner out repeatedly. Invalidation (sessions, local
+  refresh material, continuations, authorization codes, tracked tokens,
+  security-generation increment) happens only once sufficient recovery
+  authority is established, atomically with the audit record. Self-contained
+  JWTs and RP cookies that never recheck remain usable until their own
+  expiry: Lot 6 documents the bounded RP session lifetime and the KVM
+  purge/logout operation instead of claiming instant global revocation.
+- **R-REC-8 (prerequisite means independently recoverable).** The
+  two-authenticator prerequisite (section 4.2) means two **independently
+  recoverable** authenticators (for example a platform/synced passkey
+  plus a PIN-protected roaming key stored separately), not two rows that
+  share one device or one sync account. Credential IDs cannot prove
+  independence; the enrolment runbook states the assumption and the owner
+  acknowledges it, and the spare must actually authenticate in the Lot 6
+  drill — a row count is not a drill.
 
 ## 7. Recovery means — evaluation and recommendation
 
@@ -427,13 +516,30 @@ first client.
 | (d) No recovery by email alone | This is property P-MFA restated for recovery; without it every other option is bypassed by the register flow | Removes the familiar path, so (a)+(b) and optionally (c) must land with it | Breaks the current "Lost your device?" expectation for hardened accounts only | **Adopt as the invariant** R-REC-0 (Lot 3) |
 | Baseline: keep email-code enrolment for everyone (status quo) | Fails: G-RECOVERY converts mailbox control into `MFA` in two steps | Convenient | Leaves forced 2FA as email security with extra steps | **Rejected** |
 
-**Recommendation (normative).** Ship **(d) as the invariant, (a) as the
-enrolment prerequisite, (b) as the guaranteed floor, and (c) as an opt-in
-convenience**, in the lot order of section 13: Lot 3 enforces (d) and the
-enrolment-only confinement, Lot 4 adds (a), (c), and (b). No single option
-is sufficient alone: (a) without (d) still lets email enrol a third
+**Recommendation (normative).** First release: **(d) as the invariant,
+(a) as the enrolment prerequisite, (b) as the guaranteed floor**.
+Recovery codes (c) are **deferred to an optional later sublot** and are
+not a prerequisite for KVM enforcement; if built, they open only the
+restricted recovery request and the pending binding of R-REC-6 (full
+activation still needs a surviving trusted ceremony or the Job), with
+high-entropy single-use codes stored only as subject- and
+generation-bound verifiers — never the short email-code mechanism. An
+owner choice for autonomous code-plus-delay activation instead records a
+weaker recovery root explicitly (section 15, D-P2). Lot 3 enforces (d)
+and the enrolment-only confinement; Lot 4 adds (a) and (b). No single
+option is sufficient alone: (a) without (d) still lets email enrol a third
 credential; (d) without (a)/(b) risks owner lockout; (c) without the
-enrolment-only bound would reintroduce a bearer-equivalent secret.
+pending-binding bound would reintroduce a bearer-equivalent secret. The
+break-glass Job contract is normative: it identifies the cluster identity
+and the target subject separately (an `admin_app` role from a weak web
+session is never sufficient), uses a versioned purpose-specific Job with
+an immutable image digest, a scoped service account, exact target,
+reason, operation id, expected generation, and dry-run/readback; it
+issues a short-lived single-use binding authorization through the
+administrative channel and never sets `mfaVerified`, clears a client
+policy, or returns a long-lived session. The independent administrator
+route (with its own recovery material, separate from the passkey sync
+account) is prepared and rehearsed before KVM enforcement.
 
 Explicitly rejected alternatives: email link plus a waiting period (delay
 does not change who holds the mailbox; T-MAIL waits too), email plus
@@ -497,8 +603,8 @@ outside the allowlist is refused even with a qualifying MFA session.
   same `mfaVerified=false` expectation) and an allowlist refusal for an
   MFA session of an unlisted subject. Test names follow the harness-test
   convention ("should … when …"); scoped run:
-  `make test-api SCOPE=tests/oauth-client-required-acr.test.ts ENV=test-idp-per-app-mfa-recovery`
-  (package test invocation per `rules/workflow.md`; never on `ENV=dev`).
+  `make test-auth-hono SCOPE=tests/oauth-client-required-acr.test.ts ENV=test-idp-per-app-mfa-recovery`
+  (the package suite target; `ENV` last, never on `ENV=dev`).
 - File target (extend): `api/tests/api/auth/oauth-client-policy.test.ts`
   `[EXISTS]` — the API-level twin (real client row, real sessions). Lot 1
   adds the federation-origin bearer case at this level if the fixture
