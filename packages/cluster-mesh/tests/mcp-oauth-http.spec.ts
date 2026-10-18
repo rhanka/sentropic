@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createLocalJWKSet, exportJWK, jwtVerify, SignJWT, type JSONWebKeySet, type JWTVerifyGetKey } from 'jose';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { createMcpOAuthNamespace } from '../src/compose/mcp-oauth.js';
+import { createMcpOAuthNamespace, type McpOAuthNamespaceOptions } from '../src/compose/mcp-oauth.js';
 import { TokenExchangeHttpIssuer } from '../src/trust/token-exchange-http.js';
 import { fixture, issuer, resource, tools } from './packaging/fixtures/mcp-oauth/host.js';
 import { serve } from './packaging/fixtures/mcp-oauth/http.js';
@@ -49,28 +49,53 @@ describe('MCP OAuth real HTTP interoperability', () => {
         verifyJwt: async (jwt, key, verification) => (await jwtVerify(jwt, key as JWTVerifyGetKey, verification)).payload,
       },
     });
-    const secured = await createMcpOAuthNamespace(modules, { ...options, exchange: {
+    const composition: McpOAuthNamespaceOptions = { ...options, exchange: {
       issuer: exchangeIssuer, workloadClientId: workload, workloadActorSub: workload, policyRevision: 'http-1',
       profiles: { signals: { tool: 'search_signals', method: 'GET', origin: api.url, audience: apiAudience,
         pathTemplate: '/api/graph-signals/:city', requiredScopes: ['immo:search'], validateParams: (params) => params } },
     }, invoke: async (tool, args, call) => tool === 'search_signals'
       ? { ok: true, output: (await call.egress.request('signals', { city: String(args.city) })).body,
         auditId: call.correlationId, redactionClass: 'low' }
-      : options.invoke(tool, args, call) });
-    const app = new Hono().route('/', secured.metadataRoutes).route('/mcp', secured.mcpRoutes);
-    const mcp = await serve((request) => app.fetch(request));
+      : options.invoke(tool, args, call) };
+    let secured = await createMcpOAuthNamespace(modules, composition);
+    let app = new Hono().route('/', secured.metadataRoutes).route('/mcp', secured.mcpRoutes);
+    let mcp = await serve((request) => app.fetch(request));
     const bearer = await token();
     const client = new Client({ name: 'existing-client', version: '1' });
     try {
-      await client.connect(new StreamableHTTPClientTransport(new URL(`${mcp.url}/mcp`), {
+      const transport = () => new StreamableHTTPClientTransport(new URL(`${mcp.url}/mcp`), {
         requestInit: { headers: { authorization: `Bearer ${bearer}` } },
-      }));
+      });
+      await client.connect(transport());
       expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(tools.map((tool) => tool.name));
       const result = await client.callTool({ name: 'search_signals', arguments: { city: 'longueuil' } });
       expect(JSON.parse((result.content as { text: string }[])[0]!.text)).toEqual({ signals: [{ id: 'synthetic-signal' }] });
       expect(basic).toBe(`Basic ${Buffer.from(`${workload}:synthetic-workload-secret`).toString('base64')}`);
       expect(grant).toBe('urn:ietf:params:oauth:grant-type:token-exchange');
       expect(mints).toBe(1); expect(apiCalls).toBe(1);
+      expect((await fetch(`${api.url}/api/graph-signals/longueuil`, {
+        headers: { authorization: `Bearer ${bearer}` },
+      })).status).toBe(401);
+      expect((await fetch(`${mcp.url}/mcp`, { method: 'POST',
+        headers: { authorization: `Bearer ${minted}`, 'content-type': 'application/json' }, body: '{}',
+      })).status).toBe(401);
+      await client.callTool({ name: 'get_zones_geojson', arguments: { city: 'longueuil' } });
+      const stub = await client.callTool({ name: 'search_lots', arguments: { city: 'longueuil' } });
+      expect(stub.isError).toBe(true);
+      expect(stub._meta?.errorCode).toBe('not_wired_yet');
+      expect(mints).toBe(1); expect(apiCalls).toBe(1);
+      const address = mcp.url;
+      await secured.close(); await mcp.close();
+      secured = await createMcpOAuthNamespace(modules, composition);
+      app = new Hono().route('/', secured.metadataRoutes).route('/mcp', secured.mcpRoutes);
+      mcp = await serve((request) => app.fetch(request), Number(new URL(address).port));
+      expect(mcp.url).toBe(address);
+      await expect(client.callTool({ name: 'search_signals', arguments: { city: 'longueuil' } })).rejects.toMatchObject({ code: 404 });
+      // The same client automatically performs the protocol's fresh transport initialization.
+      // SDK transport itself reports 404; no new login, URL, credentials or consent is supplied.
+      await client.close(); await client.connect(transport());
+      expect((await client.callTool({ name: 'search_signals', arguments: { city: 'longueuil' } })).isError).toBe(false);
+      expect(mints).toBe(2); expect(apiCalls).toBe(2);
     } finally {
       await client.close(); await secured.close(); await mcp.close(); await api.close(); await idp.close();
     }
