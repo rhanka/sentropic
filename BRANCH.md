@@ -63,7 +63,7 @@
   - [x] Record evidence, owner constraints, retained architecture, and budget calculations in `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
   - [x] Add the train index, acceptance protocol, rollback policy, and source provenance.
 - [ ] **Lot 2 — Executable branch plans**
-  - [ ] BR-62: measure and reserve capacity.
+  - [x] BR-62: measure and reserve capacity.
   - [ ] BR-63: prepare once and run native static checks.
   - [ ] BR-64: build and transfer less.
   - [ ] BR-65: execute independent work together.
