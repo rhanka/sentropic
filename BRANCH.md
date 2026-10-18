@@ -75,6 +75,7 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
   - Switch back to the worktree after any review.
 
 ## Plan / Todo (lot-based)
+- [x] **Round 1 dossier treatment (2026-10-18), finding 3**: separate the custodian workload's renewable payload and sole refresh authority from consumer access projections; reconcile F596-5 with D7, C2/C3 and the F596-3 multi-consumer proof. Documentation only; no lifecycle qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `PLAN.md`, and `plan/BRANCH_TEMPLATE.md`.
   - [x] Confirm isolated worktree `/home/antoinefa/src/sentropic/tmp/worktrees/pr596-custody` on branch `spec/github-seat-credential-custody` (`git branch --show-current`).
