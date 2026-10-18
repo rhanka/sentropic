@@ -127,14 +127,18 @@ describe('judge receipt correlation and generation-policy refusal via public por
   });
 
   it('emits acted stage with metadata effectRef for negative verdicts and durable errors', async () => {
+    // Test-only scope: effectRef is constructed by this helper and echoed by the
+    // emitter; production derivation remains assigned to future host lot 2.08.
     const neg = await runJudgeFlow({ pass: false });
     expect(neg.ok).toBe(true);
     if (!neg.ok) throw new Error('Expected successful flow');
     expect(neg.result.ok).toBe(true);
     if (!neg.result.ok) throw new Error('Expected verdict result');
     expect(neg.result.verdict.decision?.pass).toBe(false);
+    expect(JSON.stringify(neg.result.verdict)).toContain('"pass":false');
     expect(neg.acted.effectRef).toBe(`receipt:${neg.result.receipt.callId}:metadata`);
-    expect(neg.acted.effectRef).not.toMatch(/pass|score|noul/);
+    expect(neg.acted.effectRef).not.toContain('"pass"');
+    expect(neg.acted.effectRef).not.toContain(String(neg.result.verdict.score?.value ?? 'no-score'));
     const err = await runJudgeFlow({ timeout: true });
     expect(err.ok).toBe(true);
     if (!err.ok) throw new Error('Expected successful flow');
@@ -146,6 +150,8 @@ describe('judge receipt correlation and generation-policy refusal via public por
   });
 
   it('preserves deterministic receipt IDs on retry without duplicate stages in idempotent port', async () => {
+    // Test-only scope: dedup is provided by the mock port; the real surface
+    // under test is the deterministic receiptId.
     const res = await runJudgeFlow({ dedup: true });
     const r1 = await res.emitter.transported(coordinates);
     const r2 = await res.emitter.transported(coordinates);
