@@ -1419,9 +1419,9 @@ test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (buil
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: api-extract-mcp-platform
-api-extract-mcp-platform: install-internal-packages ## Verify @sentropic/mcp-platform public API golden report (api-extractor CI mode; fails on any etc/mcp-platform.api.md drift)
+api-extract-mcp-platform: install-internal-packages ## Verify @sentropic/mcp-platform public API golden reports incl. ./memory (api-extractor CI mode; fails on any etc/*.api.md drift)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules temp'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node @microsoft/api-extractor@7.58.9 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node @microsoft/api-extractor@7.58.9 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run; "$$tool_dir/node_modules/.bin/api-extractor" run --config api-extractor.memory.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules temp'
 
 .PHONY: pack-mcp-platform
@@ -3896,16 +3896,86 @@ test-connector-host: ## Run hermetic @sentropic/connector-host tests (requires E
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/connector-host $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: typecheck-mcp-broker
-typecheck-mcp-broker: ## Run @sentropic/mcp-broker type checks (BR-72 DEPTH Lot 2 broker proof)
+typecheck-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker type checks (L5 Lot 1: plan-bound broker, public platform contracts)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-mcp-broker
-test-mcp-broker: ## Run @sentropic/mcp-broker tests (BR-72 DEPTH Lot 2 broker proof, hermetic)
+test-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker tests (L5 Lot 1: plan-bound broker, public platform contracts)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-broker/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-broker/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: build-mcp-broker
+build-mcp-broker: build-mcp-platform ## Build @sentropic/mcp-broker dist package (L5 Lot 1: public platform contracts)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: memory-l5-lint
+memory-l5-lint: build-mcp-platform build-mcp-broker ## L5 static source/packed import-graph lint (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-lint requires ENV=<env> last" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode source --root /workspace
+
+.PHONY: memory-l5-tooling
+memory-l5-tooling: ## L5 tooling contract tests via Vitest JSON-capable runner (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-tooling requires ENV=<env> last" >&2; exit 1; }
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tools/memory-mcp-l5/tests --environment node'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+
+.PHONY: memory-l5-test
+memory-l5-test: ## L5 lot-scoped package tests, LOT=<n> enumerates the exact lot file set (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-test requires ENV=<env> last" >&2; exit 1; }
+	@test "$(LOT)" = "1" || { echo "ERROR: memory-l5-test LOT=$(LOT) is owned by a later lot (only LOT=1 exists)" >&2; exit 1; }
+	@$(MAKE) test-mcp-platform SCOPE=tests/memory/invocation-context.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/memory/mutation-guard.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/memory/confirmation.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/memory/mutation-digest-vectors.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/request-identity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/wire-parity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/registry-dispatch.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker SCOPE=tests/broker.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker SCOPE=tests/memory/invocation-context.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker SCOPE=tests/memory/source-binding.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker SCOPE=tests/memory/forged-call.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker SCOPE=tests/memory/literal-true.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker SCOPE=tests/memory/audit-refusal.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+
+.PHONY: memory-l5-packed
+memory-l5-packed: ## L5 installed-consumer packed SDK suite, SCOPE=packed/<file> against ARTIFACT_MANIFEST (Lot 4)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-packed requires ENV=<env> last" >&2; exit 1; }
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-packed requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
+	@test -d tools/memory-mcp-l5/packed || { echo "ERROR: tools/memory-mcp-l5/packed is absent (arrives in Lot 4)" >&2; exit 1; }
+	@test -n "$(SCOPE)" || { echo "ERROR: memory-l5-packed requires SCOPE=packed/<file>" >&2; exit 1; }
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" "$$tool_dir/node_modules/.bin/vitest" run "$(SCOPE)" --environment node --root tools/memory-mcp-l5'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+
+.PHONY: memory-l5-pack
+memory-l5-pack: build-mcp-platform build-mcp-broker api-extract-mcp-platform ## L5 packer: writes then validates ARTIFACT_MANIFEST from exact built contracts (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-pack requires ENV=<env> last" >&2; exit 1; }
+	@test "$(STAGE)" = "pre-candidate" || { echo "ERROR: memory-l5-pack STAGE=$(STAGE) is owned by a later lot (only pre-candidate exists)" >&2; exit 1; }
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-pack requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --root /workspace
+
+.PHONY: memory-l5-receipt
+memory-l5-receipt: ## L5 receipt verifier: MODE=preflight reports obligations, MODE=checkpoint gates strictly (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-receipt requires ENV=<env> last" >&2; exit 1; }
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-receipt requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
+	@test -n "$(CHECKPOINT)" || { echo "ERROR: memory-l5-receipt requires CHECKPOINT=<path> (arrives in Lot 5+)" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node tools/memory-mcp-l5/receipt.mjs --mode "$(MODE)" --checkpoint "$(CHECKPOINT)" --manifest "$(ARTIFACT_MANIFEST)" --base-dir /workspace
+
+.PHONY: memory-l5-gate
+memory-l5-gate: ## L5 lot gate aggregate: lint, tooling, LOT tests (L5-EX1; later lots extend it)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-gate requires ENV=<env> last" >&2; exit 1; }
+	@test -n "$(LOT)" || { echo "ERROR: memory-l5-gate requires LOT=<n>" >&2; exit 1; }
+	@$(MAKE) typecheck-mcp-platform API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) typecheck-mcp-broker API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-lint API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-tooling API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-test LOT=$(LOT) API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
 .PHONY: smoke-mcp-broker-github
 smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic-broker smoke (BR-72 DEPTH Lot 2, BR72-EX1) — hits https://api.github.com, not hermetic
