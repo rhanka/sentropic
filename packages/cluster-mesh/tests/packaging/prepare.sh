@@ -125,6 +125,23 @@ fixture bare
 (cd "$work/bare" && npm install $quiet "$tgz" >/dev/null)
 fi
 
+# Version-only refresh preserves the previously qualified peer pins and uses npm's
+# frozen graph without installing unpublished peers. It does not qualify that tuple.
+if [ "${REFRESH_SELECTED_ONLY:-0}" = 1 ]; then
+  [ "${REFRESH_LOCK:-}" = 1 ] || { echo 'REFRESH_SELECTED_ONLY requires lock refresh' >&2; exit 1; }
+  mkdir -p "$work/selected"
+  cp "$fixtures/selected/package.json" "$fixtures/selected/package-lock.json" "$work/selected/"
+  consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
+    "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" \
+    "@sentropic/auth-hono=$(src @sentropic/auth-hono "$AHONO")" \
+    "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")" \
+    "@sentropic/artifacts=$(src @sentropic/artifacts "$ARTIFACTS")"
+  (cd "$work/selected" && npm install --package-lock-only --ignore-scripts $quiet >/dev/null)
+  node "$here/check-lock-integrity.mjs" refresh "$work/selected/package-lock.json" \
+    "$fixtures/selected/package-lock.json" "$fixtures/selected/package.json" "$siblings"
+  exit 0
+fi
+
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 # OAuth has its own strictly installed graph, pinned to Radar #866's SDK/Hono lock.
 # This proof needs no gateway/artifacts/auth-hono publication or workspace aliases.
@@ -161,6 +178,13 @@ for variant in mcp-oauth mcp-oauth-baseline; do
   tuple "$variant"
 done
 cat "$work/mcp-oauth/candidate.sha256"
+
+# The old gateway service-auth floor remains independently usable without OAuth selection.
+consumer "$work/gateway-service-baseline" "@sentropic/cluster-mesh=file:$tgz" \
+  "@sentropic/llm-mesh=0.22.3" "@sentropic/llm-gateway=0.19.2" "@sentropic/mcp-auth=0.2.1" \
+  "hono=4.10.7" "jose=5.10.0"
+(cd "$work/gateway-service-baseline" && npm install --ignore-scripts $quiet >/dev/null)
+tuple gateway-service-baseline
 if [ "${MCP_OAUTH_ONLY:-0}" = 1 ]; then exit 0; fi
 fi
 
