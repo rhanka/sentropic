@@ -95,6 +95,13 @@
       "isWithinExecutionBudget"
     ],
     "types": [
+      "AppConnectorProviderAdapter",
+      "StpConnectorContext",
+      "ExpectedConfirmationContinuationBindingV1",
+      "MemoryLogicalSessionReattachmentProofV1",
+      "ChannelBindingKindV1",
+      "DelegationBindingV1",
+      "TrustedInvocationContextV1",
       "ConfirmationCheckInput",
       "EffectiveMemoryMutationInputV1",
       "MemoryConfirmationAssuranceV1",

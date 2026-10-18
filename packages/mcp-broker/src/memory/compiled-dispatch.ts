@@ -16,8 +16,7 @@
 import type {
   AppConnectorProviderAdapter,
   StpConnectorContext,
-} from '@sentropic/mcp-platform';
-import type { CompiledMcpRegistry } from '@sentropic/mcp-platform/registry';
+} from '@sentropic/mcp-platform/memory';
 import {
   MEMORY_CONNECTOR_ID,
   MEMORY_PROVIDER_ID,
@@ -55,10 +54,17 @@ export class MemoryDispatchRefusal extends Error {
 }
 
 export type CompiledMemoryDispatchOptions = {
-  plan: CompiledMcpRegistry;
+  plan: MemoryDispatchPlanV1;
   adapters: AppConnectorProviderAdapter[];
   sourceId: string;
   generation: string;
+};
+
+/** Structural view of the authoritative compiled plan; no secondary registry. */
+type MemoryDispatchPlanV1 = {
+  resolveTool(name: string): {
+    providerId: string; capabilityName: string; requiredScopes: readonly string[]; requiredClaims: readonly string[];
+  } | undefined;
 };
 
 export type SelectMemoryToolInput = {
@@ -86,7 +92,7 @@ export type SelectedMemoryToolV1 = {
  * the resolved provider, never a separately registered handler.
  */
 export class CompiledMemoryDispatch {
-  private readonly plan: CompiledMcpRegistry;
+  private readonly plan: MemoryDispatchPlanV1;
   private readonly adaptersByConnector = new Map<string, AppConnectorProviderAdapter>();
   private readonly sourceId: string;
   private readonly generation: string;
