@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMcpOAuthNamespace, type McpOAuthNamespace } from '../src/compose/mcp-oauth.js';
 import { fixture, initialize, post, rpc } from './packaging/fixtures/mcp-oauth/host.js';
 
@@ -7,6 +7,26 @@ const live: McpOAuthNamespace[] = [];
 afterEach(async () => { await Promise.all(live.splice(0).map((secured) => secured.close())); });
 
 describe('MCP OAuth session authority', () => {
+  it('should close a transport whose initialization is still in progress during shutdown', async () => {
+    const { modules, options, token } = await fixture();
+    let entered!: () => void, release!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const transport = options.sessions.createTransport();
+    const close = vi.spyOn(transport, 'close');
+    const handle = transport.handleRequest.bind(transport);
+    transport.handleRequest = async (request) => { entered(); await gate; return handle(request); };
+    const secured = await createMcpOAuthNamespace(modules, { ...options,
+      sessions: { ...options.sessions, createTransport: () => transport },
+    }); live.push(secured);
+    const app = new Hono().route('/mcp', secured.mcpRoutes);
+    const pending = app.request('/mcp', post(initialize(), await token()));
+    try {
+      await started; await secured.close();
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally { release(); await pending; }
+  });
+
   it('should isolate overlapping requests on the same session and apply current scopes immediately', async () => {
     const { modules, options, token } = await fixture();
     let arrived = 0;
