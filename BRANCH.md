@@ -116,6 +116,7 @@
 - [x] Lot 1.25a review resolution - MAJEUR-1 tests (2026-10-12): added doc-example compilation test via TypeScript compiler in judge-public-surface.test.ts and public README composition test in judge-compose.spec.ts; fixed evaluatorId in README example.
 - [x] Lot 1.25a MINEUR-2 residual (2026-10-17): README blocks are extracted before compilation with equality guards; published compose/llm-mesh subpath is covered.
 - [x] Lot 1D MINEUR-3 record (2026-10-17): no PR/CI on HEAD as of this commit (N-A, resolved at PR opening); prior cluster-mesh 56/61 files and 415/449 tests are skipped per vitest convention with no failures, re-verified with raw logs in gates below.
+- [x] Rebase onto origin/main 1472d961e (2026-10-17): 91 commits replayed; conflicts resolved keeping main behaviour (muse wonder models, 0.26.1 version, CI seat addendum); judge version test updated to 0.26.1.
 
 
 ## AI Flaky tests
