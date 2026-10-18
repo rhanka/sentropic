@@ -180,4 +180,35 @@ describe('Codex runtime client', () => {
     })).rejects.toMatchObject({ status: 401 });
     expect(fetchFn).not.toHaveBeenCalled();
   });
+
+  it('surfaces upstream response.model on status/done stream events and generate providerMetadata', async () => {
+    const makeEvents = () => [
+      { type: 'response.created', response: { id: 'resp-obs', model: 'gpt-5.6-mini-fallback' } },
+      { type: 'response.output_text.delta', delta: 'ok' },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'resp-obs', model: 'gpt-5.6-mini-fallback',
+          usage: { input_tokens: 2, output_tokens: 1, total_tokens: 3 },
+        },
+      },
+    ];
+    const client = new CodexRuntimeClient({ fetch: async () => sseResponse(makeEvents()) });
+    const events = [];
+    for await (const ev of await client.stream({
+      providerId: 'openai', modelId: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'hello' }],
+    }, auth)) {
+      events.push(ev);
+    }
+    expect(events[0]).toMatchObject({ type: 'status', data: { metadata: { observedServedModelId: 'gpt-5.6-mini-fallback' } } });
+    expect(events[events.length - 1]).toMatchObject({ type: 'done', data: { metadata: { observedServedModelId: 'gpt-5.6-mini-fallback' } } });
+
+    const generated = await client.generate({
+      providerId: 'openai', modelId: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'hello' }],
+    }, auth);
+    expect(generated.modelId).toBe('gpt-5.6-terra');
+    expect(generated.providerMetadata).toEqual({ observedServedModelId: 'gpt-5.6-mini-fallback' });
+  });
 });
