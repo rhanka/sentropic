@@ -60,4 +60,12 @@ describe('selected MCP auth loaders', () => {
     tree.install('app/node_modules/@sentropic/mcp-auth', { name: '@sentropic/oauth-verify', version: '0.2.0' });
     await expect(loadMcpAuth(registry())).rejects.toMatchObject({ reason: 'incompatible_version', packageName: '@sentropic/oauth-verify' });
   });
+
+  it('should check jose from the auth owner as well as from its verifier', async () => {
+    install();
+    tree.install('app/node_modules/@sentropic/mcp-auth', { name: 'jose', version: '4.0.0',
+      exports: { '.': { source: moduleSource('wrong-owner-jose', ['jwtVerify']) } } });
+    await expect(loadMcpAuth(registry())).rejects.toMatchObject({ reason: 'incompatible_version', packageName: 'jose' });
+    expect(evaluations()).toEqual([]);
+  });
 });

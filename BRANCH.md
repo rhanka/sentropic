@@ -20,17 +20,18 @@
   - [x] `packages/cluster-mesh/src/loaders/mcp/auth.ts`; `packages/cluster-mesh/src/loaders/mcp/auth/hono.ts`; `packages/cluster-mesh/src/loaders/mcp/index.ts`.
   - [x] `packages/cluster-mesh/src/modules/contracts.ts`; `packages/cluster-mesh/src/modules/catalog.ts`; `packages/cluster-mesh/src/modules/topology-guard-mcp-auth.ts`.
   - [x] `packages/cluster-mesh/package.json`; `package-lock.json`; `packages/cluster-mesh/README.md`; `packages/cluster-mesh/CHANGELOG.md`; `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md`.
-  - [x] `packages/cluster-mesh/tests/modules/{capabilities,registry,namespace-loading,topology-ranges}.spec.ts`; `packages/cluster-mesh/tests/loaders/mcp-auth.spec.ts`; `packages/cluster-mesh/tests/integrations/mcp-auth-surface.spec.ts`.
-  - [x] `packages/cluster-mesh/tests/mcp-oauth-*.spec.ts`; `packages/cluster-mesh/tests/packaging/{prepare.sh,types-and-bundlers.spec.ts,mcp-oauth-consumer.spec.ts}`.
-  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/{package.json,package-lock.json}`; `packages/cluster-mesh/tests/packaging/fixtures/mcp-oauth/**` (typed consumer, manifest and generated lock).
+  - [x] `packages/cluster-mesh/tests/modules/capabilities.spec.ts`; `packages/cluster-mesh/tests/modules/registry.spec.ts`; `packages/cluster-mesh/tests/modules/namespace-loading.spec.ts`; `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`.
+  - [x] `packages/cluster-mesh/tests/loaders/mcp-auth.spec.ts`; `packages/cluster-mesh/tests/integrations/mcp-auth-surface.spec.ts`; `packages/cluster-mesh/tests/mcp-oauth-*.spec.ts`.
+  - [x] `packages/cluster-mesh/tests/packaging/prepare.sh`; `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts`; `packages/cluster-mesh/tests/packaging/mcp-oauth-consumer.spec.ts`.
+  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`; `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`; `packages/cluster-mesh/tests/packaging/fixtures/mcp-oauth/**` (typed consumer, manifest and generated lock).
   - [x] `.github/workflows/ci.yml` (three cluster-mesh qualification mcp-auth pins only); `scripts/ci/publishable-ci-wiring.test.mjs` (matching peer string only), authorized BR125-EX3/R1.
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`; `docker-compose*.yml`; `.cursor/rules/**`; `rules/**`; agent instructions; other branch plans; `.track/**`; credentials and backup payloads.
   - [x] `packages/cluster-mesh/src/storage/**`; `packages/cluster-mesh/assets/**`; `packages/cluster-mesh/src/comments/**`; `packages/cluster-mesh/src/live*/**`.
   - [x] `packages/cluster-mesh/src/compose/mcp.ts`; `packages/cluster-mesh/src/mcp/registry.ts`; `packages/cluster-mesh/src/token-exchange.ts`; `packages/cluster-mesh/src/trust/token-exchange-http.ts`.
-  - [x] `packages/{auth-hono,mcp-auth,oauth-verify,mcp-platform,llm-gateway,llm-mesh}/**`; `api/**`; `ui/**`; `apps/**`; `deploy/**`; all Radar files.
+  - [x] `packages/auth-hono/**`; `packages/mcp-auth/**`; `packages/oauth-verify/**`; `packages/mcp-platform/**`; `packages/llm-gateway/**`; `packages/llm-mesh/**`; `api/**`; `ui/**`; `apps/**`; `deploy/**`; all Radar files.
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `PLAN.md` (conductor registration, BR125-EX1); `packages/cluster-mesh/src/modules/{registry,topology-guard-mcp}.ts` (evidenced auth preflight gap, BR125-EX2); `packages/cluster-mesh/packaging.mk` (evidenced runner gap, BR125-EX3).
+  - [ ] `PLAN.md` (conductor registration, BR125-EX1); `packages/cluster-mesh/src/modules/registry.ts`; `packages/cluster-mesh/src/modules/topology-guard-mcp.ts` (evidenced auth preflight gap, BR125-EX2); `packages/cluster-mesh/packaging.mk` (evidenced runner gap, BR125-EX3).
 - [x] **Exception process**:
   - [x] Record reason, bounded impact and rollback before conditional edits; existing packet authorizations apply. No speculative exceptions.
 
@@ -65,6 +66,7 @@
   - [x] Read feasibility v4 and owner decisions; npm cluster-mesh=0.18.0 via container npm view, candidate=0.20.0; original ranges mesh<0.27/gateway<0.21/auth>=0.2.1 retained; #684 rebase dependency recorded. Recheck ports before listeners.
   - [ ] Prepare manifest-context.json from real branch diff/CI filters before manifest gates. API/UI/E2E test edits: none.
 - [ ] **Lot 1 — Optional auth leaves and typed loaders**
+  - [x] Catalog/capability/namespace/range regressions GREEN (68 tests); auth-owner/verifier-owner jose checks added. Expanded scope braces into literal paths because harness reports unsupported brace patterns as unknown.
   - [x] Auth loader contracts RED: missing loader import; static leaves/loaders/catalog and provider-identity tests now implemented; verification pending.
   - [ ] Add static mcp/auth + mcp/auth/hono, typed loaders/barrel, selected-only >=0.2.2 <0.3.0 topology guard, explicit exports/sideEffects; preserve provider identity and gateway >=0.2.1 floor.
   - [ ] Package tests updated: modules/capabilities.spec.ts, registry.spec.ts, namespace-loading.spec.ts, topology-ranges.spec.ts; new loaders/mcp-auth.spec.ts and integrations/mcp-auth-surface.spec.ts. Cover disabled/missing/skew/export failures, shared loads and selected-only evaluation.

@@ -5,7 +5,7 @@ import { createClusterMeshModules } from '../../../../src/index.js';
 import { createMcpRegistry } from '../../../../src/mcp/registry.js';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
 import type { RegistryDefinition } from '@sentropic/mcp-platform/registry';
-import type { BridgeTool } from '@sentropic/mcp-platform/transport/bridge';
+import type { AppToolResult, BridgeTool } from '@sentropic/mcp-platform/transport/bridge';
 import type { McpOAuthNamespaceOptions } from '../../../../src/compose/mcp-oauth.js';
 
 // Captured schemas/descriptions: Radar #866 d85def82, immo-tools.v1.json (no live data).
@@ -18,6 +18,12 @@ export const resource = 'https://preprod.immo.example/mcp';
 export const issuer = 'https://auth.example';
 export const allScopes = ['immo:read', 'immo:search', 'immo:documents:read'];
 export const stubs = ['search_lots', 'get_lot_card', 'get_opportunity_dossier', 'list_documents', 'read_document_excerpt'];
+
+function fixtureResult(tool: string, args: unknown, sub: string, scopes: readonly string[], auditId: string): AppToolResult {
+  return stubs.includes(tool)
+    ? { ok: false, auditId, redactionClass: 'low', error: { code: 'not_wired_yet', message: 'not_wired_yet', retriable: false } }
+    : { ok: true, auditId, redactionClass: 'low', output: { tool, args, sub, scopes } };
+}
 
 export async function fixture() {
   const keys = await generateKeyPair('RS256');
@@ -37,7 +43,17 @@ export async function fixture() {
     audit: { eventKinds: ['invoke'] }, durability: {},
   };
   facade.register({
-    manifest, adapter: { appId: 'immo', connectorId: 'fixture' },
+    manifest, adapter: {
+      appId: 'immo', connectorId: 'fixture', manifest,
+      resolveTenant: async (input) => ({ principalRef: input.principalSub, tenantRef: input.tenantRef,
+        connectorInstanceId: input.connectorInstanceId }),
+      listCapabilities: async () => manifest.tools,
+      invokeTool: async (request) => fixtureResult(request.capabilityRef, request.input,
+        request.ctx.principal.sub, request.ctx.principal.scopes, request.ctx.auditId),
+      readResource: async () => ({ ok: false, auditId: 'fixture', redactionClass: 'low',
+        error: { code: 'unsupported_operation', message: 'No fixture resources', retriable: false } }),
+      validateSecrets: async () => [],
+    },
     parameterSchema: { properties: {}, required: [] }, requiredPorts: [],
     handlers: Object.fromEntries(tools.map(({ name }) => [name, {
       handlerId: name, capabilityRef: name, configSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -56,11 +72,7 @@ export async function fixture() {
       sessionIdGenerator: () => crypto.randomUUID(), enableJsonResponse: true,
     }) },
     resolveAccount: async () => ({ allowed: true }),
-    invoke: async (tool, args, call) => stubs.includes(tool)
-      ? { ok: false, auditId: call.correlationId, redactionClass: 'low',
-        error: { code: 'not_wired_yet', message: 'not_wired_yet', retriable: false } }
-      : { ok: true, auditId: call.correlationId, redactionClass: 'low',
-        output: { tool, args, sub: call.principal.sub, scopes: call.principal.scopes } },
+    invoke: async (tool, args, call) => fixtureResult(tool, args, call.principal.sub, call.principal.scopes, call.correlationId),
   };
   const token = (claims: JWTPayload = {}) => new SignJWT({
     sub: 'alice', iss: issuer, aud: resource, iat: Math.floor(Date.now() / 1000),
