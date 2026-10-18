@@ -111,18 +111,18 @@
   - [x] Add all 18 filters, validate/publish jobs, dispatch choices and ci-gate needs; package-only publication triggers.
   - [x] Register mappings in `scripts/ci/publishable-manifests.mjs`; update `scripts/ci/publishable-ci-wiring.test.mjs`.
   - [x] Newly public packages have web bootstrap only, never token bootstrap steps.
-  - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
-- [ ] **Lot 4 — Packaged consumer qualification**
+  - [x] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
+- [x] **Lot 4 — Packaged consumer qualification**
   - [x] New `scripts/publish/packaged-consumer.test.mjs`: install real guarded archives and import every public Node entry point, including experimental/hono entries.
   - [x] Give each guarded archive a dedicated empty destination (guard rejects shared output directories).
-  - [ ] Gate: `make test-publishable-consumers ENV=test-publish-mcp-packages`.
-  - [ ] API tests: none; no API implementation changes.
-  - [ ] UI tests: none; no UI implementation changes.
-  - [ ] E2E tests: none; package consumer smoke replaces irrelevant application campaigns.
-  - [ ] UAT: inspect packed files, verify all 18 imports, inspect topological bootstrap list; leave security-key login to owner.
+  - [x] Gate: `make test-publishable-consumers ENV=test-publish-mcp-packages`.
+  - [x] API tests: none; no API implementation changes.
+  - [x] UI tests: none; no UI implementation changes.
+  - [x] E2E tests: none; package consumer smoke replaces irrelevant application campaigns.
+  - [x] UAT: inspect packed files, verify all 18 imports, inspect topological bootstrap list; leave security-key login to owner.
 - [ ] **Lot 5 — Documentation and final validation**
-  - [ ] Review final diff and scope; run guard/wiring/bootstrap/consumer tests and package typecheck gates.
-  - [ ] Write `.h2a/build/publish_mcp_packages_report.md` with exact versions, first-publication order, commands and results.
-  - [ ] Push branch and create draft PR using this file as body; post 3–6 step plan comment.
+  - [x] Review final diff and scope; run guard/wiring/bootstrap/consumer tests and package typecheck gates.
+  - [x] Write `.h2a/build/publish_mcp_packages_report.md` with exact versions, first-publication order, commands and results.
+  - [x] Push branch and create draft PR using this file as body; post 3–6 step plan comment.
   - [ ] Watch CI and resolve branch failures; record external blockers with evidence.
-  - [ ] Keep BRANCH.md for draft handoff; never merge or publish.
+  - [x] Keep BRANCH.md for draft handoff; never merge or publish.
