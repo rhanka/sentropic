@@ -366,13 +366,13 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
         reader = response.body?.getReader();
         if (reader) {
           for (;;) {
-            const chunk = await reader.read();
+            const chunk = await racePreflight(reader.read());
             if (timedOut || controller.signal.aborted || callOptions?.signal?.aborted) {
               return fail(timedOut ? 'TIMEOUT' : callOptions?.signal?.aborted ? 'CANCELLED' : 'TRANSPORT_FAILED');
             }
             if (chunk.done) break;
             if (size + chunk.value.byteLength > cap) {
-              await reader.cancel().catch(() => {});
+              void reader.cancel().catch(() => {});
               return fail('MESH_UNAVAILABLE');
             }
             if (size + chunk.value.byteLength > chunks.byteLength) {
