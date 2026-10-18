@@ -19,7 +19,7 @@
  * callers are redaction-obligated (see `StpConnectorContext.audit` in
  * `../../mcp-platform/src/runtime.ts`).
  */
-import type { StpConnectorContext } from '../../mcp-platform/src/runtime.js';
+import type { StpConnectorContext } from '@sentropic/mcp-platform';
 
 export type SecretResolver = (name: string) => Promise<string> | string;
 

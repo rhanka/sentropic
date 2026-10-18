@@ -7,7 +7,7 @@
  * registers the same way. See `./broker.ts` for the dispatch seam that
  * consumes this registry.
  */
-import type { AppConnectorProviderAdapter } from '../../mcp-platform/src/runtime.js';
+import type { AppConnectorProviderAdapter } from '@sentropic/mcp-platform';
 
 export class DuplicateConnectorError extends Error {
   readonly code = 'duplicate_connector';
