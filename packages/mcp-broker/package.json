@@ -44,7 +44,7 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/mcp-platform": "^0.3.0"
+    "@sentropic/mcp-platform": "^0.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",
