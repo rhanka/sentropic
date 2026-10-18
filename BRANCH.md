@@ -103,7 +103,7 @@
 - [x] **Lot N — Final validation**
   - [x] Run `make scope-check ENV=test-idp-oauth-refresh-token` and record its result: PASS C2 (sentropic).
   - [x] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution.
-  - [x] Push `spec/idp-oauth-refresh-token` and open a DRAFT PR whose body is this `BRANCH.md` text; report the PR number and head SHA, then stop without merging.
+  - [x] Push `spec/idp-oauth-refresh-token` and open a DRAFT PR whose body is this `BRANCH.md` text (Draft PR #699); report the PR number and head SHA, then stop without merging.
   - [x] Retest UI: not applicable, docs only, no UI test claimed.
   - [x] Retest API: not applicable, docs only, no API test claimed.
   - [x] Retest E2E: not applicable, docs only, no E2E test claimed.
