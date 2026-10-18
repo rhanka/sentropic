@@ -4,7 +4,7 @@ Status: **REVISED v3 — Codex 2nd-engine reconciled** — owner-decided **2026-
 Parent study: `spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md` (P1 §0/§9-Phase0, narrow-freeze §6.2, decided/open §2.1, custody §4.3, 2FA/elicitation §5).
 Platform socle: `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (manifest/adapter §4, elicitation §5, records §6.3/§6.4, visibility §7.1, durable §8).
 First real consumer: `spec/SPEC_EVOL_BANK_CONNECTOR.md` (federated openerp adapter, **read-only**; operator-secret delta §4, egress boundary §3.1; gates P1 at B3).
-Merged registry delivery using this platform kernel: `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md` (PR #679 at `1472d961e`: compiled registry entries, `sentropic.artifacts` provider, token exchange).
+Merged registry delivery using this platform kernel: `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md` (PR #679 at `1472d961e`: compiled registry plan, `sentropic.artifacts` provider, token exchange; compilation yields a plan, not runtime registry entries — see that spec, §4.3).
 
 ## 0. Executive summary
 
