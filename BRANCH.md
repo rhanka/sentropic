@@ -105,8 +105,8 @@
 - [ ] **Lot V2 — Spec-review synthesis amendments (2026-10-18)**
   - [x] F694-1 namespace binding on every stored/transported record (envelope/retained reference for frozen M1 bytes)
   - [x] F694-2 cross-namespace isolation acceptance (A-vs-B retained, namespace mismatch added)
-  - [ ] F694-3 screen vocabulary with named app instance
-  - [ ] F694-4 portable any-managed-screen target with host adapter contract
+  - [x] F694-3 screen vocabulary with named app instance
+  - [x] F694-4 portable any-managed-screen target with host adapter contract
   - [ ] F694-5 Sentropic serialization lineage for C-storage and DV3
   - [ ] F694-6 method-neutral MFA consumption with #695 and M-3 qualification
   - [ ] F694-7 shared-installation bound and catalogue relationship
