@@ -15,6 +15,7 @@
 
 import { createHash } from 'node:crypto';
 import { canonicalJson } from '../tool-configuration.js';
+import { validateCapture } from './capture-validation.js';
 import {
   MEMORY_MUTATION_DIGEST_PROFILE_ID,
   MEMORY_PROVIDER_ID,
@@ -23,6 +24,8 @@ import {
   isMutatingMemoryToolName,
   isValidIdempotencyKey,
   isValidOpaqueRef,
+  isValidCursor,
+  isValidInstant,
   type EffectiveMemoryMutationInputV1,
   type MemoryMutationPolicyVersionsV1,
   type MemoryMutationPreimageV1,
@@ -42,7 +45,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  const actual = Object.getOwnPropertyNames(value);
+  const actual = Reflect.ownKeys(value);
   return actual.length === keys.length && keys.every((key) => actual.includes(key));
 }
 
@@ -76,8 +79,7 @@ export function validateEffectiveInput(input: unknown): string[] {
         break;
       }
       const rec = input as Record<string, unknown>;
-      if (!isPlainRecord(rec['payload'])) failures.push('effective_input.payload: must be a plain object');
-      if (!isPlainRecord(rec['evidence'])) failures.push('effective_input.evidence: must be a plain object');
+      failures.push(...validateCapture(rec['payload'], rec['evidence']));
       checkPolicyVersion(rec['capture_policy_version'], 'effective_input.capture_policy_version', failures);
       break;
     }
@@ -129,6 +131,7 @@ function validateLifecycleArm(
     return;
   }
   if (!isValidOpaqueRef(anchor['kind_ref'])) failures.push('effective_input.event_anchor.kind_ref: invalid OpaqueRef');
+  if (!isValidInstant(anchor['occurred_at'])) failures.push('effective_input.event_anchor.occurred_at: invalid Instant');
   if (!isValidOpaqueRef(anchor['provenance_ref'])) failures.push('effective_input.event_anchor.provenance_ref: invalid OpaqueRef');
   const digest = anchor['provenance_digest'];
   if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(digest)) {
@@ -146,7 +149,7 @@ export function validateMutationTarget(target: unknown): string[] {
     }
     const rec = target as Record<string, unknown>;
     if (!isValidOpaqueRef(rec['source_ref'])) return ['target.source_ref: invalid OpaqueRef'];
-    if (typeof rec['sequence'] !== 'string' || !/^(0|[1-9][0-9]*)$/.test(rec['sequence'])) {
+    if (!isValidCursor(rec['sequence'])) {
       return ['target.sequence: invalid cursor'];
     }
     return [];
@@ -207,6 +210,7 @@ export function validateMutationPreimage(preimage: unknown): string[] {
   failures.push(...validateEffectiveInput(rec['effective_input']));
   if (failures.length > 0) return failures;
   const effective = rec['effective_input'] as EffectiveMemoryMutationInputV1;
+  if (effective.tool_name === 'engram_memory_capture' && effective.payload.scope_ref !== rec['scope_ref']) failures.push('preimage: capture scope must match host scope');
   if (effective.tool_name !== toolName) {
     failures.push('preimage: outer and inner tool_name must be identical');
     return failures;
