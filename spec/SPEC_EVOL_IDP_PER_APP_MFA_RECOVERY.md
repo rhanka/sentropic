@@ -442,3 +442,139 @@ notification remains required, but as detection, not authorization), and
 requiring the RP to check `acr` for KVM (owner-decided: the gateway
 performs no check; the guarantee is the IdP's).
 
+## 8. Normative commitments requested by the kvm lane
+
+Each commitment states the requirement, the file target, the lot that
+delivers it, and what already exists. These are requirements on BUILD
+branches; this spec branch changes no code or test.
+
+### 8.1 Versioned, non-secret declaration of the kvm-gateway client
+
+**Requirement R-KVM-DECL.** `[TO BUILD Lot 1]` The repository carries a
+versioned declaration of the `kvm-gateway` client containing only
+non-secret fields, sufficient to re-register the client identically on any
+tier through the existing governed Job. The secret itself never enters the
+declaration; only its variable names do (section 11 lists the fields).
+
+- File target (new): `deploy/oauth-clients/kvm-gateway.yaml` — client id,
+  display name, the single redirect URI, scopes, grant/response types,
+  token-endpoint auth method, PKCE requirement, required level (legacy
+  spelling until Lot 5, then neutral), allowlist placeholder for the owner
+  subject (subject value is tier data, committed as a variable reference,
+  not a personal identifier in prose), tenant, and the secret variable
+  names from `docs/oauth-client-rotation.md`.
+- File targets (existing, reused): the registration Job
+  `deploy/k8s/base/36-oauth-register-client-job.yaml` via
+  `make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`,
+  and the env-driven registration script
+  `api/src/scripts/oauth-register-client.ts`. Lot 1 adds the declaration
+  and a Make-level consistency check that the declaration and a dry
+  registration agree; it does not add a second registration path.
+- Already exists: confidential-client registration, secret hashing,
+  policy parsing, and the rotation runbook
+  (`docs/oauth-client-rotation.md:5` already names `kvm-gateway` as a
+  confidential client) `[EXISTS]`. Missing today: the checked-in
+  declaration file itself and any test that the declared policy survives
+  re-registration.
+
+### 8.2 IdP non-regression test for the required MFA level
+
+**Requirement R-KVM-TEST.** `[TO BUILD Lot 1, extended by Lots 2 and 5]`
+Because the gateway performs no `acr`/`amr` check, the IdP authorize
+behaviour for this level is pinned by automated tests. At authorize, a
+magic-link session and a federation (Google-shaped) session each receive
+the forced re-auth and then `access_denied` on resume, and a subject
+outside the allowlist is refused even with a qualifying MFA session.
+
+- File target (extend): `packages/auth-hono/tests/oauth-client-required-acr.test.ts`.
+  Merged coverage already present `[EXISTS]`: `meetsRequiredAcr` unit
+  cases, bearer forced to login, MFA session through to consent, no-policy
+  client untouched, bearer resume refused with `access_denied` (the test
+  names the magic-link/Google path), passkey-without-UV forced then
+  refused, `prompt=none` returning `login_required`, and fresh-after-reauth
+  acceptance. Lot 1 adds the two missing cases to the same file: a
+  federation-shaped bearer fixture explicitly (distinct session origin,
+  same `mfaVerified=false` expectation) and an allowlist refusal for an
+  MFA session of an unlisted subject. Test names follow the harness-test
+  convention ("should … when …"); scoped run:
+  `make test-api SCOPE=tests/oauth-client-required-acr.test.ts ENV=test-idp-per-app-mfa-recovery`
+  (package test invocation per `rules/workflow.md`; never on `ENV=dev`).
+- File target (extend): `api/tests/api/auth/oauth-client-policy.test.ts`
+  `[EXISTS]` — the API-level twin (real client row, real sessions). Lot 1
+  adds the federation-origin bearer case at this level if the fixture
+  supports it, otherwise records why the package level is the covering
+  level. Lots 2 and 5 extend both files with the freshness (stale MFA
+  session) and neutral-value (alias acceptance, canonical emission) cases.
+- No gateway-side test is specified: asserting a check the owner decided
+  the gateway must not perform would encode the wrong contract.
+
+### 8.3 Closing the email-only re-enrolment path for required-MFA clients
+
+**Requirement R-KVM-CLOSE.** The email-only path is closed by R-REC-1 and
+R-REC-2 (section 6), restated here with its file target and effective lot:
+
+- File target: `api/src/routes/namespaces/auth/magic-link.ts` — the
+  no-devices branch (temporary registration session, lines 194–226 at the
+  baseline) and the enrolment gate consulted by
+  `api/src/routes/namespaces/auth/registration.ts` for existing users.
+  Supporting targets: the registration handlers' hardened-account check
+  (Lot 3) and the session-purpose confinement for enrolment-only sessions.
+- **From when: Lot 3.** The closure is effective for MFA-hardened accounts
+  only, from the Lot 3 deployment. Ordering constraint (normative):
+  `kvm-gateway` may be **registered** from Lot 1, but its MFA-only
+  allowlist enforcement (owner subject actually gated on the required
+  level for production access) goes live only **after** Lot 3, otherwise
+  the email path would still convert mailbox control into access during
+  the interval. Section 10.2 sequences registration, enrolment of the
+  second credential, and enforcement.
+- Already exists `[EXISTS]`: bearer refusal at authorize, the temporary
+  session itself, and email verification marking. Missing today
+  `[TO BUILD Lot 3]`: the hardened-account branch, the enrolment-only
+  session purpose, and the register-surface block for bearer/federation
+  sessions of hardened accounts.
+
+## 9. Governance, audit, and notifications
+
+### 9.1 Who may change a client policy
+
+`[EXISTS]` There is no self-service UI for OAuth client policy. A policy
+is created or changed only by re-registering the client through the
+governed path: an operator prepares a 0600 env file with the
+`OAUTH_CLIENT_*` variables (including `OAUTH_CLIENT_REQUIRED_ACR` and
+`OAUTH_CLIENT_ALLOWED_USER_IDS` when a policy is set or replaced) and runs
+`make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`
+against the tier cluster; the Job output prints the effective required
+level and allowlist for verification before cutover
+(`docs/oauth-client-rotation.md:37`). Omitting the two policy variables
+preserves the stored policy, so a secret rotation cannot silently clear
+or weaken it.
+
+Normative additions:
+
+- **R-GOV-1.** `[TO BUILD Lot 6]` Only an operator holding both cluster
+  access for the tier and the values file may change a required level or
+  an allowlist. The IdP application role does not gain a policy-editing
+  endpoint in this evolution; adding one later requires the same audit
+  and the fresh-MFA step-up of R-STEP-1 for the acting admin.
+- **R-GOV-2.** `[TO BUILD Lot 6]` Lowering a required level, clearing it,
+  or removing a subject from an MFA client's allowlist is recorded as a
+  distinct audited event (section 9.2) with the previous and new values
+  (subject identifiers hashed or truncated in logs; full values stay in
+  the database row history the Job already prints for the operator).
+- **R-GOV-3.** The client secret, its hash rotation, and the policy are
+  independent: rotation follows the 90-day runbook cycle and never
+  requires a policy decision; a policy change never requires a secret
+  rotation.
+
+### 9.2 Audit
+
+`[EXISTS]` The host wires the package audit port to the structured logger
+(`api/src/routes/auth/oauth.ts:157`); merged OAuth code records
+`oauth.end_session` events. There is no dedicated authentication-event
+table; audit means structured, queryable log events with a stable event
+name, actor subject, client id where relevant, outcome, and timestamp —
+never secret, code, token, or full email payloads beyond the account
+address already used for delivery.
+
+`[TO BUILD Lot 6]` Required events (names are normative; field sets are
+Lot 6 work): `oauth.client_policy_changed` (including the R-GOV-2
