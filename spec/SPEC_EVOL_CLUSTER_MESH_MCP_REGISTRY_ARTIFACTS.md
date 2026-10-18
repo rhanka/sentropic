@@ -260,6 +260,23 @@ These items are open after the #679 merge. They are recorded here so no reader t
 
 The same host model applies: the Sentropic app, as a host, embeds the registry through cluster-mesh, selects and configures providers, and keeps its customizations host-side (§2, §9.1). No new design is specified here for that host.
 
+### Managed-app adoption matrix (amendment F692-3, 2026-10-18)
+
+Target matrix, not an onboarding claim: one row per managed app, with the template/instance vocabulary of `spec/SPEC_EVOL_APP_CATALOG.md:29` (Q2) and its resolved slug discipline (`:77` §6) preserved — no new naming is introduced here. Evidence status stays `unverified` for every row until a host qualification receipt exists; a row records the intended binding, never that the binding runs. The KVM gateway and the IdP appear in this section as identity actors (see the note below the table), not as app rows.
+
+| App | Owner | Repository | Template / instance identity | Tier / origin | Identity mode | Resource namespace | Selected capabilities | Annotation adapter | Data authority | Evidence status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Immo | Host owner (Immo) | Host-side, outside this repo (`missing source` in this tree, §12) | First host instance of the generic registry (§2, §9.1) | Host environment | Host-embedded registry; host-supplied identity (§7) | Host-declared per binding | Registry + `sentropic.artifacts` + own MCP providers | Host-supplied (§14.5) | Host (customizations host-side, §9.1) | `unverified` |
+| Sentropic app | Sentropic | This repo (app surface) | Second host instance (§11) | Product tiers | Host-embedded registry; IdP-issued clients | App-instance namespace (§14.3) | Registry + selected providers per host config | Embedded annotation session surface (PR #694) | Host (this app) | `unverified` |
+| OpenERP | OpenERP owner | OpenERP repo (external) | Standalone and brokered instances, distinct | Own tiers | **Client and provider**: MCP client + server, own identity authority; brokered lane via RFC 8693 (`spec/SPEC_OPENERP_REQUIREMENTS.md:18`, `:55`; `spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md:18`, `:26`) | Organisation scope (its own scope unit, no workspaces) | MCP client+server, OTel, policy hooks, marketplace/sandbox (`spec/SPEC_OPENERP_REQUIREMENTS.md:31`, `:42`, `:67`) | Per managed-screen contract (PR #694) | **Its own database** and organisation scope; never a shared Sentropic DB | `unverified` |
+| nc-fullstack | App owner | App repo (external) | Managed app instance | Own tiers | Managed-app identity mode (to qualify) | App-instance namespace | Catalogue-selected capabilities (to qualify) | Host adapter; **must not assume a Node/Hono backend** (SvelteKit UI + FastAPI backend) | App (own store) | `unverified` |
+| CV | App owner | App repos (external) | Three distinct bindings, not equated: `spa-transpose-cv`, `scalian-transpose-cv`, Sentropic profiles feature | Own tiers | Per binding (to qualify) | Per binding namespace | Per binding (to qualify) | Per binding host adapter | Per binding authority | `unverified` |
+| Diag | App owner | App repo (external; repository HEAD `unverified`) | Managed app instance | Own tiers | Managed-app identity mode (to qualify) | App-instance namespace | Catalogue-selected capabilities (to qualify) | Host adapter (to qualify) | App (own store) | `unverified` |
+| Design-system surface | Sentropic | Design-system repo (external; repository HEAD `unverified`) | Managed surface, not a flagship workspace type (§14.3) | Public/default surface | Public/PKCE RP, personas non-authoritative | Surface namespace | Catalogue-visible surface capabilities | Host adapter (to qualify) | Surface owner | `unverified` |
+| Geo and further declared consumers | Declaring owners | Declared repos (external) | Declared instances | Own tiers | To qualify per consumer | Per-instance namespace | Declared capabilities only | Host adapter (to qualify) | Consumer authority | `qualification required` |
+
+Identity actors, not app rows: the **KVM gateway** is a distinct OAuth relying party and the first forced-MFA target (PR #695); the **IdP** is the issuer/tenant-spine authority. Neither is an app-template instance, and neither appears as a catalogue app entry. Platform consumers that are not managed web apps (h2a, llm-mesh/gateway, Engram/Graphify, k8s-ops) are likewise excluded from this matrix; their catalogue relationship, where any, is the projection of §14.1, not an app row.
+
 ## Acceptance
 
 This spec is accepted as the repo record of the #679 delivery when:
