@@ -12,19 +12,22 @@ export const durableHostFixture = (key = 'a', noUsage = false) => {
     resolveOwner: (caller, context) => ({ ownerScopeRef: caller.ownerScopeRef, tenantId: 'tenant',
       principalId: 'owner', workspaceId: caller.workspaceRef, source: 'fixture', correlationId: context.requestId }),
     gateway: { config: stubGatewayConfig, routeMetering: { settleRoute: () => undefined } },
-      createRoutePlanner: (options) => new InMemoryRoutePlanner({ ...options, directory: {
-        listEligible: async () => [{ accountRef: 'internal-a', diagnosticAccountRef: 'account-a', targetProviderId: 'openai', transportProviderId: 'codex',
-          supportedModelIds: [model], enrollmentCompletedAt: '2026-10-01T00:00:00Z', readiness: 'ready', revision: '1' }],
-        prepareAttempt: async () => ({ attemptRef: 'attempt-a',
-          generate: async (request: GenerateRequest): Promise<GenerateResponse> => {
-            calls.push(request);
-            return { id: 'response', providerId: 'openai', modelId: model, message: { role: 'assistant', content: 'synthetic' },
-              text: 'synthetic', toolCalls: [], finishReason: 'stop', ...(noUsage ? {} : { usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }) };
-          }, stream: async () => { throw new Error('fixture stream unused'); },
-          markCommitted: async () => undefined, complete: async () => undefined,
-          releaseCancelled: async () => undefined, recordOutcome: async () => undefined,
-        }) as unknown as PreparedRouteAttempt,
-      } }),
+      createRoutePlanner: (options) => {
+        let seq = 0;
+        return new InMemoryRoutePlanner({ ...options, directory: {
+          listEligible: async () => [{ accountRef: 'internal-a', diagnosticAccountRef: 'account-a', targetProviderId: 'openai', transportProviderId: 'codex',
+            supportedModelIds: [model], enrollmentCompletedAt: '2026-10-01T00:00:00Z', readiness: 'ready', revision: '1' }],
+          prepareAttempt: async () => ({ attemptRef: `attempt-${++seq}`,
+            generate: async (request: GenerateRequest): Promise<GenerateResponse> => {
+              calls.push(request);
+              return { id: 'response', providerId: 'openai', modelId: model, message: { role: 'assistant', content: 'synthetic' },
+                text: 'synthetic', toolCalls: [], finishReason: 'stop', ...(noUsage ? {} : { usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }) };
+            }, stream: async () => { throw new Error('fixture stream unused'); },
+            markCommitted: async () => undefined, complete: async () => undefined,
+            releaseCancelled: async () => undefined, recordOutcome: async () => undefined,
+          }) as unknown as PreparedRouteAttempt,
+        } });
+      },
   };
   return { mesh, calls };
 };
