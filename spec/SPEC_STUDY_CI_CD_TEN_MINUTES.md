@@ -82,3 +82,53 @@ The 555/585-second figures apply to the selected API/CD path, not every combinat
 The UI merge case includes UI image publication and preproduction while preserving the API digest. The shared `AuthProviderGlyph` case selects auth-ui qualification/publication, UI and embedded IdP consumer checks, both images, and preproduction. Skipping deployment for compatible library-only changes is a future conditional policy, not a description of current main.
 
 Isolated transformation gains are not additive: several steps share preparation savings. Distinguish isolated proposed effect, dependency-wait removal, queue allowance, and the complete nine-step budget. Missing, failed, cancelled, or unexpectedly skipped required results block promotion.
+
+## 5. Branch train index
+
+These are planned branches, not branches already created. File numbers 62–70 are allocated to this train after the requested 61 boundary. Each branch starts from main after its predecessor is merged; the explicit chain serializes shared workflow/Makefile ownership. Technical prerequisites are also recorded so later orchestration can distinguish necessary data dependencies from merge ordering.
+
+| Order | Plan and branch | Dependencies | Budget to measure / acceptance focus |
+| --- | --- | --- | --- |
+| 1 | [BR-62](../plan/62-BRANCH_chore-ci-capacity-metrics.md) — `chore/ci-capacity-metrics` | This documentation PR | Complete results; aggregate critical-path queue ≤60s under contention. |
+| 2 | [BR-63](../plan/63-BRANCH_perf-ci-native-checks.md) — `perf/ci-native-checks` | BR-62 | API/UI/IdP static ≤120/90/90s, cold preparation included. |
+| 3 | [BR-64](../plan/64-BRANCH_perf-ci-image-artifacts.md) — `perf/ci-image-artifacts` | BR-63; metrics from BR-62 | Longest complete image branch ≤180s warm / 210s cold; exact digest. |
+| 4 | [BR-65](../plan/65-BRANCH_perf-ci-parallel-dag.md) — `perf/ci-parallel-dag` | BR-64; verdict from BR-62 | Early runtime dispatch; scans ≤90s; all required results preserved. |
+| 5 | [BR-66](../plan/66-BRANCH_perf-ci-package-candidates.md) — `perf/ci-package-candidates` | BR-65 for train order; BR-63 preparation and BR-64 receipts | Cluster ≤210s; common guard ≤75s; original assertions retained. |
+| 6 | [BR-67](../plan/67-BRANCH_test-ci-deterministic-journeys.md) — `test/ci-deterministic-journeys` | BR-66 for train order; BR-65 scheduling and BR-64 images | Browser/API shards ≤180s; no unexpected live calls; daily live results visible. |
+| 7 | [BR-68](../plan/68-BRANCH_perf-cd-tested-artifacts.md) — `perf/cd-tested-artifacts` | BR-64, BR-65, BR-66, BR-67 | Promotions ≤40s; preprod ≤75s; selected fresh npm train ≤195s. |
+| 8 | [BR-69](../plan/69-BRANCH_feat-ci-consumer-contracts.md) — `feat/ci-consumer-contracts` | BR-68; BR-66 candidates and BR-67 blocking integration | Unchanged installed tuple/digest proven before consumer work is omitted. |
+| 9 | [BR-70](../plan/70-BRANCH_test-ci-ten-minute-proof.md) — `test/ci-ten-minute-proof` | BR-62 through BR-69 | ≥30 complete full-product runs; publish distribution and every breach. |
+
+Each file follows [BRANCH_TEMPLATE](../plan/BRANCH_TEMPLATE.md), with exact initial file ownership, tests, scope exceptions, measured acceptance, rollback, and isolated environment/port assignment. New script/fixture names in those plans are implementation deliverables, not claims that files already exist. Before dispatch, the conductor registers the train in the execution `PLAN.md` and imports its plans into Track under that operation's scope; this documentation PR does not mutate either shared state.
+
+## 6. Acceptance and rollback
+
+Record immutable source SHA, workflow revision, run/attempt/job IDs, runner class, artifact digests, installed package tuple, cache profile, job/step timestamps, expected/executed test identities, retries, runner-minutes, and provider calls/cost. Separate install, sibling build, image build/export, transfer/load, startup, seed/auth, tests, teardown, registry visibility, rollout, and dispatch spans. Retain combined cells until instrumentation actually measures their subdivision.
+
+The final campaign requires at least 30 complete full-product runs across warm caches, source-cache misses, dependency-lock misses, full cache loss, and competing PR/main traffic. Sample API-only, UI-only, mixed application/package, compatible/additive/breaking library, explicit upgrade, tooling/lock, and relevant infrastructure changes; package-only cases supplement rather than replace full-product samples. Include actual fresh-version publication. Publish sample counts per profile/case, median, p90, p95, maximum, all incomplete/failed attempts, and each threshold breach. A ten-minute timeout is a failed unfinished release, not a successful latency sample.
+
+Negative checks must reject missing/cancelled/skipped results, incomplete matrix membership, wrong SHA/hash, absent required siblings, stale/untrusted caches, unexpected provider traffic, and contract/tuple ambiguity. Preserve served IdP pages and form redirects, real runtime smoke/limits/restore, PostgreSQL crash/upgrade qualification, and registry provenance. A sample maximum establishes the observed campaign result, not a guarantee during unlimited provider/runner/registry outages.
+
+Rollback each transformation independently while preserving result completeness, coverage, and artifact identity. Restore prior scheduling/native/cache recipes when their replacement fails; never keep dual active implementations as a workaround. Disable a failing consumer fast path by returning its boundary to full deterministic integration. Restore the previous qualified immutable deployment tuple when a release fails; npm releases require a new corrective version rather than overwriting published bytes.
+
+## 7. Presentation contract
+
+Use the existing diagram generator and design-system theme for one layered CI/CD graph. Put **before/after, case, event, and grouping controls inside the canvas**, with stable workflow job/step identifiers and viewport. Select internal compatible fix, additive change, breaking/upgrade, API, UI, tooling/lock, and the shared asset case in that graph. Events distinguish PR, merge with CD, and daily live providers. A selected plan step highlights changed jobs and shows its isolated effect; cases remain clickable. Expanded matrices preserve internal dependencies and their critical path, including the 195-second publication train.
+
+The heatmap expands job → step and separates setup/install/build/transfer/execute/publish/queue. Show elapsed or runner-seconds, numeric values, semantic colors, and bins ≤15s, 16–60s, 61–180s, >180s. Missing measurements display **to measure**, with a pattern; proposed values display **budget to measure**. Every sampled job/step over 60 seconds needs an optimization, source, and acceptance reference. Render and compute from the same graph; never sum unrelated example jobs into a measured run or add isolated savings together.
+
+The validated portable dossier is the presentation reference. Its controls check and Sol GO r3 are source-validation records supplied with the handoff; they do not attest review or CI of the new documentation commits. BR-70 owns the later measured evidence and presentation refresh.
+
+## 8. Source provenance and reconciliation
+
+The validated working bundle is `/home/antoinefa/src/sentropic/.tmp/focus-ci-efficiency-kit/`; it is not a repository dependency or a committed performance artifact. This study preserves the retained decisions and stable GitHub evidence links so implementation does not depend solely on that local bundle.
+
+| Source in that bundle | Role |
+| --- | --- |
+| `ci-optimization-implementation-plan.md` | Retained nine-step plan, titled “Plan frais CI/CD — dix minutes maximum, e2e inclus”; SHA-256 `426bb0663d9a9ca4df2ee9030603f00a93a362a003da80e34c729143a55bc820`. |
+| `strategy-v3-astra.md` | Measured study, job/step inventory, dependency graph, and proposed budgets at the evidence baseline. |
+| `strategy-v3-reconciliation.md` | Governing corrections: superseded experiment removed; main/PR scopes distinguished; all proposed publishers wait for the verdict; scenario and cache profiles drive one graph. |
+| `owner-feedback-v3/OWNER-FEEDBACK-V3.md` | Verbatim requirements and later additions; later owner feedback overrides earlier study recommendations. |
+| `dist/ci-cd-sentropic-portable.html` | Validated interactive dossier, including controls inside the diagram and linked plan steps. |
+
+The [pinned workflow](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/.github/workflows/ci.yml) and [Makefile](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/Makefile) govern historical interpretation. Every implementation branch rechecks the then-current files before changing them. The current-main 138-second UI example replaces the earlier 129-second label; the 495-second UI and 199-second scan examples belong to the broad PR. Historical publisher runs remain historical. No unmeasured cold branch, skipped test, or already-published version receives an invented duration or success credit.

@@ -59,9 +59,9 @@
   - [x] Read project rules, template, neighbouring studies, and validated source material.
   - [x] Verify branch with harness, fetch `origin/main`, and confirm the clean branch starts at that base.
   - [x] Verify source plan SHA-256 `426bb0663d9a9ca4df2ee9030603f00a93a362a003da80e34c729143a55bc820` and availability of plan files 62 through 70.
-- [ ] **Lot 1 — Study consolidation**
+- [x] **Lot 1 — Study consolidation**
   - [x] Record evidence, owner constraints, retained architecture, and budget calculations in `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
-  - [ ] Add the train index, acceptance protocol, rollback policy, and source provenance.
+  - [x] Add the train index, acceptance protocol, rollback policy, and source provenance.
 - [ ] **Lot 2 — Executable branch plans**
   - [ ] BR-62: measure and reserve capacity.
   - [ ] BR-63: prepare once and run native static checks.
