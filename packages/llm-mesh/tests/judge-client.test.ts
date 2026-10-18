@@ -302,6 +302,67 @@ describe('remote judge client', () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 
+  it('refuses NaN inputs before any egress without inventing a receipt', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('nan-corr')),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: 'nan-corr', inputs: { output: NaN } }));
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'not-sent',
+      error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' }, correlationId: 'nan-corr' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses present undefined properties before any egress', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('undef-corr')),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: 'undef-corr', inputs: { output: null, state: undefined } }));
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'not-sent',
+      error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' }, correlationId: 'undef-corr' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses over-256-KiB requests before any egress', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('big-corr')),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: 'big-corr', inputs: { output: 'x'.repeat(300_000) } }));
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'not-sent',
+      error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' }, correlationId: 'big-corr' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses excessively deep requests before any egress', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('depth-corr')),
+      { status: 200, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const request = judgeRequest({ correlationId: 'depth-corr' }) as unknown as { inputs: { output: unknown } };
+    let deep: unknown = 'leaf';
+    for (let i = 0; i < 24; i++) deep = [deep];
+    request.inputs.output = deep;
+    const result = await client.judge(request as unknown as Parameters<typeof client.judge>[0]);
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'not-sent',
+      error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' }, correlationId: 'depth-corr' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('serializes the pre-auth snapshot when the live request mutates during auth resolution', async () => {
+    let sentBody = '';
+    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      sentBody = String(init?.body);
+      return new Response(JSON.stringify(mockVerdictResult('mut-corr')),
+        { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const request = judgeRequest({ correlationId: 'mut-corr', inputs: { output: 'original' } });
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      authToken: async () => { request.inputs.output = 'mutated-during-auth'; return 'token'; } });
+    const result = await client.judge(request);
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(sentBody).inputs).toEqual({ output: 'original' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('never retries the call automatically on 502/503/429 status', async () => {
     for (const status of [429, 502, 503, 504]) {
       const fetch = vi.fn(async () => new Response('HTML Gateway Error', { status }));
