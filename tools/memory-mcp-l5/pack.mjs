@@ -77,7 +77,13 @@ function main() {
   if (failures.length > 0) {
     throw new Error(`pack.mjs: manifest invalid: ${failures.join('; ')}`);
   }
-  const bytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  const inventoryJson = `"contractInventory": [\n${inventory.map(entry => `    ${JSON.stringify(entry)}`).join(',\n')}\n  ]`;
+  const manifestJson = JSON.stringify({ ...manifest, contractInventory: [] }, null, 2)
+    .replace('"contractInventory": []', () => inventoryJson);
+  const bytes = Buffer.from(`${manifestJson}\n`, 'utf8');
+  if (existsSync(resolve(rootDir, manifestPath)) && !readBytes(rootDir, manifestPath).equals(bytes)) {
+    throw new Error('pack.mjs: immutable manifest already exists; retain it and select a new identity before packing');
+  }
   mkdirSync(dirname(resolve(rootDir, manifestPath)), { recursive: true });
   writeFileSync(resolve(rootDir, manifestPath), bytes);
   const sidecar = `${manifestPath}.sha256`;
