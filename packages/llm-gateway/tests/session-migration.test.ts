@@ -104,6 +104,37 @@ describe('migrateOldSessions', () => {
     expect(caller.ownerScopeRef).toBe('owner-a');
   });
 
+  it('carries the account pin when migrating a previously used session so inference and restart keep serving', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { FileGatewayStateStore } = await import('../src/node/gateway-state-store.js');
+    const { startGatewayHost } = await import('../src/node/gateway-host.js');
+    const { createGatewayControlClient } = await import('../src/node/control-client.js');
+    const { durableHostFixture, model, routingContract } = await import('./helpers/durable-host.js');
+    const stateDir = await mkdtemp(join(tmpdir(), 'gw-mig-pinned-'));
+    const fixture = durableHostFixture();
+    const host = await startGatewayHost({ stateDir, mesh: fixture.mesh, listen: { host: '127.0.0.1', port: 0 } });
+    try {
+      const control = createGatewayControlClient({ controlSocket: host.controlSocket });
+      const issued = await control.acquireSession({ ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'c-pinned', routingContract });
+      const send = () => fetch(`${host.endpoint}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${issued.key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      expect((await send()).status).toBe(200);
+      expect(fixture.calls).toHaveLength(1);
+      const nextContract = { ...routingContract, revision: 'p2' };
+      const migrated = await control.migrateSessionPolicy({ ownerScopeRef: 'owner-a', sessionRef: issued.sessionRef, routingContract: nextContract, expectedPolicyRevision: 'p1' });
+      expect(migrated).toMatchObject({ sessionRef: issued.sessionRef, policyRevision: 'p2', expiresAt: issued.expiresAt });
+      expect((await send()).status).toBe(200);
+      expect(fixture.calls).toHaveLength(2);
+    } finally {
+      await host.stop();
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
   it('serves real host inference with migrated keys and upgrades policyless legacy sessions while rejecting unapproved policy changes', async () => {
     const { mkdtemp, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
