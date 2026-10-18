@@ -55,8 +55,8 @@
   - [x] Record available runtime evidence, pending operator facts, endpoint parity, configured domains and generated-content authorities in `docs/baselines/app-cm-w0/baseline.md`.
   - [x] Pin exact releases, selected peers, integrities and lock/config hashes in `published-tuple.json`.
 - [ ] **Lot 1 — Frozen implementation handoffs**
-  - [ ] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
-  - [ ] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
+  - [x] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
+  - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
   - [ ] Pin P canonical verifier, vectors and trust/key authorization contract in `promotion-contract.md` and `verifier-vectors.json`.
 - [ ] **Lot 2 — Dispatch and authorization register**
   - [ ] Reserve migration IDs, ports, six train slots and shared-file writers in `reservations.md`.
