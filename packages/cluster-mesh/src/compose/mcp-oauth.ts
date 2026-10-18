@@ -38,7 +38,13 @@ export async function createMcpOAuthNamespace(
   });
   const egress = createOAuthEgress(options);
   const sessions = createOAuthSessions(options.sessions, options, () => connectOAuthServer(options, bridge, egress));
-  const metadataRoutes = adapter.mcpAuthRoutes(auth);
+  const providerRoutes = adapter.mcpAuthRoutes(auth);
+  // Cross the optional adapter boundary as HTTP, allowing compatible Hono patch versions.
+  const metadataRoutes = new Hono();
+  for (const path of [provider.protectedResourceMetadataPath(options.resource),
+    provider.PROTECTED_RESOURCE_METADATA_PATH, provider.legacyProtectedResourceMetadataPath(options.resource)]) {
+    metadataRoutes.get(path, (c) => providerRoutes.fetch(c.req.raw));
+  }
   const mcpRoutes = new Hono().all('/', async (c) => {
     try {
       const authority = await verifyOAuthRequest(auth, provider.McpAuthError, options, c.req.raw);

@@ -28,7 +28,11 @@ describe('MCP OAuth session authority', () => {
     const calls = [full, read].map((bearer, index) => app.request('/mcp', post(rpc('tools/call', {
       name: 'get_zones_geojson', arguments: { city: 'longueuil' },
     }, index + 2), bearer, session)));
-    await both; release();
+    await Promise.race([both, ...calls.map(async (pending) => {
+      const response = await pending;
+      throw new Error(`Overlap request completed before the barrier: ${await response.text()}`);
+    })]);
+    release();
     const results = await Promise.all(calls.map(async (pending) => {
       const body = await (await pending).json();
       return JSON.parse(body.result.content[0].text);

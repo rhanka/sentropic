@@ -13,6 +13,10 @@ export interface OAuthRequestAuthority {
 
 export const oauthAuthority = new AsyncLocalStorage<OAuthRequestAuthority>();
 
+// Node supports the native operation; TypeScript 5.4's DOM declaration predates it.
+export const combineOAuthSignals = (signals: AbortSignal[]): AbortSignal =>
+  (AbortSignal as typeof AbortSignal & { any(values: AbortSignal[]): AbortSignal }).any(signals);
+
 export async function verifyOAuthRequest(
   auth: McpAuth,
   AuthError: typeof McpAuthError,

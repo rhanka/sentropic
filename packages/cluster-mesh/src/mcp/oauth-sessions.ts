@@ -1,4 +1,4 @@
-import { oauthAuthority, type OAuthRequestAuthority } from './oauth-context.js';
+import { combineOAuthSignals, oauthAuthority, type OAuthRequestAuthority } from './oauth-context.js';
 import type { McpOAuthSessionOptions } from './oauth-contracts.js';
 import type { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 
@@ -76,7 +76,7 @@ export function createOAuthSessions(
         }
       }
       const current = Object.freeze({ ...authority,
-        signal: AbortSignal.any([authority.signal, session.lifetime.signal]),
+        signal: combineOAuthSignals([authority.signal, session.lifetime.signal]),
       });
       try {
         const response = await oauthAuthority.run(current, () => session.transport.handleRequest(request));
