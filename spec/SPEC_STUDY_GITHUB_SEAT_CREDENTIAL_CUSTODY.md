@@ -78,33 +78,57 @@ Current (on main): delivery is job-only. The custody job creates or updates the 
 
 The 2026-09-20 description (deploy pulls full credentials into a keyring/pool and seeds active accounts) is superseded and is not retained. Ordinary local seats and custody-managed seats stay distinct; the pool-versus-keyring retrieval choice is decided by the projection resolver above and is no longer open (§7, question 6).
 
-## 6. Provider coverage — open
+## 6. Provider coverage — current inventory and qualification status
 
-| Seat | Enrollment today | Refreshable unattended? | Note |
+Current (on main): the five-CLI envelope below is the provider inventory. Envelope support is contract coverage, not proof that every provider is deployable; lifecycle qualification stays unverified for each CLI (`spec/SPEC_EVOL_CI_SEATS.md:58-68`).
+
+| CLI | Enrollment / contract status (current) | Custody lifecycle |
+|---|---|---|
+| agy | Envelope supported; agy enrolls as `cloud-code` and its application tuple must not substitute Gemini (`spec/SPEC_EVOL_CI_SEATS.md:49-64`) | Unverified (`spec/SPEC_EVOL_CI_SEATS.md:58-68`) |
+| codex | Envelope supported; existing device-flow enrollment on main (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:16-18`) | Unverified (`spec/SPEC_EVOL_CI_SEATS.md:58-68`) |
+| vibe | Envelope supported | Unverified (`spec/SPEC_EVOL_CI_SEATS.md:58-68`) |
+| muse | Envelope supported; native Muse enrollment code exists (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:16-18`) | Unverified (`spec/SPEC_EVOL_CI_SEATS.md:58-68`) |
+| claude | Ordinary enrollment, import, and refresh delivered by PR #659 (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:120-135`) | Custody readiness not advertised; resolver not implemented at the cited baseline (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:125`, `:135`) |
+
+Delivered enrollment is distinct from execution qualification. Claude enrollment is separated from official-runner qualification (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:139`, `:165-169`, `:248`, `:308`); the execution bridge is an injected seam with no runner installed by default (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:169`), and runner/wiring plus live qualification are assigned to h2a (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:248-250`). The standalone deployable host excludes provider CLI subprocesses (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:117`), so the PR #659 h2a runner seam does not make the standalone custody gateway capable of serving Claude. That cross-host integration is not designed in this study.
+
+Direct Gemini/AI-Studio seat (deferred/unverified): the 2026-09-20 study named a direct Gemini seat as a separate candidate. Main describes AI Studio as API-key access and Vertex as ADC/OAuth (`spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md:40`; `spec/SPEC_EVOL_LLM_MESH_GCP.md:17`), and the five-CLI contract forbids substituting Gemini for the agy tuple (`spec/SPEC_EVOL_CI_SEATS.md:49-64`). No direct Gemini subscription-seat path is established; the candidate is retained only as deferred/unverified, and adding such a provider is outside this reconciliation.
+
+Initial subset and reauthentication surface (still unverified): the original request to choose the first custody proof subset and the concrete human reauthentication surface (Focus, h2a, or Sentropic UI) is retained without an invented answer. Main specifies a provider inventory, operator alerts, and trusted human surfaces, but does not select the exact initial custody rollout subset or a custody-specific UI (`spec/SPEC_EVOL_CI_SEATS.md:58-68`; `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:151-155`; `spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md:368-379`).
+
+## 7. Disposition of the seven original questions
+
+The 2026-09-20 study framed seven questions for a future EVOL gate. Each is reclassified below from evidence on main; no competing design is created and no qualification is marked complete.
+
+| # | Original question | Disposition | Evidence |
 |---|---|---|---|
-| Codex (ChatGPT) | `codex` (device-code) ✅ | refresh token, periodic reauth | exists |
-| Cloud-Code (Gemini) | `cloud-code` (Google OAuth) ✅ | refresh token | exists; `resolve()` gives `cloudaicompanionProject` |
-| Claude | `claude-code` ✅ | refresh token | exists |
-| Gemini (direct/AI-Studio) | — | — | net-new provider or via `cloud-code` |
-| **Muse** | — | **unknown** | **identity + auth mode undefined → §7 decision** |
+| 1 | Custody choice (O1/O2/O3) | Decided on main: GitHub Secrets with preprod delivery; bounded authority retained, production deferred. Historical comparison in §3. | `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:13`, `:144`, `:155`, `:263` |
+| 2 | Unwrap/KMS residence (O2/O3) | Historical dependency of the superseded options. The selected lane instead requires the specified GitHub API credential, custody environment, and rotation. | `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:145` |
+| 3 | Muse identity/auth | Obsolete as a discovery question: provider code exists on main. Lifecycle/provider qualification remains separate and unverified. | `spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:16-18`; `spec/SPEC_EVOL_CI_SEATS.md:58-68` |
+| 4 | First-wave seats | Current five-CLI inventory exists; an exact custody activation subset is not established by the qualification table. Still unverified (§6). | `spec/SPEC_EVOL_CI_SEATS.md:58-68` |
+| 5 | Refresh cadence + escalation | Cadence/freshness defaults and operator alerts are specified; provider validation and the concrete operational handoff remain open. | `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:151-153`, `:161` |
+| 6 | Pool versus keyring retrieval | Decided: projection resolver in custody-managed mode; no ordinary-envelope hydration. | `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:159-163`; `spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:135` |
+| 7 | Mono-principal scope / terms | Personal scope kept; categorical provider-permission assurance removed (§1.2). | `spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md:249`; `spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:63-75` |
 
-## 7. Owner decisions to frame (for the EVOL gate)
+## 8. Dependencies, method, and next steps
 
-1. **Custody exception** — ratify the raw-secret-mirroring exception at all, and pick the shape: **O1** (GitHub-encrypted secrets, custody delegated to GitHub) / **O2** (envelope ciphertext, key in Sentropic KMS — recommended) / **O3** (handle-only). Everything downstream depends on this.
-2. **Encryption-key residence** (if O2/O3): where the KMS/unwrap key lives and how the refresh Action + MEP reach it without a new cleartext secret on GitHub.
-3. **Muse** — what product is it and what is its auth mode (Copilot-served? standalone seat OAuth?), so it can be scoped or deferred.
-4. **First-wave seats** — which of {Codex, Cloud-Code, Claude, Gemini, Muse} enroll first (proof), which defer.
-5. **Refresh cadence + reauth escalation surface** — cron interval and where the human reauth challenge lands (Focus / h2a / Sentropic UI).
-6. **Retrieval target** — seed the gateway **account-transport pool** (rotation/cooldown across multiple seats) or just the **keyring** (one credential per provider)?
-7. **Scope confirmation** — mono-principal, own seats only (ToS-safe), no cross-user pooling in v0.
+Dependencies (precise statement): the custody maintainer/conductor owns reconciliation with G4; the h2a owner owns Claude execution qualification; the platform/custody operator owns the already-required preprod delivery and per-device revocation evidence. Actual people are assigned by that lane. Missing custody job, resolver, and lifecycle proofs are recorded here as existing dependencies: they are not delivered by PR #659, are not newly solved by this study, and are not prerequisites to merging this accurately scoped historical study. Production remains deferred under O-D3 (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:155`, `:263`).
 
-## 8. Method / next steps
-- This is the STUDY rung (reversible). Per `harness/brainstorm`, the **committed decisions** (esp. §7.1 custody) go through **≥2 independent adversarial reviews** (e.g. Codex 5.6-xhigh + a second lens on custody/ToS/security) before a `SPEC_EVOL_GITHUB_SEAT_CREDENTIAL_CUSTODY.md` and `harness/plan`.
-- No implementation before the custody exception is owner-ratified: storing seat refresh tokens is irreversible-ish (revocation SLA) and security-affecting.
+Method: this reconciliation is documentation-only and selects no new custody design. The successor filenames formerly cited — `spec/SPEC_EVOL_GITHUB_SEAT_CREDENTIAL_CUSTODY.md` in this study and the sibling-worktree `SPEC_EVOL_LLM_SEAT_CUSTODY.md` referenced from D7 — are not tracked spec files in the pinned main and are not cited as merged authority; D7 is the merged controlling consumption contract. The original gate of at least two independent adversarial reviews before a committed-decision EVOL remains a future gate: this reconciliation does not pass that gate and introduces no new decision. After this branch, the conductor obtains the two independent review lenses (mesh/Claude/runtime and custody/deployment/security) before any merge decision.
+
+No implementation is authorized by this study. Custody build prerequisites on main include owner provisioning and rotation of the repo-scoped Actions-secret API credential, the reconciled projection schema, the serialized refresher job, the independent freshness monitor, and per-device revocation evidence (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:220`, `:263`, `:410`).
 
 ## 9. Risks
-- **Custody**: any GitHub-held decryptable seat token widens the blast radius to GitHub's secret plane; O1 delegates seat-account trust to GitHub.
-- **ToS**: programmatic use of seat subscriptions (Copilot/ChatGPT/Claude/Gemini) outside their client may violate provider ToS — must be reviewed per seat before enrollment (same gate as the enrollment proposal).
-- **Reauth cliffs**: device/OAuth seats force periodic human reauth; without a reliable escalation + metered fallback the gateway can lose a provider mid-run.
-- **Refresh-token theft surface**: a scheduled Action holding refresh tokens is a high-value target; O2/O3 shrink it, O1 does not.
-- **Cost model unproven**: seat ToS may forbid this exact usage, nullifying the saving — validate before build.
+
+- **Custody blast radius (current)**: the selected Secrets design widens exposure to the GitHub secret/job boundary, which holds full provider/device payloads (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:144-147`). The dedicated API credential is a high-privilege provisioning and rotation prerequisite (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:145`).
+- **Provider terms (unverified per provider)**: programmatic seat use requires provider-specific qualification. The recorded owner continuation decision is not provider permission (`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:63-75`, `:260`).
+- **Reauthentication cliffs**: device/OAuth seats force periodic human reauthentication. Freshness monitoring and operator alerts are specified (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:151-153`, `:161`); the concrete custody handoff surface remains unselected (§6).
+- **Refresh-job target surface**: the sole refresher holds refresh material and is a high-value target. Serialization, GitHub-first commit, and redacted alerts are the specified mitigations (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:147-153`); revocation is per device at the provider (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:165`).
+- **Cost model unproven (unverified)**: retained from the 2026-09-20 study. Provider terms may forbid the exact usage and nullify the saving; validation precedes any build.
+
+## 10. Reconciliation record (2026-10-18)
+
+- Baseline: `origin/main` at `1472d961e098908e64ef60b83835af357888d031`; PR #659 merged 2026-10-10 as `dc95f7e4f88048e9671002827537cde4cb8149b7`. The Claude-seat spec is unchanged between the PR #659 merge and the pinned main, so its line references apply to both.
+- Changes made: status and dates reconciled (§header, §0); option status corrected to historical with the recorded decision carried forward (§3); security boundary corrected (§3); refresh and delivery replaced by D7 references (§4-§5); factual inventory updated (§2, §6); fallback and terms wording corrected (§1.2, §9); seven questions reclassified (§7); dependency owners stated (§8).
+- Residual contributions retained: the O1/O2/O3 comparison as decision history (§3); the dated 2026-09-20 owner request as provenance (§header, §0); the direct Gemini/AI-Studio candidate as deferred/unverified (§6); the initial-subset and reauthentication-surface questions as still unverified (§6).
+- Historical material on main is preserved as historical: a dated observation in a controlling spec does not override its current normative decision, implemented code, or qualification status (§2, §6).
