@@ -28,6 +28,7 @@ export type AppInvocationEnvelope<TInput> = {
     idempotencyKey?: string;
     elicitationRef?: string;
     memoryContext?: MemoryContextProjectionV1;
+    memoryConfirmationRequired?: boolean;
 };
 
 // @public
@@ -300,6 +301,7 @@ export interface StpConnectorContext {
         expectedActiveGeneration: string;
         expectedPolicyEpoch: string;
         now: string;
+        confirmationRequired?: boolean;
     };
     // (undocumented)
     principal: {
@@ -338,7 +340,7 @@ export type VisibilityContext = {
 // Warnings were encountered during analysis:
 //
 // dist/runtime.d.ts:20:5 - (ae-forgotten-export) The symbol "MemoryContextProjectionV1" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:142:9 - (ae-forgotten-export) The symbol "MemoryInvocationBindingV1" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:144:9 - (ae-forgotten-export) The symbol "MemoryInvocationBindingV1" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

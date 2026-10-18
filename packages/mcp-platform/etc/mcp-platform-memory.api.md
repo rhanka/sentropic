@@ -700,6 +700,7 @@ export interface StpConnectorContext {
         expectedActiveGeneration: string;
         expectedPolicyEpoch: string;
         now: string;
+        confirmationRequired?: boolean;
     };
     // (undocumented)
     principal: {
@@ -798,19 +799,19 @@ export function verifyMemoryConfirmationContinuationV1(continuation: unknown, ex
 // dist/memory/contracts.d.ts:112:5 - (ae-forgotten-export) The symbol "EvidenceBundleV1" needs to be exported by the entry point index.d.ts
 // dist/memory/contracts.d.ts:123:5 - (ae-forgotten-export) The symbol "LifecycleEventAnchorV1" needs to be exported by the entry point index.d.ts
 // dist/memory/frozen-context.d.ts:114:9 - (ae-forgotten-export) The symbol "Cursor" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:157:9 - (ae-forgotten-export) The symbol "AuthFreshnessPolicy" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:184:5 - (ae-forgotten-export) The symbol "AppMcpProviderManifest" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:185:5 - (ae-forgotten-export) The symbol "ConnectorTenantResolutionInput" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:185:5 - (ae-forgotten-export) The symbol "ConnectorTenantContext" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:186:5 - (ae-forgotten-export) The symbol "AppCapability" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:187:5 - (ae-forgotten-export) The symbol "AppToolInvocation" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:187:5 - (ae-forgotten-export) The symbol "AppToolResult" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:187:5 - (ae-forgotten-export) The symbol "DurableCallRef" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:188:5 - (ae-forgotten-export) The symbol "AppResourceRead" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:188:5 - (ae-forgotten-export) The symbol "AppResourceResult" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:189:5 - (ae-forgotten-export) The symbol "AppPromptRequest" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:189:5 - (ae-forgotten-export) The symbol "AppPromptResult" needs to be exported by the entry point index.d.ts
-// dist/runtime.d.ts:190:5 - (ae-forgotten-export) The symbol "ConnectorSecretStatus" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:161:9 - (ae-forgotten-export) The symbol "AuthFreshnessPolicy" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:188:5 - (ae-forgotten-export) The symbol "AppMcpProviderManifest" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:189:5 - (ae-forgotten-export) The symbol "ConnectorTenantResolutionInput" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:189:5 - (ae-forgotten-export) The symbol "ConnectorTenantContext" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:190:5 - (ae-forgotten-export) The symbol "AppCapability" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:191:5 - (ae-forgotten-export) The symbol "AppToolInvocation" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:191:5 - (ae-forgotten-export) The symbol "AppToolResult" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:191:5 - (ae-forgotten-export) The symbol "DurableCallRef" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:192:5 - (ae-forgotten-export) The symbol "AppResourceRead" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:192:5 - (ae-forgotten-export) The symbol "AppResourceResult" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:193:5 - (ae-forgotten-export) The symbol "AppPromptRequest" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:193:5 - (ae-forgotten-export) The symbol "AppPromptResult" needs to be exported by the entry point index.d.ts
+// dist/runtime.d.ts:194:5 - (ae-forgotten-export) The symbol "ConnectorSecretStatus" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
