@@ -1,8 +1,9 @@
-import { mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { describe, it, expect } from 'vitest';
 import {
   PROOF_CATALOG,
@@ -24,7 +25,7 @@ const RECEIPT_BIN = join(HERE, '..', 'receipt.mjs');
 
 const H64 = 'a'.repeat(64);
 const C40 = 'b'.repeat(40);
-const PINNED_IMAGE = `node:24-bookworm-slim@sha256:${H64}`;
+const PINNED_IMAGE = 'node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6';
 
 function writeRef(baseDir, relPath, content) {
   const bytes = Buffer.isBuffer(content) ? content : Buffer.from(typeof content === 'string' ? content : JSON.stringify(content), 'utf8');
@@ -32,6 +33,30 @@ function writeRef(baseDir, relPath, content) {
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, bytes);
   return { path: relPath, bytes, sha256: sha256OfBytes(bytes), integrity: sha512Integrity(bytes) };
+}
+
+function makeTarGz(entries) {
+  const blocks = [];
+  for (const [name, content] of entries) {
+    const data = Buffer.from(typeof content === 'string' ? content : JSON.stringify(content), 'utf8');
+    const hdr = Buffer.alloc(512);
+    hdr.write(name, 0, 100, 'utf8');
+    hdr.write('0000644\0', 100, 8, 'ascii');
+    hdr.write('0000000\0', 108, 8, 'ascii');
+    hdr.write('0000000\0', 116, 8, 'ascii');
+    hdr.write(`${data.length.toString(8).padStart(11, '0')}\0`, 124, 12, 'ascii');
+    hdr.write('00000000000\0', 136, 12, 'ascii');
+    hdr.write('        ', 148, 8, 'ascii');
+    hdr[156] = 48;
+    hdr.write('ustar\0', 257, 6, 'ascii');
+    hdr.write('00', 263, 2, 'ascii');
+    let sum = 0;
+    for (let i = 0; i < 512; i++) sum += hdr[i];
+    hdr.write(`${sum.toString(8).padStart(6, '0')}\0 `, 148, 8, 'ascii');
+    blocks.push(hdr, data, Buffer.alloc((512 - (data.length % 512)) % 512));
+  }
+  blocks.push(Buffer.alloc(1024));
+  return gzipSync(Buffer.concat(blocks));
 }
 
 function buildCheckpointBundle(baseDir) {
@@ -49,32 +74,56 @@ function buildCheckpointBundle(baseDir) {
   ];
   const immRefs = (PROOF_CATALOG.immutableFixtures || []).map((p) => ({ path: p, sha256: writeRef(baseDir, p, `// immutable fixture ${p}\n`).sha256 }));
   for (const m of PROOF_CATALOG.pendingPredecessorMappings || []) writeRef(baseDir, m.file.endsWith('.ts') ? m.file : `${m.file}/index.json`, '// predecessor\n');
-  const lockRef = writeRef(baseDir, 'package-lock.json', { lockfileVersion: 3, packages: { 'node_modules/@modelcontextprotocol/sdk': { version: '1.31.0', range: '^1.31.0' } } });
-  const instLockRef = writeRef(baseDir, 'receipts/installed-lock.json', { sdkVersion: '1.31.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'] });
   const refSrcRef = writeRef(baseDir, 'packages/mcp-broker/dist/memory-reference/index.js', 'export class SqliteMemoryWorkflowStoreV1 { static driver = "node:sqlite"; }\n');
-  const treeRef = writeRef(baseDir, 'receipts/source-tree.json', { repository: 'rhanka/sentropic', head: C40, base: C40, merge: C40, checkout: C40, files: [{ path: c1.path, sha256: c1.sha256 }] });
   const regRef = writeRef(baseDir, 'packages/mcp-platform/dist/registry.d.ts', 'export interface RegistryV1 {}\n');
   const gwRef = writeRef(baseDir, 'packages/cluster-mesh/dist/compose/mcp.d.ts', 'export interface MeshMcpV1 {}\n');
   const fenceRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/sqlite-fence-profile-v1.json', { driver: 'node:sqlite', journalMode: 'WAL', synchronous: 'FULL' });
-  writeRef(baseDir, 'receipts/runtime-probe.json', {
-    tupleHead: C40, nodeVersion: '24.2.0', imageDigest: PINNED_IMAGE, platform: 'linux/amd64', sqliteVersion: '3.49.1',
-    driver: 'node:sqlite', journalMode: 'WAL', synchronous: 'FULL', filesystem: 'ext4', filesystemAssumptions: 'local-posix-fsync',
-    fenceProfileSha256: fenceRef.sha256, pythonCount: 0, addonBuildCount: 0, execArgv: [], nodeOptions: '',
-  });
   const prodPolRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/sent-tech-assurance-v1.json', { issuer: 'https://auth.sent-tech.ca', qualificationOnly: false });
   const qualPolRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/qualification-assurance-v1.json', { issuer: 'https://qual.local', qualificationOnly: true });
   const verRef = writeRef(baseDir, 'tools/memory-mcp-l5/verifier.mjs', 'export const clean = true;\n');
   const trustRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/trust-profile-v1.json', { productionPolicySha256: prodPolRef.sha256, qualificationPolicySha256: qualPolRef.sha256 });
-  const roles = [
-    ['l4', '@sentropic/engram', '0.20.1', 'archives/engram.tgz'],
-    ['platform', '@sentropic/mcp-platform', '0.4.0', 'archives/platform.tgz'],
-    ['broker', '@sentropic/mcp-broker', '0.2.0', 'archives/broker.tgz'],
-    ['mesh', '@sentropic/cluster-mesh', '0.19.0', 'archives/mesh.tgz'],
+  writeRef(baseDir, 'installed/node_modules/@modelcontextprotocol/sdk/package.json', { name: '@modelcontextprotocol/sdk', version: '1.31.0' });
+  const pkgSpecs = [
+    ['l4', '@sentropic/engram', '0.20.1', 'archives/engram.tgz', { '.': './dist/index.js' }, [['dist/index.js', 'export const clean = true;\n']]],
+    ['platform', '@sentropic/mcp-platform', '0.4.0', 'archives/platform.tgz', { '.': './dist/index.js', './memory': './dist/memory/index.js' }, [['dist/index.js', 'export const clean = true;\n'], ['dist/memory/index.js', 'export const clean = true;\n']]],
+    ['broker', '@sentropic/mcp-broker', '0.2.0', 'archives/broker.tgz', { '.': './dist/index.js', './memory': './dist/memory/index.js', './memory-reference': './dist/memory-reference/index.js' }, [['dist/index.js', 'export const clean = true;\n'], ['dist/memory/index.js', 'export const clean = true;\n'], ['dist/memory-reference/index.js', 'export const clean = true;\n']]],
+    ['mesh', '@sentropic/cluster-mesh', '0.19.0', 'archives/mesh.tgz', { '.': './dist/index.js' }, [['dist/index.js', 'export const clean = true;\n']]],
   ];
-  const artifacts = roles.map(([role, name, version, archive]) => {
-    const f = writeRef(baseDir, archive, `${name}@${version}`);
+  const artifacts = pkgSpecs.map(([role, name, version, archive, exportsMap, files]) => {
+    const pkgJson = { name, version, type: 'module', exports: exportsMap };
+    writeRef(baseDir, `installed/node_modules/${name}/package.json`, pkgJson);
+    for (const [rel, body] of files) writeRef(baseDir, `installed/node_modules/${name}/${rel}`, body);
+    const tarBytes = makeTarGz([['package/package.json', pkgJson], ...files.map(([rel, body]) => [`package/${rel}`, body])]);
+    const f = writeRef(baseDir, archive, tarBytes);
     return { role, name, version, sha256: f.sha256, integrity: f.integrity, sourceHead: C40, archiveRef: archive };
   });
+  const packedRootPaths = {
+    '@sentropic/mcp-platform/memory': 'installed/node_modules/@sentropic/mcp-platform/dist/memory/index.js',
+    '@sentropic/mcp-broker': 'installed/node_modules/@sentropic/mcp-broker/dist/index.js',
+    '@sentropic/mcp-broker/memory': 'installed/node_modules/@sentropic/mcp-broker/dist/memory/index.js',
+    '@sentropic/mcp-broker/memory-reference': 'installed/node_modules/@sentropic/mcp-broker/dist/memory-reference/index.js',
+  };
+  const resolvedFiles = PROOF_CATALOG.importGraphRoots.map((root) => {
+    const p = packedRootPaths[root] || root;
+    const f = existsSync(join(baseDir, p)) ? { path: p, sha256: sha256OfBytes(readFileSync(join(baseDir, p))) } : writeRef(baseDir, p, 'export const clean = true;\n');
+    return { root, path: f.path, sha256: f.sha256 };
+  });
+  const resolvedFilesSha256 = sha256OfBytes(Buffer.from(canonicalizeJson(resolvedFiles)));
+  const graphFile = writeRef(baseDir, 'import-graph.json', {
+    roots: PROOF_CATALOG.importGraphRoots, resolvedFiles, edges: [], resolvedFilesSha256, forbiddenHits: 0, unresolvedEdges: 0,
+  });
+  const treePaths = [...new Set([
+    ...PROOF_CATALOG.importGraphRoots.filter((r) => !r.startsWith('@sentropic/')),
+    ...contractInventory.map((x) => x.path), cpSchemaRef.path, mfSchemaRef.path, catFileRef.path, ...immRefs.map((x) => x.path),
+  ])];
+  const treeRef = writeRef(baseDir, 'receipts/source-tree.json', {
+    repository: 'rhanka/sentropic', head: C40, base: C40, merge: C40, checkout: C40,
+    files: treePaths.map((p) => ({ path: p, sha256: sha256OfBytes(readFileSync(join(baseDir, p))) })),
+  });
+  const lockPackages = { 'node_modules/@modelcontextprotocol/sdk': { version: '1.31.0', range: '^1.31.0' } };
+  for (const a of artifacts) lockPackages[`node_modules/${a.name}`] = { version: a.version, resolved: a.archiveRef, integrity: a.integrity, sha256: a.sha256 };
+  const lockRef = writeRef(baseDir, 'package-lock.json', { lockfileVersion: 3, packages: lockPackages });
+  const instLockRef = writeRef(baseDir, 'receipts/installed-lock.json', { sdkVersion: '1.31.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'], packages: lockPackages });
   const mfSource = { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: lockRef.sha256 };
   const toMfItem = (a) => ({ role: a.role, name: a.name, version: a.version, sha256: a.sha256, integrity: a.integrity, sourceHead: a.sourceHead, archive: a.archiveRef });
   const preMf = writeRef(baseDir, 'tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json', {
@@ -91,25 +140,17 @@ function buildCheckpointBundle(baseDir) {
     identical: true, preCandidateManifestSha256: preMf.sha256, candidateManifestSha256: candMf.sha256, contracts: contractInventory,
   });
   const instClosureRef = writeRef(baseDir, 'receipts/installed-closure.json', {
-    artifactManifestSha256: candMf.sha256, sdkVersion: '1.31.0', referenceExport: '@sentropic/mcp-broker/memory-reference',
-    artifacts: artifacts.map((a) => ({ name: a.name, version: a.version, sha256: a.sha256 })),
+    artifactManifestSha256: candMf.sha256, sdkVersion: '1.31.0', referenceExport: '@sentropic/mcp-broker/memory-reference', artifacts,
   });
-  const resolvedFiles = PROOF_CATALOG.importGraphRoots.map((root) => {
-    const p = root.startsWith('@sentropic/') ? `packages/${root.replace('@sentropic/', '')}/dist/index.js` : root;
-    const f = writeRef(baseDir, p, 'export const clean = true;\n');
-    return { root, path: f.path, sha256: f.sha256 };
-  });
-  const resolvedFilesSha256 = sha256OfBytes(Buffer.from(canonicalizeJson(resolvedFiles)));
-  const graphFile = writeRef(baseDir, 'import-graph.json', {
-    roots: PROOF_CATALOG.importGraphRoots, resolvedFiles, edges: [], resolvedFilesSha256, forbiddenHits: 0, unresolvedEdges: 0,
+  writeRef(baseDir, 'receipts/runtime-probe.json', {
+    tupleHead: C40, artifactManifestSha256: candMf.sha256, nodeVersion: '24.2.0', imageDigest: PINNED_IMAGE, platform: 'linux/amd64', sqliteVersion: '3.49.1',
+    driver: 'node:sqlite', journalMode: 'WAL', synchronous: 'FULL', filesystem: 'ext4', filesystemAssumptions: 'local-posix-fsync',
+    fenceProfileSha256: fenceRef.sha256, pythonCount: 0, addonBuildCount: 0, execArgv: [], nodeOptions: '',
   });
   const freezeRef = writeRef(baseDir, 'spec/evidence/memory-mcp-l5/l0-freeze.json', {
-    specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, checkpointSchemaSha256: cpSchemaRef.sha256,
+    specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, imageDigest: PINNED_IMAGE, checkpointSchemaSha256: cpSchemaRef.sha256,
     artifactManifestSchemaSha256: mfSchemaRef.sha256, proofCatalogSha256: catFileRef.sha256,
-    immutableFixtures: immRefs, authorizedOwners: PROOF_CATALOG.authorizedOwners || {
-      ownerUat: ['owner:antoinefa'],
-      acceptances: { l4: ['owner:l4', 'owner:antoinefa'], platform: ['owner:platform', 'owner:antoinefa'], broker: ['owner:broker', 'owner:antoinefa'], transport: ['owner:transport', 'owner:antoinefa'] },
-    },
+    immutableFixtures: immRefs, authorizedOwners: PROOF_CATALOG.authorizedOwners,
   });
   const proofs = PROOF_CATALOG.proofs.map((cat) => {
     const testResults = cat.files.map((file) => {
@@ -171,7 +212,8 @@ function buildCheckpointBundle(baseDir) {
   };
   doc.tupleSha256 = computeTupleSha256(doc);
   const jobRef = writeRef(baseDir, 'receipts/ci-job-memory-l5-qualification.json', {
-    jobId: 'memory-l5-qualification', runId: '1001', attempt: 1, head: C40, tupleSha256: doc.tupleSha256, conclusion: 'success',
+    jobId: 'memory-l5-qualification', runId: '1001', attempt: 1, head: C40, base: C40, merge: C40, checkout: C40,
+    imageDigest: PINNED_IMAGE, artifactName: `memory-mcp-l5-${C40}-1001-1`, tupleSha256: doc.tupleSha256, conclusion: 'success',
     proofResultSha256s: proofs.map((p) => ({ id: p.id, sha256: p.result.sha256 })),
   });
   doc.ci.jobs = [{ id: 'memory-l5-qualification', conclusion: 'success', resultSha256: jobRef.sha256 }];
@@ -190,6 +232,32 @@ function buildCheckpointBundle(baseDir) {
     return { role, actorRef: `owner:${role}`, tupleSha256: doc.tupleSha256, verdict: 'accepted', evidence: { path: accRef.path, sha256: accRef.sha256 } };
   });
   return { doc, preMf, candMf, opts: { baseDir, manifestBytes: candMf.bytes, preCandidateManifestBytes: preMf.bytes, execArgv: [], nodeOptions: '' } };
+}
+function rebindTuple(baseDir, doc) {
+  doc.tupleSha256 = computeTupleSha256(doc);
+  const jobRef = writeRef(baseDir, 'receipts/ci-job-memory-l5-qualification.json', {
+    jobId: 'memory-l5-qualification', runId: doc.ci.runId, attempt: doc.ci.attempt, head: doc.ci.head, base: doc.ci.base, merge: doc.ci.merge, checkout: doc.ci.checkout,
+    imageDigest: doc.ci.imageDigest, artifactName: doc.ci.artifactName, tupleSha256: doc.tupleSha256, conclusion: 'success',
+    proofResultSha256s: doc.proofs.map((p) => ({ id: p.id, sha256: p.result.sha256 })),
+  });
+  doc.ci.jobs = [{ id: 'memory-l5-qualification', conclusion: 'success', resultSha256: jobRef.sha256 }];
+  writeRef(baseDir, 'receipts/ci-run.json', {
+    workflow: doc.ci.workflow, status: 'completed', conclusion: 'success', runId: doc.ci.runId, attempt: doc.ci.attempt,
+    head: doc.ci.head, base: doc.ci.base, merge: doc.ci.merge, checkout: doc.ci.checkout, imageDigest: doc.ci.imageDigest, artifactName: doc.ci.artifactName, tupleSha256: doc.tupleSha256,
+  });
+  const uatRef = writeRef(baseDir, 'receipts/owner-uat.json', {
+    tupleSha256: doc.tupleSha256, authoritySourceSha256: doc.contracts.l0Freeze.sha256, ciRunId: doc.ci.runId, status: doc.ownerUat.status,
+    ...(doc.ownerUat.status === 'passed' ? { policySha256: doc.ownerUat.policySha256 } : { owningLot: doc.ownerUat.owningLot, reason: doc.ownerUat.reason }),
+    actorRef: doc.ownerUat.actorRef, recordedAt: doc.ownerUat.recordedAt,
+  });
+  doc.ownerUat.evidence = { path: uatRef.path, sha256: uatRef.sha256 };
+  doc.acceptances = doc.acceptances.map((a) => {
+    const accRef = writeRef(baseDir, `receipts/accept-${a.role}.json`, {
+      role: a.role, actorRef: a.actorRef, tupleSha256: doc.tupleSha256, authoritySourceSha256: doc.contracts.l0Freeze.sha256, ciRunId: doc.ci.runId, verdict: 'accepted',
+    });
+    return { ...a, tupleSha256: doc.tupleSha256, evidence: { path: accRef.path, sha256: accRef.sha256 } };
+  });
+  return doc;
 }
 function withBundle(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'l5-cp-'));
