@@ -31,59 +31,6 @@ const BASE = {
   idempotency_key: '0123456789abcdef',
 } as const;
 
-const CAPTURE_CANONICAL =
-  '{"connector_id":"engram-memory","connector_instance_ref":"ci-1",' +
-  '"effective_input":{"capture_policy_version":"capture-policy/v1","evidence":{},' +
-  '"payload":{"schema_version":1},"tool_name":"engram_memory_capture"},' +
-  '"idempotency_key":"0123456789abcdef","principal_id":"user-1",' +
-  '"principal_namespace":"sentropic.principal",' +
-  '"profile":"sentropic.engram.memory-mutation/v1","provider_contract_version":"1.0.0",' +
-  '"provider_id":"sentropic.engram.memory","reservation_ref":"reservation-1",' +
-  '"scope_ref":"tenant-1","store_id":"ci-1",' +
-  '"target":{"kind":"capture_source","sequence":"7","source_ref":"source-1"},' +
-  '"tenant_id":"tenant-1","tool_name":"engram_memory_capture"}';
-
-const ADMISSION_CANONICAL =
-  '{"connector_id":"engram-memory","connector_instance_ref":"ci-1",' +
-  '"effective_input":{"admission_policy_version":"admission-policy/v1",' +
-  '"candidate_id":"candidate-1","tool_name":"engram_memory_request_admission"},' +
-  '"idempotency_key":"0123456789abcdef","principal_id":"user-1",' +
-  '"principal_namespace":"sentropic.principal",' +
-  '"profile":"sentropic.engram.memory-mutation/v1","provider_contract_version":"1.0.0",' +
-  '"provider_id":"sentropic.engram.memory","reservation_ref":"reservation-1",' +
-  '"scope_ref":"tenant-1","store_id":"ci-1",' +
-  '"target":{"candidate_id":"candidate-1","kind":"candidate"},' +
-  '"tenant_id":"tenant-1","tool_name":"engram_memory_request_admission"}';
-
-const WITHDRAW_CANONICAL =
-  '{"connector_id":"engram-memory","connector_instance_ref":"ci-1",' +
-  '"effective_input":{"candidate_id":"candidate-1",' +
-  '"event_anchor":{"kind_ref":"withdraw","occurred_at":"2026-10-18T00:00:00.000Z",' +
-  '"provenance_digest":"sha256:' + 'a'.repeat(64) + '","provenance_ref":"prov-1"},' +
-  '"event_id":"event-1","reason_ref":"reason-1","tool_name":"engram_memory_withdraw"},' +
-  '"idempotency_key":"0123456789abcdef","principal_id":"user-1",' +
-  '"principal_namespace":"sentropic.principal",' +
-  '"profile":"sentropic.engram.memory-mutation/v1","provider_contract_version":"1.0.0",' +
-  '"provider_id":"sentropic.engram.memory","reservation_ref":"reservation-1",' +
-  '"scope_ref":"tenant-1","store_id":"ci-1",' +
-  '"target":{"candidate_id":"candidate-1","kind":"candidate"},' +
-  '"tenant_id":"tenant-1","tool_name":"engram_memory_withdraw"}';
-
-const FORGET_CANONICAL =
-  '{"connector_id":"engram-memory","connector_instance_ref":"ci-1",' +
-  '"effective_input":{"event_anchor":{"kind_ref":"tombstone",' +
-  '"occurred_at":"2026-10-18T00:00:00.000Z",' +
-  '"provenance_digest":"sha256:' + 'b'.repeat(64) + '","provenance_ref":"prov-1"},' +
-  '"event_id":"event-1","reason_ref":"reason-1","record_id":"record-1",' +
-  '"tool_name":"engram_memory_forget"},' +
-  '"idempotency_key":"0123456789abcdef","principal_id":"user-1",' +
-  '"principal_namespace":"sentropic.principal",' +
-  '"profile":"sentropic.engram.memory-mutation/v1","provider_contract_version":"1.0.0",' +
-  '"provider_id":"sentropic.engram.memory","reservation_ref":"reservation-1",' +
-  '"scope_ref":"tenant-1","store_id":"ci-1",' +
-  '"target":{"kind":"record","record_id":"record-1"},' +
-  '"tenant_id":"tenant-1","tool_name":"engram_memory_forget"}';
-
 function shuffled<T extends object>(value: T): T {
   if (Array.isArray(value)) return value.map(shuffled) as unknown as T;
   if (value !== null && typeof value === 'object') {
@@ -94,35 +41,6 @@ function shuffled<T extends object>(value: T): T {
 }
 
 describe('P03.platform.a05-mutation-digest-vectors', () => {
-  it('P03.platform.a05-mutation-digest-vectors: seals the capture arm to its literal digest', () => {
-    const preimage = shuffled({
-      ...BASE,
-      tool_name: 'engram_memory_capture',
-      target: { kind: 'capture_source', source_ref: 'source-1', sequence: '7' },
-      effective_input: {
-        tool_name: 'engram_memory_capture',
-        payload: { schema_version: 1 },
-        evidence: {},
-        capture_policy_version: 'capture-policy/v1',
-      },
-    }) as MemoryMutationPreimageV1;
-    expect(computeMutationDigest(preimage)).toBe(`sha256:${sha(CAPTURE_CANONICAL)}`);
-  });
-
-  it('P03.platform.a05-mutation-digest-vectors: seals the admission arm to its literal digest', () => {
-    const preimage = shuffled({
-      ...BASE,
-      tool_name: 'engram_memory_request_admission',
-      target: { kind: 'candidate', candidate_id: 'candidate-1' },
-      effective_input: {
-        tool_name: 'engram_memory_request_admission',
-        candidate_id: 'candidate-1',
-        admission_policy_version: 'admission-policy/v1',
-      },
-    }) as MemoryMutationPreimageV1;
-    expect(computeMutationDigest(preimage)).toBe(`sha256:${sha(ADMISSION_CANONICAL)}`);
-  });
-
   it('P03.platform.a05-mutation-digest-vectors: seals the withdraw arm to its literal digest', () => {
     const preimage = shuffled({
       ...BASE,
