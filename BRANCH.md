@@ -91,6 +91,7 @@
 - [ ] **Lot 3 — CI publication train**
   - [x] Add publication/validation filters, batch 1 (9 packages).
   - [x] Add publication/validation filters, batch 2 (9 packages).
+  - [x] Wire validation, consumer smoke, OIDC publisher and gate: ubo-contracts, mcp-broker.
   - [ ] Add all 18 filters, validate/publish jobs, dispatch choices and ci-gate needs; package-only publication triggers.
   - [ ] Register mappings in `scripts/ci/publishable-manifests.mjs`; update `scripts/ci/publishable-ci-wiring.test.mjs`.
   - [ ] Newly public packages have web bootstrap only, never token bootstrap steps.

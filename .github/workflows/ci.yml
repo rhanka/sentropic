@@ -2298,6 +2298,81 @@ jobs:
           if [ "$LLM_GATEWAY_PUBLISH_RESULT" = success ]; then required="${required:+$required }@sentropic/llm-gateway"; fi
           make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity REQUIRE_PUBLISHED="$required" ENV=test-ci-cluster-mesh
 
+  validate-ubo-contracts:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.ubo_contracts == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test ubo-contracts
+        run: make test-public-library PACKAGE=ubo-contracts ENV=test-ci-ubo-contracts
+      - name: Build and guard ubo-contracts archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-ubo-contracts PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-ubo-contracts
+      - name: Qualify ubo-contracts packaged consumer
+        run: make test-publishable-consumer PACKAGE=ubo-contracts ENV=test-ci-ubo-contracts
+
+  publish-ubo-contracts:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-ubo-contracts]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.ubo_contracts_publish == 'true' &&
+      needs.validate-ubo-contracts.result == 'success' &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish ubo-contracts with provenance
+        run: make publish-ubo-contracts ENV=test-ci-ubo-contracts
+
+  validate-mcp-broker:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_broker == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test mcp-broker
+        run: make test-public-library PACKAGE=mcp-broker ENV=test-ci-mcp-broker
+      - name: Build and guard mcp-broker archive
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-broker PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-broker
+      - name: Qualify mcp-broker packaged consumer
+        run: make test-publishable-consumer PACKAGE=mcp-broker ENV=test-ci-mcp-broker
+
+  publish-mcp-broker:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-broker, publish-mcp-platform]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      needs.changes.outputs.mcp_broker_publish == 'true' &&
+      needs.validate-mcp-broker.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish mcp-broker with provenance
+        run: make publish-mcp-broker ENV=test-ci-mcp-broker
+
   bootstrap-publish:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_publish_target != 'none' && github.ref == 'refs/heads/main'
@@ -2477,6 +2552,8 @@ jobs:
     needs:
       - enforce-package-bump
       - changes
+      - validate-ubo-contracts
+      - validate-mcp-broker
       - validate-publishable-manifests
       - build-e2e
       - typecheck-lint-ui
