@@ -76,6 +76,7 @@
   - [x] Refresh generated root API context declarations and memory contract report, batch 1 within the commit line limit.
   - [x] Preserve the P03 proof-catalog path and case anchor while replacing its implementation with the frozen A05 corpus.
   - [x] Refuse replacing an existing P1 manifest with different bytes and retain one digest record per inventory line.
+  - [x] Retain the reviewed e789412a P1 manifest and sidecar under artifacts/history with both original archives unchanged.
   - [x] Refresh generated memory API contract report, batch 5 within the commit line limit.
   - [x] Refresh generated memory API contract report, batch 4 within the commit line limit.
   - [x] Refresh generated memory API contract report, batch 3 within the commit line limit.
