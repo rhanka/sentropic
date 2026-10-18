@@ -11,6 +11,7 @@
 - [x] Make-only commands, `ENV` last; atomic commits at most 150 changed lines, selective staging, `make scope-check` then `make commit`.
 - [x] English records; no product/API/UI/package/lock/deployment changes; no migration file on W0.
 - [x] Root dev 8787/5173/1080 and D2 9381/5581/1481, 9382/5582/1482 remain reserved to their owners.
+- [x] W0 runtime slot: `test-app-cm-w0`, API/UI/Maildev UI 9710/5910/1810; no service listeners started.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -36,6 +37,7 @@
 ## Feedback Loop
 - [ ] `attention`: Tenant operator must supply read-only live image/config/frontier/author/legacy-data and restore receipts; unknown fields remain pending and gate dispatch.
 - [ ] `attention`: SC must confirm named infra/promotion operators, shared-file ownership, signer authorization and owner/operator windows; logical reservations do not establish availability.
+- [ ] `blocked`: W0 acceptance/dispatch remains gated by B01–B08 in `docs/baselines/app-cm-w0/authorization.md`; draft delivery does not close those evidence gaps.
 - [x] `clarification`: D2 owns control 0012–0016 and O1 owns 9495/5695/1595; W1 reserves 0017, with app test ports 9710–9717 and e2e 9720–9727 (full triples in reservations.md).
 - [x] Track import belongs to the designated root writer; this concurrent worktree updates mergeable source records only (`track-operation` contract).
 
@@ -64,8 +66,10 @@
   - [x] Record pending runtime/operator/key/approval dependencies, owners, deadlines and observable gates in `authorization.md`.
   - [x] Consolidate findings into the bounded downstream branch handoffs, including W3/T3 EX1 and P/TG EX2.
 - [ ] **Lot 3 — Final validation and draft delivery**
-  - [ ] Check JSON, source citations, secret hygiene, reservations, prototype/verifier evidence and every diff hunk; run `make scope-check` before each commit.
+  - [x] Check JSON, source citations, secret hygiene, reservations, prototype/verifier evidence and every diff hunk; run `make scope-check` before each commit.
+  - [x] Reproducible committed `probe.mk`: `w0-host-fit` and `w0-record-check` pass on the pinned Node image, exact selectors and frozen public vectors; no product services/credentials.
   - [x] API/UI/E2E/security suites: not applicable to documentation-only W0; downstream file-level gates are retained in handoffs.
   - [ ] Independent acceptance-scope review; coding instance does not review itself.
+  - [x] Prepare this exact file as draft PR body; preserve pending evidence/review gates and the separate production authorization register.
   - [ ] Push branch; open DRAFT PR with this file as exact body and post the required short execution-plan comment.
   - [ ] Report PR number and exact head SHA, then stop; keep BRANCH.md and leave merge/deployment to separately authorized actors.
