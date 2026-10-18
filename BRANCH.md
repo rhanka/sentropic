@@ -24,16 +24,18 @@
   - [x] L5-EX1 broker: `packages/mcp-broker/package.json`, `packages/mcp-broker/tsconfig.json`, `packages/mcp-broker/src/index.ts`, `packages/mcp-broker/src/context.ts`, `packages/mcp-broker/src/registry.ts`, `packages/mcp-broker/src/broker.ts`, `packages/mcp-broker/src/memory/**`, `packages/mcp-broker/src/memory-reference/**`, `packages/mcp-broker/tests/broker.test.ts`, `packages/mcp-broker/tests/memory/**`, `packages/mcp-broker/README.md`, `packages/mcp-broker/CHANGELOG.md`.
   - [x] L5-EX1 mesh: `packages/cluster-mesh/src/compose/mcp.ts`, `packages/cluster-mesh/package.json`, `packages/cluster-mesh/README.md`, `packages/cluster-mesh/CHANGELOG.md`, `packages/cluster-mesh/tests/mcp-composition.spec.ts`, `packages/cluster-mesh/tests/verified-invocation-context.spec.ts`, `packages/cluster-mesh/tests/memory-context.spec.ts`.
   - [x] L5-EX1 shared tooling: root `Makefile`, `package-lock.json`, `.github/workflows/ci.yml` only.
+  - [x] L5-EX2 round-2 corrections: `packages/mcp-platform/src/tool-configuration.ts`, `packages/mcp-platform/tests/tool-configuration.test.ts`, `.h2a/reviews/pr700_treatment.md` only.
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `docker-compose*.yml`, `.cursor/rules/**`, `rules/**`, `PLAN.md`, `plan/**`, `.track/**`, `.security/**`, `scripts/**`, root `package.json`.
   - [x] `api/**`, `ui/**`, `apps/**`, `deploy/**`, `packages/llm-mesh/**`, `packages/llm-gateway/**`, `packages/auth-hono/**`, `packages/auth-ui/**`, `packages/mcp-auth/**`, `packages/artifacts/**`, `packages/connector-host/**`, `packages/skills/**`, `packages/harness/**`.
-  - [x] `packages/mcp-platform/src/registry*.ts`, `packages/mcp-platform/src/tool-configuration.ts`, `packages/mcp-platform/src/authz.ts`, `packages/mcp-platform/src/hono.ts`, `packages/mcp-platform/src/durable.ts`, `packages/mcp-platform/src/elicitation.ts`, `packages/mcp-platform/src/persistence.ts`, `packages/mcp-platform/src/stores.ts`, `packages/mcp-platform/src/audit.ts`, `packages/mcp-platform/src/experimental/**`, `packages/mcp-platform/src/mock/**`, `packages/mcp-platform/src/testing.ts`.
-  - [x] `tools/gateway-evolution/**`, `.h2a/**`, `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`, frozen memory v3.1 file, Graphify and h2a repositories, every predecessor worktree and BRANCH.md.
+  - [x] `packages/mcp-platform/src/registry*.ts`, `packages/mcp-platform/src/authz.ts`, `packages/mcp-platform/src/hono.ts`, `packages/mcp-platform/src/durable.ts`, `packages/mcp-platform/src/elicitation.ts`, `packages/mcp-platform/src/persistence.ts`, `packages/mcp-platform/src/stores.ts`, `packages/mcp-platform/src/audit.ts`, `packages/mcp-platform/src/experimental/**`, `packages/mcp-platform/src/mock/**`, `packages/mcp-platform/src/testing.ts`.
+  - [x] `tools/gateway-evolution/**`, `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`, frozen memory v3.1 file, Graphify and h2a repositories, every predecessor worktree and BRANCH.md; `.h2a/**` except the exact L5-EX2 treatment file.
   - [x] Every unlisted path is default-denied, including other .github files, other mesh files and other platform transport and tests.
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [x] None beyond the enumerated L5-EX1 inventory.
 - [x] **Exception process**:
   - [x] L5-EX1 declared in L5-preparation-plan-v2.1.md with rationale, impact and rollback, activation pending entry gate only, no second approval invented.
+  - [x] L5-EX2 authorized by the owner's round-2 fix request: align the stale platform constant and its compiler regression, repair existing CI sibling-archive selection, append the requested local treatment. Impact: full-platform configuration version becomes 0.3.1; mesh consumes the verified unpublished full candidate without changing frozen peers or P1 scope. Rollback: revert the version/CI correction commits and rebuild P1; no publication or merge.
   - [x] Verify actual path inventory and run make scope-check before authorized commits.
 
 ## Feedback Loop
