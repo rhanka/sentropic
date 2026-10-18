@@ -63,7 +63,7 @@ function buildCheckpointBundle(baseDir) {
   });
   const prodPolRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/sent-tech-assurance-v1.json', { issuer: 'https://auth.sent-tech.ca', qualificationOnly: false });
   const qualPolRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/qualification-assurance-v1.json', { issuer: 'https://qual.local', qualificationOnly: true });
-  const verRef = writeRef(baseDir, 'tools/memory-mcp-l5/verifier.mjs', 'export const verifyAssurance = () => true;\n');
+  const verRef = writeRef(baseDir, 'tools/memory-mcp-l5/verifier.mjs', 'export const clean = true;\n');
   const trustRef = writeRef(baseDir, 'tools/memory-mcp-l5/policies/trust-profile-v1.json', { productionPolicySha256: prodPolRef.sha256, qualificationPolicySha256: qualPolRef.sha256 });
   const roles = [
     ['l4', '@sentropic/engram', '0.20.1', 'archives/engram.tgz'],
@@ -238,13 +238,15 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
   }));
 
   it('P10.tooling.receipt-contract: rejects zero-assertion files, unlisted files, misplaced cases, and accepts Vitest absolute-path reports', () => withBundle(({ doc, opts }, dir) => {
-    const emptyFileRep = JSON.parse(readFileSync(join(dir, 'results/P01.json'), 'utf8'));
+    const origP01 = readFileSync(join(dir, 'results/P01.json'));
+    const emptyFileRep = JSON.parse(origP01.toString('utf8'));
     emptyFileRep.testResults[0].assertionResults = [];
     emptyFileRep.testResults.push({ name: 'unlisted/no-real-test.ts', status: 'passed', assertionResults: [{ title: 'P01.broker.invocation-context', fullName: 'P01.broker.invocation-context', status: 'passed' }] });
     const emptyRef = writeRef(dir, 'results/P01.json', emptyFileRep);
     const emptyDoc = structuredClone(doc);
     emptyDoc.proofs[0].result.sha256 = emptyRef.sha256;
     expect(checkCheckpoint(emptyDoc, opts).join(' ')).toMatch(/empty assertions|unlisted file|missing required case/i);
+    writeFileSync(join(dir, 'results/P01.json'), origP01);
 
     const p10Rep = JSON.parse(readFileSync(join(dir, 'results/P10.json'), 'utf8'));
     p10Rep.testResults = p10Rep.testResults.map((tr) => ({

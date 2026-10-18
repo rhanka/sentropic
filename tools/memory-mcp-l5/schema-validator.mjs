@@ -104,9 +104,9 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
     try { return JSON.parse(bytes.toString('utf8')); } catch { failures.push(`${label}: invalid JSON in ${ref.path}`); return null; }
   };
   const src = doc.source || {}, c = doc.contracts || {}, pre = doc.preCandidate || {}, closure = doc.closure || {};
-  readChecked('spec/evidence/memory-mcp-l5/source-tree.sha256', src.sourceTreeSha256, 'source.sourceTreeSha256');
-  readChecked('packages/mcp-platform/src/registry.ts', c.registrySha256, 'contracts.registrySha256');
-  readChecked('packages/cluster-mesh/src/gateway.ts', c.gatewaySha256, 'contracts.gatewaySha256');
+  readChecked('receipts/source-tree.json', src.sourceTreeSha256, 'source.sourceTreeSha256');
+  readChecked('packages/mcp-platform/dist/registry.d.ts', c.registrySha256, 'contracts.registrySha256');
+  readChecked('packages/cluster-mesh/dist/compose/mcp.d.ts', c.gatewaySha256, 'contracts.gatewaySha256');
   const freezeDoc = readJson(c.l0Freeze, 'contracts.l0Freeze');
   if (!freezeDoc || freezeDoc.specSha256 !== c.specSha256 || freezeDoc.l0Commit !== c.l0Commit || freezeDoc.checkpointSchemaSha256 !== CHECKPOINT_SCHEMA_SHA256 || freezeDoc.artifactManifestSchemaSha256 !== ARTIFACT_MANIFEST_SCHEMA_SHA256 || freezeDoc.proofCatalogSha256 !== PROOF_CATALOG_SHA256) {
     failures.push('contracts.l0Freeze: freeze metadata or schema/catalog hash mismatch');
@@ -147,16 +147,16 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
     failures.push('closure.installedClosureSha256: closure report mismatch');
   }
   readChecked('packages/mcp-broker/dist/memory-reference/index.js', closure.referenceSourceSha256, 'closure.referenceSourceSha256');
-  readChecked('tools/memory-mcp-l5/profiles/sqlite-fence-profile-v1.json', rt.fenceProfileSha256, 'runtime.fenceProfileSha256');
+  readChecked('tools/memory-mcp-l5/policies/sqlite-fence-profile-v1.json', rt.fenceProfileSha256, 'runtime.fenceProfileSha256');
   let probeRaw = null;
   try { probeRaw = JSON.parse(readFileSync(resolve(rootDir, 'receipts/runtime-probe.json'), 'utf8')); } catch { probeRaw = null; }
   if (!probeRaw || probeRaw.nodeVersion !== rt.nodeVersion || probeRaw.imageDigest !== rt.imageDigest || probeRaw.sqliteVersion !== rt.sqliteVersion || probeRaw.driver !== 'node:sqlite' || probeRaw.journalMode !== 'WAL' || probeRaw.synchronous !== 'FULL' || probeRaw.fenceProfileSha256 !== rt.fenceProfileSha256 || probeRaw.pythonCount !== 0 || probeRaw.addonBuildCount !== 0) {
     failures.push('runtime: on-disk runtime-probe.json mismatch');
   }
-  readChecked('spec/policies/memory-production-policy.json', assurance.productionPolicySha256, 'assurance.productionPolicySha256');
-  readChecked('spec/policies/memory-qualification-policy.json', assurance.qualificationPolicySha256, 'assurance.qualificationPolicySha256');
+  readChecked('tools/memory-mcp-l5/policies/sent-tech-assurance-v1.json', assurance.productionPolicySha256, 'assurance.productionPolicySha256');
+  readChecked('tools/memory-mcp-l5/policies/qualification-assurance-v1.json', assurance.qualificationPolicySha256, 'assurance.qualificationPolicySha256');
   readChecked('tools/memory-mcp-l5/verifier.mjs', assurance.verifierArtifactSha256, 'assurance.verifierArtifactSha256');
-  readChecked('tools/memory-mcp-l5/profiles/trust-profile-v1.json', assurance.trustProfileSha256, 'assurance.trustProfileSha256');
+  readChecked('tools/memory-mcp-l5/policies/trust-profile-v1.json', assurance.trustProfileSha256, 'assurance.trustProfileSha256');
   const graphDoc = readJson(doc.importGraph, 'importGraph');
   const resFiles = asArr(graphDoc?.resolvedFiles);
   if (!graphDoc || graphDoc.forbiddenHits !== 0 || graphDoc.unresolvedEdges !== 0 || resFiles.length !== asArr(catalog.importGraphRoots).length || sha256Hex(Buffer.from(canonicalizeJson(resFiles))) !== doc.importGraph?.resolvedFilesSha256 || JSON.stringify(graphDoc.roots) !== JSON.stringify(catalog.importGraphRoots)) {
