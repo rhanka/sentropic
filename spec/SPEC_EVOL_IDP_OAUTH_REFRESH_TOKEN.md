@@ -138,7 +138,7 @@ One additive Drizzle migration (`api/drizzle/0044_oauth_refresh_tokens.sql`, `[T
 | `revoked_at` | `timestamp` | Set when explicitly revoked, policy-invalidated, or killed by reuse detection |
 | `revoked_reason` | `text` | Nullable audit code: `'explicit_revoke' \| 'reuse_detected' \| 'policy_denied' \| 'user_logout' \| 'consent_revoked'` |
 
-Indexes on `oauth_refresh_tokens`: `token_hash` (unique), `family_id`, `(user_id, client_id)`, and `expires_at` (for `purgeExpired()`). In addition, `oauth_tokens` gains a nullable `refresh_family_id text` column indexed on `refresh_family_id` so revoking a refresh family can immediately insert all active `oauth_tokens` of that family into `revoked_tokens`.
+Indexes and uniqueness constraints on `oauth_refresh_tokens`: `token_hash` (unique), `UNIQUE (family_id, generation)`, partial unique index `ON (family_id) WHERE consumed_at IS NULL AND revoked_at IS NULL` (enforcing at most one active generation per family at the PostgreSQL layer), `(user_id, client_id)`, and `expires_at` (for `purgeExpired()`). In addition, `oauth_tokens` gains a nullable `refresh_family_id text` column indexed on `refresh_family_id` so revoking a refresh family can immediately insert all active `oauth_tokens` of that family into `revoked_tokens`.
 
 ### 4.3 Lifetime configuration (`15 days` absolute cap, `1 hour` access token)
 
@@ -146,4 +146,62 @@ Indexes on `oauth_refresh_tokens`: `token_hash` (unique), `family_id`, `(user_id
 - `OAUTH_ACCESS_TOKEN_TTL_SEC` (`api/src/config/env.ts:140` `[EXISTS]`): remains `3600` (`1 hour`).
 - At `authorization_code` exchange (`t0`), `family_expires_at = t0 + OAUTH_REFRESH_TOKEN_TTL_SEC` and `expires_at = family_expires_at`.
 - At each rotation (`t_rot < family_expires_at`), the child refresh token inherits `family_expires_at` unchanged and sets `expires_at = family_expires_at`. When `now >= family_expires_at`, refresh is refused with `400 invalid_grant` and the user performs a fresh interactive OAuth login (every 15 days).
-- The newly minted access token at `t_rot` receives `expires_in = min(OAUTH_ACCESS_TOKEN_TTL_SEC, Math.floor((family_expires_at - t_rot) / 1000))` (or full `OAUTH_ACCESS_TOKEN_TTL_SEC = 3600`; see section 6.2 rule `R-TTL-CAP` where clamping vs full 1 h on the final hour is pinned).
+- The newly minted access token at `t_rot` has `exp` capped at `min(t_rot + OAUTH_ACCESS_TOKEN_TTL_SEC, family_expires_at)` (`expires_in = min(OAUTH_ACCESS_TOKEN_TTL_SEC, Math.floor((family_expires_at - t_rot) / 1000))`, rule `R-TTL-CAP` in section 6.2) so a refresh near day 15 never extends bearer validity past the 15-day family ceiling.
+
+## 5. Client eligibility, scope semantics, and discovery
+
+### 5.1 Explicit per-client opt-in (default-deny)
+
+Refresh capability uses a single authoritative eligibility rule (`isRefreshEligibleClient(client)` in `packages/auth-hono/src/oauth/` `[TO BUILD Lot 2]`):
+
+1. `client.grantTypes` contains **both** `'authorization_code'` and `'refresh_token'`.
+2. `client.allowedScopes` contains `'offline_access'`.
+3. If the client requests a resource indicator, `resource` is present in `client.resourceIndicators` (`authorize-handler.ts:424` `[EXISTS]`).
+4. In the initial rollout (until `#695`'s shared fifth-leg MFA evaluator and `security_generation` hooks land in Lot 3), `client.requiredAcr` is `NULL` (or `'urn:sentropic:loa:bearer'`). Any client with a forced-MFA `requiredAcr` (`urn:sentropic:loa:passkey-fresh` or `urn:sentropic:loa:mfa`) is refused refresh issuance and renewal by default (section 7.1).
+
+| Client / class | Initial refresh eligibility |
+|---|---|
+| `immo-mcp` (prod) and `immo-mcp-preprod` (non-prod) | **Eligible** after explicit registration update (`grant_types = ['authorization_code', 'refresh_token']`, `allowed_scopes` including `'offline_access'`) and Lot 0 preprod qualification. |
+| Other Sentropic human-delegated MCP clients | **Supported** by the same mechanism, enabled individually per `(project, tier)` registration (`SPEC_DECISION_TIER_AUTH_PATTERN.md:54` `[EXISTS]`), never inferred from a `client_id` prefix or MCP scope presence. |
+| Public (`token_endpoint_auth_method = 'none'` + PKCE S256) and confidential (`client_secret_basic`) MCP clients | **Both supported** when explicitly allowlisted above; public clients rely on S256 PKCE at initial code exchange and strict single-use refresh rotation + reuse detection (`RFC 9700 §4.14.2`, `draft-ietf-oauth-v2-1-16 §4.3`). |
+| `immo-mcp-workload` and `service_clients` | **Ineligible (`[EXISTS]`):** workload/service clients use `service_clients`, never `oauth_clients`, and never receive `refresh_token` or `offline_access` (`oauth-client-seed.ts:166-184` `[EXISTS]`). |
+| `kvm-gateway` | **Ineligible (`grant_types = ['authorization_code']`):** administrative console with `required_acr` and owner-only `allowed_user_ids` (`SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md:716`). Not covered by the MCP refresh decision. |
+| `design-system`, `example-mock-rp`, `example-dpop-rp`, and existing browser RPs | **Ineligible by default (`grant_types = ['authorization_code']`):** zero global backfill. |
+
+### 5.2 Scope rules (`offline_access`) and OIDC consent (`OIDC Core §11`)
+
+- At `GET /authorize` (`packages/auth-hono/src/oauth/authorize-handler.ts:386-393` `[TO BUILD Lot 2]`): remove the unconditional `if (requestedScopes.includes('offline_access'))` refusal. Instead, `offline_access` is validated through `client.allowedScopes.includes('offline_access')` **plus** `client.grantTypes.includes('refresh_token')`; if either is missing, `/authorize` returns `invalid_scope`.
+- **Recorded offline consent (`OIDC Core §11`):** `hasCoveringGrant` (`authorize-handler.ts:205-218` `[EXISTS]`) checks `stored.scopes ⊇ requested.scopes`. Consequently, an existing consent row without `'offline_access'` never skips the consent screen when `'offline_access'` is requested: the user sees and approves the offline grant explicitly, and `consentStore.saveGrant` records `'offline_access'` in `oauth_consents.scopes` (`consent-decision-handler.ts:81` `[EXISTS]`).
+- **Preprod qualification of `claude.ai` (`[TO BUILD Lot 0]`):** Anthropic documents hosted MCP connector support for token expiry and refresh (`https://claude.ai/api/mcp/auth_callback`), distinct from the caller-managed Messages API MCP connector, but whether `claude.ai` sends `scope=... offline_access` on `/authorize` is **unverified** at spec time (`.tmp/idp-refresh-token/analysis-astra.md:187-198`). Lot 0 captures sanitized preprod `/authorize` and `/token` traces before enabling prod. No silent global issuance without `offline_access` is permitted to guess around an unobserved client quirk.
+
+### 5.3 Discovery metadata and client registration preservation
+
+- **Discovery (`packages/auth-hono/src/oauth/wellknown-handler.ts:48,56`, `api/src/routes/namespaces/oauth-ingress.ts:49-50` `[TO BUILD Lot 2]`):** Once the refresh handler is deployed on all serving replicas, advertise `'refresh_token'` in `grant_types_supported` and `'offline_access'` in `scopes_supported` on both `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server`.
+- **Registration script (`api/src/scripts/oauth-register-client.ts:162,206-215` `[TO BUILD Lot 1]`):** Add optional `OAUTH_CLIENT_GRANT_TYPES` (comma-separated, validated subset of `['authorization_code', 'refresh_token']`, requiring `'authorization_code'` whenever `'refresh_token'` is requested). Extend `resolvePolicyUpdate` so omitting `OAUTH_CLIENT_GRANT_TYPES` during a 90-day secret rotation (`docs/oauth-client-rotation.md`) preserves the stored `grant_types`, while an explicit value (`OAUTH_CLIENT_GRANT_TYPES=authorization_code`) can disable refresh without wiping `required_acr` or `allowed_user_ids`.
+
+## 6. Protocol flows: issuance, atomic rotation, reuse detection, and revocation
+
+### 6.1 Initial issuance on `authorization_code` exchange
+
+When `POST /token` (`grant_type=authorization_code`) succeeds (`token-handler.ts:82` `[TO BUILD Lot 2]`):
+
+1. Check `isRefreshEligibleClient(auth.client)` **and** `codePayload.scope.split(/\s+/).includes('offline_access')`. If either is false, mint only `access_token` (and `id_token` when `openid` is present), byte-identical to baseline `9ed96eb83`.
+2. Otherwise, at `t0 = ports.clock.now()` with `T = addSeconds(t0, refreshTokenTtlSeconds)` (`1,296,000 s` = 15 days), mint raw token `srt_<43-char-base64url>`, compute its domain-separated SHA-256 digest, and persist generation `0` (`family_id = id`, `parent_id = null`, `generation = 0`, `family_expires_at = T`, `expires_at = T`, sealed `client_id`, `user_id`, `tenant_id = boundTenantId`, `scope = codePayload.scope`, `resource = codePayload.resource`, `dpop_jkt = dpopJkt`, `acr`, `amr`, `auth_time`).
+3. Persist `oauth_tokens` metadata for `access_token` with `refresh_family_id = family_id`, and return `refresh_token` alongside `access_token`, `token_type`, `expires_in`, and `scope` with headers `Cache-Control: no-store` and `Pragma: no-cache` (`RFC 6749 §5.1`).
+
+### 6.2 Refresh grant validation, live policy re-evaluation, and atomic rotation
+
+On `POST /token` with `grant_type=refresh_token` (`[TO BUILD Lot 2]`):
+
+1. **Client authentication & binding first:** Authenticate the client via its registered `tokenEndpointAuthMethod` (`client_secret_basic` or `none`; reject dual Basic + form credentials or unauthenticated confidential clients with `401 invalid_client` + `WWW-Authenticate` when Basic was used, `RFC 6749 §5.2`). Verify `isRefreshEligibleClient(client)`; otherwise return `400 unauthorized_client`.
+2. **Lookup & ownership check before reuse trigger:** Hash the presented `refresh_token`. If no row matches in `oauth_refresh_tokens`, return `400 invalid_grant`. Verify `row.clientId === client.clientId` and (if `row.dpopJkt` or `client.dpopBoundAccessTokens`) verify the `DPoP` proof `jkt === row.dpopJkt` **before** checking `consumed_at`: a wrong client or missing/mismatched DPoP proof returns `400 invalid_grant` / `400 invalid_dpop_proof` without revoking the legitimate owner's family.
+3. **Reuse detection (`P-REUSE-DETECTION`):** Inside a database transaction locking the family (`SELECT ... FOR UPDATE`), if `row.consumedAt !== null`, atomically set `revoked_at = now, revoked_reason = 'reuse_detected'` on every row of `row.familyId`, copy all non-expired `oauth_tokens` rows with `refresh_family_id = row.familyId` into `revoked_tokens`, **commit the revocation transaction**, emit a credential-free security audit event, and return `400 invalid_grant`.
+4. **Expiry & live policy re-evaluation (`P-LIVE-POLICY`):** If `row.revokedAt !== null` or `now >= row.familyExpiresAt` or `now >= row.expiresAt`, return `400 invalid_grant`. Re-read live `user = ports.users.findById(row.userId)` and verify `accountPolicy.canAuthenticate(user, now).allowed`, `isSubjectAllowed(user.id, client.allowedUserIds)`, and covering `oauth_consents` grant (`hasCoveringGrant` including `'offline_access'`). If `row.tenantId !== null`, require `ports.tenant` and `await ports.tenant.isApprovedMember(user.id, row.tenantId) === true` — **never drop `tid` to `null` on refresh** (unlike initial code exchange at `token-handler.ts:420`); if membership was lost, revoke the family (`revoked_reason = 'policy_denied'`) and return `400 invalid_grant`.
+5. **Scope & resource rules (`RFC 6749 §6`, `RFC 8707`):** Omitted `scope` defaults to `row.scope`; any requested scope outside `row.scope` returns `400 invalid_scope`. A narrowed `scope` applies to the new `access_token`, while the replacement `refresh_token` retains the family's original `row.scope` (`RFC 6749 §6`). Omitted `resource` retains `row.resource`; repeated or mismatched `resource` returns `400 invalid_target` / `400 invalid_grant`.
+6. **R-TTL-CAP & atomic rotation:** Compute `accessExp = min(now + accessTokenTtlSeconds, row.familyExpiresAt)` and `expiresIn = Math.floor((accessExp - now) / 1000)` (if `expiresIn <= 0`, return `400 invalid_grant`), so a refresh near day 15 never extends bearer validity past `family_expires_at`. Consume `row` (`consumed_at = now, replaced_by_id = nextId`), insert generation `row.generation + 1` with identical `family_id`, `family_expires_at`, `scope = row.scope`, and original `acr`, `amr`, `auth_time`, persist the new `oauth_tokens` row (`refresh_family_id = row.familyId`), commit, and return the new `access_token` + new `refresh_token`. Spent generation rows are retained in `oauth_refresh_tokens` until `family_expires_at < now` (`purgeExpired` deletes a family only after `family_expires_at` and all associated `oauth_tokens.expires_at` have passed).
+
+### 6.3 Wire error contract (`oauthJsonError` compatibility) and RFC 7009 / 7662 / logout
+
+- **RFC 6749 §5.2 wire error shape (`[TO BUILD Lot 2]`):** `packages/auth-hono/src/oauth/http-utils.ts:17` `[EXISTS]` currently serializes `{ error: { code, message } }`. Standard OAuth 2.0 / MCP clients and `packages/cluster-mesh/src/trust/token-exchange-http.ts:325` `[EXISTS]` inspect top-level `typeof body.error === 'string'`. Lot 2 aligns `/token` and `/revoke` error responses to emit RFC 6749 top-level `"error": "<code>"` and `"error_description": "<message>"` (with `Cache-Control: no-store`), auditing existing internal callers (`api/tests/**`, `packages/auth-hono/tests/**`) in the same lot.
+- **RFC 7009 `/revoke` & RFC 7662 `/introspect` (`[TO BUILD Lot 3]`):** `/revoke` (`revoke-handler.ts:13` `[EXISTS]`) authenticates confidential clients (or verifies public `client_id`), checks whether `token` is an `srt_...` refresh token (or looks up by `token_hash` when `decodeJwt` returns null), verifies `row.clientId === client.clientId`, and revokes the entire `family_id` plus all associated `oauth_tokens` JTIs (`revoked_reason = 'explicit_revoke'`), even if the submitted generation was already spent. Unknown tokens return `200 OK` without enumeration. `/introspect` (`introspect-handler.ts:13` `[EXISTS]`) resolves active, unconsumed, unrevoked refresh tokens by `token_hash` (`token_type: 'refresh_token'`, `exp = family_expires_at`) and returns `{ active: false }` for spent, revoked, or expired generations.
+- **Retention of spent digests and no grace window:** No replay grace interval or plaintext response cache is introduced; concurrent duplicate refresh requests on the same token trigger reuse detection on the loser. Clients we control serialize refresh calls; `claude.ai` concurrency is qualified in Lot 0.
