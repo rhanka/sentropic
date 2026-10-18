@@ -241,13 +241,10 @@ describe('FileGatewayStateStore', () => {
   it('maintains liveness across SIGKILL of a live holder, W1/W2/W3 crash windows, and >32 repeated recovery crashes', async () => {
     const { spawn } = await import('node:child_process');
     const { readdir, writeFile } = await import('node:fs/promises');
-    const ts = await import('typescript');
     const modDir = freshDir();
-    const compileTs = (rel: string, out: string) => {
-      const src = readFileSync(new URL(rel, import.meta.url), 'utf8').replace('../ports/gateway-state.js', './gateway-state.mjs');
-      return writeFile(join(modDir, out), ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
-    };
-    await Promise.all([compileTs('../src/ports/gateway-state.ts', 'gateway-state.mjs'), compileTs('../src/node/gateway-state-store.ts', 'gateway-state-store.mjs')]);
+    const copyTs = (rel: string, out: string) =>
+      writeFile(join(modDir, out), readFileSync(new URL(rel, import.meta.url), 'utf8').replace('../ports/gateway-state.js', './gateway-state.ts'));
+    await Promise.all([copyTs('../src/ports/gateway-state.ts', 'gateway-state.ts'), copyTs('../src/node/gateway-state-store.ts', 'gateway-state-store.ts')]);
     const spawnCrashChild = async (script: string, marker = 'READY', ...nodeArgs: string[]): Promise<number> => {
       const child = spawn(process.execPath, [...nodeArgs, '-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
       await new Promise<void>((resolve, reject) => {
@@ -286,10 +283,10 @@ describe('FileGatewayStateStore', () => {
       await writeFile(join(chainDir, name), JSON.stringify({ pid: 999_999_999, token: 'dead-root', startedAt: 1 }), { mode: 0o600 });
       const killedPids: number[] = [];
       for (let i = 0; i < 36; i += 1) {
-        const script = `import * as fs from 'node:fs/promises'; import { FileGatewayStateStore } from ${JSON.stringify(join(modDir, 'gateway-state-store.mjs'))};
+        const script = `import * as fs from 'node:fs/promises'; import { FileGatewayStateStore } from ${JSON.stringify(join(modDir, 'gateway-state-store.ts'))};
           const store = new FileGatewayStateStore({ stateDir: ${JSON.stringify(chainDir)}, keyring: { getSecret: async () => ${JSON.stringify(dekFor('l'))} }, fsOps: { link: async (s, d) => { await fs.link(s, d); if (String(d).includes('.retire-')) { setInterval(() => {}, 1000); process.stdout.write('FENCE_READY\\n'); await new Promise(() => {}); } } } });
           ${name === '.host-lock' ? 'await store.claimWriter();' : 'await store.compareAndSet(0, { schemaVersion: 1, revision: 1, sessions: {}, receipts: {} });'}`;
-        killedPids.push(await spawnCrashChild(script, 'FENCE_READY', '--input-type=module'));
+        killedPids.push(await spawnCrashChild(script, 'FENCE_READY', '--disable-warning=ExperimentalWarning', '--input-type=module'));
       }
       expect(killedPids.every((pid) => { try { process.kill(pid, 0); return false; } catch { return true; } }), name).toBe(true);
       expect((await readdir(chainDir)).filter((f) => f.startsWith(`${name}.retire-`)), name).toHaveLength(36);
