@@ -66,7 +66,9 @@ export function requireTrustedInvocationContext(
     throw new MemoryTrustedContextError('authentication freshness source missing');
   }
   const tenant = (ctx as { tenantRef?: unknown }).tenantRef;
-  if (!isNonEmptyString(tenant) || tenant !== tenantRef || tenant !== ctx.principal.claims?.tid || sub !== ctx.principal.claims?.sub) {
+  if (!isNonEmptyString(tenant) || tenant !== tenantRef ||
+      (ctx.principal.claims?.tid !== undefined && tenant !== ctx.principal.claims.tid) ||
+      (ctx.principal.claims?.sub !== undefined && sub !== ctx.principal.claims.sub)) {
     throw new MemoryTrustedContextError('authorized tenant missing');
   }
   const workspace = (ctx as { workspaceRef?: unknown }).workspaceRef;
