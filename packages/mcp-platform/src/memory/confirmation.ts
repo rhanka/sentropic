@@ -1,18 +1,3 @@
-/**
- * MCP-L5 Lot 1 — confirmation assurance and continuation contracts (M4/A06).
- *
- * `MemoryConfirmationAssuranceV1` and `MemoryConfirmationContinuationV1`
- * bind the enrollment/issuer/subject receipt, verified 2FA assurance
- * receipt and its policy version, approving human, delegation, initiating
- * principal, tenant, agent, client, session, attachment, provider/connector,
- * store, scope, tool/version, target, reservation and stable operation
- * digest. Trusted host records, never tool arguments.
- *
- * Confirmation precedes the first canonical effect, is affirmative
- * (literal `true`), unexpired (`now < expires_at`, at most 300 s TTL) and
- * execution is bounded to 30 s plus any earlier deadline.
- */
-
 import {
   MEMORY_CONFIRMATION_TTL_SECONDS,
   MEMORY_EXECUTION_BUDGET_SECONDS,
@@ -22,57 +7,10 @@ import {
 } from './contracts.js';
 import { isLiteralTrueVerdict } from './invocation-context.js';
 
-/** Verified enrollment/assurance receipt for one operation-bound approval. */
-export type MemoryConfirmationAssuranceV1 = {
-  issuer: string;
-  subject: string;
-  enrollmentReceipt: string;
-  assuranceReceipt: string;
-  assurancePolicyVersion: string;
-  approverRef: string;
-  delegationRef: string | null;
-  initiatingPrincipalRef: string;
-  tenantRef: string;
-  agentRef: string;
-  clientRef: string;
-  logicalSessionRef: string;
-  attachmentGeneration: string;
-  providerRef: string;
-  connectorInstanceRef: string;
-  storeRef: string;
-  scopeRef: string;
-  toolName: 'engram_memory_withdraw' | 'engram_memory_forget';
-  toolVersion: string;
-  targetRef: string;
-  reservationRef: string;
-  operationDigest: string;
-  issuedAt: string;
-  expiresAt: string;
-};
-
-/** Durable link between a pending reservation, its elicitation and approval. */
-export type MemoryConfirmationContinuationV1 = {
-  reservationRef: string;
-  elicitationRef: string;
-  assuranceRef: string;
-  logicalSessionRef: string;
-  attachmentGeneration: string;
-  toolName: 'engram_memory_withdraw' | 'engram_memory_forget';
-  targetRef: string;
-  operationDigest: string;
-  approved: true;
-  confirmedAt: string;
-};
-
-export type ConfirmationCheckInput = {
-  assurance: MemoryConfirmationAssuranceV1;
-  continuation: MemoryConfirmationContinuationV1;
-  capability: 'engram_memory_withdraw' | 'engram_memory_forget';
-  targetRef: string;
-  operationDigest: string;
-  logicalSessionRef: string;
-  nowIso: string;
-};
+import { checkFrozenConfirmation } from './confirmation-guard.js';
+import type { ExpectedConfirmationContinuationBindingV1, MemoryConfirmationContinuationV1 } from './frozen-confirmation.js';
+export type { MemoryConfirmationAssuranceV1, MemoryConfirmationContinuationV1 } from './frozen-confirmation.js';
+export type ConfirmationCheckInput = { continuation: MemoryConfirmationContinuationV1; expected: ExpectedConfirmationContinuationBindingV1 };
 
 /**
  * Verify an operation-bound confirmation at the effect guard. Every check
