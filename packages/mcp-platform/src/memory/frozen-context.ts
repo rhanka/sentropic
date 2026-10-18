@@ -1,6 +1,6 @@
 /** Co-frozen A03 declarations from Engram 60a8bfa8 policy.ts. */
 type OpaqueRef = string;
-type Digest = string;
+type Digest = `sha256:${string}`;
 type Instant = string;
 type Cursor = string;
 type AuthorizationContextV1 = { readonly credential: string; readonly context_ref?: OpaqueRef };
