@@ -79,5 +79,5 @@
   - [x] Scoped broker command: make test-mcp-broker SCOPE=tests/memory/source-binding.test.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5, repeat per named broker file.
   - [x] Scoped platform command: make test-mcp-platform SCOPE=tests/memory/mutation-digest-vectors.test.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5, repeat per named platform file.
   - [x] Lot gate: make typecheck-mcp-platform typecheck-mcp-broker memory-l5-lint memory-l5-tooling memory-l5-test LOT=1 API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5.
-  - [x] Exit pack: make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5.
+  - [x] Exit pack: make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5 (sha256 e789412a5df3efee15359494c561ae9f0f7add68969dcf46fa31de16a429ac2a).
   - [ ] Hand immutable P1 plus manifest SHA-256 and per-artifact versions and hashes and consumed-contract inventory and fixture and export digests to gr-conductor with the exact handoff text, record receiving owner ACK and Node-matrix alignment and E2 request.
