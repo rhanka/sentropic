@@ -14,7 +14,7 @@ function makeValidPreCandidateManifest() {
   return {
     manifestVersion: 1,
     stage: 'pre-candidate',
-    source: { head: C40, base: C40, l0Commit: C40, specSha256: FROZEN_SPEC_SHA256 },
+    source: { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: H64 },
     artifacts: [
       { role: 'platform', name: '@sentropic/mcp-platform', version: '0.4.0', sha256: H64, integrity: S512, sourceHead: C40, archive: 'archives/mcp-platform-0.4.0.tgz' },
       { role: 'broker', name: '@sentropic/mcp-broker', version: '0.2.0', sha256: H64, integrity: S512, sourceHead: C40, archive: 'archives/mcp-broker-0.2.0.tgz' },
@@ -50,7 +50,7 @@ describe('L5 artifact-manifest schema and verifier', () => {
     expect(Array.isArray(schema.oneOf)).toBe(true);
     expect(schema.oneOf).toHaveLength(3);
     for (const branch of schema.oneOf) expect(branch.additionalProperties).toBe(false);
-    expect(schema.$defs.artifactEntry.additionalProperties).toBe(false);
+    expect(schema.$defs.artifactItem.additionalProperties).toBe(false);
     expect(schema.$defs.contractEntry.required).toEqual(['path', 'version', 'sha256']);
   });
 

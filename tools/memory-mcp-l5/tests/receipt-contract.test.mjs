@@ -87,7 +87,7 @@ function buildCheckpointBundle(baseDir) {
       profiles: [{ path: ev.path, sha256: ev.sha256 }], entry: { path: ev.path, sha256: ev.sha256 }, providerManifest: { path: ev.path, sha256: ev.sha256 },
     },
     preCandidate: {
-      manifestSha256: MANIFEST_SHA, contractInventory: { path: invFile.path, sha256: invFile.sha256 },
+      manifestSha256: MANIFEST_SHA, contractInventory: [invEntry],
       l4BuildReceipt: { path: l4BuildFile.path, sha256: l4BuildFile.sha256 }, contractComparison: { path: compFile.path, sha256: compFile.sha256 },
     },
     artifacts,
