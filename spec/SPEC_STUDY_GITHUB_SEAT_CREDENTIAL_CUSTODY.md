@@ -1,6 +1,6 @@
 # SPEC STUDY — GitHub-backed custody of LLM seat credentials (MEP retrieval, Sentropic-side refresh)
 
-Status: **STUDY / RECONCILED 2026-10-18** — historical study dated 2026-09-20, reconciled with `origin/main` at `1472d961e098908e64ef60b83835af357888d031` and with PR #659 (merged 2026-10-10 as `dc95f7e4f88048e9671002827537cde4cb8149b7`). Derived from the FROZEN `spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md`; this study does not re-open the broker. Current authority for custody consumption is `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` §7 (D7); this study selects no new design and authorizes no production delivery. Owner instruction 2026-10-18: keep PR #596 open (« La garder »).
+Status: **STUDY / RECONCILED 2026-10-18** — historical study dated 2026-09-20, reconciled with `origin/main` at `1472d961e098908e64ef60b83835af357888d031` and with PR #659 (merged 2026-10-10 as `dc95f7e4f88048e9671002827537cde4cb8149b7`). Derived from the FROZEN `spec/SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER.md`; this study does not re-open the broker. Current authority for custody consumption is `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` §7 (D7); this study selects no new design and authorizes no production delivery. Owner instruction 2026-10-18: keep PR #596 open (« La garder »). Addendum 2026-10-18: the owner requirement in §11 supersedes the sentropic-only framing of the 2026-09-20 study; the custody target is multi-repo and library-based, and §11 states the built / specified / missing status explicitly.
 
 Reading guide: **Historical (2026-09-20)** marks the original request and options as recorded at that date. **Current (on main)** marks a normative decision, implemented code, or inventory observed at the pinned main above. **Unverified** marks a claim with no live qualification evidence at that baseline. A historical observation is not a current fact.
 
@@ -132,3 +132,22 @@ No implementation is authorized by this study. Custody build prerequisites on ma
 - Changes made: status and dates reconciled (§header, §0); option status corrected to historical with the recorded decision carried forward (§3); security boundary corrected (§3); refresh and delivery replaced by D7 references (§4-§5); factual inventory updated (§2, §6); fallback and terms wording corrected (§1.2, §9); seven questions reclassified (§7); dependency owners stated (§8).
 - Residual contributions retained: the O1/O2/O3 comparison as decision history (§3); the dated 2026-09-20 owner request as provenance (§header, §0); the direct Gemini/AI-Studio candidate as deferred/unverified (§6); the initial-subset and reauthentication-surface questions as still unverified (§6).
 - Historical material on main is preserved as historical: a dated observation in a controlling spec does not override its current normative decision, implemented code, or qualification status (§2, §6).
+
+## 11. Addendum 2026-10-18 — all-repos, library-based custody target
+
+### 11.1 Owner requirement (verbatim, binding)
+
+Owner requirement (2026-10-18), about the GitHub-backed custody of LLM seat credentials (PR #596): « la garde est encore a réaliser ??? elle doit être pour TOUS nos repos, et dans l'idéal librarisée avec llm mesh ou gw »
+
+Carried meaning, as instructed:
+
+1. The custody is still to be built; §11.3 states what exists on main today and what remains to build.
+2. The custody service must serve ALL our repositories (sentropic, h2a, engram, immo, design-system, kvm, k8s-ops, graphify and the others), not only sentropic.
+3. Ideally it is a LIBRARY inside `@sentropic/llm-mesh` or `@sentropic/llm-gateway`, not a sentropic-only workflow.
+
+### 11.2 Target shape
+
+- One custody library, published with the mesh/gateway packages, exposing the seat-bundle contract, the GitHub Secrets store adapter, the refresh operation, and the access-only projection resolver. Consumers in every repository depend on the library; no repository forks its own custody workflow logic.
+- One custodian writer per seat, as already frozen: only the custodian channel carries renewable material or canonical payloads, and only the custodian holds refresh authority (`packages/llm-mesh/src/enrollment/seat-bundle.ts:15`, `:19`, `:298-313`). A per-repository consumer receives access-only projections, never refresh material (`packages/llm-mesh/src/enrollment/seat-bundle.ts:100-104`, `:301-313`).
+- Per-repository GitHub Secrets remain the durable commit point (D7, §4); whether an organization-level secret store can replace per-repository secrets is unverified: the recorded credential is scoped to a single repository (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:145`), and the GitHub account shape (user vs organization) for the other repositories is not established on main.
+- The refresher placement follows the same split: library code shared by all repositories, one serialized scheduled Actions refresher per custody scope, GitHub-first durable commit, CAS delivery, independent freshness monitor, per-device provider revocation (§4; `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:147-165`).
