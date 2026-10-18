@@ -94,6 +94,7 @@
   - [x] Use throwaway node:24 container/session; provenance only in supported CI context; cleanup on failure/interruption.
   - [x] Document owner approval, Trusted Publisher setup and later CI releases in `scripts/publish/README.md`.
   - [x] Expose the bootstrap orchestration to credential-free npm stubs for failure/cleanup testing.
+  - [x] Cover stubbed web login, exact archive publication, registry failure and logout-on-failure.
   - [x] Script tests: new `scripts/publish/npm-bootstrap-web.test.mjs`; existing manifest guard tests unchanged unless wiring requires updates.
 - [ ] **Lot 3 — CI publication train**
   - [x] Add publication/validation filters, batch 1 (9 packages).

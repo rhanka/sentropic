@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { planArchives, topologicalOrder } from './archive-plan.mjs';
+import { bootstrapWeb } from './npm-bootstrap-web.mjs';
 
 const sha = 'a'.repeat(40);
 const pkg = (name, dependencies) => ({ manifest: { name, dependencies } });
@@ -66,4 +67,53 @@ test('should reject empty, unknown, duplicate or missing archives without authen
     assert.throws(() => planArchives(slugs, { directory: '/missing', headSha: sha }), /distinct declared/);
   }
   assert.throws(() => planArchives(['ubo-contracts'], { directory: '/missing', headSha: sha }), /ENOENT/);
+});
+
+function fakeNpm(fail = () => null) {
+  const calls = [];
+  return {
+    calls,
+    run(args) {
+      calls.push(args);
+      const failure = fail(args);
+      if (failure) return failure;
+      if (args[0] === 'view') return { status: 1, stdout: JSON.stringify({ error: { code: 'E404' } }) };
+      return { status: 0, stdout: '' };
+    },
+  };
+}
+const release = { archive: '/verified/ubo.tgz', sha256: 'verified', manifest: { name: '@sentropic/ubo-contracts', version: '0.1.0' } };
+
+test('should use web authentication, publish the verified archive and log out', () => {
+  const npm = fakeNpm();
+  bootstrapWeb([release], npm.run);
+  assert.deepEqual(npm.calls.map((args) => args[0]), ['view', 'login', 'publish', 'logout']);
+  assert.ok(npm.calls[1].includes('--auth-type=web'));
+  assert.ok(npm.calls[2].includes(release.archive));
+  assert.ok(npm.calls[2].includes('--provenance=false'));
+  assert.ok(npm.calls[2].includes('--ignore-scripts'));
+});
+
+test('should log out after login or publication failure', () => {
+  for (const command of ['login', 'publish']) {
+    const npm = fakeNpm(([op]) => op === command ? { status: 1, stdout: '' } : null);
+    assert.throws(() => bootstrapWeb([release], npm.run), /login|Publication/);
+    assert.equal(npm.calls.at(-1)[0], 'logout');
+    if (command === 'login') assert.ok(!npm.calls.some(([op]) => op === 'publish'));
+  }
+});
+
+test('should fail before login when the registry is unavailable or a package already exists', () => {
+  for (const result of [{ status: 0, stdout: '"0.1.0"' }, { status: 1, stdout: '{}' }]) {
+    const npm = fakeNpm(([op]) => op === 'view' ? result : null);
+    assert.throws(() => bootstrapWeb([release], npm.run), /already exists|lookup failed/);
+    assert.deepEqual(npm.calls.map(([op]) => op), ['view']);
+  }
+});
+
+test('should reject incompatible selected dependency versions before login', () => {
+  const npm = fakeNpm();
+  const consumer = { ...release, manifest: { name: '@sentropic/mcp-broker', version: '0.1.0', dependencies: { '@sentropic/ubo-contracts': '^9.0.0' } } };
+  assert.throws(() => bootstrapWeb([release, consumer], npm.run), /does not satisfy/);
+  assert.ok(!npm.calls.some(([op]) => op === 'login'));
 });
