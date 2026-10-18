@@ -68,3 +68,7 @@ package is a proof, not the shipped runtime.
 - No durable-call tracking — a tool capability returning a `DurableCallRef` (string) is
   guarded and rejected, not queued/polled.
 - No production wiring, no publishing, no connector-specific logic outside the smoke script.
+
+## Releases
+
+First publication uses the owner-operated [web bootstrap](../../scripts/publish/README.md); later releases use CI trusted publishing.
