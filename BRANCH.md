@@ -83,15 +83,15 @@
   - [x] **E2E tests**: existing `none`, updated `none`, new `none` on this branch; future component and deployed-qualification suites stay specified in spec sections 8–9 and are not executed here.
   - [x] Lot gate: `make scope-check ENV=test-spec-ui-annotate-overlay` passes with only `spec/**` + `BRANCH.md` changed; no typecheck, lint, build, or test claim is made for this docs lot.
   - [ ] UAT (docs read): owner opens the promoted spec, confirms the DV3 = B paragraph states the closed decision with its controls, and confirms no pending DV3 question remains.
-- [ ] **Lot 2 — Cross-references**
-  - [ ] Add a cross-reference from `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md` to `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md` (canonical model consumed; UI overlay is a separate consumer spec).
-  - [ ] Add a cross-reference from `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` to `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md` (explicit `/api/v1/artifacts-mcp` audience/scope widening stays gated at E0).
-  - [ ] Check `spec/SPEC.md` for a SPEC_EVOL index: it lists no SPEC_EVOL index (only inline mentions), so no `spec/SPEC.md` edit is made; record this finding here.
-  - [ ] Lot gate: `make scope-check ENV=test-spec-ui-annotate-overlay` passes; every new link resolves to an existing file in this branch.
+- [x] **Lot 2 — Cross-references**
+  - [x] Add a cross-reference from `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md` to `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md` (canonical model consumed; UI overlay is a separate consumer spec).
+  - [x] Add a cross-reference from `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` to `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md` (explicit `/api/v1/artifacts-mcp` audience/scope widening stays gated at E0).
+  - [x] Check `spec/SPEC.md` for a SPEC_EVOL index: it lists no SPEC_EVOL index (only inline mentions), so no `spec/SPEC.md` edit is made; record this finding here.
+  - [x] Lot gate: `make scope-check ENV=test-spec-ui-annotate-overlay` passes; every new link resolves to an existing file in this branch.
   - [ ] UAT (docs read): owner follows each cross-reference from the two related specs to the promoted spec and back to the canonical comments model.
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Confirm the promoted spec contains no scratch-only path, no pending DV3 question, and no forbidden wording; confirm lane, lot, Make-command, and acceptance content matches v2.
-  - [ ] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Confirm the promoted spec contains no scratch-only path, no pending DV3 question, and no forbidden wording; confirm lane, lot, Make-command, and acceptance content matches v2.
+  - [x] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
 - [ ] **Lot N — Final validation**
   - [ ] Run `make scope-check ENV=test-spec-ui-annotate-overlay` and record its result.
   - [ ] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution.
