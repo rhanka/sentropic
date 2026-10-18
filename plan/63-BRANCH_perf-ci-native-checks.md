@@ -1,14 +1,14 @@
-# Feature: BR-63 — Prepare once and run native static checks
+# Feature: BR-77 — Prepare once and run native static checks
 
 ## Objective
 - [ ] Remove repeated development-stack preparation while preserving complete compiler and lint coverage.
-- [ ] Branch `perf/ci-native-checks`, step 2 of nine; train order 63 → BR-64; dependencies: BR-62 metrics and result-set contract merged.
+- [ ] Branch `perf/ci-native-checks`, step 2 of nine; train order BR-77 → BR-78; dependencies: BR-76 metrics and result-set contract merged.
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
 - [ ] Work only in `tmp/worktrees/ci-native-checks`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
 - [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-native-checks` or `ENV=e2e-ci-native-checks`, never `dev`; no secrets in evidence.
-- [ ] Slot 0 owner: branch author; API_PORT=9315, UI_PORT=5515, MAILDEV_UI_PORT=1415; verify availability before starting services and pass all three ports to service commands.
+- [ ] Slot 0 owner: branch author; API_PORT=9385, UI_PORT=5585, MAILDEV_UI_PORT=1485; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -22,13 +22,13 @@
   - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR63-EX1; `Makefile` under BR63-EX2.
+  - [ ] `.github/workflows/ci.yml` under BR77-EX1; `Makefile` under BR77-EX2.
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR63-EX1 — Planned workflow exception: replace preparation in `typecheck-lint-api`, `typecheck-lint-ui`, `validate-llm-gateway`, `validate-artifacts`, `validate-chat-ui`, and `validate-mcp-platform`. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR63-EX2 — Planned Makefile exception: add explicit CI-native preparation/check entry points; retain Make as the interface and production-image checks. This bounded CI executor is the planned Docker-first exception. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR77-EX1 — Planned workflow exception: replace preparation in `typecheck-lint-api`, `typecheck-lint-ui`, `validate-llm-gateway`, `validate-artifacts`, `validate-chat-ui`, and `validate-mcp-platform`. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [ ] BR77-EX2 — Planned Makefile exception: add explicit CI-native preparation/check entry points; retain Make as the interface and production-image checks. This bounded CI executor is the planned Docker-first exception. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
@@ -62,7 +62,7 @@
   - [ ] Review real cold/warm logs for hidden development-stack startup and compare compiler/linter coverage; no web/extension behavior changes.
   - [ ] Budget to measure on real runs, cold installation included: complete API static ≤120s, UI ≤90s, IdP/web ≤90s, versus source examples 425s/144s; count preparation, sibling builds, and transfer.
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
-  - [ ] Rollback drill: restore the previous static recipes, remove the replaced native path, and rerun identical coverage checks while retaining BR-62 timing and result completeness.
+  - [ ] Rollback drill: restore the previous static recipes, remove the replaced native path, and rerun identical coverage checks while retaining BR-76 timing and result completeness.
 - [ ] **Lot 4 — Docs consolidation**
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
