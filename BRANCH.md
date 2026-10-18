@@ -91,23 +91,23 @@
   - [x] **API tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
   - [x] **UI tests (TypeScript only)**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
   - [x] **E2E tests**: existing `none`, updated `none`, new `none` on this branch; future suites stay specified in the new spec test plan.
-  - [ ] Lot gate: `make scope-check ENV=test-idp-per-app-mfa-recovery` passes with only `spec/**` + `BRANCH.md` changed; no typecheck, lint, build, or test claim is made for this docs lot.
+  - [x] Lot gate: `make scope-check ENV=test-idp-per-app-mfa-recovery` passes with only `spec/**` + `BRANCH.md` changed; no typecheck, lint, build, or test claim is made for this docs lot.
   - [ ] UAT (docs read): owner reads the new spec and confirms the recommended recovery combination and the French owner-decision list.
 - [x] **Lot 2 — Cross-references in related specs**
   - [x] Add a cross-reference from `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` to the new spec (per-client policy extended by recovery/freshness).
   - [x] Add a cross-reference from `spec/WORKFLOW_AUTH.md` to the new spec (device-loss and magic-link assurance for forced clients).
   - [x] Add a cross-reference from `spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md` to the new spec (tenant claim unchanged; MFA/recovery is orthogonal).
   - [x] Check `spec/SPEC.md` for a SPEC_EVOL index and record the finding in this file; edit only if an index exists: no SPEC_EVOL index exists (only inline mentions), so no `spec/SPEC.md` edit is made.
-  - [ ] Lot gate: `make scope-check ENV=test-idp-per-app-mfa-recovery` passes; every new link resolves to an existing file in this branch.
+  - [x] Lot gate: `make scope-check ENV=test-idp-per-app-mfa-recovery` passes; every new link resolves to an existing file in this branch.
   - [ ] UAT (docs read): owner follows each cross-reference to the new spec and back to the policy it extends.
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Confirm the new spec reuses merged mechanisms without duplicating them and contains no secret value, only variable names.
-  - [ ] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Confirm the new spec reuses merged mechanisms without duplicating them and contains no secret value, only variable names.
+  - [x] Confirm `BRANCH.md` checkboxes reflect the completed lots with this commit.
 - [ ] **Lot N — Final validation**
-  - [ ] Run `make scope-check ENV=test-idp-per-app-mfa-recovery` and record its result.
-  - [ ] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution.
+  - [x] Run `make scope-check ENV=test-idp-per-app-mfa-recovery` and record its result: PASS C2.
+  - [x] Confirm every commit on this branch is at most 150 changed lines and was created with `make commit` without AI attribution.
   - [ ] Push `spec/idp-per-app-mfa-recovery` and open a DRAFT PR whose body is this `BRANCH.md` text; report the PR number and head SHA, then stop without merging.
-  - [ ] Retest UI: not applicable, docs only, no UI test claimed.
-  - [ ] Retest API: not applicable, docs only, no API test claimed.
-  - [ ] Retest E2E: not applicable, docs only, no E2E test claimed.
-  - [ ] Package version bump: not applicable, no `packages/<pkg>/src/**` file changed.
+  - [x] Retest UI: not applicable, docs only, no UI test claimed.
+  - [x] Retest API: not applicable, docs only, no API test claimed.
+  - [x] Retest E2E: not applicable, docs only, no E2E test claimed.
+  - [x] Package version bump: not applicable, no `packages/<pkg>/src/**` file changed.
