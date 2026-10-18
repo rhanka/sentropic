@@ -159,6 +159,23 @@ export interface ExpectedConfirmationContinuationBindingV1 {
     // (undocumented)
     readonly provider_id: 'sentropic.engram.memory';
     // (undocumented)
+    readonly reservation_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly reservation_state: 'uncommitted' | 'committed' | 'unknown';
+    // (undocumented)
+    readonly scope_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly store_id: OpaqueRef_2;
+    // (undocumented)
+    readonly target_currently_authorized?: unknown;
+    // (undocumented)
+    readonly target_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly tenant_id: OpaqueRef_2;
+    // (undocumented)
+    readonly transport_attachment_ref: OpaqueRef_2;
+}
+
 // Warning: (ae-forgotten-export) The symbol "CapabilityTool" needs to be exported by the entry point index.d.ts
 //
 // @public (undocumented)
@@ -200,7 +217,7 @@ export function isValidOpaqueRef(value: unknown): value is string;
 // @public
 export function isWellFormed(value: string): boolean;
 
-// @public
+// @public (undocumented)
 export function isWithinExecutionBudget(confirmedAtIso: string, nowIso: string): boolean;
 
 // @public
@@ -248,34 +265,86 @@ export const MEMORY_TOOLS_PROFILE_ID = "sentropic.engram.memory-tools/2020-12-v1
 // @public
 export const MEMORY_WIRE_PROFILE_ID = "sentropic.engram.memory-wire/v1";
 
-// @public
-export type MemoryConfirmationAssuranceV1 = {
-    issuer: string;
-    subject: string;
-    enrollmentReceipt: string;
-    assuranceReceipt: string;
-    assurancePolicyVersion: string;
-    approverRef: string;
-    delegationRef: string | null;
-    initiatingPrincipalRef: string;
-    tenantRef: string;
-    agentRef: string;
-    clientRef: string;
-    logicalSessionRef: string;
-    attachmentGeneration: string;
-    providerRef: string;
-    connectorInstanceRef: string;
-    storeRef: string;
-    scopeRef: string;
-    toolName: 'engram_memory_withdraw' | 'engram_memory_forget';
-    toolVersion: string;
-    targetRef: string;
-    reservationRef: string;
-    operationDigest: string;
-    issuedAt: string;
-    expiresAt: string;
-};
+// @public (undocumented)
+export interface MemoryConfirmationAssuranceV1 {
+    // (undocumented)
+    readonly approving_human_principal_id: OpaqueRef_2;
+    // (undocumented)
+    readonly approving_subject_sub: OpaqueRef_2;
+    // (undocumented)
+    readonly assurance_policy_version: OpaqueRef_2;
+    // (undocumented)
+    readonly authenticated: boolean;
+    // (undocumented)
+    readonly delegation?: DelegationBindingV1;
+    // (undocumented)
+    readonly enrolled_2fa: boolean;
+    // (undocumented)
+    readonly enrolled_oidc_domain: 'sent-tech.ca';
+    // (undocumented)
+    readonly enrollment_receipt_digest: Digest_2;
+    // (undocumented)
+    readonly hardware_key_required: false;
+    // (undocumented)
+    readonly identity_source: 'enrolled_oidc_2fa';
+    // (undocumented)
+    readonly issuer: OpaqueRef_2;
+    // (undocumented)
+    readonly step_up_2fa_receipt_digest: Digest_2;
+    // (undocumented)
+    readonly step_up_assurance_verified: boolean;
+}
 
+// @public (undocumented)
+export interface MemoryConfirmationContinuationV1 {
+    // (undocumented)
+    readonly active_generation: Cursor_2;
+    // (undocumented)
+    readonly agent_id: OpaqueRef_2;
+    // (undocumented)
+    readonly approved: boolean;
+    // (undocumented)
+    readonly assurance: MemoryConfirmationAssuranceV1;
+    // (undocumented)
+    readonly capability: DestructiveMemoryToolName;
+    // (undocumented)
+    readonly connector_id: 'engram-memory';
+    // (undocumented)
+    readonly connector_instance_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly continuation_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly elicitation_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly expires_at: Instant_2;
+    // (undocumented)
+    readonly initiating_principal_id: OpaqueRef_2;
+    // (undocumented)
+    readonly initiating_principal_namespace: OpaqueRef_2;
+    // (undocumented)
+    readonly issued_at: Instant_2;
+    // (undocumented)
+    readonly logical_session_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly mcp_client_id: OpaqueRef_2;
+    // (undocumented)
+    readonly mode: 'confirm';
+    // (undocumented)
+    readonly operation_digest: Digest_2;
+    // (undocumented)
+    readonly provider_contract_version: '1.0.0';
+    // (undocumented)
+    readonly provider_id: 'sentropic.engram.memory';
+    // (undocumented)
+    readonly reattachment_proof?: MemoryLogicalSessionReattachmentProofV1;
+    // (undocumented)
+    readonly reservation_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly scope_ref: OpaqueRef_2;
+    // (undocumented)
+    readonly store_id: OpaqueRef_2;
+    // (undocumented)
+    readonly target_ref: OpaqueRef_2;
 // @public
 export type MemoryConfirmationContinuationV1 = {
     reservationRef: string;
