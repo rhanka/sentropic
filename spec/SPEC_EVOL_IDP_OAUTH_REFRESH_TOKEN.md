@@ -242,3 +242,72 @@ On `POST /token` with `grant_type=refresh_token` (`[TO BUILD Lot 2]`):
   - `/token`: `grant_type`, `client_id`, `refresh_token_issued: boolean`, `expires_in`, `access_token_ttl_sec` (`exp - iat`), `family_id`, `generation`, `family_remaining_sec`, `error_code`.
   - Family lifecycle audit: `oauth.refresh.issued`, `oauth.refresh.rotated`, `oauth.refresh.reuse_detected` (high-severity security alert with `family_id`, `client_id`, `user_id`, `replayed_generation`), `oauth.refresh.revoked`, `oauth.refresh.policy_denied`.
 - **Strict redaction invariant:** Logs, metrics, error payloads, and Lot 0 preprod qualification notes **never** record raw `refresh_token` (`srt_...`), `access_token`, `id_token`, `code`, `code_verifier`, `client_secret`, `Authorization` headers, or session cookies.
+
+## 9. Test plan (file-level granularity)
+
+### 9.1 `@sentropic/auth-hono` unit and protocol suites
+
+- `packages/auth-hono/tests/oauth/refresh-token-flow.test.ts` `[TO BUILD Lot 2]`:
+  - Mints `srt_...` (`47` chars) on `authorization_code` exchange if and only if `isRefreshEligibleClient(client)` and granted `scope` contains `'offline_access'`.
+  - Rotates generation `0 -> 1 -> 2` atomically; preserves `family_id`, `family_expires_at` (`15 d` = `1,296,000 s`), `acr`, `amr` (verbatim, never synthesized from `acr`), and `auth_time`; caps access token `expires_in` via `R-TTL-CAP` when `family_expires_at - now < 3600 s`.
+  - Applies narrowed `scope` to the minted `access_token` while keeping original family `scope` on the replacement `refresh_token` (`RFC 6749 §6`); enforces sealed RFC 8707 `resource` (`aud`) and `dpop_jkt`.
+  - Rejects wrong `client_id`, invalid `client_secret`, or missing/mismatched `DPoP` proof **before** reuse detection so an attacker or misconfigured client cannot DoS-revoke a legitimate family.
+  - Detects replay of any spent generation (`RT_0` replayed after `RT_0 -> RT_1 -> RT_2`), marks the entire `family_id` as `revoked_reason = 'reuse_detected'`, inserts all active family `oauth_tokens` JTIs into `revoked_tokens`, and rejects `RT_2` on subsequent use.
+  - Fails closed (`400 invalid_grant` + family revocation) when live user is disabled, removed from `allowed_user_ids`, consent (`offline_access`) is withdrawn, `required_acr` is added to the client, or `ports.tenant.isApprovedMember(userId, tenantId)` becomes false (never dropping `tid` to `null`).
+- `packages/auth-hono/tests/oauth/authorize-offline-access.test.ts` `[TO BUILD Lot 2]`:
+  - `/authorize` accepts `offline_access` only when `client.allowedScopes` has `'offline_access'` and `client.grantTypes` has `'refresh_token'`; existing consent without `'offline_access'` forces interactive consent (`hasCoveringGrant === false`); discovery endpoints advertise `'refresh_token'` and `'offline_access'`; `/token` and `/revoke` error responses emit RFC 6749 top-level `"error"` and `"error_description"` strings (`http-utils.ts`).
+- `packages/auth-hono/tests/oauth/revoke-introspect-refresh.test.ts` `[TO BUILD Lot 3]`:
+  - `/revoke` with an active or already-spent `srt_...` token revokes the entire `family_id` and its active `oauth_tokens` JTIs; cross-client revocation is refused; unknown tokens return `200 OK`; `/introspect` returns `{ active: true, token_type: 'refresh_token', exp: family_expires_at }` only for the unconsumed, unrevoked, unexpired leaf.
+
+### 9.2 `api` persistence, PostgreSQL concurrency race, registration, and tier-sync suites
+
+- `api/tests/services/auth/oauth-state-adapter.refresh.test.ts` `[TO BUILD Lot 1-2]`:
+  - Verifies SHA-256 `token_hash` persistence (no plaintext `srt_...` column), `UNIQUE (family_id, generation)` and partial unique active-leaf index, `Promise.all` concurrent rotation race on the same `srt_...` token against PostgreSQL (never producing two active children; loser hits reuse detection), and `purgeExpired()` retaining spent digests until `family_expires_at < now`.
+- `api/tests/routes/oauth-refresh.integration.test.ts` `[TO BUILD Lot 2-3]`:
+  - Exercises `/oauth/authorize` -> `/oauth/consent` -> `/oauth/token` (`authorization_code`) -> `/oauth/token` (`refresh_token`) -> `/oauth/revoke` -> `/oauth/introspect` over HTTP, plus family invalidation on account disablement, consent deletion, and recovery completion.
+- `api/src/scripts/oauth-register-client.test.ts` `[TO BUILD Lot 1]`:
+  - Covers `OAUTH_CLIENT_GRANT_TYPES` parsing, rejection of `'refresh_token'` without `'authorization_code'`, and preservation of existing `grant_types` when `OAUTH_CLIENT_GRANT_TYPES` is omitted during 90-day secret rotation.
+- `api/tests/scripts/idp-identity-sync.test.ts` `[TO BUILD Lot 1]`:
+  - Verifies `export-prod.sql` never exports `oauth_refresh_tokens` and `import-preprod.sql` classifies `oauth_refresh_tokens` as `'ephemeral-auth'` and deletes preprod refresh rows on user rekeying.
+
+### 9.3 `cluster-mesh`, `@sentropic/mcp-auth`, E2E, and preprod `claude.ai` UAT
+
+- `packages/auth-hono/tests/oauth/token-exchange-refreshed-subject.test.ts` `[TO BUILD Lot 4]`: verifies that an `access_token` issued by `grant_type=refresh_token` succeeds as an RFC 8693 `subject_token` (`verifySubject` via `oauth_tokens`), is rejected immediately when its family is revoked (`revoked_tokens`), and never yields a `refresh_token` on the exchanged workload token.
+- `e2e/tests/auth/oauth-refresh-token.spec.ts` `[TO BUILD Lot 4]`: Playwright E2E flow covering login, `offline_access` consent, rotation, reuse-detection family kill, and `/oauth/revoke`.
+- Preprod native `claude.ai` UAT (`[TO BUILD Lot 0 & Lot 5]`): connect `claude.ai` to `immo-mcp-preprod`, verify sanitized `/authorize` and `/token` logs (`refresh_token_issued: true`, `expires_in: 3600`), confirm silent renewal across access-token expiry without user relogin, and verify MCP `initialize` recovery after an Immo MCP pod restart (`HTTP 404`) with `@sentropic/mcp-auth >= 0.2.2`.
+
+## 10. Implementation lots for BUILD branches
+
+| Lot | Scope & deliverables (separate BUILD branch(es), atomic commits <= 150 lines) | Verification gate |
+|---|---|---|
+| **Lot 0** | Preprod `claude.ai` trace qualification: add credential-free structured logging on `/authorize` and `/token` (`requested_offline_access`, `grant_type`, `error_code`) and capture a real `claude.ai` connector handshake on `immo-mcp-preprod`. | Scoped API tests + sanitized preprod trace recorded in `BRANCH.md`. |
+| **Lot 1** | Persistence & tooling foundation: `api/drizzle/0044_oauth_refresh_tokens.sql` (`oauth_refresh_tokens` + `oauth_tokens.refresh_family_id`), `OAUTH_REFRESH_TOKEN_TTL_SEC=1296000` in `api/src/config/env.ts`, `RefreshTokenStore` in `packages/auth-hono` + `api/src/services/auth/oauth-state-adapter.ts`, `OAUTH_CLIENT_GRANT_TYPES` preservation in `oauth-register-client.ts`, and `oauth_refresh_tokens` in `import-preprod.sql` `'ephemeral-auth'`. | `oauth-state-adapter.refresh.test.ts`, `oauth-register-client.test.ts`, `idp-identity-sync.test.ts`. |
+| **Lot 2** | Core protocol flow: `/authorize` `offline_access` gating, `authorization_code` generation-0 issuance, `grant_type=refresh_token` rotation + reuse detection + live policy/tenant/consent re-evaluation + `R-TTL-CAP`, RFC 6749 top-level `error` wire fix in `http-utils.ts`, and discovery metadata (`grant_types_supported`, `scopes_supported`). | `refresh-token-flow.test.ts`, `authorize-offline-access.test.ts`, `oauth-refresh.integration.test.ts`. |
+| **Lot 3** | Revocation, introspection, DR & `#695` hooks: opaque `srt_...` support in `/revoke` and `/introspect`, family revocation on consent withdrawal / account disablement / completed recovery / `security_generation` bump (`#695` fifth leg), and `make db-restore` refresh-family invalidation step. | `revoke-introspect-refresh.test.ts` + updated `oauth-refresh.integration.test.ts`. |
+| **Lot 4** | `cluster-mesh` RFC 8693 integration & Playwright E2E: `token-exchange-refreshed-subject.test.ts` and `e2e/tests/auth/oauth-refresh-token.spec.ts`. | Scoped `auth-hono` + `cluster-mesh` + Playwright E2E suite on `ENV=e2e-*`. |
+| **Lot 5** | MCP rollout with `cluster-mesh` migration: upgrade `radar-immobilier` to `@sentropic/mcp-auth >= 0.2.2`, key MCP session ownership on `(sub, client_id, tid)`, route `/.well-known/oauth-protected-resource/mcp`, register `grant_types = ['authorization_code', 'refresh_token']` and `'offline_access'` on `immo-mcp-preprod` then `immo-mcp`, and run native `claude.ai` UAT. | Preprod & prod `claude.ai` MCP UAT + confirmation telemetry (`section 8`). |
+
+## 11. Compatibility, non-goals, and rollout risks
+
+- **Zero impact on existing clients:** Clients registered with `grant_types = ['authorization_code']` (`design-system`, `kvm-gateway`, `example-*`) keep baseline behaviour (`offline_access` rejected, no refresh token issued).
+- **Rolling deployment order:** Deploy Lots 1–3 to all API replicas **before** advertising `'refresh_token'` in discovery or enabling `'refresh_token'` on `immo-mcp`, so no replica ever returns `unsupported_grant_type` mid-rollout.
+- **Explicit non-goals:** No sliding extension past `family_expires_at` (`15 d`); no replay grace window or plaintext token response cache; no refresh tokens on `client_credentials` or RFC 8693 `token-exchange`; no refresh tokens on forced-MFA console clients (`kvm-gateway`).
+
+## 12. Décisions propriétaire
+
+### 12.1 Décision principale (fermée le 2026-10-18 — exécutoire)
+
+- **Option retenue :** **« Refresh OAuth par l'IdP (Recommandé) »** — l'IdP Sentropic émet un refresh token OAuth standard (rotation à chaque usage, détection de réutilisation avec révocation de toute la famille, révocation explicite, stockage haché SHA-256) avec une **durée de vie absolue de 15 jours** (`1 296 000 s`) ; `claude.ai` le gère nativement (renouvellement silencieux, relogin aux 15 jours) ; les access tokens restent courts (**1 h** = `3 600 s`) ; livré avec la migration vers `cluster-mesh` ; sert également les autres MCP Sentropic.
+
+### 12.2 Arbitrages résiduels bornés (avec valeurs par défaut sûres non bloquantes)
+
+Les trois points ci-dessous disposent chacun d'une règle par défaut dans cette spécification afin qu'aucun lot BUILD ne soit bloqué ; le propriétaire peut confirmer la règle par défaut ou la modifier avant le Lot 2/3 :
+
+1. **D-R1 — Relogin aux 15 jours face au cookie navigateur IdP (7 jours) :**
+   - **Par défaut (recommandé) :** à l'expiration de la famille à 15 jours, `POST /oauth/token` refuse le refresh (`invalid_grant`) et le client relance `GET /oauth/authorize` ; si l'utilisateur possède une session navigateur IdP active (< 7 jours) et un consentement valide, `/authorize` s'appuie dessus normalement, sinon il demande une ré-authentification interactive.
+   - **Alternative stricte :** exiger `now - session.auth_time < 15 jours` (ou `prompt=login`) lors d'un `/authorize` demandant `offline_access` pour imposer une saisie d'identifiants / passkey fraîche même si un cookie navigateur plus récent existe.
+2. **D-R2 — Portée d'un logout navigateur local (`/oauth/end_session` / `/auth/logout`) sur les connecteurs MCP :**
+   - **Par défaut (recommandé) :** un logout navigateur local ferme la session `user_sessions` du navigateur sans couper les familles `oauth_refresh_tokens` des connecteurs MCP (`claude.ai`) ; les familles MCP sont révoquées lors d'un `POST /oauth/revoke` du connecteur, d'un retrait de consentement OAuth, d'une désactivation de compte ou d'un événement de sécurité (`#695` `security_generation` / recovery complété).
+   - **Alternative couplée :** révoquer également toutes les familles `oauth_refresh_tokens` liées à `session_id` (ou à `user_id`) lors d'un logout navigateur.
+3. **D-R3 — Clients à MFA forcé (`required_acr != null`, ex. `kvm-gateway`) :**
+   - **Par défaut (recommandé, section 5.1 & 7.1) :** `grant_type=refresh_token` est **désactivé** pour tout client ayant `required_acr != null` (`kvm-gateway` reste en `authorization_code` seul). Si un client nécessitant MFA devait un jour utiliser le refresh hors-ligne après `#695`, un arbitrage dédié précisera si `maxMfaAgeSeconds` borne directement le refresh ou si une fenêtre offline MFA distincte s'applique.
