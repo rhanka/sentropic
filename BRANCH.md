@@ -93,6 +93,7 @@
   - [ ] New tests/mcp-oauth-http.spec.ts: loopback issuer/MCP/independent API verifier, real Basic RFC8693 + SDK, positive search, inverse audiences, same client automatic reinitialization after restart. Synthetic keys, port 0 inside container.
   - [ ] Scoped gates: Lot 1 command with SCOPE=tests/mcp-oauth-egress.spec.ts and SCOPE=tests/token-exchange; service gate uses SCOPE=tests/mcp-oauth-http.spec.ts and ENV=e2e-feat-cluster-mesh-oauth-o1. No UI tests.
 - [ ] **Lot 4 — Packed API, compatibility and release tuple**
+  - [x] Shared native HTTP scenario prepared for both SDK/Hono tuples, including configured ACR success/failure, audience isolation, raw/stub behavior and fresh objects after restart; installed runner pending.
   - [x] Added exact SDK1.32.1/Hono4.13.13 fixture manifest and typed public call site; strict installed compilation/runtime gates pending. No base-peer archives substitute for missing publications.
   - [ ] After #684 merge, rebase only onto main; choose target 0.20.0 above registry/main; widen comments self-range only; preserve storage/comments and gateway peer ranges; rerun affected gates.
   - [ ] Update selected manifest and refresh generated lock via `rtk make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; root lock via lock-root only if actual root resolution changes require it.
