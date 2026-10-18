@@ -125,15 +125,15 @@ Implement Lot 1 exactly as the reviewed plan defines it.
     - [ ] Exercise an omitted-consumer fixture (incl. mcp-auth to API to affected AI), plus doc-only and global-change cases; inspect selected jobs + complete LLM evidence.
 
 - [ ] **Lot 4 — Smoke placement and gate hardening**
-  - [ ] Remove only `typecheck-lint-api` from `smoke-idp-screens.needs`; retain `changes`, `build-api-image`, `build-api-tool-image`, `security-sast-sca`.
-  - [ ] Verify no lint outputs/artifacts are consumed by smoke; retain both as mandatory gate dependencies.
-  - [ ] Add `scripts/ci/smoke-placement.test.mjs` (DAG acyclic, overlap, required deps stay, failure blocks green, missing/cancelled blocks green).
-  - [ ] Strengthen `ci-gate`: required LLM result absent/skipped/neutral/failed/cancelled cannot satisfy strict green; unaffected jobs skip only with explicit selection reason.
-  - [ ] Remove `continue-on-error` on AI suites so affected AI failures block green.
-  - [ ] Extend `scripts/ci/publishable-ci-wiring.test.mjs` only if exact assertions need updating; keep publication/provenance/main-only invariants.
-  - [ ] Lot gate:
-    - [ ] `make test-ci-optimization SCOPE=scripts/ci/smoke-placement.test.mjs ENV=test-ci-opt-lot1`
-    - [ ] `make test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs ENV=test-ci-opt-lot1`
+  - [x] Remove only `typecheck-lint-api` from `smoke-idp-screens.needs`; retain `changes`, `build-api-image`, `build-api-tool-image`, `security-sast-sca`.
+  - [x] Verify no lint outputs/artifacts are consumed by smoke; retain both as mandatory gate dependencies.
+  - [x] Add `scripts/ci/smoke-placement.test.mjs` (DAG acyclic, overlap, required deps stay, failure blocks green, missing/cancelled blocks green).
+  - [x] Strengthen `ci-gate`: required LLM result absent/skipped/neutral/failed/cancelled cannot satisfy strict green; unaffected jobs skip only with explicit selection reason.
+  - [x] Remove `continue-on-error` on AI suites so affected AI failures block green.
+  - [x] Extend `scripts/ci/publishable-ci-wiring.test.mjs` only if exact assertions need updating; keep publication/provenance/main-only invariants.
+  - [x] Lot gate:
+    - [x] `make test-ci-optimization SCOPE=scripts/ci/smoke-placement.test.mjs ENV=test-ci-opt-lot1`
+    - [x] `make test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs ENV=test-ci-opt-lot1`
   - [ ] CI UAT:
     - [ ] Inspect lint/smoke overlap on real runs; image/security predecessors satisfied; lint or smoke failure prevents green; no false green after cancellation/missing/failed AI shard.
     - [ ] Compare failed-lint work before/after plus successful-run delay; record extra smoke work; roll back smoke independently if cost outweighs delay benefit.

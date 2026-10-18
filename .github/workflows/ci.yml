@@ -1127,7 +1127,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, build-api-image, build-api-tool-image]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-    continue-on-error: ${{ matrix.suite == 'ai' }}
     env:
       API_TEST_CI: '1'
       API_TEST_SUT: ${{ (matrix.suite == 'smoke' || matrix.suite == 'limit') && '1' || '0' }}
@@ -1394,7 +1393,7 @@ jobs:
   # API/unit suite never exercised the served consent screen end-to-end.
   smoke-idp-screens:
     runs-on: ubuntu-latest
-    needs: [changes, typecheck-lint-api, build-api-image, build-api-tool-image, security-sast-sca]
+    needs: [changes, build-api-image, build-api-tool-image, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
       DOCKER_USERNAME: nologin
@@ -2355,4 +2354,36 @@ jobs:
             echo '::error::CI gate failed: required results are missing or unacceptable.'
             exit 1
           fi
+          # Lot 1 strict selection check: a selected lane must succeed, never skip.
+          # A required LLM result that is absent, skipped, neutral, failed or
+          # cancelled cannot satisfy strict green; unaffected jobs skip only with
+          # a selection reason (their filter output is false). Mirrors the
+          # requiredSuccessJobs table in scripts/ci/filter-consumers.mjs.
+          CHANGES="$(printf '%s' "$CI_NEEDS" | jq -c '.changes.outputs // {}')"
+          selected() { [ "$(printf '%s' "$CHANGES" | jq -r --arg k "$1" '.[$k] // "false"')" = "true" ]; }
+          REQUIRED="changes validate-publishable-manifests"
+          if selected api || selected global; then
+            REQUIRED="$REQUIRED test-api-unit-integration typecheck-lint-api build-api-image build-api-tool-image smoke-idp-screens security-sast-sca test-smoke-restore"
+          fi
+          if selected ui || selected global; then
+            REQUIRED="$REQUIRED typecheck-lint-ui build-ui test-e2e e2e-vscode"
+          fi
+          if selected api || selected ui || selected global; then
+            REQUIRED="$REQUIRED security-container build-e2e"
+          fi
+          if selected global; then REQUIRED="$REQUIRED security-iac"; fi
+          # validate-idp-sync enumerates its own inputs and stays global-free by design.
+          for pair in llm_mesh:validate-llm-mesh cluster_mesh:validate-cluster-mesh llm_gateway:validate-llm-gateway chat_ui:validate-chat-ui cited_source_viewer:validate-cited-source-viewer cowork_bridge:validate-cowork-bridge oauth_verify:validate-oauth-verify mcp_auth:validate-mcp-auth mcp_platform:validate-mcp-platform auth_hono:validate-auth-hono auth_client:validate-auth-client auth_ui:validate-auth-ui cowork_desktop:validate-cowork-desktop contracts:validate-contracts events:validate-events chat_core:validate-chat-core chat_server:validate-chat-server comments:validate-comments flow:validate-flow artifacts:validate-artifacts harness:validate-harness idp_sync:validate-idp-sync; do
+            key="${pair%%:*}"; job="${pair##*:}"
+            if selected "$key" || { [ "$key" != "idp_sync" ] && selected global; }; then
+              REQUIRED="$REQUIRED $job"
+            fi
+          done
+          for job in $REQUIRED; do
+            result="$(printf '%s' "$CI_NEEDS" | jq -r --arg j "$job" '.[$j].result // "missing"')"
+            if [ "$result" != "success" ]; then
+              echo "::error title=CI gate::strict selection requires $job result=success (got $result)"
+              exit 1
+            fi
+          done
           echo 'CI gate passed: all required jobs succeeded, were skipped, or were neutral.'
