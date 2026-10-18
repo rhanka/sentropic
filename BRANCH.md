@@ -107,6 +107,7 @@
   - [ ] Lot gate: `make test-publishable-manifests ENV=test-publish-mcp-packages`.
 - [ ] **Lot 4 — Packaged consumer qualification**
   - [x] New `scripts/publish/packaged-consumer.test.mjs`: install real guarded archives and import every public Node entry point, including experimental/hono entries.
+  - [x] Give each guarded archive a dedicated empty destination (guard rejects shared output directories).
   - [ ] Gate: `make test-publishable-consumers ENV=test-publish-mcp-packages`.
   - [ ] API tests: none; no API implementation changes.
   - [ ] UI tests: none; no UI implementation changes.

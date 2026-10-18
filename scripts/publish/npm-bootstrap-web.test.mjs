@@ -26,7 +26,8 @@ function fixture(fn) {
     fs.writeFileSync(path.join(directory, 'package/package.json'), JSON.stringify({
       name: '@sentropic/ubo-contracts', version: '0.1.0', type: 'module',
     }));
-    const archive = path.join(directory, 'ubo-contracts.tgz');
+    fs.mkdirSync(path.join(directory, 'ubo-contracts'));
+    const archive = path.join(directory, 'ubo-contracts/ubo-contracts.tgz');
     assert.equal(spawnSync('tar', ['-czf', archive, 'package'], { cwd: directory }).status, 0);
     const receipt = {
       slug: 'ubo-contracts', name: '@sentropic/ubo-contracts', version: '0.1.0',

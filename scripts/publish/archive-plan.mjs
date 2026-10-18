@@ -38,7 +38,7 @@ export function planArchives(slugs, { directory, headSha }) {
     if (receipt.slug !== slug || receipt.guard !== 'pass' || receipt.manifest_mode !== 'block' || receipt.head_sha !== headSha) {
       throw new Error(`${slug}: missing successful strict guard for the current commit`);
     }
-    const archive = path.join(directory, path.basename(receipt.archive ?? ''));
+    const archive = path.join(directory, slug, path.basename(receipt.archive ?? ''));
     const sha256 = createHash('sha256').update(fs.readFileSync(archive)).digest('hex');
     if (sha256 !== receipt.sha256) throw new Error(`${slug}: archive changed after verification`);
     const result = inspectArchive({ archive });

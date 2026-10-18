@@ -2331,7 +2331,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-ubo-contracts PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-ubo-contracts
+        run: make pack-ubo-contracts PACK_DESTINATION=tmp/npm-bootstrap/ubo-contracts MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-ubo-contracts
       - name: Qualify ubo-contracts packaged consumer
         run: make test-publishable-consumer PACKAGE=ubo-contracts ENV=test-ci-ubo-contracts
 
@@ -2368,7 +2368,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-broker PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-broker
+        run: make pack-mcp-broker PACK_DESTINATION=tmp/npm-bootstrap/mcp-broker MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-broker
       - name: Qualify mcp-broker packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-broker ENV=test-ci-mcp-broker
 
@@ -2406,7 +2406,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-connector-host PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-connector-host
+        run: make pack-connector-host PACK_DESTINATION=tmp/npm-bootstrap/connector-host MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-connector-host
       - name: Qualify connector-host packaged consumer
         run: make test-publishable-consumer PACKAGE=connector-host ENV=test-ci-connector-host
 
@@ -2444,7 +2444,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-airtable PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-airtable
+        run: make pack-mcp-connector-airtable PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-airtable MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-airtable
       - name: Qualify mcp-connector-airtable packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-airtable ENV=test-ci-mcp-connector-airtable
 
@@ -2482,7 +2482,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-dropbox PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-dropbox
+        run: make pack-mcp-connector-dropbox PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-dropbox MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-dropbox
       - name: Qualify mcp-connector-dropbox packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-dropbox ENV=test-ci-mcp-connector-dropbox
 
@@ -2520,7 +2520,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-github PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-github
+        run: make pack-mcp-connector-github PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-github MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-github
       - name: Qualify mcp-connector-github packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-github ENV=test-ci-mcp-connector-github
 
@@ -2558,7 +2558,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-gmail PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-gmail
+        run: make pack-mcp-connector-gmail PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-gmail MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-gmail
       - name: Qualify mcp-connector-gmail packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-gmail ENV=test-ci-mcp-connector-gmail
 
@@ -2596,7 +2596,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-google PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-google
+        run: make pack-mcp-connector-google PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-google MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-google
       - name: Qualify mcp-connector-google packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-google ENV=test-ci-mcp-connector-google
 
@@ -2634,7 +2634,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-googlecalendar PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googlecalendar
+        run: make pack-mcp-connector-googlecalendar PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-googlecalendar MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googlecalendar
       - name: Qualify mcp-connector-googlecalendar packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-googlecalendar ENV=test-ci-mcp-connector-googlecalendar
 
@@ -2672,7 +2672,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-googledocs PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googledocs
+        run: make pack-mcp-connector-googledocs PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-googledocs MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googledocs
       - name: Qualify mcp-connector-googledocs packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-googledocs ENV=test-ci-mcp-connector-googledocs
 
@@ -2710,7 +2710,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-googledrive PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googledrive
+        run: make pack-mcp-connector-googledrive PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-googledrive MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googledrive
       - name: Qualify mcp-connector-googledrive packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-googledrive ENV=test-ci-mcp-connector-googledrive
 
@@ -2748,7 +2748,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-googlesheets PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googlesheets
+        run: make pack-mcp-connector-googlesheets PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-googlesheets MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-googlesheets
       - name: Qualify mcp-connector-googlesheets packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-googlesheets ENV=test-ci-mcp-connector-googlesheets
 
@@ -2786,7 +2786,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-hubspot PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-hubspot
+        run: make pack-mcp-connector-hubspot PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-hubspot MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-hubspot
       - name: Qualify mcp-connector-hubspot packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-hubspot ENV=test-ci-mcp-connector-hubspot
 
@@ -2824,7 +2824,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-linear PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-linear
+        run: make pack-mcp-connector-linear PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-linear MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-linear
       - name: Qualify mcp-connector-linear packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-linear ENV=test-ci-mcp-connector-linear
 
@@ -2862,7 +2862,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-notion PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-notion
+        run: make pack-mcp-connector-notion PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-notion MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-notion
       - name: Qualify mcp-connector-notion packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-notion ENV=test-ci-mcp-connector-notion
 
@@ -2900,7 +2900,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-slack PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-slack
+        run: make pack-mcp-connector-slack PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-slack MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-slack
       - name: Qualify mcp-connector-slack packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-slack ENV=test-ci-mcp-connector-slack
 
@@ -2938,7 +2938,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-mcp-connector-stripe PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-stripe
+        run: make pack-mcp-connector-stripe PACK_DESTINATION=tmp/npm-bootstrap/mcp-connector-stripe MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-mcp-connector-stripe
       - name: Qualify mcp-connector-stripe packaged consumer
         run: make test-publishable-consumer PACKAGE=mcp-connector-stripe ENV=test-ci-mcp-connector-stripe
 
@@ -2976,7 +2976,7 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-skills PACK_DESTINATION=tmp/npm-bootstrap MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-skills
+        run: make pack-skills PACK_DESTINATION=tmp/npm-bootstrap/skills MANIFEST_REPORT_DIR=tmp/npm-bootstrap MANIFEST_SEVERITY=block ENV=test-ci-skills
       - name: Qualify skills packaged consumer
         run: make test-publishable-consumer PACKAGE=skills ENV=test-ci-skills
 
