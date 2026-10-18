@@ -94,3 +94,87 @@ Reversible pilot defaults: daily collection, a rolling 30-day compatible window 
 Reuse the Lot 1 collection/comparison protocol, closing its cited snapshot gaps in K1: the dossier's `floor(n*q)` quantile differs from nearest rank; `minDays` was recorded but completeness checked run count alone; usable gate delays need their own minimum; `summarizeWindow` sums `llmMinutes` discarded by `redactJob`. Preserve historical methods and version changes. Do not infer elapsed-window coverage or measured zero LLM usage. Recheck the actual implementation before making fixes. [S2:80; E3]
 
 Identical pinned inputs must produce identical semantic bytes. Generated facts are corrected through their source or generator, then regenerated and checked by CI diff; handwritten profiles/declarations remain reviewable source inputs. The integrator rebuilds the merged snapshot rather than choosing one branch's generated files. Retain evidence for the declared reproduction horizon and accepted-decision references; unavailable evidence explicitly means reproduction unavailable. [S1 §4.4; S2:63, 78]
+
+## 4. Typed subgraphs and the design-system contract
+
+### 4.1 One semantic profile, separate views
+
+Use the actual `@sentropic/diagram-core` contracts pinned at DS `25c0f3d33c258fc2b906a4b85219ffce5f67eccc`: [SemanticDocument](https://github.com/rhanka/sent-tech-design-system/blob/25c0f3d33c258fc2b906a4b85219ffce5f67eccc/packages/diagram-core/src/document.ts#L127) holds entities, relations, ports, resources and versioned profiles; [ViewDocument](https://github.com/rhanka/sent-tech-design-system/blob/25c0f3d33c258fc2b906a4b85219ffce5f67eccc/packages/diagram-core/src/view.ts#L126) holds occurrences, geometry, grouping and presentation. The focus kit's SvelteFlow scenes are presentation instances, not the semantic schema. [S2:82–94; S3 row 18]
+
+Declare one `repo-knowledge@1` profile with CI/CD, architecture and shared timing/provenance modules. The manifest separately types its subgraphs. The pinned [profile validator](https://github.com/rhanka/sent-tech-design-system/blob/25c0f3d33c258fc2b906a4b85219ffce5f67eccc/packages/diagram-core/src/profile.ts#L174) requires endpoint `entityTypes` to be declared in the same profile; a future profile split needs an explicit join contract. Attribute sets remain K0/K2 work with DS maintainers. [S4 finding 2]
+
+| Module | Entity vocabulary | Principal relations and roles |
+|---|---|---|
+| Shared provenance/timing | Repository, SourceArtifact, EvidenceWindow, TimingReference, ExternalAnchor | `derivedFrom` (result, source), `supports` (evidence, claim), `supersedes` (new, previous), `references` (source, target). |
+| CI/CD | Workflow, Job, JobVariant, Step, TestSuite, BuildArtifact, Environment, ResourcePool | `contains`, `precedes` (predecessor, successor), `awaitsResult` (producer, gate), `executes`, `producesArtifact`, `consumesArtifact`, `deploysTo`, `requiresResource`, `hasTiming` (subject, reference). |
+| Architecture | Component, Package, Service, Interface, Contract, SourceFile, BuildTarget, Image | `dependsOn` (consumer, provider), `implements`, `providesInterface`, `consumesInterface`, `builtFrom`, `validates` (suite anchor, component/contract). |
+
+Every relation has stable identity, named endpoint roles/cardinalities, provenance, source locators, extraction/declaration basis and confidence. Keep runtime/dev/peer/import/test/protocol dependency categories. Explicitly convert the historical extractor's provider-to-consumer direction into the declared role convention. `awaitsResult` remains an execution wait even for an observing gate. Architecture cycles are valid findings; only selected execution predecessors must form a DAG. Proposed controls carry explicit proposed/inferred state and never masquerade as implemented edges. [S1 §5.2; S2:90–94]
+
+Timing attributes include metric, mode, support, sample count, p50/p90, quantile method, window and evidence resource. Declare their types and units; missing estimates omit numeric attributes and state why. DS reference validation is complemented by repository checks for regime compatibility, conditional invariants, samples and required validation closure. A valid drawing schema alone proves no CI coverage. [S2:94]
+
+### 4.2 Explicit, versioned adapters
+
+Assign collision-checked stable DS slugs/hashes, preserving canonical external keys as typed attributes. Arbitrary slash-bearing graph IDs cannot be copied directly into restricted nominal `EntityRef`s. Cross-document references use declared `ExternalAnchor` entities bound to exact resource, revision and key; unresolved anchors remain visible and cannot justify smaller test selection. Resource resolution belongs to the repository adapter; DS itself does not fetch `artifact:` URIs. [S2:156–158; DS refs.ts:34, 57 at the pin above]
+
+The committed semantic documents are the common CI/architecture source for downstream consumers, still derived from pinned Git and reviewed declarations. Timing attributes are generated from `timings.json` in the same publication transaction; the manifest and consistency checks prevent independently maintained prices. Generate Graphify fragments and renderer inputs from these sources. Never maintain parallel handwritten dependency lists. [S2:167]
+
+Graphify's inspected loader uses `multi:false`, merges edges by endpoints and skips absent endpoints. Preserve each semantic relation as a uniquely identified relation node with role-labelled incidence edges and its original `RelationRef`; materialize anchors before assembly. Verify every relation and incidence survives, including parallel semantic relations. Raw edge-count equality across representations is not the invariant. A future multigraph replacement needs separate compatibility qualification. [S2:169; G1]
+
+DS semantic declarations and the Engram ontology/extraction mapping are different artifacts. Generate and version the latter explicitly; use existing free-string `node_type`/`relation`, `extract --semantic`, `merge-graphs` and profile validation without adding an Engram core type. Its assertion-family registry is not an ontology import. [S5:9–12; S6:14–18]
+
+Require `source_owner`, `source_id`, `observed_at`, `source_hash` and `adapter_version` at node/relation granularity, including source revision and ownership. Use SHA-256 for evidence/trust comparisons; DS's non-cryptographic FNV helper is not suitable. Topology weight never means duration. [S2:171; G1]
+
+K2 fixtures separately assert source counts (66 jobs / 171 `needs` / 43 roots / 72 pairs), semantic endpoint/role validity, Graphify relation/incidence conservation and view occurrence references. Include a job-to-timing relation and a CI-to-architecture relation within the single profile. A view may repeat an entity; deleting an occurrence or changing layout cannot change semantic facts or the knowledge digest. Inspect provenance in the rendered detail view on desktop and mobile. [S4 findings 2 and 6]
+
+### 4.3 Repository layout and ownership
+
+These are proposed implementation paths, not files produced by this study. Maintainers may reuse equivalent existing locations in other repositories, while preserving the contract and recording the mapping. [S2:173–187; S3 row 27]
+
+| Path or surface | Content | Owner |
+|---|---|---|
+| `knowledge/manifest.json` | Repo identity, schema/profile/source pins, graph/reference digests, window, publication lineage | Repository knowledge maintainer; conductor coordinates final merged snapshot. |
+| `knowledge/profiles/*.json` | Reviewed domain profiles and compatibility declarations | Domain maintainers with DS review. |
+| `knowledge/ci/graph.json` | CI/CD semantic document, including validation/publication/deployment | CI extractor and owning maintainers. |
+| `knowledge/ci/timings.json` | Distinct series, estimates and budgets | Measurement adapter and normal repository review. |
+| `knowledge/architecture/graph.json` | Components, contracts, build/runtime relations | Architecture extractor and maintainers. |
+| `knowledge/evidence/manifests/*.json` | Immutable evidence locators, digests and selection rules; small golden fixtures | Collector/CI operations. |
+| `knowledge/views/*.json` | Optional curated view documents; geometry is excluded from semantic digest | Diagram author. |
+| `plan/<integration>/knowledge-lock.json` | Candidate/base, Track cursor, graph/timing/policy digests, capacity, prediction and unknowns | Source planning skill/conductor. |
+| `scripts/ci/knowledge/**` | Proposed generator, validator and repository adapters | Repository tooling owner. |
+| `.track/events.jsonl` | Existing realization, decisions and acceptance | Designated single writer. |
+| `.engram/` or configured graph cache | Rebuildable technical fragments and audience-authorized current runtime projections | Assembly host; `.graphify/` may remain a configured/read compatibility path. |
+| Host-owned Engram store | Canonical memory and lifecycle | gr-conductor and qualified host owner. |
+| Immutable CI evidence store | Full sanitized observations retained for reproduction | CI operations. |
+
+## 5. Authority boundary and capitalisation flow
+
+gr-conductor identifies four surfaces: committed project sources (profiles, registries, mappings and reviewed declarations); generated `.engram/` state; canonical memory journal; and ontology lifecycle (proposal → deterministic validation → decision journal → `needs_update`). A generated graph stays derived even when tracked. Git/CI establish technical facts, Track establishes work/decision/acceptance state, and Engram's immutable records plus lifecycle journal are the sole memory authority. [S5; S6:3–26]
+
+The committed technical package contains **no memory body, identifier, digest, citation, relation or existence signal**; pending candidates, private journals, authorization receipts and revocable projections are excluded too. Memory metadata and indirect influence fall within D10. A text-only allowlist cannot establish this boundary. Review the entire package and its derivation. Every committed fact must regenerate from Git, sanitized CI evidence or an explicitly pinned Track projection, never from the Engram memory journal. [S1 §4.3; S4 findings 1 and 8]
+
+Memory-to-snapshot citations live only on the memory side or in an authorized runtime assembly, with no reciprocal committed reference. Eligibility loss invalidates that assembly; an old technical snapshot cannot restore excluded memory information. Any distinct durable-publication contract for memory references requires its own gr-conductor specification and qualification. [S4 finding 1; M1 M10]
+
+```mermaid
+flowchart LR
+  S[Pinned Git sources] --> E[CI and architecture extraction]
+  O[Sanitized immutable CI observations] --> T[Versioned timing reference]
+  E --> K[Committed typed technical package]
+  T --> K
+  R[Track journal] --> X[Read-only pinned fragment]
+  K --> P[Planning skill and conductor]
+  X --> P
+  Q[Current policy and capacity] --> P
+  P --> L[Plan, knowledge lock and prediction]
+  L --> A[Actual qualification evidence]
+  A --> O
+  A --> C[Cited lesson candidate]
+  C --> M[Host policy and canonical memory journal]
+  M --> F[Authorized eligible current envelopes]
+  F --> G[Controlled runtime graph assembly]
+  K --> G
+  X --> G
+  G --> V[DS semantic references and view occurrences]
+```
+
+Read the committed package at the branch base, validate and predict, then compare actual outcomes. Publish revised technical references through the source/generator review loop. Submit only bounded, reusable lessons through memory admission: for example, an integration underestimated consumer qualification and a shared publication window, with immutable evidence and a scoped revised rule. Avoid creating one memory per job execution; arithmetic always resolves to the pinned numerical reference. [S1 §4.4; S2:234–240]
