@@ -241,11 +241,32 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
         receipt: null, usage: unreportedJudgeUsage('unknown'), callStatus: 'unknown', correlationId,
       });
 
+      // Race dispatch against deadline/cancellation: an injected fetch that
+      // ignores abort still resolves to TIMEOUT/CANCELLED, and a late
+      // settlement is discarded without retrying or surfacing rejections.
       let response: Response;
+      let interruptDispatch = (): void => {};
       try {
-        response = await fetchFn(endpoint, {
+        const pending = fetchFn(endpoint, {
           method: 'POST', redirect: 'manual', headers, body: JSON.stringify(outgoing.request), signal: controller.signal,
         });
+        let lost = false;
+        const guard = new Promise<never>((_, reject) => {
+          interruptDispatch = () => { lost = true; reject(new Error('dispatch-interrupted')); };
+          if (controller.signal.aborted || callOptions?.signal?.aborted) interruptDispatch();
+        });
+        if (!controller.signal.aborted && !callOptions?.signal?.aborted) {
+          controller.signal.addEventListener('abort', interruptDispatch, { once: true });
+        }
+        void Promise.resolve(pending).then(
+          (late) => { if (lost) void late.body?.cancel().catch(() => {}); },
+          () => {},
+        );
+        try {
+          response = await Promise.race([pending, guard]);
+        } finally {
+          controller.signal.removeEventListener('abort', interruptDispatch);
+        }
       } catch {
         clearTimeout(timer);
         callOptions?.signal?.removeEventListener('abort', onAbort);
