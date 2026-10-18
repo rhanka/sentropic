@@ -1,9 +1,8 @@
 {
   "name": "@sentropic/mcp-connector-gmail",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "BR-72 Wave-1 read-only connector adapter proof for Gmail — synthetic-fixture AppConnectorProviderAdapter implementation against @sentropic/mcp-platform contracts (SPEC_STUDY_UNIVERSAL_CONNECTOR_ACCOUNT_BROKER §7). Benchmark proof only, NOT the production connector, plus a Wave-2 EXPERIMENTAL write surface gated by @sentropic/mcp-platform's mutation-gate.",
   "type": "module",
-  "private": true,
   "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -34,5 +33,22 @@
     "@types/node": "^22.10.10",
     "typescript": "5.4.5",
     "vitest": "4.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/mcp-connector-gmail"
+  },
+  "dependencies": {
+    "@sentropic/mcp-platform": "^0.3.0"
   }
 }
