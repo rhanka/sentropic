@@ -79,3 +79,91 @@ The merged model is the owner model quoted in §9.1: the registry and its parame
 | Issuer side | `packages/auth-hono/src/oauth/token-exchange-handler.ts`; `api/src/routes/auth/oauth.ts`; `api/drizzle/0043_immo_token_exchange.sql` | Sentropic issuer support for the exchange |
 
 Transports (stdio, streamable HTTP, bridge, Hono) are provided by `packages/mcp-platform/src/transport/*` and the cluster-mesh loaders; one compiled registry serves every transport, and the artifacts service is shared by its HTTP and MCP surfaces (`packages/artifacts/README.md`, L-5b–5e notes).
+
+## 4. Provider registry contract
+
+### 4.1 Selection and configuration
+
+The host-facing facade is `packages/cluster-mesh/src/mcp/registry.ts`:
+
+- `select(providerIds)` fixes the selected provider set. Selecting an unknown provider throws `unknown provider selection: <id>`; selecting the same provider twice throws `duplicate provider selection: <id>` (`packages/cluster-mesh/src/mcp/registry.ts:95-103`).
+- `configure(providerId, values)` attaches host-owned parameter values to a selected provider. Configuring an unselected provider throws `unselected provider configuration: <id>`; values must be a record (`packages/cluster-mesh/src/mcp/registry.ts:106-113`).
+- Availability is reported per builtin as `not-selected`, `not-configured` or `available` from the current compiled state (`packages/cluster-mesh/src/mcp/registry.ts:125-144`).
+- `compile(...)` materializes the selected providers and publishes the compiled registry atomically: a refusal publishes nothing and keeps the previous compiled registry intact (`packages/cluster-mesh/src/mcp/registry.ts:150-165`). Selected builtins materialize only at compile time, through the module registry.
+
+### 4.2 Names and leaves
+
+- Provider ID: `sentropic.artifacts` (`ARTIFACTS_PROVIDER_ID`, `packages/artifacts/src/mcp.ts:22`). Application ID: `sentropic-artifacts` (`packages/artifacts/src/mcp.ts:23`). Provider version at merge: `0.1.0` (`packages/artifacts/src/mcp.ts:24`).
+- Cluster-mesh leaf: `@sentropic/cluster-mesh/mcp/artifacts` (export `./mcp/artifacts`, `packages/cluster-mesh/package.json:107-109`), backed by `createArtifactsBuiltin` (`packages/cluster-mesh/src/integrations/mcp/artifacts.ts:25-39`).
+- Lazy loader: `loadArtifactsMcp(modules)` resolves the peer through `modules.load('mcp/artifacts')` (`packages/cluster-mesh/src/loaders/mcp/artifacts.ts:11-12`). The peer is optional: `@sentropic/artifacts >=0.1.0 <0.2.0` with `peerDependenciesMeta.optional = true` (`packages/cluster-mesh/package.json:150,160`). An absent or incompatible peer refuses compilation; no stub is substituted.
+- The provider's own MCP subpath is `@sentropic/artifacts/mcp` (export `./mcp`, `packages/artifacts/package.json`), which builds the kernel registry definition (`createArtifactsRegistryDefinition`, `packages/artifacts/src/mcp.ts:372-399`).
+
+### 4.3 Compiled entries
+
+Compilation produces frozen entries bound to canonical requests: `buildRegistryEntry` freezes each `RegistryEntry` (tool name, capability ref, handler ID, bounded schema, canonical request digest), and `resolveRegistryEntry` rejects an unknown tool before inspecting arguments (`packages/mcp-platform/src/registry-entry.ts:58-112`). Runtime arguments enter module code through one validated chokepoint; unknown slots are rejected by `additionalProperties: false`, missing slots by `required` (`packages/mcp-platform/src/registry-entry.ts:79-84`).
+
+## 5. The `sentropic.artifacts` provider
+
+### 5.1 Tool surface (15 exact tools)
+
+The provider exposes exactly 15 tools, with closed input schemas (`packages/artifacts/src/mcp.ts:27-31,71-85`):
+
+| Tool | Mutability (as declared) | Contract summary |
+|---|---|---|
+| `artifacts_get_template` | read-only | Approved template kit (sources + build recipe) |
+| `artifacts_get_api_guide` | read-only | Versioned artifacts API guide |
+| `artifacts_ensure` | state-transition, idempotent | Resolve or create the private artifact view for a binding |
+| `artifacts_publish` | append, idempotent | Publish inline files as a new release |
+| `artifacts_create_upload` | state-transition | Open a bounded upload session for large bytes |
+| `artifacts_commit_upload` | append, idempotent | Verify staged bytes and publish them as a release |
+| `artifacts_list` | read-only | List artifacts visible to the caller (ACL before pagination) |
+| `artifacts_get` | read-only | Artifact metadata (grants visible to the owner only) |
+| `artifacts_get_source` | read-only | Export the attached source reference (separate right) |
+| `artifacts_fork` | state-transition | Fork privately under a fresh identity (no ACL copied) |
+| `artifacts_set_access` | patch, confirm | Grant or revoke read/source access, or toggle public mode |
+| `artifacts_promote` | patch | Select a release explicitly (expected-current CAS) |
+| `artifacts_renew` | patch | Renew the artifact retention timestamp |
+| `artifacts_delete` | delete, confirm | Withdraw into pending deletion (undo via `artifacts_restore`) |
+| `artifacts_restore` | state-transition | Cancel a pending deletion or withdrawal before purge |
+
+Parameter values are validated against the provider parameter schema: defaults apply, unknown keys, wrong types and missing required values are rejected, and secret-looking keys are refused (`packages/artifacts/README.md`, L-5a notes; `packages/artifacts/src/parameters.ts`).
+
+### 5.2 Storage
+
+The service depends only on injected ports — `KvPort` (get / put-if-absent) and `UuidPort` behind `ServerPorts` — never on a driver, ORM row or network client (`packages/artifacts/src/server/ports.ts:10-23`). Hosts supply Postgres/S3-backed implementations (`packages/artifacts/src/adapters/postgres.ts`, `packages/artifacts/src/adapters/s3.ts`); domain schema ships as package migrations `packages/artifacts/migrations/0001_artifacts.sql` and `0002_lifecycle.sql`. Blobs are refcounted; garbage collection is explicit and reported (`packages/artifacts/src/server/gc.ts`).
+
+### 5.3 ACL and authorization
+
+Authorization runs first in the shared service (`packages/artifacts/src/server/service.ts`; `packages/artifacts/README.md`, L-5a notes). The baseline rule is owner-only, deny by default (`packages/artifacts/src/server/authorization.ts`); sharing grants, approved-public evaluation and the ACL store arrive in the same merged package (`packages/artifacts/src/server/access.ts`). Listing applies the ACL before pagination (`artifacts_list`, §5.1), forks copy no ACL (`packages/artifacts/src/server/fork.ts`), and content reads recheck the live ACL on every request (§5.5).
+
+### 5.4 Releases and lifecycle
+
+Publication creates releases over one current pointer; promotion selects a release explicitly with an expected-current compare-and-swap (`artifacts_promote`, §5.1; `packages/artifacts/src/server/publication.ts`, `packages/artifacts/src/server/lifecycle.ts`). Lifecycle covers withdraw, restore, delete, purge and retention renewal (`packages/artifacts/src/server/lifecycle.ts`). Uploads are staged through bounded sessions and committed only after digest/size verification (`artifacts_create_upload`, `artifacts_commit_upload`; `packages/artifacts/src/server/uploads.ts`). Mutating calls carry idempotency keys with explicit conflicts (`packages/artifacts/src/server/idempotency.ts`).
+
+### 5.5 Content grants and activation tickets (merged state)
+
+Content is served on a separate content domain (§7). Two short-lived mechanisms authorize it (`packages/artifacts/src/content/grants.ts:1-13`):
+
+- **Content grants.** HMAC-SHA256 signed with a host-injected secret; bound to subject + artifact, with an optional pinned release; 55-second TTL inside a 60-second total cutoff budget (grant + skew/propagation). Verification is fail-closed (signature, shape, lifetime cap, expiry, future-issued beyond the skew budget). A grant never replaces the per-request ACL recheck in the content handler (`packages/artifacts/src/content/handler.ts`).
+- **Activation tickets.** Single-use tickets bound the same way (`TicketRecord { ticketId, subjectId, artifactId, releaseId?, expiresAt }`, `packages/artifacts/src/content/grants.ts:112-118`), 120-second TTL (`CONTENT_TICKET_TTL_SECONDS`, `packages/artifacts/src/content/grants.ts:18`). Ticket IDs come from an injected port and must be unguessable (default: crypto UUIDs). Redemption checks subject/artifact binding before atomic single-use consumption; mismatched attempts do not consume the ticket (`packages/artifacts/src/content/grants.ts:143-188`). Per-version activation redeems one ticket, then demands fresh consent on the stable origin (401); pinned origins keep serving their immutable release (`packages/artifacts/src/content/handler.ts:4-9`).
+
+The channel-bound ticket form (`{subject, artifact, release, channel}`) is **not** in the merged tree; it is follow-up #688 (§10).
+
+## 6. Token exchange (RFC 8693)
+
+### 6.1 Contract
+
+Workload calls obtain delegated tokens through RFC 8693 token exchange. The cluster-mesh client owns policy (grant type, Bearer-only, scope intersection, TTL ceiling, caching, never-passthrough); the issuer binding owns cryptographic trust (subject verification, token minting) (`packages/cluster-mesh/src/token-exchange.ts:97-106`). Grant and token-type constants are `RFC8693_GRANT_TYPE` / `ACCESS_TOKEN_TYPE` (`packages/cluster-mesh/src/trust.ts`, consumed at `packages/cluster-mesh/src/token-exchange.ts:2`). The production binding is the authenticated RFC 8693 HTTP adapter (`packages/cluster-mesh/src/trust/token-exchange-http.ts`); the Sentropic issuer side merged in the same PR (`packages/auth-hono/src/oauth/token-exchange-handler.ts`; issuer schema `api/drizzle/0043_immo_token_exchange.sql`).
+
+Minted material never carries refresh material (`packages/cluster-mesh/src/token-exchange.ts:72`). Refusals are typed and fail-closed (unsupported grant/subject/requested token types, missing or disallowed audience, unverified or expired subject, invalid actor, empty scope intersection, `exchange_invalidated`; `packages/cluster-mesh/src/token-exchange.ts:108-135`). Raw bearer passthrough is excluded by construction and by test (`packages/cluster-mesh/tests/token-exchange-no-passthrough.spec.ts`).
+
+### 6.2 Cache
+
+- Hard residency cap: 60 seconds (`TOKEN_EXCHANGE_CACHE_TTL_MS`, `packages/cluster-mesh/src/token-exchange.ts:9-10`).
+- Hard minted-token lifetime ceiling: 300 seconds; no configuration may raise it (`TOKEN_EXCHANGE_MAX_TTL_SEC`, `packages/cluster-mesh/src/token-exchange.ts:12-16`).
+- Bounded cache: 1000 entries by default with insertion-order eviction, and a 5-second early-use safety margin subtracted from every cache deadline (`packages/cluster-mesh/src/token-exchange.ts:18-22`).
+
+### 6.3 Invalidation
+
+`invalidateTokenExchangeCache(filter | 'all')` evicts matching entries and in-flight exchanges and returns the evicted count (`packages/cluster-mesh/src/token-exchange.ts:205-214,519-538`). Every invalidation bumps a global generation: work invalidated mid-flight can neither insert into the cache nor return success, including invalidation landed during subject verification (`exchange_invalidated`; `packages/cluster-mesh/src/token-exchange.ts:317-320,439-486`).
+
