@@ -7,10 +7,12 @@
 // mock/testing/experimental symbol, createInMemoryContext, sibling-source
 // alias, unresolved edge, computed dynamic import, root reference-store
 // loading, or export inventory drift. Exit 0 with a JSON report on success.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve, relative, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { FORBIDDEN_IMPORT_PARTS } from './receipt.mjs';
+import { scanGraph } from './contract-graph.mjs';
+import { verifyPreCandidate } from './precandidate.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXPORTS_INVENTORY = JSON.parse(readFileSync(join(HERE, 'exports-v1.json'), 'utf8'));
@@ -221,6 +223,30 @@ async function checkExportInventory(rootDir, failures) {
 
 async function main() {
   const rootDir = resolve(arg('--root') || join(HERE, '..', '..'));
+  const mode = arg('--mode') ?? 'source';
+  if (mode === 'packed' || mode === 'fixture') {
+    let report;
+    if (mode === 'packed') {
+      if (!arg('--manifest')) throw new Error('packed mode requires --manifest');
+      report = verifyPreCandidate(rootDir, arg('--manifest'));
+    } else {
+      const files = new Map();
+      const visit = dir => {
+        for (const entry of readdirSync(resolve(rootDir, dir), { withFileTypes: true })) {
+          const path = join(dir, entry.name);
+          if (entry.isDirectory()) visit(path);
+          else if (entry.isFile()) files.set(path, readFileSync(resolve(rootDir, path)));
+        }
+      };
+      visit('');
+      if (!arg('--entry')) throw new Error('fixture mode requires --entry');
+      report = scanGraph(files, [arg('--entry')]);
+    }
+    if (report.failures.length) throw new Error(report.failures.join('\n'));
+    console.log(`import-graph ${mode}: ok (${report.resolvedFiles.length} files, ${report.edges.length} edges${report.manifestSha256 ? `, manifest ${report.manifestSha256}` : ''})`);
+    return;
+  }
+  if (mode !== 'source') throw new Error(`unsupported graph mode ${mode}`);
   const failures = [];
   const { failures: scanFailures, edges, resolvedFiles } = scanSourceGraph(rootDir);
   failures.push(...scanFailures);
@@ -244,5 +270,5 @@ async function main() {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  await main();
+  try { await main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
