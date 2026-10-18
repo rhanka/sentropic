@@ -16,6 +16,7 @@ import * as jevTransportLeaf from '../../src/integrations/llm-mesh/transport/jev
 import * as judgeLeaf from '../../src/integrations/llm-mesh/judge.js';
 import * as judgeHostLeaf from '../../src/integrations/llm-mesh/judge/host.js';
 import { createClusterMeshModules, verifyClusterMeshTopology } from '../../src/index.js';
+import { TRAIN_LLM_MESH_VERSION } from '../fixtures/train.js';
 import { loadLlmMesh } from '../../src/loaders/llm-mesh/index.js';
 import { loadLlmMeshFacade } from '../../src/loaders/llm-mesh/facade.js';
 import { loadLlmMeshEnrollment } from '../../src/loaders/llm-mesh/enrollment.js';
@@ -77,7 +78,7 @@ describe('llm-mesh static leaves', () => {
     expect(judgeHost.createJevAdapter).toBe(judgeHostProvider.createJevAdapter);
     expect(judgeHost.jevDescriptor).toBe(judgeHostProvider.jevDescriptor);
     expect(jevTransport.createJevTransport).toBe(jevTransportProvider.createJevTransport);
-    expect(modules.snapshot()['llm-mesh']).toMatchObject({ state: 'loaded', installedVersion: '0.26.1' });
+    expect(modules.snapshot()['llm-mesh']).toMatchObject({ state: 'loaded', installedVersion: TRAIN_LLM_MESH_VERSION });
     expect(modules.snapshot()['llm-mesh/judge']).toMatchObject({ state: 'loaded' });
     expect(modules.snapshot()['llm-mesh/judge/host']).toMatchObject({ state: 'loaded' });
     expect(modules.snapshot()['llm-mesh/transport/jev']).toMatchObject({ state: 'loaded' });

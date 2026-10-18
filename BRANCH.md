@@ -251,7 +251,7 @@
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
 - [ ] **Lot N — Final validation (deferred to conductor release train)**
-  - [ ] After PR #662 (with folded native relay) merged + rebase + 2.12 committed: 1.26a independent post-train literals in tests/fixtures/train.ts, integration suites/package-tree helper; registry/topology regressions.
+  - [x] 1.26a post-train literals (2026-10-17, PR #662 merged + rebased): new tests/fixtures/train.ts with independent 0.26.1/0.20.1/0.18.0 literals; both integration suites and package-tree helper centralized with unchanged fake defaults; registry/topology suites run unchanged. Live 2.12 qualification stays owner-gated, so TUPLE stays gated.
   - [ ] Under the same gate: 1.26b registry/topology/topology-ranges literals and intentional skew cases; run all three and both integration suites.
   - [ ] After conductor GO: atomic TUPLE/package bumps and 1.24a… packaging fixtures, complete exact-artifact/packed gates; default-suite skips are not qualification evidence.
   - [ ] Under separately authorized release scope: PR title/body from BRANCH.md, UAT/CI green, commit BRANCH.md removal, push/merge and separately authorized publication. No such action is authorized now.
