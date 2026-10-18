@@ -52,7 +52,7 @@ describe('P01.broker.forged-call', () => {
       ...MEMORY_OPTS,
     });
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe('unknown_capability');
+    expect(result.error?.code).toBe('CAPABILITY_UNAVAILABLE');
     expect(spy).not.toHaveBeenCalled();
   });
 
