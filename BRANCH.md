@@ -105,7 +105,7 @@ Implement Lot 1 exactly as the reviewed plan defines it.
 
 - [ ] **Lot 2 — Measure instrumentation**
   - [ ] Add `scripts/ci/measure-runs.mjs`, `scripts/ci/measure-runs.test.mjs`, `scripts/ci/fixtures/optimization-baseline.json`.
-  - [ ] Add Make targets `ci-optimization-collect`, `ci-optimization-compare`.
+  - [x] Add Make targets `ci-optimization-collect`, `ci-optimization-compare`.
   - [ ] Lot gate:
     - [ ] `make test-ci-optimization SCOPE=scripts/ci/measure-runs.test.mjs ENV=test-ci-opt-lot1`
 
@@ -137,7 +137,7 @@ Implement Lot 1 exactly as the reviewed plan defines it.
     - [ ] Compare failed-lint work before/after plus successful-run delay; record extra smoke work; roll back smoke independently if cost outweighs delay benefit.
 
 - [ ] **Lot 5 — Make targets and final gates**
-  - [ ] Add Make targets `test-ci-optimization` and `check-ci-optimization` (Node test runner in pinned image, pinned YAML parser, `SCOPE` file paths, fail on empty/missing selection).
+  - [x] Add Make targets `test-ci-optimization` and `check-ci-optimization` (Node test runner in pinned image, pinned YAML parser, `SCOPE` file paths, fail on empty/missing selection).
   - [ ] Wire tests into a required CI job so CI-only changes cannot bypass them.
   - [ ] Lot gate:
     - [ ] `make check-ci-optimization test-ci-optimization ENV=test-ci-opt-lot1`

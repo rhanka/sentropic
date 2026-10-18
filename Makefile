@@ -746,6 +746,40 @@ test-publishable-manifests: ## Run publishable manifest guard fixture tests in D
 check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropic workspace packages (owned by h2a)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/eradicated-packages.mjs
 
+# BR-CI-OPT-EX2 — CI optimization Lot 1 wiring (plan: ci-optimization-implementation-plan.md).
+# Additive Docker-based CI wiring tests, replay/metrics targets and scoped parameters.
+# Existing target behavior and ENV isolation are preserved.
+CI_OPTIMIZATION_TESTS ?= scripts/ci/measure-runs.test.mjs scripts/ci/concurrency.test.mjs scripts/ci/filter-consumers.test.mjs scripts/ci/smoke-placement.test.mjs scripts/ci/ci-wiring.test.mjs
+CI_OPTIMIZATION_WINDOW ?= before
+CI_OPTIMIZATION_MIN_RUNS ?= 20
+CI_OPTIMIZATION_MIN_DAYS ?= 7
+
+.PHONY: test-ci-optimization
+test-ci-optimization: ## Run CI optimization Lot 1 wiring tests in Docker (scope with SCOPE=<files>)
+	@for f in $(or $(SCOPE),$(CI_OPTIMIZATION_TESTS)); do test -f "$$f" || { echo "ERROR: SCOPE file $$f is missing"; exit 1; }; done
+	@test -n "$(strip $(or $(SCOPE),$(CI_OPTIMIZATION_TESTS)))" || { echo "ERROR: empty test selection"; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),$(CI_OPTIMIZATION_TESTS))'
+
+.PHONY: check-ci-optimization
+check-ci-optimization: ## Parse the real ci.yml YAML: concurrency fixtures, acyclic needs, mandatory result paths
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test scripts/ci/ci-wiring.test.mjs'
+
+.PHONY: ci-optimization-collect
+ci-optimization-collect: ## Collect redacted GitHub run/job records into OUT=<file> (RUNS_FILE=<json>, WINDOW=<before|after>)
+	@test -n "$(OUT)" || { echo "ERROR: OUT=<file> is required"; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(if $(RUNS_FILE),-v "$(abspath $(RUNS_FILE)):/input/runs.json:ro") -v "$(CURDIR):/workspace" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		node scripts/ci/measure-runs.mjs collect $(if $(RUNS_FILE),--runs /input/runs.json) --window "$(or $(WINDOW),$(CI_OPTIMIZATION_WINDOW))" --min-runs "$(or $(MIN_RUNS),$(CI_OPTIMIZATION_MIN_RUNS))" --min-days "$(or $(MIN_DAYS),$(CI_OPTIMIZATION_MIN_DAYS))" --out "$(OUT)"
+
+.PHONY: ci-optimization-compare
+ci-optimization-compare: ## Compare BEFORE=<file> AFTER=<file> windows, write OUT=<file>, nonzero on correctness/rollout-threshold failure
+	@test -n "$(BEFORE)" || { echo "ERROR: BEFORE=<file> is required"; exit 1; }
+	@test -n "$(AFTER)" || { echo "ERROR: AFTER=<file> is required"; exit 1; }
+	@test -n "$(OUT)" || { echo "ERROR: OUT=<file> is required"; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		node scripts/ci/measure-runs.mjs compare --before "$(BEFORE)" --after "$(AFTER)" --out "$(OUT)"
+
 
 .PHONY: typecheck
 .NOTPARALLEL: typecheck
