@@ -88,7 +88,7 @@ Actions with the following status should be included around tasks only if really
     - [ ] **E2E tests**: none — existing: none modified; updated: none; new: none (docs only).
     - [ ] UAT: none (no impacted surface).
 
-- [ ] **Lot 2 — Delivery**
-  - [ ] Commit in slices of at most 150 lines via `make commit MSG="docs: ..."` (selective `git add`, `BRANCH.md` checkboxes updated within each commit).
-  - [ ] Push `docs/spec-mcp-registry-artifacts` and open a draft PR reporting its number.
-  - [ ] Lot gate: copy of Lot 1 gate (`make scope-check`), no UAT (last lot, docs only).
+- [x] **Lot 2 — Delivery**
+  - [x] Commit in slices of at most 150 lines via `make commit MSG="docs: ..."` (selective `git add`, `BRANCH.md` checkboxes updated within each commit).
+  - [x] Push `docs/spec-mcp-registry-artifacts` and open a draft PR reporting its number.
+  - [x] Lot gate: copy of Lot 1 gate (`make scope-check`), no UAT (last lot, docs only).
