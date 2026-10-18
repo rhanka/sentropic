@@ -41,6 +41,7 @@
   - [x] Verify actual path inventory and run make scope-check before authorized commits.
 
 ## Feedback Loop
+- [x] PR700-R2 complete: all eight findings treated test-first; full platform 332 tests, broker 66 tests, installed mesh packaging 77 tests and final digest-pinned Lot 1 gate 225 tests across 28 files PASS; packed graph 30 files/54 edges and closed inventory 44 contracts.
 - [x] PR700-R2-5 installed gate PASS: full platform 0.3.1 archive e465ad5ccedf285f22c07ca9d8317333bdba1647e714ae7a8f550c7c34aa5666 verified against the selected lock, existing mesh packaging suite passes, no peer-range or guard changes.
 - [x] PR700-R2 history: retain the reviewed 4e44e9d969c0b7471763db17bcb64283d674921abf4d094cf875656b3131965a manifest and sidecar byte-for-byte, with both digest-named archives unchanged.
 - [x] PR700-R2 contracts: regenerate both API reports through explicit API_EXTRACT_LOCAL=1; keep CI's default strict verification, document effective confirmation and refresh the version-bound installed-consumer fixture.
@@ -137,6 +138,6 @@
   - [x] Scoped broker command: make test-mcp-broker SCOPE=tests/memory/source-binding.test.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5, repeat per named broker file.
   - [x] Scoped platform command: make test-mcp-platform SCOPE=tests/memory/mutation-digest-vectors.test.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5, repeat per named platform file.
   - [x] Lot gate: make typecheck-mcp-platform typecheck-mcp-broker memory-l5-lint memory-l5-tooling memory-l5-test LOT=1 API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5.
-  - [x] Exit pack: make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5 (sha256 4e44e9d969c0b7471763db17bcb64283d674921abf4d094cf875656b3131965a; source efca7c45bcfda8727c2ad44568033ecfc59a53ad; platform 0.3.1, broker 0.1.0, 44 consumed contracts).
+  - [x] Exit pack: make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5 (sha256 72612820f2ef5669c1d648008838f232bdc0ba28f601a5062873de6cb51a6751; source 23a2d19147c0a040cea16af97b2ddcb76f11ae8a; platform 0.3.1, broker 0.1.0, 44 consumed contracts; both reviewed prior identities retained).
   - [x] Final root gate PASS: make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5; Node 24.21.0 from the pinned Lot 0 digest, no flags.
   - [ ] Hand immutable P1 plus manifest SHA-256 and per-artifact versions and hashes and consumed-contract inventory and fixture and export digests to gr-conductor with the exact handoff text, record receiving owner ACK and Node-matrix alignment and E2 request.
