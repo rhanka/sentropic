@@ -167,3 +167,77 @@ Minted material never carries refresh material (`packages/cluster-mesh/src/token
 
 `invalidateTokenExchangeCache(filter | 'all')` evicts matching entries and in-flight exchanges and returns the evicted count (`packages/cluster-mesh/src/token-exchange.ts:205-214,519-538`). Every invalidation bumps a global generation: work invalidated mid-flight can neither insert into the cache nor return success, including invalidation landed during subject verification (`exchange_invalidated`; `packages/cluster-mesh/src/token-exchange.ts:317-320,439-486`).
 
+## 7. What a host must supply
+
+The merged packages define ports and transport-free surfaces; the host supplies the concrete resources:
+
+| Obligation | Host supply (merged contract) |
+|---|---|
+| Identity | Verified caller identity mapped into the provider context: the artifacts adapter resolves `principalSub`/`tenantRef`/`connectorInstanceId` into tenant/principal refs (`packages/artifacts/src/mcp.ts:320-325`) and the executor acts as `req.ctx.principal.sub` (`packages/artifacts/src/mcp.ts:333-337`). For exchange, the host/issuer binding supplies subject verification and minting (`TokenExchangeIssuer.verify/mint`, `packages/cluster-mesh/src/token-exchange.ts:103-106`) plus the workload client provisioning (`api/src/scripts/oauth-provision-exchange-client.ts`, `api/src/services/auth/oauth-client-seed.ts`). |
+| Storage | `ServerPorts` implementations (`KvPort`, `UuidPort`; `packages/artifacts/src/server/ports.ts:20-23`), backed by the shipped Postgres/S3 adapters (`packages/artifacts/src/adapters/postgres.ts`, `packages/artifacts/src/adapters/s3.ts`), with the package migrations applied (`packages/artifacts/migrations/0001_artifacts.sql`, `0002_lifecycle.sql`). No eager connections or DDL run on import (`packages/artifacts/src/server/ports.ts:1-9`). |
+| Content domain | A content base domain routed to the transport-free content handler: stable origin `<artifactId>.<base>` follows the current release, pinned origin `<releaseId>.pinned.<base>` serves one immutable release (`packages/artifacts/src/content/routing.ts:4-6,20-22`); the handler is constructed with `baseDomain` injected (`packages/artifacts/src/content/handler.ts:43-44`). |
+| TLS | TLS termination and origin routing are host-side: the package ships transport-free HTTP/content surfaces only (`packages/artifacts/src/http.ts`; `packages/artifacts/src/content/handler.ts`) and emits a host-only `__Host-artifacts_grant` cookie plus no-store/nosniff/frame-denial/CSP headers (`packages/artifacts/src/content/headers.ts`), which require the host's secure origin. |
+| Activation | The HMAC grant secret, the ticket store and the ticket ID source are injected ports (`createHmacGrantSigner`, `TicketStore`, `createTicketService`; `packages/artifacts/src/content/grants.ts:50-54,120-125,152-157`); template kits and the API guide are host-approved local assets behind a catalog port (`packages/artifacts/src/server/templates.ts`). |
+| Provider values | Selection + configuration values per provider (§4.1), and local review metadata (`approvalRef`, `revision`, `reviewedBy`) as integrity metadata only (`packages/artifacts/src/mcp.ts:363-368`). |
+
+## 8. Published versions
+
+Versions declared in the merged tree at `1472d961e`, with npm registry state checked while writing this branch:
+
+| Package | Version at `1472d961e` (source) | npm state at check |
+|---|---|---|
+| `@sentropic/cluster-mesh` | `0.18.0` (`packages/cluster-mesh/package.json`) | published: `0.18.0` |
+| `@sentropic/mcp-platform` | `0.3.0` (`packages/mcp-platform/package.json`) | published: `0.3.0` |
+| `@sentropic/auth-hono` | `0.16.0` (`packages/auth-hono/package.json`) | published: `0.16.0` |
+| `@sentropic/artifacts` | `0.1.0` (`packages/artifacts/package.json`; `ARTIFACTS_PROVIDER_VERSION`, `packages/artifacts/src/mcp.ts:24`) | not present on npm at check; first publish is an owner-run bootstrap (`bootstrap_publish_target=artifacts`), never automated (`packages/artifacts/README.md`, "First publish (bootstrap)") |
+| `@sentropic/llm-gateway` | `0.20.1` (`packages/llm-gateway/package.json`) | not re-checked for this spec |
+
+The accepted peer range binding the artifacts provider into cluster-mesh is `>=0.1.0 <0.2.0` (§4.2). A registry absence is not a source defect: local sibling archives do not establish publication, and consumers must record actual registry receipts before adoption.
+
+## 9. Owner decisions (verbatim)
+
+### 9.1 Host model (binding)
+
+Source: pre-merge consolidated specification, §1 "Binding owner model and evidence", recording the launch packet's owner instructions verbatim. Preserved here as the decision record for §2:
+
+> immo embarque le registre mcp via cluster-mesh et le configure: ajoute son propre mcp pour les fonction immo, et parametre ceux qui doivent l'être (pages de vibe coding). donc les custo vivent côté immo, et cluster-mesh et son registry et ses mcp embarquent des fonction de selection/ paramétrage
+
+> sentropic dispose d'une fonction registre avec un certain nombre de mcp (comme l'affichage de pages web) paramétrables, livrées via cluster-mesh. Immo importe cluster-mesh et expose le registre mcp, y enregistre son propre mcp des fonctions immos, et active avec un paramétrage immo la fonction des pages web.
+
+Merge sequencing decision (same source, §1 and lot plan): owner decision **2026-10-16 Q-A1 = A**:
+
+> « Tout attend la fusion »
+
+### 9.2 Gap decisions T1–T8
+
+Source: owner decisions relayed verbatim by the Immo conductor, 2026-10-16:
+
+> « T4: en fait on s'en fou un peu, c'est quotidien, s'il y a eu une annulation sur preprod et pas prod, ca n'a pas vraiment de sens, en tout cas c pas urgent » ; « T6: bah oui sinon comment on restero preprod sur prod ? » ; « T7: donc ?? pas tres clair » ; « T3 oui faut fixer ca » ; « T5 a corriger » ; « T8 je comprends pas on a tout fait pour qu'un utilisateur de prod puisse juste se loguer en prod pour éviter une complexité inutile, peux tu arrêter d'inventer n'importe quoi ? » ; « vas y mais n'hystérise pas tout. MCP = le plus critique ».
+
+Recorded consequences in the same source: T4 and T6 accepted by design (preprod mirrors prod); T8 withdrawn; T7 only measure = no manual re-sync during the restore window; T1, T3, T5 fixed host-side; T2 (MCP session bound to owner, current-request identity/scopes/token, idle expiry) prioritized host-side. T4/T6/T7/T8 are not re-raised as requirements by this spec.
+
+### 9.3 OAuth restore rehearsal
+
+Source: owner decision 2026-10-16 on OAUTH-RESTORE-T3, relayed verbatim by the Immo conductor:
+
+> « Test hors ligne seul (Recommandé) »
+
+Recorded consequence in the same source: the offline proof only; no failure-injection input is added to the host restore workflow for now; real injection is not a prerequisite.
+
+### 9.4 OAuth cutover into cluster-mesh
+
+Source: binding owner addendum 2026-10-16 (OAuth move into cluster-mesh, #861):
+
+> « ok donc je veux qu'on fasse bien la bascule. mais attention au processus de sauvegarde / backup restoration côté immo »
+
+This decision drives follow-up O1 (#689, §10); it is not merged behavior at `1472d961e`.
+
+### 9.5 « Tout en artifacts » (source gap)
+
+The launch packet for this branch requires the owner decisions quoted verbatim, including:
+
+> « Tout en artifacts »
+
+Source status: this exact phrase was not found in the scratch sources read for this spec (`spec-v8.md`, `registry-entry-contract-v9.md`, `owner-decisions-T1-T8.md`, owner addendums, O1 plan). It is quoted here from the launch packet itself. No context is added around it; closing this source gap requires the owner's original message reference.
+
+
