@@ -8,6 +8,7 @@
  * old minting writer is companion-owned (h-cond); no dual writer remains
  * after cutover. Rollback reads the gateway's committed records.
  */
+import type { LaunchRoutingContract } from '@sentropic/llm-mesh';
 import { GatewaySessionError, GatewaySessionService } from '../session-service.js';
 
 export interface OldSessionEntry {
@@ -19,6 +20,7 @@ export interface OldSessionEntry {
   readonly profiles?: readonly string[];
   readonly models?: readonly string[];
   readonly mappingRevision?: string;
+  readonly routingContract?: LaunchRoutingContract;
 }
 
 export type QuarantineReason =
@@ -45,6 +47,7 @@ export interface MigrationResult {
 export const migrateOldSessions = async (options: {
   service: GatewaySessionService;
   entries: readonly OldSessionEntry[];
+  routingContract?: LaunchRoutingContract;
 }): Promise<MigrationResult> => {
   const { service, entries } = options;
   const imported: string[] = [];
@@ -71,6 +74,7 @@ export const migrateOldSessions = async (options: {
     }
     seen.add(triple);
     try {
+      const routingContract = entry.routingContract ?? options.routingContract;
       const { sessionRef, receiptId } = await service.importSession({
         ownerScopeRef: entry.ownerScopeRef,
         workspaceRef: entry.workspaceRef,
@@ -80,6 +84,7 @@ export const migrateOldSessions = async (options: {
         profiles: entry.profiles,
         models: entry.models,
         mappingRevision: entry.mappingRevision,
+        ...(routingContract ? { routingContract } : {}),
       });
       imported.push(sessionRef);
       receiptIds.push(receiptId);

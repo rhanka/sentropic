@@ -12,11 +12,15 @@ import { createSocketControlTransport } from './socket-control-transport.js';
 import type {
   AcquireSessionInput,
   IssuedSession,
+  MigrateSessionPolicyInput,
   StoredReceipt,
 } from '../session-service.js';
 
 export interface GatewayControlClient {
   acquireSession(input: AcquireSessionInput): Promise<IssuedSession>;
+  migrateSessionPolicy(
+    input: MigrateSessionPolicyInput,
+  ): Promise<{ sessionRef: string; expiresAt: string; policyRevision: string; receiptId: string }>;
   revokeSession(input: { ownerScopeRef: string; sessionRef: string }): Promise<{ revoked: boolean }>;
   listSessions(input: { ownerScopeRef: string }): Promise<
     {
@@ -42,6 +46,7 @@ export const createGatewayControlClient = (options: {
     (await transport.invoke(op, args, options.token ?? await readFile(`${options.controlSocket}.auth`, 'utf8'))) as T;
   return {
     acquireSession: (input) => call('acquireSession', input),
+    migrateSessionPolicy: (input) => call('migrateSessionPolicy', input),
     revokeSession: (input) => call('revokeSession', input),
     listSessions: (input) => call('listSessions', input),
     readReceipt: (input) => call('readReceipt', input),
