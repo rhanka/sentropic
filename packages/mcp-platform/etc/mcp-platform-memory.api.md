@@ -345,19 +345,11 @@ export interface MemoryConfirmationContinuationV1 {
     readonly store_id: OpaqueRef_2;
     // (undocumented)
     readonly target_ref: OpaqueRef_2;
-// @public
-export type MemoryConfirmationContinuationV1 = {
-    reservationRef: string;
-    elicitationRef: string;
-    assuranceRef: string;
-    logicalSessionRef: string;
-    attachmentGeneration: string;
-    toolName: 'engram_memory_withdraw' | 'engram_memory_forget';
-    targetRef: string;
-    operationDigest: string;
-    approved: true;
-    confirmedAt: string;
-};
+    // (undocumented)
+    readonly tenant_id: OpaqueRef_2;
+    // (undocumented)
+    readonly transport_attachment_ref: OpaqueRef_2;
+}
 
 // @public (undocumented)
 export const MemoryConfirmationRequestV1Schema: {
@@ -392,6 +384,113 @@ export const MemoryConfirmationResponseV1Schema: {
     };
 };
 
+// @public (undocumented)
+export interface MemoryContextProjectionV1 {
+    // (undocumented)
+    readonly agent_id: OpaqueRef;
+    // (undocumented)
+    readonly channel_binding: ChannelBindingKindV1;
+    // (undocumented)
+    readonly delegation?: DelegationBindingV1;
+    // (undocumented)
+    readonly envelope_bindings: {
+        readonly idempotency_key?: string;
+        readonly elicitation_ref?: OpaqueRef;
+        readonly audit_id: OpaqueRef;
+        readonly correlation_ref: OpaqueRef;
+    };
+    // (undocumented)
+    readonly lifecycle_binding: {
+        readonly deadline_at: Instant;
+        readonly cancellation_ref: OpaqueRef;
+    };
+    // Warning: (ae-forgotten-export) The symbol "AuthorizationContextV1" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly neutral_authorization: AuthorizationContextV1;
+    // (undocumented)
+    readonly neutral_principal: {
+        readonly principal_namespace: OpaqueRef;
+        readonly principal_id: OpaqueRef;
+        readonly tenant_id: OpaqueRef;
+    };
+    // (undocumented)
+    readonly neutral_scope_ref: OpaqueRef;
+    // (undocumented)
+    readonly purpose_ref: OpaqueRef;
+    // (undocumented)
+    readonly routing_provenance: {
+        readonly publisher_id: 'sentropic.engram.memory';
+        readonly provider_id: 'sentropic.engram.memory';
+        readonly connector_id: 'engram-memory';
+        readonly connector_instance_ref: OpaqueRef;
+        readonly selected_source_id: 'mcp:engram-memory';
+        readonly active_generation: Cursor;
+        readonly policy_epoch: Cursor;
+    };
+    // (undocumented)
+    readonly session_attachment: {
+        readonly mcp_client_id: OpaqueRef;
+        readonly logical_session_ref: OpaqueRef;
+        readonly transport_attachment_ref: OpaqueRef;
+        readonly connection_proof_digest: Digest;
+    };
+    // (undocumented)
+    readonly transport_scopes: readonly ('mcp:discover' | 'mcp:tools:invoke')[];
+    // (undocumented)
+    readonly trusted_context: TrustedInvocationContextV1;
+    // (undocumented)
+    readonly verified_claims: {
+        readonly issuer: OpaqueRef;
+        readonly sub: OpaqueRef;
+        readonly tid: OpaqueRef;
+        readonly claims_provenance_receipt: Digest;
+        readonly tenant_membership_receipt: Digest;
+    };
+}
+
+// @public (undocumented)
+export interface MemoryInvocationBindingV1 {
+    // (undocumented)
+    readonly active_generation: Cursor;
+    // (undocumented)
+    readonly agent_id: OpaqueRef;
+    // (undocumented)
+    readonly audit_id: OpaqueRef;
+    // (undocumented)
+    readonly cancellation_ref: OpaqueRef;
+    // (undocumented)
+    readonly channel_binding: ChannelBindingKindV1;
+    // (undocumented)
+    readonly claims: readonly string[];
+    // (undocumented)
+    readonly claims_provenance_receipt: Digest;
+    // (undocumented)
+    readonly connection_proof_digest: Digest;
+    // (undocumented)
+    readonly connector_id: 'engram-memory';
+    // (undocumented)
+    readonly connector_instance_ref: OpaqueRef;
+    // (undocumented)
+    readonly correlation_ref: OpaqueRef;
+    // (undocumented)
+    readonly deadline_at: Instant;
+    // (undocumented)
+    readonly delegation?: DelegationBindingV1;
+    // (undocumented)
+    readonly elicitation_ref?: OpaqueRef;
+    // (undocumented)
+    readonly idempotency_key?: string;
+    // (undocumented)
+    readonly issued_at: Instant;
+    // (undocumented)
+    readonly issuer: OpaqueRef;
+    // (undocumented)
+    readonly logical_session_ref: OpaqueRef;
+    // (undocumented)
+    readonly mcp_client_id: OpaqueRef;
+    // (undocumented)
+    readonly neutral_context_ref?: OpaqueRef;
 // @public
 export type MemoryContextProjectionV1 = {
     principalNamespace: string;
