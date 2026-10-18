@@ -283,24 +283,24 @@ export class McpProviderBroker {
     });
     const args = input && typeof input === 'object' ? input as Record<string, any> : {};
     const purpose = capabilityRef === 'engram_memory_capture' ? args.payload?.purpose_ref : args.purpose_ref;
-    if (opts.purposeRef === undefined || (purpose !== undefined && purpose !== opts.purposeRef) ||
-        (['engram_memory_search', 'engram_memory_get', 'engram_memory_capture'].includes(capabilityRef) && purpose === undefined) ||
-        (args.idempotency_key !== undefined && args.idempotency_key !== opts.idempotencyKey)) {
-      return memoryFailure('INVALID_SCHEMA', 'Memory arguments must match the trusted purpose and envelope bindings.');
-    }
     let selected;
     try {
       if (!this.memoryDispatch || connectorId !== MEMORY_CONNECTOR_ID) throw new Error('memory dispatch unavailable');
       selected = this.memoryDispatch.select({
-        toolName: capabilityRef, ctx, purposeRef: opts.purposeRef, idempotencyKey: opts.idempotencyKey,
+        toolName: capabilityRef, ctx, purposeRef: opts.purposeRef ?? '', idempotencyKey: opts.idempotencyKey,
         elicitationRef: opts.elicitationRef, expectedPrincipalSub: ctx.principal.sub,
         expectedTenantRef: ctx.tenantRef, expectedSourceId: this.sourceId, expectedGeneration: this.generation,
       });
       if (selected.adapter !== adapter) throw new Error('selected adapter mismatch');
     } catch (error) {
       if (error instanceof MemoryTrustedContextError) throw trustedContextRefusal();
-      return memoryFailure(error instanceof MemoryDispatchRefusal ? error.refusalCode : 'source_binding_mismatch',
+      return memoryFailure(error instanceof MemoryDispatchRefusal ? (error.refusalCode === 'unknown_tool' ? 'unknown_capability' : error.refusalCode) : 'source_binding_mismatch',
         error instanceof Error ? error.message : 'invalid memory binding');
+    }
+    if (opts.purposeRef === undefined || (purpose !== undefined && purpose !== opts.purposeRef) ||
+        (['engram_memory_search', 'engram_memory_get', 'engram_memory_capture'].includes(capabilityRef) && purpose === undefined) ||
+        (args.idempotency_key !== undefined && args.idempotency_key !== opts.idempotencyKey)) {
+      return memoryFailure('INVALID_SCHEMA', 'Memory arguments must match the trusted purpose and envelope bindings.');
     }
     const result = await selected.adapter.invokeTool({ capabilityRef, input, ctx,
       idempotencyKey: opts.idempotencyKey, elicitationRef: opts.elicitationRef, memoryContext: selected.projection });
