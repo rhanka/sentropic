@@ -3913,20 +3913,27 @@ build-mcp-broker: build-mcp-platform ## Build @sentropic/mcp-broker dist package
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
+MEMORY_L5_NODE_IMAGE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+memory-l5-lint memory-l5-tooling memory-l5-test memory-l5-packed memory-l5-pack memory-l5-receipt memory-l5-verify memory-l5-gate: export LLM_MESH_NODE_IMAGE = $(MEMORY_L5_NODE_IMAGE)
+
+.PHONY: memory-l5-runtime
+memory-l5-runtime: ## Verify the frozen Node image, version floor and unflagged execution
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e MEMORY_L5_IMAGE="$(MEMORY_L5_NODE_IMAGE)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/runtime.mjs
+
 .PHONY: memory-l5-lint
-memory-l5-lint: build-mcp-platform build-mcp-broker ## L5 static source/packed import-graph lint (L5-EX1)
+memory-l5-lint: memory-l5-runtime build-mcp-platform build-mcp-broker ## L5 static source/packed import-graph lint (L5-EX1)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-lint requires ENV=<env> last" >&2; exit 1; }
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode source --root /workspace
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode source --root /workspace
 
 .PHONY: memory-l5-tooling
-memory-l5-tooling: ## L5 tooling contract tests via Vitest JSON-capable runner (L5-EX1)
+memory-l5-tooling: memory-l5-runtime ## L5 tooling contract tests via Vitest JSON-capable runner (L5-EX1)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-tooling requires ENV=<env> last" >&2; exit 1; }
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tools/memory-mcp-l5/tests --environment node'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tools/memory-mcp-l5/tests --environment node'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
 
 .PHONY: memory-l5-test
-memory-l5-test: ## L5 lot-scoped package tests, LOT=<n> enumerates the exact lot file set (L5-EX1)
+memory-l5-test: memory-l5-runtime ## L5 lot-scoped package tests, LOT=<n> enumerates the exact lot file set (L5-EX1)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-test requires ENV=<env> last" >&2; exit 1; }
 	@test "$(LOT)" = "1" || { echo "ERROR: memory-l5-test LOT=$(LOT) is owned by a later lot (only LOT=1 exists)" >&2; exit 1; }
 	@$(MAKE) test-mcp-platform SCOPE=tests/memory API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
@@ -3936,36 +3943,36 @@ memory-l5-test: ## L5 lot-scoped package tests, LOT=<n> enumerates the exact lot
 	@$(MAKE) test-mcp-broker SCOPE=tests API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
 .PHONY: memory-l5-packed
-memory-l5-packed: ## L5 installed-consumer packed SDK suite, SCOPE=packed/<file> against ARTIFACT_MANIFEST (Lot 4)
+memory-l5-packed: memory-l5-runtime ## L5 installed-consumer packed SDK suite, SCOPE=packed/<file> against ARTIFACT_MANIFEST (Lot 4)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-packed requires ENV=<env> last" >&2; exit 1; }
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-packed requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
 	@test -d tools/memory-mcp-l5/packed || { echo "ERROR: tools/memory-mcp-l5/packed is absent (arrives in Lot 4)" >&2; exit 1; }
 	@test -n "$(SCOPE)" || { echo "ERROR: memory-l5-packed requires SCOPE=packed/<file>" >&2; exit 1; }
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" "$$tool_dir/node_modules/.bin/vitest" run "$(SCOPE)" --environment node --root tools/memory-mcp-l5'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" "$$tool_dir/node_modules/.bin/vitest" run "$(SCOPE)" --environment node --root tools/memory-mcp-l5'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
 
 .PHONY: memory-l5-pack
-memory-l5-pack: build-mcp-platform build-mcp-broker api-extract-mcp-platform ## L5 packer: writes then validates ARTIFACT_MANIFEST from exact built contracts (L5-EX1)
+memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extract-mcp-platform ## L5 packer: writes then validates ARTIFACT_MANIFEST from exact built contracts (L5-EX1)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-pack requires ENV=<env> last" >&2; exit 1; }
 	@test "$(STAGE)" = "pre-candidate" || { echo "ERROR: memory-l5-pack STAGE=$(STAGE) is owned by a later lot (only pre-candidate exists)" >&2; exit 1; }
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-pack requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --root /workspace
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --root /workspace
 
 .PHONY: memory-l5-receipt
-memory-l5-receipt: ## L5 receipt verifier: MODE=preflight reports obligations, MODE=checkpoint gates strictly (L5-EX1)
+memory-l5-receipt: memory-l5-runtime ## L5 receipt verifier: MODE=preflight reports obligations, MODE=checkpoint gates strictly (L5-EX1)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-receipt requires ENV=<env> last" >&2; exit 1; }
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-receipt requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
 	@test -n "$(CHECKPOINT)" || { echo "ERROR: memory-l5-receipt requires CHECKPOINT=<path> (arrives in Lot 5+)" >&2; exit 1; }
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node tools/memory-mcp-l5/receipt.mjs --mode "$(MODE)" --checkpoint "$(CHECKPOINT)" --manifest "$(ARTIFACT_MANIFEST)" --base-dir /workspace
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/receipt.mjs --mode "$(MODE)" --checkpoint "$(CHECKPOINT)" --manifest "$(ARTIFACT_MANIFEST)" --base-dir /workspace
 
 .PHONY: memory-l5-verify
-memory-l5-verify: ## Verify retained P1 manifest, exact inventory and packed runtime/declaration graph
+memory-l5-verify: memory-l5-runtime ## Verify retained P1 manifest, exact inventory and packed runtime/declaration graph
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: ARTIFACT_MANIFEST is required" >&2; exit 1; }
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode packed --root /workspace --manifest "$(ARTIFACT_MANIFEST)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode packed --root /workspace --manifest "$(ARTIFACT_MANIFEST)"
 
 .PHONY: memory-l5-gate
-memory-l5-gate: ## L5 lot gate aggregate: lint, tooling, LOT tests (L5-EX1; later lots extend it)
+memory-l5-gate: memory-l5-runtime ## L5 lot gate aggregate: lint, tooling, LOT tests (L5-EX1; later lots extend it)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-gate requires ENV=<env> last" >&2; exit 1; }
 	@test -n "$(LOT)" || { echo "ERROR: memory-l5-gate requires LOT=<n>" >&2; exit 1; }
 	@$(MAKE) memory-l5-verify ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)

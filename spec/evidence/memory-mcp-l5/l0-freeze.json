@@ -1,7 +1,7 @@
 {
   "specSha256": "f90c927964b44fdf6ad712eee9b894762250239384643a3790931c142d3aeeca",
   "l0Commit": "60a8bfa828b5eabd360232ea5865391c23f99f48",
-  "imageDigest": "node:24.2.0-bookworm-slim@sha256:9f8fe2eef7fdde0ffc1ddbc0fbbeceff09fa8b6a2cefd4fb89b9d3b838dc0fb4",
+  "imageDigest": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
   "checkpointSchemaSha256": "144a428ae5abf99f76c7585d1976b821c2ef207f8685bd5bfa5f2f247084f3e5",
   "artifactManifestSchemaSha256": "4a43a66928c3000cdf48fe72c242e2d9cfbd2b3cc153851e9650ebc6c0cd9d8c",
   "proofCatalogSha256": "c8b0f9c8a907eb3d6a42e7a81d7509e6f5149aaf0b9f557842bda928c74c84be",
