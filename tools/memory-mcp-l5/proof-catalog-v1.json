@@ -1,0 +1,17 @@
+{
+  "catalogVersion": 1,
+  "checkpoint": "L5-MEMORY-V1",
+  "note": "Closed proof catalog. Lot 0 pins IDs, normative anchors and required files; individual case IDs and reporter mappings are pinned at the accepted freeze. No proof is fulfilled solely by an E2 run: final P01-P08 use the same E4 tuple.",
+  "proofs": [
+    { "id": "P01", "anchor": "M4, M7:813, M:1646", "title": "context-dispatch", "files": ["packages/mcp-broker/tests/memory/invocation-context.test.ts", "packages/mcp-broker/tests/memory/source-binding.test.ts", "packages/mcp-broker/tests/memory/forged-call.test.ts", "packages/mcp-platform/tests/memory/invocation-context.test.ts", "packages/cluster-mesh/tests/memory-context.spec.ts", "tools/memory-mcp-l5/packed/identity-source-refusal.test.ts"] },
+    { "id": "P02", "anchor": "M:324-326, M:525-529", "title": "audit-verdict", "files": ["packages/mcp-broker/tests/memory/audit-refusal.test.ts", "packages/mcp-broker/tests/memory/literal-true.test.ts", "packages/mcp-platform/tests/memory/mutation-guard.test.ts"] },
+    { "id": "P03", "anchor": "A04/A05/A10", "title": "digests-schemas", "files": ["packages/mcp-platform/tests/memory/mutation-digest-vectors.test.ts", "packages/mcp-platform/tests/memory/schema-profile.test.ts", "tools/memory-mcp-l5/tests/fixture-provenance.test.mjs"] },
+    { "id": "P04", "anchor": "M2, M:1428", "title": "wire-sdk", "files": ["packages/mcp-platform/tests/memory/wire-profile.test.ts", "packages/mcp-platform/tests/wire-parity.test.ts", "tools/memory-mcp-l5/packed/sdk-discovery-call.test.ts"] },
+    { "id": "P05", "anchor": "M:799-805", "title": "durable-fences", "files": ["packages/mcp-broker/tests/memory/sqlite-workflow-store.test.ts", "packages/mcp-broker/tests/memory/policy-version-persistence.test.ts"] },
+    { "id": "P06", "anchor": "M:803, M:813", "title": "crash-lost-ack", "files": ["packages/mcp-broker/tests/memory/sqlite-workflow-crash.test.ts", "packages/mcp-broker/tests/memory/mutation-recovery.test.ts", "tools/memory-mcp-l5/packed/restart-lost-response.test.ts"] },
+    { "id": "P07", "anchor": "M4/A06", "title": "assurance-continuation", "files": ["packages/mcp-broker/tests/memory/oidc-assurance.test.ts", "packages/mcp-broker/tests/memory/confirmation-continuation.test.ts", "packages/mcp-platform/tests/memory/confirmation.test.ts", "tools/memory-mcp-l5/packed/confirmation-step-up.test.ts"] },
+    { "id": "P08", "anchor": "M:815, M:1428", "title": "packaging-disabled", "files": ["tools/memory-mcp-l5/packed/exports.test.ts", "tools/memory-mcp-l5/packed/disabled-install.test.ts"] },
+    { "id": "P09", "anchor": "M12", "title": "predecessor-regressions", "files": ["packages/mcp-platform/tests/remote-bound-dispatch.test.ts", "packages/mcp-platform/tests/request-identity.test.ts", "packages/mcp-platform/tests/registry-dispatch.test.ts", "packages/cluster-mesh/tests/mcp-composition.spec.ts", "packages/cluster-mesh/tests/verified-invocation-context.spec.ts"] },
+    { "id": "P10", "anchor": "M:1428, M:1646", "title": "checkpoint-tooling", "files": ["tools/memory-mcp-l5/tests/make-contract.test.mjs", "tools/memory-mcp-l5/tests/receipt-contract.test.mjs", "tools/memory-mcp-l5/tests/import-graph.test.mjs", "tools/memory-mcp-l5/tests/artifact-manifest.test.mjs", "tools/memory-mcp-l5/tests/ci-contract.test.mjs"] }
+  ]
+}
