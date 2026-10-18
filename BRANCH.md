@@ -38,6 +38,7 @@
   - [x] `api/src/services/settings.ts` (getAISettings marker preservation only: legacy model normalization otherwise erases a stored judge-only provider before 1.04b/c can refuse it)
   - [x] `api/src/routes/namespaces/config-product-ai.ts`
   - [x] `api/tests/unit/judge-*-selection.test.ts`, `api/tests/unit/provider-registry-expansion.test.ts`, `api/tests/api/judge-chat-settings.test.ts`
+  - [x] `api/tests/unit/gateway-package-version.test.ts` (version literal follows the gateway bump only; BR96-EX8)
   - [x] `packages/llm-mesh/README.md`, `packages/cluster-mesh/README.md`, `spec/SPEC_EVOL_LLM_MESH.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` (judge semantics only)
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `.github/workflows/**`, `plan/**`, `.track/**`
@@ -50,7 +51,8 @@
   - [x] `api/src/routes/namespaces/llm-mesh.ts` (only aiSettingsSchema/updateUserSettings if the existing typesafe refusal needs a source edit)
   - [x] `package-lock.json` (root lock mirrors for the 0.27.0 cascade only; BR96-EX4)
   - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (B3 0.19.0 fixture pins only; BR96-EX7)
-  - [x] `packages/llm-gateway/package.json` (mesh range ^0.27.0 only; BR96-EX8)
+  - [x] `packages/llm-gateway/package.json` (mesh range ^0.27.0 and the required 0.21.0 bump only; BR96-EX8)
+  - [x] `api/package.json` (gateway range ^0.21.0 only, keeps the workspace link; BR96-EX8)
 - [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8.
 
 ## Feedback Loop
@@ -131,6 +133,7 @@
 - [x] Sol P1 descriptor binding (2026-10-18): preflight now refuses any request-affecting service/adapter descriptor disagreement with PROVIDER_UNAVAILABLE before credentials or spend; regression covers divergent registered rubric instructions with zero sends; settlement overrun fixture aligned to consistent descriptors.
 - [x] Sol P2 feature version (2026-10-18): llm-mesh placeholder 0.26.2 replaced by feature minor 0.27.0 per rules/workflow.md:116; gateway mesh range re-applied to ^0.27.0 (BR96-EX5 rollback), workspace-linked so npm ci still resolves without a published 0.27.0; lockfile mirrors, train literal and version test follow; rollback: revert the five version lines with the manifests.
 - [x] BR96-EX8 (2026-10-18): llm-gateway mesh dependency ^0.26.0 to ^0.27.0 for the Sol P2 feature minor, superseding BR96-EX5 per its rollback clause; rationale: release coherence, the gateway must admit the feature mesh while workspace linkage keeps npm ci green without a published 0.27.0; impact: 1 range in package.json plus the lock mirror; rollback: revert the range with the mesh version.
+- [x] BR96-EX8 extension (2026-10-18): gateway 0.20.1 to 0.21.0 plus api gateway range ^0.20.0 to ^0.21.0, required by the manifest bump gate (published 0.20.1 with a changed dep needs a new version); rationale: satisfy check-publishable-manifests without publishing; api range keeps the workspace link so no nested registry copy appears; impact: 2 version/range lines plus lock mirrors and the api version-test literal; rollback: revert versions and ranges together.
 
 
 ## AI Flaky tests
