@@ -160,6 +160,24 @@ jobs:
       mcp_connector_google_publish: ${{ steps.filter.outputs.mcp_connector_google_publish }}
       mcp_connector_googlecalendar: ${{ steps.filter.outputs.mcp_connector_googlecalendar }}
       mcp_connector_googlecalendar_publish: ${{ steps.filter.outputs.mcp_connector_googlecalendar_publish }}
+      mcp_connector_googledocs: ${{ steps.filter.outputs.mcp_connector_googledocs }}
+      mcp_connector_googledocs_publish: ${{ steps.filter.outputs.mcp_connector_googledocs_publish }}
+      mcp_connector_googledrive: ${{ steps.filter.outputs.mcp_connector_googledrive }}
+      mcp_connector_googledrive_publish: ${{ steps.filter.outputs.mcp_connector_googledrive_publish }}
+      mcp_connector_googlesheets: ${{ steps.filter.outputs.mcp_connector_googlesheets }}
+      mcp_connector_googlesheets_publish: ${{ steps.filter.outputs.mcp_connector_googlesheets_publish }}
+      mcp_connector_hubspot: ${{ steps.filter.outputs.mcp_connector_hubspot }}
+      mcp_connector_hubspot_publish: ${{ steps.filter.outputs.mcp_connector_hubspot_publish }}
+      mcp_connector_linear: ${{ steps.filter.outputs.mcp_connector_linear }}
+      mcp_connector_linear_publish: ${{ steps.filter.outputs.mcp_connector_linear_publish }}
+      mcp_connector_notion: ${{ steps.filter.outputs.mcp_connector_notion }}
+      mcp_connector_notion_publish: ${{ steps.filter.outputs.mcp_connector_notion_publish }}
+      mcp_connector_slack: ${{ steps.filter.outputs.mcp_connector_slack }}
+      mcp_connector_slack_publish: ${{ steps.filter.outputs.mcp_connector_slack_publish }}
+      mcp_connector_stripe: ${{ steps.filter.outputs.mcp_connector_stripe }}
+      mcp_connector_stripe_publish: ${{ steps.filter.outputs.mcp_connector_stripe_publish }}
+      skills: ${{ steps.filter.outputs.skills }}
+      skills_publish: ${{ steps.filter.outputs.skills_publish }}
       manifest_guard: ${{ steps.filter.outputs.manifest_guard }}
       # Publishable manifest guard context (spec section 6): JSON lists, never booleans.
       package_files: ${{ steps.publishable_files.outputs.publishable_package_files_files }}
@@ -492,6 +510,87 @@ jobs:
               - '.github/workflows/ci.yml'
             mcp_connector_googlecalendar_publish:
               - 'packages/mcp-connector-googlecalendar/**'
+            mcp_connector_googledocs:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-googledocs/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_googledocs_publish:
+              - 'packages/mcp-connector-googledocs/**'
+            mcp_connector_googledrive:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-googledrive/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_googledrive_publish:
+              - 'packages/mcp-connector-googledrive/**'
+            mcp_connector_googlesheets:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-googlesheets/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_googlesheets_publish:
+              - 'packages/mcp-connector-googlesheets/**'
+            mcp_connector_hubspot:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-hubspot/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_hubspot_publish:
+              - 'packages/mcp-connector-hubspot/**'
+            mcp_connector_linear:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-linear/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_linear_publish:
+              - 'packages/mcp-connector-linear/**'
+            mcp_connector_notion:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-notion/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_notion_publish:
+              - 'packages/mcp-connector-notion/**'
+            mcp_connector_slack:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-slack/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_slack_publish:
+              - 'packages/mcp-connector-slack/**'
+            mcp_connector_stripe:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/mcp-connector-stripe/**'
+              - '.github/workflows/ci.yml'
+            mcp_connector_stripe_publish:
+              - 'packages/mcp-connector-stripe/**'
+            skills:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/publish/**'
+              - 'packages/skills/**'
+              - '.github/workflows/ci.yml'
+            skills_publish:
+              - 'packages/skills/**'
             # Dedicated guard filter: never part of global, api/ui/e2e or _publish fanout.
             manifest_guard:
               - 'scripts/ci/**'
