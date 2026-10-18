@@ -66,7 +66,7 @@
   - [x] BR-62: measure and reserve capacity.
   - [x] BR-63: prepare once and run native static checks.
   - [x] BR-64: build and transfer less.
-  - [ ] BR-65: execute independent work together.
+  - [x] BR-65: execute independent work together.
   - [ ] BR-66: one package candidate and independent qualification.
   - [ ] BR-67: deterministic journeys and daily live providers.
   - [ ] BR-68: complete CD on tested bytes.
