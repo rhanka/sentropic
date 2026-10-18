@@ -112,14 +112,14 @@ Implement Lot 1 exactly as the reviewed plan defines it.
     - [x] `make test-ci-optimization SCOPE=scripts/ci/measure-runs.test.mjs ENV=test-ci-opt-lot1`
 
 - [ ] **Lot 3 — Filter repair**
-  - [ ] Add `scripts/ci/filter-consumers.mjs`, `scripts/ci/filter-consumers.test.mjs`, `scripts/ci/fixtures/consumer-regressions.json`.
-  - [ ] Extend `ci.yml` filters with omitted consumers incl. `mcp-auth` file-dependency propagation into API/AI.
-  - [ ] Keep `make check-ci-version-filters`; supplement with consumer regression test.
+  - [x] Add `scripts/ci/filter-consumers.mjs`, `scripts/ci/filter-consumers.test.mjs`, `scripts/ci/fixtures/consumer-regressions.json`.
+  - [x] Extend `ci.yml` filters with omitted consumers incl. `mcp-auth` file-dependency propagation into API/AI.
+  - [x] Keep `make check-ci-version-filters`; supplement with consumer regression test.
   - [ ] Add filter-output assertions to `scripts/ci/ci-wiring.test.mjs` (additions/deletions/renames, global/Make changes).
-  - [ ] Cover 74 non-fallback / 181 incl. fallback omissions, four LLM cases explicit, beyond PR #675.
-  - [ ] API test files created/updated: none. UI test files created/updated: none. E2E test files created/updated: none.
-  - [ ] Lot gate:
-    - [ ] `make test-ci-optimization SCOPE=scripts/ci/filter-consumers.test.mjs ENV=test-ci-opt-lot1`
+  - [x] Cover 74 non-fallback / 181 incl. fallback omissions, four LLM cases explicit, beyond PR #675.
+  - [x] API test files created/updated: none. UI test files created/updated: none. E2E test files created/updated: none.
+  - [x] Lot gate:
+    - [x] `make test-ci-optimization SCOPE=scripts/ci/filter-consumers.test.mjs ENV=test-ci-opt-lot1`
     - [ ] `make check-ci-version-filters check-ci-optimization test-ci-optimization ENV=test-ci-opt-lot1`
   - [ ] CI UAT:
     - [ ] Exercise an omitted-consumer fixture (incl. mcp-auth to API to affected AI), plus doc-only and global-change cases; inspect selected jobs + complete LLM evidence.
