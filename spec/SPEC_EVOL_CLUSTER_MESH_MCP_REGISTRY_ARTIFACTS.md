@@ -149,9 +149,9 @@ Publication creates releases over one current pointer; promotion selects a relea
 Content is served on a separate content domain (§7). Two short-lived mechanisms authorize it (`packages/artifacts/src/content/grants.ts:1-13`):
 
 - **Content grants.** HMAC-SHA256 signed with a host-injected secret; bound to subject + artifact, with an optional pinned release; 55-second TTL inside a 60-second total cutoff budget (grant + skew/propagation). Verification is fail-closed (signature, shape, lifetime cap, expiry, future-issued beyond the skew budget). A grant never replaces the per-request ACL recheck in the content handler (`packages/artifacts/src/content/handler.ts`).
-- **Activation tickets.** Single-use tickets bound the same way (`TicketRecord { ticketId, subjectId, artifactId, releaseId?, expiresAt }`, `packages/artifacts/src/content/grants.ts:112-118`), 120-second TTL (`CONTENT_TICKET_TTL_SECONDS`, `packages/artifacts/src/content/grants.ts:18`). Ticket IDs come from an injected port and must be unguessable (default: crypto UUIDs). Redemption checks subject/artifact binding before atomic single-use consumption; mismatched attempts do not consume the ticket (`packages/artifacts/src/content/grants.ts:143-188`). Per-version activation redeems one ticket, then demands fresh consent on the stable origin (401); pinned origins keep serving their immutable release (`packages/artifacts/src/content/handler.ts:4-9`).
+- **Activation tickets.** Single-use tickets whose stored record is `TicketRecord { ticketId, subjectId, artifactId, releaseId?, expiresAt }` (`packages/artifacts/src/content/grants.ts:112-118`), 120-second TTL (`CONTENT_TICKET_TTL_SECONDS`, `packages/artifacts/src/content/grants.ts:18`). Ticket IDs come from an injected port and must be unguessable (default: crypto UUIDs). **Stored is not enforced:** merged redemption accepts only `{subjectId, artifactId}` and compares only those two fields (`TicketService.redeem`, `packages/artifacts/src/content/grants.ts:143-148,174-188`); the stored `releaseId` is not compared at redemption. The content handler ignores the returned ticket record and mints the post-activation grant for the release currently resolved from the request origin (`packages/artifacts/src/content/handler.ts:99-122`). A ticket issued while release r1 was current can therefore activate release r2 after a stable-origin republish, even when its stored `releaseId` says r1. What remains enforced per release is the later grant-cookie check: an already-issued release-specific grant receives 401 once the stable origin resolves to another release (`packages/artifacts/src/content/handler.ts:140-142`); pinned origins keep serving their immutable release.
 
-The channel-bound ticket form (`{subject, artifact, release, channel}`) is **not** in the merged tree; it is follow-up #688 (§10).
+Mandatory release binding at redemption, and the channel-bound ticket form (`{subject, artifact, release, channel}`), are **not** in the merged tree; they are follow-up #688 (§10). A host must not treat release- or channel-bound activation as a shipped guarantee.
 
 ## 6. Token exchange (RFC 8693)
 
@@ -250,7 +250,7 @@ These items are open after the #679 merge. They are recorded here so no reader t
 
 | Follow-up | State at writing | Delta vs merged tree |
 |---|---|---|
-| Artifacts `0.1.1` — activation ticket binding (FL-ACT), PR #688 (`fix/artifacts-activation-binding`, "Fix artifact activation ticket binding (FL-ACT)") | OPEN, not merged | Extends the merged ticket binding `{subjectId, artifactId, releaseId?}` (§5.5) to channel-bound tickets `{subject, artifact, release, channel}` and ships as `@sentropic/artifacts 0.1.1`. Until it merges, §5.5 is the binding contract. |
+| Artifacts `0.1.1` — activation ticket binding (FL-ACT), PR #688 (`fix/artifacts-activation-binding`, "Fix artifact activation ticket binding (FL-ACT)") | OPEN, not merged | Makes release binding mandatory and enforces release plus channel at redemption, superseding the merged subject/artifact-only redemption (§5.5), and ships as `@sentropic/artifacts 0.1.1`. Until it merges, §5.5 is the binding contract. |
 | O1 — cluster-mesh OAuth composition for Immo, PR #689 (`feat/cluster-mesh-oauth-o1`, "Cluster-mesh OAuth composition for Immo (O1)") | OPEN draft, not merged | Implements the §9.4 cutover decision host-side composition (`/mcp/auth`, `/compose/mcp-oauth` surfaces per its branch plan). Until it merges, no OAuth composition surface is delivered by cluster-mesh beyond what #679 shipped. |
 | `@sentropic/artifacts` first npm publication (§8) | Not present on npm at check | Owner-run bootstrap only; required before any external host installs the provider from the registry. |
 
@@ -288,6 +288,3 @@ No runtime gate applies: this branch changes no code, and the merged behavior ke
 | Pre-merge scratch specifications and decision records (read-only sources, not deliverables): consolidated Immo MCP spec v8 (§1 owner model, Q-A1), registry entry contract v9, owner decisions T1–T8 (2026-10-16), OAuth owner addendum (2026-10-16), O1 branch plan (2026-10-17) | Verbatim owner decisions (§9) and follow-up framing (§10) |
 | GitHub PR state at writing: #679 MERGED; #688 OPEN; #689 OPEN draft | Merge/follow-up status (§8, §10) |
 | npm registry reads at writing (`@sentropic/cluster-mesh 0.18.0`, `@sentropic/mcp-platform 0.3.0`, `@sentropic/auth-hono 0.16.0` present; `@sentropic/artifacts` absent) | Published-version state (§8) |
-
-
-
