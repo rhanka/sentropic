@@ -30,8 +30,8 @@
 - [x] **Exception process**: declare a scoped exception with rationale, impact and rollback before any expansion; none needed.
 
 ## Feedback Loop
-- [x] R2-P3 — Owner: study author; status: acknowledged. Consolidate the active contract, replace obsolete votes and refresh source identities and citations.
-- [x] D1/D2 — Owner: repository owner; status: open. Preserve the dossiers in the study; reversible drafting has no new approval prerequisite.
+- [x] R2-P3 — Owner: study author; status: resolved. Active contract consolidated, obsolete votes retired and source identities/citations refreshed in study §10.
+- [x] D1/D2 — Owner: repository owner; status: open. Preserve [D1](spec/SPEC_STUDY_CI_TIMING_KNOWLEDGE.md#d1) and [D2](spec/SPEC_STUDY_CI_TIMING_KNOWLEDGE.md#d2); reversible drafting has no new approval prerequisite.
 - [x] Track — Existing WP9 study item `01M57FSNB4ZYA7N55GEWAN2016`, parent `01KYNH2CTQXQSGHD731H19T3XX`; leave import/realization to the designated repository writer.
 
 ## AI Flaky tests
@@ -59,11 +59,11 @@
 - [x] **Lot 3 — Conductor and capitalisation contracts**
   - [x] Add deterministic scheduling, phase-matched steering, source-skill adoption, Track joins and the qualified Engram seam.
   - [x] Gate: retain coverage, zero unqualified reuse credit, historical/incomplete fallbacks and host prerequisites.
-- [ ] **Lot 4 — Delivery, decisions and documentation consolidation**
-  - [ ] Publish the unified K0–K6 sequence, observable exits, risks and French D1/D2 dossiers with no selection asserted.
-  - [ ] Record R2-P3 resolution and refreshed source hashes; make the study self-contained without scratch-file prerequisites.
-- [ ] **Lot 5 — Final validation**
-  - [ ] Pass `make scope-check ENV=test-ci-timing-knowledge` and `git diff --check`; inspect every changed path and commit size.
-  - [ ] Check relative links and French decision anchors, exact owner quote, source digests and supersession consistency.
-  - [ ] API/UI/E2E tests and package bumps: not applicable to these two Markdown files.
-  - [ ] Prepare the draft PR from this exact branch plan and retain `BRANCH.md` for review.
+- [x] **Lot 4 — Delivery, decisions and documentation consolidation**
+  - [x] Publish the unified K0–K6 sequence, observable exits, risks and French D1/D2 dossiers with no selection asserted.
+  - [x] Record R2-P3 resolution and refreshed source hashes; make the study self-contained without scratch-file prerequisites.
+- [x] **Lot 5 — Final validation**
+  - [x] Pass `make scope-check ENV=test-ci-timing-knowledge` and `git diff --check`; inspect every changed path and commit size.
+  - [x] Check relative links and French decision anchors, exact owner quote, source digests and supersession consistency.
+  - [x] API/UI/E2E tests and package bumps: not applicable to these two Markdown files.
+  - [x] Prepare the draft PR from this exact branch plan and retain `BRANCH.md` for review.
