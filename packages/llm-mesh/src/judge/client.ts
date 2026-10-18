@@ -33,7 +33,46 @@ const BUDGET_STATES = new Set(['not-admitted', 'released', 'settled', 'pending-r
 
 const DECISION_ORIGINS = new Set(['provider', 'threshold', 'labels']);
 const DISPATCH_STATES = new Set(['not-started', 'started', 'completed', 'unknown']);
-const RAW_FIELDS = ['noul', 'score', 'choice', 'probabilities', 'confidence'] as const;
+
+/** Only the three service-emitted value shapes: binary scores alone, choice
+ * labels with a distribution, graded scores with one. Anything else never
+ * leaves the service, so the client rejects it without consulting the wire. */
+const hasServiceVerdictShape = (score: unknown, label: unknown, confidence: unknown, distribution: unknown): boolean => {
+  const hasScore = score !== null, hasLabel = label !== null;
+  const hasConfidence = confidence !== null, hasDistribution = distribution !== null;
+  if (hasLabel) return !hasScore && hasDistribution && hasConfidence;
+  if (hasDistribution) return hasScore && hasConfidence;
+  return hasScore && !hasConfidence;
+};
+
+/** Raw native values must agree with the typed verdict derived with them:
+ * same values under the same fields, and a truncation flag that matches
+ * exactly which native fields were omitted. */
+const wireRawAgreesWithTyped = (data: Record<string, unknown>, verdict: {
+  score: unknown; label: unknown; confidence: unknown; distribution: unknown }, truncated: boolean): boolean => {
+  const score = isRecord(verdict.score) && typeof verdict.score.value === 'number' ? verdict.score.value : null;
+  const label = isRecord(verdict.label) && typeof verdict.label.value === 'string' ? verdict.label.value : null;
+  const confidence = isRecord(verdict.confidence) && typeof verdict.confidence.value === 'number'
+    ? verdict.confidence.value : null;
+  const distribution = Array.isArray(verdict.distribution) ? verdict.distribution : null;
+  const expected = distribution === null ? ['noul']
+    : label !== null ? ['choice', 'probabilities', 'confidence'] : ['score', 'probabilities', 'confidence'];
+  if (!Object.keys(data).every((key) => expected.includes(key))) return false;
+  if (has(data, 'noul') && data.noul !== score) return false;
+  if (has(data, 'score') && data.score !== score) return false;
+  if (has(data, 'choice') && data.choice !== label) return false;
+  if (has(data, 'confidence') && data.confidence !== confidence) return false;
+  if (has(data, 'probabilities')) {
+    const probs = data.probabilities;
+    if (!isRecord(probs) || !distribution) return false;
+    if (Object.keys(probs).length !== distribution.length) return false;
+    for (const entry of distribution) {
+      if (!isRecord(entry) || typeof entry.nativeOutcome !== 'string' || typeof entry.probability !== 'number'
+        || !has(probs, entry.nativeOutcome) || probs[entry.nativeOutcome] !== entry.probability) return false;
+    }
+  }
+  return truncated === expected.some((key) => !has(data, key));
+};
 
 /** Cost union invariant: an unincurred or estimated cost never carries a spent amount. */
 function isValidWireCost(cost: unknown): cost is JudgeCost {
@@ -139,16 +178,18 @@ function isValidWireDistribution(distribution: unknown, label: unknown, request:
     && typeof label.value === 'string' && label.origin === 'provider');
 }
 
-/** Raw evidence is accepted only when allowlisted by the request, allowlisted by field, and byte-exact. */
-function isValidWireProviderRaw(raw: unknown, request: JudgeRequest): boolean {
+/** Raw evidence is accepted only when allowlisted by the request, byte-exact,
+ * and in full agreement with the typed verdict it was derived with. */
+function isValidWireProviderRaw(raw: unknown, request: JudgeRequest, verdict: {
+  score: unknown; label: unknown; confidence: unknown; distribution: unknown }): boolean {
   if (raw === undefined) return true;
   if (!isRecord(raw) || request.raw?.mode !== 'allowlisted') return false;
-  if (!hasOnlyKeys(raw, ['data', 'bytes', 'truncated']) || !isRecord(raw.data)
-    || !Object.keys(raw.data).every((key) => (RAW_FIELDS as readonly string[]).includes(key))) return false;
+  if (!hasOnlyKeys(raw, ['data', 'bytes', 'truncated']) || !isRecord(raw.data)) return false;
   if (typeof raw.bytes !== 'number' || !Number.isSafeInteger(raw.bytes) || raw.bytes < 0) return false;
   if (typeof raw.truncated !== 'boolean') return false;
   const actual = new TextEncoder().encode(JSON.stringify(raw.data)).byteLength;
-  return raw.bytes === actual && raw.bytes <= Math.min(16384, request.raw.maxBytes ?? 16384);
+  if (raw.bytes !== actual || raw.bytes > Math.min(16384, request.raw.maxBytes ?? 16384)) return false;
+  return wireRawAgreesWithTyped(raw.data, verdict, raw.truncated);
 }
 
 function isValidJudgeVerdict(v: unknown, request: JudgeRequest): v is JudgeVerdict {
@@ -164,8 +205,10 @@ function isValidJudgeVerdict(v: unknown, request: JudgeRequest): v is JudgeVerdi
   if (v.confidence !== null && parseJudgeConfidence(v.confidence) === null) return false;
   if (v.rationale !== null && (!isRecord(v.rationale) || typeof v.rationale.text !== 'string'
     || v.rationale.origin !== 'provider')) return false;
+  if (!hasServiceVerdictShape(v.score, v.label, v.confidence, v.distribution)) return false;
   if (!isValidWireDistribution(v.distribution, v.label, request)) return false;
-  return isValidWireProviderRaw(v.providerRaw, request);
+  return isValidWireProviderRaw(v.providerRaw, request, { score: v.score, label: v.label,
+    confidence: v.confidence, distribution: v.distribution });
 }
 
 /** Wire errors never carry wording or retry metadata: rebuild both from the code and phase. */
