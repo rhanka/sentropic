@@ -101,7 +101,8 @@
   - [x] Preserve the closed owner receipt verbatim; correct unsupported owner-UAT completion claims (finding 8).
   - [x] Define canonical digest and durable family/authorization serialization (findings 2 and 5); carry forward the existing partial evidence corrections.
   - [x] Complete current-policy and resource-aware offline-consent contracts and amendments (findings 1 and 3).
-  - [ ] Correct revocation windows/citations/provenance and complete concrete regression/expiry acceptance (findings 4, 6 and 7).
+  - [x] Correct revocation/cache/JWT windows, source paths and concrete regression/race/expiry acceptance (findings 4 and 6; citation part of 7).
+  - [ ] Reconcile actual analysis bytes/provenance and distinguish proposed interaction/logout defaults from owner ratification (findings 7 and 8).
   - [ ] Validate scope, write `.h2a/reviews/pr699_treatment.md`, push atomic commits and report head; never merge.
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Confirm the new spec reuses merged mechanisms without duplicating them and contains no secret value, only variable names.
