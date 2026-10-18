@@ -22,17 +22,37 @@ const baseline = JSON.parse(
   fs.readFileSync(path.join(root, 'scripts', 'ci', 'fixtures', 'optimization-baseline.json'), 'utf8'),
 );
 
-const buildFullJobs = (changeClass, event, createdMs, gateMs, index) => [
-  ...requiredSuccessJobs(outputsForChangeClass(changeClass), { eventName: event }).map((name, jIdx) => {
-    const isAi = name === 'test-api-unit-integration', isE2e = name === 'test-e2e' || name === 'e2e-vscode';
-    return {
-      id: (index + 1) * 100 + jIdx, name: isAi ? 'test-api-unit-integration (ai)' : name, conclusion: 'success',
-      runnerSeconds: isAi ? 120 : (isE2e ? 60 : 30), llmMinutes: isAi ? 2 : (isE2e ? 0.5 : 0),
-      selectedTests: isAi || isE2e ? 10 : null, executedTests: isAi || isE2e ? 10 : null,
-    };
-  }),
-  { id: (index + 1) * 100 + 99, name: 'ci-gate', conclusion: 'success', started_at: new Date(createdMs).toISOString(), completed_at: new Date(gateMs).toISOString(), runnerSeconds: 5 },
+const API_VARIANTS = [
+  'smoke', 'unit', 'queue',
+  'ai, chat-sync,executive-summary-auto,comment-assistant',
+  'ai, initiative-generation-async,executive-summary-sync',
+  'ai, chat-tools,company-enrichment-sync,documents-tool,initiative-generation-sync',
+  'security', 'limit', 'artifact-store', 'object-registry', 'outbox',
+  'endpoints, 1', 'endpoints, 2', 'endpoints, 3', 'endpoints, 4',
 ];
+const E2E_VARIANTS = ['group-a, 00 02 06 10', 'group-b, 01 04', 'group-c, 03', 'group-d, 08 09', 'group-e, 05 07'];
+
+const buildFullJobs = (changeClass, event, createdMs, gateMs, index) => {
+  const jobs = [];
+  let seq = 0;
+  for (const name of requiredSuccessJobs(outputsForChangeClass(changeClass), { eventName: event })) {
+    if (name === 'test-api-unit-integration') {
+      for (const v of API_VARIANTS) {
+        const isAi = v.startsWith('ai,');
+        jobs.push({ id: (index + 1) * 1000 + (seq += 1), name: `test-api-unit-integration (${v})`, conclusion: 'success', runnerSeconds: isAi ? 120 : 45, llmMinutes: isAi ? 2 : 0, selectedTests: 4, executedTests: 4 });
+      }
+    } else if (name === 'test-e2e') {
+      for (const g of E2E_VARIANTS) {
+        jobs.push({ id: (index + 1) * 1000 + (seq += 1), name: `test-e2e (${g})`, conclusion: 'success', runnerSeconds: 60, llmMinutes: 0.5, selectedTests: 4, executedTests: 4 });
+      }
+    } else {
+      const isVs = name === 'e2e-vscode';
+      jobs.push({ id: (index + 1) * 1000 + (seq += 1), name, conclusion: 'success', runnerSeconds: isVs ? 60 : 30, llmMinutes: isVs ? 0.5 : 0, selectedTests: isVs ? 4 : null, executedTests: isVs ? 4 : null });
+    }
+  }
+  jobs.push({ id: (index + 1) * 1000 + 999, name: 'ci-gate', conclusion: 'success', started_at: new Date(createdMs).toISOString(), completed_at: new Date(gateMs).toISOString(), runnerSeconds: 5 });
+  return jobs;
+};
 
 const mkRun = (delayMin, index = 0, overrides = {}) => {
   const isAfter = overrides.windowTag === 'after', idOffset = isAfter ? 2000 : 1000;
@@ -114,19 +134,31 @@ test('gate delay uses creation to final-head gate timestamps only', () => {
   assert.equal(gateDelayMinutes({ createdAt: null, gateAt: '2026-10-01T00:04:00Z' }), null);
 });
 
-test('compare rejects gate-only API runs, skipped ci-gate, reused run IDs, missing identities and 19:1 vs 1:19 cohort skew', () => {
+test('compare rejects gate-only API runs, missing matrix variants, skipped gates/shards, reused IDs, missing identities and 19:1 skew, while allowing justified skips', () => {
   const validBefore = mkWindow('before', Array.from({ length: 20 }, (_, i) => mkRun(10, i)));
   const validAfter = mkWindow('after', Array.from({ length: 20 }, (_, i) => mkRun(4, i, { windowTag: 'after' })));
   assert.equal(compareWindows(validBefore, validAfter, { minRuns: 20, minDays: 7 }).verdict, 'pass');
 
-  // 1. Finding 3 reproduction: 20 API PR runs containing only ci-gate MUST fail.
-  const gateOnlyAfter = mkWindow('after', Array.from({ length: 20 }, (_, i) => {
-    const r = mkRun(4, i, { windowTag: 'after' });
-    return { ...r, jobs: r.jobs.filter((j) => j.name === 'ci-gate') };
-  }));
-  const gateOnlyRes = compareWindows(validBefore, gateOnlyAfter, { minRuns: 20, minDays: 7 });
-  assert.equal(gateOnlyRes.verdict, 'fail');
-  assert.ok(gateOnlyRes.findings.some((f) => f.includes('incomplete required job/test inventory')));
+  // 1. Gate-only API PR runs MUST fail.
+  const gateOnlyAfter = mkWindow('after', validAfter.runs.map((r) => ({ ...r, jobs: r.jobs.filter((j) => j.name === 'ci-gate') })));
+  assert.equal(compareWindows(validBefore, gateOnlyAfter, { minRuns: 20, minDays: 7 }).verdict, 'fail');
+
+  // 1a. r4 Finding 1 & 2: missing matrix variants MUST fail; justified skips MUST pass; skipped selected shard MUST fail.
+  const singleShardAfter = mkWindow('after', validAfter.runs.map((r) => ({
+    ...r, jobs: r.jobs.filter((j) => (!j.name.startsWith('test-api-unit-integration (') && !j.name.startsWith('test-e2e (')) || j.name.includes('chat-sync') || j.name.includes('group-a')),
+  })));
+  assert.equal(compareWindows(validBefore, singleShardAfter, { minRuns: 20, minDays: 7 }).verdict, 'fail');
+  assert.equal(compareWindows(validBefore, mkWindow('after', validAfter.runs.map((r) => ({ ...r, jobs: r.jobs.filter((j) => !j.name.includes('initiative-generation-async')) }))), { minRuns: 20, minDays: 7 }).verdict, 'fail');
+  assert.equal(compareWindows(validBefore, mkWindow('after', validAfter.runs.map((r) => ({ ...r, jobs: r.jobs.filter((j) => !j.name.includes('group-e')) }))), { minRuns: 20, minDays: 7 }).verdict, 'fail');
+
+  const withSkippedPublishers = mkWindow('after', validAfter.runs.map((r) => ({
+    ...r, jobs: [...r.jobs, { id: 9901, name: 'publish-api-image', conclusion: 'skipped' }, { id: 9902, name: 'typecheck-lint-ui', conclusion: 'skipped' }, { id: 9903, name: 'security-iac', conclusion: 'skipped' }],
+  })));
+  assert.equal(compareWindows(validBefore, withSkippedPublishers, { minRuns: 20, minDays: 7 }).verdict, 'pass');
+  const narrowBefore = mkWindow('before', Array.from({ length: 20 }, (_, i) => ({ ...mkRun(6, i, { changeClass: 'llm_mesh' }), jobs: [...mkRun(6, i, { changeClass: 'llm_mesh' }).jobs, { id: 8801, name: 'publish-llm-mesh', conclusion: 'skipped' }, { id: 8802, name: 'test-api-unit-integration (smoke)', conclusion: 'skipped' }] })));
+  const narrowAfter = mkWindow('after', Array.from({ length: 20 }, (_, i) => ({ ...mkRun(3, i, { windowTag: 'after', changeClass: 'llm_mesh' }), jobs: [...mkRun(3, i, { windowTag: 'after', changeClass: 'llm_mesh' }).jobs, { id: 8801, name: 'publish-llm-mesh', conclusion: 'skipped' }, { id: 8802, name: 'test-e2e (group-a, 00 02 06 10)', conclusion: 'skipped' }] })));
+  assert.equal(compareWindows(narrowBefore, narrowAfter, { minRuns: 20, minDays: 7 }).verdict, 'pass');
+  assert.equal(compareWindows(validBefore, mkWindow('after', validAfter.runs.map((r) => ({ ...r, jobs: r.jobs.map((j) => (j.name.includes('initiative-generation-async') ? { ...j, conclusion: 'skipped' } : j)) }))), { minRuns: 20, minDays: 7 }).verdict, 'fail');
 
   // 2. Finding 3 reproduction: ci-gate with conclusion=skipped MUST fail.
   const skippedGateAfter = mkWindow('after', Array.from({ length: 20 }, (_, i) => {
@@ -166,7 +198,7 @@ test('compare rejects gate-only API runs, skipped ci-gate, reused run IDs, missi
   // 6. Masked AI failure, short window duration, and p95 regression checks remain enforced.
   const maskedAi = mkWindow('after', validAfter.runs.map((r) => ({
     ...r,
-    jobs: r.jobs.map((j) => (j.name.includes('(ai)') ? { ...j, conclusion: 'failure' } : j)),
+    jobs: r.jobs.map((j) => (j.name.includes('chat-sync') ? { ...j, conclusion: 'failure' } : j)),
   })));
   assert.equal(compareWindows(validBefore, maskedAi, { minRuns: 20, minDays: 7 }).verdict, 'fail');
 
@@ -185,15 +217,18 @@ test('collect requires --runs, rejects incomplete/reused windows in compare, and
     assert.notEqual(spawnSync(process.execPath, [scriptPath, 'collect', '--window', 'before', '--out', path.join(dir, 'nope.json')], { encoding: 'utf8' }).status, 0);
     const [rawBefore, rawAfter, rawGateOnly, winBefore, winAfter, winGateOnly, compOut] = ['rb.json', 'ra.json', 'rg.json', 'b.json', 'a.json', 'g.json', 'c.json'].map((f) => path.join(dir, f));
     fs.writeFileSync(rawBefore, JSON.stringify(Array.from({ length: 20 }, (_, i) => mkRun(10, i))));
-    fs.writeFileSync(rawAfter, JSON.stringify(Array.from({ length: 20 }, (_, i) => mkRun(4, i, { windowTag: 'after' }))));
+    fs.writeFileSync(rawAfter, JSON.stringify(Array.from({ length: 20 }, (_, i) => {
+      const r = mkRun(4, i, { windowTag: 'after' });
+      return { ...r, jobs: [...r.jobs, { id: 9901, name: 'publish-api-image', conclusion: 'skipped' }] };
+    })));
     fs.writeFileSync(rawGateOnly, JSON.stringify(Array.from({ length: 20 }, (_, i) => {
       const r = mkRun(4, i, { windowTag: 'after' });
-      return { ...r, jobs: r.jobs.filter((j) => j.name === 'ci-gate') };
+      return { ...r, jobs: r.jobs.filter((j) => !j.name.includes('initiative-generation-async')) };
     })));
     assert.equal(spawnSync(process.execPath, [scriptPath, 'collect', '--runs', rawBefore, '--window', 'before', '--out', winBefore], { encoding: 'utf8' }).status, 0);
     assert.equal(spawnSync(process.execPath, [scriptPath, 'collect', '--runs', rawAfter, '--window', 'after', '--out', winAfter], { encoding: 'utf8' }).status, 0);
     assert.equal(spawnSync(process.execPath, [scriptPath, 'collect', '--runs', rawGateOnly, '--window', 'after', '--out', winGateOnly], { encoding: 'utf8' }).status, 0);
-    assert.equal(JSON.parse(fs.readFileSync(winGateOnly, 'utf8')).complete, false, 'gate-only API runs mark window incomplete');
+    assert.equal(JSON.parse(fs.readFileSync(winGateOnly, 'utf8')).complete, false, 'missing AI shard marks window incomplete');
     assert.notEqual(spawnSync(process.execPath, [scriptPath, 'compare', '--before', winBefore, '--after', winGateOnly, '--out', compOut], { encoding: 'utf8' }).status, 0);
 
     const cmp = spawnSync(process.execPath, [scriptPath, 'compare', '--before', winBefore, '--after', winAfter, '--out', compOut], { encoding: 'utf8' });
@@ -201,7 +236,7 @@ test('collect requires --runs, rejects incomplete/reused windows in compare, and
     const parsed = JSON.parse(fs.readFileSync(compOut, 'utf8'));
     assert.equal(parsed.verdict, 'pass');
     assert.equal(parsed.after.gateP50, 4);
-    assert.equal(parsed.after.llmMinutes, 60);
+    assert.equal(parsed.after.llmMinutes, 180);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
