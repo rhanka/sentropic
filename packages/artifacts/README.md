@@ -2,7 +2,8 @@
 
 Generic, host-independent artifact domain state for the Sentropic artifacts
 provider (`sentropic.artifacts`, spec-v8 §9), covering L-5a–5e. Version
-`0.1.1` fixes activation ticket release and channel binding (FL-ACT).
+`0.1.2` exposes the storage adapters and ships versioned SQL migrations.
+Version `0.1.1` fixed activation ticket release and channel binding (FL-ACT).
 
 ## What's here (L-5a)
 
@@ -47,6 +48,37 @@ make test-artifacts-integration API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 
   byte-identity). Sharing/lifecycle/GC tables arrive with the 0002 migration.
 
 No Immo defaults, URLs or bindings in generic source.
+
+## Storage adapters and host migrations
+
+Hosts import `createS3BlobStore` from `@sentropic/artifacts/adapters/s3`
+and `createPostgresArtifactStore` from `@sentropic/artifacts/adapters/postgres`.
+Install the optional peer `@aws-sdk/client-s3@^3.980.0` for S3 and
+`pg@^8.12.0` for Postgres (`@types/pg` for TypeScript hosts). Pass a configured
+`S3Client` and bucket to the S3 adapter and a `pg.Pool` to the Postgres adapter.
+The core works without either driver; adapters do not create connections or
+apply DDL at import or startup.
+
+The installed package includes SQL resources exported under
+`@sentropic/artifacts/migrations/*`. Read them through Node's resolver:
+
+```js
+import { readFile } from 'node:fs/promises';
+
+const migrations = ['0001_artifacts.sql', '0002_lifecycle.sql'];
+for (const name of migrations) {
+  const sql = await readFile(new URL(import.meta.resolve(
+    `@sentropic/artifacts/migrations/${name}`,
+  )), 'utf8');
+  // Hand each SQL resource to the host's existing journaled migration runner.
+}
+```
+
+Apply `0001_artifacts.sql` first to create the domain schema, then
+`0002_lifecycle.sql` to add lifecycle, sharing, sources and GC support, before
+using the Postgres store. The host owns migration credentials, serialization,
+transactions and the migration journal; execute each version through that
+runner rather than running this read loop at application startup.
 
 ## What's here (L-5d–5e)
 
