@@ -19,12 +19,12 @@ function makeValidFixtureIndex() {
   };
 }
 
-describe('L5 fixture provenance index contract', () => {
-  it('accepts a valid provenance-bound L0 fixture index', () => {
+describe('P03.tooling.fixture-provenance — L5 fixture provenance index contract', () => {
+  it('P03.tooling.fixture-provenance: accepts a valid provenance-bound L0 fixture index', () => {
     expect(checkFixtureProvenance(makeValidFixtureIndex())).toEqual([]);
   });
 
-  it('rejects wrong spec digest, bad L0 commit, missing co-owner receipt, duplicate paths, and traversal', () => {
+  it('P03.tooling.fixture-provenance: rejects wrong spec digest, bad L0 commit, missing co-owner receipt, duplicate paths, and traversal', () => {
     expect(checkFixtureProvenance({ ...makeValidFixtureIndex(), specSha256: H64 }).join(' ')).toMatch(/frozen v3\.1 digest/);
     expect(checkFixtureProvenance({ ...makeValidFixtureIndex(), l0Commit: 'short' }).join(' ')).toMatch(/l0Commit/);
     expect(checkFixtureProvenance({ ...makeValidFixtureIndex(), coOwnerReceiptSha256: 'bad' }).join(' ')).toMatch(/coOwnerReceiptSha256/);
