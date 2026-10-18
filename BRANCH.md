@@ -45,6 +45,7 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
 ## Feedback Loop
 - `acknowledge` (2026-10-18): Two independent reviews of head `1019ef6020b8add72a66bf017e0dbe98e629f333` returned REQUEST_CHANGES for one shared P2 finding: the retained cost-risk instruction at study §9 read as a current pre-build gate. Fixed by marking that instruction historical and superseded (D7 no-reapproval-gate and Claude decided-continuation references); the unverified cost/terms risk is retained. Treatment record: `.h2a/reviews/pr596_treatment.md`. No other finding was raised by either review.
 - `deferred`: Custody job, resolver, and live qualification remain open on main (deployable-process custody/G4 and B4). Owner: custody maintainer/conductor for G4 reconciliation; h2a owner for Claude execution qualification; platform/custody operator for preprod delivery and per-device revocation evidence. Status: recorded as existing dependencies in the study; not blockers for merging this documentation-only reconciliation. Production stays deferred under O-D3.
+- `BR596-EX1` (2026-10-18): exception for `.h2a/reviews/custody-allrepos-reconciliation.md`, the Astra reconciliation record required by the owner packet of 2026-10-18. Reason: the packet names that path as a deliverable; it sits outside the Allowed Paths above. Impact: `.h2a/` is gitignored (`.gitignore:45`), so the file is a local record only and enters no commit. Rollback: delete the file.
 - No `blocked` or `attention` item is open for this branch.
 
 ## AI Flaky tests
@@ -117,3 +118,10 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
   - [ ] Update PR #596 title/body to reflect the reconciled study (PR body: exact text of this `BRANCH.md`).
   - [ ] Push, verify PR CI is green on the final head, record the head SHA, and stop.
   - [ ] Deferred to the conductor after handoff (not executed on this branch): two independent reviews (mesh/Claude/runtime and custody/deployment/security), then the `BRANCH.md` removal commit, then merge. Never merge on this branch.
+
+- [ ] **Lot 5 — All-repos custody addendum (owner packet 2026-10-18)**
+  - [x] Record the owner requirement verbatim in study §11.1, with the multi-repo and library-based target in §11.2.
+  - [x] State the built / specified / missing status explicitly with `file:line` evidence in study §11.3, including the cluster-mesh invocation-custody distinction.
+  - [x] Record the recommendation and lots C1-C5 in study §11.4.
+  - [ ] Reconcile the independent Astra analysis (`.h2a/inputs/astra-custody-allrepos.md`) point by point in `.h2a/reviews/custody-allrepos-reconciliation.md` (exception `BR596-EX1`; local record, gitignored).
+  - [ ] Commit in slices of at most 150 lines via `make commit`, push, record the head SHA, and stop. Never merge.

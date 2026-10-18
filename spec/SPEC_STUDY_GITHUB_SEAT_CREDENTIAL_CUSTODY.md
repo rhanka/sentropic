@@ -151,3 +151,36 @@ Carried meaning, as instructed:
 - One custodian writer per seat, as already frozen: only the custodian channel carries renewable material or canonical payloads, and only the custodian holds refresh authority (`packages/llm-mesh/src/enrollment/seat-bundle.ts:15`, `:19`, `:298-313`). A per-repository consumer receives access-only projections, never refresh material (`packages/llm-mesh/src/enrollment/seat-bundle.ts:100-104`, `:301-313`).
 - Per-repository GitHub Secrets remain the durable commit point (D7, §4); whether an organization-level secret store can replace per-repository secrets is unverified: the recorded credential is scoped to a single repository (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:145`), and the GitHub account shape (user vs organization) for the other repositories is not established on main.
 - The refresher placement follows the same split: library code shared by all repositories, one serialized scheduled Actions refresher per custody scope, GitHub-first durable commit, CAS delivery, independent freshness monitor, per-device provider revocation (§4; `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:147-165`).
+
+### 11.3 Status — built / specified / missing (on main, pinned baseline of §10)
+
+Built (implemented code on main):
+
+- Five-CLI seat envelope and static validators in `@sentropic/llm-mesh`: schema version and 48 KiB secret bound (`packages/llm-mesh/src/enrollment/seat-bundle.ts:8-13`), bundle shape (`packages/llm-mesh/src/enrollment/seat-bundle.ts:106-115`), `validateSeatBundle` (`packages/llm-mesh/src/enrollment/seat-bundle.ts:199`), lineage classification (`packages/llm-mesh/src/enrollment/seat-bundle.ts:366`), metadata-only receipt (`packages/llm-mesh/src/enrollment/seat-bundle.ts:401`). The module performs no home, keyring, network, or provider access (`packages/llm-mesh/src/enrollment/seat-bundle.ts:3-6`): it is a contract, not a custody service.
+- Enrollment providers for the five CLIs, and ordinary Claude-seat enrollment, import, and refresh delivered by PR #659 (§2; `spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md:120-135`).
+- A separate cluster-mesh custody runtime exists, but it is invocation custody, not seat custody: its actions are `drive`, `wake`, `relaunch` (`packages/cluster-mesh/src/runtime/custody-types.ts:7`), its token is a signed invocation token (`packages/cluster-mesh/src/runtime/custody-types.ts:24`), and its local source is `BoundedLocalCustodySource` (`packages/cluster-mesh/src/runtime/bounded-local-custody-source.ts:37`; design `packages/cluster-mesh/design/OQ5-custody-source.md:3`). Its signed-token, revocation-selector, and fail-closed patterns are reusable input; it stores no LLM seat credential and must not be cited as seat custody.
+
+Specified on main, not built:
+
+- D7 custody: full provider/device payloads in GitHub Secrets updated by API, dedicated repo-scoped Actions-secret credential (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:144-145`); sole scheduled refresher, GitHub-first durable commit, CAS delivery, independent freshness monitor (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:147-153`); per-device provider revocation (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:165`).
+- Projection resolver, assigned to B4 (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:220`); custody job and reconciled schema, gated by G4 (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:263`).
+- One-command seat enrollment surface, recorded as not implemented in L0a (`spec/SPEC_EVOL_CI_SEATS.md:77-89`).
+
+Missing (net-new, required by the §11.1 target):
+
+- The custody job itself: only `ci.yml` and `idp-identity-sync.yml` are tracked under `.github/workflows/` at the pinned main; no custody refresh workflow exists in any form.
+- The projection resolver: `apps/llm-gateway/src/seat-resolver.ts` is absent at the pinned main.
+- The custody library: no custody store, refresh, or resolver module exists in `@sentropic/llm-mesh` or `@sentropic/llm-gateway`; `seat-bundle.ts` is the only custody-adjacent module in `packages/llm-mesh/src/enrollment/`.
+- The multi-repo layer: per-repository consumers, organization-level versus per-repository secrets, cross-repository refresher placement, revocation, and audit are not specified on main. D7 is written for one repository and one preprod scope (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:145`, `:155`).
+- Live lifecycle qualification: unverified for all five CLIs (`spec/SPEC_EVOL_CI_SEATS.md:58-68`).
+- h2a-side seat items (CI seat round-robin, nightly vulnerability-fix seats): not located in the sources inspected for this addendum; status source-gap, not asserted.
+
+### 11.4 Recommendation and lots
+
+Recommendation: build the custody as a library in `@sentropic/llm-mesh`, beside `enrollment/` — the bundle contract, authority model, and enrollment providers already live there — with the access-only resolver consumed by `@sentropic/llm-gateway`. Each repository then carries only a thin scheduled Actions refresher that calls the library, plus its own repo-scoped credential and Secrets. This follows the owner preference in §11.1 and keeps one custodian implementation for all repositories instead of one workflow per repository. This study selects no build start; the lots below are the proposed sequence for the conductor and owner gate.
+
+- Lot C1 — Custody library core (synthetic first): bundle store, refresh, and projection interfaces in `@sentropic/llm-mesh` over `SeatBundleV1`, with the custodian/consumer authority split enforced as in `validateSeatBundle`; no live provider or GitHub call.
+- Lot C2 — GitHub Secrets adapter and reusable refresher: API write with GitHub-first durable commit, serialized triggers, CAS redelivery, redacted alerts; packaged so every repository runs the same job code with per-repository configuration.
+- Lot C3 — Gateway resolver: the B4 resolver on main (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:220`), reading the access-only projection; runtime never refreshes custody seats.
+- Lot C4 — Per-repository onboarding: provision the repo-scoped Actions-secret credential, custody environment, and rotation per repository (`spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md:145`); sentropic preprod first under O-D3, production deferred; then h2a, engram, immo, design-system, kvm, k8s-ops, graphify, and the remaining repositories, each with its own revocation and audit drill.
+- Lot C5 — Qualification: L0b native-profile and lifecycle qualification per CLI (`spec/SPEC_EVOL_CI_SEATS.md:58-68`), freshness-monitor drill, and per-device revocation evidence before any repository advertises custody readiness.
