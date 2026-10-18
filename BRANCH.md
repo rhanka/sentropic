@@ -70,6 +70,7 @@
 - [x] **Owner decisions applied (2026-10-18), receipt**: close D-P1, D-P2 and D-P3 with verbatim answers from `.h2a/reviews/pr695_owner-decisions.md`; retain full-spec docs-UAT as a separate pending receipt.
 - [x] **Owner decisions applied, freshness contract**: specify sliding browser continuity with an immutable 24-hour MFA deadline, downstream expiry, and PR #699's fifth-leg boundary; KVM remains authorization-code-only and refresh never upgrades evidence.
 - [x] **Owner decisions applied, recovery and scope**: require two independent passkeys, the operator Job and pending-binding recovery codes in Lot 4 before protected activation; align schema, UI/API tests and full-loss drills; protect forced-2FA accounts only, with ordinary email recovery unchanged.
+- [x] **Owner decisions applied, consolidation**: pin D-P1's 86400s bound and disabled OAuth refresh in the declaration/Lot 1 readback; verify all three exact answers, closed statuses, no stale optional-code references, and clean documentary diff. Scope checks: PASS C2; branch checks: PASS C1; no runtime test claim.
 - [x] **Round 1 dossier treatment (2026-10-18), finding 7**: balance D-P3 account-security benefits and recovery costs; retain trust/recovery prerequisites and explain remaining non-MFA bearer-login exposure. Documentary verification against section 4.2; no product qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `plan/BRANCH_TEMPLATE.md`, and the launch packet baseline at `94a38286e`.
