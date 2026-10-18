@@ -1,29 +1,39 @@
 /**
- * BR-72 DEPTH Lot 2 — minimal, connector-AGNOSTIC MCP provider broker.
+ * MCP-L5 Lot 1 — plan-bound MCP provider broker.
  *
- * Generalizes the "mount + invoke" seam proven per-connector in
- * `../../mcp-connector-github/src/live-broker.ts` (BR-72 DEPTH Lot 1): a
- * `ConnectorRegistry` mounts any number of `AppConnectorProviderAdapter`s,
- * and `McpProviderBroker.invoke()` dispatches resource-vs-tool through the
- * SAME code path regardless of which connector is targeted. No
- * connector-specific logic lives in this file — the only connector-aware
- * code in this package is the SMOKE script
- * (`../scripts/smoke-broker-github.mjs`), which mounts the real github live
- * adapter as ONE example connector to prove the seam end-to-end.
+ * Dispatches through ONE connector-agnostic path against the immutable
+ * compiled registry plan. Adapters are bound once at construction from that
+ * plan; consumers cannot register handlers separately or replace the plan.
  *
- * Production residence of a broker like this one (in-process library vs. a
- * hosted service, real secret-store / EnrollmentStore wiring, tenant
- * resolution policy) is an architect D4 decision, deferred — this package is
- * a proof (`"private": true`, not published), not a shipped runtime.
+ * Every invocation requires a verified host `StpConnectorContext`. A
+ * missing or untrusted context throws the M2 pre-dispatch protocol error
+ * (-32603, `Trusted invocation context unavailable`) before provider
+ * dispatch, reservation, canonical access or effect — never a domain
+ * envelope and never a fabricated audit reference. Memory tools additionally
+ * resolve their exact plan entry, provider/connector source binding and
+ * scope/claim coverage, and bind the neutral context projection before the
+ * adapter is contacted.
  */
-import type { AppCapability, CapabilityResource } from '../../mcp-platform/src/manifest.js';
+
 import type {
+  AppCapability,
   AppConnectorProviderAdapter,
   AppResultEnvelope,
+  CapabilityResource,
   StpConnectorContext,
-} from '../../mcp-platform/src/runtime.js';
-import { createInMemoryContext, type InMemoryContextOptions } from './context.js';
-import { ConnectorRegistry } from './registry.js';
+} from '@sentropic/mcp-platform';
+import type { CompiledMcpRegistry } from '@sentropic/mcp-platform/registry';
+import {
+  MEMORY_CONNECTOR_ID,
+  MEMORY_PROVIDER_ID,
+  TRUSTED_CONTEXT_PROTOCOL_ERROR_CODE,
+  TRUSTED_CONTEXT_UNAVAILABLE_MESSAGE,
+  MemoryTrustedContextError,
+  isMemoryToolName,
+  requireTrustedInvocationContext,
+} from '@sentropic/mcp-platform/memory';
+import { bindMemoryInvocation } from './memory/context-projection.js';
+import { CompiledConnectorIndex } from './registry.js';
 
 export class UnknownConnectorError extends Error {
   readonly code = 'unknown_connector';
@@ -46,17 +56,24 @@ export class McpBrokerError extends Error {
   }
 }
 
-export type InvokeOptions = {
-  ctx?: StpConnectorContext;
-  secretResolver?: InMemoryContextOptions['secretResolver'];
-  token?: string;
-};
-
-let brokerAuditSequence = 0;
-function nextBrokerAuditId(prefix: string): string {
-  brokerAuditSequence += 1;
-  return `${prefix}-${Date.now()}-${brokerAuditSequence}`;
+/** Trusted-context protocol refusal: -32603, constant message, no envelope. */
+function trustedContextRefusal(): McpBrokerError {
+  return new McpBrokerError(
+    String(TRUSTED_CONTEXT_PROTOCOL_ERROR_CODE),
+    TRUSTED_CONTEXT_UNAVAILABLE_MESSAGE,
+  );
 }
+
+export type InvokeOptions = {
+  /** Verified host invocation context (REQUIRED, never manufactured). */
+  ctx: StpConnectorContext;
+  /** Validated domain purpose for memory tools (REQUIRED for memory tools). */
+  purposeRef?: string;
+  /** Envelope idempotency key for memory mutations (REQUIRED for memory tools). */
+  idempotencyKey?: string;
+  /** Satisfied elicitation reference for memory mutations. */
+  elicitationRef?: string;
+};
 
 function findCapability(
   adapter: AppConnectorProviderAdapter,
@@ -70,13 +87,9 @@ function findCapability(
 }
 
 // Connector-AGNOSTIC resource URI resolution: uses the CAPABILITY'S OWN
-// declared `uriTemplate` (`../../mcp-platform/src/manifest.ts`'s
-// `CapabilityResource.uriTemplate`) and substitutes `{param}` placeholders
-// from the caller-supplied `input` object — no connector-specific parsing
-// (contrast with github's per-capability `buildResourceUri` switch in
-// `../../mcp-connector-github/src/live-broker.ts`, which this generalizes
-// away). A bare string input, or a single-key `{ uri }` object, is used
-// as-is (the caller already built the URI itself).
+// declared `uriTemplate` and substitutes `{param}` placeholders from the
+// caller-supplied `input` object. A bare string input, or a single-key
+// `{ uri }` object, is used as-is.
 function resolveResourceUri(capability: CapabilityResource, input: unknown): string {
   if (typeof input === 'string') {
     return input;
@@ -103,47 +116,67 @@ function resolveResourceUri(capability: CapabilityResource, input: unknown): str
   return uri;
 }
 
+export type McpProviderBrokerOptions = {
+  plan: CompiledMcpRegistry;
+  adapters: AppConnectorProviderAdapter[];
+  sourceId: string;
+  generation: string;
+};
+
 /**
- * `McpProviderBroker` — mount any number of connectors via a
- * `ConnectorRegistry`, invoke any of their capabilities through ONE
- * connector-agnostic dispatch path (`invoke`). `contextFactory` defaults to
- * `createInMemoryContext` (see `./context.ts`) but can be overridden — e.g.
- * with a factory backed by a real EnrollmentStore/TenantResolver PORT later.
+ * `McpProviderBroker` — plan-bound dispatch over the adapters mounted from
+ * that plan. `sourceId` and the active `generation` are host-supplied
+ * bindings carried into every memory selection.
  */
 export class McpProviderBroker {
-  private readonly registry: ConnectorRegistry;
-  private readonly contextFactory: (opts?: InMemoryContextOptions) => StpConnectorContext;
+  private readonly plan: CompiledMcpRegistry;
+  private readonly index: CompiledConnectorIndex;
+  private readonly sourceId: string;
+  private readonly generation: string;
 
-  constructor(opts: {
-    registry: ConnectorRegistry;
-    contextFactory?: (opts?: InMemoryContextOptions) => StpConnectorContext;
-  }) {
-    this.registry = opts.registry;
-    this.contextFactory = opts.contextFactory ?? createInMemoryContext;
+  constructor(opts: McpProviderBrokerOptions) {
+    if (opts.sourceId.length === 0) {
+      throw new McpBrokerError('source_binding_mismatch', 'McpProviderBroker: sourceId must be nonempty.');
+    }
+    if (opts.generation.length === 0) {
+      throw new McpBrokerError('stale_generation', 'McpProviderBroker: generation must be nonempty.');
+    }
+    this.plan = opts.plan;
+    this.index = new CompiledConnectorIndex(opts.plan, opts.adapters);
+    this.sourceId = opts.sourceId;
+    this.generation = opts.generation;
   }
 
   listConnectors(): string[] {
-    return this.registry.list();
+    return this.index.list();
   }
 
   private resolveAdapter(connectorId: string): AppConnectorProviderAdapter {
-    const adapter = this.registry.get(connectorId);
+    const adapter = this.index.get(connectorId);
     if (!adapter) {
       throw new UnknownConnectorError(connectorId);
     }
     return adapter;
   }
 
+  private requireCtx(opts: InvokeOptions | undefined): StpConnectorContext {
+    try {
+      return requireTrustedInvocationContext(opts?.ctx);
+    } catch {
+      throw trustedContextRefusal();
+    }
+  }
+
   /**
    * List a connector's capabilities via its OWN adapter contract:
-   * `resolveTenant()` narrows a `ConnectorTenantContext` from the given (or
-   * default in-memory) `StpConnectorContext`, then `listCapabilities()` is
-   * called against that narrowed tenant context — mirrors how a real core
-   * would call these two adapter methods in sequence (§4.4).
+   * `resolveTenant()` narrows a `ConnectorTenantContext` from the verified
+   * context, then `listCapabilities()` is called against that narrowed
+   * tenant context.
    */
-  async listCapabilities(connectorId: string, ctx?: StpConnectorContext): Promise<AppCapability[]> {
+  async listCapabilities(connectorId: string, ctx: StpConnectorContext): Promise<AppCapability[]> {
+    const verified = this.requireCtx({ ctx });
     const adapter = this.resolveAdapter(connectorId);
-    const stpCtx = ctx ?? this.contextFactory({ connectorInstanceId: connectorId });
+    const stpCtx = verified;
     const tenantCtx = await adapter.resolveTenant({
       principalSub: stpCtx.principal.sub,
       tenantRef: stpCtx.tenantRef,
@@ -154,33 +187,25 @@ export class McpProviderBroker {
   }
 
   /**
-   * Dispatch a single capability invocation through the connector's
-   * `AppConnectorProviderAdapter`. Resource-vs-tool dispatch mirrors
-   * `../../mcp-connector-github/src/live-broker.ts`'s `invokeGithubLive`,
-   * generalized: which method to call (`readResource` vs `invokeTool`) is
-   * decided from the capability's OWN declared `kind` in the connector's
-   * manifest, never from a per-connector allowlist.
+   * Dispatch a single capability invocation through the plan-bound adapter.
+   * Memory tools resolve their exact plan entry and source binding before
+   * the adapter is contacted; any mismatch refuses with a domain envelope
+   * and zero provider or effect calls.
    */
   async invoke(
     connectorId: string,
     capabilityRef: string,
     input: unknown,
-    opts?: InvokeOptions,
+    opts: InvokeOptions,
   ): Promise<AppResultEnvelope<unknown>> {
+    const ctx = this.requireCtx(opts);
     const adapter = this.resolveAdapter(connectorId);
-    const token = opts?.token;
-    const ctx =
-      opts?.ctx ??
-      this.contextFactory({
-        connectorInstanceId: connectorId,
-        secretResolver: opts?.secretResolver ?? (token !== undefined ? () => token : undefined),
-      });
 
     const capability = findCapability(adapter, capabilityRef);
     if (!capability) {
       return {
         ok: false,
-        auditId: nextBrokerAuditId('mcp-broker-unknown-capability'),
+        auditId: ctx.auditId,
         redactionClass: 'none',
         error: {
           code: 'unknown_capability',
@@ -188,6 +213,10 @@ export class McpProviderBroker {
           retriable: false,
         },
       };
+    }
+
+    if (isMemoryToolName(capabilityRef)) {
+      return this.invokeMemoryTool(adapter, connectorId, capabilityRef, input, ctx, opts);
     }
 
     if (capability.kind === 'resource') {
@@ -198,7 +227,7 @@ export class McpProviderBroker {
         if (err instanceof McpBrokerError) {
           return {
             ok: false,
-            auditId: nextBrokerAuditId('mcp-broker-resource-input-error'),
+            auditId: ctx.auditId,
             redactionClass: 'none',
             error: { code: err.code, message: err.message, retriable: false },
           };
@@ -211,11 +240,10 @@ export class McpProviderBroker {
       const result = await adapter.invokeTool({ capabilityRef, input, ctx });
       if (typeof result === 'string') {
         // Guard the DurableCallRef string return (§8 durable-call refs) —
-        // this in-memory broker proof does not implement durable-call
-        // tracking/polling; mirrors the same guard in
-        // `../../mcp-connector-github/src/live-broker.ts`'s `invokeGithubLive`.
+        // this broker proof does not implement durable-call
+        // tracking/polling.
         throw new Error(
-          `McpProviderBroker: unexpected DurableCallRef "${result}" for capability "${capabilityRef}" — this in-memory broker proof does not support durable/long-running tool calls.`,
+          `McpProviderBroker: unexpected DurableCallRef "${result}" for capability "${capabilityRef}" — durable/long-running tool calls are not supported here.`,
         );
       }
       return result;
@@ -225,7 +253,7 @@ export class McpProviderBroker {
     if (!adapter.renderPrompt) {
       return {
         ok: false,
-        auditId: nextBrokerAuditId('mcp-broker-unsupported-capability-kind'),
+        auditId: ctx.auditId,
         redactionClass: 'none',
         error: {
           code: 'unsupported_capability_kind',
@@ -236,5 +264,82 @@ export class McpProviderBroker {
     }
     const promptInput = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
     return adapter.renderPrompt({ capabilityRef, input: promptInput, ctx });
+  }
+
+  private async invokeMemoryTool(
+    adapter: AppConnectorProviderAdapter,
+    connectorId: string,
+    capabilityRef: string,
+    input: unknown,
+    ctx: StpConnectorContext,
+    opts: InvokeOptions,
+  ): Promise<AppResultEnvelope<unknown>> {
+    const memoryFailure = (code: string, message: string): AppResultEnvelope<unknown> => ({
+      ok: false,
+      auditId: ctx.auditId,
+      redactionClass: 'high',
+      error: { code, message, retriable: false },
+    });
+    const resolution = this.plan.resolveTool(capabilityRef);
+    if (resolution === undefined) {
+      return memoryFailure(
+        'unknown_capability',
+        `McpProviderBroker: memory tool "${capabilityRef}" is not in the compiled plan.`,
+      );
+    }
+    if (
+      resolution.providerId !== MEMORY_PROVIDER_ID ||
+      adapter.manifest.providerId !== MEMORY_PROVIDER_ID ||
+      adapter.connectorId !== MEMORY_CONNECTOR_ID ||
+      connectorId !== MEMORY_CONNECTOR_ID
+    ) {
+      return memoryFailure(
+        'source_binding_mismatch',
+        `McpProviderBroker: memory tool "${capabilityRef}" is not bound to the memory provider/connector.`,
+      );
+    }
+    const scopes = new Set(ctx.principal.scopes);
+    for (const required of resolution.requiredScopes) {
+      if (!scopes.has(required)) {
+        return memoryFailure('insufficient_scope', `McpProviderBroker: missing scope "${required}".`);
+      }
+    }
+    const claims = new Set(Object.keys(ctx.principal.claims ?? {}));
+    for (const required of resolution.requiredClaims) {
+      if (!claims.has(required)) {
+        return memoryFailure('insufficient_claims', `McpProviderBroker: missing claim "${required}".`);
+      }
+    }
+    if (opts.purposeRef === undefined || opts.idempotencyKey === undefined) {
+      return memoryFailure(
+        'INVALID_SCHEMA',
+        'McpProviderBroker: memory tools require purposeRef and idempotencyKey.',
+      );
+    }
+    try {
+      // Build the neutral context projection before the adapter is
+      // contacted: any binding failure refuses with zero provider contact.
+      bindMemoryInvocation({
+        ctx,
+        purposeRef: opts.purposeRef,
+        idempotencyKey: opts.idempotencyKey,
+        elicitationRef: opts.elicitationRef,
+      });
+    } catch (error) {
+      if (error instanceof MemoryTrustedContextError) {
+        throw trustedContextRefusal();
+      }
+      return memoryFailure(
+        'source_binding_mismatch',
+        error instanceof Error ? error.message : 'invalid memory invocation binding',
+      );
+    }
+    const result = await adapter.invokeTool({ capabilityRef, input, ctx });
+    if (typeof result === 'string') {
+      throw new Error(
+        `McpProviderBroker: unexpected DurableCallRef "${result}" for memory capability "${capabilityRef}".`,
+      );
+    }
+    return result;
   }
 }

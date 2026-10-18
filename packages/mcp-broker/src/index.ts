@@ -1,17 +1,17 @@
 /**
- * BR-72 DEPTH Lot 2 — `@sentropic/mcp-broker` public entry (private, not
- * published). See `./broker.ts`, `./registry.ts`, `./context.ts` and the
- * package `README.md` for the full proof scope.
+ * `@sentropic/mcp-broker` — plan-bound provider broker (public entry).
+ *
+ * Frozen root runtime exports: `McpProviderBroker`, `McpBrokerError`,
+ * `UnknownConnectorError`, plus the `InvokeOptions` and `SecretResolver`
+ * types. `InvokeOptions` requires a verified host invocation context; the
+ * broker never manufactures identity. Memory contracts live under the pure
+ * `./memory` entry; the reference store arrives under `./memory-reference`
+ * in Lot 2. No testing export, no compatibility fallback.
  */
-export { ConnectorRegistry, DuplicateConnectorError } from './registry.js';
-export {
-  createInMemoryContext,
-  type InMemoryContextOptions,
-  type SecretResolver,
-} from './context.js';
 export {
   McpProviderBroker,
   McpBrokerError,
   UnknownConnectorError,
   type InvokeOptions,
 } from './broker.js';
+export type { SecretResolver } from './context.js';
