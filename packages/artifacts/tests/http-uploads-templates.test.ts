@@ -59,7 +59,7 @@ function makeApp(withExtras = true) {
 }
 
 function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
-  return { method, path, body, actorId };
+  return { method, path, body, actorId, storageScopeId: "scope-1" };
 }
 
 async function seededId(app: ReturnType<typeof makeApp>): Promise<string> {
