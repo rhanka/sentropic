@@ -2,7 +2,7 @@
 # root Makefile's disposable workspace; no pg container is required.
 .PHONY: cluster-mesh-sqlite-test
 cluster-mesh-sqlite-test:
-	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-run SCOPE="$(if $(SCOPE),$(SCOPE),tests/storage/sqlite-corpus.spec.ts)" ENV=$(ENV)
+	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-run SCOPE="$(if $(SCOPE),$(SCOPE),tests/storage/sqlite-)" ENV=$(ENV)
 
 .PHONY: cluster-mesh-sqlite-run
 cluster-mesh-sqlite-run:
