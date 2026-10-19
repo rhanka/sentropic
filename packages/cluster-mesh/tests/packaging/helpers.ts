@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { satisfiesRange } from '../../src/modules/semver.js';
 
 // Match prepare.sh: workspace versions keep same-PR siblings selectable during lock refresh.
 export const trainVersion = (name: string): string => {
@@ -8,6 +9,11 @@ export const trainVersion = (name: string): string => {
   if (typeof version !== 'string' || !version.trim()) throw new Error(`Missing workspace version for ${name}`);
   return version;
 };
+
+/** The optional artifacts variant requires its maintainer's declared platform compatibility. */
+export const artifactsCompatible = satisfiesRange(trainVersion('mcp-platform'),
+  JSON.parse(readFileSync(new URL('../../../artifacts/package.json', import.meta.url), 'utf8'))
+    .peerDependencies?.['@sentropic/mcp-platform']);
 
 /** Set by packaging.mk; packaging specs are skipped in the ordinary package test run. */
 export const ROOT = process.env.CLUSTER_MESH_PACKAGING_DIR ?? '';

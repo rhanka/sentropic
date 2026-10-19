@@ -28,7 +28,7 @@ rm -rf "$work"
 mkdir -p "$work/tools" "$work/src"
 CM_ARTIFACTS_COMPAT="$(node --input-type=module -e '
   import fs from "node:fs";
-  import { satisfiesRange } from "./dist/modules/semver.js";
+  import { satisfiesRange } from "./src/modules/semver.ts";
   const platform = JSON.parse(fs.readFileSync("../mcp-platform/package.json")).version;
   const range = JSON.parse(fs.readFileSync("../artifacts/package.json")).peerDependencies?.["@sentropic/mcp-platform"];
   process.stdout.write(satisfiesRange(platform, range) ? "1" : "0");
