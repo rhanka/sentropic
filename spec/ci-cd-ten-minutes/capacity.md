@@ -1,7 +1,9 @@
 # CI/CD capacity — measured inventory (BR-76)
 
-Status: measurement record with reconciled receipts; account quota, registry
-cost, contention budgets, and the rollback drill remain to measure.
+Status: measurement record with reconciled receipts (metrics +
+expected-results + docs only, per owner split decision 2026-10-19);
+account quota, registry cost, contention budgets, and the rollback drill
+remain to measure under BR-77 (`plan/71-BRANCH_chore-ci-capacity-policy.md`).
 Source base: `81deb7bd78d99bca8d51f67c4f1d4424fb772d75`.
 Reference run: Main `39113919235` attempt 1 (84 job rows, 59 measured,
 25 skipped; attempts 1+2 hold 168 input rows, 58 carried-forward copies
@@ -36,7 +38,7 @@ captured attempt-1 rows reconciled against the Jobs API.
       concurrency group, including `api-image-publication` and `npm-publish-train`.
 - [x] Cancelled results retain their identified conclusions in the gate verdict;
       unexpected skips block the verdict.
-- [ ] Concurrent PR/main receipt: pending branch CI on this branch.
+- [ ] Concurrent PR/main receipt: pending BR-77 qualification (moved out of this PR).
 
 ## Cost and peak demand
 
@@ -72,14 +74,14 @@ captured attempt-1 rows reconciled against the Jobs API.
 | R2-1 / R1-2: disconnected expected results | `changes` retains the actual workflow/matrix manifest before dispatch; the gate invokes the Make evaluator on fresh attempt Jobs API rows plus the full declared needs context. Exact-script tests reject omitted/skipped selected members and unconditional validators; unselected members pass. | Exact pushed-head CI receipt. |
 | R2-2 / R1-3: invalid queue distribution | 59 reference execution waits, p50 63s; skipped rows excluded; absent readiness is null. | None for the metric defect. |
 | R2-3 / R1-3: absent step output | The Make CLI emits identified job/step spans; the workflow retains raw API and metrics artifacts. The 58s Test CLI fixture and the 8s real changes-job receipt are qualified. | Final gate duration requires a post-run capture. |
-| R2-4 / R1-4: finite-capacity acceptance | Open: metrics now retain admission, budget-breach, cancellation-ownership, and release-continuity receipts (25 Docker metrics tests), but no account quota, release reservation, registry cost, concurrent current-main delivery, or rollback drill is proven. | Account owner supplies quota/reservation/cost inventory; branch author qualifies the bounded policy with concurrent-run/rollback receipts and budgets. |
+| R2-4 / R1-4: finite-capacity acceptance | Open: metrics now retain admission, budget-breach, cancellation-ownership, and release-continuity receipts (30 Docker metrics tests), but no account quota, release reservation, registry cost, concurrent current-main delivery, or rollback drill is proven. | BR-77: the agent inventories quotas/costs itself via the GitHub API, then qualifies the bounded policy with concurrent-run/rollback receipts and budgets. |
 | R2-5: skipped delivery endpoints | Skipped rows are explicitly unselected; delivery elapsed stays null for zero/inverted timestamps; mixed execution sets are partial. | None for the metric defect. |
 
 The real reference's 972s queue wait belongs to job `117636581206`
 (`test-api-unit-integration` AI member), run `39113919235`, attempt 1.
 This exceeds the 60s scheduling budget by itself; it does not qualify the
-new policy under declared concurrent traffic. The branch author retains
-responsibility for Lot 2/3; no finite-capacity acceptance is claimed.
+new policy under declared concurrent traffic. BR-77 retains
+responsibility for Lot 2/3; no finite-capacity acceptance is claimed here.
 
 Replaying review run `39186952208`, attempt 1, head
 `d1c38a512befa26b9f6f61001a4af924a532c5b7`, through the delivered Make
@@ -99,7 +101,7 @@ breaches to retain: `changes` job `117892738937` queued 383s against the
 hypothesized 24 slots with a 2-slot release reserve reads admitted
 (headroom 5); slots remain undeclared, so live admission stays to-measure.
 Owner quota/reservation/cost inventory, concurrent PR/main qualification,
-and the rollback drill remain open under Lot 2/3.
+and the rollback drill remain open under BR-77 (Lot 2/3 moved out of this PR).
 
 ## Review-fix record
 
@@ -113,5 +115,5 @@ and the rollback drill remain open under Lot 2/3.
 
 - [ ] Classification <= 15s; verdict <= 5s; aggregate critical-path
       scheduling <= 60s under declared concurrent traffic.
-- [ ] Contention budgets and rollback drill (Lot 3): owner is the branch
-      author; failures will be recorded here with run/attempt/job IDs.
+- [ ] Contention budgets and rollback drill (BR-77): owner is the BR-77
+      agent; failures will be recorded here with run/attempt/job IDs.
