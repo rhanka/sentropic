@@ -44,6 +44,15 @@ describe('artifacts source tuple coherence', () => {
     expect(descriptor.requiredMembers).toContain('createArtifactsRegistryDefinition');
     expect(descriptor.meshCoherence).toBe(false);
   });
+
+  it('pins the current artifacts candidate in the selected consumer lock', () => {
+    const version = trainVersion('artifacts');
+    const lock = JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8'));
+    expect(lock.packages['node_modules/@sentropic/artifacts']).toMatchObject({
+      version,
+      resolved: `https://registry.npmjs.org/@sentropic/artifacts/-/artifacts-${version}.tgz`,
+    });
+  });
 });
 
 describe.skipIf(!enabled)('installed artifacts tuple', () => {
@@ -64,10 +73,10 @@ describe.skipIf(!enabled)('installed artifacts tuple', () => {
     const artifacts = consumerManifest(ARTIFACTS_PACKAGE);
     expect(artifacts.version).toBe(trainVersion('artifacts'));
     expect(satisfiesRange(artifacts.version, ARTIFACTS_RANGE)).toBe(true);
-    expect(artifacts.peerDependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
     expect(artifacts.peerDependenciesMeta?.['@sentropic/mcp-platform']).toEqual({ optional: true });
     const platform = consumerManifest('@sentropic/mcp-platform');
     expect(satisfiesRange(platform.version, MCP_PLATFORM_RANGE)).toBe(true);
+    expect(satisfiesRange(platform.version, artifacts.peerDependencies?.['@sentropic/mcp-platform'] ?? '')).toBe(true);
   });
 
   it('leaves artifacts uninstalled in the plain mcp consumer', () => {

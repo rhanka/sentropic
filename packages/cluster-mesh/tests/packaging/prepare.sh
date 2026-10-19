@@ -95,11 +95,15 @@ fixture() {
 }
 
 tuple() {
-  for name in @sentropic/cluster-mesh @sentropic/llm-mesh @sentropic/llm-gateway @sentropic/mcp-auth \
-    @sentropic/oauth-verify @sentropic/auth-hono @sentropic/mcp-platform @sentropic/artifacts jose hono; do
-    version="$(node -p "require('$work/$1/node_modules/$name/package.json').version" 2>/dev/null || echo absent)"
-    echo "$name@$version"
-  done > "$work/$1/tuple.txt"
+  node -e 'const fs = require("node:fs"); const dir = process.argv[1];
+    const names = ["@sentropic/cluster-mesh", "@sentropic/llm-mesh", "@sentropic/llm-gateway", "@sentropic/mcp-auth",
+      "@sentropic/oauth-verify", "@sentropic/auth-hono", "@sentropic/mcp-platform", "@sentropic/artifacts", "jose", "hono"];
+    const lines = names.map((name) => {
+      let version = "absent";
+      try { version = JSON.parse(fs.readFileSync(dir + "/node_modules/" + name + "/package.json", "utf8")).version; } catch {}
+      return name + "@" + version;
+    });
+    fs.writeFileSync(dir + "/tuple.txt", lines.join("\n") + "\n");' "$work/$1"
   echo "[$1]"; cat "$work/$1/tuple.txt"
   [ ! -f "$work/$1/sources.txt" ] || cat "$work/$1/sources.txt"
 }
