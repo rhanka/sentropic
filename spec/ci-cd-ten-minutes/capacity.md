@@ -4,8 +4,9 @@ Status: measurement record with reconciled receipts; account quota, registry
 cost, contention budgets, and the rollback drill remain to measure.
 Source base: `81deb7bd78d99bca8d51f67c4f1d4424fb772d75`.
 Reference run: Main `39113919235` attempt 1 (84 job rows, 59 measured,
-25 skipped; attempts 1+2 deduplicate to 110 executions, 58 carried-forward
-copies dropped). Receipts below come from `make ci-run-metrics` on the
+25 skipped; attempts 1+2 hold 168 input rows, 58 carried-forward copies
+dropped, 110 retained rows: 60 measured executions, 50 skipped rows).
+Receipts below come from `make ci-run-metrics` on the
 captured attempt-1 rows reconciled against the Jobs API.
 
 ## Observed runner classes
@@ -71,7 +72,7 @@ captured attempt-1 rows reconciled against the Jobs API.
 | R2-1 / R1-2: disconnected expected results | `changes` retains the actual workflow/matrix manifest before dispatch; the gate invokes the Make evaluator on fresh attempt Jobs API rows plus the full declared needs context. Exact-script tests reject omitted/skipped selected members and unconditional validators; unselected members pass. | Exact pushed-head CI receipt. |
 | R2-2 / R1-3: invalid queue distribution | 59 reference execution waits, p50 63s; skipped rows excluded; absent readiness is null. | None for the metric defect. |
 | R2-3 / R1-3: absent step output | The Make CLI emits identified job/step spans; the workflow retains raw API and metrics artifacts. The 58s Test CLI fixture and the 8s real changes-job receipt are qualified. | Final gate duration requires a post-run capture. |
-| R2-4 / R1-4: finite-capacity acceptance | Open: no account quota, release reservation, registry cost, admitted-slot policy, concurrent current-main delivery, or rollback drill is proven. | Account owner supplies quota/reservation/cost inventory; branch author implements the bounded policy and retains concurrent-run/rollback receipts and budgets. |
+| R2-4 / R1-4: finite-capacity acceptance | Open: metrics now retain admission, budget-breach, cancellation-ownership, and release-continuity receipts (25 Docker metrics tests), but no account quota, release reservation, registry cost, concurrent current-main delivery, or rollback drill is proven. | Account owner supplies quota/reservation/cost inventory; branch author qualifies the bounded policy with concurrent-run/rollback receipts and budgets. |
 | R2-5: skipped delivery endpoints | Skipped rows are explicitly unselected; delivery elapsed stays null for zero/inverted timestamps; mixed execution sets are partial. | None for the metric defect. |
 
 The real reference's 972s queue wait belongs to job `117636581206`
@@ -86,6 +87,19 @@ entry points reconciles 58 required members for the supplied full-validation
 selection. Metrics retain 86 rows, 60 executions and 26 skipped rows;
 execution queues have p50 74s / max 618s. The two image publishers and
 preproduction are explicitly unselected with null delivery elapsed.
+
+Round-3 capacity receipts: `admissionDecision`, `budgetVerdict`,
+`cancellationOwnership`, and `releaseContinuity` are qualified (25 Docker
+metrics tests) and emitted by `make ci-run-metrics` from optional capture
+inputs. Review round 3 reports exact-head run `39200650498`, attempt 1,
+breaches to retain: `changes` job `117892738937` queued 383s against the
+60s scheduling budget; `ci-gate` job `117904173351` took 12s against the
+5s verdict budget; 60 execution queue samples read p50 542s, max 1140s
+(`validate-idp-sync` job `117894386049`). Reference peak 17 against the
+hypothesized 24 slots with a 2-slot release reserve reads admitted
+(headroom 5); slots remain undeclared, so live admission stays to-measure.
+Owner quota/reservation/cost inventory, concurrent PR/main qualification,
+and the rollback drill remain open under Lot 2/3.
 
 ## Review-fix record
 
