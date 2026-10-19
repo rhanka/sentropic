@@ -19,6 +19,9 @@ const keywords = new Set(['$schema', '$id', '$comment', 'title', 'description', 
   'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
   'enum', 'const', 'allOf', 'anyOf', 'oneOf', 'not', 'if', 'then', 'else',
   'minProperties', 'maxProperties', 'definitions', 'examples', 'readOnly', 'writeOnly']);
+const formats = new Set(['date', 'time', 'date-time', 'duration', 'uri', 'uri-reference',
+  'uri-template', 'url', 'email', 'hostname', 'ipv4', 'ipv6', 'regex', 'uuid', 'json-pointer',
+  'relative-json-pointer', 'byte', 'int32', 'int64', 'float', 'double', 'password', 'binary']);
 
 function checkSchema(schema: unknown, path: string): void {
   if (typeof schema === 'boolean') return;
@@ -28,6 +31,9 @@ function checkSchema(schema: unknown, path: string): void {
   for (const [key, value] of Object.entries(schema)) {
     const at = `${path}/${key}`;
     if (!keywords.has(key)) throw new TypeError(`${at}: unsupported schema keyword`);
+    if (key === 'format' && (typeof value !== 'string' || !formats.has(value))) {
+      throw new TypeError(`${at}: unsupported schema format`);
+    }
     if (key === '$schema' && value !== 'http://json-schema.org/draft-07/schema#'
       && value !== 'https://json-schema.org/draft-07/schema#') {
       throw new TypeError(`${at}: unsupported schema dialect`);

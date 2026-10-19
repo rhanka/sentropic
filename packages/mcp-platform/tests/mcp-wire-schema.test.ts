@@ -81,7 +81,7 @@ describe('original Immo MCP schemas', () => {
   });
   it('rejects unsupported schemas and independent resource budgets before calls', () => {
     for (const schema of [{ $ref: 'https://secret.test/schema' }, { $async: true },
-      { $schema: 'unknown' }, { executable: 'x' }]) {
+      { $schema: 'unknown' }, { executable: 'x' }, { format: 'unknown-executable-format' }]) {
       expect(() => compileMcpToolSchemas([{ name: 'bad', inputSchema: { type: 'object', ...schema } }], limits)).toThrow();
     }
     expect(() => compileMcpToolSchemas(tools, { ...limits, maxRequestBytes: 0 })).toThrow();
