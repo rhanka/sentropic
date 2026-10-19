@@ -76,9 +76,9 @@
 - [x] **Lot 4 — UTF-8 publication**
   - [x] Add mutually exclusive bytes/text inputs to HTTP and the MCP schema; keep binary bytes behavior.
   - [x] Extend `tests/http-mcp-service-parity.test.ts` and `tests/mcp.test.ts` for accented UTF-8, empty text, MIME restrictions, exclusivity and byte-identical manifests.
-- [ ] **Lot 5 — Content isolation and host setup**
-  - [ ] Add CORP same-origin with HTML/CSS/binary coverage in `tests/content-security.test.ts`.
-  - [ ] Document text input, accepted MIME types and host-owned storage_scopes bootstrap in README.
+- [x] **Lot 5 — Content isolation and host setup**
+  - [x] Add CORP same-origin with HTML/CSS/binary coverage in `tests/content-security.test.ts`.
+  - [x] Document text input, accepted MIME types and host-owned storage_scopes bootstrap in README.
 - [ ] **Lot 6 — Packed candidate and delivery**
   - [ ] Bump package/lock metadata to 0.2.0 and prove text publication in `probe/packed-consumer.mjs` without source imports.
   - [ ] Run typecheck, lint, all package unit tests and packed consumer; inspect branch diff and scope before atomic commits.
