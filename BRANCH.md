@@ -46,6 +46,7 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] **R1 round 2 runtime**: SQLite is opened only in a dedicated Node process running a fixed program; arbitrary caller callbacks stay in the caller. Foreign caller fd closes cannot release the writer process's EXCLUSIVE lock. Linux/procfs is required; unsupported tuples fail closed. Effective receipt records owner PID/isolation. A post-write check also refuses SQL-trigger ownership changes before COMMIT.
 - [x] **R1 runtime preparation**: fixed Node owner program plus synchronous IPC, with caller callbacks executed outside the writer process; no addon or helper binary. Connection integration and S0 probes follow in separate atomic commits.
 - [x] **R7 round 2**: transaction callback ports revalidate possession before each operation and after awaited results; returning from the callback invalidates escaped ports. Tests cover loss inside the callback, loss during a prepared read, and use after callback completion.
 - [x] **R4/R8 round 2**: bound profiles and capability lookup use the same lot-1 durable claims as the root; deferred profiles refuse. Supported capability ports bind to the SQLite facade, preserving immediate persistence and terminal revocation. Three regression probes verify negotiation, SQL state at ACK, and saved-port refusal after loss.

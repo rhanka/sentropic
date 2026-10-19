@@ -148,6 +148,7 @@ export class SqliteStateBackend extends MemoryBackend {
         key,
         snapshot,
       );
+      this.engine.assertOwnership();
       db.exec('COMMIT');
     } catch (error) {
       try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }

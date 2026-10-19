@@ -27,6 +27,8 @@ export const openIsolatedConnection = (path: string): SqliteConnection => {
   }
   input.setBlocking(true); output.setBlocking(true);
   const callbacks = new Map<string, (...args: never[]) => unknown>();
+  let stopped = false;
+  const dispose = (): void => { child.stdin.destroy(); child.stdout.destroy(); child.kill(); };
   const decoder = new StringDecoder('utf8');
   let buffered = '';
   const send = (request: unknown): void => {
@@ -54,8 +56,17 @@ export const openIsolatedConnection = (path: string): SqliteConnection => {
     }
   };
   const request = (op: string, sql?: string, args?: unknown[], options?: unknown): any => {
-    send({ op, sql, args, options });
-    return receive();
+    if (stopped) throw new CanonicalOwnershipError('terminal-loss', 'SQLite owner process is closed');
+    try {
+      send({ op, sql, args, options });
+      return receive();
+    } catch (error) {
+      if (error instanceof CanonicalOwnershipError || ['EPIPE', 'ECONNRESET', 'EBADF'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+        stopped = true; dispose();
+        throw new CanonicalOwnershipError('terminal-loss', 'SQLite owner process disconnected');
+      }
+      throw error;
+    }
   };
   try {
     const ownerPid = receive() as number;
@@ -67,7 +78,7 @@ export const openIsolatedConnection = (path: string): SqliteConnection => {
         callbacks.set(name, (callback ?? options) as (...args: never[]) => unknown);
         request('function', name, undefined, callback ? options : {});
       }) as DatabaseSync['function'],
-      close: () => { try { request('close'); } finally { child.stdin.destroy(); child.stdout.destroy(); child.kill(); } },
+      close: () => { try { if (!stopped) request('close'); } finally { stopped = true; dispose(); } },
     };
   } catch (error) {
     child.stdin.destroy(); child.stdout.destroy(); child.kill();
