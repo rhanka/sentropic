@@ -66,6 +66,7 @@
   - [ ] Rollback drill: restore prior scheduling policy and conservative dispatch width; keep expected-result and metrics checks; demonstrate that cancellation never stops the current release.
 - [ ] **Lot 4 — Docs consolidation**
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
+  - [x] BR-76 receipts recorded in `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` section 9 and `spec/ci-cd-ten-minutes/capacity.md`; gaps: account quota, cost, concurrent PR/main behavior. No temporary EVOL notes were created.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [ ] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity-metrics` must parse/import the changed scripts and reject invalid result sets; application typecheck/lint is not applicable to these script-only edits.

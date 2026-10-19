@@ -134,3 +134,15 @@ The validated working bundle is `/home/antoinefa/src/sentropic/.tmp/focus-ci-eff
 | `dist/ci-cd-sentropic-portable.html` | Validated interactive dossier, including controls inside the diagram and linked plan steps. |
 
 The [pinned workflow](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/.github/workflows/ci.yml) and [Makefile](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/Makefile) govern historical interpretation. Every implementation branch rechecks the then-current files before changing them. The current-main 138-second UI example replaces the earlier 129-second label; the 495-second UI and 199-second scan examples belong to the broad PR. Historical publisher runs remain historical. No unmeasured cold branch, skipped test, or already-published version receives an invented duration or success credit.
+
+## 9. BR-76 implementation receipts
+
+BR-76 added `scripts/ci/ci-run-metrics.mjs` (durations from identified
+run/attempt/job timestamps; carried-forward rerun copies deduplicated),
+`scripts/ci/ci-expected-results.mjs` (required-result membership verdict),
+`spec/ci-cd-ten-minutes/capacity.md` (quota, reservation, cost, and peak
+demand inventory), and workflow receipts (PR-only cancellation, classification
+and capacity summary anchors). Verified against Main run `39113919235`
+attempt 1: 84 captured rows equal the 84 expanded execution rows; max span
+664s equals the cluster anchor; measured concurrency peak 18. Remaining gaps:
+account quota, runner-minutes cost, and concurrent PR/main behavior.
