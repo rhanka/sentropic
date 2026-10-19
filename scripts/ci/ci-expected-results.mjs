@@ -182,10 +182,24 @@ export function reconcileRun(manifest, capture, needs = null) {
     const actual = capture.identity ?? { runId: capture.run?.id,
       attempt: capture.run?.run_attempt, headSha: capture.run?.head_sha };
     for (const key of ['runId', 'attempt', 'headSha']) {
-      if (manifest.identity[key] == null || actual[key] == null || String(manifest.identity[key]) !== String(actual[key])) {
+      // Failed-job reruns carry forward `changes`, including its original
+      // before-dispatch manifest output. A later attempt of the same run/head
+      // reuses that intent; future manifests and cross-run/head data are invalid.
+      const matches = key === 'attempt'
+        ? Number.isSafeInteger(Number(actual[key])) && Number(manifest.identity[key]) > 0
+          && Number(actual[key]) >= Number(manifest.identity[key])
+        : String(manifest.identity[key]) === String(actual[key]);
+      if (manifest.identity[key] == null || actual[key] == null || !matches) {
         verdict.failures.push({ job: 'manifest', reason: `identity-mismatch:${key}` });
       }
     }
+    for (const row of capture.jobs ?? []) {
+      if (String(row.run_id) !== String(actual.runId) || String(row.run_attempt) !== String(actual.attempt)) {
+        verdict.failures.push({ job: row.name, reason: 'job-identity-mismatch' });
+      }
+    }
+    verdict.manifestIdentity = manifest.identity;
+    verdict.executionIdentity = actual;
   }
   if (needs !== null) {
     if (!Array.isArray(manifest.gateExpected) || manifest.gateExpected.length === 0) {
