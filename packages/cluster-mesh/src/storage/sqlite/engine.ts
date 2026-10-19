@@ -4,6 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { CanonicalInstanceRegistry, CanonicalOwnershipError, type CanonicalInstanceHandle } from '../instance-ownership.js';
 
@@ -57,6 +58,20 @@ export interface SqliteEngine {
   close(): void;
 }
 
+// Process-wide open registry, keyed by canonical path. POSIX locks do not
+// exclude two opens from the same process, so SQLite alone cannot refuse a
+// second live holder here; cross-process exclusion stays with EXCLUSIVE.
+// Entries from another pid are fork copies and are superseded.
+const OPEN_ENGINES = new Map<string, number>();
+
+const canonicalPathOf = (path: string): string => {
+  try {
+    return `${realpathSync(dirname(resolve(path)))}/${basename(resolve(path))}`;
+  } catch {
+    throw new CanonicalOwnershipError('open-refused', `SQLite parent directory is not usable: ${path}`);
+  }
+};
+
 const readPragma = (db: DatabaseSync, name: string): string => {
   const row = db.prepare(`PRAGMA ${name}`).get() as Record<string, unknown> | undefined;
   const value = row === undefined ? undefined : row[name.toLowerCase()] ?? Object.values(row)[0];
@@ -69,6 +84,11 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
   }
   const registry = options.registry ?? new CanonicalInstanceRegistry();
   const storeKey = options.storeKey ?? `sqlite:${options.path}`;
+  const canonicalPath = canonicalPathOf(options.path);
+  if (OPEN_ENGINES.get(canonicalPath) === process.pid) {
+    throw new CanonicalOwnershipError('instance-busy', `SQLite store already open in this process: ${canonicalPath}`);
+  }
+  OPEN_ENGINES.set(canonicalPath, process.pid);
   const db = new DatabaseSync(options.path);
   try {
     db.exec('PRAGMA busy_timeout = 0');
@@ -116,7 +136,7 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
       won = { instanceId: handle.instanceId, epoch: won.epoch };
     }
     const receipt: SqliteOpenReceipt = Object.freeze({ nodeVersion: process.version, engineVersion,
-      realPath: realpathSync(options.path), journalMode: journalMode.toLowerCase(), synchronous: 'FULL',
+      realPath: canonicalPath, journalMode: journalMode.toLowerCase(), synchronous: 'FULL',
       lockingMode: lockingMode.toLowerCase(), instanceId: won.instanceId, storageEpoch: String(won.epoch),
       schemaVersion: SQLITE_SCHEMA_VERSION, openedAt: new Date().toISOString() });
     let closed = false;
@@ -139,10 +159,12 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
         if (closed) return;
         closed = true;
         registry.release(handle);
+        OPEN_ENGINES.delete(canonicalPath);
         db.close();
       },
     };
   } catch (error) {
+    if (OPEN_ENGINES.get(canonicalPath) === process.pid) OPEN_ENGINES.delete(canonicalPath);
     try { db.close(); } catch { /* close best effort */ }
     throw error;
   }

@@ -24,6 +24,7 @@ Deliver the node:sqlite L3a backend for the eight transactional profiles with th
   - `packages/cluster-mesh/tests/storage/sqlite.mk`
   - `packages/cluster-mesh/tests/storage/instance-ownership.spec.ts`
   - `packages/cluster-mesh/package.json`
+  - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
