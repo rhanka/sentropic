@@ -100,26 +100,30 @@ const persistAfter = <T extends object>(bound: T, backend: SqliteStateBackend, e
         };
       }
       return async (...args: never[]) => {
-        engine.assertOwnership();
-        if (READONLY_METHODS.has(String(property))) {
-          const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
-          engine.assertOwnership();
-          return outcome;
-        }
-        // The pre-mutation snapshot rolls back a persist that fails after
-        // the inner op published in memory. Inner-op atomicity itself
-        // belongs to the coordinator: restoring there would replace the
-        // state object its CAS identity and staged attachment rely on.
-        const snapshot = backend.snapshotScope(scope);
-        const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
+        const release = backend.admit();
         try {
           engine.assertOwnership();
-          backend.flushScope(scope);
-        } catch (error) {
-          backend.restoreScope(scope, snapshot);
-          throw error;
+          if (READONLY_METHODS.has(String(property))) {
+            const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
+            engine.assertOwnership();
+            return outcome;
+          }
+          // Admission excludes readers and other mutations until rollback
+          // or durable publication has completed. Inner-op atomicity stays
+          // with the coordinator and its captured root identity.
+          const snapshot = backend.snapshotScope(scope);
+          const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
+          try {
+            engine.assertOwnership();
+            backend.flushScope(scope);
+          } catch (error) {
+            backend.restoreScope(scope, snapshot);
+            throw error;
+          }
+          return outcome;
+        } finally {
+          release();
         }
-        return outcome;
       };
     },
   }) as T;
@@ -172,6 +176,7 @@ export const createSqliteKernel = (options: SqliteKernelOptions): SqliteKernel =
     },
     profiles: (resync) => sqliteProfileClaims(moduleId, resync),
     close: (): void => {
+      backend.assertIdle();
       try {
         backend.flushAll();
       } catch (error) {
