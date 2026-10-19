@@ -75,7 +75,7 @@ Deliver the node:sqlite L3a backend for the eight transactional profiles with th
 - [ ] **Lot 1 — SQLite backend plus conformance plus G3 commit fencing**
   - [x] Neutral `CanonicalInstanceOwnershipV1` contract in `src/storage/instance-ownership.ts` with version and digest.
   - [x] SQLite open guard in `src/storage/sqlite/engine.ts`: engine check before WAL, WAL verified, FULL verified, EXCLUSIVE ownership with fail-fast second-holder refusal.
-  - [ ] Durable SQLite backend in `src/storage/sqlite/backend.ts`: per-scope snapshots persisted in one SQLite transaction per mutation, ownership re-verified before COMMIT.
+  - [x] Durable SQLite backend in `src/storage/sqlite/backend.ts`: per-scope snapshots persisted in one SQLite transaction per mutation, ownership re-verified before COMMIT.
   - [ ] Kernel composition plus eight transactional profile claims in `src/storage/sqlite/index.ts`, package export and version bump.
   - [ ] Additive Postgres commit-possession hook in `postgres/protocol.ts` plus `postgres/ordinary-transactions.ts`, no behavior change when absent.
   - [ ] Fixture plus shared-corpus SQLite spec: `tests/storage/sqlite-fixture.ts`, `tests/storage/sqlite-corpus.spec.ts`.
