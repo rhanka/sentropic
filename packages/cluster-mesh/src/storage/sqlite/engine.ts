@@ -1,0 +1,148 @@
+// SQLite open guard and G3 ownership engine (lot 1). node:sqlite only.
+// The engine check runs before WAL; effective parameters are read back,
+// never assumed from the requested setting.
+
+import { randomUUID } from 'node:crypto';
+import { realpathSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import { CanonicalInstanceRegistry, CanonicalOwnershipError, type CanonicalInstanceHandle } from '../instance-ownership.js';
+
+export const SQLITE_MIN_ENGINE = '3.51.3';
+export const SQLITE_SCHEMA_VERSION = '1';
+
+const parseEngine = (version: string): [number, number, number] => {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!match) throw new CanonicalOwnershipError('open-refused', `unreadable SQLite engine version: ${version}`);
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+};
+
+const engineAtLeast = (version: string, floor: string): boolean => {
+  const [a, b, c] = parseEngine(version);
+  const [x, y, z] = parseEngine(floor);
+  return a !== x ? a > x : b !== y ? b > y : c >= z;
+};
+
+export interface SqliteBackportQualification {
+  readonly version: string;
+  readonly imageDigest: string;
+  readonly note: string;
+}
+
+export interface SqliteOpenOptions {
+  readonly path: string;
+  readonly storeKey?: string;
+  readonly instanceId?: string;
+  readonly registry?: CanonicalInstanceRegistry;
+  readonly qualifiedBackport?: SqliteBackportQualification;
+}
+
+export interface SqliteOpenReceipt {
+  readonly nodeVersion: string;
+  readonly engineVersion: string;
+  readonly realPath: string;
+  readonly journalMode: string;
+  readonly synchronous: string;
+  readonly lockingMode: string;
+  readonly instanceId: string;
+  readonly storageEpoch: string;
+  readonly schemaVersion: string;
+  readonly openedAt: string;
+}
+
+export interface SqliteEngine {
+  readonly db: DatabaseSync;
+  readonly handle: CanonicalInstanceHandle;
+  readonly receipt: SqliteOpenReceipt;
+  assertOwnership(): void;
+  close(): void;
+}
+
+const readPragma = (db: DatabaseSync, name: string): string => {
+  const row = db.prepare(`PRAGMA ${name}`).get() as Record<string, unknown> | undefined;
+  const value = row === undefined ? undefined : row[name.toLowerCase()] ?? Object.values(row)[0];
+  return String(value);
+};
+
+export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
+  if (typeof options.path !== 'string' || options.path.length === 0 || options.path === ':memory:') {
+    throw new CanonicalOwnershipError('open-refused', 'durable SQLite storage requires a file path');
+  }
+  const registry = options.registry ?? new CanonicalInstanceRegistry();
+  const storeKey = options.storeKey ?? `sqlite:${options.path}`;
+  const db = new DatabaseSync(options.path);
+  try {
+    db.exec('PRAGMA busy_timeout = 0');
+    const engineVersion = String((db.prepare('SELECT sqlite_version() AS version').get() as { version: unknown }).version);
+    const qualified =
+      engineAtLeast(engineVersion, SQLITE_MIN_ENGINE) ||
+      (options.qualifiedBackport !== undefined &&
+        options.qualifiedBackport.version === engineVersion &&
+        options.qualifiedBackport.imageDigest.length > 0 &&
+        options.qualifiedBackport.note.length > 0);
+    if (!qualified) throw new CanonicalOwnershipError('open-refused', `refused engine ${engineVersion}: minimum is ${SQLITE_MIN_ENGINE}`);
+    db.exec('PRAGMA locking_mode = EXCLUSIVE');
+    db.exec('PRAGMA journal_mode = WAL');
+    db.exec('PRAGMA synchronous = FULL');
+    const journalMode = readPragma(db, 'journal_mode');
+    const synchronous = readPragma(db, 'synchronous');
+    const lockingMode = readPragma(db, 'locking_mode');
+    if (journalMode.toLowerCase() !== 'wal') throw new CanonicalOwnershipError('open-refused', `WAL not effective: ${journalMode}`);
+    if (synchronous !== '2') throw new CanonicalOwnershipError('open-refused', `FULL not effective: ${synchronous}`);
+    if (lockingMode.toLowerCase() !== 'exclusive') throw new CanonicalOwnershipError('open-refused', `EXCLUSIVE not effective: ${lockingMode}`);
+    db.exec('CREATE TABLE IF NOT EXISTS cm_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    db.exec('CREATE TABLE IF NOT EXISTS cm_ownership(id INTEGER PRIMARY KEY CHECK(id = 1), instance_id TEXT NOT NULL, epoch TEXT NOT NULL)');
+    let won: { instanceId: string; epoch: number };
+    try { db.exec('BEGIN IMMEDIATE'); } catch (error) {
+      throw new CanonicalOwnershipError('instance-busy', `live holder present: ${(error as Error).message}`);
+    }
+    try {
+      const row = db.prepare('SELECT instance_id AS instanceId, epoch FROM cm_ownership WHERE id = 1').get() as
+        | { instanceId: string; epoch: string } | undefined;
+      won = row === undefined
+        ? { instanceId: options.instanceId ?? `instance-${randomUUID()}`, epoch: 1 }
+        : { instanceId: options.instanceId ?? String(row.instanceId), epoch: Number(row.epoch) + 1 };
+      db.prepare('INSERT INTO cm_ownership(id, instance_id, epoch) VALUES(1, ?, ?) ON CONFLICT(id) DO UPDATE SET instance_id = excluded.instance_id, epoch = excluded.epoch').run(won.instanceId, String(won.epoch));
+      db.prepare("INSERT INTO cm_meta(key, value) VALUES('schema_version', ?) ON CONFLICT(key) DO NOTHING").run(SQLITE_SCHEMA_VERSION);
+      db.exec('COMMIT');
+    } catch (error) {
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      throw error;
+    }
+    let handle: CanonicalInstanceHandle;
+    try { handle = registry.acquire(storeKey, String(won.epoch)); } catch (error) { db.close(); throw error; }
+    if (handle.instanceId !== won.instanceId) {
+      db.prepare('UPDATE cm_ownership SET instance_id = ? WHERE id = 1').run(handle.instanceId);
+      won = { instanceId: handle.instanceId, epoch: won.epoch };
+    }
+    const receipt: SqliteOpenReceipt = Object.freeze({ nodeVersion: process.version, engineVersion,
+      realPath: realpathSync(options.path), journalMode: journalMode.toLowerCase(), synchronous: 'FULL',
+      lockingMode: lockingMode.toLowerCase(), instanceId: won.instanceId, storageEpoch: String(won.epoch),
+      schemaVersion: SQLITE_SCHEMA_VERSION, openedAt: new Date().toISOString() });
+    let closed = false;
+    const assertOwnership = (): void => {
+      if (closed) throw new CanonicalOwnershipError('terminal-loss', 'sqlite engine is closed');
+      const current = db.prepare('SELECT instance_id AS instanceId, epoch FROM cm_ownership WHERE id = 1').get() as
+        | { instanceId: string; epoch: string } | undefined;
+      if (current?.instanceId !== won.instanceId || current?.epoch !== String(won.epoch)) {
+        registry.markTerminal(handle);
+        throw new CanonicalOwnershipError('terminal-loss', 'ownership lost: epoch superseded');
+      }
+      registry.verify(handle);
+    };
+    return {
+      db,
+      handle,
+      receipt,
+      assertOwnership,
+      close: (): void => {
+        if (closed) return;
+        closed = true;
+        registry.release(handle);
+        db.close();
+      },
+    };
+  } catch (error) {
+    try { db.close(); } catch { /* close best effort */ }
+    throw error;
+  }
+};
