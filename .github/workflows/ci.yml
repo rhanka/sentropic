@@ -2355,32 +2355,60 @@ jobs:
       - security-iac
       - security-container
       - test-smoke-restore
+      - ci-capacity-receipts
+      - validate-ci-capacity-metrics
     steps:
       - name: Check required CI results
         shell: bash
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
+          CI_EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
           printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           # BR76-EX1 — label cancelled results explicitly: cancellation must never stop the current release.
           printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | select(.value.result == "cancelled") | "::error title=CI gate cancelled::\(.key) was cancelled (BR-76: verify cancellation ownership)"'
+          # BR76-EX1 — selection-aware skip verdict: a skipped job is legitimate
+          # only when its changes filter did not select it (or its event gate
+          # excluded it); a selected skipped member blocks, mirroring
+          # scripts/ci/ci-expected-results.mjs over needs contexts.
+          UNEXPECTEDLY_SKIPPED="$(printf '%s\n' "$CI_NEEDS" | jq -r --argjson changes "$(printf '%s\n' "$CI_NEEDS" | jq -c '.changes.outputs // {}')" --arg event "$CI_EVENT" '
+            def selected($job):
+              if $job == "enforce-package-bump" then $event == "pull_request"
+              elif $job == "validate-idp-sync" then $changes.idp_sync == "true"
+              elif ($job | startswith("validate-")) then
+                ($changes[($job | ltrimstr("validate-") | gsub("-"; "_"))] == "true") or ($changes.global == "true")
+              elif ["build-api-tool-image", "test-api-unit-integration", "smoke-idp-screens", "test-smoke-restore"] | index($job) then
+                ($changes.api == "true") or ($changes.global == "true")
+              elif ["test-e2e", "e2e-vscode", "security-sast-sca", "security-container"] | index($job) then
+                ($changes.api == "true") or ($changes.ui == "true") or ($changes.global == "true")
+              elif $job == "security-iac" then $changes.global == "true"
+              else true end;
+            [to_entries[] | select(.value.result == "skipped" and selected(.key)) | .key] | join(" ")')"
+          if [ -n "$UNEXPECTEDLY_SKIPPED" ]; then
+            printf '%s\n' "$UNEXPECTEDLY_SKIPPED" | tr ' ' '\n' | while IFS= read -r skipped_job; do
+              echo "::error title=CI gate::${skipped_job} was skipped while selected (BR-76: unexpected skip blocks the verdict)"
+            done
+            echo '::error::CI gate failed: selected jobs were unexpectedly skipped.'
+            exit 1
+          fi
           printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | select(.value.result as $r | ["success", "skipped", "neutral"] | index($r) | not) | "::error title=CI gate::\(.key) result=\(.value.result)"'
           if ! printf '%s\n' "$CI_NEEDS" | jq -e 'length > 0 and all(.[]; .result == "success" or .result == "skipped" or .result == "neutral")' > /dev/null; then
             echo '::error::CI gate failed: required results are missing or unacceptable.'
             exit 1
           fi
-          echo 'CI gate passed: all required jobs succeeded, were skipped, or were neutral.'
+          echo 'CI gate passed: all required jobs succeeded, were legitimately skipped, or were neutral.'
 
   # BR76-EX1 — capacity receipt: record dispatch anchors and endpoint presence
-  # from contexts only (no API calls, no invented spans). Informational: never
-  # in ci-gate needs, never blocking promotion. Rollback: delete this job.
+  # from contexts only (no API calls, no invented spans). Aggregated by
+  # ci-gate (every PR job must be); the step only echoes, so it never blocks
+  # promotion on its own. Rollback: delete this job and its ci-gate entry.
   ci-capacity-receipts:
     runs-on: ubuntu-latest
     if: always()
     permissions:
       contents: read
-    needs: [changes, ci-gate, publish-api-image, publish-ui-image, deploy-preprod]
+    needs: [changes, publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh]
     steps:
       - name: Record capacity receipt
         env:
@@ -2393,3 +2421,64 @@ jobs:
             echo "- workflow SHA: ${{ github.sha }}";
             printf '%s\n' "$RECEIPTS_NEEDS" | jq -r 'to_entries[] | "- \(.key): \(.value.result)"';
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # BR76-EX1 — qualify the capacity receipts behind Make entry points: the
+  # fixture suites plus selection-aware negative cases run in required CI.
+  # Always scheduled, credential-free, and aggregated by ci-gate.
+  # Rollback: delete this job and its ci-gate entry.
+  validate-ci-capacity-metrics:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: always() && !cancelled()
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Qualify CI capacity metrics and expected-result fixtures
+        run: make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62
+      - name: Prove selection-aware negative cases through the Make entry point
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cat > "$tmp/expected.json" <<'EOF'
+          {"expected": [
+            {"job": "selected-success", "required": true, "selected": true},
+            {"job": "selected-skipped", "required": true, "selected": true},
+            {"job": "selected-missing", "required": true, "selected": true},
+            {"job": "unselected-skipped", "required": true, "selected": false},
+            {"job": "matrix-base", "matrix": ["m-a", "m-b"], "required": true, "selected": true}
+          ]}
+          EOF
+          cat > "$tmp/executed.json" <<'EOF'
+          {"executed": [
+            {"job": "selected-success", "conclusion": "success"},
+            {"job": "selected-skipped", "conclusion": "skipped"},
+            {"job": "unselected-skipped", "conclusion": "skipped"},
+            {"job": "matrix-base (m-a)", "conclusion": "success"}
+          ]}
+          EOF
+          if make ci-expected-results EXPECTED_FILE="$tmp/expected.json" EXECUTED_FILE="$tmp/executed.json" ENV=test-ci-62; then
+            echo '::error title=Expected-result wiring::evaluator accepted a selected skipped member, a missing member, or a missing matrix member'
+            exit 1
+          fi
+          echo 'negative cases rejected: selected skipped, missing, and missing matrix members'
+          cat > "$tmp/clean-expected.json" <<'EOF'
+          {"expected": [
+            {"job": "selected-success", "required": true, "selected": true},
+            {"job": "unselected-skipped", "required": true, "selected": false},
+            {"job": "matrix-base", "matrix": ["m-a", "m-b"], "required": true, "selected": true}
+          ]}
+          EOF
+          cat > "$tmp/clean-executed.json" <<'EOF'
+          {"executed": [
+            {"job": "selected-success", "conclusion": "success"},
+            {"job": "unselected-skipped", "conclusion": "skipped"},
+            {"job": "matrix-base (m-a)", "conclusion": "success"},
+            {"job": "matrix-base (m-b)", "conclusion": "success"}
+          ]}
+          EOF
+          make ci-expected-results EXPECTED_FILE="$tmp/clean-expected.json" EXECUTED_FILE="$tmp/clean-executed.json" ENV=test-ci-62
+          echo 'positive cases accepted: executed selected members pass, unselected skipped never blocks'
