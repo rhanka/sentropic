@@ -1,7 +1,7 @@
 # Feature: Artifacts trust and publication hardening
 
 ## Objective
-- [ ] Fix the seven verified artifacts findings for Track `01M5A25DNQ78WRK4618CXBW3HH` and deliver a draft PR.
+- [x] Fix the seven verified artifacts findings for Track `01M5A25DNQ78WRK4618CXBW3HH` and deliver draft PR #708.
 
 ## Scope / Guardrails
 - [x] Branch `fix/artifacts-hardening`, worktree `tmp/worktrees/artifacts-hardening`, base `origin/main` at `cf0ad8ee4`.
@@ -72,6 +72,6 @@
   - [x] Tests: mcp.test.ts, packed consumer, typecheck-artifacts, lint-artifacts, test-artifacts; PACKED_MCP_CORE_OK, PACKED_CONSUMER_OK and PACKED_ADAPTERS_OK.
   - [x] Typecheck, lint and full unit suite passed with the 0.1.4 source and final HTTP parity assertions.
   - [x] Qualification receipt: packages/artifacts/probe/HARDENING_QUALIFICATION.md records commands, 213 passing tests, platform-absent proof and archive SHA-256 values.
-- [ ] **Lot 5 — Delivery**
-  - [ ] Review every hunk, scope-check before each commit, push and open draft PR using this plan.
-  - [ ] Report draft PR number, HEAD and validation receipts; no merge or publication.
+- [x] **Lot 5 — Delivery**
+  - [x] Review every hunk, scope-check before each commit, push and open draft PR #708 using this plan; inspect GitHub checks on the pushed HEAD.
+  - [x] Report draft PR number, HEAD and qualification receipt; preserve the seven original commits, keep every new commit under 150 changed lines, and do not merge or publish.
