@@ -38,6 +38,12 @@ env:
   REGISTRY: ${{ secrets.REGISTRY }}
   ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
 
+# BR76-EX1 — capacity reservation: cancel only superseded PR attempts; main
+# releases are never cancelled and serialize on one group (no release overlap).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   enforce-package-bump:
     runs-on: ubuntu-latest
@@ -404,6 +410,16 @@ jobs:
           filters: |
             publishable_package_files:
               - 'packages/*/**'
+      # BR76-EX1 — classification receipt: anchor the <=15s budget against the
+      # job timestamps (this echo measures nothing; compare with started_at).
+      - name: Record classification receipt (BR76-EX1)
+        run: |
+          {
+            echo "### Classification receipt (BR-76)";
+            echo "- run: ${{ github.run_id }}, attempt: ${{ github.run_attempt }}, event: ${{ github.event_name }}, ref: ${{ github.ref }}";
+            echo "- workflow SHA: ${{ github.sha }}";
+            echo "- classification budget to measure: <= 15s (compare with job timestamps, not this echo)";
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # Publishable manifest inventory (spec sections 6 and 9). Always scheduled so a failed or
   # skipped `changes` cannot silently skip this required check; never a publisher dependency.
@@ -2347,9 +2363,33 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          # BR76-EX1 — label cancelled results explicitly: cancellation must never stop the current release.
+          printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | select(.value.result == "cancelled") | "::error title=CI gate cancelled::\(.key) was cancelled (BR-76: verify cancellation ownership)"'
           printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | select(.value.result as $r | ["success", "skipped", "neutral"] | index($r) | not) | "::error title=CI gate::\(.key) result=\(.value.result)"'
           if ! printf '%s\n' "$CI_NEEDS" | jq -e 'length > 0 and all(.[]; .result == "success" or .result == "skipped" or .result == "neutral")' > /dev/null; then
             echo '::error::CI gate failed: required results are missing or unacceptable.'
             exit 1
           fi
           echo 'CI gate passed: all required jobs succeeded, were skipped, or were neutral.'
+
+  # BR76-EX1 — capacity receipt: record dispatch anchors and endpoint presence
+  # from contexts only (no API calls, no invented spans). Informational: never
+  # in ci-gate needs, never blocking promotion. Rollback: delete this job.
+  ci-capacity-receipts:
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      contents: read
+    needs: [changes, ci-gate, publish-api-image, publish-ui-image, deploy-preprod]
+    steps:
+      - name: Record capacity receipt
+        env:
+          RECEIPTS_NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Capacity receipt (BR-76)";
+            echo "- run: ${{ github.run_id }}, attempt: ${{ github.run_attempt }}, event: ${{ github.event_name }}, ref: ${{ github.ref }}";
+            echo "- workflow SHA: ${{ github.sha }}";
+            printf '%s\n' "$RECEIPTS_NEEDS" | jq -r 'to_entries[] | "- \(.key): \(.value.result)"';
+          } >> "$GITHUB_STEP_SUMMARY"
