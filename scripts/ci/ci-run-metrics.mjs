@@ -342,6 +342,8 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const minutes = runnerMinutes(jobs);
   const delivery = deliveryElapsed(jobs, runCreatedAt, captured.endpoints ?? {});
   const cache = cacheIdentities(jobs);
+  const identity = { sourceSha: captured.sourceSha ?? captured.run?.head_sha ?? null,
+    workflowSha: captured.workflowSha ?? null };
   const executions = jobs.map((record) => ({
     key: jobKey(record), runId: record.runId, attempt: record.attempt, jobId: record.jobId,
     name: record.name, conclusion: record.conclusion,
@@ -349,5 +351,5 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     seconds: record.conclusion === 'skipped' ? null : durationSeconds(record.startedAt, record.completedAt),
     queueSeconds: queueSeconds(record), steps: stepSpans(record),
   }));
-  console.log(JSON.stringify({ file, summary, readiness, queue, runnerMinutes: minutes, delivery, cache, executions }, null, 2));
+  console.log(JSON.stringify({ file, identity, summary, readiness, queue, runnerMinutes: minutes, delivery, cache, executions }, null, 2));
 }

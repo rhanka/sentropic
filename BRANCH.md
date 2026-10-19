@@ -48,6 +48,7 @@
 - [x] Rerun qualification: the carried-forward `changes.expected_attempt` selects the original before-dispatch manifest; later attempts preserve run/head identity and require each raw job row to belong to the captured attempt. Future/cross-run manifests fail.
 - [x] Real-capture qualification exposed GitHub's 100-character matrix-name truncation (job 117852314185); expected names now match the observed receipt and ambiguous truncated names fail closed.
 - [x] Capture attempt-specific run metadata: the reference run's generic endpoint now reports attempt 2 while the measured jobs belong to attempt 1; both workflow collectors use the attempt endpoint to preserve that distinction.
+- [x] Retain source SHA and actual workflow SHA separately in raw captures and metrics output; unavailable workflow revision remains null rather than assuming equality with the source.
 - [x] R2 regression gate: 56 Docker tests pass (19 metrics, 15 expected-result/actual-gate, 22 unchanged publishable wiring); real review capture 39186952208/1 reconciles 58 selected required members and leaves skipped delivery elapsed null.
 - [ ] R2-4 remains open: the account API returns `plan: null`, billing HTTP 404 requests missing `user` scope, and no quota/reservation/cost inventory was supplied. Account owner supplies that inventory; branch author must qualify the resulting bounded dispatch policy, concurrent PR/current-main delivery, rollback, and timing budgets.
 
