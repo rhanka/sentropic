@@ -54,7 +54,7 @@
   - [x] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
 - [ ] **Lot 1 — Expected results and timing receipts**
   - [ ] Create `scripts/ci/ci-run-metrics.mjs` and `scripts/ci/ci-expected-results.mjs`: record actual DAG readiness/dispatch, job and step spans, four distinct delivery endpoints, attempts, selected matrices, and cache identities.
-  - [x] `ci-run-metrics.mjs` helpers landed (timestamps, gaps, dedupe, overlap, peak); summary and CLI follow.
+  - [x] `ci-run-metrics.mjs` complete (helpers, run summary, endpoint readiness, CLI).
   - [ ] In `ci-run-metrics.test.mjs` (new), cover overlapping branches, skipped/unmeasured values, timestamp gaps, partial runs, and reruns without double-counting carried-forward jobs.
   - [ ] In `ci-expected-results.test.mjs` (new), reject failed, missing, cancelled, and unexpectedly skipped required members; prove legitimately unselected jobs do not block.
   - [ ] Lot gate: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62`; compare a captured real run to GitHub timestamps without inventing sub-spans.
