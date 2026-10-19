@@ -37,17 +37,20 @@ export function assertMcpJson(value: unknown, maxBytes: number, maxDepth: number
       throw new TypeError('MCP requires finite acyclic JSON');
     }
     const array = Array.isArray(item);
+    if (array && item.length > maxBytes) throw new TypeError('MCP JSON byte budget exceeded');
     if (!array && Object.getPrototypeOf(item) !== Object.prototype
       && Object.getPrototypeOf(item) !== null) throw new TypeError('MCP requires plain JSON objects');
     if (Object.getOwnPropertySymbols(item).length) throw new TypeError('MCP requires JSON keys');
     active.add(item);
     add(array ? '[]' : '{}');
-    const descriptors = Object.getOwnPropertyDescriptors(item);
-    const keys = array ? Array.from({ length: item.length }, (_, i) => String(i)) : Object.keys(item);
-    for (const [index, key] of keys.entries()) {
-      const descriptor = descriptors[key];
+    const keys = array ? (function* () {
+      for (let i = 0; i < item.length; i++) yield String(i);
+    })() : Object.keys(item);
+    let index = 0;
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(item, key);
       if (!descriptor || !('value' in descriptor)) throw new TypeError('MCP requires JSON data properties');
-      if (index) add(',');
+      if (index++) add(',');
       if (!array) add(JSON.stringify(key) + ':');
       visit(descriptor.value, depth + 1);
     }
