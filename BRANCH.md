@@ -30,7 +30,7 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
-- [x] Latest implementation checkpoint: BRANCH.md.
+- [x] Latest implementation checkpoint: packages/cluster-mesh/tests/conformance/STATEFUL_WRAP_QUALIFICATION.md packages/cluster-mesh/tests/conformance/fixtures/README.md.
 - [x] Rebase retained every package, lock and workflow byte; published versions rechecked at 0.3.0 / 0.19.1, below the selected 0.4.0 / 0.21.0.
 - [x] Exact golden JSON files include a trailing blank line in Radar; whitespace checks exclude only these two pinned files to preserve their original bytes.
 - [ ] Final review round is incomplete: the security leg declared xhigh instead of the requested high; its verdict is rejected under the review metadata contract. First-round peers completed without blockers; the final conformance leg completed without blockers. No final consensus or merge clearance is claimed.
