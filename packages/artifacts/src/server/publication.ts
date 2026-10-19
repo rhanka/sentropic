@@ -204,7 +204,7 @@ export function createPublicationService(deps: {
     limits,
     async publish(input: PublishInput): Promise<PublishResult> {
       validatePublicationFiles(input.files, limits);
-      input = { ...input, files: input.files.map((file) => ({ ...file, bytes: file.bytes.slice() })) };
+      input = { ...input, files: input.files.map((file) => ({ ...file, bytes: new Uint8Array(file.bytes) })) };
       const prepared = prepare(input);
       if (input.idempotencyKey !== undefined && deps.idempotency !== undefined) {
         const { result } = await deps.idempotency.execute(
