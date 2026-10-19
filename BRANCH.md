@@ -1,7 +1,7 @@
 # Feature: Cluster-mesh SQLite L3a backend lot 1 with G3 commit fencing
 
 ## Objective
-Deliver the node:sqlite L3a backend for the eight transactional profiles with the shared conformance corpus, plus the storage-carried G3 commit fencing check on SQLite and Postgres.
+Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset (atomic, chains, boundaries) with the shared conformance corpus, plus the storage-carried G3 commit fencing check on SQLite and Postgres. The remaining five profiles stay disabled until S2-S4 (Lot 2).
 
 ## Scope / Guardrails
 - Scope limited to cluster-mesh storage SQLite backend, neutral instance-ownership contract, additive Postgres commit-possession hook, and their tests.
@@ -43,6 +43,7 @@ Deliver the node:sqlite L3a backend for the eight transactional profiles with th
 ## Feedback Loop
 - [x] **BR704-EX1** (R5): touch `packages/cluster-mesh/src/modules/catalog.ts` (one line: Comments range `>=0.19.0 <0.20.0` to `>=0.19.0 <0.21.0`) so the bumped 0.20.0 package passes its own installed gate. Reason: package self-compatibility, no behavior change. Impact: Comments module admits 0.19.x and 0.20.x. Rollback: revert the range line.
 - [x] **R3**: Postgres possession hook runs after `roots.publish` (outbox callback included); protocol comment states the seam is not the full G3 guarantee. Regression test covers loss inside outbox with rollback.
+- [x] **R4**: `profiles()` advertises only the restart-durable lot 1 subset (atomic, chains, boundaries); staged/journal/barrier/fence/purge claims stay disabled until S2-S4.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -80,7 +81,7 @@ Deliver the node:sqlite L3a backend for the eight transactional profiles with th
   - [x] Neutral `CanonicalInstanceOwnershipV1` contract in `src/storage/instance-ownership.ts` with version and digest.
   - [x] SQLite open guard in `src/storage/sqlite/engine.ts`: engine check before WAL, WAL verified, FULL verified, EXCLUSIVE ownership with fail-fast second-holder refusal.
   - [x] Durable SQLite backend in `src/storage/sqlite/backend.ts`: per-scope snapshots persisted in one SQLite transaction per mutation, ownership re-verified before COMMIT.
-  - [x] Kernel composition plus eight transactional profile claims in `src/storage/sqlite/index.ts`, package export and version bump.
+  - [x] Kernel composition plus lot 1 restart-durable profile claims in `src/storage/sqlite/index.ts`, package export and version bump.
   - [x] Additive Postgres commit-possession hook in `postgres/protocol.ts` plus `postgres/ordinary-transactions.ts`, no behavior change when absent.
   - [x] Fixture plus shared-corpus SQLite specs: `tests/storage/sqlite-fixture.ts`, `tests/storage/sqlite-corpus.spec.ts`, `tests/storage/sqlite-lanes.spec.ts`.
   - [x] Ownership and fencing spec: `tests/storage/instance-ownership.spec.ts` covering double-acquire refusal, stale-epoch refusal, terminal loss, tampered-ownership commit refusal with rollback.
