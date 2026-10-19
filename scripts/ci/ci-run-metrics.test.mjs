@@ -2,12 +2,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  cacheIdentities,
   concurrencyPeak,
   dedupeJobs,
+  deliveryElapsed,
   durationSeconds,
   endpointReadiness,
   isTimestampGap,
   overlappingSeconds,
+  queueSeconds,
+  queueWaits,
+  runnerMinutes,
+  stepSpans,
   summarizeRun,
   toMs,
 } from './ci-run-metrics.mjs';
@@ -134,6 +140,75 @@ test('skipped rows and shared start/end boundaries do not inflate the peak', () 
   const first = job({ jobId: 3, startedAt: '2026-10-18T10:00:00.000Z', completedAt: '2026-10-18T10:01:00.000Z' });
   const second = job({ jobId: 4, startedAt: '2026-10-18T10:01:00.000Z', completedAt: '2026-10-18T10:02:00.000Z' });
   assert.equal(concurrencyPeak([first, second]), 1);
+});
+
+test('queue waits measure creation-to-dispatch with a workflow fallback', () => {
+  assert.equal(queueSeconds(job({ queuedAt: '2026-10-18T09:59:50.000Z' }), null), 10);
+  assert.equal(
+    queueSeconds(job({ queuedAt: undefined }), '2026-10-18T09:59:00.000Z'),
+    60,
+  );
+  assert.equal(queueSeconds(job({ startedAt: null }), '2026-10-18T09:59:00.000Z'), null);
+  assert.equal(
+    queueSeconds(job({ queuedAt: '2026-10-18T10:01:00.000Z' }), null),
+    null,
+  );
+  const waits = queueWaits(
+    [job({ queuedAt: '2026-10-18T09:59:50.000Z' }), job({ queuedAt: '2026-10-18T09:59:00.000Z' })],
+    null,
+  );
+  assert.deepEqual([waits.count, waits.minSeconds, waits.p50Seconds, waits.maxSeconds], [2, 10, 60, 60]);
+});
+
+test('step spans report per-step durations without invention', () => {
+  const spans = stepSpans(
+    job({
+      steps: [
+        { name: 'Set up job', conclusion: 'success', startedAt: '2026-10-18T09:04:45.000Z', completedAt: '2026-10-18T09:04:46.000Z' },
+        { name: 'Pending', conclusion: null, startedAt: null, completedAt: null },
+      ],
+    }),
+  );
+  assert.equal(spans[0].seconds, 1);
+  assert.equal(spans[1].seconds, null);
+  assert.deepEqual(stepSpans(job({ steps: undefined })), []);
+});
+
+test('runner-minutes group executed spans and ignore skipped rows', () => {
+  const minutes = runnerMinutes([
+    job({ runnerName: 'GitHub Actions 1', startedAt: '2026-10-18T10:00:00.000Z', completedAt: '2026-10-18T10:01:00.000Z' }),
+    job({ jobId: 2, runnerName: 'GitHub Actions 1', conclusion: 'skipped', startedAt: '2026-10-18T10:00:00.000Z', completedAt: '2026-10-18T10:00:00.000Z' }),
+    job({ jobId: 3, labels: ['ubuntu-latest'], startedAt: '2026-10-18T10:00:00.000Z', completedAt: '2026-10-18T10:02:00.000Z' }),
+  ]);
+  assert.equal(minutes.totalMinutes, 3);
+  assert.equal(minutes.byRunner['GitHub Actions 1'], 1);
+  assert.equal(minutes.byRunner['ubuntu-latest'], 2);
+});
+
+test('delivery elapsed needs every endpoint member measured', () => {
+  const records = [
+    job({ name: 'publish-api-image', startedAt: '2026-10-18T10:00:00.000Z', completedAt: '2026-10-18T10:03:44.000Z' }),
+  ];
+  const base = '2026-10-18T10:00:00.000Z';
+  const full = deliveryElapsed(records, base, { images: ['publish-api-image'] });
+  assert.equal(full.images.elapsedSeconds, 224);
+  const incomplete = deliveryElapsed(records, base, { images: ['publish-api-image', 'publish-ui-image'] });
+  assert.equal(incomplete.images.elapsedSeconds, null);
+  const unmeasured = deliveryElapsed(
+    [job({ name: 'publish-api-image', completedAt: null })],
+    base,
+    { images: ['publish-api-image'] },
+  );
+  assert.equal(unmeasured.images.elapsedSeconds, null);
+});
+
+test('cache identities stay explicit', () => {
+  const cache = cacheIdentities([
+    job({ name: 'build-ui', cache: 'node-modules:hit' }),
+    job({ jobId: 2, name: 'build-api-image' }),
+  ]);
+  assert.deepEqual(cache.known, { 'build-ui': 'node-modules:hit' });
+  assert.deepEqual(cache.unknown, ['build-api-image']);
 });
 
 test('an endpoint with an omitted required publisher is missing, not measured', () => {
