@@ -1,7 +1,7 @@
 # Feature: Cluster-mesh SQLite L3a backend lot 1 with G3 commit fencing
 
 ## Objective
-Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset (atomic, chains, boundaries) with the shared conformance corpus, plus the storage-carried G3 commit fencing check on SQLite and Postgres. The remaining five profiles stay disabled until S2-S4 (Lot 2).
+Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset (atomic, chains) with the shared conformance corpus, plus the storage-carried G3 commit fencing check on SQLite and Postgres. Boundaries plus the remaining five profiles stay disabled until S2-S4 (Lot 2).
 
 ## Scope / Guardrails
 - Scope limited to cluster-mesh storage SQLite backend, neutral instance-ownership contract, additive Postgres commit-possession hook, and their tests.
@@ -66,6 +66,9 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
 - [x] **R1/R2/R6/R7 regression tests**: foreign-fd-close terminal probe, trigger-refusal rollback, prepared-read invalidation, and cross-module reopen refusal in the SQLite specs.
 - [x] **R2 fixup**: restore preserves the live staged attachment and never replaces state on inner-op throw (coordinator owns inner atomicity and CAS identity).
 - [x] **BR704-EX2** (lazy gate): selected fixture candidate rename `0.19.1` to `0.20.0` (package.json + lock, 4 lines) so the packed 0.20.0 candidate resolves; peers untouched. Reason: version-bump companion per precedent. Rollback: revert the rename.
+- [x] **BR704-EX4**: owner-requested origin/main integration; incoming artifacts/workflow/Makefile/lock changes only, no authored changes there. Rollback: revert the integration merge.
+- [x] **R2 round 3**: persistence-refusal rollback restores the pre-operation staged attachment, so a rejected barrier no longer hides committed data. Regression in `sqlite-admission.spec.ts`.
+- [x] **R4 round 3**: `immutable-boundaries-v1` withheld from the lot-1 durable subset (manifest registry and staged attachment are session-local); root and bound handles refuse it consistently, including after reopen. Regressions in `sqlite-capabilities.spec.ts`, advertisement in `sqlite-lanes.spec.ts`.
 
 ## AI Flaky tests
 - Acceptance rule:
