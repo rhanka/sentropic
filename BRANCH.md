@@ -30,7 +30,7 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
-- [x] Latest implementation checkpoint: packages/mcp-platform/src/transport/tool-json.ts packages/mcp-platform/tests/mcp-wire-schema.test.ts.
+- [x] Latest implementation checkpoint: packages/mcp-platform/tests/tool-configuration.test.ts packages/cluster-mesh/src/modules/catalog.ts.
 - [ ] Artifacts maintainer / release dependency: npm lock-only resolution proves ERESOLVE between the new platform 0.4.0 workspace and artifacts 0.1.1's >=0.3.0 <0.4.0 peer. Acceptance: a separately qualified compatible artifacts release and 27-tool installed tuple unblock full-root installation; this branch does not widen that range or bypass npm peer checks. Core package qualification excludes that optional variant.
 - [x] BRWRAP-EX1 / CI tuple alignment: change only cluster-mesh qualification in .github/workflows/ci.yml; old explicit platform 0.3.0 pins block the new 0.4.0 contract. Impact: qualify the core tuple and run installed stateful contracts; incompatible optional artifacts remain refused. Rollback: revert the workflow hunk with the package tuple.
 - [x] L1: finite JSON budgets and cloned advertised-default traversal extracted from the #689 pattern.
