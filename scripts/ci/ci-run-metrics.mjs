@@ -98,7 +98,8 @@ export function stepSpans(record) {
   return steps.map((step) => ({
     name: step?.name ?? 'unknown',
     conclusion: step?.conclusion ?? null,
-    seconds: durationSeconds(step?.startedAt, step?.completedAt),
+    number: step?.number ?? null,
+    seconds: step?.conclusion === 'skipped' ? null : durationSeconds(step?.startedAt, step?.completedAt),
   }));
 }
 
@@ -326,5 +327,12 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const minutes = runnerMinutes(jobs);
   const delivery = deliveryElapsed(jobs, runCreatedAt, captured.endpoints ?? {});
   const cache = cacheIdentities(jobs);
-  console.log(JSON.stringify({ file, summary, readiness, queue, runnerMinutes: minutes, delivery, cache }, null, 2));
+  const executions = jobs.map((record) => ({
+    key: jobKey(record), runId: record.runId, attempt: record.attempt, jobId: record.jobId,
+    name: record.name, conclusion: record.conclusion,
+    startedAt: record.startedAt ?? null, completedAt: record.completedAt ?? null,
+    seconds: record.conclusion === 'skipped' ? null : durationSeconds(record.startedAt, record.completedAt),
+    queueSeconds: queueSeconds(record), steps: stepSpans(record),
+  }));
+  console.log(JSON.stringify({ file, summary, readiness, queue, runnerMinutes: minutes, delivery, cache, executions }, null, 2));
 }
