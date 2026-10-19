@@ -46,6 +46,7 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] **S0 identity**: canonical symlinks share admission; hard-linked stores refuse before open, and a newly added hard link makes a live engine terminal. Rename/replacement tests verify reader and mutation revocation. Restoring a path/alias never revives the old handle.
 - [x] **R1 seventh probe / S0 core**: the late BEFORE INSERT callback closes a foreign caller fd and attempts a production successor open; the successor must remain `instance-busy` while the original commits under continuous possession. Added interprocess/same-process, checkpoint, clean reopen and writer-SIGKILL/WAL recovery coverage. This replaces the old unsafe requirement to admit a successor after a caller fd close.
 - [x] **R1 round 2 runtime**: SQLite is opened only in a dedicated Node process running a fixed program; arbitrary caller callbacks stay in the caller. Foreign caller fd closes cannot release the writer process's EXCLUSIVE lock. Linux/procfs is required; unsupported tuples fail closed. Effective receipt records owner PID/isolation. A post-write check also refuses SQL-trigger ownership changes before COMMIT.
 - [x] **R1 runtime preparation**: fixed Node owner program plus synchronous IPC, with caller callbacks executed outside the writer process; no addon or helper binary. Connection integration and S0 probes follow in separate atomic commits.
