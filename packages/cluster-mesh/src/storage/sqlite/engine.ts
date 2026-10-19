@@ -93,6 +93,7 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
     db.exec('CREATE TABLE IF NOT EXISTS cm_ownership(id INTEGER PRIMARY KEY CHECK(id = 1), instance_id TEXT NOT NULL, epoch TEXT NOT NULL)');
     let won: { instanceId: string; epoch: number };
     try { db.exec('BEGIN IMMEDIATE'); } catch (error) {
+      if (!/busy|locked/i.test((error as Error)?.message ?? '')) throw error;
       throw new CanonicalOwnershipError('instance-busy', `live holder present: ${(error as Error).message}`);
     }
     try {
