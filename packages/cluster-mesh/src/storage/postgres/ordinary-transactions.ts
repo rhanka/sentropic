@@ -170,8 +170,8 @@ export const runPgTransaction = async <T,>(
           for (const contributor of tx.contributors.values()) await core.check(session, contributor, 'write', true);
           if (options.fence) await core.fence(session, grant, options.fence);
           for (const check of tx.revalidators) await check();
-          if (core.options.onCommitPossession) await core.options.onCommitPossession();
           await core.roots.publish(session, grant.scope, base, tx.root, final, options.idempotencyKey);
+          if (core.options.onCommitPossession) await core.options.onCommitPossession();
           return { value, receipt: ownPgValue(final) };
         } finally {
           tx.closed = true;
