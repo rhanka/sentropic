@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
+  admissionDecision,
+  budgetVerdict,
   cacheIdentities,
   captureRecords,
   concurrencyPeak,
@@ -303,6 +305,27 @@ test('an endpoint with an omitted required publisher is missing, not measured', 
   assert.deepEqual(omitted.images.missing, ['publish-ui-image']);
   const complete = endpointReadiness(both, patterns);
   assert.equal(complete.images.status, 'measured');
+});
+
+test('admission compares measured peak against declared slots', () => {
+  assert.deepEqual(admissionDecision({ peak: 17, availableSlots: 24, reserveSlots: 2 }),
+    { status: 'admitted', peak: 17, availableSlots: 24, reserveSlots: 2, headroom: 5 });
+  assert.equal(admissionDecision({ peak: 25, availableSlots: 24 }).status, 'over-capacity');
+  assert.equal(admissionDecision({ peak: 17, availableSlots: null }).status, 'to-measure');
+  assert.equal(admissionDecision({ peak: null, availableSlots: 24 }).status, 'to-measure');
+});
+
+test('timing budgets flag breaches and keep missing values to-measure', () => {
+  const breach = budgetVerdict({ classificationSeconds: 15, verdictSeconds: 12, schedulingSeconds: 383 });
+  assert.equal(breach.budgets.classificationSeconds.status, 'pass');
+  assert.equal(breach.budgets.verdictSeconds.status, 'breach');
+  assert.equal(breach.budgets.schedulingSeconds.status, 'breach');
+  assert.equal(breach.ok, false);
+  assert.equal(breach.pending, false);
+  const pending = budgetVerdict({});
+  assert.equal(pending.pending, true);
+  assert.equal(pending.ok, false);
+  assert.equal(budgetVerdict({ classificationSeconds: 8, verdictSeconds: 5, schedulingSeconds: 60 }).ok, true);
 });
 
 test('endpoint readiness distinguishes measured, partial, missing, and to-measure', () => {
