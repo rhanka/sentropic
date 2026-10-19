@@ -73,9 +73,9 @@
   - [x] Review final diff, run `make scope-check` before each atomic commit under 150 changed lines.
   - [x] Push and open PR #703 using this plan; execution-plan comment includes all 67 packed files; inspect CI (queued at handoff).
   - [x] Leave merge and npm publication for the owner's GO.
-- [ ] **Lot 4 — UTF-8 publication**
+- [x] **Lot 4 — UTF-8 publication**
   - [x] Add mutually exclusive bytes/text inputs to HTTP and the MCP schema; keep binary bytes behavior.
-  - [ ] Extend `tests/http-mcp-service-parity.test.ts` and `tests/mcp.test.ts` for accented UTF-8, empty text, MIME restrictions, exclusivity and byte-identical manifests.
+  - [x] Extend `tests/http-mcp-service-parity.test.ts` and `tests/mcp.test.ts` for accented UTF-8, empty text, MIME restrictions, exclusivity and byte-identical manifests.
 - [ ] **Lot 5 — Content isolation and host setup**
   - [ ] Add CORP same-origin with HTML/CSS/binary coverage in `tests/content-security.test.ts`.
   - [ ] Document text input, accepted MIME types and host-owned storage_scopes bootstrap in README.
