@@ -142,11 +142,11 @@ test('skipped rows and shared start/end boundaries do not inflate the peak', () 
   assert.equal(concurrencyPeak([first, second]), 1);
 });
 
-test('queue waits measure creation-to-dispatch with a workflow fallback', () => {
+test('queue waits require job readiness and never substitute workflow age', () => {
   assert.equal(queueSeconds(job({ queuedAt: '2026-10-18T09:59:50.000Z' }), null), 10);
   assert.equal(
     queueSeconds(job({ queuedAt: undefined }), '2026-10-18T09:59:00.000Z'),
-    60,
+    null,
   );
   assert.equal(queueSeconds(job({ startedAt: null }), '2026-10-18T09:59:00.000Z'), null);
   assert.equal(
@@ -158,6 +158,18 @@ test('queue waits measure creation-to-dispatch with a workflow fallback', () => 
     null,
   );
   assert.deepEqual([waits.count, waits.minSeconds, waits.p50Seconds, waits.maxSeconds], [2, 10, 60, 60]);
+});
+
+test('should exclude timestamped skipped rows from execution queue statistics', () => {
+  const executed = job({ queuedAt: '2026-10-18T09:58:57.000Z' });
+  const skipped = job({ conclusion: 'skipped', queuedAt: executed.startedAt });
+  assert.equal(queueSeconds(skipped), null);
+  const waits = queueWaits([executed, skipped, skipped]);
+  assert.equal(waits.count, 1);
+  assert.equal(waits.p50Seconds, 63);
+  const late = job({ startedAt: '2026-10-18T10:11:00Z' });
+  assert.equal(queueSeconds(late, '2026-10-18T10:00:00Z'), null);
+  assert.equal(queueSeconds({ ...late, queuedAt: '2026-10-18T10:10:00Z' }), 60);
 });
 
 test('step spans report per-step durations without invention', () => {

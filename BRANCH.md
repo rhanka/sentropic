@@ -32,6 +32,7 @@
 - [ ] BR76-EX2 — Planned Makefile exception: add `ci-run-metrics`, `test-ci-run-metrics`, and `test-ci-expected-results` targets (new). Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [x] R2-2: queue distributions exclude skipped nonexecutions; missing job readiness stays null, with no workflow-age fallback. Docker regressions reproduce both defects.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
