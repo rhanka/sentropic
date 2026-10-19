@@ -122,6 +122,20 @@ function needBytes(value: unknown): Uint8Array {
   return bytes;
 }
 
+/** Canonical text MIME types; parameters are omitted (encoding is always UTF-8). */
+export const TEXT_MIME_PATTERN = '^(?:text/[a-z0-9!#$&^_.+-]+|application/(?:javascript|ecmascript|json|xml|[a-z0-9!#$&^_.+-]+\\+(?:json|xml))|image/svg\\+xml)(?![\\s\\S])';
+
+function needFileBytes(entry: Record<string, unknown>, mimeType: string): Uint8Array {
+  const hasBytes = 'bytes' in entry;
+  const hasText = 'text' in entry;
+  if (hasBytes === hasText) throw new Error('invalid file: supply exactly one of bytes or text');
+  if (hasBytes) return needBytes(entry['bytes']);
+  if (typeof entry['text'] !== 'string' || !new RegExp(TEXT_MIME_PATTERN).test(mimeType)) {
+    throw new Error('invalid file text: expected a string and a canonical text MIME type');
+  }
+  return new TextEncoder().encode(entry['text']);
+}
+
 /** Create the HTTP app over injected services (no server, no fetch). */
 export function createHttpArtifactApp(deps: HttpAppDeps) {
   const isApproved = deps.isApprovedAccount ?? (() => false);
@@ -218,10 +232,11 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           if (!Array.isArray(rawFiles)) throw new Error('invalid request: missing files');
           const files = rawFiles.map((file: unknown) => {
             const entry = needObject(file);
+            const mimeType = needString(entry['mimeType'], 'file.mimeType');
             return {
               path: needString(entry['path'], 'file.path'),
-              mimeType: needString(entry['mimeType'], 'file.mimeType'),
-              bytes: needBytes(entry['bytes']),
+              mimeType,
+              bytes: needFileBytes(entry, mimeType),
             };
           });
           const source = body['source'];

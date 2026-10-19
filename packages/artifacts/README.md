@@ -2,7 +2,8 @@
 
 Generic, host-independent artifact domain state for the Sentropic artifacts
 provider (`sentropic.artifacts`, spec-v8 §9), covering L-5a–5e. Version
-`0.1.1` fixes activation ticket release and channel binding (FL-ACT).
+`0.1.2` adds UTF-8 text publication, exposes storage adapters and ships SQL migrations.
+Version `0.1.1` fixed activation ticket release and channel binding (FL-ACT).
 
 ## What's here (L-5a)
 
@@ -47,6 +48,79 @@ make test-artifacts-integration API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 
   byte-identity). Sharing/lifecycle/GC tables arrive with the 0002 migration.
 
 No Immo defaults, URLs or bindings in generic source.
+
+## Storage adapters and host migrations
+
+Hosts import `createS3BlobStore` from `@sentropic/artifacts/adapters/s3`
+and `createPostgresArtifactStore` from `@sentropic/artifacts/adapters/postgres`.
+Install the optional peer `@aws-sdk/client-s3@^3.980.0` for S3 and
+`pg@^8.12.0` for Postgres (`@types/pg` for TypeScript hosts). Pass a configured
+`S3Client` and bucket to the S3 adapter and a `pg.Pool` to the Postgres adapter.
+The core works without either driver; adapters do not create connections or
+apply DDL at import or startup.
+
+The installed package includes SQL resources exported under
+`@sentropic/artifacts/migrations/*`. Read them through Node's resolver:
+
+```js
+import { readFile } from 'node:fs/promises';
+
+const migrations = ['0001_artifacts.sql', '0002_lifecycle.sql'];
+for (const name of migrations) {
+  const sql = await readFile(new URL(import.meta.resolve(
+    `@sentropic/artifacts/migrations/${name}`,
+  )), 'utf8');
+  // Hand each SQL resource to the host's existing journaled migration runner.
+}
+```
+
+Apply `0001_artifacts.sql` first to create the domain schema, then
+`0002_lifecycle.sql` to add lifecycle, sharing, sources and GC support, before
+using the Postgres store. The host owns migration credentials, serialization,
+transactions and the migration journal; execute each version through that
+runner rather than running this read loop at application startup.
+
+Before the first `/ensure` or `artifacts_ensure`, the host must provision an
+`artifacts.storage_scopes` row for each storage scope it uses. Migration 0001
+creates the table but does not seed it; the package neither provisions scopes
+nor infers their organization. The artifact's `storage_scope_id` references
+this row through a foreign key. For example, run a parameterized host query:
+
+```js
+await pool.query(
+  'INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
+  [storageScopeId, organizationId],
+);
+```
+
+Keep the scope ID stable, validate that any existing row belongs to the intended
+organization, and use that ID as `storageScopeId` (or MCP's configured
+`defaultStorageScopeId`). The host owns provisioning permissions and tenant
+authorization; changing a binding or organization identifier does not provision
+a scope automatically.
+
+## Inline publication: text or bytes
+
+Each file in HTTP `POST /publish` and MCP `artifacts_publish` accepts exactly
+one of `text` (a string, including the empty string) or `bytes` (integers 0–255).
+The server encodes `text` as UTF-8 before calculating digests and byte sizes:
+
+```json
+{
+  "artifactId": "<ensured artifact UUID>",
+  "files": [{ "path": "index.html", "mimeType": "text/html", "text": "<h1>Été à Montréal 🏠</h1>" }]
+}
+```
+
+`text` requires a canonical lowercase MIME type without parameters: `text/*`,
+`application/javascript`, `application/ecmascript`, `application/json`,
+`application/xml`, `application/*+json`, `application/*+xml`, or `image/svg+xml`.
+Use `bytes` for binary formats such as PNG or PDF. Both fields together, neither
+field, a non-string `text`, or a non-text MIME type with `text` are rejected.
+
+Content responses include `Cross-Origin-Resource-Policy: same-origin`, preventing
+cross-origin no-CORS resource embedding even between sibling subdomains sharing
+a registrable domain. Assets within the same artifact origin remain loadable.
 
 ## What's here (L-5d–5e)
 

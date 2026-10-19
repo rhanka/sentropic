@@ -1052,6 +1052,8 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-artifacts ENV=test-ci-artifacts
+      - name: Probe packed Artifacts consumer
+        run: make probe-artifacts-packed-consumer ENV=test-ci-artifacts
 
   validate-harness:
     runs-on: ubuntu-latest
