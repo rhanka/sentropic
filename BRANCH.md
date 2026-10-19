@@ -30,7 +30,7 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
-- [x] Latest implementation checkpoint: packages/cluster-mesh/tests/packaging/prepare.sh packages/cluster-mesh/tests/packaging/helpers.ts packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts packages/cluster-mesh/tests/packaging/release-matrix.spec.ts packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts.
+- [x] Latest implementation checkpoint: packages/cluster-mesh/tests/packaging/stateful-consumer.sh.
 - [x] BRWRAP-EX1 / CI tuple alignment: change only cluster-mesh qualification in .github/workflows/ci.yml; old explicit platform 0.3.0 pins block the new 0.4.0 contract. Impact: qualify the core tuple and run installed stateful contracts; incompatible optional artifacts remain refused. Rollback: revert the workflow hunk with the package tuple.
 - [x] L1: finite JSON budgets and cloned advertised-default traversal extracted from the #689 pattern.
 - [ ] Fixture import progress: 853/853 exact lines pinned from Radar #866.
