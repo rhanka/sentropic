@@ -45,6 +45,17 @@ const SQLITE_MEANINGS = {
 
 type TransactionalProfile = keyof typeof SQLITE_MEANINGS;
 
+// Lot 1 restart-durable subset: only state inside the persisted scope
+// snapshot (records, chains/heads, index, aggregates, idempotency commits)
+// survives close/reopen. Staged attachment, journal lanes, consumers,
+// barriers, fences and purge jobs stay session-local, so their profiles
+// remain disabled until S2-S4 deliver and qualify them.
+const LOT1_DURABLE_PROFILES: ReadonlySet<TransactionalProfile> = new Set([
+  'atomic-units-v1',
+  'immutable-chains-v1',
+  'immutable-boundaries-v1',
+]);
+
 const SQLITE_CLAIMS: readonly ProfileClaim[] = Object.freeze(
   Object.entries(SQLITE_MEANINGS).map(([profile, meaning]) =>
     Object.freeze({
@@ -59,6 +70,7 @@ export const sqliteProfileClaims = (module: string, resync: boolean): readonly P
   Object.freeze(
     SQLITE_CLAIMS.filter(
       (claim) =>
+        LOT1_DURABLE_PROFILES.has(claim.profile as TransactionalProfile) &&
         (module === 'comments' || claim.profile !== 'staged-units-v1') &&
         (resync || claim.profile !== 'scope-outbox-v1'),
     ),
