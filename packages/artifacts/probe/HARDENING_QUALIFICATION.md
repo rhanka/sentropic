@@ -43,3 +43,23 @@ Both archives passed the packed-manifest guard. The existing root barrel and `/m
 Registry inspection returned artifacts 0.1.2; #707 reserves 0.1.3. This candidate uses 0.1.4, retains #707's optional platform peer `>=0.3.0 <0.5.0`, and fits both current mesh `>=0.1.0 <0.2.0` and #707's `>=0.1.3 <0.2.0` artifacts ranges. The workspace lock was regenerated through Make. Host migration and deliberate compatibility changes are documented in the package README.
 
 Every implementation hunk was inspected. Independent consensus review is not claimed: exact model/effort metadata for the resumed author is unavailable. No merge or publication is authorized by these local receipts; GitHub CI status is reported separately on the draft PR.
+
+## PR #708 CI repair
+
+- Failed run: `39279553217`, original head `2ebe21ef8f346ec656a6b1ff64eb89b466b076a3`.
+- `gh run view --log-failed` returned empty output; the GitHub job-log API provided the failure evidence.
+- `memory-l5-qualification` rejected the artifacts lockfile update with `manifest freeze/lock mismatch`.
+- `validate-cluster-mesh` expected provider version `0.1.2` in `tests/integrations/artifacts-surface.spec.ts`; the candidate correctly advertises `0.1.4`. Only that assertion changed.
+- `ci-gate` propagated those two failed dependencies.
+- Rebased all 14 original commits onto `origin/main` at `7ed41eb393396fc6d973b22a4373290d19283f82`; `git range-diff` confirmed identical patches. This brings the L5 tools into the branch before refreshing provenance.
+- Qualified P1 source: `6c1dfcdfb7886bdadbf02254679bd9499a9e36fd`.
+- Archived the previous manifest and its sidecar under `tools/memory-mcp-l5/artifacts/history/280a2ce12938414a36696fcc45540f6b4d90ac461dd2d586dbaf4492add1b767.json`.
+- Regenerated with `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9690 UI_PORT=5890 MAILDEV_UI_PORT=1790 ENV=test-artifacts-hardening`, following #704 (`3aa8880e3`).
+- New P1 SHA-256: `ca14388d51de2be5687561a8b652f18261aa6f09d0e308be55bf43110d12f15b`.
+- Root lockfile SHA-256: `5b0152f8b4b7135b0778e85bbe2ae18d6752aee4d3c6b0ebd98dfdbd6324c03c`.
+- All 44 contract entries remain identical. Platform archive SHA-256 remains `afebb47aa5e95bf555a097a96cd552d57a288edc52a2a345b846eb77c5976511`; broker remains `78ce7b5017bdd260338cc9d825498e385ae4a12e72af76424ea2cc0b83516e67`. SHA-512 integrity values, frozen spec and L0 identity are unchanged.
+- Focused Cluster Mesh reproduction failed before the assertion update and passed 7/7 afterward. `make lint-cluster-mesh typecheck-cluster-mesh test-cluster-mesh ENV=test-artifacts-hardening` passed: 932 tests, 126 conditional skips.
+- `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9690 UI_PORT=5890 MAILDEV_UI_PORT=1790 ENV=test-artifacts-hardening` passed: packed/source graph checks, platform/broker typechecks and 228 tests.
+- Post-rebase registry check through Docker: artifacts candidate `0.1.4` exceeds published `0.1.2`.
+- `make typecheck-artifacts lint-artifacts test-artifacts probe-artifacts-packed-consumer ENV=test-artifacts-hardening` passed: 183 unit tests and all three packed-consumer proofs. Artifacts archive SHA-256 is unchanged (`7755caf83e487f52d0a732beb306a783b8a1da9bb8270bac2e0e731a9567f918`); the complete platform 0.3.1 archive is `94f1a9364abc7d0ea9f84464c21253054733e65443cb4899f1b94076025f7728`.
+- The separate durable L5 lockfile-coupling proposal remains outside this repair.

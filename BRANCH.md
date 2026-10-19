@@ -83,7 +83,10 @@
 - [x] **Lot 5 — Delivery**
   - [x] Review every hunk, scope-check before each commit, push and open draft PR #708 using this plan; inspect GitHub checks on the pushed HEAD.
   - [x] Report draft PR number, HEAD and qualification receipt; preserve the seven original commits, keep every new commit under 150 changed lines, and do not merge or publish.
-- [ ] **Lot 6 — PR #708 CI repair**
+- [x] **Lot 6 — PR #708 CI repair**
   - [x] Reproduce and update the Cluster Mesh artifacts provider version assertion; focused test 7/7, lint/typecheck and complete unit lane passed (932 tests, 126 conditional skips).
-  - [ ] Archive the previous P1 by digest and regenerate through `memory-l5-pack`; verify all 44 contracts and both archive digests remain identical.
-  - [ ] Pass `memory-l5-gate LOT=1`, scope checks, and the affected library checks; push the repaired draft branch without merging, marking ready or publishing.
+  - [x] Archive P1 `280a2ce12938414a36696fcc45540f6b4d90ac461dd2d586dbaf4492add1b767` and regenerate through `memory-l5-pack`; all 44 contracts and both archive digests remain identical.
+  - [x] New P1 SHA-256: `ca14388d51de2be5687561a8b652f18261aa6f09d0e308be55bf43110d12f15b`; lockfile SHA-256 `5b0152f8b4b7135b0778e85bbe2ae18d6752aee4d3c6b0ebd98dfdbd6324c03c`.
+  - [x] After rebase, `npm view @sentropic/artifacts version` in Docker confirms published `0.1.2` < candidate `0.1.4`.
+  - [x] `memory-l5-gate LOT=1` passed (228 tests); artifacts typecheck/lint and 183 unit tests passed; packed core/consumer/adapter proofs passed with platform 0.3.1 and artifacts 0.1.4.
+  - [x] Scope checks passed; deliver the repaired draft branch with a lease on original remote head `2ebe21ef8`, without merging, marking ready or publishing.
