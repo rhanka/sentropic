@@ -45,7 +45,7 @@
 - [x] Package transport qualification only; hosted Radar UAT belongs to L5 on the qualified installed tuple.
 
 ## Plan / Todo (lot-based)
-- [ ] **L0 — Pin baseline and inventory**: exact fixture/receipt bytes, hash, twelve calls, HTTP budgets, defaults, auth/expiry rules, public bind seam.
+- [x] **L0 — Pin baseline and inventory**: exact fixture/receipt bytes, hash, twelve calls, HTTP budgets, defaults, auth/expiry rules, public bind seam.
 - [ ] **L1 — Tool schema validator**: SDK draft-07 compilation/defaults and independent finite JSON budgets; configuration compiler unchanged.
   - [ ] Tests: platform `tests/mcp-wire-schema.test.ts`, existing `tests/registry-parameters.test.ts`; positive, negative, defaults, mutation and remote-ref vectors.
 - [ ] **L2 — Shared native wire dispatch**: complete SDK discovery/results, safe failures/protocol errors, digest-bound registry inputSchema, explicit AppToolResult mode.
