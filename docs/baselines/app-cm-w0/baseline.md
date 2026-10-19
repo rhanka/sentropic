@@ -2,6 +2,8 @@
 
 Source authority: `9ed96eb83cd77da710f1adeb83a19e425d6c4910` (initial HEAD = origin/main). Approved plan SHA-256: `166e9bbf2c580ee61b3decc9c3a4c758db579a38783eb212cf80f0a3a43c816a`; section 3 is the execution contract. Owner request: “Comment avance app sentropic stp il faut vraiment migrer au long cours et faire le switch dans la semaine”. W0 launch GO is the 2026-10-18 task packet, `AGENT_SIG:7f3a9c2e1b`; no candidate merge or production action is authorized.
 
+19 October follow-up: origin/main `cf0ad8ee44f9bb7cf4ad1222a468172f0f77fc2d` was integrated unchanged at fe26214df under the owner's explicit instruction. The [verbatim Q1–Q4 answers](owner-decisions.md) supersede the original plan's staffing/window and signer/key choices. No PR merge or deployment is authorized. The initial source/lock/package observations retain their original source SHA and collection date; they are not observations of the integrated main or its published packages.
+
 ## Evidence boundary
 
 Initial observations began at 23:26 UTC with registry/GitHub GETs, unauthenticated HTTPS GETs and pinned source reads. The 19 October follow-up collected [read-only cluster metadata and precise access denials](cluster-readings.md), plus [existing archive/CI recovery evidence and historical counts](recovery-readings.md). The accessible Scaleway namespaces have zero replicas/pods; OVH's local scoped account cannot list either app namespace. Their observations cannot identify the serving deployment. Current tenant DB/object inventories remain **pending**, not empty. This record does not qualify W0 for downstream dispatch until [authorization.md](authorization.md) closes.
@@ -14,7 +16,7 @@ Initial observations began at 23:26 UTC with registry/GitHub GETs, unauthenticat
 | Live config revision and rendered config hash | **Pending B01**; source config hashes are in `published-tuple.json` |
 | Applied product/control/package migration frontier | **Pending live B02**; archived SQL checksums identify product `0041`/control `0007`; source maxima remain product `0043`, control `0011` |
 | Active author, generation, cutover and lease records | **Pending B02**; no source constant is promoted to live authority |
-| Verified backup/object checkpoint and isolated restore | **Partial B03**; existing CI-reported SQL backup/restore/smoke receipt collected; current object checkpoint, data/deny-state recovery and ownership still pending |
+| Verified backup/object checkpoint and isolated restore | **Partial B03**; existing CI-reported SQL backup/restore/smoke receipt collected; current object checkpoint and data/deny-state recovery pending; Q1 assigns human recovery ownership to the owner |
 | Existing generated-content counts and mapping decision | **Partial B04**; dated local archive: 15 documents, 0 versions, 258 jobs, 141 messages; current inventory, objects/ACLs and disposition pending |
 
 ## Existing authorities and endpoint parity

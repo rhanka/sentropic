@@ -6,6 +6,7 @@ const root = '/source';
 const folder = `${root}/docs/baselines/app-cm-w0`;
 const vectors = JSON.parse(readFileSync(`${folder}/verifier-vectors.json`, 'utf8'));
 const tuple = JSON.parse(readFileSync(`${folder}/published-tuple.json`, 'utf8'));
+assert.equal(process.env.W0_SOURCE_SHA, tuple.sourceSha);
 assert(isH2AEnvelope(vectors.envelope));
 assert.equal(computeHash(vectors.manifest), vectors.envelope.body.manifestHash);
 assert(verifyEnvelopeSignature(vectors.envelope, vectors.publicKeyPem, { by: 'w0-fixture-signer' }));
@@ -19,7 +20,7 @@ for (const [file, expected] of Object.entries(vectors.fileHashes)) {
 }
 for (const [path, expected] of Object.entries(tuple.sha256)) {
   if (path === 'probe-package-lock.json') continue;
-  assert.equal(createHash('sha256').update(readFileSync(`${root}/${path}`)).digest('hex'), expected, path);
+  assert.equal(createHash('sha256').update(readFileSync(`/baseline-source/${path}`)).digest('hex'), expected, path);
 }
 const manifests = new Map(tuple.packages.map(p => [p.name, p]));
 for (const name of ['@sentropic/cluster-mesh', '@sentropic/artifacts', '@sentropic/llm-gateway']) {
@@ -33,4 +34,4 @@ for (const file of readdirSync(folder).filter(f => f.endsWith('.md'))) {
 }
 assert(tuple.selectedClusterPeers.length === 9);
 assert(Object.values(tuple.liveRoleDigests).every(v => v === null));
-console.log('PASS: frozen vectors 1 positive/3 negative; canonical manifest hash; published verifier bytes; source hashes; record links; pending live digests');
+console.log('PASS: frozen vectors 1 positive/3 negative; canonical manifest hash; published verifier bytes; source hashes at tuple.sourceSha; current record links; pending live digests');
