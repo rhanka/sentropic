@@ -13,6 +13,7 @@ import type { McpWrapRefusal, StatefulMcpNamespaceOptions, VerifiedMcpRequest } 
 export type {
   McpWrapRefusal, StatefulMcpHost, StatefulMcpHooks, StatefulMcpNamespaceOptions, VerifiedMcpRequest,
 } from '../mcp/stateful-contracts.js';
+export type { McpToolValidationLimits } from '@sentropic/mcp-platform/transport/tool-schemas';
 
 const boundHosts = new WeakSet<object>();
 const safeFailure = (): CallToolResult =>

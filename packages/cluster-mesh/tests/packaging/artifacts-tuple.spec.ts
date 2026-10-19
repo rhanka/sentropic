@@ -31,7 +31,9 @@ describe('artifacts source tuple coherence', () => {
     expect(sourceManifest.peerDependencies?.[ARTIFACTS_PACKAGE]).toBe(ARTIFACTS_RANGE);
     expect(ARTIFACTS_RANGE).toBe('>=0.1.3 <0.2.0');
     expect(sourceManifest.peerDependenciesMeta?.[ARTIFACTS_PACKAGE]).toEqual({ optional: true });
-    expect(sourceManifest.peerDependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
+    expect(sourceManifest.dependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
+    expect(sourceManifest.peerDependencies?.['@sentropic/mcp-platform']).toBeUndefined();
+    expect(sourceManifest.peerDependenciesMeta?.['@sentropic/mcp-platform']).toBeUndefined();
     expect(sourceManifest.exports?.['./mcp/artifacts']).toBeDefined();
     expect(sourceManifest.exports?.['./mcp/web-pages']).toBeUndefined();
     expect(artifactsCompatible, 'artifacts must accept the candidate platform').toBe(true);
@@ -57,7 +59,8 @@ describe.skipIf(!enabled || !artifactsCompatible)('installed compatible artifact
     // prepare.sh always installs this consumer from the packed tarballs: the
     // dependency specs stay `file:` (never rewritten to the registry).
     const deps = manifest(join(fixtureDir('artifacts-consumer'), 'package.json')).dependencies ?? {};
-    for (const name of ['@sentropic/cluster-mesh', '@sentropic/mcp-platform', ARTIFACTS_PACKAGE]) {
+    expect(Object.keys(deps).sort()).toEqual(['@sentropic/artifacts', '@sentropic/cluster-mesh']);
+    for (const name of ['@sentropic/cluster-mesh', ARTIFACTS_PACKAGE]) {
       expect(deps[name], name).toMatch(/^file:/u);
     }
     const mesh = consumerManifest('@sentropic/cluster-mesh');
