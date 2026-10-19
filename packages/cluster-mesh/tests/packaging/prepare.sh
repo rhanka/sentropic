@@ -141,6 +141,7 @@ fi
 mkdir -p "$work/selected"
 cp "$fixtures/selected/package.json" "$work/selected/"
 cp "$fixtures/selected/package-lock.json" "$work/selected/committed-lock.json"
+cp "$fixtures/selected/package-lock.json" "$work/selected/package-lock.json"
 artifacts_spec="file:$artifacts_tgz"
 # Lock refresh retains the registry/verified-sibling contract of check-lock-integrity.mjs.
 if [ "${REFRESH_LOCK:-}" = 1 ]; then artifacts_spec="$(src @sentropic/artifacts "$ARTIFACTS")"; fi
@@ -151,12 +152,10 @@ consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH"
   "@sentropic/artifacts=$artifacts_spec"
 sources "$work/selected"
 if grep -q ' sibling ' "$work/selected/sources.txt" || [ "$artifacts_spec" = "file:$artifacts_tgz" ]; then
-  [ "${REFRESH_LOCK:-}" = 1 ] || cp "$fixtures/selected/package-lock.json" "$work/selected/"
   (cd "$work/selected" && npm install $quiet >/dev/null)
 elif [ "${REFRESH_LOCK:-}" = 1 ]; then
   (cd "$work/selected" && npm install $quiet >/dev/null)
 else
-  cp "$fixtures/selected/package-lock.json" "$work/selected/"
   (cd "$work/selected" && npm ci $quiet >/dev/null)
 fi
 if [ "${REFRESH_LOCK:-}" = 1 ]; then

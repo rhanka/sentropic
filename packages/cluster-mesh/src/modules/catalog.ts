@@ -12,8 +12,8 @@ export const MCP_PLATFORM_PACKAGE = '@sentropic/mcp-platform';
 /** Native wire validation and host-owned stateful wrapping require the 0.4 family. */
 export const MCP_PLATFORM_RANGE = '>=0.4.0 <0.5.0';
 export const ARTIFACTS_PACKAGE = '@sentropic/artifacts';
-/** Single 0.1.0 artifacts candidate covering L-5a–5e (no per-slice train). */
-export const ARTIFACTS_RANGE = '>=0.1.0 <0.2.0';
+/** Artifacts 0.1.3 admits the platform 0.4 family used by native wrapping. */
+export const ARTIFACTS_RANGE = '>=0.1.3 <0.2.0';
 export const LLM_MESH_RANGE = '>=0.22.0 <0.28.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.22.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
