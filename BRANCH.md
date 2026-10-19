@@ -57,21 +57,21 @@
   - [x] Read rules, branch template, package, adapters, migrations, packed probe, and host reference.
   - [x] Verify branch with Git and `harness check branch` before work.
   - [x] Confirm source manifest omits adapter exports and migration files.
-  - [x] Docker/Make registry check returned 0.1.1 before the 0.1.2 bump.
+  - [x] Docker/Make registry check returned 0.1.1 before choosing the 0.2.0 minor bump.
 - [x] **Lot 1 — Publishable package contract**
-  - [x] Add typed adapter exports and SQL resource export; include migrations; bump to 0.1.2.
+  - [x] Add typed adapter exports and SQL resource export; include migrations; release candidate is 0.2.0.
   - [x] Declare injected driver packages as optional peers and synchronize workspace lock metadata.
   - [x] Document driver installation and ordered host-managed SQL execution in README; no package changelog exists.
 - [x] **Lot 2 — Packed-consumer regression**
   - [x] Extend `packages/artifacts/probe/packed-consumer.mjs` to verify core without drivers and shipped SQL.
   - [x] Add adapter imports/types resolution checks after explicit driver installation in the existing Make recipe.
   - [x] Run the packed-consumer regression in the existing artifacts CI validation job; 22 CI-wiring fixture tests pass.
-  - [x] Reproduce 0.1.1 `ERR_PACKAGE_PATH_NOT_EXPORTED`, then pass `make probe-artifacts-packed-consumer ENV=test-artifacts-012` on 0.1.2 (15 tools, two adapters, two SQL resources).
+  - [x] Reproduce 0.1.1 `ERR_PACKAGE_PATH_NOT_EXPORTED`, then pass `make probe-artifacts-packed-consumer ENV=test-artifacts-012` on 0.2.0 (15 tools, two adapters, two SQL resources).
 - [x] **Lot 3 — Final validation and handoff**
-  - [x] Run `make typecheck-artifacts lint-artifacts test-artifacts ENV=test-artifacts-012`: typecheck, lint, 128 tests in 24 files pass.
-  - [x] Capture all 67 files from the 0.1.2 `npm pack --dry-run` through a temporary Docker Make target.
+  - [x] Run `make typecheck-artifacts lint-artifacts test-artifacts ENV=test-artifacts-012`: typecheck, lint, 158 tests in 24 files pass.
+  - [x] Inspect the real 0.2.0 tarball: 67 packaged files; packed-manifest guard passes.
   - [x] Review final diff, run `make scope-check` before each atomic commit under 150 changed lines.
-  - [x] Push and open PR #703 using this plan; execution-plan comment includes all 67 packed files; inspect CI (queued at handoff).
+  - [x] Open PR #703 using this plan; the final delivery lot refreshes its title/body and checks the pushed HEAD.
   - [x] Leave merge and npm publication for the owner's GO.
 - [x] **Lot 4 — UTF-8 publication**
   - [x] Add mutually exclusive bytes/text inputs to HTTP and the MCP schema; keep binary bytes behavior.
@@ -79,7 +79,8 @@
 - [x] **Lot 5 — Content isolation and host setup**
   - [x] Add CORP same-origin with HTML/CSS/binary coverage in `tests/content-security.test.ts`.
   - [x] Document text input, accepted MIME types and host-owned storage_scopes bootstrap in README.
-- [ ] **Lot 6 — Packed candidate and delivery**
-  - [ ] Bump package/lock metadata to 0.2.0 and prove text publication in `probe/packed-consumer.mjs` without source imports.
-  - [ ] Run typecheck, lint, all package unit tests and packed consumer; inspect branch diff and scope before atomic commits.
-  - [ ] Update PR #703 title/body with version rationale and validation, push, and inspect CI; no merge or publication.
+- [x] **Lot 6 — Packed candidate and delivery**
+  - [x] Bump package/lock metadata to 0.2.0 and prove text publication in `probe/packed-consumer.mjs` without source imports.
+  - [x] Packed proof: `version=0.2.0 utf8Bytes=32 textValidation=ok corp=same-origin fetchCalls=0`; `PACKED_ADAPTERS_OK adapters=2 migrations=2`.
+  - [x] Run typecheck, lint, all 158 package unit tests and packed consumer; inspect branch diff and scope before atomic commits.
+  - [x] Update PR #703 title/body with version rationale and validation, push, and inspect CI; no merge or publication.
