@@ -64,21 +64,21 @@ export function dedupeJobs(records) {
 }
 
 // Ready-to-dispatch wait: job creation (queued) to execution start, in
-// seconds. Falls back to the workflow creation stamp when the row carries
-// no queue stamp. Null when unmeasurable or inverted: missing data stays
-// missing, never zero.
-export function queueSeconds(record, runCreatedAt = null) {
-  const queued = toMs(record?.queuedAt ?? record?.createdAt ?? runCreatedAt);
+// seconds. Workflow creation includes upstream execution and is never a
+// readiness substitute. Skipped rows have no runner queue measurement.
+export function queueSeconds(record) {
+  if (record?.conclusion === 'skipped') return null;
+  const queued = toMs(record?.queuedAt ?? record?.createdAt);
   const start = toMs(record?.startedAt);
   if (queued === null || start === null || start < queued) return null;
   return (start - queued) / 1000;
 }
 
 // Distribution of ready-to-dispatch waits over one record set.
-export function queueWaits(records, runCreatedAt = null) {
+export function queueWaits(records) {
   const waits = [];
   for (const record of records ?? []) {
-    const wait = queueSeconds(record, runCreatedAt);
+    const wait = queueSeconds(record);
     if (wait !== null) waits.push(wait);
   }
   waits.sort((a, b) => a - b);
@@ -314,7 +314,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const runCreatedAt = captured.runCreatedAt ?? null;
   const summary = summarizeRun(captured.records, { expectedJobCount });
   const readiness = endpointReadiness(jobs, captured.endpoints ?? {});
-  const queue = queueWaits(jobs, runCreatedAt);
+  const queue = queueWaits(jobs);
   const minutes = runnerMinutes(jobs);
   const delivery = deliveryElapsed(jobs, runCreatedAt, captured.endpoints ?? {});
   const cache = cacheIdentities(jobs);
