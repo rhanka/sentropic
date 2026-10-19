@@ -68,9 +68,9 @@
 - [x] **Lot 4 — Docs consolidation and review**
   - [x] Reconcile recovered review findings and record the incomplete formal review; verify references, signatures, dependency ranges and acceptance criteria.
   - [x] Keep the standalone EVOL spec; no temporary BRANCH_SPEC_EVOL document is needed.
-- [ ] **Lot 5 — Final validation and draft PR**
+- [x] **Lot 5 — Final validation and draft PR**
   - [x] Run `make scope-check ENV=test-cm-mcp-stateful-wrap` before every commit; inspect the complete diff and whitespace.
   - [x] Verify documentation-only scope; runtime test/typecheck/build/UAT campaigns and package bumps do not apply here.
   - [x] Push the branch and create draft PR #706 using this BRANCH.md as its body; post the short execution plan.
-  - [ ] Inspect PR checks and report the PR number, HEAD and specification path.
+  - [x] Inspect PR checks and prepare delivery of PR #706, HEAD and specification path; the first CI gate passed and the final run is monitored separately.
   - [x] Stop at draft delivery: retain BRANCH.md, do not merge, publish or activate exchange.
