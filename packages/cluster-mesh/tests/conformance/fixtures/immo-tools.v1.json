@@ -183,3 +183,143 @@
             "minimum": 0,
             "default": 0
           },
+          "maxChars": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4000,
+            "default": 1200
+          }
+        },
+        "required": [
+          "documentId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_zones_geojson",
+      "title": "Get zones GeoJSON",
+      "description": "FeatureCollection GeoJSON des zones de zonage d'une ville (code de zone, kind, grille PDF et propriétés sources). Réponse BORNÉE : limit défaut 500 (max 2000), bbox [minLon,minLat,maxLon,maxLat] OBLIGATOIRE pour limit > 500. numberMatched/numberReturned/truncated indiquent ce qui reste : si truncated, resserrez le bbox. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (slug, ex: longueuil, valleyfield, delson)"
+          },
+          "bbox": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "description": "Emprise [minLon, minLat, maxLon, maxLat] en WGS84 (ex: [-73.53, 45.52, -73.5, 45.55]). Obligatoire quand limit > 500."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000,
+            "default": 500,
+            "description": "Nombre max de features retournées (défaut 500, max 2000 — bbox obligatoire au-delà de 500)."
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_lots_geojson",
+      "title": "Get lots GeoJSON",
+      "description": "FeatureCollection GeoJSON des lots cadastraux d'une ville, enrichis server-side : zone jointe (zone.code/kind/densiteLogHa/usages/grillePdfUrl), zoneCode, multifamilial4plus (+ multifamilial4plusSource: grille|heuristique), superficieM2, tod/priorite quand la source les porte. Réponse BORNÉE : limit défaut 500 (max 2000), bbox OBLIGATOIRE pour limit > 500 ; une ville peut dépasser 15 000 lots — paginez par bbox. Filtres optionnels only4Plus/superficieMinM2 appliqués sur la page récupérée. truncated=true → resserrez le bbox. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (slug, ex: longueuil, valleyfield, delson)"
+          },
+          "bbox": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "description": "Emprise [minLon, minLat, maxLon, maxLat] en WGS84 (ex: [-73.53, 45.52, -73.5, 45.55]). Obligatoire quand limit > 500."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000,
+            "default": 500,
+            "description": "Nombre max de features retournées (défaut 500, max 2000 — bbox obligatoire au-delà de 500)."
+          },
+          "only4Plus": {
+            "type": "boolean",
+            "description": "Ne garder que les lots dont multifamilial4plus === true"
+          },
+          "superficieMinM2": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Superficie minimale en m² (champ superficieM2)"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_grille_pdf",
+      "title": "Get grille de zonage PDF",
+      "description": "URL de la grille de zonage PDF (grillePdfUrl) d'une zone d'une ville, quand la source municipale la porte. L'URL retournée est publique : elle peut être lue directement. Retourne found=false si la zone est inconnue, grillePdfUrl=null si la zone existe sans grille. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (slug, ex: longueuil)"
+          },
+          "zone": {
+            "type": "string",
