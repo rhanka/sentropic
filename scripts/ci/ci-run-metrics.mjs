@@ -63,6 +63,113 @@ export function dedupeJobs(records) {
   return { jobs: [...seen.values()].map((entry) => entry.record), dropped };
 }
 
+// Ready-to-dispatch wait: job creation (queued) to execution start, in
+// seconds. Falls back to the workflow creation stamp when the row carries
+// no queue stamp. Null when unmeasurable or inverted: missing data stays
+// missing, never zero.
+export function queueSeconds(record, runCreatedAt = null) {
+  const queued = toMs(record?.queuedAt ?? record?.createdAt ?? runCreatedAt);
+  const start = toMs(record?.startedAt);
+  if (queued === null || start === null || start < queued) return null;
+  return (start - queued) / 1000;
+}
+
+// Distribution of ready-to-dispatch waits over one record set.
+export function queueWaits(records, runCreatedAt = null) {
+  const waits = [];
+  for (const record of records ?? []) {
+    const wait = queueSeconds(record, runCreatedAt);
+    if (wait !== null) waits.push(wait);
+  }
+  waits.sort((a, b) => a - b);
+  if (waits.length === 0) return { count: 0, minSeconds: null, p50Seconds: null, maxSeconds: null };
+  return {
+    count: waits.length,
+    minSeconds: waits[0],
+    p50Seconds: waits[Math.floor(waits.length / 2)],
+    maxSeconds: waits[waits.length - 1],
+  };
+}
+
+// Per-step spans of one job row carrying API steps[]. Conclusions and
+// missing stamps pass through unchanged; unmeasurable steps stay null.
+export function stepSpans(record) {
+  const steps = Array.isArray(record?.steps) ? record.steps : [];
+  return steps.map((step) => ({
+    name: step?.name ?? 'unknown',
+    conclusion: step?.conclusion ?? null,
+    seconds: durationSeconds(step?.startedAt, step?.completedAt),
+  }));
+}
+
+// Runner-minutes over measurable executed spans, grouped by runner identity
+// (runnerName, runner, or labels). Skipped and unmeasured rows cost nothing.
+export function runnerMinutes(records) {
+  let totalSeconds = 0;
+  const byRunner = {};
+  for (const record of records ?? []) {
+    if (record?.conclusion === 'skipped') continue;
+    const span = durationSeconds(record?.startedAt, record?.completedAt);
+    if (span === null) continue;
+    totalSeconds += span;
+    const runner = record?.runnerName ?? record?.runner
+      ?? (Array.isArray(record?.labels) ? record.labels.join(',') : null) ?? 'unknown';
+    byRunner[runner] = (byRunner[runner] ?? 0) + span / 60;
+  }
+  return { totalMinutes: totalSeconds / 60, byRunner };
+}
+
+// Delivery elapsed: workflow creation to each endpoint's last measured
+// completion. Complete only when every pattern of the endpoint matches at
+// least one measured row; otherwise null (an incomplete delivery has no
+// complete timing). Missing durations never contribute.
+export function deliveryElapsed(records, runCreatedAt, endpoints = {}) {
+  const base = toMs(runCreatedAt);
+  const result = {};
+  const matches = (record, pattern) =>
+    String(record?.name ?? '').toLowerCase().includes(String(pattern).toLowerCase());
+  for (const [endpoint, patterns] of Object.entries(endpoints)) {
+    if (base === null || !Array.isArray(patterns) || patterns.length === 0) {
+      result[endpoint] = { elapsedSeconds: null };
+      continue;
+    }
+    let latest = null;
+    let complete = true;
+    for (const pattern of patterns) {
+      const ends = (records ?? [])
+        .filter((record) => matches(record, pattern))
+        .map((record) => (durationSeconds(record?.startedAt, record?.completedAt) === null
+          ? null
+          : toMs(record?.completedAt)))
+        .filter((end) => end !== null);
+      if (ends.length === 0) {
+        complete = false;
+        break;
+      }
+      const member = Math.max(...ends);
+      if (latest === null || member > latest) latest = member;
+    }
+    result[endpoint] = { elapsedSeconds: !complete || latest === null ? null : (latest - base) / 1000 };
+  }
+  return result;
+}
+
+// Cache identities carried by rows (an API capture may attach `cache`).
+// Rows without one are listed unknown: cache state stays explicit.
+export function cacheIdentities(records) {
+  const known = {};
+  const unknown = [];
+  for (const record of records ?? []) {
+    const name = String(record?.name ?? record?.jobId ?? 'unknown');
+    if (record?.cache === undefined || record?.cache === null || String(record.cache).trim() === '') {
+      unknown.push(name);
+    } else {
+      known[name] = String(record.cache);
+    }
+  }
+  return { known, unknown };
+}
+
 // Overlap in seconds between two runs' measurable windows, or null when
 // either window is unmeasurable. Used for concurrent PR/main traffic.
 export function overlappingSeconds(aRecords, bRecords) {
@@ -189,7 +296,9 @@ export function endpointReadiness(records, endpoints = {}) {
 
 const usage = `usage: ci-run-metrics.mjs --run-file <captured-run.json> [--expected-jobs <n>]
 Captured file shape: { "records": [{ runId, attempt, jobId, name, conclusion,
-startedAt, completedAt }] } plus optional "endpoints": { <name>: [<pattern>] }.`;
+startedAt, completedAt, queuedAt?, steps?[{ name, conclusion, startedAt,
+completedAt }], runnerName?/runner?/labels?[], cache? }], "runCreatedAt":
+<workflow creation stamp> } plus optional "endpoints": { <name>: [<pattern>] }.`;
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const args = process.argv.slice(2);
@@ -201,7 +310,13 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const expectedIndex = args.indexOf('--expected-jobs');
   const expectedJobCount = expectedIndex === -1 ? null : Number(args[expectedIndex + 1]);
   const captured = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const { jobs } = dedupeJobs(captured.records);
+  const runCreatedAt = captured.runCreatedAt ?? null;
   const summary = summarizeRun(captured.records, { expectedJobCount });
-  const readiness = endpointReadiness(captured.records, captured.endpoints ?? {});
-  console.log(JSON.stringify({ file, summary, readiness }, null, 2));
+  const readiness = endpointReadiness(jobs, captured.endpoints ?? {});
+  const queue = queueWaits(jobs, runCreatedAt);
+  const minutes = runnerMinutes(jobs);
+  const delivery = deliveryElapsed(jobs, runCreatedAt, captured.endpoints ?? {});
+  const cache = cacheIdentities(jobs);
+  console.log(JSON.stringify({ file, summary, readiness, queue, runnerMinutes: minutes, delivery, cache }, null, 2));
 }
