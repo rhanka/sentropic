@@ -29,7 +29,7 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
-- [x] Latest implementation checkpoint: packages/cluster-mesh/tests/packaging/stateful-consumer.sh packages/cluster-mesh/tests/storage/cold-workspace.sh packages/cluster-mesh/tests/loaders/mcp-platform.spec.ts packages/cluster-mesh/tests/packaging/mcp-tuple.spec.ts.
+- [x] Latest implementation checkpoint: package-lock.json packages/mcp-platform/etc/mcp-wire.api.md packages/mcp-platform/README.md packages/cluster-mesh/tests/conformance/fixtures/README.md.
 - [x] L1: finite JSON budgets and cloned advertised-default traversal extracted from the #689 pattern.
 - [ ] Fixture import progress: 853/853 exact lines pinned from Radar #866.
 - [x] Radar constraints read: blocker 6 belongs inside 2b-MCP after #706 and #689; exclude #865 before cutover.
