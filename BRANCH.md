@@ -29,7 +29,7 @@
 
 ## Feedback Loop
 - [ ] BR76-EX1 — Planned workflow exception: instrument `changes` and `ci-gate`, PR concurrency, and main scheduling without cancelling an active release. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR76-EX2 — Planned Makefile exception: add `ci-run-metrics`, `test-ci-run-metrics`, and `test-ci-expected-results` targets (new). Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR76-EX2 — Planned Makefile exception: add `ci-run-metrics`, `ci-expected-manifest`, `ci-expected-results`, `test-ci-run-metrics`, and `test-ci-expected-results` targets. Impact: named CI measurement and result entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 - [x] R2-2: queue distributions exclude skipped nonexecutions; missing job readiness stays null, with no workflow-age fallback. Docker regressions reproduce both defects.
@@ -48,6 +48,8 @@
 - [x] Rerun qualification: the carried-forward `changes.expected_attempt` selects the original before-dispatch manifest; later attempts preserve run/head identity and require each raw job row to belong to the captured attempt. Future/cross-run manifests fail.
 - [x] Real-capture qualification exposed GitHub's 100-character matrix-name truncation (job 117852314185); expected names now match the observed receipt and ambiguous truncated names fail closed.
 - [x] Capture attempt-specific run metadata: the reference run's generic endpoint now reports attempt 2 while the measured jobs belong to attempt 1; both workflow collectors use the attempt endpoint to preserve that distinction.
+- [x] R2 regression gate: 56 Docker tests pass (19 metrics, 15 expected-result/actual-gate, 22 unchanged publishable wiring); real review capture 39186952208/1 reconciles 58 selected required members and leaves skipped delivery elapsed null.
+- [ ] R2-4 remains open: the account API returns `plan: null`, billing HTTP 404 requests missing `user` scope, and no quota/reservation/cost inventory was supplied. Account owner supplies that inventory; branch author must qualify the resulting bounded dispatch policy, concurrent PR/current-main delivery, rollback, and timing budgets.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
@@ -73,10 +75,10 @@
   - [x] `ci-run-metrics.mjs` complete (helpers, run summary, endpoint readiness, CLI).
   - [x] In `ci-run-metrics.test.mjs` (new), cover overlapping branches, skipped/unmeasured values, timestamp gaps, partial runs, and reruns without double-counting carried-forward jobs.
   - [x] In `ci-expected-results.test.mjs` (new), reject failed, missing, cancelled, and unexpectedly skipped required members; prove legitimately unselected jobs do not block.
-  - [x] Lot gate: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62` green in Docker (15 + 9 tests); captured Main run `39113919235` attempt 1 via API (84 rows = study count; max span 664s = study cluster anchor; executed peak 17 half-open); no sub-spans invented.
+  - [x] Lot gate: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62` green in Docker (19 + 15 tests); unchanged publishable wiring passes 22/22; Main run `39113919235` attempt 1 retains 84 rows, 59 execution queue waits, p50 63s, max span 664s, and executed peak 17 half-open; no sub-spans invented.
 - [ ] **Lot 2 — Finite capacity and concurrency**
   - [ ] Inventory real account quotas/runner classes; record reservation, scheduling priorities, cost, and peak demand in `spec/ci-cd-ten-minutes/capacity.md` (new). Measured so far: runner classes, executed peak 17, runner-minutes 148.25, queue and delivery receipts. Roughly 24 workers is a hypothesis, not a provisioned fact; quota, reservation, and registry cost remain to measure.
-  - [ ] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots. Cancellation ownership is wired (PR-only cancel, gate annotation, unexpected-skip verdict); the measured-slot fan-out cap is not staged yet.
+  - [ ] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots. Cancellation ownership is wired (PR-only cancel, identified gate verdict, unexpected-skip rejection); the measured-slot fan-out cap is not staged yet.
   - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [ ] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
