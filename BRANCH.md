@@ -33,6 +33,8 @@
 - [x] Baseline evidence: publication `src/server/publication.ts:138` hashes arbitrary files without path/size validation; content `src/content/handler.ts:92,154` allows HEAD then returns bytes; `:54` errors have only content-type.
 - [x] Baseline evidence: `src/mcp.ts:18` imports platform tool-configuration at runtime.
 - [x] Resume audit: seven commits and pending MCP split are readable; first build caught the missed needBytes argument in uploads/append; bound it before allocation.
+- [x] Publication review repro: Buffer.slice shares caller storage; mutating the caller during intent recording stored [2] under the digest of [1]. Copy through Uint8Array for Buffer and typed arrays; retain both regression cases.
+- [x] Resume gates: typecheck and lint passed; publication security passed 20/20 including both byte-snapshot cases. Update the HTTP parity replay test to ignore forged hashes and conflict on changed metadata.
 - [ ] Document compatibility changes and migration in packages/artifacts/README.md.
 - [ ] Designated Track writer imports this source plan; this worktree does not append .track.
 
