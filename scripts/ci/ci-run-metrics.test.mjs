@@ -1,6 +1,10 @@
 // ci-run-metrics fixtures (make test-ci-run-metrics).
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   cacheIdentities,
   concurrencyPeak,
@@ -184,6 +188,28 @@ test('step spans report per-step durations without invention', () => {
   assert.equal(spans[0].seconds, 1);
   assert.equal(spans[1].seconds, null);
   assert.deepEqual(stepSpans(job({ steps: undefined })), []);
+});
+
+test('should emit identified job and step measurements through the delivered CLI', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-metrics-'));
+  try {
+    const file = path.join(dir, 'capture.json');
+    const record = job({ steps: [{ name: 'Test', conclusion: 'success',
+      startedAt: '2026-10-18T10:00:00Z', completedAt: '2026-10-18T10:00:58Z' }] });
+    fs.writeFileSync(file, JSON.stringify({ records: [record] }));
+    const cli = spawnSync(process.execPath, ['scripts/ci/ci-run-metrics.mjs', '--run-file', file], { encoding: 'utf8' });
+    assert.equal(cli.status, 0, cli.stderr);
+    const [execution] = JSON.parse(cli.stdout).executions;
+    assert.equal(execution.runId, 1);
+    assert.equal(execution.attempt, 1);
+    assert.equal(execution.jobId, 10);
+    assert.equal(execution.seconds, 224);
+    assert.equal(execution.queueSeconds, null);
+    assert.equal(execution.steps[0].name, 'Test');
+    assert.equal(execution.steps[0].seconds, 58);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('runner-minutes group executed spans and ignore skipped rows', () => {
