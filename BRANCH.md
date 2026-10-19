@@ -35,7 +35,7 @@
 - [x] Resume audit: seven commits and pending MCP split are readable; first build caught the missed needBytes argument in uploads/append; bound it before allocation.
 - [x] Publication review repro: Buffer.slice shares caller storage; mutating the caller during intent recording stored [2] under the digest of [1]. Copy through Uint8Array for Buffer and typed arrays; retain both regression cases.
 - [x] Resume gates: typecheck and lint passed; publication security passed 20/20 including both byte-snapshot cases. Update the HTTP parity replay test to ignore forged hashes and conflict on changed metadata.
-- [ ] Document compatibility changes and migration in packages/artifacts/README.md.
+- [x] Document compatibility changes and migration in packages/artifacts/README.md, including host scope, legacy hashes, publication limits/paths and replay-key migration.
 - [ ] Designated Track writer imports this source plan; this worktree does not append .track.
 
 ## AI Flaky tests
@@ -49,16 +49,16 @@
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and branch**: read rules, inspect findings, verify isolated branch, inspect #707.
-- [ ] **Lot 1 — Authority and idempotency**
+- [x] **Lot 1 — Authority and idempotency**
   - [x] Resolve ensure scope from trusted host context and ignore legacy body scope/hash.
-  - [ ] Namespace service keys by operation and principal; hash validated parameters server-side.
+  - [x] Namespace service keys by operation and principal; hash validated parameters server-side.
   - [x] Ensure service now scopes keys and derives hashes; three focused repros failed against baseline before the fix.
-  - [ ] Tests: service.test.ts, http-security.test.ts, HTTP/MCP parity and existing fixtures.
-- [ ] **Lot 2 — Publication boundaries**
+  - [x] Tests: service.test.ts, http-security.test.ts, HTTP/MCP parity and existing fixtures.
+- [x] **Lot 2 — Publication boundaries**
   - [x] Path/hash/principal repros failed in 17 cases against baseline; added service validation and server-derived replay digest.
   - [x] Validate canonical relative paths, duplicates, count, per-file and total bytes before effects; HTTP checks before allocating decoded bytes.
-  - [ ] Compute publication hash over server-derived file digests and metadata; principal-scoped keys.
-  - [ ] Tests: publication.test.ts, publication-security.test.ts, HTTP publication regressions.
+  - [x] Compute publication hash over server-derived file digests and metadata; principal-scoped keys.
+  - [x] Tests: publication.test.ts, publication-security.test.ts, HTTP publication regressions; full unit suite 183/183 across 25 files.
 - [ ] **Lot 3 — Content HTTP semantics**
   - [x] Suppress all HEAD bodies and apply security/cache headers to errors and activation; regression failed on baseline.
   - [ ] Tests: content-security.test.ts and content.e2e.test.ts.
@@ -68,6 +68,7 @@
   - [x] Finish compatible /mcp wrapper; MCP scoped tests passed 11/11 before release-version update; select unpublished 0.1.4 above npm 0.1.2 and retain #707 peer widening.
   - [ ] Packed clean-consumer proof with platform absent; update package version and provider version.
   - [ ] Tests: mcp.test.ts, packed consumer, typecheck-artifacts, lint-artifacts, test-artifacts.
+  - [x] Typecheck, lint and full unit suite passed with the 0.1.4 source and final HTTP parity assertions.
 - [ ] **Lot 5 — Delivery**
   - [ ] Review every hunk, scope-check before each commit, push and open draft PR using this plan.
   - [ ] Report draft PR number, HEAD and validation receipts; no merge or publication.
