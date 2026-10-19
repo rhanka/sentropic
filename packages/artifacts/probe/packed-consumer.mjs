@@ -10,12 +10,37 @@
  * `PACKED_CONSUMER_OK` on success; any failure throws.
  */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFileSync, statSync } from "node:fs";
 
 let fetchCalls = 0;
 globalThis.fetch = async () => {
   fetchCalls += 1;
   throw new Error("network must not be used");
 };
+
+await import("@sentropic/artifacts");
+const packageRoot = new URL("../", import.meta.resolve("@sentropic/artifacts"));
+const manifest = JSON.parse(readFileSync(new URL("package.json", packageRoot), "utf8"));
+for (const adapter of ["s3", "postgres"]) {
+  const subpath = `./adapters/${adapter}`;
+  assert.equal(import.meta.resolve(`@sentropic/artifacts/adapters/${adapter}`),
+    new URL(`dist/adapters/${adapter}.js`, packageRoot).href);
+  assert.deepEqual(manifest.exports[subpath], {
+    types: `./dist/adapters/${adapter}.d.ts`, import: `./dist/adapters/${adapter}.js`,
+  });
+  for (const target of Object.values(manifest.exports[subpath])) {
+    assert.ok(statSync(new URL(target, packageRoot)).isFile(), `missing ${target}`);
+  }
+}
+for (const migration of ["0001_artifacts.sql", "0002_lifecycle.sql"]) {
+  const sql = readFileSync(new URL(import.meta.resolve(`@sentropic/artifacts/migrations/${migration}`)), "utf8");
+  assert.match(sql, /(?:CREATE|ALTER) TABLE (?:IF NOT EXISTS )?artifacts\./u, `missing SQL in ${migration}`);
+}
+for (const driver of ["@aws-sdk/client-s3", "pg"]) {
+  await assert.rejects(import(driver), { code: "ERR_MODULE_NOT_FOUND" });
+  assert.equal(manifest.peerDependenciesMeta[driver]?.optional, true);
+}
 
 const mcp = await import("@sentropic/artifacts/mcp");
 assert.equal(Object.keys(mcp).some((name) => /WEB_PAGES|WebPages/u.test(name)), false);
@@ -96,17 +121,49 @@ const ensured = await executor.invoke({
 });
 if (ensured.status !== 201) throw new Error("ensure status " + ensured.status);
 const artifactId = ensured.body.artifactId;
+const text = "<h1>Été à Montréal 🏠</h1>";
+const expectedBytes = [...Buffer.from(text, "utf8")];
+const file = { path: "index.html", mimeType: "text/html", text };
+const fileSchema = definition.manifest.tools.find((tool) => tool.name === "artifacts_publish")
+  .inputSchema.properties.files.items;
+assert.equal(fileSchema.properties.text.type, "string");
+assert.equal(fileSchema.oneOf.length, 2);
 const published = await executor.invoke({
   tool: "artifacts_publish",
   actorId: "owner-1",
   args: {
     artifactId,
-    files: [{ path: "index.html", mimeType: "text/html", bytes: [60, 104, 62] }],
+    files: [file, { path: "asset.png", mimeType: "image/png", bytes: [0, 128, 255] }],
     idempotencyKey: "p-1",
     paramsHash: "h-1",
   },
 });
 if (published.status !== 201) throw new Error("publish status " + published.status);
+const request = (method, path, body) => app.handle({ method, path, body, actorId: "owner-1" });
+const current = await request("GET", `/current/${artifactId}`);
+assert.equal(current.status, 200);
+const files = JSON.parse(current.body.manifest).files;
+const html = files.find((entry) => entry.path === "index.html");
+assert.equal(html.digest, "sha256:" + createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex"));
+assert.equal(html.size, expectedBytes.length);
+const served = await request("GET", `/content/${artifactId}/${html.digest}`);
+assert.equal(served.status, 200);
+assert.deepEqual(served.body.bytes, expectedBytes);
+assert.equal(Buffer.from(served.body.bytes).toString("utf8"), text);
+for (const invalid of [
+  { ...file, bytes: expectedBytes }, { ...file, mimeType: "image/png" },
+  { ...file, text: null }, { path: file.path, mimeType: file.mimeType },
+]) {
+  const result = await executor.invoke({
+    tool: "artifacts_publish", actorId: "owner-1", args: { artifactId, files: [invalid] },
+  });
+  assert.deepEqual(result, { status: 400, body: { error: "invalid_request" } });
+}
+const viaHttp = await request("POST", "/publish", { artifactId, files: [file] });
+assert.equal(viaHttp.status, 201);
+const headers = await import("@sentropic/artifacts/content/headers");
+assert.equal(headers.contentHeaders({ mimeType: "text/html", size: html.size })
+  ["cross-origin-resource-policy"], "same-origin");
 const got = await executor.invoke({ tool: "artifacts_get", actorId: "owner-1", args: { artifactId } });
 if (got.status !== 200) throw new Error("get status " + got.status);
 const listed = await executor.invoke({ tool: "artifacts_list", actorId: "owner-1", args: {} });
@@ -115,5 +172,6 @@ if (fetchCalls !== 0) throw new Error("network was used");
 console.log(
   "PACKED_CONSUMER_OK tools=15 manifestDigest=" +
     toolConfig.computeManifestDigest(definition.manifest) +
-    " fetchCalls=" + fetchCalls,
+    " version=" + manifest.version + " utf8Bytes=" + expectedBytes.length +
+    " textValidation=ok corp=same-origin fetchCalls=" + fetchCalls,
 );
