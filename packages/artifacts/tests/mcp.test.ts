@@ -30,7 +30,7 @@ import {
   createArtifactsManifest,
   createArtifactsRegistryDefinition,
   createArtifactsToolExecutor,
-} from '../src/mcp.js';
+} from '../src/mcp-core.js';
 import type { StpConnectorContext } from '@sentropic/mcp-platform';
 import { createProviderRegistry } from '@sentropic/mcp-platform/registry';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
