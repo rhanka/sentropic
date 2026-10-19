@@ -86,3 +86,11 @@ node --input-type=module -e '
   }
   console.log("INSTALLED_STATEFUL_C1_C7_OK");
 '
+# Qualify the optional variant after the explicit twelve-tool core consumer.
+(cd "$source_root/packages/artifacts" && npm pack --pack-destination "$pack_dir" --silent)
+sha256sum "$pack_dir"/sentropic-artifacts-*.tgz
+npm install --ignore-scripts --no-audit --no-fund "$pack_dir"/*.tgz >/dev/null
+test ! -L node_modules/@sentropic/artifacts
+cp "$source_root"/packages/cluster-mesh/tests/conformance/immo-stateful-artifacts.spec.ts tests/conformance/
+sed -i -E "s#'../../src/compose/mcp-stateful.js'#'@sentropic/cluster-mesh/compose/mcp-stateful'#g; s#'../../src/modules/registry.js'#'@sentropic/cluster-mesh'#g; s#'../../src/integrations/mcp/artifacts.js'#'@sentropic/cluster-mesh/mcp/artifacts'#g" tests/conformance/immo-stateful-artifacts.spec.ts
+/tmp/cm-tools/node_modules/.bin/vitest run tests/conformance/immo-stateful-artifacts.spec.ts --environment node --maxWorkers=1

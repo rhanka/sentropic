@@ -18,7 +18,7 @@ const requiredScope = name => name.startsWith('search_') ? 'immo:search'
   : ['list_documents', 'read_document_excerpt', 'get_grille_pdf', 'get_pv_pdf'].includes(name)
     ? 'immo:documents:read' : 'immo:read';
 
-export function makeRegistry(tools = fixture.tools, claims = []) {
+export function makeRegistry(tools = fixture.tools, claims = [], additions = []) {
   const manifest = {
     appId: 'immo-app', providerId: 'immo', version: '0.0.1', displayName: 'Immo',
     resources: [], prompts: [], tools: tools.map(tool => ({
@@ -47,8 +47,15 @@ export function makeRegistry(tools = fixture.tools, claims = []) {
     },
     toolValues: Object.fromEntries(tools.map(tool => [tool.name, { handlerId: tool.name, values: {} }])),
   });
-  registry.select(['immo']); registry.configure('immo', {});
-  const result = registry.compile({ bindings: {}, compatibility: { immo: { manifestDigest: digest } } });
+  for (const { definition } of additions) registry.register(definition);
+  registry.select(['immo', ...additions.map(({ definition }) => definition.manifest.providerId)]);
+  registry.configure('immo', {});
+  const compatibility = { immo: { manifestDigest: digest } };
+  for (const { definition, parameters } of additions) {
+    registry.configure(definition.manifest.providerId, parameters);
+    compatibility[definition.manifest.providerId] = { manifestDigest: computeManifestDigest(definition.manifest) };
+  }
+  const result = registry.compile({ bindings: {}, compatibility });
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
   return result.registry;
 }
