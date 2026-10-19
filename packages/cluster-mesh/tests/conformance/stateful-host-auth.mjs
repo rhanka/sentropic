@@ -37,7 +37,7 @@ export function verifiedAuthority(verified, signal) {
 }
 
 /** Host adapter reads the entire bounded body before any JSON parsing or allocation. */
-export async function readRpc(request, limit) {
+export async function readRpc(request, limit, recordSize = () => {}) {
   const reader = request.body?.getReader();
   if (!reader) return undefined;
   const chunks = [];
@@ -46,6 +46,7 @@ export async function readRpc(request, limit) {
     const { value, done } = await reader.read();
     if (done) break;
     size += value.byteLength;
+    recordSize(size);
     if (size > limit) { await reader.cancel(); throw new RangeError('Request too large'); }
     chunks.push(value);
   }
