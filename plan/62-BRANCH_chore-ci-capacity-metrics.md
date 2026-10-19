@@ -1,8 +1,9 @@
-# Feature: BR-76 — Measure CI/CD and reserve execution capacity
+# Feature: BR-76 — Measure CI/CD execution receipts
 
 ## Objective
-- [ ] Establish result completeness and measured queue capacity before changing execution cost.
+- [ ] Establish result completeness and measured queue/capacity receipts before changing execution cost.
 - [ ] Branch `chore/ci-capacity-metrics`, step 1 of nine; train order BR-76 → BR-77; dependencies: this documentation PR merged; no earlier acceleration branch.
+- [ ] Owner split decision 2026-10-19: this PR claims metrics + expected-results + docs only; Lot 2 and the capacity/contention/rollback parts of Lot 3 move to BR-77 (`plan/71-BRANCH_chore-ci-capacity-policy.md`).
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
@@ -30,6 +31,7 @@
 ## Feedback Loop
 - [ ] BR76-EX1 — Planned workflow exception: instrument `changes` and `ci-gate`, PR concurrency, and main scheduling without cancelling an active release. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
 - [ ] BR76-EX2 — Planned Makefile exception: add `ci-run-metrics`, `test-ci-run-metrics`, and `test-ci-expected-results` targets (new). Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR76-EX3 — Follow-up plan exception: create `plan/71-BRANCH_chore-ci-capacity-policy.md` (forbidden path, owner split decision 2026-10-19). Impact: one new plan file; no code or workflow change. Rollback: delete the file.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
@@ -55,25 +57,21 @@
   - [ ] In `ci-run-metrics.test.mjs` (new), cover overlapping branches, skipped/unmeasured values, timestamp gaps, partial runs, and reruns without double-counting carried-forward jobs.
   - [ ] In `ci-expected-results.test.mjs` (new), reject failed, missing, cancelled, and unexpectedly skipped required members; prove legitimately unselected jobs do not block.
   - [ ] Lot gate: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity-metrics`; compare a captured real run to GitHub timestamps without inventing sub-spans.
-- [ ] **Lot 2 — Finite capacity and concurrency**
-  - [ ] Inventory real account quotas/runner classes; record reservation, scheduling priorities, cost, and peak demand in `spec/ci-cd-ten-minutes/capacity.md` (new). Roughly 24 workers is a hypothesis, not a provisioned fact.
-  - [ ] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots.
-  - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
-- [ ] **Lot 3 — UAT and measured acceptance**
-  - [ ] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
-  - [ ] Budget to measure: classification ≤15s, verdict ≤5s, aggregate critical-path scheduling ≤60s under declared concurrent traffic; compare with the study's 877s E2E ready-to-start wait, not with a fabricated whole-run speedup.
+- [ ] **Lot 2 — Finite capacity and concurrency (moved to BR-77, `plan/71-BRANCH_chore-ci-capacity-policy.md`)**
+  - [ ] Moved: quota/reservation/cost inventory, bounded dispatch, fan-out cap, concurrent PR/main qualification.
+- [ ] **Lot 3 — UAT and measured acceptance (capacity/contention/rollback parts moved to BR-77)**
+  - [ ] Moved to BR-77: obsolete-PR/concurrent-main verification, contention budgets, rollback drill.
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
-  - [ ] Rollback drill: restore prior scheduling policy and conservative dispatch width; keep expected-result and metrics checks; demonstrate that cancellation never stops the current release.
 - [ ] **Lot 4 — Docs consolidation**
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
   - [x] BR-76 receipts recorded in `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` section 9 and `spec/ci-cd-ten-minutes/capacity.md`; gaps: account quota, cost, concurrent PR/main behavior. No temporary EVOL notes were created.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [ ] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity-metrics` must parse/import the changed scripts and reject invalid result sets; application typecheck/lint is not applicable to these script-only edits.
-  - [ ] Build: no image/package build recipe changes; retain the final concurrent PR/main runs' existing build and artifact receipts.
-  - [ ] API regression: no API source/test edits; verify every selected API result from the concurrent runs is present and successful.
+  - [ ] Build: no image/package build recipe changes; retain this head's existing build and artifact receipts.
+  - [ ] API regression: no API source/test edits; verify every selected API result from this head is present and successful.
   - [ ] UI regression: no UI source/test edits; verify the unchanged UI test/build results are present in the complete verdict.
-  - [ ] E2E regression: no browser/VSCode/IdP membership change; reconcile the concurrent runs' selected and executed test identities, including cancellation ownership.
+  - [ ] E2E regression: no browser/VSCode/IdP membership change; reconcile this head's selected and executed test identities (concurrent PR/main qualification moved to BR-77).
   - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
   - [ ] Run `make scope-check ENV=test-ci-capacity-metrics` before each commit; end isolated service lots with `make down ENV=test-ci-capacity-metrics` and `make down ENV=e2e-ci-capacity-metrics`.

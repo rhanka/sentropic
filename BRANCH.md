@@ -1,8 +1,9 @@
-# Feature: BR-76 — Measure CI/CD and reserve execution capacity
+# Feature: BR-76 — Measure CI/CD execution receipts
 
 ## Objective
-- [ ] Establish result completeness and measured queue capacity before changing execution cost.
+- [ ] Establish result completeness and measured queue/capacity receipts before changing execution cost.
 - [ ] Branch `chore/ci-capacity-metrics`, step 1 of nine; train order BR-76 → BR-77; dependencies: this documentation PR merged; no earlier acceleration branch.
+- [ ] Owner split decision 2026-10-19: this PR claims metrics + expected-results + docs only; Lot 2 and the capacity/contention/rollback parts of Lot 3 move to BR-77 (`plan/71-BRANCH_chore-ci-capacity-policy.md`).
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
@@ -30,6 +31,7 @@
 ## Feedback Loop
 - [ ] BR76-EX1 — Planned workflow exception: instrument `changes` and `ci-gate`, PR concurrency, and main scheduling without cancelling an active release. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
 - [ ] BR76-EX2 — Planned Makefile exception: add `ci-run-metrics`, `ci-expected-manifest`, `ci-expected-results`, `test-ci-run-metrics`, and `test-ci-expected-results` targets. Impact: named CI measurement and result entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR76-EX3 — Follow-up plan exception: create `plan/71-BRANCH_chore-ci-capacity-policy.md` (forbidden path, owner split decision 2026-10-19). Impact: one new plan file; no code or workflow change. Rollback: delete the file.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 - [x] R2-2: queue distributions exclude skipped nonexecutions; missing job readiness stays null, with no workflow-age fallback. Docker regressions reproduce both defects.
@@ -52,10 +54,11 @@
 - [x] R2 regression gate: 56 Docker tests pass (19 metrics, 15 expected-result/actual-gate, 22 unchanged publishable wiring); real review capture 39186952208/1 reconciles 58 selected required members and leaves skipped delivery elapsed null.
 - [x] R1-4/R2-4 contention window: overlapping PR/main windows exclude skipped nonexecutions and unmeasurable/inverted intervals (Docker regression).
 - [x] R1-4/R2-4 measured admission and budgets: `admissionDecision` checks observed peak against declared slots plus release reserve; `budgetVerdict` flags 15s/5s/60s breaches and keeps missing inputs to-measure (Docker regressions).
-- [x] R1-4/R2-4 cancellation and release continuity: `cancellationOwnership` attributes each cancelled row to a superseded or current attempt; `releaseContinuity` requires every release endpoint measured (Docker regressions).
+- [x] R1-4/R2-4 cancellation and release continuity: `cancellationOwnership` attributes each cancelled row to a superseded or current attempt within and across runs (head-ref receipts); `releaseContinuity` requires every release endpoint measured and successful (Docker regressions, round-4 probes green).
 - [x] R1-4/R2-4 CLI capacity receipts: the metrics output retains admission, budget, cancellation, and continuity sections from optional capture inputs (Docker regression).
 - [x] Round-3 count correction: attempts 1+2 read 168 input rows, 58 copies dropped, 110 retained rows (60 measured, 50 skipped) in capacity.md and the study; exact-head budget breaches retained with run/attempt/job IDs, Lot 2/3 acceptance still open.
-- [ ] R2-4 remains open: the account API returns `plan: null`, billing HTTP 404 requests missing `user` scope, and no quota/reservation/cost inventory was supplied. Account owner supplies that inventory; branch author must qualify the resulting bounded dispatch policy, concurrent PR/current-main delivery, rollback, and timing budgets.
+- [ ] R2-4 follow-up (BR-77): the account API returns `plan: null`, billing HTTP 404 requests missing `user` scope, and no quota/reservation/cost inventory was supplied. The BR-77 agent inventories quotas/costs itself via the GitHub API, then qualifies the bounded dispatch policy, concurrent PR/current-main delivery, rollback, and timing budgets.
+- [ ] Round-4 E2E root cause: `tests/05-usecase-detail.spec.ts:690` expected 201, got 409 because this branch predated main fix `3dab10a48` (same-owner concurrent lock acquisition returned conflict). Resolved by merging origin/main; no E2E timeout change; branch carries no app-code edit for it.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
@@ -82,24 +85,20 @@
   - [x] In `ci-run-metrics.test.mjs` (new), cover overlapping branches, skipped/unmeasured values, timestamp gaps, partial runs, and reruns without double-counting carried-forward jobs.
   - [x] In `ci-expected-results.test.mjs` (new), reject failed, missing, cancelled, and unexpectedly skipped required members; prove legitimately unselected jobs do not block.
   - [x] Lot gate: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62` green in Docker (19 + 15 tests); unchanged publishable wiring passes 22/22; Main run `39113919235` attempt 1 retains 84 rows, 59 execution queue waits, p50 63s, max span 664s, and executed peak 17 half-open; no sub-spans invented.
-- [ ] **Lot 2 — Finite capacity and concurrency**
-  - [ ] Inventory real account quotas/runner classes; record reservation, scheduling priorities, cost, and peak demand in `spec/ci-cd-ten-minutes/capacity.md` (new). Measured so far: runner classes, executed peak 17, runner-minutes 148.25, queue and delivery receipts. Roughly 24 workers is a hypothesis, not a provisioned fact; quota, reservation, and registry cost remain to measure.
-  - [ ] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots. Cancellation ownership is wired (PR-only cancel, identified gate verdict, unexpected-skip rejection); the measured-slot fan-out cap is not staged yet.
-  - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
-- [ ] **Lot 3 — UAT and measured acceptance**
-  - [ ] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
-  - [ ] Budget to measure: classification ≤15s, verdict ≤5s, aggregate critical-path scheduling ≤60s under declared concurrent traffic; compare with the study's 877s E2E ready-to-start wait, not with a fabricated whole-run speedup.
+- [ ] **Lot 2 — Finite capacity and concurrency (moved to BR-77, `plan/71-BRANCH_chore-ci-capacity-policy.md`)**
+  - [ ] Moved: quota/reservation/cost inventory, bounded dispatch, fan-out cap, concurrent PR/main qualification.
+- [ ] **Lot 3 — UAT and measured acceptance (capacity/contention/rollback parts moved to BR-77)**
+  - [ ] Moved to BR-77: obsolete-PR/concurrent-main verification, contention budgets, rollback drill.
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
-  - [ ] Rollback drill: restore prior scheduling policy and conservative dispatch width; keep expected-result and metrics checks; demonstrate that cancellation never stops the current release.
 - [x] **Lot 4 — Docs consolidation**
   - [x] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [x] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [x] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62` must parse/import the changed scripts and reject invalid result sets; application typecheck/lint is not applicable to these script-only edits.
-  - [ ] Build: no image/package build recipe changes; retain the final concurrent PR/main runs' existing build and artifact receipts.
-  - [ ] API regression: no API source/test edits; verify every selected API result from the concurrent runs is present and successful.
+  - [ ] Build: no image/package build recipe changes; retain this head's existing build and artifact receipts.
+  - [ ] API regression: no API source/test edits; verify every selected API result from this head is present and successful.
   - [ ] UI regression: no UI source/test edits; verify the unchanged UI test/build results are present in the complete verdict.
-  - [ ] E2E regression: no browser/VSCode/IdP membership change; reconcile the concurrent runs' selected and executed test identities, including cancellation ownership.
+  - [ ] E2E regression: no browser/VSCode/IdP membership change; reconcile this head's selected and executed test identities (concurrent PR/main qualification moved to BR-77).
   - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
   - [ ] Run `make scope-check ENV=test-ci-62` before each commit; end isolated service lots with `make down ENV=test-ci-62` and `make down ENV=e2e-ci-62`.
