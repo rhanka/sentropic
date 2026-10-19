@@ -78,6 +78,17 @@ export const decodeScopeState = (json: string): BackendScopeState => {
 
 export class SqliteStateBackend extends MemoryBackend {
   private readonly knownScopes = new Map<string, StorageScope>();
+  private admitted = false;
+
+  assertIdle(): void {
+    if (this.admitted) throw new CanonicalOwnershipError('instance-busy', 'SQLite operation is still active');
+  }
+
+  admit(): () => void {
+    this.assertIdle();
+    this.admitted = true;
+    return () => { this.admitted = false; };
+  }
 
   constructor(private readonly engine: SqliteEngine) {
     super(createIndexedBackendScopeState);

@@ -46,6 +46,7 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] **R2 round 2**: one immediate admission slot per SQLite backend covers reads, preparation, persistence and rollback across all bound handles/scopes; overlapping independent calls refuse with `instance-busy`, without a queue. Regression probes cover rejected-write visibility and acknowledged-write preservation after retry.
 - [x] **BR704-EX3**: owner-requested origin/main integration; incoming plan/spec changes only, no authored changes there. The conflict-free merge has no resolution delta; its first-parent size reflects imported main commits. Rollback: revert the integration merge.
 - [x] **BR704-EX1** (R5): touch `packages/cluster-mesh/src/modules/catalog.ts` (one line: Comments range `>=0.19.0 <0.20.0` to `>=0.19.0 <0.21.0`) so the bumped 0.20.0 package passes its own installed gate. Reason: package self-compatibility, no behavior change. Impact: Comments module admits 0.19.x and 0.20.x. Rollback: revert the range line.
 - [x] **R3**: Postgres possession hook runs after `roots.publish` (outbox callback included); protocol comment states the seam is not the full G3 guarantee. Regression test covers loss inside outbox with rollback.
