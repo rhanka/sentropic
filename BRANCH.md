@@ -35,6 +35,8 @@
 - [x] Resume audit: seven commits and pending MCP split are readable; first build caught the missed needBytes argument in uploads/append; bound it before allocation.
 - [x] Publication review repro: Buffer.slice shares caller storage; mutating the caller during intent recording stored [2] under the digest of [1]. Copy through Uint8Array for Buffer and typed arrays; retain both regression cases.
 - [x] Resume gates: typecheck and lint passed; publication security passed 20/20 including both byte-snapshot cases. Update the HTTP parity replay test to ignore forged hashes and conflict on changed metadata.
+- [x] Packed-proof scope: the compatible root barrel re-exports /mcp and still requires the platform; the platform-absent consumer imports /mcp-core directly. Document the distinction without changing root exports.
+- [x] Review boundary: every implementation hunk inspected and regressions qualified; independent consensus is not established because exact resumed-author model/effort metadata is unavailable. Maintainer review remains a pre-merge gate outside draft delivery.
 - [x] Document compatibility changes and migration in packages/artifacts/README.md, including host scope, legacy hashes, publication limits/paths and replay-key migration.
 - [ ] Designated Track writer imports this source plan; this worktree does not append .track.
 
@@ -59,15 +61,15 @@
   - [x] Validate canonical relative paths, duplicates, count, per-file and total bytes before effects; HTTP checks before allocating decoded bytes.
   - [x] Compute publication hash over server-derived file digests and metadata; principal-scoped keys.
   - [x] Tests: publication.test.ts, publication-security.test.ts, HTTP publication regressions; full unit suite 183/183 across 25 files.
-- [ ] **Lot 3 — Content HTTP semantics**
+- [x] **Lot 3 — Content HTTP semantics**
   - [x] Suppress all HEAD bodies and apply security/cache headers to errors and activation; regression failed on baseline.
-  - [ ] Tests: content-security.test.ts and content.e2e.test.ts.
-- [ ] **Lot 4 — Platform-free MCP and release**
+  - [x] Tests: content-security.test.ts and content.e2e.test.ts; complete integration/E2E lane passed 30/30 across six files on isolated Postgres/MinIO, then stopped the services.
+- [x] **Lot 4 — Platform-free MCP and release**
   - [x] Preserve /mcp compatibility; expose /mcp-core with no runtime platform dependency.
   - [x] Relocate MCP source with public exports preserved, before splitting its platform wrapper in a separate atomic commit.
   - [x] Finish compatible /mcp wrapper; MCP scoped tests passed 11/11 before release-version update; select unpublished 0.1.4 above npm 0.1.2 and retain #707 peer widening.
-  - [ ] Packed clean-consumer proof with platform absent; update package version and provider version.
-  - [ ] Tests: mcp.test.ts, packed consumer, typecheck-artifacts, lint-artifacts, test-artifacts.
+  - [x] Packed clean-consumer proof with platform absent; package and provider version 0.1.4; optional platform peer >=0.3.0 <0.5.0.
+  - [x] Tests: mcp.test.ts, packed consumer, typecheck-artifacts, lint-artifacts, test-artifacts; PACKED_MCP_CORE_OK, PACKED_CONSUMER_OK and PACKED_ADAPTERS_OK.
   - [x] Typecheck, lint and full unit suite passed with the 0.1.4 source and final HTTP parity assertions.
 - [ ] **Lot 5 — Delivery**
   - [ ] Review every hunk, scope-check before each commit, push and open draft PR using this plan.

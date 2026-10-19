@@ -36,6 +36,7 @@ Import `createArtifactsManifest`, `createArtifactsToolExecutor` or
 `createArtifactsAdapter` from `@sentropic/artifacts/mcp-core` when the platform
 is absent. This entry has no runtime platform import. Existing `/mcp` exports,
 including `createArtifactsRegistryDefinition`, retain their platform integration.
+The existing root barrel re-exports `/mcp` and also requires the platform.
 Platform types remain referenced in TypeScript declarations for adapter typing.
 `make probe-artifacts-packed-consumer ENV=test-artifacts-hardening` installs the
 tarball alone in a separate consumer, proves the platform is absent and runs the
@@ -181,7 +182,7 @@ a registrable domain. Assets within the same artifact origin remain loadable.
   `artifacts_*` tools with closed schemas, a host-bindable invocation
   scope, an executor over the same HTTP app and a platform adapter.
 - `src/mcp.ts` — the compatible `@sentropic/mcp-platform` kernel registry
-  definition wrapper (the optional peer is required at runtime only here).
+  definition wrapper (the optional peer is required here and by the root barrel).
 
 Ticket issuance and redemption both require `subjectId`, `artifactId`,
 `releaseId` and `channel`. The handler checks the release resolved from the
