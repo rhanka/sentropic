@@ -2,7 +2,7 @@
 
 Generic, host-independent artifact domain state for the Sentropic artifacts
 provider (`sentropic.artifacts`, spec-v8 §9), covering L-5a–5e. Version
-`0.2.0` adds UTF-8 text publication, exposes storage adapters and ships SQL migrations.
+`0.1.2` adds UTF-8 text publication, exposes storage adapters and ships SQL migrations.
 Version `0.1.1` fixed activation ticket release and channel binding (FL-ACT).
 
 ## What's here (L-5a)
