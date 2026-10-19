@@ -28,13 +28,14 @@ const MISSING = '00000000-0000-4000-8000-000000000000';
 const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true }]);
 const FILES = [{ path: 'index.html', mimeType: 'text/html', bytes: [1, 2, 3] }];
 
-function makeApp() {
+function makeApp(limits = {}) {
   const state = createMemoryStateStore();
   const blobs = createMemoryBlobStore();
   return createHttpArtifactApp({
     parameterSchema: SCHEMA,
     artifacts: createArtifactService({ kv: createMemoryKv(), uuid: createCryptoUuid() }),
     publication: createPublicationService({
+      limits,
       state,
       blobs,
       intents: createMemoryIntentStore(),
@@ -73,6 +74,22 @@ async function seeded() {
 }
 
 describe('http security (m5)', () => {
+  it('should bound inline byte arrays, UTF-8 text, aggregate bytes and file counts', async () => {
+    const app = makeApp({ maxFiles: 2, maxFileBytes: 3, maxTotalBytes: 3 });
+    const ensured = await app.handle(req('POST', '/ensure', { bindingName: 'bounded',
+      idempotencyKey: 'ensure', parameters: { title: 'Bounded' } }, OWNER));
+    const artifactId = (ensured.body as { artifactId: string }).artifactId;
+    const file = { path: 'index.html', mimeType: 'text/html', bytes: [1, 2] };
+    for (const files of [
+      [{ ...file, bytes: [1, 2, 3, 4] }],
+      [{ path: file.path, mimeType: file.mimeType, text: 'éé' }],
+      [file, { ...file, path: 'second' }], [file, file, file],
+    ]) expect((await app.handle(req('POST', '/publish', { artifactId, files }, OWNER))).status).toBe(400);
+    expect((await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER))).status).toBe(404);
+    expect((await app.handle(req('POST', '/publish', { artifactId,
+      files: [{ ...file, bytes: [1, 2, 3] }] }, OWNER))).status).toBe(201);
+  });
+
   it('should trust host scope and validated parameters instead of body scope or hash', async () => {
     const app = makeApp();
     const body = { bindingName: 'scope-test', storageScopeId: 'forged',

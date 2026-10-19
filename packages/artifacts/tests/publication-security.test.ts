@@ -7,15 +7,31 @@ const INPUT = {
   ownerId: 'alice', storageScopeId: 'scope-1', artifactId: 'artifact-1', profile: {},
   files: [{ path: 'index.html', mimeType: 'text/html', bytes: new Uint8Array([1, 2]) }],
 };
-function world() {
+function world(limits = {}) {
   const blobs = createMemoryBlobStore();
   const intents = createMemoryIntentStore();
-  const service = createPublicationService({ state: createMemoryStateStore(), blobs, intents,
+  const service = createPublicationService({ state: createMemoryStateStore(), blobs, intents, limits,
     idempotency: createIdempotencyStore(createMemoryIdempotencyKv()) });
   return { service, blobs, intents };
 }
 
 describe('publication security', () => {
+  it('should enforce file count, per-file bytes and total bytes at their boundaries', async () => {
+    const { service, blobs, intents } = world({ maxFiles: 2, maxFileBytes: 2, maxTotalBytes: 3 });
+    const file = INPUT.files[0]!;
+    for (const files of [
+      [{ ...file, bytes: new Uint8Array(3) }],
+      [file, { ...file, path: 'second' }],
+      [file, { ...file, path: 'second' }, { ...file, path: 'third' }],
+    ]) await expect(service.publish({ ...INPUT, files })).rejects.toThrow(/budget/);
+    expect(await blobs.listKeys('')).toEqual([]);
+    expect(await intents.listPending()).toEqual([]);
+    const accepted = await service.publish({ ...INPUT, files: [file,
+      { ...file, path: 'nested/é.txt', bytes: new Uint8Array(1) }] });
+    expect(accepted.releaseId).toBeDefined();
+    for (const value of [0, -1, Infinity, NaN, 1.5]) expect(() => world({ maxFiles: value })).toThrow(/invalid/);
+  });
+
   it.each(['../x', '/x', 'x/../y', 'x//y', './x', 'x/', 'x\\y', '%2e%2e/x',
     'a%2fb', 'x?query', 'x#fragment', 'x\u0000', 'https://host/x', 'x'.repeat(1025)])(
     'should refuse unsafe path %s before any external effect', async (path) => {

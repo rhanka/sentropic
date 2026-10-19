@@ -53,7 +53,7 @@
   - [ ] Tests: service.test.ts, http-security.test.ts, HTTP/MCP parity and existing fixtures.
 - [ ] **Lot 2 — Publication boundaries**
   - [x] Path/hash/principal repros failed in 17 cases against baseline; added service validation and server-derived replay digest.
-  - [ ] Validate canonical relative paths, duplicates, count, per-file and total bytes before effects.
+  - [x] Validate canonical relative paths, duplicates, count, per-file and total bytes before effects; HTTP checks before allocating decoded bytes.
   - [ ] Compute publication hash over server-derived file digests and metadata; principal-scoped keys.
   - [ ] Tests: publication.test.ts, publication-security.test.ts, HTTP publication regressions.
 - [ ] **Lot 3 — Content HTTP semantics**
