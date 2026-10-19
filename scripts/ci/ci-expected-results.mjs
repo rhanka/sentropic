@@ -13,6 +13,56 @@ export function normalizeConclusion(conclusion) {
   return String(conclusion ?? '').trim().toLowerCase();
 }
 
+// Interpret only the job-selection grammar used by this workflow. Unsupported
+// syntax fails closed; workflow text and context values are never executable code.
+export function evaluateSelection(expression, lookup) {
+  const source = String(expression).replace(/^\$\{\{\s*|\s*\}\}$/g, '');
+  const tokens = source.match(/'(?:[^']|'')*'|[A-Za-z_][\w.-]*|==|!=|&&|\|\||[!()]/g) ?? [];
+  if (tokens.join('') !== source.replace(/\s+(?=(?:[^']*'[^']*')*[^']*$)/g, '')) {
+    throw new Error(`Unsupported selection syntax: ${source}`);
+  }
+  let index = 0;
+  const take = (token) => {
+    if (tokens[index++] !== token) throw new Error(`Expected ${token}: ${source}`);
+  };
+  const atom = () => {
+    const token = tokens[index++];
+    if (token === '!') return !atom();
+    if (token === '(') { const value = or(); take(')'); return value; }
+    if (token?.startsWith("'")) return token.slice(1, -1).replaceAll("''", "'");
+    if (token === 'true' || token === 'false') return token === 'true';
+    if (tokens[index] === '(') {
+      take('('); take(')');
+      if (token === 'always') return true;
+      if (token === 'cancelled') return false;
+      throw new Error(`Unsupported selection function: ${token}`);
+    }
+    if (!token) throw new Error(`Unexpected end: ${source}`);
+    return lookup(token);
+  };
+  const compare = () => {
+    const left = atom();
+    const op = tokens[index];
+    if (op !== '==' && op !== '!=') return left;
+    index += 1;
+    const right = atom();
+    return op === '==' ? left === right : left !== right;
+  };
+  const and = () => {
+    let value = compare();
+    while (tokens[index] === '&&') { index += 1; const right = compare(); value = value && right; }
+    return value;
+  };
+  const or = () => {
+    let value = and();
+    while (tokens[index] === '||') { index += 1; const right = and(); value = value || right; }
+    return value;
+  };
+  const value = or();
+  if (index !== tokens.length) throw new Error(`Unexpected selection token: ${tokens[index]}`);
+  return Boolean(value);
+}
+
 // expected: [{ job, required?, selected?, matrix? | members? }]
 // (defaults: required true, selected true). A `matrix` array of member
 // suffixes expands to GitHub matrix names `${job} (${suffix})` (observed:

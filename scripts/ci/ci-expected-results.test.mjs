@@ -1,10 +1,21 @@
 // ci-expected-results fixtures (make test-ci-expected-results).
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { evaluateExpected } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
+
+test('should evaluate workflow selection expressions without running expression text as code', () => {
+  const values = { 'needs.changes.outputs.global': 'true', 'github.ref': 'refs/pull/705/merge' };
+  const lookup = (key) => values[key] ?? '';
+  assert.equal(evaluateSelection("!cancelled() && (needs.changes.outputs.global == 'true' || always())", lookup), true);
+  assert.equal(evaluateSelection("github.ref == 'refs/heads/main' && needs.changes.outputs.global == 'true'", lookup), false);
+  assert.equal(evaluateSelection("needs.changes.outputs.api != 'true'", lookup), true);
+  for (const expression of ["unknown()", "true; process.exit()", "(true", "true false"]) {
+    assert.throws(() => evaluateSelection(expression, lookup), /Unsupported|Expected|Unexpected/);
+  }
+});
 
 test('all-success selected sets pass', () => {
   const verdict = evaluateExpected({
