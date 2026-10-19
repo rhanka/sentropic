@@ -32,9 +32,6 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `plan/6[2-9]-BRANCH_*.md` (BR704-EX3, unchanged origin/main merge input only)
-  - `plan/70-BRANCH_test-ci-ten-minute-proof.md` (BR704-EX3, unchanged origin/main merge input only)
-  - `spec/**` (BR704-EX3, unchanged origin/main merge input only)
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
   - `packages/cluster-mesh/src/modules/catalog.ts` (BR704-EX1, one range line only)
@@ -46,6 +43,10 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] **Round-2 regression inventory**: `sqlite-admission.spec.ts` (two R2 probes); `sqlite-capabilities.spec.ts` (R4 and two R8 probes); `sqlite-transaction-port.spec.ts` (R7 plus prepared/escaped readers); `sqlite-s0.spec.ts` (R1 plus caller/writer crashes, contention/checkpoint/reopen); `sqlite-s0-identity.spec.ts` (aliases/rename/replacement). Default `cluster-mesh-sqlite-test` now includes all SQLite specs.
+- [x] **Round-2 scope accounting**: owner-authorized lot-1 remediation adds three SQLite implementation files and five focused SQLite specs within Allowed Paths; the prior whole-branch 12-file proposal cannot cover the already-17-file draft plus these fixes. No S2-S4 functionality or production-volume qualification is added.
+- [x] **Round-2 package version**: registry recheck on 2026-10-19 returns published `0.19.1`; candidate `0.20.0` remains a valid unpublished bump for this PR.
+- [x] **Round-2 observed test failure**: first full live-PG storage sweep timed out at 5000 ms in `postgres-external-journal.spec.ts`; scoped rerun passed in 237 ms with unchanged source/timeouts. Full sweep rerun required before handoff; no flaky waiver requested.
 - [x] **S0 identity**: canonical symlinks share admission; hard-linked stores refuse before open, and a newly added hard link makes a live engine terminal. Rename/replacement tests verify reader and mutation revocation. Restoring a path/alias never revives the old handle.
 - [x] **R1 seventh probe / S0 core**: the late BEFORE INSERT callback closes a foreign caller fd and attempts a production successor open; the successor must remain `instance-busy` while the original commits under continuous possession. Added interprocess/same-process, checkpoint, clean reopen and writer-SIGKILL/WAL recovery coverage. This replaces the old unsafe requirement to admit a successor after a caller fd close.
 - [x] **R1 round 2 runtime**: SQLite is opened only in a dedicated Node process running a fixed program; arbitrary caller callbacks stay in the caller. Foreign caller fd closes cannot release the writer process's EXCLUSIVE lock. Linux/procfs is required; unsupported tuples fail closed. Effective receipt records owner PID/isolation. A post-write check also refuses SQL-trigger ownership changes before COMMIT.
