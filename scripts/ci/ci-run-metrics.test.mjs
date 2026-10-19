@@ -242,6 +242,28 @@ test('should emit identified job and step measurements through the delivered CLI
   }
 });
 
+test('should emit capacity receipts through the delivered CLI when inputs exist', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-metrics-'));
+  try {
+    const file = path.join(dir, 'capture.json');
+    fs.writeFileSync(file, JSON.stringify({ records: [job()], sourceSha: 'source', workflowSha: 'workflow',
+      endpoints: { images: ['build-api-image'] },
+      capacity: { availableSlots: 24, reserveSlots: 2 },
+      timings: { classificationSeconds: 8, verdictSeconds: 12 } }));
+    const cli = spawnSync(process.execPath, ['scripts/ci/ci-run-metrics.mjs', '--run-file', file], { encoding: 'utf8' });
+    assert.equal(cli.status, 0, cli.stderr);
+    const out = JSON.parse(cli.stdout);
+    assert.equal(out.admission.status, 'admitted');
+    assert.equal(out.admission.headroom, 21);
+    assert.equal(out.budgets.budgets.classificationSeconds.status, 'pass');
+    assert.equal(out.budgets.budgets.verdictSeconds.status, 'breach');
+    assert.equal(out.cancellation.cancelledCount, 0);
+    assert.equal(out.continuity.continuous, true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('runner-minutes group executed spans and ignore skipped rows', () => {
   const minutes = runnerMinutes([
     job({ runnerName: 'GitHub Actions 1', startedAt: '2026-10-18T10:00:00.000Z', completedAt: '2026-10-18T10:01:00.000Z' }),
