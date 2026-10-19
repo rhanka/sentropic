@@ -74,7 +74,7 @@ export function makeStatefulHost(tools, overrides = {}) {
       });
       entry = { server, transport, lifetime, sub: verified.sub,
         client: verified.claims.azp ?? verified.claims.client_id, createdAt: now, lastSeenAt: now,
-        closed: false, pending: new Set() };
+        closed: false, pending: new Set(), calls: new Set() };
       const originalClose = transport.close.bind(transport);
       transport.close = async () => {
         if (entry.closed) return;
@@ -93,7 +93,17 @@ export function makeStatefulHost(tools, overrides = {}) {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (request.headers.has('authorization')) stats.sdkCredentials++;
-    const execute = () => current.transport.handleRequest(request);
+    if (body?.method === 'tools/call') current.calls.add(body.id);
+    const execute = async () => {
+      const response = await current.transport.handleRequest(request);
+      if (body?.method === 'notifications/cancelled' && current.calls.has(body.params?.requestId)) {
+        // SDK Protocol suppresses replies after cancellation. The host releases the
+        // original HTTP response explicitly through the transport's public send seam.
+        await current.transport.send({ jsonrpc: '2.0', id: body.params.requestId,
+          error: { code: -32603, message: 'Request cancelled' } });
+      }
+      return response;
+    };
     const authority = verifiedAuthority(verified, AbortSignal.any([request.signal, current.lifetime.signal]));
     const operation = hooks ? hooks.run(authority, execute) : execute();
     if (c.req.method === 'POST') pending.add(operation);
@@ -104,7 +114,10 @@ export function makeStatefulHost(tools, overrides = {}) {
       else if (!sid) await close(current);
       return response;
     } catch (error) { if (!sid) await close(current); throw error; }
-    finally { pending.delete(operation); current.pending.delete(operation); }
+    finally {
+      pending.delete(operation); current.pending.delete(operation);
+      if (body?.method === 'tools/call') current.calls.delete(body.id);
+    }
   });
   return { app, host, token, stats, sessions, sweep,
     setNow: value => { now = value; }, admission: () => admission,
