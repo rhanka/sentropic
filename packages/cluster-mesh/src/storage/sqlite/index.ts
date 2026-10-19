@@ -115,14 +115,15 @@ const persistAfter = <T extends object>(bound: T, backend: SqliteStateBackend, e
         };
       }
       return async (...args: unknown[]) => {
-        const release = backend.admit();
+        const joined = property === 'transact' && backend.joinsTransaction(scope);
+        const release = joined ? () => {} : backend.admit();
         try {
           engine.assertOwnership();
           if (property === 'transact' && typeof args[1] === 'function') {
             const callback = args[1] as (tx: KernelTransaction) => Promise<unknown>;
             args[1] = (tx: KernelTransaction) => withSqliteTransaction(engine, tx, callback);
           }
-          if (READONLY_METHODS.has(String(property))) {
+          if (READONLY_METHODS.has(String(property)) || joined) {
             const outcome = await (value as (...args: unknown[]) => unknown).apply(target, args);
             engine.assertOwnership();
             return outcome;
@@ -131,7 +132,8 @@ const persistAfter = <T extends object>(bound: T, backend: SqliteStateBackend, e
           // or durable publication has completed. Inner-op atomicity stays
           // with the coordinator and its captured root identity.
           const snapshot = backend.snapshotScope(scope);
-          const outcome = await (value as (...args: unknown[]) => unknown).apply(target, args);
+          const invoke = async () => (value as (...args: unknown[]) => unknown).apply(target, args);
+          const outcome = property === 'transact' ? await backend.withTransaction(scope, invoke) : await invoke();
           try {
             engine.assertOwnership();
             backend.flushScope(scope);
