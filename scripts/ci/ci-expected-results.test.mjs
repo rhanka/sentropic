@@ -29,6 +29,7 @@ test('should capture every page of the current attempt at the actual gate and fa
   await execute(() => files, context, fetch, { env: { GITHUB_RUN_ATTEMPT: '3' } });
   assert.equal(captured.jobs.length, 2);
   assert.equal(captured.run.run_attempt, 3);
+  assert.match(requests[0], /\/attempts\/3$/);
   assert.match(requests[1], /\/attempts\/3\/jobs\?per_page=100&page=1$/);
   assert.match(requests[2], /page=2$/);
   await assert.rejects(execute(() => files, context, async () => ({ ok: false, status: 503 }),
