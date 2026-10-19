@@ -1,5 +1,7 @@
 # W0 — décisions du propriétaire pour F3 et F4
 
+> Réponses reçues le 19 octobre 2026 : [copie verbatim versionnée](../docs/baselines/app-cm-w0/owner-decisions.md). Les questions, options et recommandations ci-dessous sont historiques ; les réponses les remplacent. Q2 supprime le besoin de fenêtres et de réservation temporelle des slots puisqu'il n'y a pas d'utilisateurs. Q4 prévoit un enrôlement dédié ultérieur ; aucune clé n'est créée par ce dossier.
+
 ## 1. Décisions demandées
 
 [FACT] La demande `AGENT_SIG:7f3a9c2e1b` réserve F3/F4 au propriétaire. Ce dossier prépare quatre réponses : **Q1 personnes et responsabilités ; Q2 fenêtres ; Q3 signataire ; Q4 source de clé et politique de confiance**. Aucun nom, créneau, mandat ou clé n'est adopté ici. Toutes les recommandations sont des **propositions**.
