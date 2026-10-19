@@ -38,7 +38,7 @@
 
 ## Feedback Loop
 - [ ] `attention`: F1/F2 read-only collection is recorded in cluster-readings.md and recovery-readings.md; serving-tenant Kubernetes/DB/object access and current recovery/ACL/disposition evidence remain missing.
-- [ ] `attention`: SC must confirm named infra/promotion operators, shared-file ownership, signer authorization and owner/operator windows; logical reservations do not establish availability.
+- [ ] `attention`: Owner decisions F3/F4 are prepared in .h2a/owner-questions-w0.md; named operators/accepted file ownership, staffed windows and authorized signer/key source remain unassigned.
 - [ ] `blocked`: W0 acceptance/dispatch remains gated by B01–B08 in `docs/baselines/app-cm-w0/authorization.md`; draft delivery does not close those evidence gaps.
 - [x] `clarification`: D2 owns control 0012–0016 and O1 owns 9495/5695/1595; W1 reserves 0017, with app test ports 9710–9717 and e2e 9720–9727 (full triples in reservations.md).
 - [x] Track import belongs to the designated root writer; this concurrent worktree updates mergeable source records only (`track-operation` contract).
@@ -69,12 +69,14 @@
 - [ ] **Lot 2 — Dispatch and authorization register**
   - [x] Reserve migration IDs, ports, six train slots and shared-file writer roles in `reservations.md`; SC confirms personal assignments/availability under B06.
   - [x] Record pending runtime/operator/key/approval dependencies, owners, deadlines and observable gates in `authorization.md`.
+  - [x] F3/F4 follow-up: prepare the requested French owner questions with context, options, consequences and explicitly provisional recommendations; no assignments or keys invented.
   - [x] Consolidate findings into the bounded downstream branch handoffs, including W3/T3 EX1 and P/TG EX2.
 - [ ] **Lot 3 — Final validation and draft delivery**
   - [x] Check JSON, source citations, secret hygiene, reservations, prototype/verifier evidence and every diff hunk; run `make scope-check` before each commit.
   - [x] Reproducible committed `probe.mk`: `w0-host-fit` and `w0-record-check` pass on the pinned Node image, exact selectors and frozen public vectors; no product services/credentials.
+  - [x] Follow-up validation: w0-record-check passes; 34 local record/dossier links and retained CI JSON checked; COPY fixture passes; live digests and independent acceptance stay pending.
   - [x] API/UI/E2E/security suites: not applicable to documentation-only W0; downstream file-level gates are retained in handoffs.
   - [ ] Independent acceptance-scope review; coding instance does not review itself.
   - [x] Prepare this exact file as draft PR body; preserve pending evidence/review gates and the separate production authorization register.
-  - [ ] Push branch; open DRAFT PR with this file as exact body and post the required short execution-plan comment.
+  - [x] Initial draft PR #702 and required execution-plan comment delivered at reviewed head ce26bb090bf1d2a43a00d9c97671269e18152e52; follow-up evidence updates the same draft.
   - [ ] Report PR number and exact head SHA, then stop; keep BRANCH.md and leave merge/deployment to separately authorized actors.
