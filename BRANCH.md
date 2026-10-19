@@ -5,7 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Base: spec HEAD `8ac9c7c64381c98b1a52d81d6ede8bce2b46ecc7` after rebase; initial creation at `f560d073b9c0d04fd5947e018a7abb2632e302ed`; branch `feat/cluster-mesh-mcp-stateful-wrap`.
-- [x] Worktree `tmp/worktrees/cm-mcp-stateful-wrap-impl`; ENV=test-cm-wrap; no listening ports or root dev changes.
+- [x] Worktree `tmp/worktrees/cm-mcp-stateful-wrap-impl`; ENV=test-cm-mcp-wrap; no listening ports or root dev changes.
 - [x] Make only, ENV last, no Python, sequential Docker builds, selective staging, make commit, under 150 changed lines per commit.
 - [x] Preserve host identity, sessions and ownership; prohibit bearer passthrough, exchange installation and legacy fallback.
 - [x] Do not merge or publish; retain BRANCH.md at draft delivery.
@@ -33,7 +33,8 @@
 
 ## Feedback Loop
 - [x] Owner input (2026-10-19): embed mcp-platform as a regular mesh dependency, preserving one npm-resolved kernel without bundling duplicate code. Immo installs `@sentropic/cluster-mesh@0.21.0` plus optional `@sentropic/artifacts@0.1.3`; platform 0.4.0 resolves transitively. Host entries: `@sentropic/cluster-mesh/compose/mcp-stateful`, `@sentropic/cluster-mesh/mcp/registry`, `@sentropic/cluster-mesh/mcp/artifacts`; artifacts definition and executor both come through mesh.
-- [ ] Embedded-platform validation: regenerate the root lock, qualify a consumer declaring only mesh (then mesh plus artifacts), prove twelve Immo plus fifteen artifacts tools, and inspect CI at the pushed HEAD.
+- [x] Embedded-platform installed proof: mesh alone resolves platform 0.4.0 transitively; public types, refusal probes and 15 core tests pass. Adding only artifacts 0.1.3 passes the 27-tool test through mesh exports. CI wiring passes 22 tests; root lock was regenerated in 9063a2597.
+- [ ] Resume delivery: merge origin/main, resolve the release tuple and P1 provenance, rerun local gates, push and inspect CI at the new HEAD; keep draft #707 without merge or publication.
 - [x] Latest implementation checkpoint: BRANCH.md.
 - [x] BRWRAP-EX2 / Astra R1 release repair: authorize the artifacts manifest patch and CI wiring contract tests. Reason: artifacts 0.1.2 excludes platform 0.4.0, breaking canonical root installation and complete release qualification. Impact: artifacts 0.1.3 widens its platform peer to >=0.3.0 <0.5.0; retain platform 0.4.0 and mesh 0.21.0 for the new wire/wrap API. Rollback: revert the tuple, regenerated lock and matching workflow/tests together.
 - [x] R1 implementation: regenerate the root lock without peer bypasses; restore artifacts in candidate, post-publication and bootstrap tuples; require its publisher before mesh; pass canonical platform, complete packaging, 27-tool artifacts and twelve-tool core qualification. Exact-head CI, including installed comments, remains the delivery gate.

@@ -1,8 +1,7 @@
 import { expect, it, vi } from 'vitest';
-import { createArtifactsToolExecutor, type ArtifactsApp } from '@sentropic/artifacts/mcp';
 import { createStatefulMcpNamespace, type VerifiedMcpRequest } from '../../src/compose/mcp-stateful.js';
 import { createClusterMeshModules } from '../../src/modules/registry.js';
-import { createArtifactsBuiltin } from '../../src/integrations/mcp/artifacts.js';
+import { createArtifactsBuiltin, createArtifactsToolExecutor, type ArtifactsApp } from '../../src/integrations/mcp/artifacts.js';
 import { makeStatefulHost } from './stateful-host.mjs';
 import { fixture, makeRegistry, normalizeCorrelationId, openClient, optionsFor } from './stateful-fixture.mjs';
 
