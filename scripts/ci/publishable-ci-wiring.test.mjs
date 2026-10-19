@@ -308,6 +308,11 @@ test('release train: validation barrier, strict chain, serialization, lock-sync 
   const index = (pattern) => steps.findIndex((s) => pattern.test(s.run ?? ''));
   const lazy = index(/packaging\.mk test-lazy-package/);
   assert.ok(index(/make pack-cluster-mesh /) < index(/make pack-candidate-siblings /) && index(/make pack-candidate-siblings /) < lazy, 'candidate and siblings packed before the lazy qualification');
+  for (const target of ['cluster-mesh-comments-installed', 'cluster-mesh-pg-major-upgrade']) {
+    const installed = index(new RegExp(`\\b${target} `));
+    assert.ok(index(/make pack-candidate-siblings /) < installed, `${target}: embedded candidates packed first`);
+    assert.match(steps[installed].run, /SIBLING_ARCHIVES_FILE=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
+  }
   assert.equal(steps[lazy].if, undefined, 'lazy qualification always runs');
   assert.match(steps[lazy].run, /if \[ -f "\$receipts" \]; then\n\s*make -f packages\/cluster-mesh\/packaging\.mk test-lazy-package SIBLING_ARCHIVES_FILE="\$receipts" ENV=test\n\s*else\n\s*make -f packages\/cluster-mesh\/packaging\.mk test-lazy-package ENV=test\n\s*fi/);
   assert.match(steps[lazy].run, /receipts=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
