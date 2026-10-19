@@ -746,6 +746,15 @@ test-publishable-manifests: ## Run publishable manifest guard fixture tests in D
 check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropic workspace packages (owned by h2a)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/eradicated-packages.mjs
 
+# BR76-EX2 — CI capacity metrics entry points (plan/62-BRANCH_chore-ci-capacity-metrics.md).
+.PHONY: ci-run-metrics test-ci-run-metrics test-ci-expected-results
+ci-run-metrics: ## Summarize one captured CI run file RUN_FILE=<path> (BR76-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help)
+test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node --test scripts/ci/ci-run-metrics.test.mjs
+test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR76-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node --test scripts/ci/ci-expected-results.test.mjs
+
 
 .PHONY: typecheck
 .NOTPARALLEL: typecheck
