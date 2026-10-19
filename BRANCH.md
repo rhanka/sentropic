@@ -29,7 +29,8 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
-- [ ] Fixture import progress: 325/853 exact lines pinned from Radar #866.
+- [x] L1: finite JSON budgets and cloned advertised-default traversal extracted from the #689 pattern.
+- [ ] Fixture import progress: 465/853 exact lines pinned from Radar #866.
 - [x] Radar constraints read: blocker 6 belongs inside 2b-MCP after #706 and #689; exclude #865 before cutover.
 - [x] L5 is Radar-owned and gated on published packages/environment receipts/owner GO; this branch qualifies library contracts only.
 - [ ] Designated Track writer imports this source plan; this worktree never appends to shared .track.
