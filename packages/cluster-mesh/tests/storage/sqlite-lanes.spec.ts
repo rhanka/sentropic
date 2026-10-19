@@ -72,10 +72,10 @@ describe('durable SQLite backend: lanes and lifecycle', () => {
     const fixture = createSqliteFixture();
     try {
       const full = fixture.kernel.profiles(true).map((claim) => claim.profile);
-      for (const profile of ['atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1']) {
+      for (const profile of ['atomic-units-v1', 'immutable-chains-v1']) {
         assert.ok(full.includes(profile as (typeof full)[number]), `advertised: ${profile}`);
       }
-      for (const profile of ['scope-outbox-v1', 'visibility-barriers-v1', 'staged-units-v1', 'fenced-writers-v1', 'purge-jobs-v1']) {
+      for (const profile of ['immutable-boundaries-v1', 'scope-outbox-v1', 'visibility-barriers-v1', 'staged-units-v1', 'fenced-writers-v1', 'purge-jobs-v1']) {
         assert.ok(!full.includes(profile as (typeof full)[number]), `withheld until S2-S4: ${profile}`);
       }
     } finally {

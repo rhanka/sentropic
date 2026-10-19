@@ -1,8 +1,8 @@
 // @sentropic/cluster-mesh/storage/sqlite — durable node:sqlite backend.
 // Lot 1 boundary: committed ordinary state persists per mutation in one
 // SQLite transaction that re-verifies ownership before COMMIT. Staged
-// attachment, journal lanes, consumers and grant issuance stay
-// session-local: reopening replays ordinary reads and commits, while
+// attachment, boundary manifests, journal lanes, consumers and grant
+// issuance stay session-local: reopening replays ordinary reads and commits, while
 // staged-family calls on a reloaded populated scope refuse loudly until
 // restart recovery lands. No Python, no addon, no helper binary.
 
@@ -52,12 +52,14 @@ type TransactionalProfile = keyof typeof SQLITE_MEANINGS;
 // Lot 1 restart-durable subset: only state inside the persisted scope
 // snapshot (records, chains/heads, index, aggregates, idempotency commits)
 // survives close/reopen. Staged attachment, journal lanes, consumers,
-// barriers, fences and purge jobs stay session-local, so their profiles
-// remain disabled until S2-S4 deliver and qualify them.
+// barriers, fences, purge jobs and boundary manifests stay session-local,
+// so their profiles remain disabled until S2-S4 deliver and qualify them.
+// immutable-boundaries-v1 is withheld in particular: its manifest registry
+// and staged attachment are not persisted, so advertised manifests would
+// disappear on reopen.
 const LOT1_DURABLE_PROFILES: ReadonlySet<TransactionalProfile> = new Set([
   'atomic-units-v1',
   'immutable-chains-v1',
-  'immutable-boundaries-v1',
 ]);
 
 const SQLITE_CLAIMS: readonly ProfileClaim[] = Object.freeze(
