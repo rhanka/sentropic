@@ -243,4 +243,3 @@ AppToolResult codec. Explicit SDK McpError failures keep standard JSON-RPC codes
 with fixed public messages and no exception data; ordinary exceptions become
 safe tool errors. Existing `registerBridgeTools` retains explicit AppToolResult
 semantics through the same registration kernel. See `etc/mcp-wire.api.md`.
-
