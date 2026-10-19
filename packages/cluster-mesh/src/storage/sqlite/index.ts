@@ -9,6 +9,8 @@
 import { createHash } from 'node:crypto';
 import type { ScopeGrant } from '../authority.js';
 import type { StorageScope } from '../contracts.js';
+import { StorageInvalidCommandError, UnsupportedProfileError } from '../errors.js';
+import { CanonicalOwnershipError } from '../instance-ownership.js';
 import { createKernel, type KernelRoot } from '../kernel.js';
 import type { ProfileClaim, ProfileId } from '../profiles.js';
 import {
@@ -69,23 +71,26 @@ const READONLY_METHODS = new Set([
   'manifestReadPage', 'readBlob', 'query',
 ]);
 
+const SYNC_METHODS = new Set(['requireOperation', 'capability']);
+
 const persistAfter = <T extends object>(bound: T, backend: SqliteStateBackend, engine: SqliteEngine, scope: StorageScope): T =>
   new Proxy(bound, {
     get(target, property) {
       const value = Reflect.get(target, property, target) as unknown;
-      if (typeof value !== 'function' || READONLY_METHODS.has(String(property))) {
-        return typeof value === 'function' ? (value as (...args: never[]) => unknown).bind(target) : value;
+      if (typeof value !== 'function') return value;
+      // Possession is verified before every call, reads included: loss is
+      // terminal and revokes dependent readers. Only mutations persist.
+      // Sync ports keep their sync contract; async refusals reject.
+      if (SYNC_METHODS.has(String(property))) {
+        return (...args: never[]) => {
+          engine.assertOwnership();
+          return (value as (...args: never[]) => unknown).apply(target, args);
+        };
       }
-      return (...args: never[]) => {
+      return async (...args: never[]) => {
         engine.assertOwnership();
-        const outcome = (value as (...args: never[]) => unknown).apply(target, args);
-        if (outcome instanceof Promise) {
-          return outcome.then((resolved) => {
-            backend.flushScope(scope);
-            return resolved;
-          });
-        }
-        backend.flushScope(scope);
+        const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
+        if (!READONLY_METHODS.has(String(property))) backend.flushScope(scope);
         return outcome;
       };
     },
@@ -106,13 +111,16 @@ export interface SqliteKernel {
   bind(grant: ScopeGrant<unknown>): unknown;
   bindNew(grant: ScopeGrant<unknown>): unknown;
   revoke(token: string): void | Promise<void>;
-  provisionFence(...args: never[]): unknown;
+  provisionFence(...args: Parameters<StagedKernelRoot['provisionFence']>): unknown;
   profiles(resync: boolean): readonly ProfileClaim[];
   close(): void;
 }
 
 export const createSqliteKernel = (options: SqliteKernelOptions): SqliteKernel => {
   const { path, moduleId, open, ...neutral } = options;
+  if (typeof moduleId !== 'string' || moduleId.length === 0) {
+    throw new StorageInvalidCommandError('sqlite kernel requires a moduleId');
+  }
   const engine = openSqliteEngine({ ...(open ?? {}), path });
   const backend = new SqliteStateBackend(engine);
   const staged = moduleId === 'comments';
@@ -130,11 +138,17 @@ export const createSqliteKernel = (options: SqliteKernelOptions): SqliteKernel =
     bind: (grant) => wrapScope(inner.bind(grant) as object, grant),
     bindNew: (grant) => wrapScope(inner.bindNew(grant) as object, grant),
     revoke: (token) => inner.revoke(token),
-    provisionFence: (...args: never[]) =>
-      'provisionFence' in inner ? (inner.provisionFence as (...args: never[]) => unknown)(...args) : undefined,
+    provisionFence: (...args: Parameters<StagedKernelRoot['provisionFence']>): unknown => {
+      if (!('provisionFence' in inner)) throw new UnsupportedProfileError('staged-units-v1');
+      return (inner as StagedKernelRoot).provisionFence(...args);
+    },
     profiles: (resync) => sqliteProfileClaims(moduleId, resync),
     close: (): void => {
-      backend.flushAll();
+      try {
+        backend.flushAll();
+      } catch (error) {
+        if (!(error instanceof CanonicalOwnershipError)) throw error;
+      }
       engine.close();
     },
   };
