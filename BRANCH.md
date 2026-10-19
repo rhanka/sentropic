@@ -39,6 +39,7 @@
 - [x] R2-1 selection foundation: interpret workflow conditions with a restricted parser; unsupported syntax fails closed and context strings never execute as code.
 - [x] R2-1 expected-set foundation: derive the intended DAG and expanded matrix names from workflow conditions before dispatch; unconditional validators stay required even with empty change filters.
 - [x] R2-1 Make manifest: generate and retain actual workflow selections; actual-workflow regressions reject missing/ignored matrix members and unconditional validators, while unselected jobs pass.
+- [x] R2-1 dispatch wiring: `changes` retains the workflow-derived manifest as a run/attempt-specific artifact before any dependent lane dispatches.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
