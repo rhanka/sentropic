@@ -144,5 +144,13 @@ run/attempt/job timestamps; carried-forward rerun copies deduplicated),
 demand inventory), and workflow receipts (PR-only cancellation, classification
 and capacity summary anchors). Verified against Main run `39113919235`
 attempt 1: 84 captured rows equal the 84 expanded execution rows; max span
-664s equals the cluster anchor; measured concurrency peak 18. Remaining gaps:
-account quota, runner-minutes cost, and concurrent PR/main behavior.
+664s equals the cluster anchor; executed concurrency peak 17 (half-open
+intervals, skipped and zero-duration rows excluded; the inclusive count that
+kept them read 18). Reconciled receipts: ready-to-dispatch waits p50 3s max
+972s, runner-minutes 148.25, delivery elapsed per endpoint (api-image 1775s,
+preprod 1893s, cluster-mesh 1392s, llm-mesh 737s; images partial because
+`publish-ui-image` was skipped), 20 observed matrix member names, cache
+identities to-measure. Attempts 1+2 deduplicate to 110 executions (58
+carried-forward copies dropped). Remaining gaps: account quota, reservation,
+registry cost, contention budgets, rollback drill, and concurrent PR/main
+behavior.
