@@ -101,8 +101,26 @@ const persistAfter = <T extends object>(bound: T, backend: SqliteStateBackend, e
       }
       return async (...args: never[]) => {
         engine.assertOwnership();
-        const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
-        if (!READONLY_METHODS.has(String(property))) backend.flushScope(scope);
+        if (READONLY_METHODS.has(String(property))) {
+          const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
+          engine.assertOwnership();
+          return outcome;
+        }
+        const snapshot = backend.snapshotScope(scope);
+        let outcome: unknown;
+        try {
+          outcome = await (value as (...args: never[]) => unknown).apply(target, args);
+        } catch (error) {
+          backend.restoreScope(scope, snapshot);
+          throw error;
+        }
+        try {
+          engine.assertOwnership();
+          backend.flushScope(scope);
+        } catch (error) {
+          backend.restoreScope(scope, snapshot);
+          throw error;
+        }
         return outcome;
       };
     },
@@ -133,7 +151,7 @@ export const createSqliteKernel = (options: SqliteKernelOptions): SqliteKernel =
   if (typeof moduleId !== 'string' || moduleId.length === 0) {
     throw new StorageInvalidCommandError('sqlite kernel requires a moduleId');
   }
-  const engine = openSqliteEngine({ ...(open ?? {}), path });
+  const engine = openSqliteEngine({ ...(open ?? {}), path, moduleId });
   const backend = new SqliteStateBackend(engine);
   const staged = moduleId === 'comments';
   const inner: StagedKernelRoot | KernelRoot = staged

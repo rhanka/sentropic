@@ -97,6 +97,25 @@ export class SqliteStateBackend extends MemoryBackend {
     return state;
   }
 
+  /** Pre-mutation snapshot for atomic rollback: a rejected persist must
+   * not leave the in-memory root, receipts or related state published.
+   * Null when the scope has no loaded state yet. */
+  snapshotScope(scope: StorageScope): string | null {
+    const state = this.scopes.get(backendScopeKey(scope));
+    if (!state) return null;
+    return encodeScopeState(state);
+  }
+
+  restoreScope(scope: StorageScope, snapshot: string | null): void {
+    const key = backendScopeKey(scope);
+    if (snapshot === null) {
+      this.scopes.delete(key);
+      this.knownScopes.delete(key);
+      return;
+    }
+    this.scopes.set(key, decodeScopeState(snapshot));
+  }
+
   flushScope(scope: StorageScope): void {
     const key = backendScopeKey(scope);
     const state = this.scopes.get(key);
