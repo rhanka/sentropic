@@ -119,7 +119,9 @@ export function workflowExpected(workflow, context = {}) {
       }
       if (job.name !== undefined) throw new Error(`Unsupported workflow job name: ${name}`);
       const members = matrix?.include.map((member) => `${name} (${Object.values(member).join(', ')})`);
-      return expandExpected([{ job: name, members, selected: selection(name) }]);
+      // Existing train policy keeps this observer independent of promotion.
+      return expandExpected([{ job: name, members, selected: selection(name),
+        required: name !== 'verify-train-lock-integrity' }]);
     });
 }
 
