@@ -170,7 +170,9 @@ export function reconcileRun(manifest, capture, needs = null) {
   const executed = new Map((capture.executed ?? capture.jobs?.map((row) =>
     ({ job: row.name, conclusion: row.conclusion })) ?? []).map((row) => [row.job, row]));
   if (needs !== null) for (const [job, row] of Object.entries(needs)) {
-    executed.set(job, { job, conclusion: row.result });
+    if (executed.has(job) && !normalizeConclusion(executed.get(job).conclusion)) {
+      executed.set(job, { job, conclusion: row.result });
+    }
   }
   const verdict = evaluateExpected({ expected: manifest.expected, executed: [...executed.values()] });
   if (!Array.isArray(manifest.expected) || manifest.expected.length === 0) {

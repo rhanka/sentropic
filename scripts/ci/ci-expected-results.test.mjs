@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun } from './ci-expected-results.mjs';
 
@@ -10,6 +12,49 @@ const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
+
+test('should reject incomplete real gate contexts and missing expanded receipts through its exact script', () => {
+  const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
+  const gateExpected = workflow.jobs['ci-gate'].needs.map((job) => ({ job,
+    selected: job === 'ci-capacity-receipts' || expected.some((row) => row.selected
+      && (row.job === job || row.job.startsWith(`${job} (`))) }));
+  const needs = Object.fromEntries(gateExpected.map((row) => [row.job, { result: row.selected ? 'success' : 'skipped' }]));
+  const executed = expected.map((row) => ran(row.job, row.selected ? 'success' : 'skipped'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-gate-'));
+  const script = path.resolve('scripts/ci/ci-expected-results.mjs');
+  try {
+    fs.mkdirSync(path.join(dir, 'tmp/ci-capacity'), { recursive: true });
+    // Forward the exact workflow Make invocation to its Node evaluator inside
+    // this existing test container; no nested Docker or host runtime is needed.
+    fs.writeFileSync(path.join(dir, 'make'), `#!/bin/sh
+set -eu
+[ "$1" = ci-expected-results ]; shift
+for arg do
+  case "$arg" in EXPECTED_FILE=*) expected="\${arg#*=}";; EXECUTED_FILE=*) executed="\${arg#*=}";; ENV=test-ci-62) ;; *) exit 2;; esac
+done
+exec '${process.execPath}' '${script}' --expected-file "$expected" --executed-file "$executed"
+`, { mode: 0o755 });
+    fs.writeFileSync(path.join(dir, 'tmp/ci-capacity/expected.json'), JSON.stringify({ expected, gateExpected }));
+    const run = (context, rows = executed) => {
+      fs.writeFileSync(path.join(dir, 'tmp/ci-capacity/capture.json'), JSON.stringify({ executed: rows }));
+      return spawnSync('bash', ['-euo', 'pipefail', '-c', workflow.jobs['ci-gate'].steps.find((s) => s.name === 'Check required CI results').run], {
+        cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${dir}:${process.env.PATH}`,
+          CI_GATE_NEEDS: JSON.stringify(context), CI_NEEDS: JSON.stringify(context), CI_EVENT: 'pull_request' },
+      });
+    };
+    const good = run(needs);
+    assert.equal(good.status, 0, good.stderr);
+    assert.notEqual(run({ changes: needs.changes }).status, 0);
+    const member = executed.find((row) => row.job.startsWith('test-e2e ('));
+    assert.notEqual(run(needs, executed.filter((row) => row.job !== 'changes')).status, 0);
+    assert.notEqual(run(needs, executed.filter((row) => row !== member)).status, 0);
+    assert.notEqual(run(needs, executed.map((row) => row === member ? ran(row.job, 'skipped') : row)).status, 0);
+    for (const job of ['validate-publishable-manifests', 'validate-ci-capacity-metrics']) {
+      assert.notEqual(run({ ...needs, [job]: { result: 'skipped' } }).status, 0);
+      assert.notEqual(run(needs, executed.map((row) => row.job === job ? ran(job, 'skipped') : row)).status, 0);
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('should reconcile attempt identity, actual members and the complete final needs context', () => {
   const identity = { runId: 7, attempt: 2, headSha: 'abc' };

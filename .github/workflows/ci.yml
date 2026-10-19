@@ -2372,46 +2372,20 @@ jobs:
       - ci-capacity-receipts
       - validate-ci-capacity-metrics
     steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-expected-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/ci-capacity
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-capacity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/ci-capacity
       - name: Check required CI results
         shell: bash
         env:
-          CI_NEEDS: ${{ toJSON(needs) }}
-          CI_EVENT: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          # BR76-EX1 — label cancelled results explicitly: cancellation must never stop the current release.
-          printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | select(.value.result == "cancelled") | "::error title=CI gate cancelled::\(.key) was cancelled (BR-76: verify cancellation ownership)"'
-          # BR76-EX1 — selection-aware skip verdict: a skipped job is legitimate
-          # only when its changes filter did not select it (or its event gate
-          # excluded it); a selected skipped member blocks, mirroring
-          # scripts/ci/ci-expected-results.mjs over needs contexts.
-          UNEXPECTEDLY_SKIPPED="$(printf '%s\n' "$CI_NEEDS" | jq -r --argjson changes "$(printf '%s\n' "$CI_NEEDS" | jq -c '.changes.outputs // {}')" --arg event "$CI_EVENT" '
-            def selected($job):
-              if $job == "enforce-package-bump" then $event == "pull_request"
-              elif $job == "validate-idp-sync" then $changes.idp_sync == "true"
-              elif ($job | startswith("validate-")) then
-                ($changes[($job | ltrimstr("validate-") | gsub("-"; "_"))] == "true") or ($changes.global == "true")
-              elif ["build-api-tool-image", "test-api-unit-integration", "smoke-idp-screens", "test-smoke-restore"] | index($job) then
-                ($changes.api == "true") or ($changes.global == "true")
-              elif ["test-e2e", "e2e-vscode", "security-sast-sca", "security-container"] | index($job) then
-                ($changes.api == "true") or ($changes.ui == "true") or ($changes.global == "true")
-              elif $job == "security-iac" then $changes.global == "true"
-              else true end;
-            [to_entries[] | select(.value.result == "skipped" and selected(.key)) | .key] | join(" ")')"
-          if [ -n "$UNEXPECTEDLY_SKIPPED" ]; then
-            printf '%s\n' "$UNEXPECTEDLY_SKIPPED" | tr ' ' '\n' | while IFS= read -r skipped_job; do
-              echo "::error title=CI gate::${skipped_job} was skipped while selected (BR-76: unexpected skip blocks the verdict)"
-            done
-            echo '::error::CI gate failed: selected jobs were unexpectedly skipped.'
-            exit 1
-          fi
-          printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | select(.value.result as $r | ["success", "skipped", "neutral"] | index($r) | not) | "::error title=CI gate::\(.key) result=\(.value.result)"'
-          if ! printf '%s\n' "$CI_NEEDS" | jq -e 'length > 0 and all(.[]; .result == "success" or .result == "skipped" or .result == "neutral")' > /dev/null; then
-            echo '::error::CI gate failed: required results are missing or unacceptable.'
-            exit 1
-          fi
-          echo 'CI gate passed: all required jobs succeeded, were legitimately skipped, or were neutral.'
+          CI_GATE_NEEDS: ${{ toJSON(needs) }}
+        run: make ci-expected-results EXPECTED_FILE=tmp/ci-capacity/expected.json EXECUTED_FILE=tmp/ci-capacity/capture.json ENV=test-ci-62
 
   # BR76-EX1 — retain actual matrix/job/step receipts before the final gate.
   # The manifest validator remains an independent leaf; the gate supplies its
