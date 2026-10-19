@@ -181,11 +181,11 @@ describe('http service parity', () => {
     const publish = { artifactId: id, profile: {}, files: FILES, idempotencyKey: 'p-1', paramsHash: 'h-1' };
     const first = await app.handle(req('POST', '/publish', publish, OWNER));
     expect(first.status).toBe(201);
-    const replay = await app.handle(req('POST', '/publish', publish, OWNER));
+    const replay = await app.handle(req('POST', '/publish', { ...publish, paramsHash: 'h-2' }, OWNER));
     expect(replay.status).toBe(201);
     expect(replay.body).toEqual(first.body);
     const conflict = await app.handle(
-      req('POST', '/publish', { ...publish, paramsHash: 'h-2' }, OWNER),
+      req('POST', '/publish', { ...publish, profile: { title: 'changed' } }, OWNER),
     );
     expect(conflict.status).toBe(409);
     const badBytes = await app.handle(
