@@ -53,9 +53,9 @@
   - [x] Read repository rules, branch template, prior composition analysis and the pinned #866 fixture/tests.
   - [x] Create the requested worktree from origin/main and pass `harness check branch` with actual and expected branch names.
   - [x] Inspect current composer, platform bridge/codec, #689 sessions/schema helper and release manifests.
-- [ ] **Lot 1 — Stateful host contract**
-  - [ ] Write the spec's decisions, host ownership, request authority, public exports and warm wrapping acceptance.
-  - [ ] Gate: no per-request recreation, identity rewriting, raw bearer exposure, or second session owner in the proposed API.
+- [x] **Lot 1 — Stateful host contract**
+  - [x] Write the spec's decisions, host ownership, request authority, public exports and warm wrapping acceptance.
+  - [x] Gate: no per-request recreation, identity rewriting, raw bearer exposure, or second session owner in the proposed API.
 - [ ] **Lot 2 — Validation, discovery and result fidelity**
   - [ ] Define draft-07 schema semantics, defaults, resource limits, complete tool metadata and lossless CallToolResult handling.
   - [ ] Gate: all twelve #866 schemas and complete discovery/results have explicit positive and negative conformance checks.
