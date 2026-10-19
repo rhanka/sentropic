@@ -37,31 +37,28 @@ export function isTimestampGap(record) {
 export const jobKey = (record) =>
   `${record?.runId ?? 'unknown'}/attempt-${record?.attempt ?? '?'}/${record?.jobId ?? record?.name ?? 'unknown'}`;
 
-// Deduplicate job rows across attempts of one run. GitHub reruns copy
-// carried-forward jobs into the new attempt; those copies are not independent
-// executions. Keep the highest attempt per (runId, jobId); count the rest as
-// dropped carried-forward copies. Exact duplicates collapse to one row.
+// Deduplicate job rows to distinct executions of one run. GitHub reruns copy
+// carried-forward jobs into the new attempt under NEW job IDs with the
+// original interval (reference run 39113919235: `changes` is job 117635669586
+// in attempt 1 and 117665333718 in attempt 2, both 09:04:44Z to 09:04:52Z),
+// so a (runId, jobId) key keeps both copies. Execution identity is
+// (runId, name, startedAt, completedAt): rows sharing it count once with the
+// highest attempt winning; a fresh execution with a different interval still
+// counts separately, as do distinct matrix members (distinct names). Rows
+// without timestamps collapse per name: a non-execution is one placeholder.
 export function dedupeJobs(records) {
   const seen = new Map();
   let dropped = 0;
   for (const record of records ?? []) {
-    const key = `${record?.runId ?? 'unknown'}/${record?.jobId ?? record?.name ?? 'unknown'}`;
+    const key = `${record?.runId ?? 'unknown'}/${record?.name ?? record?.jobId ?? 'unknown'}/${record?.startedAt ?? 'none'}/${record?.completedAt ?? 'none'}`;
     const attempt = Number.isFinite(record?.attempt) ? record.attempt : 0;
     const prior = seen.get(key);
     if (!prior) {
       seen.set(key, { record, attempt });
       continue;
     }
-    if (attempt === prior.attempt && JSON.stringify(record) === JSON.stringify(prior.record)) {
-      dropped += 1;
-      continue;
-    }
-    if (attempt >= prior.attempt) {
-      dropped += 1;
-      seen.set(key, { record, attempt });
-    } else {
-      dropped += 1;
-    }
+    dropped += 1;
+    if (attempt > prior.attempt) seen.set(key, { record, attempt });
   }
   return { jobs: [...seen.values()].map((entry) => entry.record), dropped };
 }
@@ -88,16 +85,22 @@ export function overlappingSeconds(aRecords, bRecords) {
 }
 
 // Peak count of concurrently executing measurable jobs in one record set.
+// Half-open execution intervals [start, end): ends sort before starts at the
+// same timestamp, so adjacent executions never stack. Skipped rows are
+// nonexecutions and zero-duration intervals occupy no worker: both are
+// excluded, otherwise a timestamped skipped row or a shared boundary
+// inflates the peak (one 60s job plus a skipped row at its end read 2).
 export function concurrencyPeak(records) {
   const events = [];
   for (const record of records ?? []) {
+    if (record?.conclusion === 'skipped') continue;
     const start = toMs(record?.startedAt);
     const end = toMs(record?.completedAt);
-    if (start === null || end === null || end < start) continue;
+    if (start === null || end === null || end <= start) continue;
     events.push([start, 1]);
     events.push([end, -1]);
   }
-  events.sort((x, y) => x[0] - y[0] || y[1] - x[1]);
+  events.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
   let current = 0;
   let peak = 0;
   for (const [, delta] of events) {
@@ -147,22 +150,29 @@ export function summarizeRun(records, { expectedJobCount = null } = {}) {
 }
 
 // Presence of the four delivery endpoints in a record set. The caller maps
-// each endpoint to job-name substrings; matching is case-insensitive.
-// Status is measured (every mapped job present with a duration), partial
-// (present without full durations), missing (no mapped job), or to-measure
-// (the endpoint has no mapping yet).
+// each endpoint to job-name substrings; matching is case-insensitive. Every
+// pattern is a required member: status is measured (each pattern matches at
+// least one row and every matched row has a duration), partial (each pattern
+// matches but some matched row lacks a duration), missing (at least one
+// pattern matches nothing; the absent patterns are listed), or to-measure
+// (the endpoint has no mapping yet). A partially captured endpoint never
+// reports measured.
 export function endpointReadiness(records, endpoints = {}) {
   const result = {};
+  const matches = (record, pattern) =>
+    String(record?.name ?? '').toLowerCase().includes(String(pattern).toLowerCase());
   for (const [endpoint, patterns] of Object.entries(endpoints)) {
     if (!Array.isArray(patterns) || patterns.length === 0) {
-      result[endpoint] = { status: 'to-measure', jobs: [] };
+      result[endpoint] = { status: 'to-measure', jobs: [], missing: [] };
       continue;
     }
-    const matched = (records ?? []).filter((record) =>
-      patterns.some((pattern) => String(record?.name ?? '').toLowerCase().includes(String(pattern).toLowerCase())),
+    const missing = patterns.filter(
+      (pattern) => !(records ?? []).some((record) => matches(record, pattern)),
     );
-    if (matched.length === 0) {
-      result[endpoint] = { status: 'missing', jobs: [] };
+    const matched = (records ?? []).filter((record) => patterns.some((pattern) => matches(record, pattern)));
+    const names = matched.map((record) => record?.name ?? String(record?.jobId ?? 'unknown'));
+    if (missing.length > 0) {
+      result[endpoint] = { status: 'missing', jobs: names, missing: missing.map(String) };
       continue;
     }
     const withDuration = matched.filter(
@@ -170,7 +180,8 @@ export function endpointReadiness(records, endpoints = {}) {
     );
     result[endpoint] = {
       status: withDuration.length === matched.length ? 'measured' : 'partial',
-      jobs: matched.map((record) => record?.name ?? String(record?.jobId ?? 'unknown')),
+      jobs: names,
+      missing: [],
     };
   }
   return result;
