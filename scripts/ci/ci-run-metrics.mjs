@@ -126,11 +126,13 @@ export function runnerMinutes(records) {
 export function deliveryElapsed(records, runCreatedAt, endpoints = {}) {
   const base = toMs(runCreatedAt);
   const result = {};
+  const readiness = endpointReadiness(records, endpoints);
   const matches = (record, pattern) =>
     String(record?.name ?? '').toLowerCase().includes(String(pattern).toLowerCase());
   for (const [endpoint, patterns] of Object.entries(endpoints)) {
-    if (base === null || !Array.isArray(patterns) || patterns.length === 0) {
-      result[endpoint] = { elapsedSeconds: null };
+    const status = readiness[endpoint].status;
+    if (base === null || status !== 'measured') {
+      result[endpoint] = { status, elapsedSeconds: null };
       continue;
     }
     let latest = null;
@@ -149,7 +151,7 @@ export function deliveryElapsed(records, runCreatedAt, endpoints = {}) {
       const member = Math.max(...ends);
       if (latest === null || member > latest) latest = member;
     }
-    result[endpoint] = { elapsedSeconds: !complete || latest === null ? null : (latest - base) / 1000 };
+    result[endpoint] = { status, elapsedSeconds: !complete || latest === null ? null : (latest - base) / 1000 };
   }
   return result;
 }
@@ -263,7 +265,8 @@ export function summarizeRun(records, { expectedJobCount = null } = {}) {
 // matches but some matched row lacks a duration), missing (at least one
 // pattern matches nothing; the absent patterns are listed), or to-measure
 // (the endpoint has no mapping yet). A partially captured endpoint never
-// reports measured.
+// reports measured. All-skipped endpoints are explicitly unselected;
+// mixed executed/skipped endpoints are partial regardless of API timestamps.
 export function endpointReadiness(records, endpoints = {}) {
   const result = {};
   const matches = (record, pattern) =>
@@ -282,8 +285,13 @@ export function endpointReadiness(records, endpoints = {}) {
       result[endpoint] = { status: 'missing', jobs: names, missing: missing.map(String) };
       continue;
     }
+    if (matched.every((record) => record?.conclusion === 'skipped')) {
+      result[endpoint] = { status: 'unselected', jobs: names, missing: [] };
+      continue;
+    }
     const withDuration = matched.filter(
-      (record) => durationSeconds(record?.startedAt, record?.completedAt) !== null,
+      (record) => record?.conclusion !== 'skipped'
+        && durationSeconds(record?.startedAt, record?.completedAt) !== null,
     );
     result[endpoint] = {
       status: withDuration.length === matched.length ? 'measured' : 'partial',

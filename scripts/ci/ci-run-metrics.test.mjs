@@ -214,6 +214,25 @@ test('delivery elapsed needs every endpoint member measured', () => {
   assert.equal(unmeasured.images.elapsedSeconds, null);
 });
 
+test('should leave skipped delivery endpoints unmeasured for zero and inverted intervals', () => {
+  const base = '2026-10-19T01:47:28Z';
+  const stamp = '2026-10-19T02:10:23Z';
+  const endpoints = { images: ['publish-api-image', 'publish-ui-image'], preproduction: ['deploy-preprod'] };
+  for (const completedAt of [stamp, '2026-10-19T02:10:22Z']) {
+    const records = ['publish-api-image', 'publish-ui-image', 'deploy-preprod'].map((name) =>
+      job({ name, conclusion: 'skipped', startedAt: stamp, completedAt }));
+    const readiness = endpointReadiness(records, endpoints);
+    const elapsed = deliveryElapsed(records, base, endpoints);
+    for (const endpoint of Object.keys(endpoints)) {
+      assert.equal(readiness[endpoint].status, 'unselected');
+      assert.equal(elapsed[endpoint].elapsedSeconds, null);
+    }
+    records[0] = job({ name: 'publish-api-image', startedAt: stamp, completedAt: stamp });
+    assert.equal(endpointReadiness(records, endpoints).images.status, 'partial');
+    assert.equal(deliveryElapsed(records, base, endpoints).images.elapsedSeconds, null);
+  }
+});
+
 test('cache identities stay explicit', () => {
   const cache = cacheIdentities([
     job({ name: 'build-ui', cache: 'node-modules:hit' }),
