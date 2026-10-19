@@ -20,6 +20,7 @@
   - [x] `package-lock.json`
   - [x] `.github/workflows/ci.yml` (BRWRAP-EX1)
   - [x] `tools/memory-mcp-l5/artifacts/**` (BR707-EX3)
+  - [x] `packages/mcp-broker/package.json` (BR707-EX4)
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
   - [x] `docker-compose*.yml`
@@ -33,6 +34,7 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
+- [x] BR707-EX4 / blocking P1 closure repair: the existing packer refuses broker ^0.3.1 with platform 0.4.0 (`P1 dependency closure mismatch`). Align the private broker dependency to ^0.4.0 and regenerate the root lock, preserving source and the strict P1 verifier. Impact: the merged memory consumer resolves the same platform candidate; rollback both manifest and lock together. Verify with the existing memory-l5 gate.
 - [x] BR707-EX3 / owner resume packet: regenerate retained P1 artifacts after the merged lock changes. Evidence: memory-l5-verify fails with `manifest freeze/lock mismatch`. Impact: archives and immutable manifest history only; keep the memory toolchain unchanged. Rollback: revert the generated proof together with its lockfile input.
 - [x] Main integration: preserve SQLite #704 and memory #700; retain mesh 0.21.0, platform 0.4.0, artifacts 0.1.3 and the version-bound configuration digests. The merge imports main-owned files unchanged; conflict resolutions remain in the declared package/lock scope.
 - [x] Owner input (2026-10-19): embed mcp-platform as a regular mesh dependency, preserving one npm-resolved kernel without bundling duplicate code. Immo installs `@sentropic/cluster-mesh@0.21.0` plus optional `@sentropic/artifacts@0.1.3`; platform 0.4.0 resolves transitively. Host entries: `@sentropic/cluster-mesh/compose/mcp-stateful`, `@sentropic/cluster-mesh/mcp/registry`, `@sentropic/cluster-mesh/mcp/artifacts`; artifacts definition and executor both come through mesh.
