@@ -49,6 +49,41 @@ test('unexpectedly skipped required members are rejected', () => {
   assert.equal(verdict.failures[0].reason, 'unexpectedly-skipped');
 });
 
+test('expanded matrix members are enforced individually', () => {
+  const verdict = evaluateExpected({
+    expected: [{ job: 'test-e2e', matrix: ['group-a, 00 02 06 10', 'group-b, 01 04'], required: true, selected: true }],
+    executed: [ran('test-e2e (group-a, 00 02 06 10)', 'success'), ran('test-e2e (group-b, 01 04)', 'skipped')],
+  });
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.failures.length, 1);
+  assert.equal(verdict.failures[0].job, 'test-e2e (group-b, 01 04)');
+  assert.equal(verdict.failures[0].reason, 'unexpectedly-skipped');
+});
+
+test('a missing matrix member is rejected while unselected matrices pass', () => {
+  const missing = evaluateExpected({
+    expected: [{ job: 'test-e2e', matrix: ['group-a, 00 02 06 10', 'group-b, 01 04'], required: true, selected: true }],
+    executed: [ran('test-e2e (group-a, 00 02 06 10)', 'success')],
+  });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.failures[0].reason, 'missing');
+  const unselected = evaluateExpected({
+    expected: [{ job: 'test-e2e', matrix: ['group-a, 00 02 06 10'], required: true, selected: false }],
+    executed: [ran('test-e2e (group-a, 00 02 06 10)', 'skipped')],
+  });
+  assert.equal(unselected.ok, true);
+  assert.deepEqual(unselected.unselected, ['test-e2e (group-a, 00 02 06 10)']);
+});
+
+test('explicit member lists expand with shared flags', () => {
+  const verdict = evaluateExpected({
+    expected: [{ members: ['test-api-unit-integration (smoke)', 'test-api-unit-integration (unit)'], required: true, selected: true }],
+    executed: [ran('test-api-unit-integration (smoke)', 'success'), ran('test-api-unit-integration (unit)', 'success')],
+  });
+  assert.equal(verdict.ok, true);
+  assert.deepEqual(verdict.passed, ['test-api-unit-integration (smoke)', 'test-api-unit-integration (unit)']);
+});
+
 test('legitimately unselected jobs do not block', () => {
   const verdict = evaluateExpected({
     expected: [selected('ci-gate'), { job: 'e2e-vscode', required: true, selected: false }],
