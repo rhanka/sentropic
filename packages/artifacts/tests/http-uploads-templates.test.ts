@@ -12,6 +12,7 @@ import {
   createPublicationService,
   createMemoryStateStore,
   createMemoryBlobStore,
+  type PublicationLimits,
 } from '../src/server/publication.js';
 import { createMemoryIntentStore } from '../src/server/object-intents.js';
 import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
@@ -30,7 +31,7 @@ const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true 
 const HI = [104, 105];
 const HI_DIGEST = `sha256:${createHash('sha256').update(new Uint8Array(HI)).digest('hex')}`;
 
-function makeApp(withExtras = true) {
+function makeApp(withExtras = true, limits?: Partial<PublicationLimits>) {
   const state = createMemoryStateStore();
   const blobs = createMemoryBlobStore();
   const staging = createMemoryStaging();
@@ -42,6 +43,7 @@ function makeApp(withExtras = true) {
       blobs,
       intents: createMemoryIntentStore(),
       idempotency: createIdempotencyStore(createMemoryIdempotencyKv()),
+      limits,
     }),
     lifecycle: createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z', state),
     forks: createForkService(createMemoryForkStore()),
@@ -73,6 +75,17 @@ async function seededId(app: ReturnType<typeof makeApp>): Promise<string> {
 }
 
 describe('http uploads + templates routes', () => {
+  it('should refuse an oversized upload chunk before changing staged bytes', async () => {
+    const app = makeApp(true, { maxFileBytes: 1, maxTotalBytes: 1 });
+    const artifactId = await seededId(app);
+    const begun = await app.handle(req('POST', '/uploads', { artifactId, mimeType: 'text/plain' }, OWNER));
+    const { uploadId } = begun.body as { uploadId: string };
+    const append = (bytes: number[]) => app.handle(req('POST', '/uploads/append',
+      { uploadId, offset: 0, bytes }, OWNER));
+    expect((await append([1, 2])).status).toBe(400);
+    expect(await append([1])).toEqual({ status: 200, body: { size: 1 } });
+  });
+
   it('serves the generic template kit and the versioned api guide', async () => {
     const app = makeApp();
     const template = await app.handle(req('GET', '/templates/static-html', undefined, OWNER));
