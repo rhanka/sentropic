@@ -35,6 +35,8 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
   - `packages/cluster-mesh/src/modules/catalog.ts` (BR704-EX1, one range line only)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR704-EX2, candidate file: rename only)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR704-EX2, candidate file: rename only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -49,6 +51,7 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
 - [x] **R2/R7**: mutations snapshot the scope and restore it when the inner op, the post-op revalidation, or `flushScope` fails; reads revalidate after the await.
 - [x] **R1/R2/R6/R7 regression tests**: foreign-fd-close terminal probe, trigger-refusal rollback, prepared-read invalidation, and cross-module reopen refusal in the SQLite specs.
 - [x] **R2 fixup**: restore preserves the live staged attachment and never replaces state on inner-op throw (coordinator owns inner atomicity and CAS identity).
+- [x] **BR704-EX2** (lazy gate): selected fixture candidate rename `0.19.1` to `0.20.0` (package.json + lock, 4 lines) so the packed 0.20.0 candidate resolves; peers untouched. Reason: version-bump companion per precedent. Rollback: revert the rename.
 
 ## AI Flaky tests
 - Acceptance rule:
