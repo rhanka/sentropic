@@ -34,7 +34,8 @@
 - [x] 2026-10-18 / owner / clarification: Radar owns mcp-auth 0.2.2 adoption (blocker 6); this specification owns blockers 1, 2 and 3 only.
 - [x] 2026-10-18 / spec author / acknowledge: #689 remains open at `811455a5b3724999828e4b313057d78cb26323e3`; its schema/session code is reuse material, not evidence of released Immo parity.
 - [x] 2026-10-18 / spec author / attention: protected live signals cannot satisfy full production parity with exchange disabled and bearer forwarding prohibited; release/cutover gates must expose this dependency.
-- [ ] Design review: reconcile independent peer findings before marking the specification reviewed.
+- [x] Design findings reconciled: verified claims/domain attributes, safe protocol-error handling, concrete public SDK handler replacement under an admission barrier, and compatible optional artifacts tuple.
+- [ ] Formal review acceptance remains pending: both independent report writes were rejected by H2A_SCOPE:FOREIGN_WORKSPACE; recovered findings were addressed, but no completed consensus is claimed.
 - [ ] Track import: designated repository writer imports this branch plan and links the three existing item IDs; this worktree does not append to the shared event log.
 
 ## AI Flaky tests
@@ -64,12 +65,12 @@
   - [x] Test inventory: platform `tests/mcp-wire-schema.test.ts`, `tests/mcp-wire-results.test.ts`, `tests/wire-parity.test.ts`; mesh `tests/mcp-stateful-wrap.spec.ts`, `tests/conformance/immo-stateful-wrap.spec.ts`, `tests/packaging/mcp-stateful-consumer.spec.ts`.
   - [x] Radar follow-up: `packages/immo-mcp/src/deployed-baseline.test.ts` and `server-http.test.ts`; immutable #866 fixture; published dependencies only.
   - [x] Gate: distinguish proposed runtime checks from evidence actually produced by this documentation branch.
-- [ ] **Lot 4 — Docs consolidation and review**
-  - [ ] Reconcile review findings; verify all references, signatures, dependency ranges and acceptance criteria.
-  - [ ] Keep the standalone EVOL spec; no temporary BRANCH_SPEC_EVOL document is needed.
+- [x] **Lot 4 — Docs consolidation and review**
+  - [x] Reconcile recovered review findings and record the incomplete formal review; verify references, signatures, dependency ranges and acceptance criteria.
+  - [x] Keep the standalone EVOL spec; no temporary BRANCH_SPEC_EVOL document is needed.
 - [ ] **Lot 5 — Final validation and draft PR**
-  - [ ] Run `make scope-check ENV=test-cm-mcp-stateful-wrap` before every commit; inspect the complete diff and whitespace.
-  - [ ] Verify documentation-only scope; runtime test/typecheck/build/UAT campaigns and package bumps do not apply here.
-  - [ ] Push the branch and create a draft PR using this BRANCH.md as its body; post the short execution plan.
+  - [x] Run `make scope-check ENV=test-cm-mcp-stateful-wrap` before every commit; inspect the complete diff and whitespace.
+  - [x] Verify documentation-only scope; runtime test/typecheck/build/UAT campaigns and package bumps do not apply here.
+  - [x] Push the branch and create draft PR #706 using this BRANCH.md as its body; post the short execution plan.
   - [ ] Inspect PR checks and report the PR number, HEAD and specification path.
   - [x] Stop at draft delivery: retain BRANCH.md, do not merge, publish or activate exchange.

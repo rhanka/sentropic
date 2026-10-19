@@ -50,7 +50,13 @@ sequenceDiagram
     T-->>C: Unchanged CallToolResult through same transport
 ```
 
-The adapter binds the host once. It registers the bridge on each existing SDK server and on each subsequently created server, before that server handles its next call. Binding is atomic relative to request admission: in-flight calls finish with their captured handlers/context; later calls use the installed bridge. The host must expose this seam explicitly. A Hono app with an inaccessible session map is not sufficient; do not introspect SDK private fields or create an HTTP loopback proxy.
+The adapter binds the host once. It installs the bridge on each existing SDK server and on each subsequently created server, before that server handles its next call. The host must expose its session enumeration and admission barrier explicitly; a Hono app with an inaccessible session map is insufficient. Do not introspect SDK private fields or create an HTTP loopback proxy.
+
+The concrete replacement seam is the public low-level `McpServer.server.setRequestHandler`: SDK 1.31.0 `dist/esm/shared/protocol.js` explicitly documents that this replaces a previous handler for the same method; `Server.setRequestHandler` delegates to it after adding SDK validation. The bridge replaces `tools/list` and `tools/call` through that API. It never calls high-level `registerTool` again, never mutates private handler maps and never reconnects the server. The host adapter factors existing domain callbacks into reusable functions rather than retaining old dispatch as a fallback.
+
+Binding first prepares/validates all descriptors without mutation. The host then pauses new transport dispatch (including initialize), drains admitted tool operations to their existing deadline, and keeps established GET streams open. Under this barrier it installs both handlers on every connected server; only after all installations succeed does it atomically mark the host wrapped and release admission. Future servers receive the same bridge before connect. No request can observe only one replaced method or only part of the session set. A drain timeout aborts before mutation; an installation failure keeps admission closed with a safe 503 and the existing objects retained for operator repair, without restoring old dispatch automatically.
+
+At successful handover, no old tool callback remains in flight. Clear obsolete bearer-bearing `toolCtx.auth` state owned by the host, and disable subsequent high-level tool registration/update paths. Instrument old callback counts and outbound credential use: both remain zero after the handover point. The warm-bind test starts with Radar's already registered, connected McpServer, pauses an old call while bind waits, then proves guarded list/call dispatch on unchanged server/transport/session objects; inject failure between the two handler installations to prove the barrier stays closed. A host unable to expose this seam fails L0/C4 and cannot claim a no-reconnection cutover.
 
 Only a valid initialize without a session ID allocates a server/transport. Existing IDs reuse their objects for POST, GET and DELETE, notifications, SSE and cancellation. A foreign, expired or unknown ID returns the host's identical 404 response without initializing a replacement or touching another owner's transport. Missing-ID methods and malformed initialize retain the host's protocol behavior. DELETE, failed initialization and shutdown close each allocated transport exactly once.
 
@@ -70,24 +76,28 @@ These are new APIs to implement, not exports available in 0.19.1. Keep Node-spec
 | `@sentropic/mcp-platform/transport/bridge` | `registerMcpWireTools`, `McpWireRunner`, `McpWireBridgeOptions`, `McpWireFailure`; SDK `Tool`/`CallToolResult` remain the wire types |
 | `@sentropic/mcp-platform/transport/tool-schemas` | `compileMcpToolSchemas`, `CompiledMcpToolSchemas`, `McpToolValidationLimits` |
 | `@sentropic/mcp-platform/transport/result-codec` | Public existing AppToolResult codec plus `validateMcpWireResult`; no lossy decode/re-encode for native results |
-| `@sentropic/cluster-mesh/loaders/mcp` | Typed loaders for the schema and result leaves; existing bridge loader exposes its new symbols |
+| `@sentropic/mcp-platform/registry` | Add readonly `inputSchema: unknown` to `CompiledToolResolution`, captured from the digest-bound manifest during compilation |
+| `@sentropic/cluster-mesh/loaders/mcp` | `loadMcpPlatformToolSchemas`, `loadMcpPlatformResultCodec`; existing `loadMcpPlatformBridge` exposes the new registration symbols |
 
 ```ts
 // Proposed cluster-mesh leaf; types below are part of its public contract.
 interface VerifiedMcpRequest {
   readonly principal: Readonly<{
     issuer: string; sub: string; clientId?: string; tid?: string;
-    scopes: readonly string[];
+    scopes: readonly string[]; claims: readonly string[];
+    attributes: Readonly<Record<string, unknown>>;
   }>;
   readonly resource: string;
   readonly correlationId: string;
   readonly signal: AbortSignal;
 }
 interface StatefulMcpHooks {
+  readonly maxRequestBytes: number; // Host enforces before parsing the RPC body.
   register(server: Server): void; // McpServer hosts pass their public .server.
   run<T>(authority: VerifiedMcpRequest, next: () => Promise<T>): Promise<T>;
 }
 interface StatefulMcpHost {
+  readonly verifiedClaimNames: readonly string[];
   bind(hooks: StatefulMcpHooks): Promise<Hono>;
 }
 type McpWrapRefusal =
@@ -112,9 +122,15 @@ declare function createStatefulMcpNamespace(modules: ClusterMeshModules,
 
 The module declares namespace `/mcp`, while the complete host router already owns `/mcp` and its well-known routes. Mount explicitly with `createClusterMeshPlugin({ runtime, namespaces: [wrapped], mounts: { '/mcp': '/' } })`; test that `/mcp/mcp` is absent. Never protect public PRM discovery behind the transport's auth middleware.
 
-Preflight validates exact tool-name uniqueness, compiled-registry resolution for every selected tool, complete selected-provider tool coverage and original schema compilation before binding. Collision or incompatible/missing package leaves fail startup. No name prefixes, copied manifests, second registry, dummy principal verifier or catch-and-use-stateless behavior.
+Preflight validates exact tool-name uniqueness, compiled-registry resolution for every selected tool, complete selected-provider tool coverage and original schema compilation before binding. Require each Tool.inputSchema to equal `registry.resolveTool(name).inputSchema`; this new compiled field is a frozen copy of the manifest schema, not a separately supplied value. Snapshot/freeze tool descriptors so mutation cannot desynchronize discovery, validation and policy. Collision or incompatible/missing package leaves fail startup. No name prefixes, second registry, dummy principal verifier or catch-and-use-stateless behavior.
 
 `authorizeDispatch` remains the compiled-plan policy check before effects, followed by the required host `authorize` callback for live account/domain decisions. `formatRefusal` is a pure, bounded presentation callback, never an authorization override; it receives only the public reason and verified context. For Immo scope refusal it emits the existing `scope_denied:<scope>`, tool and correlationId envelope. Unknown tools remain JSON-RPC MethodNotFound. Internal exceptions become a safe generic failure, without exception messages or credentials.
+
+A false `authorize` result maps to an account refusal; thrown authorization failures also deny. Both refusal formatters must return an SDK-valid result with `isError: true`; if either throws or produces an invalid/non-error result, emit a constant safe failure without calling it recursively. `McpWireFailure` discriminates invalid-arguments (bounded schema diagnostics) from internal failures (no exception text). Host authority derives only from the auth library's verified context; client-supplied identity headers and SDK request hints are never trusted.
+
+`principal.claims` contains only policy labels whose configured predicates the host evaluated against verified claims; it is not the raw JWT payload or an automatic list of token property names. The host declares these mappings through verifiedClaimNames (empty for a claim-free host); preflight rejects requiredClaims outside that set, and request labels must be a subset. Pass labels directly to `authorizeDispatch` with scopes/identity; an absent clientId uses its existing empty-string policy sentinel without changing the optional session-owner binding. Add satisfied/missing-claim and refresh vectors.
+
+`principal.attributes` is a frozen, finite-JSON projection defined and validated by the host, never the whole token payload. The Immo adapter preserves its verified roles, workspaces and optional org_id here, then reconstructs its domain auth context with sub/userId, tenant fallback and dataMode using the existing mapping rules. No accessToken, refresh token or authorization header is admissible. Test that refreshed attributes remain request-local alongside scopes, and that account/domain callbacks see the expected current values.
 
 The platform wire registration takes `(server, tools, runner, options)`: `McpWireRunner.run(name, validatedArgs, extra)` returns `Promise<CallToolResult>`; `extra` exposes only SDK cancellation, not headers. Options require a compiled schema validator and `formatFailure(name, McpWireFailure)` for invalid arguments/internal failures. The composer implements that formatter using its current request context and `formatRefusal`. Missing request authority refuses execution. The stdio adapter supplies its own trusted context explicitly.
 
@@ -124,7 +140,7 @@ The platform wire registration takes `(server, tools, runner, options)`: `McpWir
 
 Accept unbounded strings, draft-07 tuple `items`, numeric `exclusiveMinimum`, required fields, enums, `additionalProperties: false`, numeric limits and the exact advertised defaults. Do not coerce types, drop unknown properties, add schema bounds, replace schemas with `{}`, or reinterpret tuples as homogeneous arrays. Apply supported defaults to a cloned arguments object before validation; missing values default, explicit null/false/zero do not. Preserve domain-only checks such as bbox ordering and bbox-required when limit exceeds 500.
 
-Schema and JSON budgets are independent of semantic string bounds. `McpToolValidationLimits` requires positive integers `maxSchemaBytes`, `maxSchemaDepth`, `maxArgumentBytes`, `maxArgumentDepth`, `maxResultBytes` and `maxResultDepth`. Implementation lot 0 records the host's existing HTTP limit and measured fixture/request/result maxima; set limits high enough for every currently accepted representative Immo case and enforce the same advertised host budget. Never silently shrink accepted inputs to make validation bounded. Check raw HTTP bytes before JSON allocation, then finite JSON values/depth before Ajv or domain invocation; reject oversize inputs without effects. Do not truncate results to meet a budget.
+Schema and JSON budgets are independent of semantic string bounds. `McpToolValidationLimits` requires positive integers `maxSchemaBytes`, `maxSchemaDepth`, `maxRequestBytes`, `maxArgumentBytes`, `maxArgumentDepth`, `maxResultBytes` and `maxResultDepth`. The host receives maxRequestBytes through bind hooks and bounds the entire raw JSON-RPC body before parsing; maxArgumentBytes applies separately to the parsed arguments. Implementation lot 0 records the host's existing limits and measured fixture/request/result maxima; retain its accepted budgets. If no existing counterpart exists, record the proposed bound as an explicit compatibility decision before implementation, not silent parity. Check finite JSON values/depth before Ajv or invocation and refuse oversize input without effects. Do not truncate results.
 
 This validator is used by the new wire bridge only. The bounded configuration compiler and its negative tests remain unchanged. The original Tool.inputSchema object is retained for discovery and registry digest/provenance; compiled validators and defaulted call arguments are separate internal objects.
 
@@ -135,6 +151,8 @@ The bridge returns every provided SDK Tool field unchanged: name, title, descrip
 `validateMcpWireResult(result, limits)` validates the complete SDK result without transforming it, then returns it. Preserve content order and block types, text bytes (including pretty JSON/whitespace/key order inside text), structuredContent, isError presence/value and `_meta` presence/value. SDK passthrough fields must not be stripped by parsing; validate a view and return the original JSON value. No injected audit metadata; receipts use the existing out-of-band receipt port.
 
 Application errors already returned as CallToolResult remain tool results. Protocol errors remain protocol errors. Native results never travel through `decodeToolResult`/`encodeToolResult`; those remain for explicitly AppToolResult-native providers. Shared registration internals select the contract explicitly, with one execution and no fallback. Add vectors for non-text/mixed content, absent versus false isError, empty content where SDK-valid, structuredContent and metadata, beyond the twelve-tool fixture.
+
+An SDK `McpError` thrown by a native runner is the explicit protocol-error channel. Preserve standard JSON-RPC codes (-32700, -32600, -32601, -32602, -32603), use their fixed standard public messages and omit data/exception details; map other codes to a safe -32603 protocol error. Ordinary exceptions use the safe internal tool-result formatter. Session/transport errors generated by the host/SDK retain the host's existing behavior. Test an intentional InvalidParams McpError versus an ordinary Error containing a secret sentinel over both HTTP and stdio; assert the different channels and absence of that sentinel.
 
 ## 7. Conformance against #866
 
@@ -155,11 +173,40 @@ The exact tool set is `search_lots`, `get_lot_card`, `search_signals`, `get_oppo
 
 Two complementary test levels are required. Sentropic's deterministic fixture-backed handlers exercise transport, validation and preservation of recorded result envelopes; they are package contract tests, not a Radar domain implementation. Radar's installed-package test must run its real factored handlers/data adapters via the existing `deployed-baseline.test.ts` methodology, including actual default application, authorization and domain refusals. Neither test may implement the wrapper in a fixture or return golden responses as evidence of domain parity.
 
+Concrete assertions for the proposed Radar integration test follow. `openWrappedImmo` uses real factored Immo handlers, the installed composer, signed test tokens and deterministic data ports; `normalizeCorrelationId` is #866's narrow normalization, and `close` terminates the test session. This is the specified test, not a test executed by this documentation PR.
+
+```ts
+expect(sha256(fixtureBytes)).toBe(
+  '31487e8fb9b85019fc707ed3a7296e33156c46fb5fd3071d456d6dae1b44d998');
+it.each(['http', 'simulation'] as const)('preserves #866 in %s', async mode => {
+  const host = await openWrappedImmo({ mode, scopes: allImmoScopes });
+  try {
+    expect(host.client.getServerVersion()).toEqual(fixture.serverVersion);
+    expect(host.client.getServerCapabilities()).toEqual(fixture.serverCapabilities);
+    expect((await host.client.listTools()).tools).toEqual(fixture.tools);
+    for (const [name, call] of Object.entries(fixture.captures[mode].calls)) {
+      const actual = await host.client.callTool({ name, arguments: call.args });
+      expect(normalizeCorrelationId(actual)).toEqual(normalizeCorrelationId(call.result));
+    }
+    await host.useRefreshedToken({ scopes: ['immo:read'] });
+    expect(host.sessionId()).toBe(host.initialSessionId);
+    for (const [name, expected] of Object.entries(fixture.captures[mode].limitedScope.calls)) {
+      const args = fixture.captures[mode].calls[name].args;
+      const actual = await host.client.callTool({ name, arguments: args });
+      expect(normalizeCorrelationId(actual)).toEqual(normalizeCorrelationId(expected));
+    }
+    expect(host.clientConnectCount()).toBe(1);
+  } finally { await host.close(); }
+});
+```
+
 The current #866 missing-coarse-scope capture is HTTP 401 under mcp-auth 0.1.0. Radar's 0.2.2 adoption/#689 may deliberately return 403 for an authenticated token with insufficient scope. Keep the original fixture immutable; record and assert that separately owned auth delta with its adoption receipt. It is not permission to normalize other mismatches or relabel a full snapshot comparison as exact parity.
 
 The captured HTTP `search_signals` success can qualify formatting with synthetic local data. It cannot qualify today's protected live Radar path under D5. Record C7 refusal evidence and mark production signal parity blocked until #689, receiver #865 qualification and owner GO provide an approved replacement. Package conformance completion does not close that external gate.
 
 Optional artifacts composition is a separate variant: expect twelve unchanged Immo entries plus the exact selected artifacts tool set (15 in the inspected 0.1.1 baseline, 27 total). Compare the Immo subset in original order and every field, separately validate artifacts names/results, and reject unexpected/duplicate names. Do not silently change the twelve-tool acceptance denominator.
+
+That optional variant needs its own compatible artifacts release: 0.1.1 declares a platform peer range `>=0.3.0 <0.4.0`, which excludes this design's 0.4.0 platform. The artifacts maintainer owns the bounded peer-range update and installed 27-tool qualification; until then, qualify the core twelve-tool wrapper and refuse the incompatible optional tuple. Do not bypass peer checks or silently widen artifacts compatibility in this branch.
 
 ## 8. Release and compatibility plan
 
@@ -181,14 +228,14 @@ These are future implementation lots, distinct from this spec branch's documenta
 | --- | --- | --- |
 | L0 / package maintainer + Radar | Pin conformance fixture/receipt; inventory `server-http.ts`, `tools.ts`, auth/default/expiry semantics and current HTTP budgets; agree the host bind seam and handler extraction. | Fixture hash verified; all twelve calls classified; exact budget values and auth delta recorded; no claim of production signal parity. Starts from this spec and Hosting B. |
 | L1 / mcp-platform | Add `src/transport/tool-schemas.ts`; share SDK validation/default logic with #689; expose the new leaf. | C2 positive/negative vectors pass; bounded configuration behavior unchanged; no empty-schema workaround, caller mutation or remote schema fetch. Depends on L0. |
-| L2 / mcp-platform | Evolve `src/transport/bridge.ts` and `result-codec.ts` with explicit native wire registration; retain a single shared dispatch kernel. | C1/C3 full-field discovery and wire vectors pass over HTTP and stdio; existing AppToolResult round trips pass; invalid result fails safely. Depends on L1. |
-| L3 / cluster-mesh | Add `src/compose/mcp-stateful.ts`, stateful contract/context modules and loaders; reuse `createRegistryPolicy`/`authorizeDispatch` and #689 request-local primitives. | C4-C7 pass with a host-owned session adapter; startup failure is fail-closed; no second session map, alternate legacy endpoint or bearer-bearing invocation context. Depends on L2. |
+| L2 / mcp-platform | Evolve `src/transport/bridge.ts` and `result-codec.ts` with explicit native wire registration; retain a single shared dispatch kernel. Add digest-bound inputSchema to public resolution in `src/registry.ts`. | C1/C3 full-field discovery and wire vectors pass over HTTP and stdio; schema mismatch/mutation refuses; existing AppToolResult round trips pass; invalid result fails safely. Depends on L1. |
+| L3 / cluster-mesh | Add `src/compose/mcp-stateful.ts`, stateful contract/context modules and loaders; reuse the `authorizeDispatch` policy engine and #689 request-local primitives. | C4-C7 pass with a host-owned session adapter, including satisfied/missing verified claims; startup failure is fail-closed; no second session map, alternate legacy endpoint or bearer-bearing invocation context. Depends on L2. |
 | L4 / package maintainer | Update manifests/exports, catalog/ranges, lockfiles, READMEs, API report and packaging consumer fixtures; CI releases in dependency order. | C8 clean consumer passes, required symbols resolve, cold optional imports remain valid, published versions and package integrity recorded. Depends on L1-L3. |
 | L5 / Radar integration owner | Adapt existing host/session and domain seams using public installed packages; remove mutable auth and replaced registrations; run host suite and hosted-client UAT. | Actual Immo handlers satisfy C1-C6, no manual reconnect/re-registration; C7 enforced. Production cutover additionally requires live signal authorization and owner GO. Depends on L4 and Radar blocker 6. |
 
 File-level test inventory (new unless marked existing):
 
-- Platform: `packages/mcp-platform/tests/mcp-wire-schema.test.ts` (all fixture schema constructs/defaults/budgets); `tests/mcp-wire-results.test.ts` (metadata and lossless/error vectors); existing `tests/registry-parameters.test.ts`, `wire-parity.test.ts`, `request-identity.test.ts`, `streamable-http.test.ts`, `stdio.test.ts` (configuration/transport/authority regressions).
+- Platform: `packages/mcp-platform/tests/mcp-wire-schema.test.ts` (all fixture schema constructs/defaults/budgets); `tests/mcp-wire-results.test.ts` (metadata and lossless/error vectors); existing `tests/registry.test.ts` (immutable manifest-schema resolution), `registry-parameters.test.ts`, `wire-parity.test.ts`, `request-identity.test.ts`, `streamable-http.test.ts`, `stdio.test.ts` (configuration/transport/authority regressions).
 - Mesh: `packages/cluster-mesh/tests/mcp-stateful-wrap.spec.ts` (bind, ownership, concurrency, lifecycle, authority and egress); `tests/conformance/immo-stateful-wrap.spec.ts` (C1-C7); `tests/packaging/mcp-stateful-consumer.spec.ts` and its `fixtures/mcp-stateful/host.ts` (C8); existing `tests/mcp-composition.spec.ts`, `loaders/mcp-platform.spec.ts`, `integrations/mcp-surface.spec.ts`, `modules/topology-ranges.spec.ts`, `packaging/mcp-tuple.spec.ts` (explicit existing surfaces and release tuple).
 - Radar: existing `packages/immo-mcp/src/deployed-baseline.test.ts`, `server-http-session.test.ts`, `server-http.test.ts`, `oauth-discovery.test.ts`, `server.test.ts`, `data-source.test.ts`, `raw-data.test.ts`; add a warm-bind scenario exercising its real server/transport map and a hosted-client session across wrapping.
 
