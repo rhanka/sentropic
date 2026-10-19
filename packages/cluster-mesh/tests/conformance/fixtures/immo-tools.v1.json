@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "serverVersion": {
+    "name": "immo",
+    "version": "0.0.1"
+  },
+  "serverCapabilities": {
+    "tools": {
+      "listChanged": true
+    }
+  },
+  "tools": [
+    {
+      "name": "search_lots",
+      "title": "Search lots",
+      "description": "Recherche de lots par ville et critères (zone, no_lot, superficie min). Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (ex: longueuil, valleyfield)"
+          },
+          "zone": {
+            "type": "string",
+            "description": "Code de zonage (ex: H-203)"
+          },
+          "no_lot": {
+            "type": "string",
+            "description": "Numéro de lot cadastral exact"
+          },
+          "minArea": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Superficie minimale en m²"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "required": [
