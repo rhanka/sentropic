@@ -1,7 +1,7 @@
-# Feature: Fix artifacts 0.1.2 adapter and migration packaging
+# Feature: Artifacts 0.2.0 UTF-8 publication and host packaging
 
 ## Objective
-- [x] Make installed artifacts adapters and versioned SQL available to hosts without changing domain APIs.
+- [x] Expose installed adapters and SQL resources, and add UTF-8 text publication through HTTP and MCP.
 
 ## Scope / Guardrails
 - [x] Worktree: `tmp/worktrees/artifacts-012`; branch: `fix/artifacts-0.1.2-adapters-migrations`; base: `origin/main`.
@@ -15,11 +15,16 @@
   - `packages/artifacts/package.json`
   - `packages/artifacts/README.md`
   - `packages/artifacts/probe/**`
+  - `packages/artifacts/src/http.ts`
+  - `packages/artifacts/src/mcp.ts`
+  - `packages/artifacts/src/content/headers.ts`
+  - `packages/artifacts/tests/http-mcp-service-parity.test.ts`
+  - `packages/artifacts/tests/mcp.test.ts`
+  - `packages/artifacts/tests/content-security.test.ts`
   - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/artifacts/src/**`
   - `packages/artifacts/migrations/**`
   - `plan/**`
   - `.track/**`
@@ -32,6 +37,9 @@
 ## Feedback Loop
 - [x] BR012-EX1: allow only the existing packed-consumer Makefile recipe to install optional driver peers after proving core-only imports; impact limited to the disposable Docker consumer; rollback restores that recipe and probes together.
 - [x] BR012-EX2: allow one packed-consumer step in `.github/workflows/ci.yml` so adapter/SQL regressions block artifacts CI; impact limited to package validation; rollback removes the added step.
+- [x] BR012-EX3: owner requests text publication and permits CORP/bootstrap changes; allow only the listed source/test files; impact is additive transport input plus same-origin resource policy; rollback reverts these changes and their tests.
+- [x] Design: exactly one of bytes/text per file; canonical lowercase text/*, JavaScript, JSON, XML and structured JSON/XML MIME types; reject MIME parameters; encode UTF-8 before existing digest/size verification.
+- [x] Version decision: 0.2.0 because text is an additive API feature (minor under rules/workflow.md); registry baseline is 0.1.1; satisfies enforce-package-bump.
 - [x] Track import belongs to the designated repository writer; this concurrent worktree updates only the mergeable branch plan.
 - [ ] Independent peer review awaits the launch authorization required by `rules/subagents.md`; no reviewers launched or consensus claimed.
 
@@ -65,3 +73,13 @@
   - [x] Review final diff, run `make scope-check` before each atomic commit under 150 changed lines.
   - [x] Push and open PR #703 using this plan; execution-plan comment includes all 67 packed files; inspect CI (queued at handoff).
   - [x] Leave merge and npm publication for the owner's GO.
+- [ ] **Lot 4 — UTF-8 publication**
+  - [x] Add mutually exclusive bytes/text inputs to HTTP and the MCP schema; keep binary bytes behavior.
+  - [ ] Extend `tests/http-mcp-service-parity.test.ts` and `tests/mcp.test.ts` for accented UTF-8, empty text, MIME restrictions, exclusivity and byte-identical manifests.
+- [ ] **Lot 5 — Content isolation and host setup**
+  - [ ] Add CORP same-origin with HTML/CSS/binary coverage in `tests/content-security.test.ts`.
+  - [ ] Document text input, accepted MIME types and host-owned storage_scopes bootstrap in README.
+- [ ] **Lot 6 — Packed candidate and delivery**
+  - [ ] Bump package/lock metadata to 0.2.0 and prove text publication in `probe/packed-consumer.mjs` without source imports.
+  - [ ] Run typecheck, lint, all package unit tests and packed consumer; inspect branch diff and scope before atomic commits.
+  - [ ] Update PR #703 title/body with version rationale and validation, push, and inspect CI; no merge or publication.

@@ -110,7 +110,7 @@ describe('artifacts MCP provider', () => {
     expect([...ARTIFACTS_TOOL_NAMES]).toEqual(SPEC_TOOLS);
     const manifest = createArtifactsManifest();
     expect(manifest.providerId).toBe('sentropic.artifacts');
-    expect(manifest.version).toBe('0.1.0');
+    expect(manifest.version).toBe('0.2.0');
     expect(manifest.tools.map((tool) => tool.name)).toEqual(SPEC_TOOLS);
     for (const tool of manifest.tools) {
       const schema = tool.inputSchema as { type?: unknown; additionalProperties?: unknown };
