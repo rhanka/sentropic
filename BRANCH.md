@@ -46,8 +46,10 @@
   - [x] Strip decoded NUL while preserving Unicode, whitespace and literal escape text; scoped suite PASS, 5 tests covering raw, wrapped and repaired JSON.
 - [x] **Lot 2: lock acquisition race**
   - [x] Reproduce concurrent same-owner acquisition in lock-service.test.ts: original service reports one success and seven false conflicts.
-  - [x] Recognize the persisted owner after an insert collision; scoped lock suite PASS, 7 tests including same-owner concurrency and other-owner refusal.
+  - [x] Recognize the persisted owner after an insert collision; scoped lock suite PASS, 7 tests including same-owner concurrency and other-owner refusal; commit the bounded service correction with its regression.
 - [ ] **Lot 3: final verification and push**
+  - [x] API typecheck and lint PASS (0 lint errors); NUL regression suite 5/5 and lock suite 7/7 PASS after reproducing both failures.
+  - [x] Exact failing AI slice PASS locally: make test-api-ai SCOPE='tests/ai/chat-sync.test.ts tests/ai/executive-summary-auto.test.ts tests/ai/comment-assistant.test.ts', 10/10 tests, including automatic executive summary generation.
   - [ ] Run API typecheck/lint and targeted API suites; run existing E2E group 05/07 on built artifacts or verify CI.
   - [ ] Run make scope-check before each commit; inspect the complete repair diff.
   - [ ] Push, monitor CI, report cause, fix and exact HEAD; do not merge.
