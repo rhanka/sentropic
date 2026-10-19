@@ -2400,7 +2400,8 @@ jobs:
               jobs.push(...result.jobs);
               if (jobs.length >= result.total_count) break;
             }
-            fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs }, null, 2));
+            fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs,
+              sourceSha: run.head_sha, workflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null }, null, 2));
       - name: Check required CI results
         shell: bash
         env:
@@ -2453,7 +2454,8 @@ jobs:
             const selected = packages.filter(row => row.selected);
             const endpoints = { qualification: ['ci-gate'], images: ['publish-api-image', 'publish-ui-image'],
               preproduction: ['deploy-preprod'], packages: (selected.length ? selected : packages).map(row => row.job) };
-            fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs, endpoints }, null, 2));
+            fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs, endpoints,
+              sourceSha: run.head_sha, workflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null }, null, 2));
       - name: Emit measured job and step spans through Make
         run: make --no-print-directory ci-run-metrics RUN_FILE=tmp/ci-capacity/capture.json ENV=test-ci-62 > tmp/ci-capacity/metrics.json
       - uses: actions/upload-artifact@v4

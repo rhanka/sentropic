@@ -208,10 +208,11 @@ test('should emit identified job and step measurements through the delivered CLI
     const file = path.join(dir, 'capture.json');
     const record = job({ steps: [{ name: 'Test', conclusion: 'success',
       startedAt: '2026-10-18T10:00:00Z', completedAt: '2026-10-18T10:00:58Z' }] });
-    fs.writeFileSync(file, JSON.stringify({ records: [record] }));
+    fs.writeFileSync(file, JSON.stringify({ records: [record], sourceSha: 'source', workflowSha: 'workflow' }));
     const cli = spawnSync(process.execPath, ['scripts/ci/ci-run-metrics.mjs', '--run-file', file], { encoding: 'utf8' });
     assert.equal(cli.status, 0, cli.stderr);
     const [execution] = JSON.parse(cli.stdout).executions;
+    assert.deepEqual(JSON.parse(cli.stdout).identity, { sourceSha: 'source', workflowSha: 'workflow' });
     assert.equal(execution.runId, 1);
     assert.equal(execution.attempt, 1);
     assert.equal(execution.jobId, 10);
