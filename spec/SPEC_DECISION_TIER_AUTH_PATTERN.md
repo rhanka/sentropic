@@ -99,6 +99,10 @@ refused at authorize with `access_denied`) and optionally
 before consent). Absent both, the client keeps the legacy behavior. Rotation:
 `docs/oauth-client-rotation.md` (90-day cycle, immediate cutover).
 
+Recovery, method-neutral level, freshness, and the KVM onboarding that
+extend this B3/C1 policy are specified in
+[SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md](SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md).
+
 Per-client OAuth refresh tokens: clients that require silent offline renewal
 (starting with `immo-mcp` / `immo-mcp-preprod` and other Sentropic MCP clients)
 opt in explicitly via `OAUTH_CLIENT_GRANT_TYPES=authorization_code,refresh_token`
