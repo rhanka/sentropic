@@ -3,7 +3,7 @@ import { createMcpAuth } from '@sentropic/mcp-auth';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { InitializeRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-export const resource = 'http://immo.test/mcp';
+export const resource = 'https://preprod.immo.sent-tech.ca/mcp';
 export const issuer = 'https://issuer.example.test';
 const keys = await generateKeyPair('RS256');
 

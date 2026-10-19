@@ -14,8 +14,13 @@ function frozenJson(value: unknown, active = new Set<object>(), depth = 0): unkn
     throw new TypeError('Invalid verified attributes');
   }
   active.add(value);
+  if (Object.getOwnPropertySymbols(value).length
+    || (Array.isArray(value) && Object.keys(value).length !== value.length)) {
+    throw new TypeError('Invalid verified attributes');
+  }
   const entries = Object.entries(value).map(([key, child]) => {
-    if (/^(authorization|access_?token|refresh_?token|subject_?token|bearer)$/i.test(key)) {
+    if (/^(authorization(header)?|accesstoken|refreshtoken|subjecttoken|bearer|cookie|setcookie)$/.test(
+      key.replace(/[_-]/g, '').toLowerCase())) {
       throw new TypeError('Credentials are forbidden in verified attributes');
     }
     return [key, frozenJson(child, active, depth + 1)] as const;
