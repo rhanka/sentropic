@@ -31,6 +31,10 @@ export type AppInvocationEnvelope<TInput> = {
   ctx: StpConnectorContext;
   idempotencyKey?: string; // REQUIRED when the capability's idempotency.required
   elicitationRef?: string; // satisfied elicitation, REQUIRED when gates.requiresElicitation
+  /** Verified A03 projection for the memory provider, outside tool arguments. */
+  memoryContext?: import('./memory/frozen-context.js').MemoryContextProjectionV1;
+  /** Effective compiled/host memory confirmation policy, outside tool arguments. */
+  memoryConfirmationRequired?: boolean;
 };
 
 export type AppToolInvocation = AppInvocationEnvelope<unknown>;
@@ -200,6 +204,15 @@ export type McpDurableCall = {
 // ---------------------------------------------------------------------------
 
 export interface StpConnectorContext {
+  /** Authoritative memory bindings supplied by the verified host resolver. */
+  memory?: {
+    binding: import('./memory/frozen-context.js').MemoryInvocationBindingV1;
+    expectedActiveGeneration: string;
+    expectedPolicyEpoch: string;
+    now: string;
+    /** Stronger current host policy, combined with the compiled tool gates. */
+    confirmationRequired?: boolean;
+  };
   requestId: string;
   correlationId: string;
   auditId: string;
