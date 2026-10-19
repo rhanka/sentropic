@@ -189,15 +189,19 @@ export function cacheIdentities(records) {
 
 // Overlap in seconds between two runs' measurable windows, or null when
 // either window is unmeasurable. Used for concurrent PR/main traffic.
+// Skipped rows are nonexecutions and timestamp gaps never widen a contention
+// window: only measured executed intervals contribute.
 export function overlappingSeconds(aRecords, bRecords) {
   const window = (records) => {
     const starts = [];
     const ends = [];
     for (const record of records ?? []) {
+      if (record?.conclusion === 'skipped') continue;
       const start = toMs(record?.startedAt);
       const end = toMs(record?.completedAt);
-      if (start !== null) starts.push(start);
-      if (end !== null) ends.push(end);
+      if (start === null || end === null || end < start) continue;
+      starts.push(start);
+      ends.push(end);
     }
     if (starts.length === 0 || ends.length === 0) return null;
     return { start: Math.min(...starts), end: Math.max(...ends) };

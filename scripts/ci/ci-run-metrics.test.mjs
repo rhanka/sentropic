@@ -71,6 +71,19 @@ test('overlapping PR/main branches report shared execution time', () => {
   assert.equal(overlappingSeconds(pr, []), null);
 });
 
+test('contention windows ignore skipped and unmeasurable rows', () => {
+  const pr = [job({ runId: 100, startedAt: '2026-10-18T10:00:00.000Z', completedAt: '2026-10-18T10:10:00.000Z' })];
+  const main = [
+    job({ runId: 200, startedAt: '2026-10-18T10:05:00.000Z', completedAt: '2026-10-18T10:15:00.000Z' }),
+    job({ runId: 200, jobId: 21, conclusion: 'skipped',
+      startedAt: '2026-10-18T12:00:00.000Z', completedAt: '2026-10-18T12:00:00.000Z' }),
+    job({ runId: 200, jobId: 22, startedAt: '2026-10-18T10:20:00.000Z', completedAt: '2026-10-18T10:10:00.000Z' }),
+    job({ runId: 200, jobId: 23, startedAt: null, completedAt: '2026-10-18T10:15:00.000Z' }),
+  ];
+  assert.equal(overlappingSeconds(pr, main), 300);
+  assert.equal(overlappingSeconds(pr, [main[1]]), null);
+});
+
 test('reruns do not double-count carried-forward jobs', () => {
   const first = job({ runId: 7, attempt: 1, jobId: 11 });
   const carried = job({ runId: 7, attempt: 2, jobId: 11 });
