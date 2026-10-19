@@ -5,17 +5,18 @@ import type { KernelTransaction } from '../../src/storage/scope-runtime.js';
 import { createSqliteFixture } from './sqlite-fixture.js';
 
 describe('SQLite transaction dependent readers', () => {
-  for (const prepared of [false, true]) {
-    it(`should refuse ownership loss ${prepared ? 'during' : 'before'} a callback read`, async () => {
+  for (const mode of ['before', 'prepared', 'descriptor']) {
+    it(`should refuse ownership loss through a ${mode} callback read`, async () => {
       const f = createSqliteFixture();
       try {
         const b = f.kernel.bindNew(f.grant()) as RootScopedRuntime;
         await b.appendChain('seed', { id: 'seed', bytes: '{}', hash: 'hash-seed' }, { kind: 'absent', allocation: '0' });
         let leaked: unknown = null;
         await assert.rejects(b.transact({}, async tx => {
-          const pending = prepared ? tx.readHead('seed') : null;
+          const read = mode === 'descriptor' ? Object.getOwnPropertyDescriptor(tx, 'readHead')!.value : tx.readHead;
+          const pending = mode === 'prepared' ? read('seed') : null;
           f.kernel.engine.db.exec("UPDATE cm_ownership SET epoch = '999' WHERE id = 1");
-          leaked = await (pending ?? tx.readHead('seed'));
+          leaked = await (pending ?? read('seed'));
         }), { code: 'terminal-loss' });
         assert.equal(leaked, null);
       } finally { f.close(); }

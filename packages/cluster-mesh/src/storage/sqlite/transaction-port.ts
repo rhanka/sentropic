@@ -11,18 +11,14 @@ export const withSqliteTransaction = async <T>(engine: SqliteEngine, tx: KernelT
     if (!active) throw new CanonicalOwnershipError('terminal-loss', 'SQLite transaction callback has ended');
     engine.assertOwnership();
   };
-  const port = new Proxy(tx, {
-    get(target, property) {
-      const value = Reflect.get(target, property, target);
-      if (typeof value !== 'function') return value;
-      return async (...args: unknown[]) => {
+  const port = Object.freeze(Object.fromEntries(
+    Object.entries(tx).map(([property, value]) => [property, async (...args: unknown[]) => {
         verify();
-        const result = await value.apply(target, args);
+        const result = await value.apply(tx, args);
         verify();
         return result;
-      };
-    },
-  });
+    }]),
+  )) as unknown as KernelTransaction;
   try {
     verify();
     const result = await callback(port);

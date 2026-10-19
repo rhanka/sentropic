@@ -43,6 +43,7 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] **R7 descriptor hardening**: transaction callbacks receive a frozen facade containing guarded methods; property descriptors cannot recover the raw neutral functions. Added a descriptor-read variant to the ownership-loss regression.
 - [x] **Round-2 regression inventory**: `sqlite-admission.spec.ts` (two R2 probes); `sqlite-capabilities.spec.ts` (R4 and two R8 probes); `sqlite-transaction-port.spec.ts` (R7 plus prepared/escaped readers); `sqlite-s0.spec.ts` (R1 plus caller/writer crashes, contention/checkpoint/reopen); `sqlite-s0-identity.spec.ts` (aliases/rename/replacement). Default `cluster-mesh-sqlite-test` now includes all SQLite specs.
 - [x] **Round-2 scope accounting**: owner-authorized lot-1 remediation adds three SQLite implementation files and five focused SQLite specs within Allowed Paths; the prior whole-branch 12-file proposal cannot cover the already-17-file draft plus these fixes. No S2-S4 functionality or production-volume qualification is added.
 - [x] **Round-2 package version**: registry recheck on 2026-10-19 returns published `0.19.1`; candidate `0.20.0` remains a valid unpublished bump for this PR.
