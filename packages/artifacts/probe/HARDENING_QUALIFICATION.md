@@ -63,3 +63,13 @@ Every implementation hunk was inspected. Independent consensus review is not cla
 - Post-rebase registry check through Docker: artifacts candidate `0.1.4` exceeds published `0.1.2`.
 - `make typecheck-artifacts lint-artifacts test-artifacts probe-artifacts-packed-consumer ENV=test-artifacts-hardening` passed: 183 unit tests and all three packed-consumer proofs. Artifacts archive SHA-256 is unchanged (`7755caf83e487f52d0a732beb306a783b8a1da9bb8270bac2e0e731a9567f918`); the complete platform 0.3.1 archive is `94f1a9364abc7d0ea9f84464c21253054733e65443cb4899f1b94076025f7728`.
 - The separate durable L5 lockfile-coupling proposal remains outside this repair.
+
+## PR #708 packed qualification follow-up
+
+- Exact job log: run `39320255479`, job `118292763317`; all 932 unit tests passed before the packed lazy gate rejected selected artifacts 0.1.2 against the verified 0.1.4 sibling (version, registry URL and SHA-512).
+- Refresh only the selected artifacts metadata, add source/selected version coherence coverage and check installed platform compatibility against both declared peer ranges. Batch tuple version reads to avoid a parallel offline-preparation timeout; retain the 5000 ms limit.
+- Before main alignment, all 933 unit and 78 packed tests passed, as did lint/typecheck, guarded pack and the clean candidate install with every declared Node entry point. The artifacts archive stayed `7755caf83e487f52d0a732beb306a783b8a1da9bb8270bac2e0e731a9567f918`.
+- GitHub could not start a new run while P1 conflicted with current main. Rebase onto `3556df5c6a9cbb6abc83e59f6a49e08b731a6064`; retain main P1 `68181613ff36b601d7f6bb62550294fdcd2c0ad26f2ed25cc1ad2fa633fafd5a` and branch P1 `ca14388d51de2be5687561a8b652f18261aa6f09d0e308be55bf43110d12f15b` in history.
+- Fresh P1: `014a1f014c668e3cec6f724fa278073774eb2e4307b086c55bceccbaaa01986a`; source head `a8da8b1eafea112bd6875615bb09548b0384ca1a`; root lockfile `b4bc5762c8c94c29bc7cfcb43b27c2fa3f0daf80d0a2e9372377fdfa4a9b7ca3`.
+- All 44 contracts and both MCP archive SHA-256/SHA-512 values remain identical. `memory-l5-gate LOT=1` passes all 228 tests on this P1, including packed/source graph checks and platform/broker typechecks. Post-rebase npm inspection confirms published artifacts 0.1.2 < candidate 0.1.4.
+- Rebased Cluster Mesh 0.20.0 passes lint/typecheck, 972 unit tests (129 conditional skips), the guarded pack, all 78 parallel packed tests and clean candidate installation with the exact CI peers and the verified artifacts sibling. Every declared Node entry point imports, including storage/sqlite. Cluster Mesh archive SHA-256: `17cc762d41222c4e7f78b487fa94637a693efb63dae45fcd024db9bbaa77ff3b`.
