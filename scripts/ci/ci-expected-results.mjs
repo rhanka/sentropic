@@ -161,6 +161,41 @@ export function evaluateExpected({ expected = [], executed = [] } = {}) {
   return { ok: failures.length === 0, failures, passed, unselected };
 }
 
+// Matrix members come from the attempt's Jobs API capture. The final gate's
+// needs context supplies completed single-job/aggregate results, including the
+// receipt collector itself and the independently scheduled manifest validator.
+export function reconcileRun(manifest, capture, needs = null) {
+  const executed = new Map((capture.executed ?? capture.jobs?.map((row) =>
+    ({ job: row.name, conclusion: row.conclusion })) ?? []).map((row) => [row.job, row]));
+  if (needs !== null) for (const [job, row] of Object.entries(needs)) {
+    executed.set(job, { job, conclusion: row.result });
+  }
+  const verdict = evaluateExpected({ expected: manifest.expected, executed: [...executed.values()] });
+  if (!Array.isArray(manifest.expected) || manifest.expected.length === 0) {
+    verdict.failures.push({ job: 'manifest', reason: 'missing-expected-set' });
+  }
+  if (manifest.identity) {
+    const actual = capture.identity ?? { runId: capture.run?.id,
+      attempt: capture.run?.run_attempt, headSha: capture.run?.head_sha };
+    for (const key of ['runId', 'attempt', 'headSha']) {
+      if (manifest.identity[key] == null || actual[key] == null || String(manifest.identity[key]) !== String(actual[key])) {
+        verdict.failures.push({ job: 'manifest', reason: `identity-mismatch:${key}` });
+      }
+    }
+  }
+  if (needs !== null) {
+    if (!Array.isArray(manifest.gateExpected) || manifest.gateExpected.length === 0) {
+      verdict.failures.push({ job: 'manifest', reason: 'missing-gate-expected-set' });
+    } else {
+      const gate = evaluateExpected({ expected: manifest.gateExpected,
+        executed: Object.entries(needs).map(([job, row]) => ({ job, conclusion: row.result })) });
+      verdict.failures.push(...gate.failures.map((row) => ({ ...row, source: 'gate-context' })));
+    }
+  }
+  verdict.ok = verdict.failures.length === 0;
+  return verdict;
+}
+
 const usage = `usage: ci-expected-results.mjs --expected-file <json> --executed-file <json>
 Expected shape: { "expected": [{ "job": <name>, "required": true, "selected": true }] }.
 Matrix members: { "job": <base>, "matrix": [<suffix>, ...] } expands to "<base> (<suffix>)";
@@ -173,7 +208,11 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
     const workflow = YAML.parse(fs.readFileSync(args[args.indexOf('--workflow-file') + 1], 'utf8'));
     const context = JSON.parse(process.env.CI_SELECTION_CONTEXT);
-    const manifest = { identity: context.identity, expected: workflowExpected(workflow, context) };
+    const expected = workflowExpected(workflow, context);
+    const gateExpected = workflow.jobs['ci-gate'].needs.map((job) => ({ job,
+      selected: job === 'ci-capacity-receipts' || expected.some((row) => row.selected
+        && (row.job === job || row.job.startsWith(`${job} (`))) }));
+    const manifest = { identity: context.identity, expected, gateExpected };
     fs.writeFileSync(args[args.indexOf('--manifest-file') + 1], JSON.stringify(manifest, null, 2));
     process.exit(0);
   }
@@ -183,7 +222,8 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   }
   const expected = JSON.parse(fs.readFileSync(args[args.indexOf('--expected-file') + 1], 'utf8'));
   const executed = JSON.parse(fs.readFileSync(args[args.indexOf('--executed-file') + 1], 'utf8'));
-  const verdict = evaluateExpected({ expected: expected.expected, executed: executed.executed });
+  const needs = process.env.CI_GATE_NEEDS ? JSON.parse(process.env.CI_GATE_NEEDS) : null;
+  const verdict = reconcileRun(expected, executed, needs);
   console.log(JSON.stringify(verdict, null, 2));
   process.exit(verdict.ok ? 0 : 1);
 }

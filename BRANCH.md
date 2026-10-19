@@ -41,6 +41,7 @@
 - [x] R2-1 Make manifest: generate and retain actual workflow selections; actual-workflow regressions reject missing/ignored matrix members and unconditional validators, while unselected jobs pass.
 - [x] R2-1 dispatch wiring: `changes` retains the workflow-derived manifest as a run/attempt-specific artifact before any dependent lane dispatches.
 - [x] R2-3 capture input: accept retained raw Jobs API rows and normalize their run/attempt/job identities and numbered steps through the metrics entry point; absent readiness remains null.
+- [x] R2-1 reconciliation: bind the expected manifest to run/attempt/head identity, enforce individual API matrix receipts, and require the full declared gate context including the collector itself.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
