@@ -17,6 +17,7 @@
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `docs/baselines/app-cm-w0/**`
+  - `.h2a/owner-questions-w0.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -33,9 +34,10 @@
   - None; downstream W3/P exceptions are recorded as handoffs, not exercised here.
 - **Exception process**:
   - Declare `BR-CM-W0-EXn` with reason, impact and rollback before any scope expansion.
+  - [x] `BR-CM-W0-EX1`: owner follow-up explicitly requests `.h2a/owner-questions-w0.md` in French; impact is one decision-preparation record, no operator/key assignment; rollback removes that record. Other records remain English.
 
 ## Feedback Loop
-- [ ] `attention`: Tenant operator must supply read-only live image/config/frontier/author/legacy-data and restore receipts; unknown fields remain pending and gate dispatch.
+- [ ] `attention`: F1/F2 read-only collection is in progress; accessible cluster metadata and existing offline/CI receipts do not substitute for current production/preprod database and object evidence.
 - [ ] `attention`: SC must confirm named infra/promotion operators, shared-file ownership, signer authorization and owner/operator windows; logical reservations do not establish availability.
 - [ ] `blocked`: W0 acceptance/dispatch remains gated by B01–B08 in `docs/baselines/app-cm-w0/authorization.md`; draft delivery does not close those evidence gaps.
 - [x] `clarification`: D2 owns control 0012–0016 and O1 owns 9495/5695/1595; W1 reserves 0017, with app test ports 9710–9717 and e2e 9720–9727 (full triples in reservations.md).
@@ -57,6 +59,7 @@
   - [x] Mechanical `harness check branch` passes; branch is clean and starts at pinned main.
   - [x] Record available runtime evidence, pending operator facts, endpoint parity, configured domains and generated-content authorities in `docs/baselines/app-cm-w0/baseline.md`.
   - [x] Pin exact releases, selected peers, integrities and lock/config hashes in `published-tuple.json`.
+  - [x] F1/F2 follow-up: add standalone read-only metadata/archive collectors; validate COPY counting with a two-table fixture before recording historical aggregates.
 - [ ] **Lot 1 — Frozen implementation handoffs**
   - [x] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
   - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
