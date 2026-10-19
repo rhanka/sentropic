@@ -11,7 +11,7 @@ export function makeStatefulHost(tools, overrides = {}) {
   app.route('/', mcpAuthRoutes(auth));
   const sessions = new Map();
   const pending = new Set();
-  const stats = { servers: 0, transports: 0, closes: 0, oldCalls: 0, sdkCredentials: 0 };
+  const stats = { servers: 0, transports: 0, closes: 0, oldCalls: 0, sdkCredentials: 0, gets: 0 };
   let hooks, bound = false, admission = 'open', now = 0;
   const expired = entry => now - entry.lastSeenAt > (overrides.idle ?? 1_800_000)
     || now - entry.createdAt > (overrides.absolute ?? 28_800_000);
@@ -52,6 +52,7 @@ export function makeStatefulHost(tools, overrides = {}) {
       const client = verified.claims.azp ?? verified.claims.client_id;
       if (verified.sub !== entry.sub || (client && entry.client && client !== entry.client)) return unknown(c);
       entry.lastSeenAt = now;
+      if (c.req.method === 'GET') stats.gets++;
     }
     let body;
     if (c.req.method === 'POST') {
@@ -72,12 +73,14 @@ export function makeStatefulHost(tools, overrides = {}) {
         sessionIdGenerator: () => crypto.randomUUID(), enableJsonResponse: true,
       });
       entry = { server, transport, lifetime, sub: verified.sub,
-        client: verified.claims.azp ?? verified.claims.client_id, createdAt: now, lastSeenAt: now, closed: false };
+        client: verified.claims.azp ?? verified.claims.client_id, createdAt: now, lastSeenAt: now,
+        closed: false, pending: new Set() };
       const originalClose = transport.close.bind(transport);
       transport.close = async () => {
         if (entry.closed) return;
         stats.closes++; entry.closed = true; lifetime.abort();
         sessions.delete(transport.sessionId);
+        await Promise.all([...entry.pending]);
         await originalClose();
       };
       await server.connect(transport);
@@ -94,13 +97,14 @@ export function makeStatefulHost(tools, overrides = {}) {
     const authority = verifiedAuthority(verified, AbortSignal.any([request.signal, current.lifetime.signal]));
     const operation = hooks ? hooks.run(authority, execute) : execute();
     if (c.req.method === 'POST') pending.add(operation);
+    if (sid && c.req.method === 'POST') current.pending.add(operation);
     try {
       const response = await operation;
       if (current.transport.sessionId && !current.closed) sessions.set(current.transport.sessionId, current);
       else if (!sid) await close(current);
       return response;
     } catch (error) { if (!sid) await close(current); throw error; }
-    finally { pending.delete(operation); }
+    finally { pending.delete(operation); current.pending.delete(operation); }
   });
   return { app, host, token, stats, sessions, sweep,
     setNow: value => { now = value; }, admission: () => admission,
