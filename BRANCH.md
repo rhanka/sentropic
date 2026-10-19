@@ -34,8 +34,8 @@
 ## Feedback Loop
 - [x] Latest implementation checkpoint: BRANCH.md.
 - [x] BRWRAP-EX2 / Astra R1 release repair: authorize the artifacts manifest patch and CI wiring contract tests. Reason: artifacts 0.1.2 excludes platform 0.4.0, breaking canonical root installation and complete release qualification. Impact: artifacts 0.1.3 widens its platform peer to >=0.3.0 <0.5.0; retain platform 0.4.0 and mesh 0.21.0 for the new wire/wrap API. Rollback: revert the tuple, regenerated lock and matching workflow/tests together.
-- [ ] R1 verification: regenerate the root lock without peer bypasses; restore artifacts in candidate, post-publication and bootstrap tuples; require its publisher before mesh; pass canonical platform, installed comments, complete 27-tool artifacts and twelve-tool core qualification; inspect CI at the pushed exact HEAD.
-- [x] PR #707 targets the approved spec branch; GitHub reports no checks/runs because CI pull_request filters target main only. This is not a green global-CI claim.
+- [x] R1 implementation: regenerate the root lock without peer bypasses; restore artifacts in candidate, post-publication and bootstrap tuples; require its publisher before mesh; pass canonical platform, complete packaging, 27-tool artifacts and twelve-tool core qualification. Exact-head CI, including installed comments, remains the delivery gate.
+- [x] PR #707 now targets main; verified the branch mechanically and pulled GitHub's main merge with --ff-only before the R1 repair. No history rewrite or publication.
 - [x] Qualification receipt: `packages/cluster-mesh/tests/conformance/STATEFUL_WRAP_QUALIFICATION.md`; core C8 passed again on the final package bytes, with archive SHA-256 and observed raw RPC maximum 158 bytes recorded.
 - [x] Measured agent wall-clock start: 2026-10-19 03:57:48 UTC; final elapsed time is reported with draft delivery.
 - [x] Rebase retained every package, lock and workflow byte; published versions rechecked at 0.3.0 / 0.19.1, below the selected 0.4.0 / 0.21.0.
@@ -45,6 +45,7 @@
 - [x] R1 bare-install reproduction: npm considered published artifacts 0.1.2 through mesh's old optional range and failed ERESOLVE even without selecting artifacts. Raise the mesh manifest/catalog floor to 0.1.3 so every selected artifacts version supports platform 0.4; retain optional loading and refusal behavior.
 - [x] R1 frozen release fixture: refresh from the existing lock, retain its S3/pg adapter versions, align the selected workspace tuple and verify the platform/artifacts archive integrities. Complete installed packaging matrix passed 77 tests; the subsequent refresh preserves optional adapter coverage.
 - [x] R1 installed 27-tool proof: the core consumer first passed all 15 C1–C7 tests without artifacts; installing the artifacts 0.1.3 archive then passed the combined twelve Immo plus fifteen artifacts test, retaining the warm session and verified actor and refusing denied account access before invocation.
+- [x] R1 artifact surface expectation: replace the old real-candidate incompatibility assertion with positive loading of all fifteen capabilities; the absent-peer atomic refusal and version-range checks remain exercised.
 - [x] BRWRAP-EX1 / CI tuple alignment: candidate, post-publication and bootstrap qualification retain platform 0.4.0 and restore artifacts 0.1.3; mesh publication waits strictly for the artifacts publisher. Impact: complete optional surface remains gated; explicit core qualification is retained. Rollback: revert the workflow hunk with the package tuple.
 - [x] L1: finite JSON budgets and cloned advertised-default traversal extracted from the #689 pattern.
 - [x] Fixture import progress: 853/853 exact lines pinned from Radar #866.
@@ -69,8 +70,8 @@
   - [x] Tests: platform `tests/mcp-wire-results.test.ts`, `tests/wire-parity.test.ts`, `tests/stdio.test.ts`, `tests/registry.test.ts`; full platform suite: 237 passed.
 - [x] **L3 — Stateful composer**: host bind contract, immutable request authority/cancellation, policy/account checks, lazy loaders, preflight, one cached router.
   - [x] Tests: mesh `tests/mcp-stateful-{wrap,lifetime,authority,boundaries}.spec.ts`, `tests/conformance/immo-stateful-wrap.spec.ts`; C1–C7, warm bind and failure barrier. Full mesh suite: 947 passed, 126 infrastructure/packaging tests skipped by their existing environment gates.
-- [ ] **L4 — Package qualification**: versions above npm, exports/ranges/locks, API report, READMEs and installed clean consumer C8.
+- [x] **L4 — Package qualification**: versions above npm, exports/ranges/locks, API report, READMEs and installed clean consumer C8; R1 additionally restores compatible artifacts 0.1.3 and the complete installed matrix.
   - [x] Installed core: `tests/packaging/stateful-consumer.sh`, 15 tests plus public TypeScript and missing/version/export/member refusal probes passed; no workspace symlinks or artifacts dependency.
   - [x] Typecheck and lint passed in the cold Docker lanes; published version floors rechecked after rebase. No package was published.
-  - [ ] Full-root install/release matrix remains blocked by the separately owned artifacts peer conflict; publication and L5 cutover remain outside this delivery.
-- [x] **Final validation and draft PR**: scope-check before each commit; review outcomes recorded; diff/whitespace and 143-line maximum commit verified; pushed draft #707 with this plan and inspected GitHub checks. L4 release and final-review gates remain open above; no merge/publication.
+  - [x] Full-root installation, canonical platform API extraction and the compatible installed release matrix passed locally; exact-head CI is checked after pushing. Publication and L5 cutover remain outside this delivery.
+- [x] **Final validation and draft PR**: scope-check before each commit; review outcomes recorded; every R1 commit stays under 150 changed lines; retain draft #707, update its body from this plan and inspect checks at the pushed HEAD. Final-review clearance remains outside this repair; no merge/publication.
