@@ -105,12 +105,12 @@ Actions with the following status should be included around tasks only if really
   - [x] F692-7: terminology repair (`SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md:7`) and dated status layer (#688 merged, #689 open).
   - [x] Push and amendment-to-commit table in `.h2a/reviews/pr692_amend-v2.md` (gitignored, not committed).
 
-- [ ] **Lot 4 — Generic view hosting proposal (owner brief `AGENT_SIG:7f3a9c2e1b`)**
+- [x] **Lot 4 — Generic view hosting proposal (owner brief `AGENT_SIG:7f3a9c2e1b`)**
   - [x] Verify branch with `harness check branch`; read D5, #703 content code, #861 dossier/annex and governance boundaries.
   - [x] Preserve all seven verbatim owner inputs and the final framing: D5 covers developer UAT/previews, not later artifact views; domain/API remain open, while Sentropic/package ownership, host configuration and Data=C are decided.
   - [x] Specify package-owned configuration, DNS/TLS reconciliation, reader BFF, cookies/CORS/CORP and source-versus-proposal boundaries in `spec/SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md`.
   - [x] Reconcile two independent design passes (decision provenance/DNS and browser authority), renewed for the final framing: qualify A's stable-storage benefit, release attribution and B's identity adapter. Formal review across different hosts was not established; no consensus approval claimed.
   - [x] Gate: inspect the documentation diff, run `make scope-check` and `git diff --check`; scope remains `spec/**` and `BRANCH.md` only.
-  - [ ] Delivery: commit under 150 changed lines via `make commit`, push without merging and verify remote HEAD/CI status.
+  - [x] Delivery: proposal revision `c30c50345` (80 changed lines) committed via `make commit` and pushed; PR #692 remote HEAD verified, draft/open, CI run `39182658557` observed queued. No merge; final handoff reports the latest delivery HEAD and CI status.
   - [x] Runtime tests/UAT: not applicable to this specification-only change; future qualification criteria are explicit in the proposal.
   - [x] Final framing amendment: compare A/B across security, cookies/CORS/CORP, DNS/TLS, developer/agent experience, package cost and reversal; cite file:line sources and recommend B as a new proposal with its strongest counter-argument.
