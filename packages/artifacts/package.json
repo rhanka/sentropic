@@ -98,8 +98,12 @@
       "import": "./dist/server/templates.js"
     },
     "./mcp": {
-      "types": "./dist/mcp.d.ts",
-      "import": "./dist/mcp.js"
+      "types": "./dist/mcp-core.d.ts",
+      "import": "./dist/mcp-core.js"
+    },
+    "./mcp-core": {
+      "types": "./dist/mcp-core.d.ts",
+      "import": "./dist/mcp-core.js"
     },
     "./content/grants": {
       "types": "./dist/content/grants.d.ts",
