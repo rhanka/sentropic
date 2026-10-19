@@ -8,7 +8,7 @@ W0_DUMP ?= prod-2026-10-17T21-56-20.dump
 W0_PG := postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
 W0_KUBE = kubectl --kubeconfig="$(W0_KUBECONFIG)" --request-timeout=15s -n "$(W0_NS)"
 W0_DIR := docs/baselines/app-cm-w0
-.PHONY: w0-roles w0-config w0-backup-status w0-archive w0-ci-recovery w0-local-restore
+.PHONY: w0-roles w0-config w0-backup-status w0-archive w0-ci-recovery w0-local-restore w0-access
 w0-roles:
 	@date -u +%Y-%m-%dT%H:%M:%SZ
 	@$(W0_KUBE) get deployments -o json | jq -c '{items:[.items[]|{name:.metadata.name,uid:.metadata.uid,resourceVersion:.metadata.resourceVersion,generation:.metadata.generation,revision:.metadata.annotations["deployment.kubernetes.io/revision"],replicas:.spec.replicas,containers:[.spec.template.spec.containers[]|{name,image}]}]}'
@@ -43,3 +43,10 @@ w0-local-restore:
 	  stat -c '%n %s bytes mtime=%y' "$(W0_BACKUPS)/$$file"; sha256sum "$(W0_BACKUPS)/$$file"; \
 	  awk '/context_documents|context_document_versions|job_queue|chat_messages|__drizzle/ {print}' "$(W0_BACKUPS)/$$file"; \
 	done
+w0-access:
+	@date -u +%Y-%m-%dT%H:%M:%SZ
+	@kubectl --kubeconfig="$(W0_KUBECONFIG)" config get-contexts
+	@$(W0_KUBE) get ingress -o='jsonpath={range .items[*]}{.metadata.name}{"\t"}{range .spec.rules[*]}{.host}{";"}{end}{"\t"}{.status.loadBalancer.ingress}{"\n"}{end}'
+	@getent ahostsv4 sentropic.sent-tech.ca
+	@for name in KUBECONFIG PGHOST PGPORT PGUSER PGDATABASE PGPASSFILE PGSERVICE PGSERVICEFILE DATABASE_URL; do if [[ -v "$$name" ]]; then printf '%s=set\n' "$$name"; else printf '%s=unset\n' "$$name"; fi; done
+	@for file in /home/antoinefa/.pg_service.conf /home/antoinefa/.pgpass; do if [[ -f "$$file" ]]; then printf '%s=present\n' "$$file"; else printf '%s=absent\n' "$$file"; fi; done

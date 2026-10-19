@@ -37,7 +37,7 @@
   - [x] `BR-CM-W0-EX1`: owner follow-up explicitly requests `.h2a/owner-questions-w0.md` in French; impact is one decision-preparation record, no operator/key assignment; rollback removes that record. Other records remain English.
 
 ## Feedback Loop
-- [ ] `attention`: F1/F2 read-only collection is in progress; accessible cluster metadata and existing offline/CI receipts do not substitute for current production/preprod database and object evidence.
+- [ ] `attention`: F1/F2 read-only collection is recorded in cluster-readings.md and recovery-readings.md; serving-tenant Kubernetes/DB/object access and current recovery/ACL/disposition evidence remain missing.
 - [ ] `attention`: SC must confirm named infra/promotion operators, shared-file ownership, signer authorization and owner/operator windows; logical reservations do not establish availability.
 - [ ] `blocked`: W0 acceptance/dispatch remains gated by B01–B08 in `docs/baselines/app-cm-w0/authorization.md`; draft delivery does not close those evidence gaps.
 - [x] `clarification`: D2 owns control 0012–0016 and O1 owns 9495/5695/1595; W1 reserves 0017, with app test ports 9710–9717 and e2e 9720–9727 (full triples in reservations.md).
@@ -61,6 +61,7 @@
   - [x] Pin exact releases, selected peers, integrities and lock/config hashes in `published-tuple.json`.
   - [x] F1/F2 follow-up: add standalone read-only metadata/archive collectors; validate COPY counting with a two-table fixture before recording historical aggregates.
   - [x] F1/F2 follow-up: preserve dated offline journal/content counts and existing CI SQL backup/restore metadata in recovery-readings.md; current tenant recovery/object/ACL proof remains open.
+  - [x] F1 follow-up: record inactive-cluster deployment/config identities and hashes, zero pod lists, actual OVH RBAC denials and exact missing current-tenant access in cluster-readings.md.
 - [ ] **Lot 1 — Frozen implementation handoffs**
   - [x] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
   - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.

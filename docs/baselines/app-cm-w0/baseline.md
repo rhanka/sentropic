@@ -4,7 +4,7 @@ Source authority: `9ed96eb83cd77da710f1adeb83a19e425d6c4910` (initial HEAD = ori
 
 ## Evidence boundary
 
-Observations below were collected beginning at 23:26 UTC by registry/GitHub GETs, unauthenticated HTTPS GETs and reads of the pinned source. No production credential was opened or used. No reader kubeconfig for this tenant was identified among local kubeconfig names; the default operator config was not substituted. Live pod/database/object inventories remain **pending**, not empty. This record does not qualify W0 for downstream dispatch until the operator receipts in [authorization.md](authorization.md) close.
+Initial observations began at 23:26 UTC with registry/GitHub GETs, unauthenticated HTTPS GETs and pinned source reads. The 19 October follow-up collected [read-only cluster metadata and precise access denials](cluster-readings.md), plus [existing archive/CI recovery evidence and historical counts](recovery-readings.md). The accessible Scaleway namespaces have zero replicas/pods; OVH's local scoped account cannot list either app namespace. Their observations cannot identify the serving deployment. Current tenant DB/object inventories remain **pending**, not empty. This record does not qualify W0 for downstream dispatch until [authorization.md](authorization.md) closes.
 
 | Required runtime fact | Frozen value / receipt |
 |---|---|
@@ -12,10 +12,10 @@ Observations below were collected beginning at 23:26 UTC by registry/GitHub GETs
 | Preprod API, UI and IdP digests | **Pending B01**; health 200 alone does not identify an image |
 | Content role digest | No content Deployment in pinned source; live absence not verified; pending B01 |
 | Live config revision and rendered config hash | **Pending B01**; source config hashes are in `published-tuple.json` |
-| Applied product/control/package migration frontier | **Pending B02**; source maxima are product `0043_immo_token_exchange.sql`, control `0011_session_workspace_bindings.sql` |
+| Applied product/control/package migration frontier | **Pending live B02**; archived SQL checksums identify product `0041`/control `0007`; source maxima remain product `0043`, control `0011` |
 | Active author, generation, cutover and lease records | **Pending B02**; no source constant is promoted to live authority |
-| Verified backup/object checkpoint and isolated restore | **Pending B03**; neither a CronJob definition nor a successful CI run proves restore |
-| Existing generated-content counts and mapping decision | **Pending B04**; source paths below prove possible stores, not production row counts |
+| Verified backup/object checkpoint and isolated restore | **Partial B03**; existing CI-reported SQL backup/restore/smoke receipt collected; current object checkpoint, data/deny-state recovery and ownership still pending |
+| Existing generated-content counts and mapping decision | **Partial B04**; dated local archive: 15 documents, 0 versions, 258 jobs, 141 messages; current inventory, objects/ACLs and disposition pending |
 
 ## Existing authorities and endpoint parity
 
@@ -32,7 +32,7 @@ Paths are relative to the pinned repository. The product mounts 28 namespaces wi
 | Comments/D1 | Existing `PgCommentStore` (`api/src/services/comments/instance.ts:18`) remains active; D1 service/binding stays available, with D2 capture/control off |
 | Catalogue | Five existing kinds and one composite registry; new private provider metadata requires W4's request context before exposure |
 
-Public GET observations (TLS validation succeeded; no session/token supplied): production and preprod `/api/v1/health` **200**; production `/api/v1/auth/session` **401**; production GET `/api/v1/mcp` **404**. This does not establish positive authenticated MCP parity or the live enable flag. The root-host GET `/.well-known/oauth-protected-resource/api/v1/mcp` returned the UI HTML shell, not usable JSON metadata; preserve/test the actual mounted metadata paths in W2. CI run `39154603798` jobs-detail GET again returned HTTP 502; individual deployment completion remains unverified.
+Public GET observations (TLS validation succeeded; no session/token supplied): production and preprod `/api/v1/health` **200**; production `/api/v1/auth/session` **401**; production GET `/api/v1/mcp` **404**. This does not establish positive authenticated MCP parity or the live enable flag. The root-host GET `/.well-known/oauth-protected-resource/api/v1/mcp` returned the UI HTML shell, not usable JSON metadata; preserve/test the actual mounted metadata paths in W2. The initial CI jobs-detail HTTP 502 is superseded by the retained paginated [CI metadata receipt](ci-recovery-reading.txt): preprod deployment succeeded, without proving current pod digests.
 
 ## Configured domains
 
