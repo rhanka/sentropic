@@ -103,6 +103,10 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
   readonly operations?: Readonly<Record<string, PgInstalledOperation>>;
   readonly purgeFinalizer?: PgPurgeFinalizer;
   readonly purgeAuthorize?: PgPurgeFinalizer;
+  /** Optional G3 commit fence: verified after the last callback and before
+   * the commit decision. A refusal rolls the transaction back. Absent by
+   * default: existing behavior is unchanged. */
+  readonly onCommitPossession?: () => void | Promise<void>;
   readonly stagedModules?: Readonly<Record<string, PgStagedModule>>;
   readonly pgPredicates?: Readonly<
     Record<

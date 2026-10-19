@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cluster-mesh",
-  "version": "0.19.1",
+  "version": "0.20.0",
   "description": "Injectable Cluster Mesh control-plane contracts, namespace modules, and single-instance runtime.",
   "type": "module",
   "license": "MIT",
@@ -27,6 +27,10 @@
     "./storage/postgres": {
       "types": "./dist/storage/postgres/index.d.ts",
       "import": "./dist/storage/postgres/index.js"
+    },
+    "./storage/sqlite": {
+      "types": "./dist/storage/sqlite/index.d.ts",
+      "import": "./dist/storage/sqlite/index.js"
     },
     "./comments": {
       "types": "./dist/integrations/comments/index.d.ts",
