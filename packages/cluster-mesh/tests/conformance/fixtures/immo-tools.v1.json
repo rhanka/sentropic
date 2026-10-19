@@ -603,3 +603,143 @@
                 "type": "text",
                 "text": "{\n  \"error\": \"scope_denied:immo:search\",\n  \"tool\": \"search_signals\",\n  \"correlationId\": \"9df4fb49-3a00-476c-b4bb-79ffe02ec55b\"\n}"
               }
+            ],
+            "isError": true
+          },
+          "list_documents": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:documents:read\",\n  \"tool\": \"list_documents\",\n  \"correlationId\": \"73f811b8-d150-4702-9acc-bddcb102d948\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "search_lots": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:search\",\n  \"tool\": \"search_lots\",\n  \"correlationId\": \"7a3d2f2e-45ed-4702-9089-672ff3392ace\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "get_zones_geojson": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"collection_not_found:qc-zonage-longueuil — ville inconnue ou couche non publiée\",\n  \"tool\": \"get_zones_geojson\",\n  \"correlationId\": \"3825ff2c-58c6-4961-bd95-5ee01584c63b\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      "missingCoarseScope": {
+        "name": "Error",
+        "code": 401,
+        "message": "Streamable HTTP error: Error POSTing to endpoint: {\"error\":{\"code\":\"invalid_token\",\"message\":\"Missing required scope: immo:read.\"}}"
+      }
+    },
+    "simulation": {
+      "capturedAt": "2026-10-16T00:58:00.534Z",
+      "calls": {
+        "search_lots": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 3,\n  \"lots\": [\n    {\n      \"no_lot\": \"6 359 591\",\n      \"city\": \"longueuil\",\n      \"zone\": \"H-203\",\n      \"area_m2\": 1240,\n      \"frontage_m\": 24,\n      \"address_street\": \"rue Saint-Charles Ouest\",\n      \"usage\": \"résidentiel basse densité\",\n      \"serviced\": true\n    },\n    {\n      \"no_lot\": \"6 359 612\",\n      \"city\": \"longueuil\",\n      \"zone\": \"H-203\",\n      \"area_m2\": 1985,\n      \"frontage_m\": 31,\n      \"address_street\": \"rue Saint-Charles Ouest\",\n      \"usage\": \"résidentiel basse densité\",\n      \"serviced\": true\n    },\n    {\n      \"no_lot\": \"4 102 884\",\n      \"city\": \"longueuil\",\n      \"zone\": \"C-101\",\n      \"area_m2\": 760,\n      \"frontage_m\": 18,\n      \"address_street\": \"boulevard Curé-Poirier\",\n      \"usage\": \"commercial\",\n      \"serviced\": true\n    }\n  ]\n}"
+              }
+            ]
+          }
+        },
+        "get_lot_card": {
+          "args": {
+            "city": "longueuil",
+            "no_lot": "1234567"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"city\": \"longueuil\",\n  \"no_lot\": \"1234567\"\n}"
+              }
+            ]
+          }
+        },
+        "search_signals": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 2,\n  \"signals\": [\n    {\n      \"id\": \"sig-longueuil-001\",\n      \"city\": \"longueuil\",\n      \"type\": \"modification_zonage\",\n      \"etape\": \"avis_motion\",\n      \"regulatoryStatus\": \"anticipation\",\n      \"etape_date\": \"2026-04-14\",\n      \"reglement_number\": \"CO-2026-1187\",\n      \"zone_ref\": \"H-203\",\n      \"no_lot\": \"6 359 591\",\n      \"summary\": \"Avis de motion pour permettre l'habitation multifamiliale jusqu'à 4 étages dans la zone H-203.\",\n      \"source_document_id\": \"doc-longueuil-pv-2026-04-14\"\n    },\n    {\n      \"id\": \"sig-longueuil-002\",\n      \"city\": \"longueuil\",\n      \"type\": \"usage_conditionnel\",\n      \"etape\": \"adoption\",\n      \"regulatoryStatus\": \"firm\",\n      \"etape_date\": \"2026-05-12\",\n      \"reglement_number\": \"USC-2026-044\",\n      \"zone_ref\": \"C-101\",\n      \"no_lot\": \"4 102 884\",\n      \"summary\": \"Adoption d'un usage conditionnel autorisant la mixité commerce/logement sur le boulevard Curé-Poirier.\",\n      \"source_document_id\": \"doc-longueuil-pv-2026-05-12\"\n    }\n  ]\n}"
+              }
+            ]
+          }
+        },
+        "get_opportunity_dossier": {
+          "args": {
+            "city": "longueuil",
+            "opportunityId": "opp-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"city\": \"longueuil\",\n  \"opportunityId\": \"opp-1\"\n}"
+              }
+            ]
+          }
+        },
+        "list_documents": {
+          "args": {},
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"count\": 3,\n  \"documents\": [\n    {\n      \"id\": \"doc-longueuil-pv-2026-04-14\",\n      \"city\": \"longueuil\",\n      \"title\": \"Procès-verbal — séance ordinaire du conseil municipal\",\n      \"doc_type\": \"proces_verbal\",\n      \"published_at\": \"2026-04-14\",\n      \"source\": \"Ville de Longueuil\",\n      \"archive_url\": \"s3://radar-archive/longueuil/pv/2026-04-14.pdf\",\n      \"page_count\": 18\n    },\n    {\n      \"id\": \"doc-longueuil-pv-2026-05-12\",\n      \"city\": \"longueuil\",\n      \"title\": \"Procès-verbal — séance ordinaire du conseil municipal\",\n      \"doc_type\": \"proces_verbal\",\n      \"published_at\": \"2026-05-12\",\n      \"source\": \"Ville de Longueuil\",\n      \"archive_url\": \"s3://radar-archive/longueuil/pv/2026-05-12.pdf\",\n      \"page_count\": 22\n    },\n    {\n      \"id\": \"doc-valleyfield-pv-2026-03-02\",\n      \"city\": \"valleyfield\",\n      \"title\": \"Procès-verbal — assemblée de consultation publique\",\n      \"doc_type\": \"proces_verbal\",\n      \"published_at\": \"2026-03-02\",\n      \"source\": \"Ville de Salaberry-de-Valleyfield\",\n      \"archive_url\": \"s3://radar-archive/valleyfield/pv/2026-03-02.pdf\",\n      \"page_count\": 12\n    }\n  ]\n}"
+              }
+            ]
+          }
+        },
+        "read_document_excerpt": {
+          "args": {
+            "documentId": "doc-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"documentId\": \"doc-1\"\n}"
+              }
+            ]
+          }
+        },
+        "get_zones_geojson": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"city\":\"longueuil\",\"collectionId\":\"qc-zonage-longueuil\",\"featureCollection\":{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.52,45.53],[-73.50999999999999,45.53],[-73.50999999999999,45.54],[-73.52,45.54],[-73.52,45.53]]]},\"properties\":{\"citySlug\":\"longueuil\",\"ZONE\":\"H-203\",\"DENSITE\":35,\"URL_GRILLE\":\"https://longueuil.example/grilles/H-203.pdf\",\"kind\":\"H\",\"reglement_url\":\"https://longueuil.example/reglements/CO-2016-1187.pdf\",\"reglement_numero\":\"CO-2016-1187\",\"reglement_millesime\":\"2016\",\"reglement_page_source\":\"12\",\"reglement_ancien_numero\":\"CO-2009-500\",\"reglement_ancien_source\":\"https://longueuil.example/reglements/CO-2009-500.pdf\",\"has_ancien\":true,\"_source_url\":\"https://interne.capture/breadcrumb-ne-jamais-exposer\"}},{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.5,45.51],[-73.49,45.51],[-73.49,45.519999999999996],[-73.5,45.519999999999996],[-73.5,45.51]]]},\"properties\":{\"citySlug\":\"longueuil\",\"ZONE\":\"C-101\",\"kind\":\"C\"}}]},\"numberReturned\":2,\"numberMatched\":2,\"truncated\":false,\"note\":\"mode mock: fixtures déterministes (aucun réseau)\"}"
+              }
+            ]
+          }
+        },
+        "get_lots_geojson": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
