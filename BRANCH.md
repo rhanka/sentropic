@@ -32,6 +32,8 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
+- [x] Owner input (2026-10-19): embed mcp-platform as a regular mesh dependency, preserving one npm-resolved kernel without bundling duplicate code. Immo installs `@sentropic/cluster-mesh@0.21.0` plus optional `@sentropic/artifacts@0.1.3`; platform 0.4.0 resolves transitively. Host entries: `@sentropic/cluster-mesh/compose/mcp-stateful`, `@sentropic/cluster-mesh/mcp/registry`, `@sentropic/cluster-mesh/mcp/artifacts`; artifacts definition and executor both come through mesh.
+- [ ] Embedded-platform validation: regenerate the root lock, qualify a consumer declaring only mesh (then mesh plus artifacts), prove twelve Immo plus fifteen artifacts tools, and inspect CI at the pushed HEAD.
 - [x] Latest implementation checkpoint: BRANCH.md.
 - [x] BRWRAP-EX2 / Astra R1 release repair: authorize the artifacts manifest patch and CI wiring contract tests. Reason: artifacts 0.1.2 excludes platform 0.4.0, breaking canonical root installation and complete release qualification. Impact: artifacts 0.1.3 widens its platform peer to >=0.3.0 <0.5.0; retain platform 0.4.0 and mesh 0.21.0 for the new wire/wrap API. Rollback: revert the tuple, regenerated lock and matching workflow/tests together.
 - [x] R1 implementation: regenerate the root lock without peer bypasses; restore artifacts in candidate, post-publication and bootstrap tuples; require its publisher before mesh; pass canonical platform, complete packaging, 27-tool artifacts and twelve-tool core qualification. Exact-head CI, including installed comments, remains the delivery gate.

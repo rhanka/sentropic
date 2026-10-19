@@ -17,6 +17,8 @@ const installed = (dir: string, name: string): string => {
 
 describe.skipIf(!enabled)('mcp tuple', () => {
   it('installs candidate, platform sibling and registry SDK together', () => {
+    const pkg = JSON.parse(read(join(fixtureDir('mcp-consumer'), 'package.json')));
+    expect(Object.keys(pkg.dependencies)).toEqual(['@sentropic/cluster-mesh']);
     const mesh = installed('mcp-consumer', '@sentropic/cluster-mesh');
     const platform = installed('mcp-consumer', '@sentropic/mcp-platform');
     const sdk = installed('mcp-consumer', '@modelcontextprotocol/sdk');
@@ -25,11 +27,11 @@ describe.skipIf(!enabled)('mcp tuple', () => {
     expect(sdk, 'sdk').not.toBe('absent');
   });
 
-  it('keeps both peers inside the candidate ranges', () => {
-    const peers = JSON.parse(read(new URL('../../package.json', import.meta.url), 'utf8'))
-      .peerDependencies as Record<string, string>;
-    expect(peers['@sentropic/mcp-platform']).toBe('>=0.4.0 <0.5.0');
-    expect(peers['@modelcontextprotocol/sdk']).toBe('^1.31.0');
+  it('installs the embedded platform dependency inside the candidate range', () => {
+    const pkg = JSON.parse(read(new URL('../../package.json', import.meta.url), 'utf8'));
+    expect(pkg.dependencies['@sentropic/mcp-platform']).toBe('>=0.4.0 <0.5.0');
+    expect(pkg.peerDependencies['@sentropic/mcp-platform']).toBeUndefined();
+    expect(pkg.peerDependencies['@modelcontextprotocol/sdk']).toBe('^1.31.0');
     expect(installed('mcp-consumer', '@sentropic/mcp-platform')).toBe(trainVersion('mcp-platform'));
   });
 });
