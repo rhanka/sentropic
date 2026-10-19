@@ -63,7 +63,7 @@ function makeWorld() {
     tickets,
     baseDomain: BASE,
   });
-  return { app, handler, tickets };
+  return { app, handler, tickets, publication };
 }
 
 function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
@@ -109,6 +109,51 @@ async function activate(
 const get = (world: World, input: ContentRequest) => world.handler.handle(input);
 
 describe('content serving e2e', () => {
+  it('should return secured stable errors when a content dependency throws', async () => {
+    const world = makeWorld();
+    const { id } = await publish(world, V1, 'internal-error');
+    world.publication.getCurrent = async () => { throw new Error('private driver details'); };
+    for (const method of ['GET', 'HEAD']) {
+      const response = await get(world, { method, host: `${id}.${BASE}`, path: '/' });
+      expect(response.status).toBe(500);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.body).toEqual(method === 'HEAD' ? undefined : { error: 'internal_error' });
+      expect(response.bytes).toBeUndefined();
+    }
+  });
+
+  it('should omit all HEAD bodies and secure errors and activation responses', async () => {
+    const world = makeWorld();
+    const { id, releaseId } = await publish(world, V1, 'head');
+    const host = `${id}.${BASE}`;
+    const issued = await world.tickets.issue({ subjectId: FARID, artifactId: id, releaseId, channel: 'stable' });
+    const activation = await get(world, { method: 'HEAD', host, path: '/', actorId: FARID, ticket: issued.ticketId });
+    const cookie = activation.headers['set-cookie'];
+    expect(activation.status).toBe(200);
+    const served = await get(world, { method: 'HEAD', host, path: '/', cookie });
+    expect(served.status).toBe(200);
+    expect(served.headers['content-length']).toBe(String(bytes(V1).length));
+    const errors = await Promise.all([
+      get(world, { method: 'GET', host, path: '/' }),
+      get(world, { method: 'GET', host: 'invalid', path: '/' }),
+      get(world, { method: 'GET', host, path: '/missing', cookie }),
+      get(world, { method: 'HEAD', host, path: '/' }),
+    ]);
+    for (const response of [activation, ...errors]) {
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['x-frame-options']).toBe('DENY');
+      expect(response.headers['cross-origin-resource-policy']).toBe('same-origin');
+      expect(response.headers['referrer-policy']).toBe('no-referrer');
+      expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+    }
+    for (const response of [activation, served, errors[3]!]) {
+      expect(response.body).toBeUndefined();
+      expect(response.bytes).toBeUndefined();
+    }
+  });
+
   it.each(['stable', 'pinned'] as const)('should refuse a %s ticket on the other channel', async (channel) => {
     const world = makeWorld();
     const v1 = await publish(world, V1, 'p-1');
