@@ -16,6 +16,7 @@
   - [x] `packages/mcp-platform/**`
   - [x] `packages/cluster-mesh/**`
   - [x] `package-lock.json`
+  - [x] `.github/workflows/ci.yml` (BRWRAP-EX1)
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
   - [x] `docker-compose*.yml`
@@ -29,7 +30,8 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
-- [x] Latest implementation checkpoint: packages/mcp-platform/src/tool-configuration.ts packages/mcp-platform/src/transport/bridge-kernel.ts packages/mcp-platform/src/transport/bridge.ts.
+- [x] Latest implementation checkpoint: BRANCH.md.
+- [x] BRWRAP-EX1 / CI tuple alignment: change only cluster-mesh qualification in .github/workflows/ci.yml; old explicit platform 0.3.0 pins block the new 0.4.0 contract. Impact: qualify the core tuple and run installed stateful contracts; incompatible optional artifacts remain refused. Rollback: revert the workflow hunk with the package tuple.
 - [x] L1: finite JSON budgets and cloned advertised-default traversal extracted from the #689 pattern.
 - [ ] Fixture import progress: 853/853 exact lines pinned from Radar #866.
 - [x] Radar constraints read: blocker 6 belongs inside 2b-MCP after #706 and #689; exclude #865 before cutover.
