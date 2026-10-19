@@ -2413,28 +2413,63 @@ jobs:
           fi
           echo 'CI gate passed: all required jobs succeeded, were legitimately skipped, or were neutral.'
 
-  # BR76-EX1 — capacity receipt: record dispatch anchors and endpoint presence
-  # from contexts only (no API calls, no invented spans). Aggregated by
-  # ci-gate (every PR job must be); the step only echoes, so it never blocks
-  # promotion on its own. Rollback: delete this job and its ci-gate entry.
+  # BR76-EX1 — retain actual matrix/job/step receipts before the final gate.
+  # The manifest validator remains an independent leaf; the gate supplies its
+  # completed result through needs. Rollback preserves expected-result checks.
   ci-capacity-receipts:
     runs-on: ubuntu-latest
     if: always()
     permissions:
       contents: read
-    needs: [changes, publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh]
+      actions: read
+    needs: [changes, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
+      validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
+      validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
+      validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
+      validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
+      validate-chat-core, validate-chat-server, validate-comments, validate-flow,
+      validate-artifacts, validate-harness, build-api-image, build-api-tool-image,
+      test-api-unit-integration, build-ui, test-e2e, e2e-vscode, smoke-idp-screens,
+      security-sast-sca, security-iac, security-container, test-smoke-restore, validate-ci-capacity-metrics,
+      publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
+      publish-llm-mesh, publish-llm-gateway, publish-chat-ui, publish-cited-source-viewer,
+      publish-cowork-bridge, publish-oauth-verify, publish-mcp-auth, publish-mcp-platform,
+      publish-artifacts, publish-auth-hono, publish-auth-client, publish-auth-ui,
+      publish-cowork-desktop, publish-contracts, publish-events, publish-chat-core,
+      publish-chat-server, publish-comments, publish-flow, publish-harness,
+      bootstrap-publish]
     steps:
-      - name: Record capacity receipt
-        env:
-          RECEIPTS_NEEDS: ${{ toJSON(needs) }}
-        run: |
-          set -euo pipefail
-          {
-            echo "### Capacity receipt (BR-76)";
-            echo "- run: ${{ github.run_id }}, attempt: ${{ github.run_attempt }}, event: ${{ github.event_name }}, ref: ${{ github.ref }}";
-            echo "- workflow SHA: ${{ github.sha }}";
-            printf '%s\n' "$RECEIPTS_NEEDS" | jq -r 'to_entries[] | "- \(.key): \(.value.result)"';
-          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-expected-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/ci-capacity
+      - name: Capture identified run and expanded job receipts
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const params = { ...context.repo, run_id: context.runId };
+            const { data: run } = await github.rest.actions.getWorkflowRun(params);
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
+              { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
+            const expected = JSON.parse(fs.readFileSync('tmp/ci-capacity/expected.json')).expected;
+            const packages = expected.filter(row => row.job.startsWith('publish-') && !row.job.endsWith('-image'));
+            const selected = packages.filter(row => row.selected);
+            const endpoints = { qualification: ['ci-gate'], images: ['publish-api-image', 'publish-ui-image'],
+              preproduction: ['deploy-preprod'], packages: (selected.length ? selected : packages).map(row => row.job) };
+            fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs, endpoints }, null, 2));
+      - name: Emit measured job and step spans through Make
+        run: make --no-print-directory ci-run-metrics RUN_FILE=tmp/ci-capacity/capture.json ENV=test-ci-62 > tmp/ci-capacity/metrics.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-capacity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            tmp/ci-capacity/capture.json
+            tmp/ci-capacity/metrics.json
+          if-no-files-found: error
+          retention-days: 7
 
   # BR76-EX1 — qualify the capacity receipts behind Make entry points: the
   # fixture suites plus selection-aware negative cases run in required CI.
