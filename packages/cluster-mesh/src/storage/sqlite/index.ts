@@ -13,6 +13,8 @@ import { StorageInvalidCommandError, UnsupportedProfileError } from '../errors.j
 import { CanonicalOwnershipError } from '../instance-ownership.js';
 import { createKernel, type KernelRoot } from '../kernel.js';
 import type { ProfileClaim, ProfileId } from '../profiles.js';
+import type { RootScopedRuntime } from '../root-facade.js';
+import { rootCapability } from '../root-profiles.js';
 import {
   createRootStagedKernel,
   type StagedKernelOptions,
@@ -87,7 +89,18 @@ const SYNC_METHODS = new Set(['requireOperation', 'capability']);
 
 const persistAfter = <T extends object>(bound: T, backend: SqliteStateBackend, engine: SqliteEngine, scope: StorageScope): T =>
   new Proxy(bound, {
-    get(target, property) {
+    get(target, property, receiver) {
+      const claims = sqliteProfileClaims((target as RootScopedRuntime).moduleId, true);
+      if (property === 'profiles') return claims;
+      if (property === 'capability') return (profile: ProfileId) => {
+        engine.assertOwnership();
+        const claim = claims.find(entry => entry.profile === profile);
+        if (!claim) throw new UnsupportedProfileError(profile);
+        const original = (target as RootScopedRuntime).capability(profile);
+        // Bind ports to the guarded facade, including previously issued
+        // ports. Never return methods bound to the memory runtime.
+        return Object.freeze({ ...('port' in original ? rootCapability(receiver as RootScopedRuntime, profile) : {}), ...claim });
+      };
       const value = Reflect.get(target, property, target) as unknown;
       if (typeof value !== 'function') return value;
       // Possession is verified before every call, reads included: loss is
