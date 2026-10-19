@@ -23,7 +23,7 @@ import { createMemoryStaging, createUploadService } from '../src/server/uploads.
 import { createDefaultTemplateCatalog } from '../src/server/templates.js';
 import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
 import { defineParameters } from '../src/parameters.js';
-import { createArtifactsToolExecutor, type ArtifactsInvokeInput } from '../src/mcp-core.js';
+import { createArtifactsToolExecutor, type ArtifactsInvokeInput } from '../src/mcp.js';
 
 const FARID = 'farid';
 const STEVE = 'steve';

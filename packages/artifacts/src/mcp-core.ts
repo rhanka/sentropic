@@ -15,14 +15,13 @@ import type {
   AppToolResult,
   CapabilityTool,
 } from '@sentropic/mcp-platform';
-import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
-import type { ProviderParameterSchema, RegistryDefinition } from '@sentropic/mcp-platform/registry';
+import type { ProviderParameterSchema } from '@sentropic/mcp-platform/registry';
 import type { HttpRequest, HttpResponse } from './http.js';
 import { TEXT_MIME_PATTERN } from './http.js';
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.1.2';
+export const ARTIFACTS_PROVIDER_VERSION = '0.1.4';
 
 export const ARTIFACTS_TOOL_NAMES = [
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_ensure',
@@ -367,43 +366,5 @@ export function createArtifactsAdapter(
       error: { code: 'not_found', message: 'not_found', retriable: false },
     }),
     validateSecrets: () => Promise.resolve([]),
-  };
-}
-
-export interface ArtifactsDefinitionOptions extends ArtifactsAdapterOptions {
-  /** Local config-review reference (integrity metadata, never authority). */
-  approvalRef?: string;
-  revision?: string;
-  reviewedBy?: string[];
-}
-
-const EMPTY_TOOL_CONFIG: Schema = { type: 'object', properties: {}, additionalProperties: false };
-
-/** Build the kernel registry definition for sentropic.artifacts (§3). */
-export function createArtifactsRegistryDefinition(
-  options: ArtifactsDefinitionOptions,
-): RegistryDefinition {
-  const adapter = createArtifactsAdapter(options);
-  const manifest = adapter.manifest;
-  const handlers: Record<string, { handlerId: string; capabilityRef: string; configSchema: unknown }> = {};
-  const toolValues: Record<string, { handlerId: string; values: Record<string, unknown> }> = {};
-  for (const spec of ARTIFACTS_TOOL_SPECS) {
-    const handlerId = `${spec.name}-handler`;
-    handlers[handlerId] = { handlerId, capabilityRef: spec.name, configSchema: EMPTY_TOOL_CONFIG };
-    toolValues[spec.name] = { handlerId, values: {} };
-  }
-  return {
-    manifest,
-    adapter,
-    parameterSchema: ARTIFACTS_PARAMETER_SCHEMA,
-    handlers,
-    requiredPorts: [],
-    provenance: {
-      approvalRef: options.approvalRef ?? 'artifacts-local-1',
-      revision: options.revision ?? 'rev-1',
-      manifestDigest: computeManifestDigest(manifest),
-      reviewedBy: options.reviewedBy ?? ['host-owner'],
-    },
-    toolValues,
   };
 }
