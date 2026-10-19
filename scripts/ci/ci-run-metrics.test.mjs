@@ -398,3 +398,51 @@ test('release continuity requires every release endpoint measured', () => {
   assert.equal(receipt.continuous, false);
   assert.equal(receipt.endpoints.preproduction.status, 'partial');
 });
+
+for (const conclusion of ['failure', 'cancelled']) {
+  test(`release continuity rejects a completed ${conclusion} release endpoint`, () => {
+    const record = job({ runId: 1, attempt: 1, jobId: 2, name: 'deploy-preprod', conclusion,
+      startedAt: '2026-10-19T12:00:00Z', completedAt: '2026-10-19T12:01:00Z' });
+    const receipt = releaseContinuity([record], { preproduction: ['deploy-preprod'] });
+    assert.equal(receipt.endpoints.preproduction.status, 'measured');
+    assert.equal(receipt.continuous, false);
+  });
+}
+
+test('release continuity rejects a completed failed qualification gate', () => {
+  const gate = job({ runId: 39248907136, attempt: 1, jobId: 118102013502, name: 'ci-gate',
+    conclusion: 'failure', startedAt: '2026-10-19T14:00:03Z', completedAt: '2026-10-19T14:00:18Z' });
+  const receipt = releaseContinuity([gate], { qualification: ['ci-gate'] });
+  assert.equal(receipt.endpoints.qualification.status, 'measured');
+  assert.equal(receipt.continuous, false);
+});
+
+test('cancellation ownership marks older PR head runs superseded across run IDs', () => {
+  const branch = 'chore/ci-capacity-metrics';
+  const previous = { headSha: 'be63fe929df1f105b7de9d0966613f1a829139e8', runId: 39186496525 };
+  const successor = { headSha: 'd1c38a512befa26b9f6f61001a4af924a532c5b7', runId: 39186952208 };
+  const records = [
+    job({ ...previous, headBranch: branch, attempt: 1, jobId: 1, conclusion: 'cancelled' }),
+    job({ ...previous, headBranch: branch, attempt: 1, jobId: 2, conclusion: 'cancelled' }),
+    job({ ...previous, headBranch: branch, attempt: 1, jobId: 3 }),
+    job({ ...successor, headBranch: branch, attempt: 1, jobId: 4, conclusion: 'cancelled' }),
+    job({ ...successor, headBranch: branch, attempt: 1, jobId: 5 }),
+  ];
+  const receipt = cancellationOwnership(records);
+  assert.equal(receipt.cancelledCount, 3);
+  assert.equal(receipt.superseded, 2);
+  const previousOwnership = receipt.cancelled.filter((row) => row.runId === previous.runId);
+  assert.equal(previousOwnership.length, 2);
+  assert.ok(previousOwnership.every((row) => row.ownership === 'superseded'));
+  assert.ok(previousOwnership.every((row) => row.headSha === previous.headSha));
+  const successorOwnership = receipt.cancelled.filter((row) => row.runId === successor.runId);
+  assert.deepEqual(successorOwnership.map((row) => row.ownership), ['current']);
+});
+
+test('capture records retain head ref context for supersession receipts', () => {
+  const [record] = captureRecords({ run: { id: 7 }, jobs: [{ run_id: 7, run_attempt: 1,
+    id: 11, name: 'changes', conclusion: 'cancelled', head_sha: 'abc123', head_branch: 'chore/x',
+    started_at: '2026-10-18T10:00:00Z', completed_at: '2026-10-18T10:01:00Z' }] });
+  assert.equal(record.headSha, 'abc123');
+  assert.equal(record.headBranch, 'chore/x');
+});
