@@ -5,6 +5,8 @@
 | Record | Purpose |
 |---|---|
 | [baseline.md](baseline.md) | Pinned source/owner GO, runtime unknowns, observed public endpoints, domains and legacy content sources |
+| [cluster-readings.md](cluster-readings.md) | Dated inactive-cluster metadata, hashes, actual RBAC denials and exact missing serving-cluster/DB/object access |
+| [recovery-readings.md](recovery-readings.md) | Existing CI SQL restore metadata, offline archive/frontier/count observations and their limits |
 | [published-tuple.json](published-tuple.json) | Exact published selectors/integrities, all nine selected cluster peers, source lock/config hashes and explicit null live digests |
 | [host-fit.md](host-fit.md) | W2 host-owned registry, unchanged URLs/resource semantics, prototype boundary and acceptance files |
 | [catalog-context.md](catalog-context.md) | W4 authoritative request/turn context, current uncached tenant resolver, all affected signatures/callers and auth tests |
