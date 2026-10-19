@@ -238,6 +238,40 @@ export function concurrencyPeak(records) {
   return peak;
 }
 
+// Measured-slot admission: evaluate observed demand against declared capacity.
+// availableSlots comes from the owner-supplied quota inventory (or a measured
+// lower bound recorded in capacity.md); reserveSlots holds release lanes.
+// Missing inputs stay to-measure, never zero: no admission claim without them.
+export function admissionDecision({ peak, availableSlots = null, reserveSlots = 0 } = {}) {
+  const slots = Number.isFinite(availableSlots) ? availableSlots : null;
+  const reserve = Number.isFinite(reserveSlots) ? reserveSlots : 0;
+  const demand = Number.isFinite(peak) ? peak : null;
+  if (slots === null || demand === null) {
+    return { status: 'to-measure', peak: demand, availableSlots: slots, reserveSlots: reserve, headroom: null };
+  }
+  const headroom = slots - reserve - demand;
+  return { status: headroom >= 0 ? 'admitted' : 'over-capacity',
+    peak: demand, availableSlots: slots, reserveSlots: reserve, headroom };
+}
+
+// Declared timing budgets in seconds: classification <= 15, verdict <= 5,
+// aggregate critical-path scheduling <= 60 under declared concurrent traffic.
+// Missing observations stay to-measure; a breach retains its observed value.
+export const CAPACITY_BUDGETS = { classificationSeconds: 15, verdictSeconds: 5, schedulingSeconds: 60 };
+
+export function budgetVerdict({ classificationSeconds = null, verdictSeconds = null, schedulingSeconds = null } = {}) {
+  const observed = { classificationSeconds, verdictSeconds, schedulingSeconds };
+  const budgets = {};
+  for (const [key, budget] of Object.entries(CAPACITY_BUDGETS)) {
+    const value = observed[key];
+    budgets[key] = { budget, observed: Number.isFinite(value) ? value : null,
+      status: !Number.isFinite(value) ? 'to-measure' : (value <= budget ? 'pass' : 'breach') };
+  }
+  const statuses = Object.values(budgets).map((entry) => entry.status);
+  return { budgets, ok: statuses.every((status) => status === 'pass'),
+    pending: statuses.some((status) => status === 'to-measure') };
+}
+
 // Summarize one captured run file. Buckets are disjoint: skipped rows are
 // reported separately and never counted as measured; rows with timestamp gaps
 // are unmeasured, never zero-filled. Partial means the capture holds fewer
