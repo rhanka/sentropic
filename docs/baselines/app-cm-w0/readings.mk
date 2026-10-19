@@ -8,7 +8,7 @@ W0_DUMP ?= prod-2026-10-17T21-56-20.dump
 W0_PG := postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
 W0_KUBE = kubectl --kubeconfig="$(W0_KUBECONFIG)" --request-timeout=15s -n "$(W0_NS)"
 W0_DIR := docs/baselines/app-cm-w0
-.PHONY: w0-roles w0-config w0-backup-status w0-archive w0-ci-recovery
+.PHONY: w0-roles w0-config w0-backup-status w0-archive w0-ci-recovery w0-local-restore
 w0-roles:
 	@date -u +%Y-%m-%dT%H:%M:%SZ
 	@$(W0_KUBE) get deployments -o json | jq -c '{items:[.items[]|{name:.metadata.name,uid:.metadata.uid,resourceVersion:.metadata.resourceVersion,generation:.metadata.generation,revision:.metadata.annotations["deployment.kubernetes.io/revision"],replicas:.spec.replicas,containers:[.spec.template.spec.containers[]|{name,image}]}]}'
@@ -37,3 +37,9 @@ w0-archive:
 w0-ci-recovery:
 	@date -u +%Y-%m-%dT%H:%M:%SZ
 	@gh api 'repos/rhanka/sentropic/actions/runs/39154603798/jobs?per_page=100' --jq '{total_count,jobs:[.jobs[]|select(.name|test("deploy|preprod|restore|backup"))|{id,name,conclusion,started_at,completed_at,steps:[.steps[]|select(.name|test("[Dd]eploy|[Rr]estore|[Bb]ackup|[Mm]igrat"))|{name,conclusion,started_at,completed_at}]}]}'
+w0-local-restore:
+	@date -u +%Y-%m-%dT%H:%M:%SZ
+	@for file in preprod-pre-0008.source-exact.clean.txt preprod-pre-0008.restored-exact.clean.txt; do \
+	  stat -c '%n %s bytes mtime=%y' "$(W0_BACKUPS)/$$file"; sha256sum "$(W0_BACKUPS)/$$file"; \
+	  awk '/context_documents|context_document_versions|job_queue|chat_messages|__drizzle/ {print}' "$(W0_BACKUPS)/$$file"; \
+	done
