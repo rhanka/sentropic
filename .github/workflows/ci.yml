@@ -2391,7 +2391,7 @@ jobs:
               if (!response.ok) throw new Error(`Receipt capture failed: HTTP ${response.status}`);
               return response.json();
             };
-            const run = await get(base);
+            const run = await get(`${base}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`);
             const jobs = [];
             for (let page = 1; ; page++) {
               const result = await get(`${base}/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`);
@@ -2442,7 +2442,8 @@ jobs:
           script: |
             const fs = require('node:fs');
             const params = { ...context.repo, run_id: context.runId };
-            const { data: run } = await github.rest.actions.getWorkflowRun(params);
+            const { data: run } = await github.rest.actions.getWorkflowRunAttempt(
+              { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT) });
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
               { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
             const expected = JSON.parse(fs.readFileSync('tmp/ci-capacity/expected.json')).expected;
