@@ -73,7 +73,7 @@ Deliver the node:sqlite L3a backend for the eight transactional profiles with th
   - [ ] Confirm no host ports needed: disposable Docker cold workspace, no pg container for lot 1 gates.
   - [ ] Confirm scope boundaries and no `BRxx-EXn` exceptions needed.
 - [ ] **Lot 1 — SQLite backend plus conformance plus G3 commit fencing**
-  - [ ] Neutral `CanonicalInstanceOwnershipV1` contract in `src/storage/instance-ownership.ts` with version and digest.
+  - [x] Neutral `CanonicalInstanceOwnershipV1` contract in `src/storage/instance-ownership.ts` with version and digest.
   - [ ] SQLite open guard in `src/storage/sqlite/engine.ts`: engine check before WAL, WAL verified, FULL verified, EXCLUSIVE ownership with fail-fast second-holder refusal.
   - [ ] Durable SQLite backend in `src/storage/sqlite/backend.ts`: per-scope snapshots persisted in one SQLite transaction per mutation, ownership re-verified before COMMIT.
   - [ ] Kernel composition plus eight transactional profile claims in `src/storage/sqlite/index.ts`, package export and version bump.
