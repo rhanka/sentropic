@@ -1,0 +1,51 @@
+# W0 release and authorization evidence register
+
+W0 preparation, local evidence probes, commits, push and a draft PR are covered by the owner's 2026-10-18 launch packet `AGENT_SIG:7f3a9c2e1b`. The 19 October follow-up also authorizes integrating origin/main into this branch and recording the [verbatim Q1–Q4 owner answers](owner-decisions.md). The original request and approved plan hash are preserved in [baseline.md](baseline.md). No PR merge, deployment, production migration, live restore, key enrollment or Environment reconfiguration is included in this task. Unknown evidence is pending; no receipt is inferred from a green check or elapsed time.
+
+## Pending dependencies and observable handoffs
+
+The owner (rhanka) holds all human roles as principal operator; agents do the work (Q1). No staffed windows or temporal slot bookings are required because there are no users (Q2). Dates below retain the original plan's requested technical deadlines. SC owns evidence collection; unresolved technical dependencies keep their applicable gates closed and add their nonoverlapping critical-path delay to Δ.
+
+| ID / responsible role | Bounded missing evidence / acceptance | Deadline / gate |
+|---|---|---|
+| B01 / owner as tenant operator, agents collect | Read-only pod/deployment inventory in prod and preprod: namespace, role, pod UID/start time, requested image, actual `imageID`, deployment revision, config/resource hashes and observed timestamp. Include actual content-role presence/absence. Names of Secret refs only; no values or privileged kubeconfig | 19 Oct 09:00 Toronto, before W0 dispatch sign-off |
+| B02 / tenant operator | Read-only applied migration journal IDs/checksums and frontier; current `(compositionRoot,namespace)` selected generation/active author/status, generation/server/lease validity and writer fence. Distinguish both migration streams and package journal | Same W0 dispatch gate; refresh before W5 |
+| B03 / owner as tenant operator + KO, agents collect | Last verified backup + private object checkpoint, isolated restore receipt preserving grants/revocations. Q1 assigns backup/rotation/restore ownership to the owner. No live restore attempt from W0 | Baseline receipt before dispatch; actual new-provider restore before W5 |
+| B04 / tenant operator + W1 storage owner | Aggregate counts of `context_documents`, versions, generated `job_queue.result` objects/legacy base64 and chat references, grouped by tenant/workspace/source; object existence/checksum and ACL mapping summary. Record explicit leave-in-place vs import disposition for each source; no content, user IDs or object names in report | Before W0 acceptance and W1 dispatch; refresh qualification inventory in W5 |
+| B05 / owner as acceptance signer + SC | **W0 decisions closed by Q3/Q4:** owner signs from an instance he designates; new dedicated acceptance identity/key, later authorized enrollment, own revocation cycle. Public SPKI fingerprint **PENDING until enrollment**; no private key in records. Later action records public export/validity/revocation/role binding; reviewed P installs protected-main trust | Enrollment/trust evidence before signed acceptance/production validation; no pending W0 owner choice |
+| B06 / owner as KO + tenant operator, SC/agents execute | **W0 ownership/scheduling decisions closed by Q1/Q2:** owner holds all human roles; agents execute; distinct AIs review independently. No staffed windows or temporal slot bookings required. Technical ownership/order and port isolation retained. Infra repo/PR, exact DNS/TLS callbacks, private bucket/IAM/RBAC and migration reservation reconciliation retain their applicable technical gates | Migration reservation reconciliation at W0 exit/before W1 allocation; infra before W3/W5, promotion configuration before TG exit |
+| B07 / rhanka + tenant operator | Native app `production` Environment configuration, main-only/reviewer/no-admin-bypass receipt, tag rules, credential-route audit and preprod production-write denial; signed positive rehearsal and native `probe_only` barrier receipt | TG exit; actual distinct G-PROD and run approval before production |
+| B08 / SC / independent R | Sol 6.1 xhigh + Astra max acceptance-scope review of the exact W0 head/records and reconciliation. Coding instance supplies evidence and does not issue its own independent GO | Before marking W0 accepted; draft PR alone is not acceptance |
+
+F1/F2 follow-up: [cluster-readings.md](cluster-readings.md) records accessible inactive-cluster metadata and actual namespace RBAC denials; [recovery-readings.md](recovery-readings.md) retains existing SQL restore metadata and historical archive counts/frontiers. B01–B04 remain open for the specific current-tenant reads, object/ACL recovery proof and disposition listed there. F3/F4 owner decisions are closed by the [verbatim answers](owner-decisions.md); later enrollment and technical receipts retain their downstream gates. Do not switch to admin credentials to fill the blanks. SC records unresolved technical critical-path delay and keeps dependent work gated.
+
+## Remaining W0 acceptance blockers
+
+- **F1 / B01:** serving-cluster prod/preprod reader access and endpoint-to-cluster confirmation; dated role/pod/image/config identities and content-role presence/absence. The local OVH account is denied deployment listing in both namespaces; accessible Scaleway namespaces have no running pods.
+- **F1 / B02:** authenticated read-only access to actual product/control DBs for both migration journals/checksums, package journals and current author/generation/cutover/server/lease/fence state. No applicable connection is supplied.
+- **F1 / B03:** scoped backup/object catalogue and retained isolated-restore receipts binding the current baseline to verified DB backup, private-object checkpoint and restored grants/revocations. Existing CI SQL success metadata does not supply that binding or object/deny-state proof.
+- **F2 / B04:** current tenant/workspace/source aggregate inventory across documents/versions, job objects/legacy base64, chat attachments/tool references and generic artifact-store; scoped object existence/checksum/ACL evidence, then explicit leave-in-place/import disposition per source. Historical counts do not close this gate; Q2's absence of users does not assert absence of stored data.
+- **F3 technical remainder / B06:** SC/owner confirmation that reserved control migration `0017` has no nonlocal unpublished collision, preserving D2's `0012`–`0016`. The recorded sibling scan found no `0017` file; the cross-train reconciliation receipt is still absent. This requires no staffed window or temporal slot booking.
+- **B08:** independent non-author Sol + Astra acceptance reviews and reconciliation on the final W0 head, including the owner answers. The retained Astra round-1 review targets ce26bb090bf1d2a43a00d9c97671269e18152e52 and is not final-head acceptance.
+
+B05 enrollment/trust installation, B06 infrastructure delivery and B07 Environment/rehearsal receipts remain later action gates, not additional unresolved W0 owner decisions. B06's nonlocal migration-ID reconciliation above remains a W0 technical handoff check. No staffed window or temporal slot reservation blocks W0 acceptance. Technical rollback ability remains required under F1 and downstream qualification.
+
+## Action authorization register
+
+Each merge record needs the owner/actor, UTC timestamp, durable source link, action scope, PR, exact reviewed head, required checks and both independent reviews. Each production record instead binds the canonical manifest hash, all four role digests, config/migration/frontier/backup/rollback scope, target tenant, signed acceptance, owner as principal operator and the native Environment run/approval receipt. Q2 requires no staffed window; technical rollback and action authorization remain required.
+
+| Record | Action / state |
+|---|---|
+| W0-LAUNCH | **Granted**, owner 18 Oct task packet; baseline preparation + draft delivery only. W0 head/review/PR are supplied by this branch; this is not a merge receipt |
+| W0-FOLLOW-UP | **Granted**, owner 19 Oct task packet; branch pull/main integration, verbatim Q1–Q4 recording, commits and push. Later dedicated-key enrollment is outside this task |
+| M-T1 | **Pending**, W1 storage exact PR/head + tests/reviews; SC prepares, owner authorizes |
+| M-T2 | **Pending**, W2 registry exact PR/head + parity/identity evidence; SC prepares, owner authorizes |
+| M-T3 | **Pending**, W3 content/activation/packaging/I manifests + EX1 and KO handoff; SC prepares, owner authorizes |
+| M-T4 | **Pending**, W4 context/callers/catalogue/UI + HTTP/chat auth proof; SC prepares, owner authorizes |
+| M-TG | **Pending**, P exact PR/head + verifier/bypass/configuration evidence and EX2; SC/operator prepare, owner authorizes |
+| M-T5 | **Pending**, integrated fixes/runbook/qualification candidate + final Sol/Astra findings/checks; SC prepares, owner authorizes; excludes production |
+| G-PROD | **Pending**, qualified immutable tuple/manifest + owner's signed acceptance, frontier/backup/migration scope and owner as principal operator; rhanka's distinct native approval is mandatory; no staffed window required |
+| G-ROLLBACK | **Pending**, explicit stop/fence/prior-tuple actions preserving committed data and deny state; may be included in G-PROD, but each workflow still passes its Environment gate. Destructive live restore excluded |
+| Other/T0/TX candidates | No authority granted by this plan or W0; SC refreshes their heads and cites separately applicable receipts |
+
+SC may reuse an existing explicit GO whose scope covers the concrete action; it records the receipt rather than requesting the same approval again. Operator and signer assignments above come from the owner answers. W0 creates no independent review or deployment approval by declaration. This draft remains a baseline preparation record until the remaining W0 blockers above close; later gates are assessed at their stated stages.
