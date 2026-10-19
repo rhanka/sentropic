@@ -76,6 +76,8 @@ describe('original Immo MCP schemas', () => {
     }
     const cyclic: Record<string, unknown> = {}; cyclic.self = cyclic;
     expect(check('search_lots', cyclic).valid).toBe(false);
+    const sparse: unknown[] = []; sparse.length = 2 ** 32 - 1;
+    expect(check('search_lots', { city: 'x', sparse }).valid).toBe(false);
   });
   it('rejects unsupported schemas and independent resource budgets before calls', () => {
     for (const schema of [{ $ref: 'https://secret.test/schema' }, { $async: true },
