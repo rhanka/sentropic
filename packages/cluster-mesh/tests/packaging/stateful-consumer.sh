@@ -7,6 +7,7 @@ consumer=$(mktemp -d)
 for package in contracts events oauth-verify mcp-auth mcp-platform cluster-mesh; do
   (cd "$source_root/packages/$package" && npm pack --pack-destination "$pack_dir" --silent)
 done
+sha256sum "$pack_dir"/*.tgz
 cd "$consumer"
 npm init -y >/dev/null
 npm pkg set type=module >/dev/null
