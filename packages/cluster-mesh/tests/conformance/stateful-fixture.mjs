@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { createProviderRegistry } from '@sentropic/mcp-platform/registry';
-import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
+import { createClusterMeshModules } from '../../src/modules/registry.js';
+import { loadMcpPlatformRegistry } from '../../src/loaders/mcp/index.js';
+import { computeManifestDigest } from '../../src/mcp/registry.js';
 import { resource } from './stateful-host-auth.mjs';
+
+const { createProviderRegistry } = await loadMcpPlatformRegistry(createClusterMeshModules());
 
 const bytes = readFileSync(new URL('./fixtures/immo-tools.v1.json', import.meta.url));
 if (createHash('sha256').update(bytes).digest('hex')
