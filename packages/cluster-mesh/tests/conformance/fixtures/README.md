@@ -37,3 +37,7 @@ separately. Preserve both public metadata routes. No auth dependency change,
 live signal parity, token exchange, production cutover or #865 receiver
 qualification is implied by library conformance. #865 remains excluded from
 Radar candidate SHAs until its same-environment 2b-MCP cutover receipt.
+Measured compact JSON maxima across the pinned HTTP and simulation calls:
+schema 908 bytes / depth 5; arguments 44 bytes / depth 1; results 1,873 bytes /
+depth 3. The complete golden file is 38,747 bytes. Depth counts container levels.
+

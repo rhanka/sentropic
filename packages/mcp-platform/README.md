@@ -220,3 +220,27 @@ make api-extract-mcp-platform ENV=test-mcp-registry-codec
 
 Real validation against Claude.ai or another external MCP client is UAT, not a CI
 dependency (spec §11).
+# Native MCP wire tools (0.4.0)
+
+Use `compileMcpToolSchemas` from `/transport/tool-schemas` for original draft-07
+MCP schemas, including unbounded strings, numeric exclusive bounds, tuple items
+and cloned property defaults. Supply all seven positive JSON resource limits.
+Schema validation has no remote references, async validators or custom keywords;
+unsupported constructs fail at startup. It never coerces types, drops extra
+properties or changes advertised schemas. Configuration schemas retain the
+separate bounded profile.
+
+`registerMcpWireTools` from `/transport/bridge` explicitly accepts SDK Tool
+descriptors and a native CallToolResult runner. It replaces public SDK list/call
+handlers, retaining every descriptor field and content byte. The runner receives
+validated cloned arguments and cancellation only; trusted execution authority is
+the host's responsibility. `formatFailure` must return a valid error result;
+invalid/throwing formatters produce a constant safe failure.
+
+`validateMcpWireResult` from `/transport/result-codec` checks SDK shape and finite
+JSON budgets, then returns the original value. Native results never use the
+AppToolResult codec. Explicit SDK McpError failures keep standard JSON-RPC codes
+with fixed public messages and no exception data; ordinary exceptions become
+safe tool errors. Existing `registerBridgeTools` retains explicit AppToolResult
+semantics through the same registration kernel. See `etc/mcp-wire.api.md`.
+
