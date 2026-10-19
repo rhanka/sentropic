@@ -16,7 +16,7 @@ export function hostAuth() {
     sub: 'owner', azp: 'client', scope: 'immo:read immo:search immo:documents:read',
     roles: ['viewer'], workspaces: ['default'], ...claims,
   }).setProtectedHeader({ alg: 'RS256', kid: 'test' }).setIssuer(issuer)
-    .setAudience(resource).setIssuedAt().setExpirationTime('1h').sign(keys.privateKey);
+    .setAudience(claims.aud ?? resource).setIssuedAt().setExpirationTime(claims.exp ?? '1h').sign(keys.privateKey);
   return { auth, token };
 }
 
