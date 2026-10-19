@@ -45,6 +45,7 @@ export function captureRecords(captured) {
     runId: row.run_id, attempt: row.run_attempt, jobId: row.id, name: row.name,
     conclusion: row.conclusion, queuedAt: row.created_at,
     startedAt: row.started_at, completedAt: row.completed_at, labels: row.labels,
+    headSha: row.head_sha ?? null, headBranch: row.head_branch ?? null,
     runnerName: row.runner_name || undefined,
     steps: row.steps?.map((step) => ({ name: step.name, number: step.number,
       conclusion: step.conclusion, startedAt: step.started_at, completedAt: step.completed_at })),
@@ -274,16 +275,50 @@ export function budgetVerdict({ classificationSeconds = null, verdictSeconds = n
 
 // Cancellation ownership: every cancelled row retains its run/attempt/job
 // identity so a superseded PR attempt stays distinguishable from the current
-// release. A cancellation below its run's latest attempt is superseded;
-// one in the latest attempt is current; a cancelled row without an
+// release. A cancellation below its run's latest attempt is superseded, and
+// so is a cancellation from a run superseded by a newer head on the same
+// ref: PR supersession creates a new run per head (same attempt number), so
+// attempt comparison alone cannot see it. Rows carry headSha/headBranch from
+// the Jobs API; an explicit run context may override them. A cancellation in
+// the latest attempt of the latest run is current; a cancelled row without an
 // identified attempt is unidentified and blocks ownership.
-export function cancellationOwnership(records) {
-  const latest = new Map();
-  for (const record of records ?? []) {
-    const attempt = Number.isFinite(record?.attempt) ? record.attempt : null;
-    if (attempt === null) continue;
+export function cancellationOwnership(records, context = {}) {
+  const runs = new Map();
+  const runMeta = (record) => {
     const run = record?.runId ?? 'unknown';
-    if (!latest.has(run) || attempt > latest.get(run)) latest.set(run, attempt);
+    if (!runs.has(run)) runs.set(run, { attempts: [], headShas: new Set(), headBranches: new Set() });
+    return runs.get(run);
+  };
+  for (const record of records ?? []) {
+    const meta = runMeta(record);
+    if (Number.isFinite(record?.attempt)) meta.attempts.push(record.attempt);
+    if (record?.headSha != null) meta.headShas.add(String(record.headSha));
+    if (record?.headBranch != null) meta.headBranches.add(String(record.headBranch));
+  }
+  for (const [run, override] of Object.entries(context?.runs ?? {})) {
+    const meta = runMeta({ runId: Number.isFinite(Number(run)) ? Number(run) : run });
+    if (override?.headSha != null) meta.headShas.add(String(override.headSha));
+    if (override?.headBranch != null) meta.headBranches.add(String(override.headBranch));
+    if (override?.createdAt != null) meta.createdAt = override.createdAt;
+  }
+  const branchOf = (run) => {
+    const branches = [...(runs.get(run)?.headBranches ?? [])];
+    return branches.length === 1 ? branches[0] : null;
+  };
+  const orderOf = (run) => {
+    const created = toMs(runs.get(run)?.createdAt);
+    return created ?? (Number.isFinite(run) ? run : null);
+  };
+  const latestAttempt = new Map([...runs].map(([run, meta]) =>
+    [run, meta.attempts.length > 0 ? Math.max(...meta.attempts) : null]));
+  const latestRunByBranch = new Map();
+  for (const run of runs.keys()) {
+    const branch = branchOf(run) ?? `run:${String(run)}`;
+    const order = orderOf(run);
+    const prior = latestRunByBranch.get(branch);
+    if (!prior || (order !== null && (prior.order === null || order > prior.order))) {
+      latestRunByBranch.set(branch, { run, order });
+    }
   }
   const cancelled = [];
   let superseded = 0;
@@ -296,22 +331,37 @@ export function cancellationOwnership(records) {
       cancelled.push({ key: jobKey(record), ownership: 'unidentified' });
       continue;
     }
-    const ownership = latest.has(record?.runId ?? 'unknown')
-      && attempt < latest.get(record?.runId ?? 'unknown') ? 'superseded' : 'current';
+    const run = record?.runId ?? 'unknown';
+    const rerunSuperseded = latestAttempt.get(run) !== null && attempt < latestAttempt.get(run);
+    const branch = branchOf(run) ?? `run:${String(run)}`;
+    const crossRunSuperseded = latestRunByBranch.get(branch)?.run !== run;
+    const ownership = rerunSuperseded || crossRunSuperseded ? 'superseded' : 'current';
     if (ownership === 'superseded') superseded += 1;
-    cancelled.push({ key: jobKey(record), runId: record.runId, attempt, ownership });
+    cancelled.push({ key: jobKey(record), runId: record.runId, attempt,
+      headSha: record?.headSha ?? [...(runs.get(run)?.headShas ?? [])][0] ?? null,
+      ownership });
   }
   return { cancelled, cancelledCount: cancelled.length, superseded, unidentified };
 }
 
 // Release continuity: rollback and cancellation never stop the current
 // release. Every release endpoint must be measured (each mapped member with
-// a duration); anything else is an interruption carrying its readiness status.
+// a duration) AND successful: readiness measures timestamp coverage, not the
+// conclusion, so a completed failure or cancellation reads measured but is
+// an interruption. Duration measurements stay in readiness; continuity
+// requires successful identified results.
 export function releaseContinuity(records, endpoints = {}) {
   const readiness = endpointReadiness(records, endpoints);
+  const matches = (record, pattern) =>
+    String(record?.name ?? '').toLowerCase().includes(String(pattern).toLowerCase());
   const perEndpoint = {};
   for (const [endpoint, state] of Object.entries(readiness)) {
-    perEndpoint[endpoint] = { status: state.status, continuous: state.status === 'measured' };
+    const patterns = endpoints[endpoint];
+    const matched = Array.isArray(patterns) && patterns.length > 0
+      ? (records ?? []).filter((record) => patterns.some((pattern) => matches(record, pattern)))
+      : [];
+    const successful = matched.length > 0 && matched.every((record) => record?.conclusion === 'success');
+    perEndpoint[endpoint] = { status: state.status, continuous: state.status === 'measured' && successful };
   }
   return { continuous: Object.values(perEndpoint).every((entry) => entry.continuous),
     endpoints: perEndpoint };
@@ -440,6 +490,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const executions = jobs.map((record) => ({
     key: jobKey(record), runId: record.runId, attempt: record.attempt, jobId: record.jobId,
     name: record.name, conclusion: record.conclusion,
+    headSha: record.headSha ?? null, headBranch: record.headBranch ?? null,
     startedAt: record.startedAt ?? null, completedAt: record.completedAt ?? null,
     seconds: record.conclusion === 'skipped' ? null : durationSeconds(record.startedAt, record.completedAt),
     queueSeconds: queueSeconds(record), steps: stepSpans(record),
