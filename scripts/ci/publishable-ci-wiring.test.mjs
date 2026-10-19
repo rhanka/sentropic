@@ -164,7 +164,7 @@ const TRAIN_VALIDATES = [['validate-llm-mesh', 'llm_mesh'], ['validate-llm-gatew
 const TRAIN_UPSTREAMS = {
   'publish-llm-mesh': [],
   'publish-llm-gateway': [['publish-llm-mesh', 'llm_mesh_publish']],
-  'publish-cluster-mesh': [['publish-llm-mesh', 'llm_mesh_publish'], ['publish-llm-gateway', 'llm_gateway_publish'], ['publish-events', 'events_publish'], ['publish-contracts', 'contracts_publish'], ['publish-mcp-platform', 'mcp_platform_publish']],
+  'publish-cluster-mesh': [['publish-llm-mesh', 'llm_mesh_publish'], ['publish-llm-gateway', 'llm_gateway_publish'], ['publish-events', 'events_publish'], ['publish-contracts', 'contracts_publish'], ['publish-mcp-platform', 'mcp_platform_publish'], ['publish-artifacts', 'artifacts_publish']],
 };
 
 test('publisher ordering: gateway waits for mesh; N1 lockstep siblings gate mcp-auth and cluster-mesh', () => {
@@ -217,7 +217,7 @@ test('lint wiring follows baseline evidence, independently per package, before t
 });
 
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
-const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/mcp-platform@0.3.0,@sentropic/artifacts@0.1.0,jose@5.10.0,@sentropic/comments@0.3.0';
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/mcp-platform@0.4.0,@sentropic/artifacts@0.1.3,jose@5.10.0,@sentropic/comments@0.3.0';
 
 test('cluster-mesh qualification installs every declared optional Sentropic peer', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages/cluster-mesh/package.json'), 'utf8'));
@@ -230,6 +230,7 @@ test('cluster-mesh qualification installs every declared optional Sentropic peer
   ];
   for (const step of steps) {
     const peers = step.run.match(/\bPEERS=(\S+)/)?.[1].split(',') ?? [];
+    assert.equal(` PEERS=${peers.join(',')}`, CLUSTER_MESH_PEERS, `${step.name}: complete release tuple`);
     for (const name of required) {
       assert.ok(peers.some((spec) => spec.startsWith(`${name}@`)), `${step.name}: missing optional peer ${name}`);
     }
