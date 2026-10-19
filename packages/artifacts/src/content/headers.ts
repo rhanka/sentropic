@@ -41,6 +41,7 @@ export function contentHeaders(input: ContentHeaderInput): Record<string, string
     'content-type': withCharset,
     'content-length': String(input.size),
     'x-content-type-options': 'nosniff',
+    'cross-origin-resource-policy': 'same-origin',
     'cache-control': cacheable ? `private, max-age=${input.assetCacheSeconds}` : 'no-store',
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
