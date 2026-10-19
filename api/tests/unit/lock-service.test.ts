@@ -60,6 +60,18 @@ describe('lock-service', () => {
     expect(lock?.lockedBy.userId).toBe(editorB.id);
   });
 
+  it('should acquire one lock for concurrent requests from the same owner', async () => {
+    const options = { userId: editor.id, workspaceId, objectType: 'initiative' as const, objectId: `race_${Date.now()}` };
+    const results = await Promise.all(Array.from({ length: 8 }, () => acquireLock(options)));
+
+    expect(results.map((result) => result.acquired)).toEqual(Array(8).fill(true));
+    expect(new Set(results.map((result) => result.lock.id)).size).toBe(1);
+    expect(results.every((result) => result.lock.lockedBy.userId === editor.id)).toBe(true);
+    const conflict = await acquireLock({ ...options, userId: editorB.id });
+    expect(conflict.acquired).toBe(false);
+    expect(conflict.lock.lockedBy.userId).toBe(editor.id);
+  });
+
   it('forceUnlock requires admin workspace role', async () => {
     const objectType = 'initiative';
     const objectId = `initiative_${Date.now()}`;

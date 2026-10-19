@@ -1109,6 +1109,15 @@ process.stdin.on('end', () => {
     expect(TOOL_CONFIGURATION_PLATFORM_VERSION).toBe(pkg.version);
   });
 
+  it('accepts a resealed snapshot naming the installed platform version', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    const snapshot = buildSnapshot();
+    snapshot.platformVersion = pkg.version;
+    reseal(snapshot);
+    const result = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(result.ok).toBe(true);
+  });
+
   it('requires qualified provider and platform versions', () => {
     const missing = buildSnapshot();
     delete (missing as Partial<ApprovedToolSnapshot>).providerVersion;

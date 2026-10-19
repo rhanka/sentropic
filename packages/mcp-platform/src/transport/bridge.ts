@@ -83,6 +83,20 @@ export interface BridgeTool {
   readonly description?: string;
   /** Bounded 2020-12 schema: advertised on the wire and enforced by the kernel. */
   readonly schema: unknown;
+  /**
+   * Explicit wire-profile admission (L5 Lot 1): memory tools carry
+   * `sentropic.engram.memory-wire/v1`. Absent means the existing default
+   * (Immo) profile; the global/default codec never changes silently.
+   */
+  readonly profile?: string;
+}
+
+/** Memory wire-profile identifier admitted explicitly through this bridge. */
+export const MEMORY_BRIDGE_PROFILE_ID = 'sentropic.engram.memory-wire/v1';
+
+/** True when the tool explicitly negotiates the memory wire profile. */
+export function isMemoryProfileTool(tool: BridgeTool): boolean {
+  return tool.profile === MEMORY_BRIDGE_PROFILE_ID;
 }
 
 export interface BridgeRunner {
