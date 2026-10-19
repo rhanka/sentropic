@@ -16,6 +16,8 @@ import { canonicalManifest, manifestDigest } from '../codecs.js';
 import type { JsonValue } from '../contracts.js';
 import type { IntentStore } from './object-intents.js';
 import type { IdempotencyStore } from './idempotency.js';
+import { publicationLimits, validatePublicationFiles, type PublicationLimits } from './publication-limits.js';
+export { DEFAULT_PUBLICATION_LIMITS, type PublicationLimits } from './publication-limits.js';
 
 export interface ReleaseRecord {
   releaseId: string;
@@ -109,6 +111,7 @@ export interface PublishInput {
   profile: Record<string, JsonValue | undefined>;
   files: PublicationFileInput[];
   idempotencyKey?: string;
+  /** @deprecated Ignored; the server hashes release metadata and file digests. */
   paramsHash?: string;
 }
 
@@ -122,6 +125,7 @@ function shaHex(bytes: Uint8Array): string {
 }
 
 export interface PublicationService {
+  readonly limits?: Readonly<PublicationLimits>;
   publish(input: PublishInput): Promise<PublishResult>;
   getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
   getRelease(releaseId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
@@ -133,9 +137,10 @@ export function createPublicationService(deps: {
   blobs: PublicationBlobStore;
   intents: IntentStore;
   idempotency?: IdempotencyStore;
+  limits?: Partial<PublicationLimits>;
 }): PublicationService {
-  async function commitOnce(input: PublishInput): Promise<PublishResult> {
-    const releaseId = crypto.randomUUID();
+  const limits = publicationLimits(deps.limits);
+  function prepare(input: PublishInput) {
     const entries = input.files.map((file) => {
       const hex = shaHex(file.bytes);
       return {
@@ -154,6 +159,11 @@ export function createPublicationService(deps: {
     };
     const digest = manifestDigest(body);
     const manifest = canonicalManifest({ ...body, digest });
+    return { entries, digest, manifest };
+  }
+  async function commitOnce(input: PublishInput, prepared: ReturnType<typeof prepare>): Promise<PublishResult> {
+    const releaseId = crypto.randomUUID();
+    const { entries, digest, manifest } = prepared;
     const intent = await deps.intents.record('commit-release', {
       artifactId: input.artifactId,
       releaseId,
@@ -191,16 +201,20 @@ export function createPublicationService(deps: {
   }
 
   return {
+    limits,
     async publish(input: PublishInput): Promise<PublishResult> {
+      validatePublicationFiles(input.files, limits);
+      input = { ...input, files: input.files.map((file) => ({ ...file, bytes: file.bytes.slice() })) };
+      const prepared = prepare(input);
       if (input.idempotencyKey !== undefined && deps.idempotency !== undefined) {
         const { result } = await deps.idempotency.execute(
-          input.idempotencyKey,
-          input.paramsHash ?? '',
-          () => commitOnce(input),
+          JSON.stringify(['publish', input.ownerId, input.idempotencyKey]),
+          prepared.digest,
+          () => commitOnce(input, prepared),
         );
         return result;
       }
-      return commitOnce(input);
+      return commitOnce(input, prepared);
     },
     async getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined> {
       const releaseId = await deps.state.getCurrentReleaseId(artifactId);
