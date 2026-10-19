@@ -50,6 +50,7 @@
 - [x] Capture attempt-specific run metadata: the reference run's generic endpoint now reports attempt 2 while the measured jobs belong to attempt 1; both workflow collectors use the attempt endpoint to preserve that distinction.
 - [x] Retain source SHA and actual workflow SHA separately in raw captures and metrics output; unavailable workflow revision remains null rather than assuming equality with the source.
 - [x] R2 regression gate: 56 Docker tests pass (19 metrics, 15 expected-result/actual-gate, 22 unchanged publishable wiring); real review capture 39186952208/1 reconciles 58 selected required members and leaves skipped delivery elapsed null.
+- [x] R1-4/R2-4 contention window: overlapping PR/main windows exclude skipped nonexecutions and unmeasurable/inverted intervals (Docker regression).
 - [ ] R2-4 remains open: the account API returns `plan: null`, billing HTTP 404 requests missing `user` scope, and no quota/reservation/cost inventory was supplied. Account owner supplies that inventory; branch author must qualify the resulting bounded dispatch policy, concurrent PR/current-main delivery, rollback, and timing budgets.
 
 ## AI Flaky tests
