@@ -13,7 +13,9 @@ async function open(mode: 'http' | 'stdio') {
   const client = new Client({ name: 'conformance', version: '1' });
   const server = new Server({ name: 'native-probe', version: '1' }, { capabilities: { tools: {} } });
   register(server);
-  const hostTransport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
+  const hostTransport = new WebStandardStreamableHTTPServerTransport({
+    enableJsonResponse: true, sessionIdGenerator: () => crypto.randomUUID(),
+  });
   if (mode === 'http') await server.connect(hostTransport);
   const transport = mode === 'http'
     ? new StreamableHTTPClientTransport(new URL('http://native.test/mcp'), {
