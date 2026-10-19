@@ -44,6 +44,8 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
 - [x] **BR704-EX1** (R5): touch `packages/cluster-mesh/src/modules/catalog.ts` (one line: Comments range `>=0.19.0 <0.20.0` to `>=0.19.0 <0.21.0`) so the bumped 0.20.0 package passes its own installed gate. Reason: package self-compatibility, no behavior change. Impact: Comments module admits 0.19.x and 0.20.x. Rollback: revert the range line.
 - [x] **R3**: Postgres possession hook runs after `roots.publish` (outbox callback included); protocol comment states the seam is not the full G3 guarantee. Regression test covers loss inside outbox with rollback.
 - [x] **R4**: `profiles()` advertises only the restart-durable lot 1 subset (atomic, chains, boundaries); staged/journal/barrier/fence/purge claims stay disabled until S2-S4.
+- [x] **R6**: owning moduleId persisted in `cm_meta` at creation and validated on reopen; cross-module reopen refuses before any read or mutation.
+- [x] **R1**: `assertOwnership` re-verifies store file identity plus kernel POSIX lock liveness (procfs, no store fd) before trusting cached reads; acquisition contention maps to typed `instance-busy`.
 
 ## AI Flaky tests
 - Acceptance rule:
