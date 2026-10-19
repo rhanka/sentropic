@@ -20,8 +20,8 @@ cp "$source_root"/packages/cluster-mesh/tests/conformance/stateful-*.mjs tests/c
 cp "$source_root"/packages/cluster-mesh/tests/conformance/immo-stateful-wrap.spec.ts tests/conformance/
 cp -R "$source_root"/packages/cluster-mesh/tests/conformance/fixtures tests/conformance/
 for file in tests/*.ts tests/conformance/*.ts; do
-  sed -i -E "s|'\.\./(\.\./)?src/compose/mcp-stateful.js'|'@sentropic/cluster-mesh/compose/mcp-stateful'|g" "$file"
-  sed -i -E "s|'\.\./(\.\./)?src/(modules/registry|hono/plugin).js'|'@sentropic/cluster-mesh'|g" "$file"
+  sed -i -E "s#'\.\./(\.\./)?src/compose/mcp-stateful.js'#'@sentropic/cluster-mesh/compose/mcp-stateful'#g" "$file"
+  sed -i -E "s#'\.\./(\.\./)?src/(modules/registry|hono/plugin).js'#'@sentropic/cluster-mesh'#g" "$file"
 done
 ln -s /tmp/cm-tools/node_modules/vitest node_modules/vitest
 /tmp/cm-tools/node_modules/.bin/vitest run tests --environment node --maxWorkers=1
