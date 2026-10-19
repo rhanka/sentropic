@@ -69,6 +69,11 @@ All commands below use `ENV=test-cm-mcp-wrap` last.
   The frozen lock now records the normal embedded-platform dependency and the
   merged platform archive integrity. Packaging runs with one worker; the offline
   preparation test passed in 2.16s, within its unchanged 5s budget.
+- Installed comments and PostgreSQL 17.11→18.6 qualification passed using guarded
+  sibling receipts before installation. Both consumers resolve platform
+  transitively through a container-local registry; cursor retention,
+  reattestation and operator audit passed. CI wiring (22 tests), lint and scope
+  passed for this repair; the qualified package archives are unchanged.
 - `make memory-l5-pack STAGE=pre-candidate`: regenerated and verified two archives
   and 44 contracts. P1 manifest SHA-256:
   `732b96bc3284fb6f38cf031bd33a9cfe341ee7bc8129741f7e9726a371b66d53`.
