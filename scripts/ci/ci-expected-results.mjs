@@ -6,6 +6,8 @@
 // absent from the expected set with a skipped conclusion) never blocks.
 // Runs only behind root Make targets.
 import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
 
 const BLOCKING = new Set(['failed', 'cancelled', 'timed_out', 'stale']);
 
@@ -167,6 +169,14 @@ Executed shape: { "executed": [{ "job": <name>, "conclusion": <ci conclusion> }]
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const args = process.argv.slice(2);
+  if (args.includes('--workflow-file')) {
+    const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
+    const workflow = YAML.parse(fs.readFileSync(args[args.indexOf('--workflow-file') + 1], 'utf8'));
+    const context = JSON.parse(process.env.CI_SELECTION_CONTEXT);
+    const manifest = { identity: context.identity, expected: workflowExpected(workflow, context) };
+    fs.writeFileSync(args[args.indexOf('--manifest-file') + 1], JSON.stringify(manifest, null, 2));
+    process.exit(0);
+  }
   if (args.includes('--help') || !args.includes('--expected-file') || !args.includes('--executed-file')) {
     console.log(usage);
     process.exit(args.includes('--help') ? 0 : 2);

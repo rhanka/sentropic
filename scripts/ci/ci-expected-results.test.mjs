@@ -1,10 +1,35 @@
 // ci-expected-results fixtures (make test-ci-expected-results).
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
 import { evaluateExpected, evaluateSelection, workflowExpected } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
+const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
+const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
+
+test('should reject missing actual workflow members and always-required skipped validators', () => {
+  for (const changes of [{ global: 'true' }, { api: 'true' }, { ui: 'true' }, {}]) {
+    const expected = workflowExpected(workflow, { changes, event: 'pull_request', ref: 'refs/pull/705/merge' });
+    const executed = expected.filter((item) => item.selected).map((item) => ran(item.job, 'success'));
+    assert.equal(evaluateExpected({ expected, executed }).ok, true);
+    for (const validator of ['validate-publishable-manifests', 'validate-ci-capacity-metrics']) {
+      const skipped = executed.map((row) => row.job === validator ? ran(validator, 'skipped') : row);
+      assert.equal(evaluateExpected({ expected, executed: skipped }).ok, false);
+    }
+    assert.equal(evaluateExpected({ expected, executed: [ran('changes', 'success')] }).ok, false);
+    const member = executed.find((row) => row.job.startsWith('test-e2e ('));
+    if (member) {
+      assert.equal(evaluateExpected({ expected, executed: executed.filter((row) => row !== member) }).ok, false);
+      assert.equal(evaluateExpected({ expected, executed: executed.map((row) => row === member ? ran(row.job, 'skipped') : row) }).ok, false);
+    }
+  }
+  const main = workflowExpected(workflow, { changes: { global: 'true' }, event: 'push', ref: 'refs/heads/main' });
+  assert.equal(main.find((row) => row.job === 'publish-api-image').selected, true);
+});
 
 test('should evaluate workflow selection expressions without running expression text as code', () => {
   const values = { 'needs.changes.outputs.global': 'true', 'github.ref': 'refs/pull/705/merge' };
