@@ -79,9 +79,9 @@ Deliver the node:sqlite L3a backend for the eight transactional profiles with th
   - [x] Durable SQLite backend in `src/storage/sqlite/backend.ts`: per-scope snapshots persisted in one SQLite transaction per mutation, ownership re-verified before COMMIT.
   - [x] Kernel composition plus eight transactional profile claims in `src/storage/sqlite/index.ts`, package export and version bump.
   - [x] Additive Postgres commit-possession hook in `postgres/protocol.ts` plus `postgres/ordinary-transactions.ts`, no behavior change when absent.
-  - [ ] Fixture plus shared-corpus SQLite spec: `tests/storage/sqlite-fixture.ts`, `tests/storage/sqlite-corpus.spec.ts`.
+  - [x] Fixture plus shared-corpus SQLite spec: `tests/storage/sqlite-fixture.ts`, `tests/storage/sqlite-corpus.spec.ts`.
   - [ ] Ownership and fencing spec: `tests/storage/instance-ownership.spec.ts` covering double-acquire refusal, stale-epoch refusal, terminal loss, tampered-ownership commit refusal with rollback.
-  - [ ] New make targets in `tests/storage/sqlite.mk` for `cluster-mesh-sqlite-test`.
+  - [x] New make targets in `tests/storage/sqlite.mk` for `cluster-mesh-sqlite-test`.
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh ENV=test-cm-sqlite`
     - [ ] **API tests**
