@@ -2,6 +2,8 @@
 
 > Status: SCOPED (decided). Consolidates `/tmp/39e-scope-draft.md` v2 after double-review (Codex 5.5-high + Opus 4.8-max) and the owner decisions of 2026-06-07. Federation-first was rejected by both reviewers; v1 spine = identity-scoped tenancy. Owner widened scope from "immo-first" to **broad** ("plus large d'emblée"). To be deleted after consolidation into BRANCH.md lots + tests.
 
+> Related: per-application forced MFA and recovery (orthogonal to the tenant claim: `tid` derivation is unchanged there) — [SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md](SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md).
+
 ## 1. Objective
 Add a real **tenancy spine** to the standalone IdP (`auth.sent-tech.ca`): model *which organization a human belongs to* (not just *which client they logged into*), with per-(user,tenant) membership, tenant-scoped acceptance, and an immutable tenant claim in tokens — designed from the start for **multiple consumers** (immo, diag, design-system, and an openerp brokered lane), on the shared IdP DB.
 

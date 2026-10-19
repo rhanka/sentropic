@@ -32,6 +32,9 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `plan/6[2-9]-BRANCH_*.md` (BR704-EX3, unchanged origin/main merge input only)
+  - `plan/70-BRANCH_test-ci-ten-minute-proof.md` (BR704-EX3, unchanged origin/main merge input only)
+  - `spec/**` (BR704-EX3, unchanged origin/main merge input only)
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
   - `packages/cluster-mesh/src/modules/catalog.ts` (BR704-EX1, one range line only)
@@ -43,6 +46,7 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] **BR704-EX3**: owner-requested origin/main integration; incoming plan/spec changes only, no authored changes there. The conflict-free merge has no resolution delta; its first-parent size reflects imported main commits. Rollback: revert the integration merge.
 - [x] **BR704-EX1** (R5): touch `packages/cluster-mesh/src/modules/catalog.ts` (one line: Comments range `>=0.19.0 <0.20.0` to `>=0.19.0 <0.21.0`) so the bumped 0.20.0 package passes its own installed gate. Reason: package self-compatibility, no behavior change. Impact: Comments module admits 0.19.x and 0.20.x. Rollback: revert the range line.
 - [x] **R3**: Postgres possession hook runs after `roots.publish` (outbox callback included); protocol comment states the seam is not the full G3 guarantee. Regression test covers loss inside outbox with rollback.
 - [x] **R4**: `profiles()` advertises only the restart-durable lot 1 subset (atomic, chains, boundaries); staged/journal/barrier/fence/purge claims stay disabled until S2-S4.
