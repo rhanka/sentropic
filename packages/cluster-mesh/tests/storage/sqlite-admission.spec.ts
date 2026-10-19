@@ -7,6 +7,27 @@ const record = (id: string) => ({ id, bytes: '{"n":1}', hash: `hash-${id}` });
 const absent = { kind: 'absent' as const, allocation: '0' };
 
 describe('SQLite independent admission and persistence rollback', () => {
+  it('should join a same-scope transaction contribution and persist only its final receipt', async () => {
+    const f = createSqliteFixture();
+    try {
+      const b = f.kernel.bindNew(f.grant()) as RootScopedRuntime;
+      const other = f.kernel.bindNew(f.grant({ token: 'joined' })) as RootScopedRuntime;
+      const unit = (id: string) => ({ guards: [], records: [], appends: [{ chainId: id, record: record(id), expectation: absent }],
+        updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [] });
+      const result = await b.transact({}, async tx => {
+        await tx.apply(unit('outer'));
+        return other.transact({}, async nested => { await nested.apply(unit('inner')); return 'joined'; });
+      });
+      assert.equal(result.receipt.effectiveAppends, 2);
+      assert.equal(result.value.receipt.commitId, result.receipt.commitId);
+      assert.equal(result.value.receipt.effectiveAppends, 0);
+      assert.equal(await b.readHead('outer'), 'hash-outer');
+      assert.equal(await b.readHead('inner'), 'hash-inner');
+      const disk = f.kernel.engine.db.prepare('SELECT state FROM cm_scopes').all() as { state: string }[];
+      assert.ok(disk.some(row => row.state.includes('hash-outer') && row.state.includes('hash-inner')));
+    } finally { f.close(); }
+  });
+
   it('should preserve accepted writes after a refused overlapping append', async () => {
     const f = createSqliteFixture();
     try {

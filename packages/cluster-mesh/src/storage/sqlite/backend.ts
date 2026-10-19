@@ -8,6 +8,7 @@
 // session-local and are documented in index.ts.
 
 import { BackendScopeState, MemoryBackend, backendScopeKey, createIndexedBackendScopeState } from '../backend.js';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { StorageScope } from '../contracts.js';
 import { IndexedHistory } from '../indexed-history.js';
 import { IndexedMap } from '../indexed-map.js';
@@ -79,6 +80,20 @@ export const decodeScopeState = (json: string): BackendScopeState => {
 export class SqliteStateBackend extends MemoryBackend {
   private readonly knownScopes = new Map<string, StorageScope>();
   private admitted = false;
+  private readonly transactions = new AsyncLocalStorage<{ key: string; active: boolean }>();
+
+  joinsTransaction(scope: StorageScope): boolean {
+    const context = this.transactions.getStore();
+    return context?.active === true && context.key === backendScopeKey(scope);
+  }
+
+  async withTransaction<T>(scope: StorageScope, operation: () => Promise<T>): Promise<T> {
+    const context = { key: backendScopeKey(scope), active: true };
+    return this.transactions.run(context, async () => {
+      try { return await operation(); }
+      finally { context.active = false; }
+    });
+  }
 
   assertIdle(): void {
     if (this.admitted) throw new CanonicalOwnershipError('instance-busy', 'SQLite operation is still active');
