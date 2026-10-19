@@ -40,3 +40,4 @@ Radar candidate SHAs until its same-environment 2b-MCP cutover receipt.
 Measured compact JSON maxima across the pinned HTTP and simulation calls:
 schema 908 bytes / depth 5; arguments 44 bytes / depth 1; results 1,873 bytes /
 depth 3. The complete golden file is 38,747 bytes. Depth counts container levels.
+The real SDK Client's largest observed raw RPC body was 158 bytes in both modes.
