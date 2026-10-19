@@ -56,14 +56,14 @@
 - [x] **Lot 1 — Stateful host contract**
   - [x] Write the spec's decisions, host ownership, request authority, public exports and warm wrapping acceptance.
   - [x] Gate: no per-request recreation, identity rewriting, raw bearer exposure, or second session owner in the proposed API.
-- [ ] **Lot 2 — Validation, discovery and result fidelity**
-  - [ ] Define draft-07 schema semantics, defaults, resource limits, complete tool metadata and lossless CallToolResult handling.
-  - [ ] Gate: all twelve #866 schemas and complete discovery/results have explicit positive and negative conformance checks.
-- [ ] **Lot 3 — Delivery plan and risks**
-  - [ ] Specify package versions, implementation lots, file-level tests, external dependencies and no-reconnection cutover gate.
-  - [ ] Test inventory: platform `tests/mcp-wire-schema.test.ts`, `tests/mcp-wire-results.test.ts`, `tests/wire-parity.test.ts`; mesh `tests/mcp-stateful-wrap.spec.ts`, `tests/conformance/immo-stateful-wrap.spec.ts`, `tests/packaging/mcp-stateful-consumer.spec.ts`.
-  - [ ] Radar follow-up: `packages/immo-mcp/src/deployed-baseline.test.ts` and `server-http.test.ts`; immutable #866 fixture; published dependencies only.
-  - [ ] Gate: distinguish proposed runtime checks from evidence actually produced by this documentation branch.
+- [x] **Lot 2 — Validation, discovery and result fidelity**
+  - [x] Define draft-07 schema semantics, defaults, resource limits, complete tool metadata and lossless CallToolResult handling.
+  - [x] Gate: all twelve #866 schemas and complete discovery/results have explicit positive and negative conformance checks.
+- [x] **Lot 3 — Delivery plan and risks**
+  - [x] Specify package versions, implementation lots, file-level tests, external dependencies and no-reconnection cutover gate.
+  - [x] Test inventory: platform `tests/mcp-wire-schema.test.ts`, `tests/mcp-wire-results.test.ts`, `tests/wire-parity.test.ts`; mesh `tests/mcp-stateful-wrap.spec.ts`, `tests/conformance/immo-stateful-wrap.spec.ts`, `tests/packaging/mcp-stateful-consumer.spec.ts`.
+  - [x] Radar follow-up: `packages/immo-mcp/src/deployed-baseline.test.ts` and `server-http.test.ts`; immutable #866 fixture; published dependencies only.
+  - [x] Gate: distinguish proposed runtime checks from evidence actually produced by this documentation branch.
 - [ ] **Lot 4 — Docs consolidation and review**
   - [ ] Reconcile review findings; verify all references, signatures, dependency ranges and acceptance criteria.
   - [ ] Keep the standalone EVOL spec; no temporary BRANCH_SPEC_EVOL document is needed.
