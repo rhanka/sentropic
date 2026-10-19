@@ -243,10 +243,16 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     const steps = jobs[`validate-${slug}`].steps;
     const pack = steps.find((s) => s.id === 'pack');
     assert.equal(pack.run, `make pack-${slug} PACK_DESTINATION=tmp/ci-manifest-guard/candidate/${slug} PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-${slug}`);
-    const gated = steps.filter((s) => s.if === "steps.pack.outputs.manifest_mode == 'block'");
-    assert.equal(gated[0].run, `make pack-candidate-siblings PACKAGE=${slug} SIBLING_DIR=tmp/ci-manifest-guard/siblings/${slug} ENV=test-ci-${slug}`);
-    assert.equal(gated[1].env.CANDIDATE_TARBALL, '${{ steps.pack.outputs.tarball }}');
-    assert.equal(gated[1].run, `make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/${slug}/receipts.json${peers} REPORT_DIR=tmp/ci-manifest-guard/qualify-${slug} ENV=test-ci-${slug}`);
+    const siblings = steps.find((s) => s.run?.startsWith('make pack-candidate-siblings '));
+    const qualify = steps.find((s) => s.run?.startsWith('make qualify-published-install TARBALL='));
+    assert.equal(siblings.run, `make pack-candidate-siblings PACKAGE=${slug} SIBLING_DIR=tmp/ci-manifest-guard/siblings/${slug} ENV=test-ci-${slug}`);
+    // An unchanged mesh can still consume a BLOCK sibling; classification belongs to the sibling packer.
+    assert.equal(siblings.if, slug === 'cluster-mesh' ? undefined : "steps.pack.outputs.manifest_mode == 'block'");
+    for (const [key, value] of Object.entries(CTX)) assert.equal(siblings.env[key], value);
+    assert.ok(steps.indexOf(pack) < steps.indexOf(siblings) && steps.indexOf(siblings) < steps.indexOf(qualify), `${slug}: pack candidate and siblings before qualification`);
+    assert.equal(qualify.if, "steps.pack.outputs.manifest_mode == 'block'");
+    assert.equal(qualify.env.CANDIDATE_TARBALL, '${{ steps.pack.outputs.tarball }}');
+    assert.equal(qualify.run, `make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/${slug}/receipts.json${peers} REPORT_DIR=tmp/ci-manifest-guard/qualify-${slug} ENV=test-ci-${slug}`);
     const publish = jobs[`publish-${slug}`].steps;
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));

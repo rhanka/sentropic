@@ -1,33 +1,31 @@
 /**
- * BR-72 DEPTH Lot 2 — `ConnectorRegistry` / `McpProviderBroker` /
- * `createInMemoryContext` HERMETIC unit tests.
+ * MCP-L5 Lot 1 — `McpProviderBroker` plan-bound dispatch tests.
  *
- * NO REAL NETWORK CALL — registers a MOCK `AppConnectorProviderAdapter` (not
- * github, not any real connector) to keep this suite connector-agnostic on
- * purpose. See `../scripts/smoke-broker-github.mjs` for the real-network
- * proof that mounts the actual github live adapter (BR-72 DEPTH Lot 1).
+ * Hermetic: registers mock `AppConnectorProviderAdapter`s bound from an
+ * immutable compiled plan stub (no real connector). Every invocation
+ * carries an explicit verified host context; the broker never manufactures
+ * identity.
  */
 import { describe, expect, it } from 'vitest';
 import type {
   AppCapability,
-  AppMcpProviderManifest,
-  CapabilityGates,
-  CapabilityResource,
-  CapabilityTool,
-} from '../../mcp-platform/src/manifest.js';
-import type {
   AppConnectorProviderAdapter,
+  AppMcpProviderManifest,
   AppResourceRead,
   AppResourceResult,
   AppToolInvocation,
   AppToolResult,
+  CapabilityGates,
+  CapabilityResource,
+  CapabilityTool,
   ConnectorSecretStatus,
   ConnectorTenantContext,
   DurableCallRef,
-} from '../../mcp-platform/src/runtime.js';
+  StpConnectorContext,
+} from '@sentropic/mcp-platform';
+import type { CompiledMcpRegistry } from '@sentropic/mcp-platform/registry';
 import { McpProviderBroker, UnknownConnectorError } from '../src/broker.js';
-import { createInMemoryContext } from '../src/context.js';
-import { ConnectorRegistry, DuplicateConnectorError } from '../src/registry.js';
+import { DuplicateConnectorError } from '../src/registry.js';
 
 const readOnlyGates: CapabilityGates = {
   requiresElicitation: false,
@@ -138,99 +136,110 @@ function makeMockAdapter(connectorId = 'mock'): AppConnectorProviderAdapter {
   };
 }
 
-describe('createInMemoryContext (BR-72 DEPTH Lot 2)', () => {
-  it('produces a contract-complete StpConnectorContext with all required fields', async () => {
-    const ctx = createInMemoryContext();
+function makeCtx(): StpConnectorContext {
+  return {
+    requestId: 'req-1',
+    correlationId: 'corr-1',
+    auditId: 'audit-host-1',
+    principal: {
+      sub: 'user-1',
+      claims: {},
+      scopes: [],
+      tenantRef: 'tenant-1',
+      authTime: '2026-10-18T00:00:00.000Z',
+    },
+    surface: 'backend',
+    session: { mcpSessionId: 'session-1' },
+    tenantRef: 'tenant-1',
+    connectorInstanceId: 'mock',
+    consentRefs: [],
+    grantRefs: [],
+    getSecret: async () => '',
+    connectorConfig: {},
+    audit: { emit: async () => undefined },
+    logger: undefined,
+  };
+}
 
-    expect(typeof ctx.requestId).toBe('string');
-    expect(ctx.requestId.length).toBeGreaterThan(0);
-    expect(typeof ctx.correlationId).toBe('string');
-    expect(typeof ctx.auditId).toBe('string');
+function makePlan(): CompiledMcpRegistry {
+  const names = ['get_thing', 'do_thing', 'durable_thing'];
+  const resolutions = new Map(
+    names.map((name) => [
+      name,
+      {
+        providerId: 'mock',
+        capabilityName: name,
+        values: {},
+        requiredScopes: [] as string[],
+        requiredClaims: [] as string[],
+        entry: {
+          toolName: name,
+          capabilityRef: name,
+          handlerId: 'mock-handler',
+          values: {},
+          requiredScopes: [] as string[],
+          requiredClaims: [] as string[],
+          mutability: 'read-only' as const,
+          mutatesExternalSystem: false,
+          idempotency: { required: false },
+          redactionClass: 'none' as const,
+          gates: readOnlyGates,
+        },
+      },
+    ]),
+  );
+  return {
+    providers: new Map([
+      ['mock', { providerId: 'mock', version: '0.0.0', manifestDigest: 'm', values: {}, tools: [] }],
+    ]),
+    tools: resolutions,
+    resolveTool: (name: string) => resolutions.get(name),
+  };
+}
 
-    expect(ctx.principal.sub).toBeTruthy();
-    expect(ctx.principal.claims).toEqual({});
-    expect(Array.isArray(ctx.principal.scopes)).toBe(true);
-    expect(ctx.principal.tenantRef).toBeTruthy();
-    expect(typeof ctx.principal.authTime).toBe('string');
-
-    expect(typeof ctx.surface).toBe('string');
-    expect(typeof ctx.session.mcpSessionId).toBe('string');
-    expect(ctx.tenantRef).toBeTruthy();
-    expect(ctx.connectorInstanceId).toBeTruthy();
-    expect(ctx.consentRefs).toEqual([]);
-    expect(ctx.grantRefs).toEqual([]);
-    expect(typeof ctx.getSecret).toBe('function');
-    await expect(ctx.getSecret('anything')).resolves.toBe('');
-    expect(ctx.connectorConfig).toEqual({});
-    expect(typeof ctx.audit.emit).toBe('function');
-    expect(ctx.logger).toBeDefined();
-  });
-
-  it('routes getSecret through an injected secretResolver (the future EnrollmentStore PORT seam)', async () => {
-    const ctx = createInMemoryContext({
-      secretResolver: (name) => (name === 'wanted' ? 'resolved-value' : ''),
-    });
-
-    await expect(ctx.getSecret('wanted')).resolves.toBe('resolved-value');
-    await expect(ctx.getSecret('other')).resolves.toBe('');
-  });
-
-  it('accepts overrides for principalSub/tenantRef/connectorInstanceId', () => {
-    const ctx = createInMemoryContext({
-      principalSub: 'p-1',
-      tenantRef: 't-1',
-      connectorInstanceId: 'ci-1',
-    });
-
-    expect(ctx.principal.sub).toBe('p-1');
-    expect(ctx.principal.tenantRef).toBe('t-1');
-    expect(ctx.tenantRef).toBe('t-1');
-    expect(ctx.connectorInstanceId).toBe('ci-1');
-  });
-});
-
-describe('ConnectorRegistry (BR-72 DEPTH Lot 2)', () => {
-  it('registers, gets and lists adapters keyed by connectorId', () => {
-    const registry = new ConnectorRegistry();
-    const adapter = makeMockAdapter('mock');
-
-    registry.register(adapter);
-
-    expect(registry.get('mock')).toBe(adapter);
-    expect(registry.list()).toEqual(['mock']);
-    expect(registry.get('nope')).toBeUndefined();
-  });
-
-  it('throws DuplicateConnectorError on a duplicate register() for the same connectorId', () => {
-    const registry = new ConnectorRegistry();
-    registry.register(makeMockAdapter('mock'));
-
-    expect(() => registry.register(makeMockAdapter('mock'))).toThrow(DuplicateConnectorError);
-  });
-});
-
-describe('McpProviderBroker (BR-72 DEPTH Lot 2, hermetic mock adapter)', () => {
+describe('McpProviderBroker (L5 Lot 1, plan-bound, explicit trusted context)', () => {
   function makeBroker() {
-    const registry = new ConnectorRegistry();
-    registry.register(makeMockAdapter('mock'));
-    return new McpProviderBroker({ registry });
+    return new McpProviderBroker({
+      plan: makePlan(),
+      adapters: [makeMockAdapter('mock')],
+      sourceId: 'mcp:mock',
+      generation: '0',
+    });
   }
 
-  it('listConnectors() reflects the registry', () => {
-    const broker = makeBroker();
-    expect(broker.listConnectors()).toEqual(['mock']);
+  it('refuses duplicate connector mounts with a typed error', () => {
+    expect(
+      () =>
+        new McpProviderBroker({
+          plan: makePlan(),
+          adapters: [makeMockAdapter('mock'), makeMockAdapter('mock')],
+          sourceId: 'mcp:mock',
+          generation: '0',
+        }),
+    ).toThrow(DuplicateConnectorError);
   });
 
-  it('listCapabilities() calls the adapter contract (resolveTenant then listCapabilities)', async () => {
+  it('listConnectors() reflects the plan-bound adapters', () => {
+    expect(makeBroker().listConnectors()).toEqual(['mock']);
+  });
+
+  it('listCapabilities() calls the adapter contract with the verified context', async () => {
     const broker = makeBroker();
-    const capabilities = await broker.listCapabilities('mock');
+    const capabilities = await broker.listCapabilities('mock', makeCtx());
     const names = capabilities.map((c) => c.name);
     expect(names).toEqual(expect.arrayContaining(['get_thing', 'do_thing', 'durable_thing']));
   });
 
+  it('invoke() requires a verified context before dispatch', async () => {
+    const broker = makeBroker();
+    await expect(
+      broker.invoke('mock', 'do_thing', {}, { ctx: undefined as unknown as StpConnectorContext }),
+    ).rejects.toMatchObject({ code: '-32603', message: 'Trusted invocation context unavailable' });
+  });
+
   it('invoke() dispatches a resource capability to readResource, building the URI from uriTemplate', async () => {
     const broker = makeBroker();
-    const result = await broker.invoke('mock', 'get_thing', { id: 42 });
+    const result = await broker.invoke('mock', 'get_thing', { id: 42 }, { ctx: makeCtx() });
 
     expect(result.ok).toBe(true);
     expect(result.output).toEqual({ uri: 'mock://things/42', capabilityRef: 'get_thing' });
@@ -239,7 +248,7 @@ describe('McpProviderBroker (BR-72 DEPTH Lot 2, hermetic mock adapter)', () => {
 
   it('invoke() dispatches a tool capability to invokeTool, forwarding input as-is', async () => {
     const broker = makeBroker();
-    const result = await broker.invoke('mock', 'do_thing', { foo: 'bar' });
+    const result = await broker.invoke('mock', 'do_thing', { foo: 'bar' }, { ctx: makeCtx() });
 
     expect(result.ok).toBe(true);
     expect(result.output).toEqual({ received: { foo: 'bar' }, capabilityRef: 'do_thing' });
@@ -248,8 +257,10 @@ describe('McpProviderBroker (BR-72 DEPTH Lot 2, hermetic mock adapter)', () => {
 
   it('invoke() throws a typed UnknownConnectorError for an unmounted connectorId', async () => {
     const broker = makeBroker();
-    await expect(broker.invoke('nope', 'get_thing', {})).rejects.toThrow(UnknownConnectorError);
-    await expect(broker.invoke('nope', 'get_thing', {})).rejects.toMatchObject({
+    await expect(broker.invoke('nope', 'get_thing', {}, { ctx: makeCtx() })).rejects.toThrow(
+      UnknownConnectorError,
+    );
+    await expect(broker.invoke('nope', 'get_thing', {}, { ctx: makeCtx() })).rejects.toMatchObject({
       code: 'unknown_connector',
       connectorId: 'nope',
     });
@@ -257,30 +268,25 @@ describe('McpProviderBroker (BR-72 DEPTH Lot 2, hermetic mock adapter)', () => {
 
   it('invoke() returns an unknown_capability error envelope for a capabilityRef not in the manifest', async () => {
     const broker = makeBroker();
-    const result = await broker.invoke('mock', 'no_such_capability', {});
+    const result = await broker.invoke('mock', 'no_such_capability', {}, { ctx: makeCtx() });
 
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('unknown_capability');
+    expect(result.auditId).toBe('audit-host-1');
   });
 
   it('invoke() returns an error envelope (not a throw) when a resource uriTemplate param is missing', async () => {
     const broker = makeBroker();
-    const result = await broker.invoke('mock', 'get_thing', {});
+    const result = await broker.invoke('mock', 'get_thing', {}, { ctx: makeCtx() });
 
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('missing_resource_uri_param');
   });
 
-  it('invoke() throws when invokeTool returns a DurableCallRef (guarded, unsupported by this in-memory broker)', async () => {
+  it('invoke() throws when invokeTool returns a DurableCallRef (guarded, unsupported)', async () => {
     const broker = makeBroker();
-    await expect(broker.invoke('mock', 'durable_thing', {})).rejects.toThrow(/DurableCallRef/);
-  });
-
-  it('invoke() accepts a pre-built ctx via opts.ctx instead of the default context factory', async () => {
-    const broker = makeBroker();
-    const ctx = createInMemoryContext({ principalSub: 'custom-principal' });
-    const result = await broker.invoke('mock', 'do_thing', {}, { ctx });
-
-    expect(result.ok).toBe(true);
+    await expect(
+      broker.invoke('mock', 'durable_thing', {}, { ctx: makeCtx() }),
+    ).rejects.toThrow(/DurableCallRef/);
   });
 });
