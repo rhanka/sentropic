@@ -3,7 +3,7 @@
 // never assumed from the requested setting.
 
 import { randomUUID } from 'node:crypto';
-import { readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { openIsolatedConnection, type SqliteConnection } from './connection.js';
 import { CanonicalInstanceRegistry, CanonicalOwnershipError, type CanonicalInstanceHandle } from '../instance-ownership.js';
@@ -89,12 +89,13 @@ const isBusyError = (error: unknown): boolean => /busy|locked/i.test((error as E
 interface StoreFileIdentity {
   readonly dev: number;
   readonly ino: number;
+  readonly nlink: number;
 }
 
 const storeFileIdentityOf = (path: string): StoreFileIdentity => {
   try {
     const identity = statSync(path);
-    return { dev: identity.dev, ino: identity.ino };
+    return { dev: identity.dev, ino: identity.ino, nlink: identity.nlink };
   } catch {
     throw new CanonicalOwnershipError('terminal-loss', `SQLite store file is not usable: ${path}`);
   }
@@ -157,6 +158,9 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
   const registry = options.registry ?? new CanonicalInstanceRegistry();
   const storeKey = options.storeKey ?? `sqlite:${options.path}`;
   const canonicalPath = canonicalPathOf(options.path);
+  if (existsSync(canonicalPath) && statSync(canonicalPath).nlink !== 1) {
+    throw new CanonicalOwnershipError('open-refused', 'SQLite hard-link aliases are not qualified');
+  }
   if (OPEN_ENGINES.get(canonicalPath) === process.pid) {
     throw new CanonicalOwnershipError('instance-busy', `SQLite store already open in this process: ${canonicalPath}`);
   }
@@ -229,8 +233,10 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
     const assertOwnership = (): void => {
       if (closed) throw new CanonicalOwnershipError('terminal-loss', 'sqlite engine is closed');
       // File identity first: a replace/rename invalidates every cached read.
-      const identity = storeFileIdentityOf(canonicalPath);
-      if (identity.dev !== fileId.dev || identity.ino !== fileId.ino) {
+      let identity: StoreFileIdentity;
+      try { identity = storeFileIdentityOf(canonicalPath); }
+      catch (error) { registry.markTerminal(handle); throw error; }
+      if (identity.dev !== fileId.dev || identity.ino !== fileId.ino || identity.nlink !== 1) {
         registry.markTerminal(handle);
         throw new CanonicalOwnershipError('terminal-loss', 'ownership lost: store file was replaced');
       }

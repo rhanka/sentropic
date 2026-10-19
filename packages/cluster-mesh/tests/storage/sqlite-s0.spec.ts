@@ -1,18 +1,21 @@
 import assert from 'node:assert/strict';
 import { closeSync, openSync, statfsSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { describe, it } from 'vitest';
 import type { RootScopedRuntime } from '../../src/storage/root-facade.js';
 import { openSqliteEngine } from '../../src/storage/sqlite/engine.js';
 import { createSqliteFixture } from './sqlite-fixture.js';
 
-const contenderSource = `
+const loadEngineSource = `
 import { registerHooks } from 'node:module';
 registerHooks({ resolve(specifier, context, next) {
   if (specifier.endsWith('.js')) { try { return next(specifier.slice(0, -3) + '.ts', context); } catch {} }
   return next(specifier, context);
 } });
 const { openSqliteEngine } = await import(process.argv[2]);
+`;
+const contenderSource = loadEngineSource + `
 try {
   const e = openSqliteEngine({ path: process.argv[1] });
   console.log(JSON.stringify({ acquired: true, epoch: e.receipt.storageEpoch })); e.close();
@@ -28,6 +31,33 @@ const record = (id: string) => ({ id, bytes: '{"n":1}', hash: `hash-${id}` });
 const absent = { kind: 'absent' as const, allocation: '0' };
 
 describe('SQLite S0 process-isolated possession', () => {
+  it('should release the isolated owner after its caller is killed', async () => {
+    const f = createSqliteFixture();
+    f.kernel.close();
+    const engine = new URL('../../src/storage/sqlite/engine.ts', import.meta.url).href;
+    const source = loadEngineSource + `
+      const owner = openSqliteEngine({ path: process.argv[1] });
+      console.log(JSON.stringify(owner.receipt));
+      setInterval(() => {}, 1000);
+    `;
+    const caller = spawn(process.execPath, ['--input-type=module', '-e', source, f.path, engine], { stdio: ['ignore', 'pipe', 'pipe'] });
+    try {
+      const [data] = await once(caller.stdout, 'data');
+      const receipt = JSON.parse(String(data));
+      assert.equal(receipt.storageEpoch, '2');
+      assert.notEqual(receipt.ownerPid, caller.pid);
+      const exit = once(caller, 'exit');
+      caller.kill('SIGKILL');
+      await exit;
+      for (let attempt = 0; ; attempt++) {
+        const next = contender(f.path);
+        if (next.acquired) { assert.equal(next.epoch, '3'); break; }
+        assert.equal(next.code, 'instance-busy');
+        assert.ok(attempt < 10, 'caller EOF must terminate the isolated owner');
+      }
+    } finally { caller.kill('SIGKILL'); f.close(); }
+  });
+
   it('should retain exclusive possession after late foreign-close interference', async () => {
     const f = createSqliteFixture();
     try {
