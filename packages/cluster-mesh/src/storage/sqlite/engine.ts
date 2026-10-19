@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { openIsolatedConnection, type SqliteConnection } from './connection.js';
 import { CanonicalInstanceRegistry, CanonicalOwnershipError, type CanonicalInstanceHandle } from '../instance-ownership.js';
 
 export const SQLITE_MIN_ENGINE = '3.51.3';
@@ -41,6 +41,8 @@ export interface SqliteOpenOptions {
 }
 
 export interface SqliteOpenReceipt {
+  readonly ownerPid: number;
+  readonly isolation: 'process';
   readonly nodeVersion: string;
   readonly engineVersion: string;
   readonly realPath: string;
@@ -51,14 +53,12 @@ export interface SqliteOpenReceipt {
   readonly storageEpoch: string;
   readonly schemaVersion: string;
   readonly openedAt: string;
-  /** Kernel lock-liveness posture: `procfs` verifies the POSIX WRITE lock
-   * on Linux before every guarded call; `unavailable` keeps only the
-   * ownership-row check on platforms without /proc/locks. */
-  readonly lockLiveness: 'procfs' | 'unavailable';
+  /** The qualified Linux tuple verifies the isolated owner's kernel lock. */
+  readonly lockLiveness: 'procfs';
 }
 
 export interface SqliteEngine {
-  readonly db: DatabaseSync;
+  readonly db: SqliteConnection;
   readonly handle: CanonicalInstanceHandle;
   readonly receipt: SqliteOpenReceipt;
   assertOwnership(): void;
@@ -117,7 +117,7 @@ const lockLineFor = (line: string, pid: number, ino: number): boolean => {
 const holdsPosixWriteLock = (locks: string, pid: number, ino: number): boolean =>
   locks.split('\n').some((line) => lockLineFor(line, pid, ino));
 
-const readPragma = (db: DatabaseSync, name: string): string => {
+const readPragma = (db: SqliteConnection, name: string): string => {
   const row = db.prepare(`PRAGMA ${name}`).get() as Record<string, unknown> | undefined;
   const value = row === undefined ? undefined : row[name.toLowerCase()] ?? Object.values(row)[0];
   return String(value);
@@ -125,7 +125,7 @@ const readPragma = (db: DatabaseSync, name: string): string => {
 
 const SQLITE_MODULE_KEY = 'sqlite_module_id';
 
-const gateModuleIdentity = (db: DatabaseSync, moduleId: string | undefined): void => {
+const gateModuleIdentity = (db: SqliteConnection, moduleId: string | undefined): void => {
   if (moduleId === undefined) return;
   if (moduleId.length === 0) throw new CanonicalOwnershipError('open-refused', 'sqlite open requires a non-empty moduleId');
   const row = db.prepare('SELECT value FROM cm_meta WHERE key = ?').get(SQLITE_MODULE_KEY) as
@@ -148,6 +148,9 @@ const gateModuleIdentity = (db: DatabaseSync, moduleId: string | undefined): voi
 };
 
 export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
+  if (process.platform !== 'linux') {
+    throw new CanonicalOwnershipError('open-refused', 'SQLite ownership requires the qualified Linux process-isolation tuple');
+  }
   if (typeof options.path !== 'string' || options.path.length === 0 || options.path === ':memory:') {
     throw new CanonicalOwnershipError('open-refused', 'durable SQLite storage requires a file path');
   }
@@ -158,7 +161,9 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
     throw new CanonicalOwnershipError('instance-busy', `SQLite store already open in this process: ${canonicalPath}`);
   }
   OPEN_ENGINES.set(canonicalPath, process.pid);
-  const db = new DatabaseSync(options.path);
+  let db: SqliteConnection;
+  try { db = openIsolatedConnection(canonicalPath); }
+  catch (error) { OPEN_ENGINES.delete(canonicalPath); throw error; }
   try {
     let engineVersion: string;
     let journalMode: string;
@@ -214,9 +219,9 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
       db.prepare('UPDATE cm_ownership SET instance_id = ? WHERE id = 1').run(handle.instanceId);
       won = { instanceId: handle.instanceId, epoch: won.epoch };
     }
-    const lockLiveness = process.platform === 'linux' ? ('procfs' as const) : ('unavailable' as const);
+    const lockLiveness = 'procfs' as const;
     const fileId = storeFileIdentityOf(canonicalPath);
-    const receipt: SqliteOpenReceipt = Object.freeze({ nodeVersion: process.version, engineVersion,
+    const receipt: SqliteOpenReceipt = Object.freeze({ ownerPid: db.ownerPid, isolation: 'process', nodeVersion: process.version, engineVersion,
       realPath: canonicalPath, journalMode: journalMode.toLowerCase(), synchronous: 'FULL',
       lockingMode: lockingMode.toLowerCase(), instanceId: won.instanceId, storageEpoch: String(won.epoch),
       schemaVersion: SQLITE_SCHEMA_VERSION, openedAt: new Date().toISOString(), lockLiveness });
@@ -235,7 +240,7 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
       if (lockLiveness === 'procfs') {
         let locks: string | null = null;
         try { locks = readFileSync('/proc/locks', 'utf8'); } catch { locks = null; }
-        if (locks === null || !holdsPosixWriteLock(locks, process.pid, fileId.ino)) {
+        if (locks === null || !holdsPosixWriteLock(locks, db.ownerPid, fileId.ino)) {
           registry.markTerminal(handle);
           throw new CanonicalOwnershipError('terminal-loss', 'ownership lost: POSIX lock is no longer held');
         }

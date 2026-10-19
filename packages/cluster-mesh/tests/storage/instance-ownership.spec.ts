@@ -70,10 +70,12 @@ describe('canonical instance ownership', () => {
     }
   });
 
-  it('makes a foreign fd close terminal before any stale commit', async () => {
+  it('isolates the writer lock from foreign caller fd closes', async () => {
     const fixture = createSqliteFixture();
     try {
       assert.equal(fixture.kernel.engine.receipt.lockLiveness, 'procfs');
+      assert.equal(fixture.kernel.engine.receipt.isolation, 'process');
+      assert.notEqual(fixture.kernel.engine.receipt.ownerPid, process.pid);
       const bound = fixture.kernel.bindNew(fixture.grant()) as unknown as {
         appendChain(id: string, record: { id: string; bytes: string; hash: string }, expectation: { kind: 'absent'; allocation: string }): Promise<unknown>;
         readHead(id: string): Promise<string | null>;
@@ -110,16 +112,11 @@ describe('canonical instance ownership', () => {
       const afterClose = contender();
       assert.equal(afterClose.status, 0, afterClose.stderr);
       const successor = JSON.parse(afterClose.stdout) as { acquired: boolean; epoch?: string };
-      assert.equal(successor.acquired, true);
-      assert.equal(successor.epoch, '2');
-      await expect(bound.appendChain('after', { id: 'a1', bytes: '{"n":1}', hash: 'hash-after' }, { kind: 'absent', allocation: '0' })).rejects.toMatchObject({
-        name: 'CanonicalOwnershipError',
-        code: 'terminal-loss',
-      });
-      await expect(bound.readHead('after')).rejects.toMatchObject({ code: 'terminal-loss' });
+      assert.equal(successor.acquired, false);
+      await bound.appendChain('after', { id: 'a1', bytes: '{"n":1}', hash: 'hash-after' }, { kind: 'absent', allocation: '0' });
+      assert.equal(await bound.readHead('after'), 'hash-after');
       const persisted = fixture.kernel.engine.db.prepare('SELECT state FROM cm_scopes').all() as { state: string }[];
-      assert.ok(persisted.every((row) => !row.state.includes('hash-after')), 'no stale commit survives the loss');
-      await expect(bound.appendChain('late', { id: 'l1', bytes: '{"n":1}', hash: 'hash-late' }, { kind: 'absent', allocation: '0' })).rejects.toMatchObject({ code: 'terminal-loss' });
+      assert.ok(persisted.some((row) => row.state.includes('hash-after')), 'the isolated holder retains possession through commit');
     } finally {
       fixture.close();
     }
