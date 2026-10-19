@@ -57,10 +57,10 @@
   - [x] `ci-run-metrics.mjs` complete (helpers, run summary, endpoint readiness, CLI).
   - [x] In `ci-run-metrics.test.mjs` (new), cover overlapping branches, skipped/unmeasured values, timestamp gaps, partial runs, and reruns without double-counting carried-forward jobs.
   - [x] In `ci-expected-results.test.mjs` (new), reject failed, missing, cancelled, and unexpectedly skipped required members; prove legitimately unselected jobs do not block.
-  - [x] Lot gate: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62` green in Docker (7 + 6 tests); captured Main run `39113919235` attempt 1 via API (84 rows = study count; max span 664s = study cluster anchor; peak overlap 18); no sub-spans invented.
+  - [x] Lot gate: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62` green in Docker (15 + 9 tests); captured Main run `39113919235` attempt 1 via API (84 rows = study count; max span 664s = study cluster anchor; executed peak 17 half-open); no sub-spans invented.
 - [ ] **Lot 2 — Finite capacity and concurrency**
-  - [x] Inventory real account quotas/runner classes; record reservation, scheduling priorities, cost, and peak demand in `spec/ci-cd-ten-minutes/capacity.md` (new). Roughly 24 workers is a hypothesis, not a provisioned fact.
-  - [x] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots.
+  - [ ] Inventory real account quotas/runner classes; record reservation, scheduling priorities, cost, and peak demand in `spec/ci-cd-ten-minutes/capacity.md` (new). Measured so far: runner classes, executed peak 17, runner-minutes 148.25, queue and delivery receipts. Roughly 24 workers is a hypothesis, not a provisioned fact; quota, reservation, and registry cost remain to measure.
+  - [ ] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots. Cancellation ownership is wired (PR-only cancel, gate annotation, unexpected-skip verdict); the measured-slot fan-out cap is not staged yet.
   - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [ ] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
