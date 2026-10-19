@@ -28,7 +28,7 @@ export const TOOL_CONFIGURATION_SCHEMA_VERSION = 'v1' as const;
 export type ToolConfigurationSchemaVersion = typeof TOOL_CONFIGURATION_SCHEMA_VERSION;
 
 /** Qualified platform version for `platformVersion` (R2-m3, mirrors package.json). */
-export const TOOL_CONFIGURATION_PLATFORM_VERSION = '0.3.0' as const;
+export const TOOL_CONFIGURATION_PLATFORM_VERSION = '0.4.0' as const;
 
 // ---------------------------------------------------------------------------
 // Diagnostics
