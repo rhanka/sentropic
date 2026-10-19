@@ -9,8 +9,10 @@ import {
   admissionDecision,
   budgetVerdict,
   cacheIdentities,
+  cancellationOwnership,
   captureRecords,
   concurrencyPeak,
+  releaseContinuity,
   dedupeJobs,
   deliveryElapsed,
   durationSeconds,
@@ -343,4 +345,34 @@ test('endpoint readiness distinguishes measured, partial, missing, and to-measur
   assert.equal(readiness.preproduction.status, 'partial');
   assert.equal(readiness.packages.status, 'missing');
   assert.equal(readiness.qualification.status, 'to-measure');
+});
+
+test('cancellation ownership separates superseded attempts from current ones', () => {
+  const records = [
+    job({ runId: 9, attempt: 1, jobId: 1, conclusion: 'cancelled' }),
+    job({ runId: 9, attempt: 2, jobId: 2 }),
+    job({ runId: 9, attempt: 2, jobId: 3, conclusion: 'cancelled' }),
+    job({ runId: 9, attempt: null, jobId: 4, conclusion: 'cancelled' }),
+  ];
+  const ownership = cancellationOwnership(records);
+  assert.equal(ownership.cancelledCount, 3);
+  assert.equal(ownership.superseded, 1);
+  assert.equal(ownership.unidentified, 1);
+  assert.deepEqual(ownership.cancelled.map((row) => row.ownership), ['superseded', 'current', 'unidentified']);
+});
+
+test('release continuity requires every release endpoint measured', () => {
+  const endpoints = { images: ['publish-api-image'], preproduction: ['deploy-preprod'] };
+  const full = [
+    job({ name: 'publish-api-image' }),
+    job({ jobId: 2, name: 'deploy-preprod' }),
+  ];
+  assert.equal(releaseContinuity(full, endpoints).continuous, true);
+  const stopped = [
+    job({ name: 'publish-api-image' }),
+    job({ jobId: 2, name: 'deploy-preprod', conclusion: 'cancelled', completedAt: null }),
+  ];
+  const receipt = releaseContinuity(stopped, endpoints);
+  assert.equal(receipt.continuous, false);
+  assert.equal(receipt.endpoints.preproduction.status, 'partial');
 });
