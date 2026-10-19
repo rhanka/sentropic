@@ -43,7 +43,9 @@ export function registerMcpWireTools(
   const limits = Object.freeze({ ...options.limits });
   const names = new Set<string>();
   for (const tool of tools) {
-    assertMcpJson(tool, limits.maxSchemaBytes, limits.maxSchemaDepth);
+    // Descriptor metadata is trusted startup data. Schema budgets apply to
+    // inputSchema in the compiler, independently of title/description size.
+    assertMcpJson(tool, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
     if (names.has(tool.name) || !ToolSchema.safeParse(tool).success) throw new TypeError('Invalid MCP tool descriptor');
     names.add(tool.name);
   }

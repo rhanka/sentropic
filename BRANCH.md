@@ -29,7 +29,7 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
-- [x] Latest implementation checkpoint: packages/cluster-mesh/README.md packages/cluster-mesh/tests/mcp-stateful-authority.spec.ts packages/cluster-mesh/tests/packaging/stateful-consumer.sh.
+- [x] Latest implementation checkpoint: packages/cluster-mesh/src/mcp/stateful-context.ts packages/mcp-platform/src/transport/bridge.ts packages/mcp-platform/package.json packages/cluster-mesh/tests/conformance/stateful-host-auth.mjs packages/cluster-mesh/tests/conformance/immo-stateful-wrap.spec.ts.
 - [x] L1: finite JSON budgets and cloned advertised-default traversal extracted from the #689 pattern.
 - [ ] Fixture import progress: 853/853 exact lines pinned from Radar #866.
 - [x] Radar constraints read: blocker 6 belongs inside 2b-MCP after #706 and #689; exclude #865 before cutover.

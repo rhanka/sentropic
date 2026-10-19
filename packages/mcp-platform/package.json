@@ -64,6 +64,7 @@
   },
   "typesVersions": {
     "*": {
+      "transport/bridge": ["./dist/transport/bridge.d.ts"],
       "transport/tool-schemas": ["./dist/transport/tool-schemas.d.ts"],
       "transport/result-codec": ["./dist/transport/result-codec.d.ts"],
       "experimental": [

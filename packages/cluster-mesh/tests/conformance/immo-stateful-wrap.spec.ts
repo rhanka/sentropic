@@ -40,7 +40,7 @@ describe.each(['http', 'simulation'] as const)('Immo native wire conformance: %s
       for (const route of ['/.well-known/oauth-protected-resource/mcp', '/mcp/.well-known/oauth-protected-resource']) {
         const response = await plugin.request(route);
         expect(response.status).toBe(200);
-        expect((await response.json()).resource).toBe('http://immo.test/mcp');
+        expect((await response.json()).resource).toBe('https://preprod.immo.sent-tech.ca/mcp');
       }
       expect((await plugin.request('/mcp/mcp')).status).toBe(404);
     } finally { await connection.close(); await host.close(); }
