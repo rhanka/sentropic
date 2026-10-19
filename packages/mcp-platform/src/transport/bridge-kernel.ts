@@ -6,6 +6,7 @@ import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
 export interface BridgeKernel {
   readonly tools: readonly Tool[];
+  unknownTool?(name: string): McpError;
   call(name: string, args: unknown, signal: AbortSignal): Promise<CallToolResult>;
 }
 
@@ -27,7 +28,9 @@ export function registerBridgeKernel(server: Server, kernel: BridgeKernel): void
   const names = new Set(kernel.tools.map(tool => tool.name));
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [...kernel.tools] }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    if (!names.has(request.params.name)) throw safeMcpProtocolError(new McpError(-32601, ''));
+    if (!names.has(request.params.name)) {
+      throw kernel.unknownTool?.(request.params.name) ?? safeMcpProtocolError(new McpError(-32601, ''));
+    }
     return kernel.call(request.params.name, request.params.arguments ?? {}, extra.signal);
   });
 }

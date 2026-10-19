@@ -10,6 +10,7 @@
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
+  ErrorCode,
   McpError,
   ToolSchema,
   type Tool,
@@ -183,6 +184,7 @@ export function registerBridgeTools(
 ): void {
   const identity = options?.identity;
   registerBridgeKernel(server, {
+    unknownTool: name => new McpError(ErrorCode.MethodNotFound, `Unknown tool '${name}'`),
     tools: tools.map((tool) => ({
       name: tool.name,
       ...(tool.description === undefined ? {} : { description: tool.description }),
