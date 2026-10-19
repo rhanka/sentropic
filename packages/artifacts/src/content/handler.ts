@@ -48,8 +48,16 @@ export interface ContentHandlerDeps {
 
 interface ManifestFile { path?: unknown; digest?: unknown; size?: unknown; mimeType?: unknown }
 
+function jsonResponse(status: number, body: unknown, extra: Record<string, string> = {}): ContentResponse {
+  return { status, body, headers: {
+    ...contentHeaders({ mimeType: 'application/json', size: Buffer.byteLength(JSON.stringify(body)) }),
+    'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    ...extra,
+  } };
+}
+
 function fail(status: number): ContentResponse {
-  return { status, headers: { 'content-type': 'application/json' }, body: errorBody(status) };
+  return jsonResponse(status, errorBody(status));
 }
 
 /** Create the content handler over injected host ports (no server). */
@@ -89,8 +97,7 @@ export function createContentHandler(deps: ContentHandlerDeps) {
     };
   }
 
-  return {
-    async handle(request: ContentRequest): Promise<ContentResponse> {
+  async function handle(request: ContentRequest): Promise<ContentResponse> {
       if (request.method !== 'GET' && request.method !== 'HEAD') return fail(404);
       const origin = parseContentHost(request.host, deps.baseDomain);
       if (origin === undefined) return fail(404);
@@ -122,14 +129,9 @@ export function createContentHandler(deps: ContentHandlerDeps) {
           artifactId,
           releaseId: release.releaseId,
         });
-        return {
-          status: 200,
-          headers: {
-            'content-type': 'application/json',
-            'set-cookie': grantCookie(token, CONTENT_GRANT_TTL_SECONDS),
-          },
-          body: { activated: true, artifactId, releaseId: release.releaseId },
-        };
+        return jsonResponse(200, { activated: true, artifactId, releaseId: release.releaseId }, {
+          'set-cookie': grantCookie(token, CONTENT_GRANT_TTL_SECONDS),
+        });
       }
       const token = parseGrantCookie(request.cookie);
       if (token === undefined) return fail(401);
@@ -147,6 +149,16 @@ export function createContentHandler(deps: ContentHandlerDeps) {
       const filePath = resolveContentPath(request.path);
       if (filePath === undefined || isServiceWorkerPath(filePath)) return fail(404);
       return serveFile(artifactId, release.manifest, filePath);
+  }
+  return {
+    async handle(request: ContentRequest): Promise<ContentResponse> {
+      let response: ContentResponse;
+      try { response = await handle(request); } catch { response = fail(500); }
+      if (request.method === 'HEAD') {
+        const { bytes: _bytes, body: _body, ...head } = response;
+        return head;
+      }
+      return response;
     },
   };
 }
