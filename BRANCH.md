@@ -67,8 +67,8 @@
   - [ ] Budget to measure: classification ≤15s, verdict ≤5s, aggregate critical-path scheduling ≤60s under declared concurrent traffic; compare with the study's 877s E2E ready-to-start wait, not with a fabricated whole-run speedup.
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
   - [ ] Rollback drill: restore prior scheduling policy and conservative dispatch width; keep expected-result and metrics checks; demonstrate that cancellation never stops the current release.
-- [ ] **Lot 4 — Docs consolidation**
-  - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
+- [x] **Lot 4 — Docs consolidation**
+  - [x] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [ ] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62` must parse/import the changed scripts and reject invalid result sets; application typecheck/lint is not applicable to these script-only edits.
