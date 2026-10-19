@@ -43,6 +43,8 @@
   - [x] Verify actual path inventory and run make scope-check before authorized commits.
 
 ## Feedback Loop
+- [x] PR700-R3-1: reproduce raw-JSON negative-zero acceptance at valid_time.t, valid_time.t_end and primary_event.at; reject it through the shared integer guard before sealing. Scoped A05 suite PASS: 38 tests, including all eight unchanged frozen vectors and positive-zero controls matching Astra's two digests.
+- [ ] PR700-R3-P1: retain reviewed P1 72612820f2ef5669c1d648008838f232bdc0ba28f601a5062873de6cb51a6751, rebuild an immutable identity from the corrected source and run the scoped Lot 1 gate.
 - [x] PR700-CI: reproduced CI run 39174580054 at publishable-ci-wiring.test.mjs:245; assert unconditional Cluster Mesh sibling classification before BLOCK-only candidate qualification and retain mcp-auth's BLOCK condition. Validation: 22 scoped wiring tests, 86 manifest guard tests and 18 consumer qualification tests PASS; memory-l5-verify PASS with unchanged P1 sha256 72612820f2ef5669c1d648008838f232bdc0ba28f601a5062873de6cb51a6751.
 - [x] PR700-R2 complete: all eight findings treated test-first; full platform 332 tests, broker 66 tests, installed mesh packaging 77 tests and final digest-pinned Lot 1 gate 225 tests across 28 files PASS; packed graph 30 files/54 edges and closed inventory 44 contracts.
 - [x] PR700-R2-5 installed gate PASS: full platform 0.3.1 archive e465ad5ccedf285f22c07ca9d8317333bdba1647e714ae7a8f550c7c34aa5666 verified against the selected lock, existing mesh packaging suite passes, no peer-range or guard changes.

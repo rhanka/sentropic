@@ -13,6 +13,26 @@ describe('P03.platform.a05-mutation-digest-vectors — identical frozen A05 corp
     expect(computeMutationDigest(Object.fromEntries(Object.entries(input).reverse()) as any)).toBe(vector.expected_digest);
   });
   it.each([
+    ['valid_time', 't', 'sha256:03ed6636f722480c343773e969c7f342a9cc3df54e291201224f3ff00fa85a4a'],
+    ['primary_event', 'at', 'sha256:092917b2c23dec31b34d6fa7840fa913481d1d1e13469c3066129da1cb192431'],
+    ['valid_time', 't_end', undefined],
+  ] as const)('should reject raw JSON negative zero at payload.%s.%s before sealing', (object, field, expectedDigest) => {
+    const input = capture();
+    if (field === 't_end') input.effective_input.payload.valid_time.t = -1;
+    input.effective_input.payload[object][field] = 0;
+    const raw = JSON.stringify(input);
+    const negative = JSON.parse(raw.replace(`"${field}":0`, `"${field}":-0`));
+    expect(Object.is(negative.effective_input.payload[object][field], -0)).toBe(true);
+    expect(validateMutationPreimage(negative)).toContain(`effective_input.payload.${object}.${field}: finite safe integer required`);
+    expect(() => computeMutationDigest(negative)).toThrow('MemoryMutationPreimageV1 invalid');
+    const positive = JSON.parse(raw);
+    expect(Object.is(positive.effective_input.payload[object][field], 0)).toBe(true);
+    expect(validateMutationPreimage(positive)).toEqual([]);
+    const digest = computeMutationDigest(positive);
+    if (expectedDigest) expect(digest).toBe(expectedDigest);
+    else expect(digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+  it.each([
     (p: any) => {
       const payload = p.effective_input.payload;
       payload.citations.push({ ...payload.citations[0], citation_id: 'cit_2' });
