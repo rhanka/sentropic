@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/artifacts",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
   "type": "module",
   "license": "MIT",
@@ -98,8 +98,8 @@
       "import": "./dist/server/templates.js"
     },
     "./mcp": {
-      "types": "./dist/mcp-core.d.ts",
-      "import": "./dist/mcp-core.js"
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
     },
     "./mcp-core": {
       "types": "./dist/mcp-core.d.ts",
@@ -159,7 +159,7 @@
   },
   "peerDependencies": {
     "@aws-sdk/client-s3": "^3.980.0",
-    "@sentropic/mcp-platform": ">=0.3.0 <0.4.0",
+    "@sentropic/mcp-platform": ">=0.3.0 <0.5.0",
     "pg": "^8.12.0"
   },
   "peerDependenciesMeta": {

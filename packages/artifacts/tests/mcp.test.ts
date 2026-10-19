@@ -30,7 +30,7 @@ import {
   createArtifactsManifest,
   createArtifactsRegistryDefinition,
   createArtifactsToolExecutor,
-} from '../src/mcp-core.js';
+} from '../src/mcp.js';
 import type { StpConnectorContext } from '@sentropic/mcp-platform';
 import { createProviderRegistry } from '@sentropic/mcp-platform/registry';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
@@ -145,7 +145,7 @@ describe('artifacts MCP provider', () => {
     expect([...ARTIFACTS_TOOL_NAMES]).toEqual(SPEC_TOOLS);
     const manifest = createArtifactsManifest();
     expect(manifest.providerId).toBe('sentropic.artifacts');
-    expect(manifest.version).toBe('0.1.2');
+    expect(manifest.version).toBe('0.1.4');
     expect(manifest.tools.map((tool) => tool.name)).toEqual(SPEC_TOOLS);
     for (const tool of manifest.tools) {
       const schema = tool.inputSchema as { type?: unknown; additionalProperties?: unknown };
