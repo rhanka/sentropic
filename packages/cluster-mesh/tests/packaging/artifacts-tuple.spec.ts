@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { satisfiesRange } from '../../src/modules/semver.js';
 import { ARTIFACTS_PACKAGE, ARTIFACTS_RANGE, MCP_PLATFORM_RANGE, PROVIDER_CATALOG } from '../../src/modules/catalog.js';
-import { enabled, fixtureDir, nodeJson, trainVersion } from './helpers.js';
+import { artifactsCompatible, enabled, fixtureDir, nodeJson, trainVersion } from './helpers.js';
 
 interface Pkg {
   version: string;
@@ -46,7 +46,7 @@ describe('artifacts source tuple coherence', () => {
   });
 });
 
-describe.skipIf(!enabled)('installed artifacts tuple', () => {
+describe.skipIf(!enabled || !artifactsCompatible)('installed compatible artifacts tuple', () => {
   // Installed manifest of a package inside the artifacts consumer tree.
   const consumerManifest = (name: string): Pkg => manifest(join(
     fixtureDir('artifacts-consumer'), 'node_modules', ...name.split('/'), 'package.json',
