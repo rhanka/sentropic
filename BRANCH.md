@@ -42,6 +42,7 @@ Deliver the node:sqlite L3a backend for the eight transactional profiles with th
 
 ## Feedback Loop
 - [x] **BR704-EX1** (R5): touch `packages/cluster-mesh/src/modules/catalog.ts` (one line: Comments range `>=0.19.0 <0.20.0` to `>=0.19.0 <0.21.0`) so the bumped 0.20.0 package passes its own installed gate. Reason: package self-compatibility, no behavior change. Impact: Comments module admits 0.19.x and 0.20.x. Rollback: revert the range line.
+- [x] **R3**: Postgres possession hook runs after `roots.publish` (outbox callback included); protocol comment states the seam is not the full G3 guarantee. Regression test covers loss inside outbox with rollback.
 
 ## AI Flaky tests
 - Acceptance rule:

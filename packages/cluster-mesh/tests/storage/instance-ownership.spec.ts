@@ -99,6 +99,39 @@ describe.skipIf(!pgEnabled)('postgres commit-possession hook', () => {
     }
   });
 
+  it('refuses after the outbox callback when possession is lost there', async () => {
+    let valid = true;
+    let armed = false;
+    const order: string[] = [];
+    const fixture = await createPgFixture({
+      onCommitPossession: () => {
+        order.push('hook');
+        if (!valid) throw new CanonicalOwnershipError('terminal-loss', 'test possession lost');
+      },
+      outbox: {
+        append: async () => { order.push('outbox'); if (armed) valid = false; },
+        read: async () => [],
+        find: async () => null,
+      },
+    });
+    try {
+      const bound = await (await fixture.open()).bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+      await bound.configureLifecycle('optional');
+      order.length = 0;
+      armed = true;
+      const unit = { guards: [], records: [], appends: [{ chainId: 'after-hook', record: { id: 'h1', bytes: '{"n":1}', hash: 'hash-after-hook' }, expectation: { kind: 'absent', allocation: '0' } as const }], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [] };
+      await assert.rejects(bound.commitAtomic(unit), (error: unknown) => {
+        const cause = (error as { cause?: unknown }).cause;
+        return cause instanceof CanonicalOwnershipError && cause.code === 'terminal-loss';
+      });
+      assert.deepEqual(order, ['outbox', 'hook']);
+      assert.equal(valid, false);
+      assert.equal(await bound.readHead('after-hook'), null);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it('commits unchanged when no possession hook is installed', async () => {
     const fixture = await createPgFixture();
     try {
