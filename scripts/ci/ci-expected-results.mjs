@@ -118,7 +118,15 @@ export function workflowExpected(workflow, context = {}) {
         throw new Error(`Unsupported workflow matrix: ${name}`);
       }
       if (job.name !== undefined) throw new Error(`Unsupported workflow job name: ${name}`);
-      const members = matrix?.include.map((member) => `${name} (${Object.values(member).join(', ')})`);
+      // GitHub truncates default display names to 100 characters (97 + ...).
+      // Reference job 117852314185 carries this exact long AI-member receipt.
+      const members = matrix?.include.map((member) => {
+        const full = `${name} (${Object.values(member).join(', ')})`;
+        return full.length > 100 ? `${full.slice(0, 97)}...` : full;
+      });
+      if (members && new Set(members).size !== members.length) {
+        throw new Error(`Ambiguous truncated matrix names: ${name}`);
+      }
       // Existing train policy keeps this observer independent of promotion.
       return expandExpected([{ job: name, members, selected: selection(name),
         required: name !== 'verify-train-lock-integrity' }]);

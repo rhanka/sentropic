@@ -116,6 +116,12 @@ test('should reject missing actual workflow members and always-required skipped 
   }
   const main = workflowExpected(workflow, { changes: { global: 'true' }, event: 'push', ref: 'refs/heads/main' });
   assert.equal(main.find((row) => row.job === 'publish-api-image').selected, true);
+  const observed = 'test-api-unit-integration (ai, chat-tools,company-enrichment-sync,documents-tool,initiative-gener...';
+  assert.equal(main.some((row) => row.job === observed), true);
+  assert.equal(evaluateExpected({ expected: [selected(observed)], executed: [ran(observed, 'success')] }).ok, true);
+  assert.throws(() => workflowExpected({ jobs: { changes: {}, 'ci-gate': {},
+    matrix: { strategy: { matrix: { include: [{ value: 'x'.repeat(110) }, { value: `${'x'.repeat(110)}y` }] } } },
+  } }), /Ambiguous truncated matrix names/);
 });
 
 test('should evaluate workflow selection expressions without running expression text as code', () => {
