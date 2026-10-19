@@ -404,7 +404,9 @@ const usage = `usage: ci-run-metrics.mjs --run-file <captured-run.json> [--expec
 Captured file shape: { "records": [{ runId, attempt, jobId, name, conclusion,
 startedAt, completedAt, queuedAt?, steps?[{ name, conclusion, startedAt,
 completedAt }], runnerName?/runner?/labels?[], cache? }], "runCreatedAt":
-<workflow creation stamp> } plus optional "endpoints": { <name>: [<pattern>] }.`;
+<workflow creation stamp> } plus optional "endpoints": { <name>: [<pattern>] },
+"capacity": { availableSlots?, reserveSlots? }, and "timings":
+{ classificationSeconds?, verdictSeconds? }.`;
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const args = process.argv.slice(2);
@@ -425,6 +427,14 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const minutes = runnerMinutes(jobs);
   const delivery = deliveryElapsed(jobs, runCreatedAt, captured.endpoints ?? {});
   const cache = cacheIdentities(jobs);
+  const capacity = captured.capacity ?? {};
+  const admission = admissionDecision({ peak: summary.concurrencyPeak,
+    availableSlots: capacity.availableSlots ?? null, reserveSlots: capacity.reserveSlots ?? 0 });
+  const timings = captured.timings ?? {};
+  const budgets = budgetVerdict({ classificationSeconds: timings.classificationSeconds ?? null,
+    verdictSeconds: timings.verdictSeconds ?? null, schedulingSeconds: queue.maxSeconds });
+  const cancellation = cancellationOwnership(jobs);
+  const continuity = releaseContinuity(jobs, captured.endpoints ?? {});
   const identity = { sourceSha: captured.sourceSha ?? captured.run?.head_sha ?? null,
     workflowSha: captured.workflowSha ?? null };
   const executions = jobs.map((record) => ({
@@ -434,5 +444,6 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     seconds: record.conclusion === 'skipped' ? null : durationSeconds(record.startedAt, record.completedAt),
     queueSeconds: queueSeconds(record), steps: stepSpans(record),
   }));
-  console.log(JSON.stringify({ file, identity, summary, readiness, queue, runnerMinutes: minutes, delivery, cache, executions }, null, 2));
+  console.log(JSON.stringify({ file, identity, summary, readiness, queue, runnerMinutes: minutes, delivery, cache,
+    admission, budgets, cancellation, continuity, executions }, null, 2));
 }

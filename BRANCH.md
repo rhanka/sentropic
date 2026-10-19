@@ -53,6 +53,7 @@
 - [x] R1-4/R2-4 contention window: overlapping PR/main windows exclude skipped nonexecutions and unmeasurable/inverted intervals (Docker regression).
 - [x] R1-4/R2-4 measured admission and budgets: `admissionDecision` checks observed peak against declared slots plus release reserve; `budgetVerdict` flags 15s/5s/60s breaches and keeps missing inputs to-measure (Docker regressions).
 - [x] R1-4/R2-4 cancellation and release continuity: `cancellationOwnership` attributes each cancelled row to a superseded or current attempt; `releaseContinuity` requires every release endpoint measured (Docker regressions).
+- [x] R1-4/R2-4 CLI capacity receipts: the metrics output retains admission, budget, cancellation, and continuity sections from optional capture inputs (Docker regression).
 - [ ] R2-4 remains open: the account API returns `plan: null`, billing HTTP 404 requests missing `user` scope, and no quota/reservation/cost inventory was supplied. Account owner supplies that inventory; branch author must qualify the resulting bounded dispatch policy, concurrent PR/current-main delivery, rollback, and timing budgets.
 
 ## AI Flaky tests
