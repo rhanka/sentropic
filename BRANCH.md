@@ -33,6 +33,7 @@
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 - [x] R2-2: queue distributions exclude skipped nonexecutions; missing job readiness stays null, with no workflow-age fallback. Docker regressions reproduce both defects.
+- [x] R2-5: skipped delivery endpoints are unselected with null elapsed; mixed execution sets stay partial. Zero-duration, inverted, and omitted-member regressions qualify the helpers.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
