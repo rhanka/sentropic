@@ -48,6 +48,7 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
 - [x] **R1**: `assertOwnership` re-verifies store file identity plus kernel POSIX lock liveness (procfs, no store fd) before trusting cached reads; acquisition contention maps to typed `instance-busy`.
 - [x] **R2/R7**: mutations snapshot the scope and restore it when the inner op, the post-op revalidation, or `flushScope` fails; reads revalidate after the await.
 - [x] **R1/R2/R6/R7 regression tests**: foreign-fd-close terminal probe, trigger-refusal rollback, prepared-read invalidation, and cross-module reopen refusal in the SQLite specs.
+- [x] **R2 fixup**: restore preserves the live staged attachment and never replaces state on inner-op throw (coordinator owns inner atomicity and CAS identity).
 
 ## AI Flaky tests
 - Acceptance rule:

@@ -160,9 +160,12 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
   OPEN_ENGINES.set(canonicalPath, process.pid);
   const db = new DatabaseSync(options.path);
   try {
+    let engineVersion: string;
+    let journalMode: string;
+    let lockingMode: string;
     try {
       db.exec('PRAGMA busy_timeout = 0');
-      const engineVersion = String((db.prepare('SELECT sqlite_version() AS version').get() as { version: unknown }).version);
+      engineVersion = String((db.prepare('SELECT sqlite_version() AS version').get() as { version: unknown }).version);
       const qualified =
         engineAtLeast(engineVersion, SQLITE_MIN_ENGINE) ||
         (options.qualifiedBackport !== undefined &&
@@ -173,9 +176,9 @@ export const openSqliteEngine = (options: SqliteOpenOptions): SqliteEngine => {
       db.exec('PRAGMA locking_mode = EXCLUSIVE');
       db.exec('PRAGMA journal_mode = WAL');
       db.exec('PRAGMA synchronous = FULL');
-      const journalMode = readPragma(db, 'journal_mode');
+      journalMode = readPragma(db, 'journal_mode');
       const synchronous = readPragma(db, 'synchronous');
-      const lockingMode = readPragma(db, 'locking_mode');
+      lockingMode = readPragma(db, 'locking_mode');
       if (journalMode.toLowerCase() !== 'wal') throw new CanonicalOwnershipError('open-refused', `WAL not effective: ${journalMode}`);
       if (synchronous !== '2') throw new CanonicalOwnershipError('open-refused', `FULL not effective: ${synchronous}`);
       if (lockingMode.toLowerCase() !== 'exclusive') throw new CanonicalOwnershipError('open-refused', `EXCLUSIVE not effective: ${lockingMode}`);
