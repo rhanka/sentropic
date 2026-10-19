@@ -2441,7 +2441,12 @@ jobs:
       - name: Prove selection-aware negative cases through the Make entry point
         run: |
           set -euo pipefail
-          tmp="$(mktemp -d)"
+          # Fixtures live under the workspace: the Make entry points run in a
+          # container that mounts only the worktree, so a host mktemp path
+          # would be unreadable inside Docker.
+          tmp="tmp/ci-capacity-selfcheck"
+          rm -rf "$tmp"
+          mkdir -p "$tmp"
           trap 'rm -rf "$tmp"' EXIT
           cat > "$tmp/expected.json" <<'EOF'
           {"expected": [
