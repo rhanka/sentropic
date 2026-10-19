@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { createStatefulMcpNamespace } from '../src/compose/mcp-stateful.js';
 import { createClusterMeshModules } from '../src/modules/registry.js';
 import { makeStatefulHost } from './conformance/stateful-host.mjs';
@@ -8,6 +8,7 @@ it('retains host owner checks, expiry boundaries and per-request authentication'
   const host = makeStatefulHost(fixture.tools, { idle: 10, absolute: 100 });
   await createStatefulMcpNamespace(createClusterMeshModules(), optionsFor(host.host));
   const ref = { value: await host.token() }, connection = await openClient(host, ref);
+  await vi.waitFor(() => expect(host.stats.gets).toBe(1));
   const sid = connection.transport.sessionId!, entry = host.sessions.get(sid);
   const request = async (token: string | undefined, id = sid) => host.app.request('/mcp', {
     headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), 'mcp-session-id': id,
