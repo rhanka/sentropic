@@ -1410,7 +1410,7 @@ probe-artifacts-packed-consumer: ## Second-host packed-consumer proof of the @se
 	@$(MAKE) pack-mcp-platform PACK_DESTINATION=tmp/artifacts-platform-pack ENV=$(ENV)
 	@$(MAKE) pack-artifacts PACK_DESTINATION=tmp/artifacts-pack ENV=$(ENV)
 	@cp tmp/artifacts-platform-pack/*.tgz tmp/artifacts-pack/
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs ./packed-consumer.mjs; node ./packed-consumer.mjs'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs /probe/adapter-consumer.mjs ./; node ./packed-consumer.mjs; npm install /pack/*.tgz @aws-sdk/client-s3@3.1095.0 pg@8.22.0 --no-save --no-audit --no-fund >/dev/null 2>&1; node ./adapter-consumer.mjs'
 
 .PHONY: test-mcp-platform
 test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (builds dist first for the packaged test, BR1a-EX3)
