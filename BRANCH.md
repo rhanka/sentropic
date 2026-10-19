@@ -49,6 +49,7 @@
 - [ ] **Lot 1 — Authority and idempotency**
   - [ ] Resolve ensure scope from trusted host context and ignore legacy body scope/hash.
   - [ ] Namespace service keys by operation and principal; hash validated parameters server-side.
+  - [x] Ensure service now scopes keys and derives hashes; three focused repros failed against baseline before the fix.
   - [ ] Tests: service.test.ts, http-security.test.ts, HTTP/MCP parity and existing fixtures.
 - [ ] **Lot 2 — Publication boundaries**
   - [ ] Validate canonical relative paths, duplicates, count, per-file and total bytes before effects.
