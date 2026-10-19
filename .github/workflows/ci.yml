@@ -99,6 +99,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      expected_attempt: ${{ steps.ci_expected.outputs.attempt }}
       global: ${{ steps.filter.outputs.global }}
       idp_sync: ${{ steps.filter.outputs.idp_sync }}
       api: ${{ steps.filter.outputs.api }}
@@ -411,6 +412,7 @@ jobs:
             publishable_package_files:
               - 'packages/*/**'
       - name: Retain expected execution set before dispatch (BR76-EX1)
+        id: ci_expected
         env:
           CI_SELECTION_CONTEXT: >-
             {"changes": ${{ toJSON(steps.filter.outputs) }}, "event": "${{ github.event_name }}",
@@ -2375,12 +2377,28 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
         with:
-          name: ci-expected-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ci-expected-${{ github.run_id }}-${{ needs.changes.outputs.expected_attempt }}
           path: tmp/ci-capacity
-      - uses: actions/download-artifact@v4
+      - name: Capture the current attempt for the final verdict
+        uses: actions/github-script@v8
         with:
-          name: ci-capacity-${{ github.run_id }}-${{ github.run_attempt }}
-          path: tmp/ci-capacity
+          script: |
+            const fs = require('node:fs');
+            // This repository's run/job receipts are public; no additional token permissions.
+            const base = `https://api.github.com/repos/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const get = async url => {
+              const response = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+              if (!response.ok) throw new Error(`Receipt capture failed: HTTP ${response.status}`);
+              return response.json();
+            };
+            const run = await get(base);
+            const jobs = [];
+            for (let page = 1; ; page++) {
+              const result = await get(`${base}/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`);
+              jobs.push(...result.jobs);
+              if (jobs.length >= result.total_count) break;
+            }
+            fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs }, null, 2));
       - name: Check required CI results
         shell: bash
         env:
@@ -2416,7 +2434,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
         with:
-          name: ci-expected-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ci-expected-${{ github.run_id }}-${{ needs.changes.outputs.expected_attempt }}
           path: tmp/ci-capacity
       - name: Capture identified run and expanded job receipts
         uses: actions/github-script@v8

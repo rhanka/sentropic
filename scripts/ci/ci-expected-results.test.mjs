@@ -13,6 +13,28 @@ const ran = (job, conclusion) => ({ job, conclusion });
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
 
+test('should capture every page of the current attempt at the actual gate and fail on API errors', async () => {
+  const script = workflow.jobs['ci-gate'].steps.find((step) => step.name === 'Capture the current attempt for the final verdict').with.script;
+  const execute = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'context', 'fetch', 'process', script);
+  const requests = [];
+  let captured;
+  const files = { writeFileSync: (_file, value) => { captured = JSON.parse(value); } };
+  const context = { repo: { owner: 'rhanka', repo: 'sentropic' }, runId: 7 };
+  const fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => url.includes('/jobs?')
+      ? { jobs: [{ id: requests.length, run_id: 7, run_attempt: 3 }], total_count: 2 }
+      : { id: 7, run_attempt: 3, head_sha: 'abc' } };
+  };
+  await execute(() => files, context, fetch, { env: { GITHUB_RUN_ATTEMPT: '3' } });
+  assert.equal(captured.jobs.length, 2);
+  assert.equal(captured.run.run_attempt, 3);
+  assert.match(requests[1], /\/attempts\/3\/jobs\?per_page=100&page=1$/);
+  assert.match(requests[2], /page=2$/);
+  await assert.rejects(execute(() => files, context, async () => ({ ok: false, status: 503 }),
+    { env: { GITHUB_RUN_ATTEMPT: '3' } }), /HTTP 503/);
+});
+
 test('should reject incomplete real gate contexts and missing expanded receipts through its exact script', () => {
   const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
   const gateExpected = workflow.jobs['ci-gate'].needs.map((job) => ({ job,
@@ -64,12 +86,16 @@ test('should reconcile attempt identity, actual members and the complete final n
   const needs = { changes: { result: 'success' }, 'test-e2e': { result: 'success' },
     'ci-capacity-receipts': { result: 'success' } };
   assert.equal(reconcileRun(manifest, capture, needs).ok, true);
+  assert.equal(reconcileRun(manifest, { ...capture, identity: { ...identity, attempt: 3 } }, needs).ok, true);
+  assert.equal(reconcileRun(manifest, { ...capture, identity: { ...identity, attempt: 1 } }, needs).ok, false);
   assert.equal(reconcileRun(manifest, capture, { changes: needs.changes }).ok, false);
   assert.equal(reconcileRun(manifest, { ...capture, executed: capture.executed.slice(0, 1) }, needs).ok, false);
   for (const key of Object.keys(identity)) {
     assert.equal(reconcileRun(manifest, { ...capture, identity: { ...identity, [key]: 'wrong' } }, needs).ok, false);
   }
   assert.equal(reconcileRun({}, capture).ok, false);
+  assert.equal(reconcileRun(manifest, { ...capture, jobs: [{ name: 'wrong-run', run_id: 8, run_attempt: 2 }] }, needs).ok, false);
+  assert.equal(workflow.jobs.changes.outputs.expected_attempt, '${{ steps.ci_expected.outputs.attempt }}');
 });
 
 test('should reject missing actual workflow members and always-required skipped validators', () => {

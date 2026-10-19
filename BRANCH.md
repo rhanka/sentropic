@@ -45,6 +45,7 @@
 - [x] R2-3 workflow delivery: the receipt job retains raw run/job/step API rows and the Make metrics output as run/attempt-specific artifacts after selected lanes complete; final-gate timing remains post-run measurement.
 - [x] Preserve the train-integrity observer's existing non-gating contract: retain its receipt without making the collector a dependent; unchanged release-train wiring tests enforce this boundary.
 - [x] R2-1 live gate: download this attempt's expected manifest and actual expanded receipts, then invoke the Make evaluator with the complete final needs context; exact-script regressions reject omissions/skips and accept legitimate unselected members.
+- [x] Rerun qualification: the carried-forward `changes.expected_attempt` selects the original before-dispatch manifest; later attempts preserve run/head identity and require each raw job row to belong to the captured attempt. Future/cross-run manifests fail.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
