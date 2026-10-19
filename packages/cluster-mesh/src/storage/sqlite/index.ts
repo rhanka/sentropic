@@ -26,6 +26,8 @@ import {
 } from '../instance-ownership.js';
 import { openSqliteEngine, type SqliteEngine, type SqliteOpenOptions } from './engine.js';
 import { SqliteStateBackend } from './backend.js';
+import type { KernelTransaction } from '../scope-runtime.js';
+import { withSqliteTransaction } from './transaction-port.js';
 
 const SQLITE_MEANINGS = {
   'atomic-units-v1':
@@ -112,12 +114,16 @@ const persistAfter = <T extends object>(bound: T, backend: SqliteStateBackend, e
           return (value as (...args: never[]) => unknown).apply(target, args);
         };
       }
-      return async (...args: never[]) => {
+      return async (...args: unknown[]) => {
         const release = backend.admit();
         try {
           engine.assertOwnership();
+          if (property === 'transact' && typeof args[1] === 'function') {
+            const callback = args[1] as (tx: KernelTransaction) => Promise<unknown>;
+            args[1] = (tx: KernelTransaction) => withSqliteTransaction(engine, tx, callback);
+          }
           if (READONLY_METHODS.has(String(property))) {
-            const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
+            const outcome = await (value as (...args: unknown[]) => unknown).apply(target, args);
             engine.assertOwnership();
             return outcome;
           }
@@ -125,7 +131,7 @@ const persistAfter = <T extends object>(bound: T, backend: SqliteStateBackend, e
           // or durable publication has completed. Inner-op atomicity stays
           // with the coordinator and its captured root identity.
           const snapshot = backend.snapshotScope(scope);
-          const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
+          const outcome = await (value as (...args: unknown[]) => unknown).apply(target, args);
           try {
             engine.assertOwnership();
             backend.flushScope(scope);

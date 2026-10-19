@@ -46,6 +46,7 @@ Deliver the node:sqlite L3a backend for the restart-durable lot 1 profile subset
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] **R7 round 2**: transaction callback ports revalidate possession before each operation and after awaited results; returning from the callback invalidates escaped ports. Tests cover loss inside the callback, loss during a prepared read, and use after callback completion.
 - [x] **R4/R8 round 2**: bound profiles and capability lookup use the same lot-1 durable claims as the root; deferred profiles refuse. Supported capability ports bind to the SQLite facade, preserving immediate persistence and terminal revocation. Three regression probes verify negotiation, SQL state at ACK, and saved-port refusal after loss.
 - [x] **R2 round 2**: one immediate admission slot per SQLite backend covers reads, preparation, persistence and rollback across all bound handles/scopes; overlapping independent calls refuse with `instance-busy`, without a queue. Regression probes cover rejected-write visibility and acknowledged-write preservation after retry.
 - [x] **BR704-EX3**: owner-requested origin/main integration; incoming plan/spec changes only, no authored changes there. The conflict-free merge has no resolution delta; its first-parent size reflects imported main commits. Rollback: revert the integration merge.
