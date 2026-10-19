@@ -22,6 +22,7 @@
   - `packages/artifacts/tests/mcp.test.ts`
   - `packages/artifacts/tests/content-security.test.ts`
   - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
@@ -42,6 +43,7 @@
 - [x] Design: exactly one of bytes/text per file; canonical lowercase text/*, JavaScript, JSON, XML and structured JSON/XML MIME types; reject MIME parameters; encode UTF-8 before existing digest/size verification.
 - [x] Version decision (owner-authorized option a): use 0.1.2 for the backward-compatible, additive change; registry baseline is 0.1.1. This is the fastest unblock because cluster-mesh already accepts >=0.1.0 <0.2.0, avoiding a cluster-mesh release. This explicit choice supersedes the default minor-bump guidance and the initial 0.2.0 candidate below.
 - [x] BR012-EX4: allow only the cluster-mesh artifacts integration test to expect provider 0.1.2; no cluster-mesh production changes or version bump; rollback restores the assertion alongside the provider version.
+- [x] BR012-EX5: allow the selected-consumer fixture lock to pin the exact artifacts 0.1.2 archive; CI on cc31fbef9 passed the real loader and API image but rejected the stale 0.1.1 lock integrity. Impact is qualification metadata only; rollback restores the prior lock.
 - [x] Track import belongs to the designated repository writer; this concurrent worktree updates only the mergeable branch plan.
 - [x] Received Astra round 1 at `.h2a/reviews/pr703_astra_r1.md`: packaging/text pass; blocking R1 requires consumer-compatible versioning and exact-head CI. No additional reviewers launched or consensus claimed.
 
@@ -92,4 +94,6 @@
   - [x] Align artifacts package, provider, workspace lock metadata, README and both version assertions to 0.1.2.
   - [x] Pass the scoped cluster-mesh suite (7 tests), artifacts unit suite (158 tests) and packed-consumer proof (15 tools, 2 adapters, 2 migrations); packed archive SHA-256: ec145fbb68fe50b45bd7e0f88976674b3c86472c9436ef3361334cfd35b53562.
   - [x] Review the minimal diff and pass the mechanical scope gate; commit via Make.
+  - [x] Refresh only the artifacts entry of the frozen selected-consumer lock from the verified 0.1.2 archive; reproduce rejection of the old entry and pass the exact sibling-integrity gate with the corrected version, registry URL and sha512.
+  - [ ] Pass the complete packed cluster-mesh qualification gate in exact-head CI.
   - [ ] Update PR #703 with the version decision, push, and require green CI at the exact resulting HEAD; do not merge or publish.
