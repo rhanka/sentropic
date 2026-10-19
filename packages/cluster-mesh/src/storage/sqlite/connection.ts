@@ -78,7 +78,11 @@ export const openIsolatedConnection = (path: string): SqliteConnection => {
         callbacks.set(name, (callback ?? options) as (...args: never[]) => unknown);
         request('function', name, undefined, callback ? options : {});
       }) as DatabaseSync['function'],
-      close: () => { try { if (!stopped) request('close'); } finally { stopped = true; dispose(); } },
+      close: () => {
+        try { if (!stopped) request('close'); }
+        catch (error) { if (!(error instanceof CanonicalOwnershipError)) throw error; }
+        finally { stopped = true; dispose(); }
+      },
     };
   } catch (error) {
     child.stdin.destroy(); child.stdout.destroy(); child.kill();
