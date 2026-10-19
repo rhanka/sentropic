@@ -63,6 +63,7 @@
 - [ ] **Lot 4 — Platform-free MCP and release**
   - [x] Preserve /mcp compatibility; expose /mcp-core with no runtime platform dependency.
   - [x] Relocate MCP source with public exports preserved, before splitting its platform wrapper in a separate atomic commit.
+  - [x] Finish compatible /mcp wrapper; MCP scoped tests passed 11/11 before release-version update; select unpublished 0.1.4 above npm 0.1.2 and retain #707 peer widening.
   - [ ] Packed clean-consumer proof with platform absent; update package version and provider version.
   - [ ] Tests: mcp.test.ts, packed consumer, typecheck-artifacts, lint-artifacts, test-artifacts.
 - [ ] **Lot 5 — Delivery**
