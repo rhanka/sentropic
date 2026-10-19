@@ -37,6 +37,20 @@ export function isTimestampGap(record) {
 export const jobKey = (record) =>
   `${record?.runId ?? 'unknown'}/attempt-${record?.attempt ?? '?'}/${record?.jobId ?? record?.name ?? 'unknown'}`;
 
+// Accept the retained Jobs API capture as well as normalized fixture records.
+export function captureRecords(captured) {
+  if (Array.isArray(captured.records)) return captured.records;
+  if (!Array.isArray(captured.jobs) || !captured.run) throw new Error('Missing run/jobs capture');
+  return captured.jobs.map((row) => ({
+    runId: row.run_id, attempt: row.run_attempt, jobId: row.id, name: row.name,
+    conclusion: row.conclusion, queuedAt: row.created_at,
+    startedAt: row.started_at, completedAt: row.completed_at, labels: row.labels,
+    runnerName: row.runner_name || undefined,
+    steps: row.steps?.map((step) => ({ name: step.name, number: step.number,
+      conclusion: step.conclusion, startedAt: step.started_at, completedAt: step.completed_at })),
+  }));
+}
+
 // Deduplicate job rows to distinct executions of one run. GitHub reruns copy
 // carried-forward jobs into the new attempt under NEW job IDs with the
 // original interval (reference run 39113919235: `changes` is job 117635669586
@@ -319,9 +333,10 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const expectedIndex = args.indexOf('--expected-jobs');
   const expectedJobCount = expectedIndex === -1 ? null : Number(args[expectedIndex + 1]);
   const captured = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const { jobs } = dedupeJobs(captured.records);
-  const runCreatedAt = captured.runCreatedAt ?? null;
-  const summary = summarizeRun(captured.records, { expectedJobCount });
+  const records = captureRecords(captured);
+  const { jobs } = dedupeJobs(records);
+  const runCreatedAt = captured.runCreatedAt ?? captured.run?.created_at ?? null;
+  const summary = summarizeRun(records, { expectedJobCount });
   const readiness = endpointReadiness(jobs, captured.endpoints ?? {});
   const queue = queueWaits(jobs);
   const minutes = runnerMinutes(jobs);

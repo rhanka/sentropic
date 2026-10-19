@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
   cacheIdentities,
+  captureRecords,
   concurrencyPeak,
   dedupeJobs,
   deliveryElapsed,
@@ -31,6 +32,17 @@ const job = (overrides = {}) => ({
   startedAt: '2026-10-18T10:00:00.000Z',
   completedAt: '2026-10-18T10:03:44.000Z',
   ...overrides,
+});
+
+test('should retain Jobs API identities and step timestamps without inventing readiness', () => {
+  const [record] = captureRecords({ run: { id: 7 }, jobs: [{ run_id: 7, run_attempt: 2,
+    id: 11, name: 'changes', conclusion: 'success', started_at: '2026-10-18T10:00:00Z',
+    completed_at: '2026-10-18T10:01:00Z', steps: [{ name: 'Test', number: 3,
+      started_at: '2026-10-18T10:00:01Z', completed_at: '2026-10-18T10:00:59Z' }] }] });
+  assert.deepEqual([record.runId, record.attempt, record.jobId], [7, 2, 11]);
+  assert.equal(queueSeconds(record), null);
+  assert.equal(stepSpans(record)[0].seconds, 58);
+  assert.throws(() => captureRecords({}), /Missing run\/jobs/);
 });
 
 test('durations are completion minus start; missing values stay null, never zero', () => {
