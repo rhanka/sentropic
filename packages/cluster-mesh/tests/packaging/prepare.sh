@@ -65,6 +65,17 @@ receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/artifacts 
 if [ -n "$receipt" ]; then cp "$receipt" "$artifacts_tgz"; fi
 echo "[artifacts candidate] sha256 $(sha256sum "$artifacts_tgz" | cut -d' ' -f1)"
 
+# The embedded dependency must also resolve for bare and global consumers before publication.
+(cd ../mcp-platform && npm pack --silent --pack-destination "$work/src" >/dev/null)
+platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
+receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/mcp-platform "$MPLATFORM")"
+if [ -n "$receipt" ]; then cp "$receipt" "$platform_tgz"; fi
+node "$here/candidate-platform-registry.mjs" ../mcp-platform/package.json "$platform_tgz" > "$work/registry-url" &
+registry_pid=$!
+trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
+while [ ! -s "$work/registry-url" ]; do kill -0 "$registry_pid"; sleep 0.1; done
+export npm_config_registry="$(cat "$work/registry-url")"
+
 # src NAME VERSION: a verified sibling archive (`file:`) for exactly NAME@VERSION, else the registry version.
 src() {
   node "$here/siblings.mjs" spec "$siblings" "$1" "$2"
@@ -177,13 +188,9 @@ sources "$work/selected-session"
 tuple selected-session
 fi
 
-# MCP consumer: the candidate plus the locally-packed mcp-platform sibling (unpublished 0.3.0
-# candidate, packed exactly as published; dist built by the packaging.mk prerequisite) and the
-# registry SDK. Optional peers stay absent; the leaves must resolve without them.
-(cd ../mcp-platform && npm pack --silent --pack-destination "$work/src" >/dev/null)
-platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
+# MCP consumer: only mesh is declared; platform and SDK resolve transitively.
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
-consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz"
+consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz"
 (cd "$work/mcp-consumer" && npm install $quiet >/dev/null)
 tuple mcp-consumer
 fi
@@ -192,7 +199,7 @@ fi
 # (dist built by the packaging.mk prerequisite). The leaf must
 # load only when selected; the installed artifacts version must satisfy the declared range.
 if [ "$CM_ARTIFACTS_COMPAT" = 1 ]; then
-  consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz" "@sentropic/artifacts=file:$artifacts_tgz"
+  consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/artifacts=file:$artifacts_tgz"
   sources "$work/artifacts-consumer"
   (cd "$work/artifacts-consumer" && npm install $quiet >/dev/null)
   tuple artifacts-consumer
