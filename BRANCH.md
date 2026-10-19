@@ -1,7 +1,7 @@
 # Feature: Cluster-mesh stateful MCP wrapping
 
 ## Objective
-- [ ] Implement approved #706 blockers 1–3, qualify the twelve Immo tools, and deliver a draft PR.
+- [x] Implement approved #706 blockers 1–3, qualify the twelve Immo tools, and deliver draft PR #707.
 
 ## Scope / Guardrails
 - [x] Base: spec HEAD `8ac9c7c64381c98b1a52d81d6ede8bce2b46ecc7` after rebase; initial creation at `f560d073b9c0d04fd5947e018a7abb2632e302ed`; branch `feat/cluster-mesh-mcp-stateful-wrap`.
@@ -30,7 +30,10 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
-- [x] Latest implementation checkpoint: packages/cluster-mesh/tests/conformance/STATEFUL_WRAP_QUALIFICATION.md packages/cluster-mesh/tests/conformance/fixtures/README.md.
+- [x] Latest implementation checkpoint: BRANCH.md.
+- [x] PR #707 targets the approved spec branch; GitHub reports no checks/runs because CI pull_request filters target main only. This is not a green global-CI claim.
+- [x] Qualification receipt: `packages/cluster-mesh/tests/conformance/STATEFUL_WRAP_QUALIFICATION.md`; core C8 passed again on the final package bytes, with archive SHA-256 and observed raw RPC maximum 158 bytes recorded.
+- [x] Measured agent wall-clock start: 2026-10-19 03:57:48 UTC; final elapsed time is reported with draft delivery.
 - [x] Rebase retained every package, lock and workflow byte; published versions rechecked at 0.3.0 / 0.19.1, below the selected 0.4.0 / 0.21.0.
 - [x] Exact golden JSON files include a trailing blank line in Radar; whitespace checks exclude only these two pinned files to preserve their original bytes.
 - [ ] Final review round is incomplete: the security leg declared xhigh instead of the requested high; its verdict is rejected under the review metadata contract. First-round peers completed without blockers; the final conformance leg completed without blockers. No final consensus or merge clearance is claimed.
@@ -63,4 +66,4 @@
   - [x] Installed core: `tests/packaging/stateful-consumer.sh`, 15 tests plus public TypeScript and missing/version/export/member refusal probes passed; no workspace symlinks or artifacts dependency.
   - [x] Typecheck and lint passed in the cold Docker lanes; published version floors rechecked after rebase. No package was published.
   - [ ] Full-root install/release matrix remains blocked by the separately owned artifacts peer conflict; publication and L5 cutover remain outside this delivery.
-- [ ] **Final validation and draft PR**: scope-check before each commit, independent review, diff/whitespace, push and draft using this plan; inspect CI.
+- [x] **Final validation and draft PR**: scope-check before each commit; review outcomes recorded; diff/whitespace and 143-line maximum commit verified; pushed draft #707 with this plan and inspected GitHub checks. L4 release and final-review gates remain open above; no merge/publication.
