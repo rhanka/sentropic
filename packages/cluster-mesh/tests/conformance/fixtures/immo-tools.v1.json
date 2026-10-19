@@ -43,3 +43,143 @@
           }
         },
         "required": [
+          "city"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_lot_card",
+      "title": "Get lot card",
+      "description": "Fiche détaillée d'un lot (zonage, superficie, signaux liés). Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "no_lot": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Numéro de lot cadastral exact"
+          }
+        },
+        "required": [
+          "city",
+          "no_lot"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "search_signals",
+      "title": "Search signals",
+      "description": "Recherche de signaux réglementaires par ville (étape, mot-clé). Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "etape": {
+            "type": "string",
+            "description": "Étape du processus (ex: avis_motion, adoption, consultation)"
+          },
+          "query": {
+            "type": "string",
+            "description": "Mot-clé libre"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_opportunity_dossier",
+      "title": "Get opportunity dossier",
+      "description": "Dossier d'opportunité consolidé (score, lots et signaux liés, rationale). Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "opportunityId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "city",
+          "opportunityId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_documents",
+      "title": "List documents",
+      "description": "Liste les documents sources archivés (procès-verbaux, etc.) par ville. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "read_document_excerpt",
+      "title": "Read document excerpt",
+      "description": "Lit un extrait borné d'un document source. La sortie est passée par la redaction anti-PII. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
