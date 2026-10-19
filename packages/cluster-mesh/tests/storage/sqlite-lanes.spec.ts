@@ -106,6 +106,30 @@ describe('durable SQLite backend: lanes and lifecycle', () => {
     }
   });
 
+  it('refuses to reopen an existing file under a different module', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cm-sqlite-'));
+    const path = join(dir, 'store.db');
+    const first = createSqliteKernel({ path, moduleId: 'comments', cursorSecret: 'sqlite-lot1-secret' });
+    const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
+    await (first.bindNew(grant) as unknown as { appendChain(id: string, record: { id: string; bytes: string; hash: string }, expectation: { kind: 'absent'; allocation: string }): Promise<unknown> }).appendChain(
+      'private',
+      { id: 'p1', bytes: '{"n":1}', hash: 'hash-private' },
+      { kind: 'absent', allocation: '0' },
+    );
+    first.close();
+    expect(() => createSqliteKernel({ path, moduleId: 'engram-live', cursorSecret: 'sqlite-lot1-secret' })).toThrow(
+      /owned by module comments/,
+    );
+    const second = createSqliteKernel({ path, moduleId: 'comments', cursorSecret: 'sqlite-lot1-secret' });
+    try {
+      const head = await (second.bindNew(grant) as unknown as { readHead(id: string): Promise<string | null> }).readHead('private');
+      assert.equal(head, 'hash-private');
+    } finally {
+      second.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects unregistered modules and unknown grants like the neutral kernel', async () => {
     const fixture = createSqliteFixture();
     try {
