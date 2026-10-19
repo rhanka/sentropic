@@ -9,8 +9,8 @@ import {
 export const LLM_MESH_PACKAGE = '@sentropic/llm-mesh';
 export const LLM_GATEWAY_PACKAGE = '@sentropic/llm-gateway';
 export const MCP_PLATFORM_PACKAGE = '@sentropic/mcp-platform';
-/** Tight bound on the qualified platform candidate (single 0.3.0, no intermediate publication). */
-export const MCP_PLATFORM_RANGE = '>=0.3.0 <0.4.0';
+/** Native wire validation and host-owned stateful wrapping require the 0.4 family. */
+export const MCP_PLATFORM_RANGE = '>=0.4.0 <0.5.0';
 export const ARTIFACTS_PACKAGE = '@sentropic/artifacts';
 /** Single 0.1.0 artifacts candidate covering L-5a–5e (no per-slice train). */
 export const ARTIFACTS_RANGE = '>=0.1.0 <0.2.0';
@@ -87,7 +87,9 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   'gateway/auth-hono': gateway('gateway/auth-hono', './auth-hono', ['AuthHonoVerifyToken'], SESSION_AUTH_PEERS),
   'mcp-platform/registry': mcpPlatform('mcp-platform/registry', './registry', ['createProviderRegistry']),
   'mcp-platform/entry': mcpPlatform('mcp-platform/entry', './registry/entry', ['buildRegistryEntry', 'resolveRegistryEntry']),
-  'mcp-platform/bridge': mcpPlatform('mcp-platform/bridge', './transport/bridge', ['registerBridgeTools', 'identityFromExtra']),
+  'mcp-platform/bridge': mcpPlatform('mcp-platform/bridge', './transport/bridge', ['registerBridgeTools', 'registerMcpWireTools', 'identityFromExtra']),
+  'mcp-platform/tool-schemas': mcpPlatform('mcp-platform/tool-schemas', './transport/tool-schemas', ['compileMcpToolSchemas']),
+  'mcp-platform/result-codec': mcpPlatform('mcp-platform/result-codec', './transport/result-codec', ['validateMcpWireResult']),
   'mcp-platform/hono': mcpPlatform('mcp-platform/hono', './hono', ['createMcpPlatformHono']),
   'mcp-platform/stdio': mcpPlatform('mcp-platform/stdio', './transport/stdio', ['createStdioTransport', 'extractStdioRequestIdentity']),
   'mcp/artifacts': artifacts('mcp/artifacts', './mcp', [
