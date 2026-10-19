@@ -13,8 +13,28 @@ export function normalizeConclusion(conclusion) {
   return String(conclusion ?? '').trim().toLowerCase();
 }
 
-// expected: [{ job, required?, selected? }] (defaults: required true, selected true).
-// executed: [{ job, conclusion, selected? }].
+// expected: [{ job, required?, selected?, matrix? | members? }]
+// (defaults: required true, selected true). A `matrix` array of member
+// suffixes expands to GitHub matrix names `${job} (${suffix})` (observed:
+// `test-e2e (group-a, 00 02 06 10)`); `members` lists explicit full names.
+// executed: [{ job, conclusion }], one row per executed member.
+// Unexpanded base names never match an executed member: every selected
+// matrix member is enforced individually.
+export function expandExpected(expected = []) {
+  const out = [];
+  for (const item of expected ?? []) {
+    const flags = { required: item?.required !== false, selected: item?.selected !== false };
+    if (Array.isArray(item?.members) && item.members.length > 0) {
+      for (const member of item.members) out.push({ job: String(member), ...flags });
+    } else if (Array.isArray(item?.matrix) && item.matrix.length > 0) {
+      for (const suffix of item.matrix) out.push({ job: `${String(item?.job ?? '')} (${String(suffix)})`, ...flags });
+    } else if (item?.job !== undefined) {
+      out.push({ job: String(item.job), ...flags });
+    }
+  }
+  return out;
+}
+
 export function evaluateExpected({ expected = [], executed = [] } = {}) {
   const executedByJob = new Map();
   for (const row of executed) {
@@ -24,7 +44,7 @@ export function evaluateExpected({ expected = [], executed = [] } = {}) {
   const failures = [];
   const passed = [];
   const unselected = [];
-  for (const item of expected) {
+  for (const item of expandExpected(expected)) {
     const name = String(item?.job ?? '');
     const required = item?.required !== false;
     const selected = item?.selected !== false;
@@ -55,6 +75,8 @@ export function evaluateExpected({ expected = [], executed = [] } = {}) {
 
 const usage = `usage: ci-expected-results.mjs --expected-file <json> --executed-file <json>
 Expected shape: { "expected": [{ "job": <name>, "required": true, "selected": true }] }.
+Matrix members: { "job": <base>, "matrix": [<suffix>, ...] } expands to "<base> (<suffix>)";
+{ "members": [<full name>, ...] } lists explicit member names.
 Executed shape: { "executed": [{ "job": <name>, "conclusion": <ci conclusion> }] }.`;
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
