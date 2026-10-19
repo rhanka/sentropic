@@ -6,6 +6,7 @@
 ## Scope / Guardrails
 - [x] Branch `fix/artifacts-hardening`, worktree `tmp/worktrees/artifacts-hardening`, base `origin/main` at `cf0ad8ee4`.
 - [x] CI repair: rebase the 14 artifacts commits onto `origin/main` at `7ed41eb39` to qualify the same L5 inputs as the PR merge checkout.
+- [x] Second CI repair: rebase onto `origin/main` at `3556df5c6`; GitHub could not create a PR merge checkout while the two P1 files conflicted with the SQLite integration.
 - [x] Mechanical `harness check branch`: PASS C1.
 - [x] Make only, Docker tools, no Python, ENV=test-artifacts-hardening last; no listening services during unit checks.
 - [x] Selective staging, make commit, every commit under 150 changed lines, no attribution.
@@ -38,6 +39,7 @@
 - [x] BRAH-EX2 (owner second CI repair packet): allow the selected artifacts lock entry, tuple assertions and batched fixture-version reads; impact is packed-consumer verification only, with integrity enforcement and timeouts retained; rollback restores those qualification hunks.
 
 ## Feedback Loop
+- [x] Delivery of `6ca10d3e6` exposed GitHub `mergeable=false`, `mergeable_state=dirty` and no new run. Mechanical merge-tree against current main identifies only P1 JSON/hash conflicts; rebase resolves those files and retains both superseded manifests.
 - [x] Run `39320255479`, job `118292763317`: all 932 unit tests pass; packed lazy qualification rejects selected lock artifacts 0.1.2 against verified candidate 0.1.4 (version, registry URL and SHA-512 mismatch).
 - [x] First repaired packed run: sibling integrity and installed tuple pass; 77/78 tests pass, but the offline preparation test takes 5530 ms against 5000 ms under parallel workers. Batch tuple manifest reads instead of spawning Node for every package; retain the timeout and full parallel qualification.
 - [x] Run `39279553217`: L5 rejects the artifacts lockfile change (`manifest freeze/lock mismatch`); Cluster Mesh expects artifacts provider `0.1.2`, receives `0.1.4`; `ci-gate` propagates those two failures.
@@ -104,3 +106,7 @@
   - [x] Final gates: lint/typecheck and guarded pack pass; 933 unit tests pass (126 conditional skips); full parallel packed lazy qualification passes all 78 tests with verified sibling receipts and unchanged timeouts.
   - [x] Clean candidate install with the exact CI peers and artifacts sibling passes every declared Node entry point; candidate Cluster Mesh SHA-256 `79ac243b77b480d02f8b17467af37b2daa6fd8997f56bdb79f4f4e138ef2da88` matches CI.
   - [x] Delivery constraints: selective staging, scope-check before make commit, push the draft branch; no merge, ready transition or publication.
+- [ ] **Lot 8 — Qualify the current main merge checkout**
+  - [x] Rebase onto `3556df5c6` without merging; retain main P1 `68181613...` and branch P1 `ca14388d...` in history, and recheck npm 0.1.2 < artifacts candidate 0.1.4.
+  - [ ] Regenerate P1 through memory-l5-pack for the combined lockfile; verify contracts and archive bytes and pass memory-l5-gate LOT=1.
+  - [ ] Requalify Cluster Mesh on the rebased inputs; push with a lease on remote head `6ca10d3e63406a4fc093ec4f4099866607ef3c0d` and verify GitHub can start CI.
