@@ -191,27 +191,11 @@ describe('artifacts mesh leaf', () => {
     expect(compiled.ok).toBe(false);
   });
 
-  it('resolves the leaf through the real module registry and catalog', async () => {
+  it('refuses the optional artifacts tuple whose declared platform peer excludes this candidate', async () => {
     const modules = createClusterMeshModules();
-    const mcp = await loadArtifactsMcp(modules);
-    expect(mcp.ARTIFACTS_PROVIDER_ID).toBe('sentropic.artifacts');
-    expect([...mcp.ARTIFACTS_TOOL_NAMES]).toEqual(SPEC_TOOLS);
-    expect(typeof mcp.createArtifactsRegistryDefinition).toBe('function');
-    const facade = createMcpRegistry({
-      modules,
-      builtins: [createArtifactsBuiltin({ modules, definition: { app: fakeApp } })],
+    await expect(loadArtifactsMcp(modules)).rejects.toMatchObject({
+      reason: 'incompatible_version', packageName: '@sentropic/mcp-platform',
+      installedVersion: '0.4.0', requiredRange: '>=0.3.0 <0.4.0',
     });
-    facade.select(['sentropic.artifacts']);
-    const compiled = await facade.compile({
-      bindings: {},
-      compatibility: {
-        'sentropic.artifacts': {
-          manifestDigest: computeManifestDigest(mcp.createArtifactsManifest()),
-        },
-      },
-    });
-    if (!compiled.ok) throw new Error(`compile refused: ${JSON.stringify(compiled.diagnostics)}`);
-    expect(compiled.registry.resolveTool('artifacts_restore')?.providerId)
-      .toBe('sentropic.artifacts');
   });
 });

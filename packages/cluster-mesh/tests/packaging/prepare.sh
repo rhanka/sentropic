@@ -26,6 +26,15 @@ MPLATFORM="$(train_version mcp-platform)"
 ARTIFACTS="$(train_version artifacts)"
 rm -rf "$work"
 mkdir -p "$work/tools" "$work/src"
+CM_ARTIFACTS_COMPAT="$(node --input-type=module -e '
+  import fs from "node:fs";
+  import { satisfiesRange } from "./dist/modules/semver.js";
+  const platform = JSON.parse(fs.readFileSync("../mcp-platform/package.json")).version;
+  const range = JSON.parse(fs.readFileSync("../artifacts/package.json")).peerDependencies?.["@sentropic/mcp-platform"];
+  process.stdout.write(satisfiesRange(platform, range) ? "1" : "0");
+')"
+export CM_ARTIFACTS_COMPAT
+printf '{"compatible":%s}\n' "$([ "$CM_ARTIFACTS_COMPAT" = 1 ] && echo true || echo false)" > "$work/artifacts-compatibility.json"
 quiet="--no-audit --no-fund --loglevel=error"
 siblings="$work/siblings"
 
@@ -73,6 +82,7 @@ consumer() {
     pkg.name = pkg.name ?? "fixture-" + dir.split("/").pop();
     pkg.dependencies = { ...pkg.dependencies };
     for (const pair of pairs) { const at = pair.indexOf("="); pkg.dependencies[pair.slice(0, at)] = pair.slice(at + 1); }
+    if (process.env.CM_ARTIFACTS_COMPAT !== "1") delete pkg.dependencies["@sentropic/artifacts"];
     const overrides = Object.fromEntries(Object.entries(pkg.dependencies)
       .filter(([name, spec]) => name !== "@sentropic/cluster-mesh" && spec.startsWith("file:/")));
     if (Object.keys(overrides).length) pkg.overrides = overrides; else delete pkg.overrides;
@@ -182,10 +192,14 @@ fi
 # Web-pages consumer: the MCP consumer tuple plus the locally-packed artifacts sibling
 # (dist built by the packaging.mk prerequisite). The leaf must
 # load only when selected; the installed artifacts version must satisfy the declared range.
-consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz" "@sentropic/artifacts=file:$artifacts_tgz"
-sources "$work/artifacts-consumer"
-(cd "$work/artifacts-consumer" && npm install $quiet >/dev/null)
-tuple artifacts-consumer
+if [ "$CM_ARTIFACTS_COMPAT" = 1 ]; then
+  consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz" "@sentropic/artifacts=file:$artifacts_tgz"
+  sources "$work/artifacts-consumer"
+  (cd "$work/artifacts-consumer" && npm install $quiet >/dev/null)
+  tuple artifacts-consumer
+else
+  echo '[artifacts] optional tuple refused: declared platform peer excludes candidate'
+fi
 
 # installed DIR: installed versions of the candidate and both train packages in DIR.
 installed() {

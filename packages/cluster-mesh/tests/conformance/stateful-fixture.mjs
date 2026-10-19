@@ -85,12 +85,16 @@ export function normalizeCorrelationId(value) {
   const copy = structuredClone(value);
   for (const block of copy.content ?? []) {
     if (block.type !== 'text') continue;
+    const payload = JSON.parse(block.text);
+    if (payload.correlationId === undefined) continue;
     const match = /"correlationId":\s*"([^"]+)"/.exec(block.text);
-    if (!match) continue;
+    if (!match || payload.correlationId !== match[1]) throw new Error('Invalid top-level correlation ID');
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(match[1])) {
       throw new Error('Invalid correlation UUIDv4');
     }
-    block.text = block.text.replace(match[1], '00000000-0000-4000-8000-000000000000');
+    block.text = block.text.slice(0, match.index)
+      + match[0].replace(match[1], '00000000-0000-4000-8000-000000000000')
+      + block.text.slice(match.index + match[0].length);
   }
   return copy;
 }
