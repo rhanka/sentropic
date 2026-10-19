@@ -81,6 +81,37 @@ async function ensureSite(app: ReturnType<typeof makeApp>['app'], actor = OWNER,
 const FILES = [{ path: 'index.html', mimeType: 'text/html', bytes: [1, 2, 3] }];
 
 describe('http service parity', () => {
+  it.each([
+    'text/html', 'text/plain', 'text/css', 'text/javascript', 'application/javascript',
+    'application/ecmascript', 'application/json', 'application/xml', 'application/ld+json',
+    'application/atom+xml', 'image/svg+xml',
+  ])('should accept empty UTF-8 text for %s', async (mimeType) => {
+    const { app } = makeApp();
+    const artifactId = await ensureSite(app);
+    const published = await app.handle(req('POST', '/publish', {
+      artifactId, files: [{ path: 'empty', mimeType, text: '' }],
+    }, OWNER));
+    expect(published.status).toBe(201);
+    const current = await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER));
+    expect(JSON.parse((current.body as { manifest: string }).manifest).files[0].size).toBe(0);
+  });
+
+  it.each([
+    { text: 'x', bytes: [120] }, { text: '', bytes: [] }, {},
+    { text: null }, { text: 42 }, { text: ['x'] }, { text: 'x', bytes: null },
+    { mimeType: 'image/png', text: 'x' }, { mimeType: 'application/pdf', text: 'x' },
+    { mimeType: 'application/octet-stream', text: 'x' }, { mimeType: 'text/', text: 'x' },
+    { mimeType: 'text/html; charset=utf-8', text: 'x' }, { mimeType: 'text/html\n', text: 'x' },
+  ])('should reject invalid text inputs without creating a release: %j', async (content) => {
+    const { app } = makeApp();
+    const artifactId = await ensureSite(app);
+    const result = await app.handle(req('POST', '/publish', {
+      artifactId, files: [{ path: 'index.html', mimeType: 'text/html', ...content }],
+    }, OWNER));
+    expect(result).toEqual({ status: 400, body: { error: 'invalid_request' } });
+    expect((await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER))).status).toBe(404);
+  });
+
   it('should publish UTF-8 text with the same manifest as bytes', async () => {
     const { app } = makeApp();
     const artifactId = await ensureSite(app);
