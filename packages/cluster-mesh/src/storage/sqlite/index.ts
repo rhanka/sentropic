@@ -106,14 +106,12 @@ const persistAfter = <T extends object>(bound: T, backend: SqliteStateBackend, e
           engine.assertOwnership();
           return outcome;
         }
+        // The pre-mutation snapshot rolls back a persist that fails after
+        // the inner op published in memory. Inner-op atomicity itself
+        // belongs to the coordinator: restoring there would replace the
+        // state object its CAS identity and staged attachment rely on.
         const snapshot = backend.snapshotScope(scope);
-        let outcome: unknown;
-        try {
-          outcome = await (value as (...args: never[]) => unknown).apply(target, args);
-        } catch (error) {
-          backend.restoreScope(scope, snapshot);
-          throw error;
-        }
+        const outcome = await (value as (...args: never[]) => unknown).apply(target, args);
         try {
           engine.assertOwnership();
           backend.flushScope(scope);

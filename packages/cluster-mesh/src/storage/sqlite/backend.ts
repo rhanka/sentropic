@@ -113,7 +113,10 @@ export class SqliteStateBackend extends MemoryBackend {
       this.knownScopes.delete(key);
       return;
     }
-    this.scopes.set(key, decodeScopeState(snapshot));
+    const live = this.scopes.get(key);
+    const restored = decodeScopeState(snapshot);
+    if (live?.attachment !== undefined) Object.assign(restored, { attachment: live.attachment });
+    this.scopes.set(key, restored);
   }
 
   flushScope(scope: StorageScope): void {
