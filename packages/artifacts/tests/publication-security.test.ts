@@ -16,6 +16,22 @@ function world(limits = {}) {
 }
 
 describe('publication security', () => {
+  it.each([{ kind: 'Uint8Array', bytes: new Uint8Array([1]) }, { kind: 'Buffer', bytes: Buffer.from([1]) }])(
+    'should snapshot caller $kind bytes before asynchronous publication effects', async ({ bytes }) => {
+      const blobs = createMemoryBlobStore();
+      const intents = createMemoryIntentStore();
+      const service = createPublicationService({ state: createMemoryStateStore(), blobs,
+        intents: { ...intents, record: (...args) => {
+          bytes[0] = 2;
+          return intents.record(...args);
+        } } });
+      const result = await service.publish({ ...INPUT, files: [{ ...INPUT.files[0]!, bytes }] });
+      const { digest } = JSON.parse(result.manifest).files[0] as { digest: string };
+      expect([...await blobs.getBlob(`artifacts/scope-1/blobs/sha256/${digest.slice(7)}`) ?? []])
+        .toEqual([1]);
+    },
+  );
+
   it('should enforce file count, per-file bytes and total bytes at their boundaries', async () => {
     const { service, blobs, intents } = world({ maxFiles: 2, maxFileBytes: 2, maxTotalBytes: 3 });
     const file = INPUT.files[0]!;
