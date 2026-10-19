@@ -49,7 +49,7 @@ function makeApp() {
 }
 
 function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
-  return { method, path, body, actorId };
+  return { method, path, body, actorId, storageScopeId: "scope-1" };
 }
 
 async function seeded() {
@@ -73,6 +73,23 @@ async function seeded() {
 }
 
 describe('http security (m5)', () => {
+  it('should trust host scope and validated parameters instead of body scope or hash', async () => {
+    const app = makeApp();
+    const body = { bindingName: 'scope-test', storageScopeId: 'forged',
+      idempotencyKey: 'same', paramsHash: 'forged', parameters: { title: 'One' } };
+    const request = req('POST', '/ensure', body, OWNER);
+    expect((await app.handle({ ...request, storageScopeId: undefined })).status).toBe(400);
+    const first = await app.handle(request);
+    expect(first.status).toBe(201);
+    expect((await app.handle({ ...request, body: { ...body, storageScopeId: 'other', paramsHash: 'other' } })).body)
+      .toMatchObject({ ...(first.body as object), replayed: true });
+    expect((await app.handle({ ...request, storageScopeId: 'other' })).status).toBe(409);
+    expect((await app.handle({ ...request, body: { ...body, parameters: { title: 'Two' } } })).status).toBe(409);
+    const bob = await app.handle({ ...request, actorId: 'bob' });
+    expect(bob.status).toBe(201);
+    expect(bob.body).not.toMatchObject({ artifactId: (first.body as { artifactId: string }).artifactId });
+  });
+
   it('gives strangers identical 404 answers for existing and unknown artifacts', async () => {
     const { app, id, digest } = await seeded();
     const attempts: Array<[string, string, unknown]> = [

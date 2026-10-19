@@ -160,6 +160,8 @@ export interface ArtifactsApp {
 export interface ArtifactsInvokeInput {
   tool: string;
   actorId: string;
+  /** Trusted host scope; tool arguments cannot select storage. */
+  storageScopeId?: string;
   args: Record<string, unknown>;
 }
 
@@ -186,7 +188,10 @@ export function createArtifactsToolExecutor(deps: {
     method: string,
     path: string,
     body?: unknown,
-  ): Promise<HttpResponse> => deps.app.handle({ method, path, actorId, body });
+    storageScopeId?: string,
+  ): Promise<HttpResponse> => deps.app.handle({
+    method, path, actorId, body, storageScopeId: storageScopeId ?? deps.defaultStorageScopeId,
+  });
 
   function setAccess(actorId: string, args: Record<string, unknown>): Promise<HttpResponse> {
     const artifactId = needString(args, 'artifactId');
@@ -227,12 +232,10 @@ export function createArtifactsToolExecutor(deps: {
         case 'artifacts_ensure':
           return call(actorId, 'POST', '/ensure', {
             bindingName: needString(args, 'bindingName'),
-            storageScopeId: optString(args, 'storageScopeId') ?? deps.defaultStorageScopeId
-              ?? needString(args, 'storageScopeId'),
             idempotencyKey: needString(args, 'idempotencyKey'),
             paramsHash: optString(args, 'paramsHash') ?? '',
             parameters: args['parameters'] ?? {},
-          });
+          }, input.storageScopeId);
         case 'artifacts_publish':
           return call(actorId, 'POST', '/publish', {
             artifactId: needString(args, 'artifactId'),

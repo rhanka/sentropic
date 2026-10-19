@@ -37,6 +37,8 @@ export interface HttpRequest {
   path: string;
   body: unknown;
   actorId: string;
+  /** Trusted host context, resolved alongside actorId; never copy from the body. */
+  storageScopeId?: string;
 }
 
 export interface HttpResponse {
@@ -197,9 +199,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
         if (request.method === 'POST' && request.path === '/ensure') {
           const ensured = buildEnsureRequest(deps.parameterSchema, {
             bindingName: needString(body['bindingName'], 'bindingName'),
-            storageScopeId: needString(body['storageScopeId'], 'storageScopeId'),
+            storageScopeId: needString(request.storageScopeId, 'host storageScopeId'),
             idempotencyKey: needString(body['idempotencyKey'], 'idempotencyKey'),
-            paramsHash: typeof body['paramsHash'] === 'string' ? body['paramsHash'] : '',
+            paramsHash: '',
             parameters: (body['parameters'] ?? {}) as Record<string, string | number | boolean | null | undefined>,
           });
           const result = await deps.artifacts.ensurePrivateView({
@@ -208,7 +210,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
             storageScopeId: ensured.storageScopeId,
             bindingName: ensured.bindingName,
             idempotencyKey: ensured.idempotencyKey,
-            paramsHash: ensured.paramsHash,
+            parameters: ensured.parameters,
           });
           if ((await deps.acls.getArtifactAcl(result.artifactId)) === undefined) {
             await deps.acls.putArtifactAcl(result.artifactId, {
