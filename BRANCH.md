@@ -34,6 +34,7 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
+- [x] Preserve main's P1 manifest and SHA-256 sidecar under immutable history identity 68181613ff36b601d7f6bb62550294fdcd2c0ad26f2ed25cc1ad2fa633fafd5a before replacing the active proof.
 - [x] BR707-EX4 / blocking P1 closure repair: the existing packer refuses broker ^0.3.1 with platform 0.4.0 (`P1 dependency closure mismatch`). Align the private broker dependency to ^0.4.0 and regenerate the root lock, preserving source and the strict P1 verifier. Impact: the merged memory consumer resolves the same platform candidate; rollback both manifest and lock together. Verify with the existing memory-l5 gate.
 - [x] BR707-EX3 / owner resume packet: regenerate retained P1 artifacts after the merged lock changes. Evidence: memory-l5-verify fails with `manifest freeze/lock mismatch`. Impact: archives and immutable manifest history only; keep the memory toolchain unchanged. Rollback: revert the generated proof together with its lockfile input.
 - [x] Main integration: preserve SQLite #704 and memory #700; retain mesh 0.21.0, platform 0.4.0, artifacts 0.1.3 and the version-bound configuration digests. The merge imports main-owned files unchanged; conflict resolutions remain in the declared package/lock scope.
