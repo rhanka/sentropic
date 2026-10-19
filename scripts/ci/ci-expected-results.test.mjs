@@ -4,12 +4,28 @@ import test from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { evaluateExpected, evaluateSelection, workflowExpected } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
+
+test('should reconcile attempt identity, actual members and the complete final needs context', () => {
+  const identity = { runId: 7, attempt: 2, headSha: 'abc' };
+  const manifest = { identity, expected: [selected('test-e2e (a)'), selected('test-e2e (b)')],
+    gateExpected: [selected('changes'), selected('test-e2e'), selected('ci-capacity-receipts')] };
+  const capture = { identity, executed: [ran('test-e2e (a)', 'success'), ran('test-e2e (b)', 'success')] };
+  const needs = { changes: { result: 'success' }, 'test-e2e': { result: 'success' },
+    'ci-capacity-receipts': { result: 'success' } };
+  assert.equal(reconcileRun(manifest, capture, needs).ok, true);
+  assert.equal(reconcileRun(manifest, capture, { changes: needs.changes }).ok, false);
+  assert.equal(reconcileRun(manifest, { ...capture, executed: capture.executed.slice(0, 1) }, needs).ok, false);
+  for (const key of Object.keys(identity)) {
+    assert.equal(reconcileRun(manifest, { ...capture, identity: { ...identity, [key]: 'wrong' } }, needs).ok, false);
+  }
+  assert.equal(reconcileRun({}, capture).ok, false);
+});
 
 test('should reject missing actual workflow members and always-required skipped validators', () => {
   for (const changes of [{ global: 'true' }, { api: 'true' }, { ui: 'true' }, {}]) {
