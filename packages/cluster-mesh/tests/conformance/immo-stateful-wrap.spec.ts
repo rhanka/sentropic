@@ -36,6 +36,7 @@ describe.each(['http', 'simulation'] as const)('Immo native wire conformance: %s
       expect(host.stats.servers).toBe(1);
       expect(host.stats.oldCalls).toBe(0);
       expect(host.stats.sdkCredentials).toBe(0);
+      console.info(`IMMO_MEASURED_REQUEST_MAX_BYTES ${mode} ${host.stats.maxRequestBytes}`);
       expect(JSON.stringify(invoke.mock.calls)).not.toContain(tokenRef.value);
       for (const route of ['/.well-known/oauth-protected-resource/mcp', '/mcp/.well-known/oauth-protected-resource']) {
         const response = await plugin.request(route);

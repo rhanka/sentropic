@@ -11,7 +11,7 @@ export function makeStatefulHost(tools, overrides = {}) {
   app.route('/', mcpAuthRoutes(auth));
   const sessions = new Map();
   const pending = new Set();
-  const stats = { servers: 0, transports: 0, closes: 0, oldCalls: 0, sdkCredentials: 0, gets: 0 };
+  const stats = { servers: 0, transports: 0, closes: 0, oldCalls: 0, sdkCredentials: 0, gets: 0, maxRequestBytes: 0 };
   let hooks, bound = false, admission = 'open', now = 0;
   const expired = entry => now - entry.lastSeenAt > (overrides.idle ?? 1_800_000)
     || now - entry.createdAt > (overrides.absolute ?? 28_800_000);
@@ -63,7 +63,8 @@ export function makeStatefulHost(tools, overrides = {}) {
     }
     let body;
     if (c.req.method === 'POST') {
-      try { body = await readRpc(c.req.raw, hooks?.maxRequestBytes ?? 2 ** 25); }
+      try { body = await readRpc(c.req.raw, hooks?.maxRequestBytes ?? 2 ** 25,
+        size => { stats.maxRequestBytes = Math.max(stats.maxRequestBytes, size); }); }
       catch (error) { return c.json({ error: 'Invalid request' }, error instanceof RangeError ? 413 : 400); }
     }
     if (!entry) {
