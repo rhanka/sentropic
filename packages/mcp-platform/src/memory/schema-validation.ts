@@ -41,7 +41,7 @@ export function validateSchema(value: unknown, schema: any, path = '$', seen = n
     if (/(_at|occurred_at|observed_at)$/.test(path) && !isValidInstant(value)) failures.push(`${path}: canonical instant required`);
     if (/cursor|sequence/.test(path) && schema.pattern === '^(0|[1-9][0-9]*)$' && !isValidCursor(value)) failures.push(`${path}: unsigned u64 required`);
   } else if (schema.type === 'integer' || schema.type === 'number') {
-    if (typeof value !== 'number' || !Number.isFinite(value) || (schema.type === 'integer' && !Number.isSafeInteger(value))) return [`${path}: finite safe ${schema.type} required`];
+    if (typeof value !== 'number' || !Number.isFinite(value) || (schema.type === 'integer' && (!Number.isSafeInteger(value) || Object.is(value, -0)))) return [`${path}: finite safe ${schema.type} required`];
     if (value < (schema.minimum ?? -Infinity) || value > (schema.maximum ?? Infinity)) failures.push(`${path}: numeric bounds`);
   } else if (schema.type === 'boolean' && typeof value !== 'boolean') failures.push(`${path}: boolean required`);
   return failures;
