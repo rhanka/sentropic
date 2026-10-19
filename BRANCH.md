@@ -2,7 +2,7 @@
 
 ## Objective
 - Consolidate into `spec/` what PR #679 merged on `main` at `1472d961e`: the host-embedded MCP provider registry, the `sentropic.artifacts` provider, the RFC 8693 token exchange, and the verbatim owner decisions.
-- Docs only: describe merged behavior, mark open follow-ups (#688, #689), add no new design.
+- Docs only: preserve the merged baseline and mark later design amendments explicitly as proposals; the 2026-10-18 owner brief authorizes the generic artifact view address, DNS/TLS ownership and reader API-access proposal.
 
 ## Scope / Guardrails
 - Scope limited to `spec/**` and `BRANCH.md`.
@@ -104,3 +104,12 @@ Actions with the following status should be included around tasks only if really
   - [x] F692-6: annotations and per-app MFA connection (three distinct facts; open owner questions kept in French).
   - [x] F692-7: terminology repair (`SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md:7`) and dated status layer (#688 merged, #689 open).
   - [x] Push and amendment-to-commit table in `.h2a/reviews/pr692_amend-v2.md` (gitignored, not committed).
+
+- [ ] **Lot 4 — Generic view hosting proposal (owner brief `AGENT_SIG:7f3a9c2e1b`)**
+  - [x] Verify branch with `harness check branch`; read D5, #703 content code, #861 dossier/annex and governance boundaries.
+  - [x] Preserve all five verbatim owner inputs, including the correction: URL/API are orientation; only Sentropic/package ownership and host configuration are decided.
+  - [x] Specify package-owned configuration, DNS/TLS reconciliation, reader BFF, cookies/CORS/CORP and source-versus-proposal boundaries in `spec/SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md`.
+  - [x] Reconcile two independent design passes (contracts/DNS and browser authority); specify pinned execution, transaction placement and cookie protections. Formal review across different hosts was not established; no consensus approval claimed.
+  - [x] Gate: inspect the documentation diff, run `make scope-check` and `git diff --check`; scope remains `spec/**` and `BRANCH.md` only.
+  - [ ] Delivery: commit under 150 changed lines via `make commit`, push without merging and verify remote HEAD/CI status.
+  - [x] Runtime tests/UAT: not applicable to this specification-only change; future qualification criteria are explicit in the proposal.
