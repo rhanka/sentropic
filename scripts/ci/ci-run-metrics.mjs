@@ -272,6 +272,51 @@ export function budgetVerdict({ classificationSeconds = null, verdictSeconds = n
     pending: statuses.some((status) => status === 'to-measure') };
 }
 
+// Cancellation ownership: every cancelled row retains its run/attempt/job
+// identity so a superseded PR attempt stays distinguishable from the current
+// release. A cancellation below its run's latest attempt is superseded;
+// one in the latest attempt is current; a cancelled row without an
+// identified attempt is unidentified and blocks ownership.
+export function cancellationOwnership(records) {
+  const latest = new Map();
+  for (const record of records ?? []) {
+    const attempt = Number.isFinite(record?.attempt) ? record.attempt : null;
+    if (attempt === null) continue;
+    const run = record?.runId ?? 'unknown';
+    if (!latest.has(run) || attempt > latest.get(run)) latest.set(run, attempt);
+  }
+  const cancelled = [];
+  let superseded = 0;
+  let unidentified = 0;
+  for (const record of records ?? []) {
+    if (record?.conclusion !== 'cancelled') continue;
+    const attempt = Number.isFinite(record?.attempt) ? record.attempt : null;
+    if (attempt === null) {
+      unidentified += 1;
+      cancelled.push({ key: jobKey(record), ownership: 'unidentified' });
+      continue;
+    }
+    const ownership = latest.has(record?.runId ?? 'unknown')
+      && attempt < latest.get(record?.runId ?? 'unknown') ? 'superseded' : 'current';
+    if (ownership === 'superseded') superseded += 1;
+    cancelled.push({ key: jobKey(record), runId: record.runId, attempt, ownership });
+  }
+  return { cancelled, cancelledCount: cancelled.length, superseded, unidentified };
+}
+
+// Release continuity: rollback and cancellation never stop the current
+// release. Every release endpoint must be measured (each mapped member with
+// a duration); anything else is an interruption carrying its readiness status.
+export function releaseContinuity(records, endpoints = {}) {
+  const readiness = endpointReadiness(records, endpoints);
+  const perEndpoint = {};
+  for (const [endpoint, state] of Object.entries(readiness)) {
+    perEndpoint[endpoint] = { status: state.status, continuous: state.status === 'measured' };
+  }
+  return { continuous: Object.values(perEndpoint).every((entry) => entry.continuous),
+    endpoints: perEndpoint };
+}
+
 // Summarize one captured run file. Buckets are disjoint: skipped rows are
 // reported separately and never counted as measured; rows with timestamp gaps
 // are unmeasured, never zero-filled. Partial means the capture holds fewer
