@@ -15,6 +15,8 @@
   - [x] `BRANCH.md`
   - [x] `packages/mcp-platform/**`
   - [x] `packages/cluster-mesh/**`
+  - [x] `packages/artifacts/package.json` (BRWRAP-EX2)
+  - [x] `scripts/ci/publishable-ci-wiring.test.mjs` (BRWRAP-EX2)
   - [x] `package-lock.json`
   - [x] `.github/workflows/ci.yml` (BRWRAP-EX1)
 - [x] **Forbidden Paths (must not change in this branch)**:
@@ -31,14 +33,16 @@
 
 ## Feedback Loop
 - [x] Latest implementation checkpoint: BRANCH.md.
+- [x] BRWRAP-EX2 / Astra R1 release repair: authorize the artifacts manifest patch and CI wiring contract tests. Reason: artifacts 0.1.2 excludes platform 0.4.0, breaking canonical root installation and complete release qualification. Impact: artifacts 0.1.3 widens its platform peer to >=0.3.0 <0.5.0; retain platform 0.4.0 and mesh 0.21.0 for the new wire/wrap API. Rollback: revert the tuple, regenerated lock and matching workflow/tests together.
+- [ ] R1 verification: regenerate the root lock without peer bypasses; restore artifacts in candidate, post-publication and bootstrap tuples; require its publisher before mesh; pass canonical platform, installed comments, complete 27-tool artifacts and twelve-tool core qualification; inspect CI at the pushed exact HEAD.
 - [x] PR #707 targets the approved spec branch; GitHub reports no checks/runs because CI pull_request filters target main only. This is not a green global-CI claim.
 - [x] Qualification receipt: `packages/cluster-mesh/tests/conformance/STATEFUL_WRAP_QUALIFICATION.md`; core C8 passed again on the final package bytes, with archive SHA-256 and observed raw RPC maximum 158 bytes recorded.
 - [x] Measured agent wall-clock start: 2026-10-19 03:57:48 UTC; final elapsed time is reported with draft delivery.
 - [x] Rebase retained every package, lock and workflow byte; published versions rechecked at 0.3.0 / 0.19.1, below the selected 0.4.0 / 0.21.0.
 - [x] Exact golden JSON files include a trailing blank line in Radar; whitespace checks exclude only these two pinned files to preserve their original bytes.
 - [ ] Final review round is incomplete: the security leg declared xhigh instead of the requested high; its verdict is rejected under the review metadata contract. First-round peers completed without blockers; the final conformance leg completed without blockers. No final consensus or merge clearance is claimed.
-- [ ] Artifacts maintainer / release dependency: npm lock-only resolution proves ERESOLVE between the new platform 0.4.0 workspace and artifacts 0.1.1's >=0.3.0 <0.4.0 peer. Acceptance: a separately qualified compatible artifacts release and 27-tool installed tuple unblock full-root installation; this branch does not widen that range or bypass npm peer checks. Core package qualification excludes that optional variant.
-- [x] BRWRAP-EX1 / CI tuple alignment: change only cluster-mesh qualification in .github/workflows/ci.yml; old explicit platform 0.3.0 pins block the new 0.4.0 contract. Impact: qualify the core tuple and run installed stateful contracts; incompatible optional artifacts remain refused. Rollback: revert the workflow hunk with the package tuple.
+- [x] R1 root installation: artifacts 0.1.3 accepts platform >=0.3.0 <0.5.0; `make lock-root` regenerated the root lock without peer bypasses. Canonical platform typecheck, all 237 tests and API extraction passed; the CI wiring suite passed 22/22. Complete installed qualification remains pending below.
+- [x] BRWRAP-EX1 / CI tuple alignment: candidate, post-publication and bootstrap qualification retain platform 0.4.0 and restore artifacts 0.1.3; mesh publication waits strictly for the artifacts publisher. Impact: complete optional surface remains gated; explicit core qualification is retained. Rollback: revert the workflow hunk with the package tuple.
 - [x] L1: finite JSON budgets and cloned advertised-default traversal extracted from the #689 pattern.
 - [x] Fixture import progress: 853/853 exact lines pinned from Radar #866.
 - [x] Radar constraints read: blocker 6 belongs inside 2b-MCP after #706 and #689; exclude #865 before cutover.

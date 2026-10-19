@@ -34,6 +34,7 @@ describe('artifacts source tuple coherence', () => {
     expect(sourceManifest.peerDependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
     expect(sourceManifest.exports?.['./mcp/artifacts']).toBeDefined();
     expect(sourceManifest.exports?.['./mcp/web-pages']).toBeUndefined();
+    expect(artifactsCompatible, 'artifacts must accept the candidate platform').toBe(true);
   });
 
   it('keeps the module catalog descriptor identical to the declared peer', () => {
@@ -64,10 +65,10 @@ describe.skipIf(!enabled || !artifactsCompatible)('installed compatible artifact
     const artifacts = consumerManifest(ARTIFACTS_PACKAGE);
     expect(artifacts.version).toBe(trainVersion('artifacts'));
     expect(satisfiesRange(artifacts.version, ARTIFACTS_RANGE)).toBe(true);
-    expect(artifacts.peerDependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
     expect(artifacts.peerDependenciesMeta?.['@sentropic/mcp-platform']).toEqual({ optional: true });
     const platform = consumerManifest('@sentropic/mcp-platform');
     expect(satisfiesRange(platform.version, MCP_PLATFORM_RANGE)).toBe(true);
+    expect(satisfiesRange(platform.version, artifacts.peerDependencies!['@sentropic/mcp-platform']!)).toBe(true);
   });
 
   it('leaves artifacts uninstalled in the plain mcp consumer', () => {
