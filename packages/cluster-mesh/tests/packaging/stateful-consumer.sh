@@ -14,6 +14,53 @@ npm install --ignore-scripts --no-audit --no-fund "$pack_dir"/*.tgz >/dev/null
 test ! -L node_modules/@sentropic/cluster-mesh
 test ! -L node_modules/@sentropic/mcp-platform
 test ! -e node_modules/@sentropic/artifacts
+node --input-type=module -e '
+  import assert from "node:assert/strict";
+  import fs from "node:fs";
+  import { createClusterMeshModules } from "@sentropic/cluster-mesh";
+  import { loadMcpPlatformToolSchemas } from "@sentropic/cluster-mesh/loaders/mcp";
+  const dir = "node_modules/@sentropic/mcp-platform";
+  const path = dir + "/package.json", saved = fs.readFileSync(path, "utf8");
+  try {
+    fs.renameSync(dir, dir + ".hidden");
+    await assert.rejects(loadMcpPlatformToolSchemas(createClusterMeshModules()), { reason: "not_installed" });
+    fs.renameSync(dir + ".hidden", dir);
+    for (const mutate of [
+      pkg => { pkg.version = "0.3.0"; },
+      pkg => { delete pkg.exports["./transport/tool-schemas"]; },
+      pkg => { pkg.exports["./transport/tool-schemas"] = { import: "./missing-members.mjs" }; },
+    ]) {
+      const pkg = JSON.parse(saved);
+      mutate(pkg);
+      fs.writeFileSync(dir + "/missing-members.mjs", "export const other = true;");
+      fs.writeFileSync(path, JSON.stringify(pkg));
+      await assert.rejects(loadMcpPlatformToolSchemas(createClusterMeshModules()));
+    }
+  } finally {
+    if (fs.existsSync(dir + ".hidden")) fs.renameSync(dir + ".hidden", dir);
+    fs.writeFileSync(path, saved);
+  }
+'
+cat > public-types.ts <<'TYPES'
+import { createStatefulMcpNamespace, type StatefulMcpHost, type StatefulMcpHooks,
+  type StatefulMcpNamespaceOptions, type VerifiedMcpRequest, type McpWrapRefusal
+} from '@sentropic/cluster-mesh/compose/mcp-stateful';
+import { createClusterMeshModules } from '@sentropic/cluster-mesh';
+import { compileMcpToolSchemas, type McpToolValidationLimits
+} from '@sentropic/mcp-platform/transport/tool-schemas';
+import { registerMcpWireTools, type McpWireRunner, type McpWireFailure
+} from '@sentropic/mcp-platform/transport/bridge';
+import { validateMcpWireResult } from '@sentropic/mcp-platform/transport/result-codec';
+declare const options: StatefulMcpNamespaceOptions;
+declare const budget: McpToolValidationLimits;
+const namespace = createStatefulMcpNamespace(createClusterMeshModules(), options);
+const validator = compileMcpToolSchemas(options.tools, budget);
+void [namespace, validator, registerMcpWireTools, validateMcpWireResult];
+type Public = StatefulMcpHost | StatefulMcpHooks | VerifiedMcpRequest | McpWrapRefusal | McpWireRunner | McpWireFailure;
+export type { Public };
+TYPES
+/tmp/cm-tools/node_modules/.bin/tsc --noEmit --target ES2022 --module NodeNext \
+  --strict --esModuleInterop --skipLibCheck --typeRoots /tmp/cm-tools/node_modules/@types public-types.ts
 mkdir -p tests/conformance
 cp "$source_root"/packages/cluster-mesh/tests/mcp-stateful*.spec.ts tests/
 cp "$source_root"/packages/cluster-mesh/tests/conformance/stateful-*.mjs tests/conformance/
