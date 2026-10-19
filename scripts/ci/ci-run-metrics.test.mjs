@@ -52,7 +52,10 @@ test('overlapping PR/main branches report shared execution time', () => {
 test('reruns do not double-count carried-forward jobs', () => {
   const first = job({ runId: 7, attempt: 1, jobId: 11 });
   const carried = job({ runId: 7, attempt: 2, jobId: 11 });
-  const fresh = job({ runId: 7, attempt: 2, jobId: 12 });
+  // A distinct execution carries a distinct name (matrix members and jobs
+  // never share a name); the same name with the same interval is one
+  // execution even under a new job ID.
+  const fresh = job({ runId: 7, attempt: 2, jobId: 12, name: 'build-ui-image' });
   const { jobs, dropped } = dedupeJobs([first, carried, fresh]);
   assert.equal(jobs.length, 2);
   assert.equal(dropped, 1);
@@ -85,6 +88,63 @@ test('concurrency peak counts overlapping measurable jobs only', () => {
     job({ jobId: 4, startedAt: null, completedAt: null }),
   ];
   assert.equal(concurrencyPeak(records), 2);
+});
+
+test('carried-forward copies under new job IDs count once; fresh intervals count separately', () => {
+  // Reference run 39113919235: `changes` is job 117635669586 in attempt 1 and
+  // job 117665333718 in attempt 2 with the same 09:04:44Z-09:04:52Z interval.
+  const first = job({
+    runId: 39113919235,
+    attempt: 1,
+    jobId: 117635669586,
+    name: 'changes',
+    startedAt: '2026-10-18T09:04:44.000Z',
+    completedAt: '2026-10-18T09:04:52.000Z',
+  });
+  const carried = job({
+    runId: 39113919235,
+    attempt: 2,
+    jobId: 117665333718,
+    name: 'changes',
+    startedAt: '2026-10-18T09:04:44.000Z',
+    completedAt: '2026-10-18T09:04:52.000Z',
+  });
+  const fresh = job({
+    runId: 39113919235,
+    attempt: 2,
+    jobId: 117665333719,
+    name: 'changes',
+    startedAt: '2026-10-18T11:38:20.000Z',
+    completedAt: '2026-10-18T11:38:28.000Z',
+  });
+  const { jobs, dropped } = dedupeJobs([first, carried, fresh]);
+  assert.equal(jobs.length, 2);
+  assert.equal(dropped, 1);
+});
+
+test('skipped rows and shared start/end boundaries do not inflate the peak', () => {
+  const sixty = job({ jobId: 1, startedAt: '2026-10-18T10:00:00.000Z', completedAt: '2026-10-18T10:01:00.000Z' });
+  const skippedAtEnd = job({
+    jobId: 2,
+    conclusion: 'skipped',
+    startedAt: '2026-10-18T10:01:00.000Z',
+    completedAt: '2026-10-18T10:01:00.000Z',
+  });
+  assert.equal(concurrencyPeak([sixty, skippedAtEnd]), 1);
+  const first = job({ jobId: 3, startedAt: '2026-10-18T10:00:00.000Z', completedAt: '2026-10-18T10:01:00.000Z' });
+  const second = job({ jobId: 4, startedAt: '2026-10-18T10:01:00.000Z', completedAt: '2026-10-18T10:02:00.000Z' });
+  assert.equal(concurrencyPeak([first, second]), 1);
+});
+
+test('an endpoint with an omitted required publisher is missing, not measured', () => {
+  const apiOnly = [job({ name: 'publish-api-image' })];
+  const both = [job({ name: 'publish-api-image' }), job({ jobId: 100, name: 'publish-ui-image' })];
+  const patterns = { images: ['publish-api-image', 'publish-ui-image'] };
+  const omitted = endpointReadiness(apiOnly, patterns);
+  assert.equal(omitted.images.status, 'missing');
+  assert.deepEqual(omitted.images.missing, ['publish-ui-image']);
+  const complete = endpointReadiness(both, patterns);
+  assert.equal(complete.images.status, 'measured');
 });
 
 test('endpoint readiness distinguishes measured, partial, missing, and to-measure', () => {
