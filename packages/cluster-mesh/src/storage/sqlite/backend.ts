@@ -106,6 +106,7 @@ export class SqliteStateBackend extends MemoryBackend {
     try {
       db.exec('BEGIN IMMEDIATE');
     } catch (error) {
+      if (!/busy|locked/i.test((error as Error)?.message ?? '')) throw error;
       throw new CanonicalOwnershipError('instance-busy', `SQLite persist could not start: ${(error as Error).message}`);
     }
     try {
