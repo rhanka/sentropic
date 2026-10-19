@@ -105,6 +105,41 @@ async function ensureAndPublish(executor: ReturnType<typeof makeExecutor>): Prom
 }
 
 describe('artifacts MCP provider', () => {
+  it('should publish accented UTF-8 text through MCP and reject ambiguous or binary text', async () => {
+    const app = makeApp();
+    const executor = createArtifactsToolExecutor({ app, defaultStorageScopeId: 'scope-1' });
+    const artifactId = await ensureAndPublish(executor);
+    const text = '<h1>Été à Montréal 🏠</h1>';
+    const file = { path: 'index.html', mimeType: 'text/html', text };
+    const publish = (files: unknown[]) => executor.invoke({
+      tool: 'artifacts_publish', actorId: OWNER, args: { artifactId, files },
+    });
+    expect((await publish([file])).status).toBe(201);
+    const current = await app.handle({ method: 'GET', path: `/current/${artifactId}`, actorId: OWNER, body: undefined });
+    const manifest = JSON.parse((current.body as { manifest: string }).manifest);
+    const digest = manifest.files[0].digest;
+    const bytes = [...Buffer.from(text, 'utf8')];
+    expect(digest).toBe(`sha256:${createHash('sha256').update(Buffer.from(bytes)).digest('hex')}`);
+    const served = await app.handle({ method: 'GET', path: `/content/${artifactId}/${digest}`, actorId: OWNER, body: undefined });
+    expect(served.body).toMatchObject({ bytes, size: bytes.length });
+    for (const invalid of [{ ...file, bytes }, { ...file, mimeType: 'image/png' }, { ...file, text: 7 }]) {
+      expect(await publish([invalid])).toEqual({ status: 400, body: { error: 'invalid_request' } });
+    }
+  });
+
+  it('should advertise exclusive bytes/text entries and text MIME restrictions', () => {
+    const publish = createArtifactsManifest().tools.find((tool) => tool.name === 'artifacts_publish');
+    const schema = publish?.inputSchema as { properties: { files: { items: Record<string, unknown> } } };
+    expect(schema.properties.files.items).toMatchObject({
+      required: ['path', 'mimeType'], additionalProperties: false,
+      properties: { bytes: { type: 'array' }, text: { type: 'string' } },
+      oneOf: [
+        { required: ['bytes'], not: { required: ['text'] } },
+        { required: ['text'], not: { required: ['bytes'] }, properties: { mimeType: { pattern: expect.any(String) } } },
+      ],
+    });
+  });
+
   it('exposes sentropic.artifacts with exactly the 15 spec tools', () => {
     expect(ARTIFACTS_PROVIDER_ID).toBe('sentropic.artifacts');
     expect([...ARTIFACTS_TOOL_NAMES]).toEqual(SPEC_TOOLS);
