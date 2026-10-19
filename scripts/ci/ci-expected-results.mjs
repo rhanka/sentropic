@@ -85,6 +85,42 @@ export function expandExpected(expected = []) {
   return out;
 }
 
+// Compute the intended successful DAG from the actual workflow and classifier
+// outputs, before dependent jobs dispatch. Upstream failures never shrink it.
+export function workflowExpected(workflow, context = {}) {
+  const jobs = workflow.jobs;
+  if (!jobs?.changes || !jobs['ci-gate']) throw new Error('Missing workflow jobs');
+  const selected = new Map();
+  const visiting = new Set();
+  const selection = (name) => {
+    if (selected.has(name)) return selected.get(name);
+    if (!jobs[name] || visiting.has(name)) throw new Error(`Invalid workflow dependency: ${name}`);
+    visiting.add(name);
+    const value = jobs[name].if === undefined ? true : evaluateSelection(jobs[name].if, (key) => {
+      if (key.startsWith('needs.changes.outputs.')) return context.changes?.[key.slice(22)] ?? '';
+      if (key === 'github.ref') return context.ref ?? '';
+      if (key === 'github.event_name') return context.event ?? '';
+      if (key.startsWith('inputs.')) return context.inputs?.[key.slice(7)] ?? 'none';
+      const dependency = key.match(/^needs\.([\w-]+)\.result$/)?.[1];
+      if (dependency) return selection(dependency) ? 'success' : 'skipped';
+      throw new Error(`Unsupported selection context: ${key}`);
+    });
+    visiting.delete(name);
+    selected.set(name, value);
+    return value;
+  };
+  return Object.entries(jobs).filter(([name]) => !['ci-gate', 'ci-capacity-receipts'].includes(name))
+    .flatMap(([name, job]) => {
+      const matrix = job.strategy?.matrix;
+      if (matrix && (Object.keys(matrix).some((key) => key !== 'include') || !Array.isArray(matrix.include))) {
+        throw new Error(`Unsupported workflow matrix: ${name}`);
+      }
+      if (job.name !== undefined) throw new Error(`Unsupported workflow job name: ${name}`);
+      const members = matrix?.include.map((member) => `${name} (${Object.values(member).join(', ')})`);
+      return expandExpected([{ job: name, members, selected: selection(name) }]);
+    });
+}
+
 export function evaluateExpected({ expected = [], executed = [] } = {}) {
   const executedByJob = new Map();
   for (const row of executed) {

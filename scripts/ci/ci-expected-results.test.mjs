@@ -1,7 +1,7 @@
 // ci-expected-results fixtures (make test-ci-expected-results).
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { evaluateExpected, evaluateSelection } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
@@ -15,6 +15,27 @@ test('should evaluate workflow selection expressions without running expression 
   for (const expression of ["unknown()", "true; process.exit()", "(true", "true false"]) {
     assert.throws(() => evaluateSelection(expression, lookup), /Unsupported|Expected|Unexpected/);
   }
+});
+
+test('should derive selected expanded members before dispatch independently of received results', () => {
+  const workflow = { jobs: {
+    changes: {}, 'validate-publishable-manifests': { if: 'always() && !cancelled()' },
+    'validate-ci-capacity-metrics': { if: 'always() && !cancelled()' },
+    'test-e2e': { if: "needs.changes.outputs.global == 'true'", strategy: { matrix: { include: [
+      { group: 'group-a', e2e_groups: '00 02' }, { group: 'group-b', e2e_groups: '01 04' },
+    ] } } },
+    'publish-api-image': { if: "github.ref == 'refs/heads/main'" },
+    'ci-gate': {}, 'ci-capacity-receipts': {},
+  } };
+  const expected = workflowExpected(workflow, { changes: { global: 'true' }, ref: 'refs/pull/705/merge' });
+  const names = expected.filter((row) => row.selected).map((row) => row.job);
+  assert.deepEqual(names, ['changes', 'validate-publishable-manifests', 'validate-ci-capacity-metrics',
+    'test-e2e (group-a, 00 02)', 'test-e2e (group-b, 01 04)']);
+  assert.equal(expected.find((row) => row.job === 'publish-api-image').selected, false);
+  assert.equal(evaluateExpected({ expected, executed: [ran('changes', 'success')] }).ok, false);
+  const minimal = workflowExpected(workflow, { changes: {} });
+  assert.equal(evaluateExpected({ expected: minimal, executed: [ran('changes', 'success'),
+    ran('validate-publishable-manifests', 'skipped'), ran('validate-ci-capacity-metrics', 'skipped')] }).ok, false);
 });
 
 test('all-success selected sets pass', () => {
