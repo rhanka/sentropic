@@ -82,8 +82,8 @@ Deliver the node:sqlite L3a backend for the eight transactional profiles with th
   - [x] Fixture plus shared-corpus SQLite specs: `tests/storage/sqlite-fixture.ts`, `tests/storage/sqlite-corpus.spec.ts`, `tests/storage/sqlite-lanes.spec.ts`.
   - [x] Ownership and fencing spec: `tests/storage/instance-ownership.spec.ts` covering double-acquire refusal, stale-epoch refusal, terminal loss, tampered-ownership commit refusal with rollback.
   - [x] New make targets in `tests/storage/sqlite.mk` for `cluster-mesh-sqlite-test`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh ENV=test-cm-sqlite`
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh ENV=test-cm-sqlite`
     - [ ] **API tests**
       - [ ] No API surface changed, no API test updates.
       - [ ] Sub-lot gate: not applicable, cluster-mesh package gate applies.
@@ -91,10 +91,11 @@ Deliver the node:sqlite L3a backend for the eight transactional profiles with th
       - [ ] No UI surface changed, no UI test updates.
     - [ ] **E2E tests**
       - [ ] No E2E surface changed, no E2E test updates.
-    - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/sqlite-corpus.spec.ts ENV=test-cm-sqlite`
-    - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/instance-ownership.spec.ts ENV=test-cm-sqlite`
-    - [ ] Sub-lot gate: `make test-cluster-mesh SCOPE=tests/storage/ ENV=test-cm-sqlite`
-    - [ ] `make scope-check` clean before every commit.
+    - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/sqlite-corpus.spec.ts ENV=test-cm-sqlite`
+    - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/instance-ownership.spec.ts ENV=test-cm-sqlite`
+    - [x] Sub-lot gate: `make test-cluster-mesh SCOPE=tests/storage/ ENV=test-cm-sqlite`
+    - [x] Full pg sweep for the additive hook: all `postgres-*` suites green on live Postgres.
+    - [x] `make scope-check` clean before every commit.
 - [ ] **Lot 2 — Deferred to follow-up branches (out of scope here)**
   - [ ] Roots, staging, SPI, journal, claims, lifecycle, crash hardening per plan S2 through S4.
   - [ ] Postgres deferred guard asset and session admission per plan G-P0a through G-P1.
