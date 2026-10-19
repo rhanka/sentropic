@@ -79,7 +79,8 @@ it('combines SDK cancellation and host session expiry without later effects or d
     await entered.promise;
     if (abortSource === 'sdk') controller.abort();
     else { host.setNow(11); await host.sweep(); }
-    await aborted.promise; await pending;
+    await aborted.promise;
+    await pending;
     expect(effects).toBe(0);
     await connection.client.close(); await host.close();
     expect(host.stats.closes).toBe(1);

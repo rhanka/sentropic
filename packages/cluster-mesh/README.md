@@ -148,9 +148,9 @@ providers stay independent packages and never depend on cluster-mesh. They are
 | `/gateway/auth-hono` (session mode) | `@sentropic/llm-gateway/auth-hono` | gateway + `@sentropic/auth-hono ^0.15.0 \|\| ^0.16.0` |
 | `/loaders/<leaf>` | async typed loader (`loadLlmMesh`, `loadGateway`, `loadGatewayAuth`, ...) | as its leaf, resolved on call |
 | `/compose/llm-mesh`, `/compose/gateway` | `createLlmMeshNamespaceModule`, `createGatewayNamespaceModule` | as the loaders they call |
-| `/mcp/registry`, `/mcp/stdio` | `@sentropic/mcp-platform` MCP kernel entries | `@sentropic/mcp-platform >=0.3.0 <0.4.0` (plus `@modelcontextprotocol/sdk ^1.31.0` for the stdio transport) |
+| `/mcp/registry`, `/mcp/stdio` | `@sentropic/mcp-platform` MCP kernel entries | `@sentropic/mcp-platform >=0.4.0 <0.5.0` (plus `@modelcontextprotocol/sdk ^1.31.0` for the stdio transport) |
 | `/compose/mcp`, `/loaders/mcp` | `createMcpNamespaceModule`, `loadMcpPlatform{Registry,Stdio,Bridge,Entry,Hono}` | as its leaf, resolved on call |
-| `/mcp/artifacts` | `createArtifactsBuiltin` over `@sentropic/artifacts/mcp` | `@sentropic/artifacts >=0.1.0 <0.2.0`, `@sentropic/mcp-platform >=0.3.0 <0.4.0` |
+| `/mcp/artifacts` | `createArtifactsBuiltin` over `@sentropic/artifacts/mcp` | `@sentropic/artifacts >=0.1.0 <0.2.0`, `@sentropic/mcp-platform >=0.4.0 <0.5.0` |
 
 The `./mcp/artifacts` export provides the `sentropic.artifacts` builtin factory;
 its optional `@sentropic/artifacts >=0.1.0 <0.2.0` peer must be installed when
@@ -364,3 +364,41 @@ Manual publication is forbidden. For the first release, merge the validated pack
 run the `ci.yml` workflow with `bootstrap_publish_target=cluster-mesh`, then attach the
 npm OIDC trusted publisher to `rhanka/sentropic` and `ci.yml`. Later releases use the
 repository CI publication path.
+# Stateful MCP wrapping (0.21.0)
+
+`createStatefulMcpNamespace` from `@sentropic/cluster-mesh/compose/mcp-stateful`
+wraps an existing host through the explicit StatefulMcpHost contract. Select
+`@sentropic/mcp-platform >=0.4.0 <0.5.0` and the MCP SDK peer. The host owns
+authentication, HTTP budgets, server/transport/session objects, ownership and
+expiry rules, cancellation and close-once cleanup. The composer owns immutable
+request authority, digest-bound registry/schema preflight and per-call policy
+followed by live account/domain authorization.
+
+The host's `bind` must pause new dispatch including initialize, drain old calls
+to their existing deadline, register both bridge handlers on every existing
+public McpServer.server, clear obsolete bearer state, disable high-level tool
+updates, and register all future servers before connect. Drain timeout precedes
+mutation; installation failure keeps admission closed with safe 503 responses.
+The composer binds once and caches the complete host router. Mount that router
+at root to retain /mcp and public protected-resource metadata paths:
+
+```ts
+const wrapped = await createStatefulMcpNamespace(modules, options);
+const plugin = createClusterMeshPlugin({
+  runtime, namespaces: [wrapped], mounts: { '/mcp': '/' },
+});
+```
+
+The host alone sees credentials and passes sanitized SDK requests. Domain
+callbacks receive verified, frozen claims/attributes and combined cancellation;
+never raw requests, bearer values or an exchange capability. Claim labels must
+have host-evaluated verified predicates. Protected remote access fails closed
+until the separately authorized exchange integration. This release does not
+activate Radar's receiver #865 or its production cutover.
+
+Core qualification uses twelve Immo tools. Artifacts 0.1.1 excludes platform
+0.4.0 in its own peer range; selecting that optional tuple is refused until its
+maintainer releases and qualifies compatibility. No artifact peer is widened here.
+The installed consumer lane is
+`make cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=test-cm-wrap`.
+
