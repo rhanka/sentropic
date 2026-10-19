@@ -23,6 +23,7 @@ import { buildEnsureRequest } from './client.js';
 import type { ParameterSchema } from './parameters.js';
 import type { ArtifactService } from './server/service.js';
 import type { PublicationBlobStore, PublicationService } from './server/publication.js';
+import { DEFAULT_PUBLICATION_LIMITS } from './server/publication.js';
 import { createContentRuntime } from './server/runtime.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import type { ForkRecord, ForkService } from './server/fork.js';
@@ -111,8 +112,9 @@ function needString(value: unknown, name: string): string {
   return value;
 }
 
-function needBytes(value: unknown): Uint8Array {
+function needBytes(value: unknown, maxBytes: number): Uint8Array {
   if (!Array.isArray(value)) throw new Error('invalid file bytes: must be an array');
+  if (value.length > maxBytes) throw new Error('invalid publication byte budget');
   const bytes = new Uint8Array(value.length);
   for (let i = 0; i < value.length; i += 1) {
     const byte = value[i];
@@ -127,14 +129,15 @@ function needBytes(value: unknown): Uint8Array {
 /** Canonical text MIME types; parameters are omitted (encoding is always UTF-8). */
 export const TEXT_MIME_PATTERN = '^(?:text/[a-z0-9!#$&^_.+-]+|application/(?:javascript|ecmascript|json|xml|[a-z0-9!#$&^_.+-]+\\+(?:json|xml))|image/svg\\+xml)(?![\\s\\S])';
 
-function needFileBytes(entry: Record<string, unknown>, mimeType: string): Uint8Array {
+function needFileBytes(entry: Record<string, unknown>, mimeType: string, maxBytes: number): Uint8Array {
   const hasBytes = 'bytes' in entry;
   const hasText = 'text' in entry;
   if (hasBytes === hasText) throw new Error('invalid file: supply exactly one of bytes or text');
-  if (hasBytes) return needBytes(entry['bytes']);
+  if (hasBytes) return needBytes(entry['bytes'], maxBytes);
   if (typeof entry['text'] !== 'string' || !new RegExp(TEXT_MIME_PATTERN).test(mimeType)) {
     throw new Error('invalid file text: expected a string and a canonical text MIME type');
   }
+  if (Buffer.byteLength(entry['text'], 'utf8') > maxBytes) throw new Error('invalid publication byte budget');
   return new TextEncoder().encode(entry['text']);
 }
 
@@ -231,14 +234,20 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
           if (acl.storageScopeId === undefined) throw new Error('invalid request: missing storage scope');
           const rawFiles = body['files'];
-          if (!Array.isArray(rawFiles)) throw new Error('invalid request: missing files');
+          const limits = deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS;
+          if (!Array.isArray(rawFiles) || rawFiles.length === 0 || rawFiles.length > limits.maxFiles) {
+            throw new Error('invalid publication file count budget');
+          }
+          let remaining = limits.maxTotalBytes;
           const files = rawFiles.map((file: unknown) => {
             const entry = needObject(file);
             const mimeType = needString(entry['mimeType'], 'file.mimeType');
+            const bytes = needFileBytes(entry, mimeType, Math.min(limits.maxFileBytes, remaining));
+            remaining -= bytes.byteLength;
             return {
               path: needString(entry['path'], 'file.path'),
               mimeType,
-              bytes: needFileBytes(entry, mimeType),
+              bytes,
             };
           });
           const source = body['source'];
