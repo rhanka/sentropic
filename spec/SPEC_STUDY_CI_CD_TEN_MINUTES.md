@@ -150,8 +150,9 @@ kept them read 18). Reconciled receipts: 59 execution queue waits, p50 63s max
 972s, runner-minutes 148.25, delivery elapsed per endpoint (api-image 1775s,
 preprod 1893s, cluster-mesh 1392s, llm-mesh 737s; images partial because
 `publish-ui-image` was skipped), 20 observed matrix member names, cache
-identities to-measure. Attempts 1+2 deduplicate to 110 executions (58
-carried-forward copies dropped). Remaining gaps: account quota, reservation,
+identities to-measure. Attempts 1+2 hold 168 input rows; 58
+carried-forward copies dropped, 110 retained rows (60 measured executions,
+50 skipped rows). Remaining gaps: account quota, reservation,
 registry cost, contention budgets, rollback drill, and concurrent PR/main
 behavior.
 
