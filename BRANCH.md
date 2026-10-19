@@ -18,6 +18,29 @@
   - `BRANCH.md`
   - `docs/baselines/app-cm-w0/**`
   - `.h2a/owner-questions-w0.md`
+  - `.github/workflows/ci.yml`
+  - `Makefile`
+  - `package-lock.json`
+  - `packages/artifacts/**`
+  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `plan/62-BRANCH_chore-ci-capacity-metrics.md`
+  - `plan/63-BRANCH_perf-ci-native-checks.md`
+  - `plan/64-BRANCH_perf-ci-image-artifacts.md`
+  - `plan/65-BRANCH_perf-ci-parallel-dag.md`
+  - `plan/66-BRANCH_perf-ci-package-candidates.md`
+  - `plan/67-BRANCH_test-ci-deterministic-journeys.md`
+  - `plan/68-BRANCH_perf-cd-tested-artifacts.md`
+  - `plan/69-BRANCH_feat-ci-consumer-contracts.md`
+  - `plan/70-BRANCH_test-ci-ten-minute-proof.md`
+  - `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md`
+  - `spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md`
+  - `spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md`
+  - `spec/SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md`
+  - `spec/SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN_RECONCILIATION.md`
+  - `spec/SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md`
+  - `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`
+  - `spec/WORKFLOW_AUTH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -35,6 +58,7 @@
 - **Exception process**:
   - Declare `BR-CM-W0-EXn` with reason, impact and rollback before any scope expansion.
   - [x] `BR-CM-W0-EX1`: owner follow-up explicitly requests `.h2a/owner-questions-w0.md` in French; impact is one decision-preparation record, no operator/key assignment; rollback removes that record. Other records remain English.
+  - [x] `BR142-EX2`: owner follow-up explicitly requests merging origin/main `cf0ad8ee44f9bb7cf4ad1222a468172f0f77fc2d` into W0. Temporary additional Allowed Paths cover inherited upstream bytes only; no W0 implementation edits there. Impact: main history and its existing package/lock/CI/spec/plan changes enter this branch; rollback: owner-authorized merge revert. Remove these temporary allowances after integration; no PR merge or deployment is authorized.
 
 ## Feedback Loop
 - [ ] `attention`: F1/F2 read-only collection is recorded in cluster-readings.md and recovery-readings.md; serving-tenant Kubernetes/DB/object access and current recovery/ACL/disposition evidence remain missing.
@@ -57,6 +81,7 @@
 - [ ] **Lot 0 — Baseline and evidence boundaries**
   - [x] Read MASTER/workflow, README/TODO/PLAN, branch template and approved owner request/plan.
   - [x] Mechanical `harness check branch` passes; branch is clean and starts at pinned main.
+  - [x] Follow-up: verify branch, pull its remote with fast-forward only, and prepare the explicitly requested main integration under BR142-EX2; Track event blobs are identical on both tips.
   - [x] Record available runtime evidence, pending operator facts, endpoint parity, configured domains and generated-content authorities in `docs/baselines/app-cm-w0/baseline.md`.
   - [x] Pin exact releases, selected peers, integrities and lock/config hashes in `published-tuple.json`.
   - [x] F1/F2 follow-up: add standalone read-only metadata/archive collectors; validate COPY counting with a two-table fixture before recording historical aggregates.
