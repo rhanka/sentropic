@@ -17,6 +17,9 @@
   - [x] `packages/artifacts/**`
   - [x] `package-lock.json`
   - [x] `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts`
+  - [x] `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - [x] `packages/cluster-mesh/tests/packaging/prepare.sh`
+  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
   - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`
   - [x] `tools/memory-mcp-l5/artifacts/history/**`
@@ -32,8 +35,11 @@
   - [x] `.github/workflows/**`
 - [x] Exception process: document BRAH-EXn with reason, impact and rollback before sensitive edits.
 - [x] BRAH-EX1 (owner CI repair packet): allow only the artifacts consumer version assertion and P1 manifest/history refresh; impact is test/release provenance, with the 44 contracts and archive bytes unchanged; rollback restores the retained P1 and previous assertion.
+- [x] BRAH-EX2 (owner second CI repair packet): allow the selected artifacts lock entry, tuple assertions and batched fixture-version reads; impact is packed-consumer verification only, with integrity enforcement and timeouts retained; rollback restores those qualification hunks.
 
 ## Feedback Loop
+- [x] Run `39320255479`, job `118292763317`: all 932 unit tests pass; packed lazy qualification rejects selected lock artifacts 0.1.2 against verified candidate 0.1.4 (version, registry URL and SHA-512 mismatch).
+- [x] First repaired packed run: sibling integrity and installed tuple pass; 77/78 tests pass, but the offline preparation test takes 5530 ms against 5000 ms under parallel workers. Batch tuple manifest reads instead of spawning Node for every package; retain the timeout and full parallel qualification.
 - [x] Run `39279553217`: L5 rejects the artifacts lockfile change (`manifest freeze/lock mismatch`); Cluster Mesh expects artifacts provider `0.1.2`, receives `0.1.4`; `ci-gate` propagates those two failures.
 - [x] Preserve the separate durable L5 dependency-fingerprint proposal at `.tmp/l5-p1-lockfile-coupling.md`; do not implement it in this branch.
 - [x] Version coordination: open PR #707 reserves artifacts 0.1.3 and widens the optional platform peer to >=0.3.0 <0.5.0; this branch selects the next patch 0.1.4 and retains that widening. Both current mesh >=0.1.0 <0.2.0 and #707's >=0.1.3 <0.2.0 accept 0.1.4.
@@ -90,3 +96,11 @@
   - [x] After rebase, `npm view @sentropic/artifacts version` in Docker confirms published `0.1.2` < candidate `0.1.4`.
   - [x] `memory-l5-gate LOT=1` passed (228 tests); artifacts typecheck/lint and 183 unit tests passed; packed core/consumer/adapter proofs passed with platform 0.3.1 and artifacts 0.1.4.
   - [x] Scope checks passed; deliver the repaired draft branch with a lease on original remote head `2ebe21ef8`, without merging, marking ready or publishing.
+- [x] **Lot 7 — Packed Cluster Mesh CI repair**
+  - [x] Reproduce the exact same-PR sibling qualification and refresh only the artifacts candidate entry through the Make lock-refresh lane; retain four artifacts metadata changes and discard unrelated refresh churn.
+  - [x] Candidate SHA-256 `7755caf83e487f52d0a732beb306a783b8a1da9bb8270bac2e0e731a9567f918` matches the CI archive exactly; the sibling integrity guard passes.
+  - [x] Cover source/selected candidate version coherence (regression fails on 0.1.2) and validate the installed platform against both consumer peer ranges (six tuple tests pass).
+  - [x] Batch ten tuple version reads in one Node process; the offline preparation check passes in 1202 ms on the focused lane, with the original 5000 ms timeout.
+  - [x] Final gates: lint/typecheck and guarded pack pass; 933 unit tests pass (126 conditional skips); full parallel packed lazy qualification passes all 78 tests with verified sibling receipts and unchanged timeouts.
+  - [x] Clean candidate install with the exact CI peers and artifacts sibling passes every declared Node entry point; candidate Cluster Mesh SHA-256 `79ac243b77b480d02f8b17467af37b2daa6fd8997f56bdb79f4f4e138ef2da88` matches CI.
+  - [x] Delivery constraints: selective staging, scope-check before make commit, push the draft branch; no merge, ready transition or publication.
