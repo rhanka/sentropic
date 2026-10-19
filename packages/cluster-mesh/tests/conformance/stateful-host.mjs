@@ -27,11 +27,18 @@ export function makeStatefulHost(tools, overrides = {}) {
       if (bound) throw new Error('Already bound');
       bound = true; admission = 'binding';
       // Admission remains closed while admitted POST operations finish.
-      await Promise.all([...pending]);
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          admission = 'failed'; reject(new Error('Host drain deadline exceeded'));
+        }, overrides.drainTimeoutMs ?? 1_000);
+        Promise.all([...pending]).then(() => { clearTimeout(timer); resolve(); },
+          error => { clearTimeout(timer); reject(error); });
+      });
       try {
         for (const entry of sessions.values()) {
           if (overrides.failInstall) overrides.failInstall(entry.server.server);
           nextHooks.register(entry.server.server);
+          entry.server.disableToolUpdates();
         }
         hooks = nextHooks;
         admission = 'open';
@@ -67,7 +74,7 @@ export function makeStatefulHost(tools, overrides = {}) {
         return overrides.oldInvoke ? overrides.oldInvoke(name) : { content: [] };
       });
       stats.servers++; stats.transports++;
-      if (hooks) hooks.register(server.server);
+      if (hooks) { hooks.register(server.server); server.disableToolUpdates(); }
       const lifetime = new AbortController();
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: () => crypto.randomUUID(), enableJsonResponse: true,

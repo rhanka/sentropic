@@ -55,8 +55,15 @@ export const validInitialize = body => InitializeRequestSchema.safeParse(body).s
 
 export function oldServer(tools, oldInvoke) {
   const server = new McpServer({ name: 'immo', version: '0.0.1' });
-  for (const tool of tools) server.registerTool(tool.name, {
+  const handles = tools.map(tool => server.registerTool(tool.name, {
     title: tool.title, description: tool.description,
-  }, () => oldInvoke(tool.name));
+  }, () => oldInvoke(tool.name)));
+  server.disableToolUpdates = () => {
+    const refuse = () => { throw new Error('Host tool updates are disabled after wrapping'); };
+    for (const handle of handles) {
+      for (const method of ['update', 'remove', 'enable', 'disable']) handle[method] = refuse;
+    }
+    server.registerTool = refuse; server.tool = refuse;
+  };
   return server;
 }
