@@ -5,8 +5,8 @@ It does not qualify Radar domain handlers, production signals or cutover.
 
 ## Package tuple and integrity
 
-Published versions observed before implementation and after rebase:
-`mcp-platform@0.3.0`, `cluster-mesh@0.19.1`.
+Published versions rechecked after merging main `3556df5c6`:
+`mcp-platform@0.3.1`, `cluster-mesh@0.19.1`, `artifacts@0.1.2`.
 The selected unpublished candidates are `mcp-platform@0.4.0`,
 `cluster-mesh@0.21.0` and `artifacts@0.1.3`.
 Artifacts 0.1.3 widens its platform peer to `>=0.3.0 <0.5.0`, retaining
@@ -16,19 +16,24 @@ No publication or merge was performed.
 
 | Installed archive | SHA-256 |
 | --- | --- |
-| sentropic-mcp-platform-0.4.0.tgz | e5e411a08e102be079f2cd7710d9fcd1cb1c3a1951dd1d5c0298ccc12cdc15e2 |
-| sentropic-cluster-mesh-0.21.0.tgz | c6d02aff7e6aa9e5e7088103ee121768eea8827c1457ddf8ae87a85b2187ff36 |
+| sentropic-mcp-platform-0.4.0.tgz | 67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5 |
+| sentropic-cluster-mesh-0.21.0.tgz | af4e08afa58c8461677ce880d16234d3e34a646a05a83329fc7ce7297d0c4dfe |
 | sentropic-artifacts-0.1.3.tgz | 919242fc36f456d25ac635c78701bb62588fdfc43ac4362018bc8eac6ee533ca |
 
 These exact archives passed public-subpath imports, strict consumer TypeScript,
 missing/incompatible/export/member refusal probes and 15 installed tests covering
-C1–C7. The core consumer contains no workspace symlinks or artifacts dependency.
+C1–C7. The core consumer declares only mesh as a runtime dependency; platform
+resolves transitively. Authentication test tools remain dev dependencies. There
+are no workspace symlinks or artifacts dependency.
 The same installed tree then installs the artifacts archive and passes the
 27-tool variant: all twelve captured Immo calls, fifteen discovered artifacts
 tools, a real artifacts executor call, verified actor propagation, account
 refusal before invocation, and warm session identity.
 
 ## Checks
+
+The table records the original R1 checks; the resume checks below use the merged
+sources and the embedded-platform consumer.
 
 | Command, with ENV=test-cm-wrap last | Result |
 | --- | --- |
@@ -41,6 +46,38 @@ refusal before invocation, and warm session identity.
 | make test-publishable-manifests | 86 passed, including all three complete release tuples and publisher ordering |
 | make -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json | 77 passed, including compatible artifacts and verified archive integrity |
 | make scope-check -o build-harness | passed before every implementation commit after the initial harness build |
+
+## Resume checks after main integration
+
+All commands below use `ENV=test-cm-mcp-wrap` last.
+
+- `make typecheck-cluster-mesh test-cluster-mesh lint-cluster-mesh`: passed;
+  987 tests passed, 129 tests retain their environment gates.
+- `make cluster-mesh-workspace CM_ACTION=stateful-consumer`: 15 core tests,
+  public TypeScript, refusal probes and the combined 27-tool test passed.
+  Host imports use mesh entries only, including the artifacts executor.
+- `make test-publishable-manifests`: 86 tests passed.
+- `make test-qualify-published-install`: 18 tests passed.
+- `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`:
+  passed, including packed/source graphs, typechecks, tooling and memory/broker tests.
+- `make test-mcp-platform`: all 345 tests passed after main integration.
+- `make pack-publishable-manifest PACKAGE=cluster-mesh`: guarded candidate passed,
+  matching the mesh archive above. `make qualify-published-install` with the CI
+  optional-peer tuple and guarded sibling receipts passed all 34 import checks.
+- `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` and
+  `test-lazy-package`, using the guarded sibling receipts: passed, 77 tests.
+  The frozen lock now records the normal embedded-platform dependency and the
+  merged platform archive integrity. Packaging runs with one worker; the offline
+  preparation test passed in 2.16s, within its unchanged 5s budget.
+- `make memory-l5-pack STAGE=pre-candidate`: regenerated and verified two archives
+  and 44 contracts. P1 manifest SHA-256:
+  `732b96bc3284fb6f38cf031bd33a9cfe341ee7bc8129741f7e9726a371b66d53`.
+  The private broker now resolves platform ^0.4.0; the prior P1 proof is retained
+  under its immutable history identity. Both public API extractors passed.
+- Harness C1 and C2 passed for the authored changes. During the main merge,
+  the local C2 command reported inherited main paths; mechanical C2 on the
+  conflict-resolution paths passed, and inherited files matched main exactly.
+  Track containment retained all 342 event IDs without a Track write.
 
 Fixture SHA-256 is checked before JSON parsing. The receipt's externalResource is
 `https://preprod.immo.sent-tech.ca/mcp`, matching the signed test audience/resource.
