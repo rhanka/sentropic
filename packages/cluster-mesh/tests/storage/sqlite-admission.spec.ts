@@ -52,6 +52,21 @@ describe('SQLite independent admission and persistence rollback', () => {
     } finally { f.close(); }
   });
 
+  it('should not expose a barrier from an atomic commit whose SQLite persistence failed', async () => {
+    const f = createSqliteFixture();
+    try {
+      const b = f.kernel.bindNew(f.grant()) as any;
+      await b.appendChain('seed', record('seed'), absent);
+      f.kernel.engine.db.exec("CREATE TRIGGER review_refuse BEFORE INSERT ON cm_scopes BEGIN SELECT RAISE(ABORT, 'review persistence refusal'); END");
+      const unit = { guards: [], records: [], appends: [], updates: [], relationships: [],
+        barriers: [{ boundary: 'seed', reason: 'review barrier' }], purgeIntents: [], indexWrites: [] };
+      try {
+        await assert.rejects(b.capability('atomic-units-v1').port.commitAtomic(unit), /review persistence refusal/);
+      } finally { f.kernel.engine.db.exec('DROP TRIGGER review_refuse'); }
+      assert.equal(await b.readHead('seed'), 'hash-seed', 'rejected barrier must not hide committed data');
+    } finally { f.close(); }
+  });
+
   it('should refuse a concurrent reader before rejected bytes escape', async () => {
     const f = createSqliteFixture();
     try {

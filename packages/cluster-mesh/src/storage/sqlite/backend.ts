@@ -77,6 +77,14 @@ export const decodeScopeState = (json: string): BackendScopeState => {
   return state;
 };
 
+export interface SqliteScopeSnapshot {
+  /** Encoded ordinary state, or null when the scope has no loaded state yet. */
+  readonly state: string | null;
+  /** Pre-operation staged attachment reference. Attachments are frozen at
+   * publication, so holding the reference across the persist is safe. */
+  readonly attachment: unknown;
+}
+
 export class SqliteStateBackend extends MemoryBackend {
   private readonly knownScopes = new Map<string, StorageScope>();
   private admitted = false;
@@ -125,23 +133,24 @@ export class SqliteStateBackend extends MemoryBackend {
 
   /** Pre-mutation snapshot for atomic rollback: a rejected persist must
    * not leave the in-memory root, receipts or related state published.
-   * Null when the scope has no loaded state yet. */
-  snapshotScope(scope: StorageScope): string | null {
+   * The snapshot carries the pre-operation staged attachment, so restoring
+   * it also retracts rejected visibility effects (barriers, coverage,
+   * disposal) instead of retaining them from the rejected successor. */
+  snapshotScope(scope: StorageScope): SqliteScopeSnapshot {
     const state = this.scopes.get(backendScopeKey(scope));
-    if (!state) return null;
-    return encodeScopeState(state);
+    if (!state) return { state: null, attachment: undefined };
+    return { state: encodeScopeState(state), attachment: state.attachment };
   }
 
-  restoreScope(scope: StorageScope, snapshot: string | null): void {
+  restoreScope(scope: StorageScope, snapshot: SqliteScopeSnapshot): void {
     const key = backendScopeKey(scope);
-    if (snapshot === null) {
+    if (snapshot.state === null) {
       this.scopes.delete(key);
       this.knownScopes.delete(key);
       return;
     }
-    const live = this.scopes.get(key);
-    const restored = decodeScopeState(snapshot);
-    if (live?.attachment !== undefined) Object.assign(restored, { attachment: live.attachment });
+    const restored = decodeScopeState(snapshot.state);
+    if (snapshot.attachment !== undefined) Object.assign(restored, { attachment: snapshot.attachment });
     this.scopes.set(key, restored);
   }
 
