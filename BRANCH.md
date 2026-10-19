@@ -7,6 +7,7 @@
 - [x] Documentation only: runtime implementation, publication, deployment and token exchange activation are separate work.
 - [x] Preserve the owner decision of 2026-10-14 (Hosting B), current identifiers and tools; require no forced hosted-client reconnection.
 - [x] Keep token exchange disabled until #689 and explicit owner GO; prohibit user-bearer passthrough and legacy fallback.
+- [x] Radar blocker 6 lands inside 2b-MCP with wrapping and exchange after #706 is built and #689 is merged; exclude #865 from candidate SHAs before that cutover.
 - [x] Worktree: `tmp/worktrees/cm-mcp-stateful-wrap`; branch: `spec/cluster-mesh-mcp-stateful-wrap`; base: `origin/main` at `ab2138d605816cc278fbfd2cf88968ffcfbdb649`.
 - [x] Make-only commands with ENV last; English artifacts; selective staging and commits under 150 changed lines via `make commit`.
 - [x] Validation environment: `test-cm-mcp-stateful-wrap`; no services or ports allocated; root dev remains untouched.
@@ -35,6 +36,8 @@
 - [x] 2026-10-18 / spec author / acknowledge: #689 remains open at `811455a5b3724999828e4b313057d78cb26323e3`; its schema/session code is reuse material, not evidence of released Immo parity.
 - [x] 2026-10-18 / spec author / attention: protected live signals cannot satisfy full production parity with exchange disabled and bearer forwarding prohibited; release/cutover gates must expose this dependency.
 - [x] Design findings reconciled: verified claims/domain attributes, safe protocol-error handling, concrete public SDK handler replacement under an admission barrier, and compatible optional artifacts tuple.
+- [x] Sol round 1 approved the specification at `f560d073b9c0d04fd5947e018a7abb2632e302ed` (`.h2a/reviews/pr706_sol_r1.md`), with no requested edits; approval covers the contract, not runtime or cutover evidence.
+- [x] 2026-10-19 / Radar integration owner / constraint incorporated: Q-A1 = A keeps the 0.1.0 safety net before 2b-MCP, the 0.2.2 upgrade/canonical challenge/ordered mounts inside it, and #865 outside pre-cutover candidate SHAs.
 - [ ] Formal review acceptance remains pending: both independent report writes were rejected by H2A_SCOPE:FOREIGN_WORKSPACE; recovered findings were addressed, but no completed consensus is claimed.
 - [ ] Track import: designated repository writer imports this branch plan and links the three existing item IDs; this worktree does not append to the shared event log.
 
@@ -67,6 +70,7 @@
   - [x] Gate: distinguish proposed runtime checks from evidence actually produced by this documentation branch.
 - [x] **Lot 4 — Docs consolidation and review**
   - [x] Reconcile recovered review findings and record the incomplete formal review; verify references, signatures, dependency ranges and acceptance criteria.
+  - [x] Integrate the 2026-10-19 Radar constraints across decisions, auth deltas, release sequencing, L5 and cutover gates; align signal-parity acceptance with the exchange-first, strict-receiver-second sequence; read Sol's approval without claiming a completed consensus.
   - [x] Keep the standalone EVOL spec; no temporary BRANCH_SPEC_EVOL document is needed.
 - [x] **Lot 5 — Final validation and draft PR**
   - [x] Run `make scope-check ENV=test-cm-mcp-stateful-wrap` before every commit; inspect the complete diff and whitespace.
