@@ -106,3 +106,91 @@ export function concurrencyPeak(records) {
   }
   return peak;
 }
+
+// Summarize one captured run file. Buckets are disjoint: skipped rows are
+// reported separately and never counted as measured; rows with timestamp gaps
+// are unmeasured, never zero-filled. Partial means the capture holds fewer
+// distinct jobs than expectedJobCount (null expectation means unknown).
+export function summarizeRun(records, { expectedJobCount = null } = {}) {
+  const { jobs, dropped } = dedupeJobs(records);
+  let measured = 0;
+  let unmeasured = 0;
+  let skipped = 0;
+  let gaps = 0;
+  const spans = [];
+  for (const job of jobs) {
+    if (job?.conclusion === 'skipped') {
+      skipped += 1;
+      continue;
+    }
+    const span = durationSeconds(job?.startedAt, job?.completedAt);
+    if (span === null) {
+      unmeasured += 1;
+      if (isTimestampGap(job)) gaps += 1;
+    } else {
+      measured += 1;
+      spans.push(span);
+    }
+  }
+  const partial = expectedJobCount === null ? null : jobs.length < expectedJobCount;
+  return {
+    jobs: jobs.length,
+    measured,
+    unmeasured,
+    skipped,
+    timestampGaps: gaps,
+    carriedForwardCopiesDropped: dropped,
+    partial,
+    maxJobSeconds: spans.length > 0 ? Math.max(...spans) : null,
+    concurrencyPeak: concurrencyPeak(jobs),
+  };
+}
+
+// Presence of the four delivery endpoints in a record set. The caller maps
+// each endpoint to job-name substrings; matching is case-insensitive.
+// Status is measured (every mapped job present with a duration), partial
+// (present without full durations), missing (no mapped job), or to-measure
+// (the endpoint has no mapping yet).
+export function endpointReadiness(records, endpoints = {}) {
+  const result = {};
+  for (const [endpoint, patterns] of Object.entries(endpoints)) {
+    if (!Array.isArray(patterns) || patterns.length === 0) {
+      result[endpoint] = { status: 'to-measure', jobs: [] };
+      continue;
+    }
+    const matched = (records ?? []).filter((record) =>
+      patterns.some((pattern) => String(record?.name ?? '').toLowerCase().includes(String(pattern).toLowerCase())),
+    );
+    if (matched.length === 0) {
+      result[endpoint] = { status: 'missing', jobs: [] };
+      continue;
+    }
+    const withDuration = matched.filter(
+      (record) => durationSeconds(record?.startedAt, record?.completedAt) !== null,
+    );
+    result[endpoint] = {
+      status: withDuration.length === matched.length ? 'measured' : 'partial',
+      jobs: matched.map((record) => record?.name ?? String(record?.jobId ?? 'unknown')),
+    };
+  }
+  return result;
+}
+
+const usage = `usage: ci-run-metrics.mjs --run-file <captured-run.json> [--expected-jobs <n>]
+Captured file shape: { "records": [{ runId, attempt, jobId, name, conclusion,
+startedAt, completedAt }] } plus optional "endpoints": { <name>: [<pattern>] }.`;
+
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
+  const args = process.argv.slice(2);
+  if (args.includes('--help') || !args.includes('--run-file')) {
+    console.log(usage);
+    process.exit(args.includes('--help') ? 0 : 2);
+  }
+  const file = args[args.indexOf('--run-file') + 1];
+  const expectedIndex = args.indexOf('--expected-jobs');
+  const expectedJobCount = expectedIndex === -1 ? null : Number(args[expectedIndex + 1]);
+  const captured = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const summary = summarizeRun(captured.records, { expectedJobCount });
+  const readiness = endpointReadiness(captured.records, captured.endpoints ?? {});
+  console.log(JSON.stringify({ file, summary, readiness }, null, 2));
+}
