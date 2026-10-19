@@ -743,3 +743,111 @@
             "content": [
               {
                 "type": "text",
+                "text": "{\"city\":\"longueuil\",\"collectionId\":\"qc-lots-longueuil\",\"featureCollection\":{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.518,45.532],[-73.516,45.532],[-73.516,45.534],[-73.518,45.534],[-73.518,45.532]]]},\"properties\":{\"citySlug\":\"longueuil\",\"NO_LOT\":\"6 359 591\",\"zoneCode\":\"H-203\",\"zoneJoin\":\"code\",\"zone\":{\"code\":\"H-203\",\"kind\":\"H\",\"densiteLogHa\":35,\"usages\":[\"habitation\"],\"grillePdfUrl\":\"https://longueuil.example/grilles/H-203.pdf\"},\"multifamilial4plus\":true,\"multifamilial4plusSource\":\"grille\",\"superficieM2\":1240}},{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.516,45.534],[-73.51400000000001,45.534],[-73.51400000000001,45.536],[-73.516,45.536],[-73.516,45.534]]]},\"properties\":{\"citySlug\":\"longueuil\",\"NO_LOT\":\"6 359 612\",\"zoneCode\":\"H-203\",\"zoneJoin\":\"centroid\",\"zone\":{\"code\":\"H-203\",\"kind\":\"H\",\"densiteLogHa\":35,\"usages\":[\"habitation\"],\"grillePdfUrl\":\"https://longueuil.example/grilles/H-203.pdf\"},\"multifamilial4plus\":true,\"multifamilial4plusSource\":\"grille\",\"superficieM2\":1985}},{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.498,45.512],[-73.49600000000001,45.512],[-73.49600000000001,45.514],[-73.498,45.514],[-73.498,45.512]]]},\"properties\":{\"citySlug\":\"longueuil\",\"NO_LOT\":\"4 102 884\",\"zoneCode\":\"C-101\",\"zoneJoin\":\"code\",\"zone\":{\"code\":\"C-101\",\"kind\":\"C\",\"densiteLogHa\":null,\"usages\":[],\"grillePdfUrl\":null},\"multifamilial4plus\":false,\"multifamilial4plusSource\":\"heuristique\",\"superficieM2\":760}}]},\"numberReturned\":3,\"numberMatched\":3,\"truncated\":false,\"note\":\"mode mock: fixtures déterministes (aucun réseau)\"}"
+              }
+            ]
+          }
+        },
+        "get_grille_pdf": {
+          "args": {
+            "city": "longueuil",
+            "zone": "H-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"city\": \"longueuil\",\n  \"zone\": \"H-1\"\n}"
+              }
+            ]
+          }
+        },
+        "get_pv_pdf": {
+          "args": {
+            "rawRef": "pv/longueuil/2026-04-14.pdf"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"rawRef\": \"pv/longueuil/2026-04-14.pdf\"\n}"
+              }
+            ]
+          }
+        },
+        "get_reglement_provenance": {
+          "args": {
+            "muni_slug": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": true,\n  \"city\": \"longueuil\",\n  \"reglement_url\": \"https://longueuil.example/reglements/CO-2016-1187.pdf\",\n  \"reglement_numero\": \"CO-2016-1187\",\n  \"reglement_millesime\": \"2016\",\n  \"reglement_page_source\": \"12\",\n  \"reglement_ancien_numero\": \"CO-2009-500\",\n  \"reglement_ancien_millesime\": null,\n  \"reglement_ancien_source\": \"https://longueuil.example/reglements/CO-2009-500.pdf\",\n  \"has_ancien\": true,\n  \"note\": \"mode mock: fixtures déterministes (aucun réseau)\"\n}"
+              }
+            ]
+          }
+        },
+        "query_zoning_events": {
+          "args": {
+            "muni_slug": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 2,\n  \"events\": [\n    {\n      \"citySlug\": \"longueuil\",\n      \"event_id\": \"evt-longueuil-001\",\n      \"state\": \"active\",\n      \"document_type\": \"avis_motion\",\n      \"decision_state\": \"planned\",\n      \"type_instrument\": \"zonage\",\n      \"bylaw_numero\": \"CO-2026-1200\",\n      \"date_iso\": \"2026-04-14\",\n      \"zone_codes_resolus\": [\n        {\n          \"zone_code\": \"H-203\",\n          \"relation_type\": \"cite\",\n          \"score_confiance\": 1,\n          \"provenance\": \"exact_geom\"\n        }\n      ],\n      \"libelles_relation\": [\n        \"modifie CO-2016-1187\"\n      ],\n      \"url_pdf\": \"https://longueuil.example/pv/2026-04-14.pdf\",\n      \"provenance\": {\n        \"producer\": \"geo-wp3\",\n        \"source_url\": \"https://longueuil.example/pv/2026-04-14.pdf\",\n        \"as_of_date\": \"2026-04-15\"\n      }\n    },\n    {\n      \"citySlug\": \"longueuil\",\n      \"event_id\": \"evt-longueuil-002\",\n      \"state\": \"active\",\n      \"document_type\": \"adoption\",\n      \"decision_state\": \"decided\",\n      \"type_instrument\": \"zonage\",\n      \"bylaw_numero\": \"CO-2026-1187\",\n      \"date_iso\": \"2026-06-09\",\n      \"zone_codes_resolus\": [\n        {\n          \"zone_code\": \"C-101\",\n          \"relation_type\": \"cite\",\n          \"score_confiance\": 1,\n          \"provenance\": \"exact_geom\"\n        }\n      ],\n      \"provenance\": {\n        \"producer\": \"geo-wp3\",\n        \"source_url\": \"https://longueuil.example/pv/2026-06-09.pdf\",\n        \"as_of_date\": \"2026-06-10\"\n      }\n    }\n  ],\n  \"numberMatched\": 2,\n  \"truncated\": false,\n  \"note\": \"mode mock: fixtures déterministes (aucun réseau)\"\n}"
+              }
+            ]
+          }
+        }
+      },
+      "limitedScope": {
+        "token": "immo:read seulement",
+        "calls": {
+          "search_signals": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:search\",\n  \"tool\": \"search_signals\",\n  \"correlationId\": \"d318e0bb-e13b-489d-bf1c-7199da2e94f5\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "list_documents": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:documents:read\",\n  \"tool\": \"list_documents\",\n  \"correlationId\": \"fda3d360-faa8-4dda-b385-579d7d452ddb\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "search_lots": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:search\",\n  \"tool\": \"search_lots\",\n  \"correlationId\": \"c4c0b973-cb5a-4a2b-ac93-43a1834354d1\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "get_zones_geojson": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"city\":\"longueuil\",\"collectionId\":\"qc-zonage-longueuil\",\"featureCollection\":{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.52,45.53],[-73.50999999999999,45.53],[-73.50999999999999,45.54],[-73.52,45.54],[-73.52,45.53]]]},\"properties\":{\"citySlug\":\"longueuil\",\"ZONE\":\"H-203\",\"DENSITE\":35,\"URL_GRILLE\":\"https://longueuil.example/grilles/H-203.pdf\",\"kind\":\"H\",\"reglement_url\":\"https://longueuil.example/reglements/CO-2016-1187.pdf\",\"reglement_numero\":\"CO-2016-1187\",\"reglement_millesime\":\"2016\",\"reglement_page_source\":\"12\",\"reglement_ancien_numero\":\"CO-2009-500\",\"reglement_ancien_source\":\"https://longueuil.example/reglements/CO-2009-500.pdf\",\"has_ancien\":true,\"_source_url\":\"https://interne.capture/breadcrumb-ne-jamais-exposer\"}},{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.5,45.51],[-73.49,45.51],[-73.49,45.519999999999996],[-73.5,45.519999999999996],[-73.5,45.51]]]},\"properties\":{\"citySlug\":\"longueuil\",\"ZONE\":\"C-101\",\"kind\":\"C\"}}]},\"numberReturned\":2,\"numberMatched\":2,\"truncated\":false,\"note\":\"mode mock: fixtures déterministes (aucun réseau)\"}"
+              }
+            ]
+          }
+        }
+      },
+      "missingCoarseScope": {
+        "name": "Error",
+        "code": 401,
+        "message": "Streamable HTTP error: Error POSTing to endpoint: {\"error\":{\"code\":\"invalid_token\",\"message\":\"Missing required scope: immo:read.\"}}"
+      }
+    }
+  }
+}
+
