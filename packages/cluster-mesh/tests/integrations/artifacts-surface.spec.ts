@@ -191,11 +191,10 @@ describe('artifacts mesh leaf', () => {
     expect(compiled.ok).toBe(false);
   });
 
-  it('refuses the optional artifacts tuple whose declared platform peer excludes this candidate', async () => {
+  it('loads the compatible artifacts candidate through the real module registry', async () => {
     const modules = createClusterMeshModules();
-    await expect(loadArtifactsMcp(modules)).rejects.toMatchObject({
-      reason: 'incompatible_version', packageName: '@sentropic/mcp-platform',
-      installedVersion: '0.4.0', requiredRange: '>=0.3.0 <0.4.0',
-    });
+    const artifacts = await loadArtifactsMcp(modules);
+    expect(typeof artifacts.createArtifactsRegistryDefinition).toBe('function');
+    expect(artifacts.ARTIFACTS_TOOL_NAMES).toEqual(SPEC_TOOLS);
   });
 });
