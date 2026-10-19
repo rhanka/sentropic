@@ -40,6 +40,9 @@ it('requires request authority and rejects credentials or undeclared verified la
     headers: { authorization: `Bearer ${token}` },
   }));
   const authority = verifiedAuthority(principal, new AbortController().signal);
+  await expect(hooks.run({ ...authority, principal: {
+    ...authority.principal, attributes: Object.create(null),
+  } }, async () => 'finite JSON')).resolves.toBe('finite JSON');
   for (const attributes of [{ accessToken: token }, { nested: { 'authorization-header': token } }, { x: NaN }]) {
     await expect(hooks.run({ ...authority, principal: { ...authority.principal, attributes } }, async () => {})).rejects.toThrow();
   }

@@ -10,7 +10,8 @@ function frozenJson(value: unknown, active = new Set<object>(), depth = 0): unkn
   if (value === null || typeof value === 'string' || typeof value === 'boolean'
     || (typeof value === 'number' && Number.isFinite(value))) return value;
   if (typeof value !== 'object' || value === null || active.has(value)
-    || (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype)) {
+    || (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype
+      && Object.getPrototypeOf(value) !== null)) {
     throw new TypeError('Invalid verified attributes');
   }
   active.add(value);
