@@ -10,16 +10,70 @@
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
-  CallToolRequestSchema,
-  ErrorCode,
-  ListToolsRequestSchema,
   McpError,
+  ToolSchema,
+  type Tool,
+  type CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
-import { encodeToolResult } from './result-codec.js';
+import { encodeToolResult, validateMcpWireResult } from './result-codec.js';
+import { registerBridgeKernel, safeMcpProtocolError } from './bridge-kernel.js';
+import { assertMcpJson, freezeMcpJson } from './tool-json.js';
+import type { CompiledMcpToolSchemas, McpToolDiagnostic, McpToolValidationLimits } from './tool-schemas.js';
 import { validateBoundedValue, type JSONValue } from '../registry-parameters.js';
 import type { AppToolResult } from '../runtime.js';
 
 export type { AppToolResult } from '../runtime.js';
+
+export type McpWireFailure =
+  | { readonly kind: 'invalid-arguments'; readonly diagnostics: readonly McpToolDiagnostic[] }
+  | { readonly kind: 'internal' };
+export interface McpWireRunner {
+  run(name: string, args: Record<string, unknown>, extra: Readonly<{ signal: AbortSignal }>): Promise<CallToolResult>;
+}
+export interface McpWireBridgeOptions {
+  readonly schemas: CompiledMcpToolSchemas;
+  readonly limits: McpToolValidationLimits;
+  formatFailure(name: string, failure: McpWireFailure): CallToolResult;
+}
+
+/** Explicit native mode: preserve full descriptors/results, never try an application codec. */
+export function registerMcpWireTools(
+  server: Server, tools: readonly Tool[], runner: McpWireRunner, options: McpWireBridgeOptions,
+): void {
+  const limits = Object.freeze({ ...options.limits });
+  const names = new Set<string>();
+  for (const tool of tools) {
+    assertMcpJson(tool, limits.maxSchemaBytes, limits.maxSchemaDepth);
+    if (names.has(tool.name) || !ToolSchema.safeParse(tool).success) throw new TypeError('Invalid MCP tool descriptor');
+    names.add(tool.name);
+  }
+  const descriptors = freezeMcpJson(structuredClone(tools));
+  const failure = (name: string, reason: McpWireFailure): CallToolResult => {
+    try {
+      const result = validateMcpWireResult(options.formatFailure(name, reason), limits);
+      if (result.isError !== true) throw new TypeError();
+      return result;
+    } catch {
+      return { content: [{ type: 'text', text: 'Tool call failed' }], isError: true };
+    }
+  };
+  registerBridgeKernel(server, {
+    tools: descriptors,
+    async call(name, args, signal) {
+      try {
+        const checked = options.schemas.validate(name, args);
+        if (!checked.valid) return failure(name, { kind: 'invalid-arguments', diagnostics: checked.diagnostics });
+        signal.throwIfAborted();
+        const result = await runner.run(name, checked.data, Object.freeze({ signal }));
+        signal.throwIfAborted();
+        return validateMcpWireResult(result, limits);
+      } catch (error) {
+        if (error instanceof McpError) throw safeMcpProtocolError(error);
+        return failure(name, { kind: 'internal' });
+      }
+    },
+  });
+}
 
 export interface BridgeTool {
   readonly name: string;
@@ -126,7 +180,7 @@ export function registerBridgeTools(
   options?: BridgeOptions,
 ): void {
   const identity = options?.identity;
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  registerBridgeKernel(server, {
     tools: tools.map((tool) => ({
       name: tool.name,
       ...(tool.description === undefined ? {} : { description: tool.description }),
@@ -135,14 +189,8 @@ export function registerBridgeTools(
         ...(isRecord(tool.schema) ? tool.schema : {}),
       },
     })),
-  }));
-  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    const name = request.params.name;
-    const tool = tools.find((candidate) => candidate.name === name);
-    if (tool === undefined) {
-      throw new McpError(ErrorCode.MethodNotFound, `Unknown tool '${name}'`);
-    }
-    const rawArgs = request.params.arguments ?? {};
+    async call(name, rawArgs) {
+    const tool = tools.find((candidate) => candidate.name === name)!;
     if (!isRecord(rawArgs)) {
       return encodeToolResult(errorResult('kernel-rejection', 'invalid_parameters', 'arguments must be an object'));
     }
@@ -158,11 +206,7 @@ export function registerBridgeTools(
       );
     }
     try {
-      // B1: the runner receives the host-owned mount identity only. Client
-      // headers are untrusted and never override it (`extra` is intentionally
-      // unread here); verified per-request identity is the host's composition
-      // concern (mesh verified-invocation context).
-      void extra;
+      // The shared kernel exposes cancellation only; identity remains host-owned.
       return encodeToolResult(await runner.run(tool.name, args, identity));
     } catch (error) {
       return encodeToolResult(
@@ -173,5 +217,6 @@ export function registerBridgeTools(
         ),
       );
     }
+    },
   });
 }
