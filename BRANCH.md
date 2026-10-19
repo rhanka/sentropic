@@ -5,6 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Branch `fix/artifacts-hardening`, worktree `tmp/worktrees/artifacts-hardening`, base `origin/main` at `cf0ad8ee4`.
+- [x] CI repair: rebase the 14 artifacts commits onto `origin/main` at `7ed41eb39` to qualify the same L5 inputs as the PR merge checkout.
 - [x] Mechanical `harness check branch`: PASS C1.
 - [x] Make only, Docker tools, no Python, ENV=test-artifacts-hardening last; no listening services during unit checks.
 - [x] Selective staging, make commit, every commit under 150 changed lines, no attribution.
@@ -15,6 +16,10 @@
   - [x] `BRANCH.md`
   - [x] `packages/artifacts/**`
   - [x] `package-lock.json`
+  - [x] `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts`
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`
+  - [x] `tools/memory-mcp-l5/artifacts/history/**`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
   - [x] `docker-compose*.yml`
@@ -26,8 +31,11 @@
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [x] `.github/workflows/**`
 - [x] Exception process: document BRAH-EXn with reason, impact and rollback before sensitive edits.
+- [x] BRAH-EX1 (owner CI repair packet): allow only the artifacts consumer version assertion and P1 manifest/history refresh; impact is test/release provenance, with the 44 contracts and archive bytes unchanged; rollback restores the retained P1 and previous assertion.
 
 ## Feedback Loop
+- [x] Run `39279553217`: L5 rejects the artifacts lockfile change (`manifest freeze/lock mismatch`); Cluster Mesh expects artifacts provider `0.1.2`, receives `0.1.4`; `ci-gate` propagates those two failures.
+- [x] Preserve the separate durable L5 dependency-fingerprint proposal at `.tmp/l5-p1-lockfile-coupling.md`; do not implement it in this branch.
 - [x] Version coordination: open PR #707 reserves artifacts 0.1.3 and widens the optional platform peer to >=0.3.0 <0.5.0; this branch selects the next patch 0.1.4 and retains that widening. Both current mesh >=0.1.0 <0.2.0 and #707's >=0.1.3 <0.2.0 accept 0.1.4.
 - [x] Baseline evidence: HTTP `src/http.ts:200` trusts body storageScopeId; `:202,251,520` accept client paramsHash. Service `src/server/service.ts:46` and publication `src/server/publication.ts:197` use global keys.
 - [x] Baseline evidence: publication `src/server/publication.ts:138` hashes arbitrary files without path/size validation; content `src/content/handler.ts:92,154` allows HEAD then returns bytes; `:54` errors have only content-type.
@@ -75,3 +83,7 @@
 - [x] **Lot 5 — Delivery**
   - [x] Review every hunk, scope-check before each commit, push and open draft PR #708 using this plan; inspect GitHub checks on the pushed HEAD.
   - [x] Report draft PR number, HEAD and qualification receipt; preserve the seven original commits, keep every new commit under 150 changed lines, and do not merge or publish.
+- [ ] **Lot 6 — PR #708 CI repair**
+  - [x] Reproduce and update the Cluster Mesh artifacts provider version assertion; focused test 7/7, lint/typecheck and complete unit lane passed (932 tests, 126 conditional skips).
+  - [ ] Archive the previous P1 by digest and regenerate through `memory-l5-pack`; verify all 44 contracts and both archive digests remain identical.
+  - [ ] Pass `memory-l5-gate LOT=1`, scope checks, and the affected library checks; push the repaired draft branch without merging, marking ready or publishing.
