@@ -71,6 +71,7 @@
   - [x] Packed clean-consumer proof with platform absent; package and provider version 0.1.4; optional platform peer >=0.3.0 <0.5.0.
   - [x] Tests: mcp.test.ts, packed consumer, typecheck-artifacts, lint-artifacts, test-artifacts; PACKED_MCP_CORE_OK, PACKED_CONSUMER_OK and PACKED_ADAPTERS_OK.
   - [x] Typecheck, lint and full unit suite passed with the 0.1.4 source and final HTTP parity assertions.
+  - [x] Qualification receipt: packages/artifacts/probe/HARDENING_QUALIFICATION.md records commands, 213 passing tests, platform-absent proof and archive SHA-256 values.
 - [ ] **Lot 5 — Delivery**
   - [ ] Review every hunk, scope-check before each commit, push and open draft PR using this plan.
   - [ ] Report draft PR number, HEAD and validation receipts; no merge or publication.
