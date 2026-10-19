@@ -28,7 +28,7 @@ describe.skipIf(!enabled)('mcp tuple', () => {
   it('keeps both peers inside the candidate ranges', () => {
     const peers = JSON.parse(read(new URL('../../package.json', import.meta.url), 'utf8'))
       .peerDependencies as Record<string, string>;
-    expect(peers['@sentropic/mcp-platform']).toBe('>=0.3.0 <0.4.0');
+    expect(peers['@sentropic/mcp-platform']).toBe('>=0.4.0 <0.5.0');
     expect(peers['@modelcontextprotocol/sdk']).toBe('^1.31.0');
     expect(installed('mcp-consumer', '@sentropic/mcp-platform')).toBe(trainVersion('mcp-platform'));
   });
