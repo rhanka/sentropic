@@ -57,7 +57,7 @@
   - [ ] Compute publication hash over server-derived file digests and metadata; principal-scoped keys.
   - [ ] Tests: publication.test.ts, publication-security.test.ts, HTTP publication regressions.
 - [ ] **Lot 3 — Content HTTP semantics**
-  - [ ] Suppress all HEAD bodies and apply security/cache headers to errors and activation.
+  - [x] Suppress all HEAD bodies and apply security/cache headers to errors and activation; regression failed on baseline.
   - [ ] Tests: content-security.test.ts and content.e2e.test.ts.
 - [ ] **Lot 4 — Platform-free MCP and release**
   - [ ] Preserve /mcp compatibility; expose /mcp-core with no runtime platform dependency.
