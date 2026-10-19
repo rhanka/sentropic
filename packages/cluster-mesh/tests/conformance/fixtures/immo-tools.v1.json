@@ -463,3 +463,143 @@
           },
           "result": {
             "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 1,\n  \"signals\": [\n    {\n      \"id\": \"sig-synthetique-1\",\n      \"city\": \"longueuil\",\n      \"type\": \"reglement\",\n      \"etape\": \"\",\n      \"regulatoryStatus\": \"anticipation\",\n      \"etape_date\": \"\",\n      \"reglement_number\": \"\",\n      \"zone_ref\": \"\",\n      \"no_lot\": null,\n      \"summary\": \"\",\n      \"source_document_id\": \"\"\n    }\n  ]\n}"
+              }
+            ]
+          }
+        },
+        "get_opportunity_dossier": {
+          "args": {
+            "city": "longueuil",
+            "opportunityId": "opp-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"not_wired_yet:http_data_source GET /api/opportunites + /api/signals/:city/detail base=https://radar-api.example.test (only search_signals is wired to the real radar API in this seam)\",\n  \"tool\": \"get_opportunity_dossier\",\n  \"correlationId\": \"8722dfbd-43a9-4f84-ad41-47c373274614\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "list_documents": {
+          "args": {},
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"not_wired_yet:http_data_source GET /api/documents/raw (list) base=https://radar-api.example.test (only search_signals is wired to the real radar API in this seam)\",\n  \"tool\": \"list_documents\",\n  \"correlationId\": \"7492b6ba-15b0-4295-983b-7a10334c1663\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "read_document_excerpt": {
+          "args": {
+            "documentId": "doc-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"not_wired_yet:http_data_source GET /api/documents/raw (bounded excerpt) base=https://radar-api.example.test (only search_signals is wired to the real radar API in this seam)\",\n  \"tool\": \"read_document_excerpt\",\n  \"correlationId\": \"9e4d38e9-7fea-417a-8c30-f0faec241196\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "get_zones_geojson": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"collection_not_found:qc-zonage-longueuil — ville inconnue ou couche non publiée\",\n  \"tool\": \"get_zones_geojson\",\n  \"correlationId\": \"6c41fc7f-307b-4669-9c0a-20ad7b3a5e35\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "get_lots_geojson": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"collection_not_found:qc-lots-longueuil — ville inconnue ou couche non publiée\",\n  \"tool\": \"get_lots_geojson\",\n  \"correlationId\": \"96b7df4c-8dfe-4d66-8b00-393e0670ec84\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "get_grille_pdf": {
+          "args": {
+            "city": "longueuil",
+            "zone": "H-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"collection_not_found:qc-zonage-longueuil — ville inconnue ou couche non publiée\",\n  \"tool\": \"get_grille_pdf\",\n  \"correlationId\": \"f9ba1376-c40f-449b-819a-410e04084545\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "get_pv_pdf": {
+          "args": {
+            "rawRef": "pv/longueuil/2026-04-14.pdf"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"rawRef\": \"pv/longueuil/2026-04-14.pdf\",\n  \"note\": \"statut api: 404\"\n}"
+              }
+            ]
+          }
+        },
+        "get_reglement_provenance": {
+          "args": {
+            "muni_slug": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"city\": \"longueuil\",\n  \"reglement_url\": null,\n  \"reglement_numero\": null,\n  \"reglement_millesime\": null,\n  \"reglement_page_source\": null,\n  \"reglement_ancien_numero\": null,\n  \"reglement_ancien_millesime\": null,\n  \"reglement_ancien_source\": null,\n  \"has_ancien\": null,\n  \"note\": \"grille de normes non publiée pour cette ville (qc-zonage-norms absent)\"\n}"
+              }
+            ]
+          }
+        },
+        "query_zoning_events": {
+          "args": {
+            "muni_slug": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 0,\n  \"events\": [],\n  \"numberMatched\": 0,\n  \"truncated\": false,\n  \"note\": \"aucun event de zonage servi pour cette ville (qc-zoning-events absent)\"\n}"
+              }
+            ]
+          }
+        }
+      },
+      "limitedScope": {
+        "token": "immo:read seulement",
+        "calls": {
+          "search_signals": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:search\",\n  \"tool\": \"search_signals\",\n  \"correlationId\": \"9df4fb49-3a00-476c-b4bb-79ffe02ec55b\"\n}"
+              }
