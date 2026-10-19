@@ -32,6 +32,7 @@
 - [x] Baseline evidence: HTTP `src/http.ts:200` trusts body storageScopeId; `:202,251,520` accept client paramsHash. Service `src/server/service.ts:46` and publication `src/server/publication.ts:197` use global keys.
 - [x] Baseline evidence: publication `src/server/publication.ts:138` hashes arbitrary files without path/size validation; content `src/content/handler.ts:92,154` allows HEAD then returns bytes; `:54` errors have only content-type.
 - [x] Baseline evidence: `src/mcp.ts:18` imports platform tool-configuration at runtime.
+- [x] Resume audit: seven commits and pending MCP split are readable; first build caught the missed needBytes argument in uploads/append; bound it before allocation.
 - [ ] Document compatibility changes and migration in packages/artifacts/README.md.
 - [ ] Designated Track writer imports this source plan; this worktree does not append .track.
 
@@ -60,7 +61,7 @@
   - [x] Suppress all HEAD bodies and apply security/cache headers to errors and activation; regression failed on baseline.
   - [ ] Tests: content-security.test.ts and content.e2e.test.ts.
 - [ ] **Lot 4 — Platform-free MCP and release**
-  - [ ] Preserve /mcp compatibility; expose /mcp-core with no runtime platform dependency.
+  - [x] Preserve /mcp compatibility; expose /mcp-core with no runtime platform dependency.
   - [x] Relocate MCP source with public exports preserved, before splitting its platform wrapper in a separate atomic commit.
   - [ ] Packed clean-consumer proof with platform absent; update package version and provider version.
   - [ ] Tests: mcp.test.ts, packed consumer, typecheck-artifacts, lint-artifacts, test-artifacts.

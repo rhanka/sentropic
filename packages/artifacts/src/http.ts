@@ -493,7 +493,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           if (!Number.isInteger(offset) || (offset as number) < 0) {
             throw new Error('invalid request: offset must be a non-negative integer');
           }
-          const appended = await uploads.append(uploadId, offset as number, needBytes(body['bytes']));
+          const limits = deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS;
+          const appended = await uploads.append(uploadId, offset as number,
+            needBytes(body['bytes'], Math.min(limits.maxFileBytes, limits.maxTotalBytes)));
           return { status: 200, body: appended };
         }
 
