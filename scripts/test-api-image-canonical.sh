@@ -139,7 +139,7 @@ tag_inputs_cover_builds() {
     esac
   done < <(grep -o 'npm --workspace @sentropic/[a-z0-9-]* run build' api/Dockerfile)
   test "$missing" -eq 0 || return 1
-  for required in api apps/auth-idp apps/llm-gateway e2e/tests/fixtures packages/auth-ui packages/skills packages/mcp-platform packages/llm-gateway .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore package.json package-lock.json; do
+  for required in api apps/auth-idp apps/llm-gateway e2e/tests/fixtures ui/package.json packages/auth-ui packages/skills packages/mcp-platform packages/llm-gateway .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore package.json package-lock.json; do
     grep -Fxq "$required" <<< "$inputs" || { echo "FAIL: shipped build input '$required' missing from API_VERSION" >&2; return 1; }
   done
   echo "PASS: every shipped build input is hashed into the canonical tag (runtime change -> new tag)"
@@ -187,6 +187,109 @@ tag_inputs_exclude_global() {
   echo "PASS: global-only paths stay out of the tag and out of the build context (existing tag reused)"
 }
 
+docker_copy_sources() {
+  awk '$1 == "COPY" { for (i = 2; i < NF; i++) print $i }' api/Dockerfile
+}
+
+copy_sources_hashed() {
+  local inputs missing=0 src
+  inputs="$(hash_inputs)"
+  while IFS= read -r src; do
+    [ -n "$src" ] || continue
+    case "$src" in
+      --*|/*) continue ;;
+    esac
+    # A trailing `*` (e.g. package-lock.json*) matches the exact file.
+    src="${src%\*}"
+    [ -n "$src" ] || continue
+    if ! grep -Fxq "$src" <<< "$inputs"; then
+      # A whole-dir input covers its files; otherwise the exact path must be hashed.
+      local covered=0 input
+      while IFS= read -r input; do
+        [ -n "$input" ] || continue
+        case "$input" in
+          */) ;;
+          *)
+            if [[ "$src" == "$input"/* ]]; then covered=1; break; fi
+            ;;
+        esac
+      done <<< "$inputs"
+      if [ "$covered" -eq 0 ]; then
+        echo "FAIL: Dockerfile COPYs '$src' into the image but API_VERSION does not hash it" >&2
+        missing=1
+      fi
+    fi
+  done < <(docker_copy_sources)
+  test "$missing" -eq 0 || return 1
+  echo "PASS: every Dockerfile COPY source is hashed into the canonical tag"
+}
+
+no_blind_copy() {
+  # A bare `COPY . .` would reintroduce unhashed bytes; every COPY must name
+  # an explicit source (flags like --from/--chown are not sources).
+  local bad
+  bad="$(awk '$1 == "COPY" { for (i = 2; i <= NF; i++) { if ($i !~ /^--/) { print $i; break } } }' api/Dockerfile | grep -Fx '.' || true)"
+  test -z "$bad" || { echo "FAIL: blind 'COPY . .' in api/Dockerfile reintroduces unhashed bytes" >&2; return 1; }
+  echo "PASS: api/Dockerfile has no blind COPY; unhashed sources cannot enter the image"
+}
+
+ci_filter_block() {
+  awk -v want="$1" '
+    /^            [a-z_]+:[[:space:]]*$/ {
+      key = $0
+      gsub(/[[:space:]]/, "", key)
+      sub(/:$/, "", key)
+      inblock = (key == want)
+      next
+    }
+    inblock && /^              -[[:space:]]*\047/ {
+      line = $0
+      sub(/^[^\047]*\047/, "", line)
+      sub(/\047.*$/, "", line)
+      print line
+      next
+    }
+    inblock && $0 !~ /^[[:space:]]*-/ && $0 !~ /^[[:space:]]*$/ { inblock = 0 }
+  ' .github/workflows/ci.yml
+}
+
+trigger_coverage() {
+  local script
+  for script in scripts/resolve-api-image.sh scripts/test-api-image-canonical.sh; do
+    if ! ci_filter_block global | grep -Fxq "$script"; then
+      if ! ci_filter_block api | grep -Fxq "$script"; then
+        echo "FAIL: '$script' matches no filter running the canonical-image tests" >&2
+        return 1
+      fi
+    fi
+  done
+  echo "PASS: script-only changes trigger the canonical-image tests via CI filters"
+}
+
+retained_exclusions() {
+  local registry="${REGISTRY:-}"
+  local version="${API_VERSION:-}"
+  if [ -z "$version" ]; then
+    version="$(make -s version | awk '/^API_VERSION:/ {print $2}')"
+  fi
+  local image="${registry}/${API_IMAGE_NAME:-sentropic-api}:${version}"
+  local missing=0 path
+  for path in api/package.json e2e/package.json e2e/tests/fixtures apps/llm-gateway apps/auth-idp ui/package.json .security/audit-gate.mjs; do
+    if ! docker run --rm "$image" sh -ec "test -e '/workspace/$path'" >/dev/null 2>&1; then
+      echo "FAIL: retained input '$path' missing from the canonical image" >&2
+      missing=1
+    fi
+  done
+  for path in ui/src e2e/global.setup.ts e2e/tests/00-access-control.spec.ts packages/harness Makefile spec docs tools; do
+    if docker run --rm "$image" sh -ec "test -e '/workspace/$path'" >/dev/null 2>&1; then
+      echo "FAIL: unhashed source '$path' is retained in the canonical image" >&2
+      missing=1
+    fi
+  done
+  test "$missing" -eq 0 || return 1
+  echo "PASS: retained filesystem matches the hashed inputs exactly"
+}
+
 hash_pipeline_sensitive() {
   local probe="$scratch/hashprobe"
   mkdir -p "$probe/a"
@@ -223,6 +326,10 @@ case "${1:-all}" in
   guard-collision) guard_collision ;;
   tag-inputs-cover-builds) tag_inputs_cover_builds ;;
   tag-inputs-exclude-global) tag_inputs_exclude_global ;;
+  copy-sources-hashed) copy_sources_hashed ;;
+  no-blind-copy) no_blind_copy ;;
+  trigger-coverage) trigger_coverage ;;
+  retained-exclusions) retained_exclusions ;;
   hash-pipeline-sensitive) hash_pipeline_sensitive ;;
   toolchain-pinned) toolchain_pinned ;;
   version-filters-cover) version_filters_cover ;;
@@ -237,9 +344,15 @@ case "${1:-all}" in
   tag-inputs)
     tag_inputs_cover_builds
     tag_inputs_exclude_global
+    copy_sources_hashed
+    no_blind_copy
+    trigger_coverage
     hash_pipeline_sensitive
     toolchain_pinned
     version_filters_cover
+    ;;
+  retained)
+    retained_exclusions
     ;;
   all)
     resolve_reuse
@@ -251,9 +364,13 @@ case "${1:-all}" in
     guard_collision
     tag_inputs_cover_builds
     tag_inputs_exclude_global
+    copy_sources_hashed
+    no_blind_copy
+    trigger_coverage
     hash_pipeline_sensitive
     toolchain_pinned
     version_filters_cover
+    retained_exclusions
     ;;
-  *) echo "Expected resolve-reuse, resolve-absent, resolve-local, resolve-auth-error, resolve-network-error, resolve-stdout-unknown, guard-collision, tag-inputs-cover-builds, tag-inputs-exclude-global, hash-pipeline-sensitive, toolchain-pinned, version-filters-cover, resolve, tag-inputs, or all" >&2; exit 1 ;;
+  *) echo "Expected resolve-reuse, resolve-absent, resolve-local, resolve-auth-error, resolve-network-error, resolve-stdout-unknown, guard-collision, tag-inputs-cover-builds, tag-inputs-exclude-global, copy-sources-hashed, no-blind-copy, trigger-coverage, retained-exclusions, hash-pipeline-sensitive, toolchain-pinned, version-filters-cover, resolve, tag-inputs, retained, or all" >&2; exit 1 ;;
 esac
