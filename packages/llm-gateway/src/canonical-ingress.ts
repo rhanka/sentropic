@@ -245,8 +245,18 @@ const normalizeToolChoice = (value: unknown): {
   };
 };
 
-const normalizeReasoning = (raw: JsonRecord): GenerateRequest['reasoning'] | undefined => {
-  const reasoning = asRecord(raw.reasoning);
+const normalizeReasoning = (raw: JsonRecord, wire: GatewayWire): GenerateRequest['reasoning'] | undefined => {
+  let reasoning = asRecord(raw.reasoning);
+  if (wire === 'openai-chat-completions') {
+    const refuse = (param: string): never => { throw new GatewayError('bad-request', 'unsupported reasoning control', undefined, undefined, 'unsupported_parameter', param); };
+    if (raw.reasoning !== undefined && (!reasoning || Object.keys(reasoning).some((key) => !['effort', 'summary'].includes(key)))) refuse('reasoning');
+    if (raw.reasoning_effort !== undefined) {
+      if (reasoning?.effort !== undefined && reasoning.effort !== raw.reasoning_effort) refuse('reasoning_effort');
+      reasoning = { ...reasoning, effort: raw.reasoning_effort };
+    }
+    if (reasoning?.effort !== undefined && !['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(reasoning.effort as string)) refuse('reasoning.effort');
+    if (reasoning?.summary !== undefined && !['auto', 'concise', 'detailed'].includes(reasoning.summary as string)) refuse('reasoning.summary');
+  }
   const thinking = asRecord(raw.thinking);
   if (!reasoning && !thinking) return undefined;
   return {
@@ -314,7 +324,8 @@ export const normalizeGatewayIngress = (
   if (toolControl.parallelToolCalls !== undefined) {
     requiredFeatures.push('parallel-tool-control');
   }
-  const reasoning = normalizeReasoning(raw);
+  const reasoning = normalizeReasoning(raw, wire);
+  if (wire === 'openai-chat-completions' && (reasoning?.effort !== undefined || reasoning?.summary !== undefined)) requiredFeatures.push('reasoning-controls');
   const serialized = JSON.stringify(body);
   const required = new Set<CapabilityRequirement>();
   if (tools.length > 0 || messages.some((message) =>
@@ -324,7 +335,7 @@ export const normalizeGatewayIngress = (
   if (serialized.includes('image_url') || serialized.includes('"type":"image"')) {
     required.add('input:image');
   }
-  if (raw.reasoning !== undefined || raw.thinking !== undefined) required.add('reasoning');
+  if (reasoning !== undefined) required.add('reasoning');
   if (raw.stream === true) required.add('streaming');
   const request: GenerateRequest = {
     model: raw.model as GenerateRequest['model'], messages,

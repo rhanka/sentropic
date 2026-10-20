@@ -1,5 +1,7 @@
 # Convergence receipt
 
+**Historical evidence.** Verdicts, pending conditions and hashes below describe their recorded revision. The [frozen storage alignment](storage-alignment.md) governs current work: M1 is owner-closed with carried reserves and unprovided handoff evidence; C0/module extensions and selected PG qualification remain separate. No historical proposal authorizes rewriting M1.
+
 **Recorded source convergence: PASS with reservations. Promotion delta: CONFIRMED with reservations (CONF4); P-1–P-5 recorded. Git recording remains pending.** This receipt transcribes author treatment and CONF3/CONF4's actual verdicts; it does not impersonate a reviewer, sign a new acceptance or certify implementation.
 
 ## Source convergence and exact bytes

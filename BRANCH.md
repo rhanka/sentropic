@@ -69,6 +69,12 @@
 - [x] This branch has no UI change: UAT is an owner read of the promoted spec and cross-references on the draft PR; no service start and no `ENV=dev` test run.
 
 ## Plan / Todo (lot-based)
+- [x] **Lot R4-0 — Refresh PR #694 baseline (2026-10-19)**
+  - [x] Verify draft PR #694 targets `docs/spec-ui-annotate-overlay`, pass `harness check branch`, fetch `origin`, and merge `origin/main` as requested.
+  - [x] Resolve the sole conflict in `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`: preserve main's current M1/M2 status and this branch's overlay cross-reference; retain the canonical model.
+  - [x] Scope of authored changes remains `spec/**` and `BRANCH.md`; incoming main history is the owner-authorized baseline synchronization, not a new implementation lot.
+  - [x] Merge parent: `origin/main = f5c4c36a6d9e2f236d8a7f58784c2384ba32115f`. `make scope-check` reports incoming main paths against old HEAD (advisory FAIL C2); validate the four-file PR delta against the new main with `harness check scope`. No scope expansion or authored code change.
+  - [x] `.track` is byte-identical on both parents and the merged tree; no event loss, Track amendment or acceptance claim is introduced.
 - [x] **Round 1 dossier treatment (2026-10-18), findings 6/7**: replace stale D-P1/D-P2/D-P3 references with revision-pinned section/line citations; carry the corrected account-protection benefit, recovery prerequisites and remaining non-MFA login exposure. Namespace and host-mapping contracts stay intact.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `plan/BRANCH_TEMPLATE.md`, the scratch spec v2 (sha256 `5717b057b5d4ea78c78ffb7d77c71e50c198012b1219662b599c624e87543b11`), and the Astra re-review (verdict GO).
