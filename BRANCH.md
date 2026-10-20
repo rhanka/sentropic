@@ -85,10 +85,10 @@ Actions with the following status should be included around tasks only if really
   - [x] Add `tests/lock-fingerprint.test.mjs`: unrelated lockfile edits pass, relevant dependency/build-input edits fail.
   - [x] Extend packed-gate coverage: unrelated lock edit passes, relevant lock edit fails, contract/archive drift still fails.
   - [x] Lot gate: `make memory-l5-tooling API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
-- [ ] **Lot 3 — Regenerate P1, full gate, PR**
-  - [ ] Retain superseded manifest in `artifacts/history/` (content-sha name + sidecar).
-  - [ ] Rebuild dist and repack P1 via make targets.
-  - [ ] Verify archives unchanged, inventory still exact 44 contracts, sidecars valid.
-  - [ ] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
-  - [ ] `make scope-check` before each commit; atomic commits via `make commit MSG="..."`.
+- [x] **Lot 3 — Regenerate P1, full gate, PR**
+  - [x] Retain superseded manifest in `artifacts/history/` (content-sha name + sidecar).
+  - [x] Rebuild dist and repack P1 via make targets.
+  - [x] Verify archives unchanged, inventory still exact 44 contracts, sidecars valid.
+  - [x] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
+  - [x] `make scope-check` before each commit; atomic commits via `make commit MSG="..."`.
   - [ ] Push branch and open DRAFT PR; do not merge.
