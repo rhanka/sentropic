@@ -3974,7 +3974,7 @@ memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extrac
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-pack requires ENV=<env> last" >&2; exit 1; }
 	@test "$(STAGE)" = "pre-candidate" || { echo "ERROR: memory-l5-pack STAGE=$(STAGE) is owned by a later lot (only pre-candidate exists)" >&2; exit 1; }
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-pack requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --root /workspace
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --head-lock-sha "$$(git show HEAD:package-lock.json | sha256sum | cut -d' ' -f1)" --root /workspace
 
 .PHONY: memory-l5-receipt
 memory-l5-receipt: memory-l5-runtime ## L5 receipt verifier: MODE=preflight reports obligations, MODE=checkpoint gates strictly (L5-EX1)
