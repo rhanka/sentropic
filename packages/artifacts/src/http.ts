@@ -24,6 +24,7 @@ import type { ParameterSchema } from './parameters.js';
 import type { ArtifactService } from './server/service.js';
 import type { PublicationBlobStore, PublicationService } from './server/publication.js';
 import { DEFAULT_PUBLICATION_LIMITS } from './server/publication.js';
+import { validatePublicationFiles } from './server/publication-limits.js';
 import { createContentRuntime } from './server/runtime.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import type { ForkRecord, ForkService } from './server/fork.js';
@@ -517,21 +518,24 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           if (!Number.isInteger(size) || (size as number) < 0) {
             throw new Error('invalid request: size must be a non-negative integer');
           }
+          uploads.remainingBytes(uploadId);
+          const bytes = await staging.read(uploadId);
+          const files = [{
+            path: needString(body['path'], 'path'),
+            mimeType: needString(body['mimeType'], 'mimeType'),
+            bytes,
+          }];
+          validatePublicationFiles(files, deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS);
           await uploads.commit(uploadId, {
             digest: needString(body['digest'], 'digest'),
             size: size as number,
           });
-          const bytes = await staging.read(uploadId);
           const result = await deps.publication.publish({
             ownerId: acl.ownerId,
             storageScopeId: acl.storageScopeId,
             artifactId,
             profile: (body['profile'] ?? {}) as Record<string, string | number | boolean | null | undefined>,
-            files: [{
-              path: needString(body['path'], 'path'),
-              mimeType: needString(body['mimeType'], 'mimeType'),
-              bytes,
-            }],
+            files,
             idempotencyKey: typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : undefined,
             paramsHash: typeof body['paramsHash'] === 'string' ? body['paramsHash'] : undefined,
           });
