@@ -518,17 +518,17 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           if (!Number.isInteger(size) || (size as number) < 0) {
             throw new Error('invalid request: size must be a non-negative integer');
           }
-          uploads.remainingBytes(uploadId);
-          const bytes = await staging.read(uploadId);
           const files = [{
             path: needString(body['path'], 'path'),
             mimeType: needString(body['mimeType'], 'mimeType'),
-            bytes,
+            bytes: new Uint8Array(0),
           }];
-          validatePublicationFiles(files, deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS);
           await uploads.commit(uploadId, {
             digest: needString(body['digest'], 'digest'),
             size: size as number,
+          }, (bytes) => {
+            files[0]!.bytes = bytes;
+            validatePublicationFiles(files, deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS);
           });
           const result = await deps.publication.publish({
             ownerId: acl.ownerId,
