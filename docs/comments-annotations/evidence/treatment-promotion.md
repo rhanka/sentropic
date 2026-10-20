@@ -1,5 +1,7 @@
 # Promotion treatment after CONF3
 
+**Historical evidence.** Verdicts, pending conditions and hashes below describe their recorded revision. The [frozen storage alignment](storage-alignment.md) governs current work: M1 is owner-closed with carried reserves and unprovided handoff evidence; C0/module extensions and selected PG qualification remain separate. No historical proposal authorizes rewriting M1.
+
 **Files prepared; bounded promotion-delta confirmation and Git recording pending.** All seven CONF3 reservations are accepted as documentary requirements below; future execution evidence remains at its responsible phase. No refusal, owner arbitration, new review verdict or implementation result is asserted.
 
 Mandate PROMOTE: `a65d849cd712c96645255898335c6019bdfefd75ad03da8a0ccda7e9a7908ab9`. CONF3 review: `6a341ab8ad5f80736c18db63fe16f197fe7697ab8a7504b0e11b20c7dac35aff`. Confirmed incoming SPEC: `c6d7a548d25746243b3904a20adea2d1b96360b3042445ba020a8204479ed967`. Incoming log: `7f713c5a861f79c75d067398d81dc0db1c26c38ceba1ce338b271897bfbe12fa`; its bytes remain an unchanged prefix of the local appended log.

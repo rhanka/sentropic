@@ -208,7 +208,8 @@ export async function acquireLock(options: {
     throw new Error('Failed to acquire lock');
   }
 
-  if (result.type === 'conflict') {
+  // Concurrent inserts can collide even when both requests belong to this owner.
+  if (result.type === 'conflict' && lock.lockedBy.userId !== options.userId) {
     return { lock, acquired: false };
   }
 

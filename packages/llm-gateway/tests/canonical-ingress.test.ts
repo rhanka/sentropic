@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { normalizeGatewayIngress } from '../src/canonical-ingress.js';
 
 describe('canonical gateway ingress', () => {
+  it.each([{ reasoning_effort: 'high' }, { reasoning: { effort: 'high' } }])('preserves Chat reasoning controls and requires transport support: %s', (control) => {
+    const body = { model: 'gpt-6.1-sol', messages: [{ role: 'user', content: 'synthetic' }], ...control };
+    const result = normalizeGatewayIngress('openai-chat-completions', body);
+    expect(result.request.reasoning).toEqual({ effort: 'high' });
+    expect(result.requiredCapabilities).toContain('reasoning');
+    expect(result.requiredExecutionFeatures).toContain('reasoning-controls');
+  });
+  it.each([{ reasoning_effort: 'unknown' }, { reasoning_effort: 'low', reasoning: { effort: 'high' } }, { reasoning: { ignored: true } }])('refuses invalid/conflicting Chat reasoning: %s', (control) => {
+    expect(() => normalizeGatewayIngress('openai-chat-completions', { model: 'gpt-6.1-sol', messages: [], ...control }))
+      .toThrow(expect.objectContaining({ kind: 'bad-request', code: 'unsupported_parameter' }));
+  });
   it.each(['anthropic-messages', 'openai-chat-completions'] as const)(
     'preserves canonical aliases/compaction extensions and their original projection on %s', wire => {
       const body = { model: 'claude-opus-5-high', messages: [{ role: 'user', content: 'compact this history' }],

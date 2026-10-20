@@ -3,6 +3,7 @@
 ## Objective
 - Consolidate into `spec/` what PR #679 merged on `main` at `1472d961e`: the host-embedded MCP provider registry, the `sentropic.artifacts` provider, the RFC 8693 token exchange, and the verbatim owner decisions.
 - Docs only: preserve the merged baseline and mark later design amendments explicitly as proposals; the 2026-10-18 owner brief authorizes the generic artifact view address, DNS/TLS ownership and reader API-access proposal.
+- Apply the 2026-10-19 owner decisions G1=1, G2=1, G3=a and H1=both to this PR's specification boundaries; retain unresolved domain names, DNS GO and Sentropic-owned anchor-contract details.
 
 ## Scope / Guardrails
 - Scope limited to `spec/**` and `BRANCH.md`.
@@ -40,6 +41,7 @@ Actions with the following status should be included around tasks only if really
 - subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
 - conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 - [x] `attention`: the verbatim phrase « Tout en artifacts » is required by the launch packet but was not found in the scratch sources read (`spec-v8.md`, `registry-entry-contract-v9.md`, `owner-decisions-T1-T8.md`, owner addendums); the spec quotes it with the launch packet as its source and flags the source gap in place.
+- [x] `clarification` (owner, 2026-10-19): the requested main merge imports upstream files outside the authored documentation scope. Pre-merge `make scope-check` reports those inherited paths; harness scope against `origin/main` verifies the actual PR delta. No upstream file was manually edited; the merge is isolated from the atomic spec amendments.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -66,6 +68,15 @@ Actions with the following status should be included around tasks only if really
   - Switch back to `tmp/worktrees/spec-mcp-registry-artifacts` after UAT: not applicable.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 5 — Owner decisions (2026-10-19)**
+  - [x] Verify PR #692 is draft/open on `docs/spec-mcp-registry-artifacts` at `261aaed6ed2a8652fdadef5107d72022240aa1cf`; `harness check branch` passes; fetch `origin`.
+  - [x] Merge `origin/main` at `f5c4c36a6` (918 commits behind) without conflicts; no manual changes to inherited main files. Track containment passes for both parents (342/342 events); Track writes remain with the designated writer.
+  - [ ] Amend `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md`: dated verbatim decisions, federated authority, Engram/DS producer split and Sentropic annotation-model ownership; preserve the #679 historical record.
+  - [ ] Amend `spec/SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md`: both domain modes per app, independent API-transport proposal, no exclusive A/B recommendation; domain names and exact DNS GO remain open.
+  - [ ] Review decision coverage and removed alternatives; run `make scope-check`, harness branch/scope checks and `git diff --check` before delivery.
+  - [x] API/UI/E2E tests, typecheck, runtime lint and UAT: not applicable to documentation-only amendments; no service or port allocation, checks use `ENV=test-spec-mcp-registry-artifacts`.
+  - [ ] Commit atomic amendments through `make commit`, update PR body from `BRANCH.md`, push and verify remote HEAD/CI; retain draft status, no PR merge.
+
 - [x] **Round 1 dossier treatment (2026-10-18), findings 1/2/6/7**: restore the APP_CATALOG Q4 app kind and AppCatalogSource trace; consume host screen and server recipient bindings; pin D-P1/D-P2/D-P3 citations and balance the copied D-P3 tradeoff. Documentation only; no product qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read the relevant rules files (`rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`) and `plan/BRANCH_TEMPLATE.md`.

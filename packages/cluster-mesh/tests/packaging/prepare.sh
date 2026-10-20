@@ -2,6 +2,8 @@
 # Prepare B3 packed-qualification fixtures in container scratch space.
 # Invoked by packaging.mk inside the Node image (npm only); never on the host.
 # REFRESH_LOCK=1 regenerates the frozen `selected` lockfile instead of `npm ci`.
+# CLUSTER_MESH_PREPARE_ONLY=artifacts prepares only the artifacts-candidate consumers
+# (selected, latest, artifacts-consumer); the packaging qualification keeps the default full run.
 # CLUSTER_MESH_SIBLING_RECEIPTS=<receipts.json> (release train): same-PR sibling archives validated by
 # scripts/ci loadSiblings (sha256, packed identity and guard, head sha CLUSTER_MESH_HEAD_SHA, no unlisted
 # archive) replace the registry for exactly the name@version they carry; every other
@@ -28,7 +30,9 @@ quiet="--no-audit --no-fund --loglevel=error"
 siblings="$work/siblings"
 
 # Qualification tools, isolated from every fixture tree (semver: the pinned guard semver of loadSiblings).
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 npm install --prefix "$work/tools" $quiet vitest@4.1.5 typescript@5.9.3 @types/node@22 esbuild@0.25.12 semver@7.7.2 >/dev/null
+fi
 if [ -n "${CLUSTER_MESH_SIBLING_RECEIPTS:-}" ]; then
   MANIFEST_GUARD_TOOL_DIR="$work/tools" node "$here/siblings.mjs" verify "$CLUSTER_MESH_SIBLING_RECEIPTS" "$siblings"
 fi
@@ -43,6 +47,14 @@ if [ -n "$receipt" ]; then
   echo "[candidate] local pack sha256 $(sha256sum "$tgz" | cut -d' ' -f1); qualifying the receipt archive sha256 $(sha256sum "$receipt" | cut -d' ' -f1)"
   cp "$receipt" "$tgz"
 fi
+
+# Artifacts is an unpublished candidate, also exercised by the dedicated consumer below.
+# Reuse these exact bytes in every consumer that selects it, preferring a verified receipt.
+(cd ../artifacts && npm pack --silent --pack-destination "$work/src" >/dev/null)
+artifacts_tgz="$(ls "$work"/src/sentropic-artifacts-*.tgz)"
+receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/artifacts "$ARTIFACTS")"
+if [ -n "$receipt" ]; then cp "$receipt" "$artifacts_tgz"; fi
+echo "[artifacts candidate] sha256 $(sha256sum "$artifacts_tgz" | cut -d' ' -f1)"
 
 # src NAME VERSION: a verified sibling archive (`file:`) for exactly NAME@VERSION, else the registry version.
 src() {
@@ -108,22 +120,27 @@ stage() {
 }
 
 # Bare consumer: the candidate only; optional peers stay absent.
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 fixture bare
 (cd "$work/bare" && npm install $quiet "$tgz" >/dev/null)
+fi
 
-# Selected consumer: E8's public service-mode tuple, frozen by the committed lockfile. With siblings the
-# install is provisional (same pins, sibling archives + overrides, `npm install`); the committed lock then
-# carries the registry URL and the sibling bytes' sha512, asserted on every sibling run.
+# Selected consumer: start from E8's committed lock, substituting the local artifacts candidate.
+# Candidate/sibling installs are provisional (`npm install`); the committed lock is not rewritten.
+# Verified sibling receipts still require the committed registry URL and sha512 on every sibling run.
 mkdir -p "$work/selected"
 cp "$fixtures/selected/package.json" "$work/selected/"
 cp "$fixtures/selected/package-lock.json" "$work/selected/committed-lock.json"
+artifacts_spec="file:$artifacts_tgz"
+# Lock refresh retains the registry/verified-sibling contract of check-lock-integrity.mjs.
+if [ "${REFRESH_LOCK:-}" = 1 ]; then artifacts_spec="$(src @sentropic/artifacts "$ARTIFACTS")"; fi
 consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
   "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" \
   "@sentropic/auth-hono=$(src @sentropic/auth-hono "$AHONO")" \
   "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")" \
-  "@sentropic/artifacts=$(src @sentropic/artifacts "$ARTIFACTS")"
+  "@sentropic/artifacts=$artifacts_spec"
 sources "$work/selected"
-if grep -q ' sibling ' "$work/selected/sources.txt"; then
+if grep -q ' sibling ' "$work/selected/sources.txt" || [ "$artifacts_spec" = "file:$artifacts_tgz" ]; then
   [ "${REFRESH_LOCK:-}" = 1 ] || cp "$fixtures/selected/package-lock.json" "$work/selected/"
   (cd "$work/selected" && npm install $quiet >/dev/null)
 elif [ "${REFRESH_LOCK:-}" = 1 ]; then
@@ -143,26 +160,28 @@ fi
 tuple selected
 
 # Session mode: the public auth-hono tarball at llm-gateway's declared peer range.
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 consumer "$work/selected-session" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
   "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" "@sentropic/auth-hono=0.15.0" "hono=4.10.7"
 sources "$work/selected-session"
 (cd "$work/selected-session" && npm install $quiet >/dev/null)
 tuple selected-session
+fi
 
 # MCP consumer: the candidate plus the locally-packed mcp-platform sibling (unpublished 0.3.0
 # candidate, packed exactly as published; dist built by the packaging.mk prerequisite) and the
 # registry SDK. Optional peers stay absent; the leaves must resolve without them.
 (cd ../mcp-platform && npm pack --silent --pack-destination "$work/src" >/dev/null)
 platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz"
 (cd "$work/mcp-consumer" && npm install $quiet >/dev/null)
 tuple mcp-consumer
+fi
 
 # Web-pages consumer: the MCP consumer tuple plus the locally-packed artifacts sibling
-# (unpublished 0.1.0 candidate; dist built by the packaging.mk prerequisite). The leaf must
+# (dist built by the packaging.mk prerequisite). The leaf must
 # load only when selected; the installed artifacts version must satisfy the declared range.
-(cd ../artifacts && npm pack --silent --pack-destination "$work/src" >/dev/null)
-artifacts_tgz="$(ls "$work"/src/sentropic-artifacts-*.tgz)"
 consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz" "@sentropic/artifacts=file:$artifacts_tgz"
 sources "$work/artifacts-consumer"
 (cd "$work/artifacts-consumer" && npm install $quiet >/dev/null)
@@ -198,13 +217,14 @@ for sib in llm-mesh llm-gateway auth-hono mcp-platform mcp-auth oauth-verify con
   sib_spec="$(src @sentropic/"$sib" "$sib_ver")"
   case "$sib_spec" in file:*) latest_overrides="$latest_overrides @sentropic/$sib=$sib_spec" ;; esac
 done
-consumer "$work/latest" $latest_overrides
+consumer "$work/latest" $latest_overrides "@sentropic/artifacts=file:$artifacts_tgz"
 sources "$work/latest"
 : > "$work/latest/npm-install-detail"
 attempt "$work/latest" plain
 tuple latest
 
 # Real global topology: runtime installed separately in the global prefix, then the consumer.
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 stage separate-runtime
 stage global-consumer
 stage global-consumer-pinned
@@ -212,9 +232,11 @@ npm install -g --prefix "$work/global" $quiet "$work/src/fixture-separate-runtim
 npm install -g --prefix "$work/global" $quiet "$work/src/fixture-global-consumer-1.0.0.tgz" >/dev/null
 npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
 npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-global-consumer-pinned-1.0.0.tgz" >/dev/null
+fi
 
 old_installed="@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0"
 
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 # Old tuple (llm-mesh 0.21.2, llm-gateway 0.18.0), registry only: npm must refuse the out-of-range optional
 # peers. npm 11 either fails with ERESOLVE or exits 0 after dropping the conflicting root requests
 # ("ERESOLVE overriding peer dependency"); both leave the old tuple uninstalled and count as refused.
@@ -237,7 +259,9 @@ esac
 echo "skew-build=$skew" >> "$work/old-tuple/npm-install-detail"
 echo "[old-tuple] outcome $(cat "$work/old-tuple/npm-install-outcome")"; cat "$work/old-tuple/npm-install-detail"
 tuple old-tuple
+fi
 
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 # Partial bump: the consumer moves cluster-mesh to the candidate but keeps its own direct llm-mesh ^0.21.2 and
 # llm-gateway ^0.18.0 (registry). What npm does is recorded as is; unless the plain install already built the
 # skewed tree (an invariant violation asserted by the spec) it is rebuilt with --legacy-peer-deps so the runtime
@@ -253,3 +277,4 @@ esac
 echo "skew-build=$skew" >> "$work/partial-bump/npm-install-detail"
 echo "[partial-bump]"; cat "$work/partial-bump/npm-install-detail"
 tuple partial-bump
+fi

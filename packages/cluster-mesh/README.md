@@ -105,6 +105,36 @@ implement server-to-server federation.
 
 ## Lazy integration surface (0.12+, tuple of 0.14)
 
+### Comments and generic storage candidate (0.19)
+
+The `0.19.0` candidate adds `/storage` (neutral shared kernel),
+`/storage/postgres` (host-injected SQL driver and migration assets), `/comments`,
+`/comments/hono`, `/loaders/comments` and `/compose/comments`. Selecting comments
+requires optional peer `@sentropic/comments ^0.3.0`; the qualified exact peer is
+`0.3.0`. Root/generic storage and disabled comments composition do not evaluate it.
+The host owns database connections, migration history, issued scope grants and
+domain capability/resolution/decision ports. Startup verifies installed assets;
+it never schedules migrations or opens its own connection.
+
+`createCommentsPostgresStorage` and `createCommentsModule` expose the unchanged
+24-method M1 persistence store, operational content/lifecycle services, and seven
+bounded import/export/receipt methods. Transactions use `store.transaction().run`.
+Use issued `module.withContext(grant, callback)` contexts. Full-runtime Hono
+composition uses `createCanonicalCommentsNamespaceModule` and a host grant resolver;
+raw lifecycle append and physical-completion routes are unavailable. Dedicated
+review/submission/assignment operational APIs and SQLite parity remain separate.
+
+The archive includes checksum-ordered PostgreSQL SQL assets and the digest-pinned
+unchanged M1 conformance oracle under `assets/storage/`. The repository
+[host guide](https://github.com/rhanka/sentropic/blob/feat/cluster-mesh-comments-m2/docs/comments-annotations/immo-host-guide.md)
+and [installed evidence](https://github.com/rhanka/sentropic/blob/feat/cluster-mesh-comments-m2/docs/comments-annotations/evidence/installed-module.md)
+describe exact calls, fragment/terminal receipt rules and tested bounds. Import
+preparation stays private until one canonical root publication; acknowledgements
+are progress rather than complete receipts. The host retains exact qualified
+archive/lock bytes before any separately approved delivery.
+
+### Optional provider leaves
+
 Cluster Mesh is the single integration surface for llm-mesh and llm-gateway. Those
 providers stay independent packages and never depend on cluster-mesh. They are
 **optional peers**: a bare install pulls none of them, and the root entry
