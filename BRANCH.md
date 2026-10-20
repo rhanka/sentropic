@@ -32,6 +32,7 @@ Fix main CI publish-api-image tag collision on global-only changes while keeping
   - `.github/workflows/**`
   - `Makefile`
   - `package-lock.json` (BR01-EX4 only: pinned markdown-it bump)
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json*` (BR01-EX5 only: lock-hash freeze regen)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -47,6 +48,8 @@ Fix main CI publish-api-image tag collision on global-only changes while keeping
 - `acknowledge`: P2 triggers fixed — both new scripts in the `global` change filter; regression test `trigger-coverage`.
 - `blocked`: audit gate fails fresh builds on new upstream markdown-it HIGH advisories (GHSA-253c-mchw-3w2r, GHSA-r7fv-28h4-cvq7); manifests/lock untouched by this branch, main equally affected on next build; HIGH fix belongs on a dedicated branch (dependabot ui/markdown-it exists). Local validation used a strictly temporary gate bypass, restored byte-for-byte (never committed).
 - `attention`: BR01-EX4 declared — `package-lock.json` (unlisted path, treated as conditional): pinned markdown-it 14.3.0 -> 14.3.3 (3-line delta: version/resolved/integrity from registry; transitive closure identical, verified uc.micro/punycode.js already locked). Reason: unblock audit/SCA gates failing on live HIGH advisories; required for CI green on this head. Impact: tag rotates to a new absent tag; prod bytes change only in the markdown-it tarball. Rollback: revert the 3 lines. `ui/package-lock.json` left to dependabot (no CI gate reads it).
+- `attention`: BR01-EX5 declared — `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` + sidecar: regenerate via `make memory-l5-pack` (repo-owned flow, never hand-edited) because the freeze pins `package-lock.json` sha256 and the EX4 bump moved it. Impact: manifest source section only. Rollback: restore both files.
+- `acknowledge`: EX5 done — old manifest retained as `history/732b96bc…`, fresh pack green, full `memory-l5-gate LOT=1` green locally, diff limited to source section (precedent b477879c8).
 
 ## AI Flaky tests
 - Acceptance rule:
