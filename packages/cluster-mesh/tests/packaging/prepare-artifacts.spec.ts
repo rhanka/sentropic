@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
+import { artifactsCompatible } from './helpers.js';
 
-it('should install the same packed artifacts candidate in selected, latest and artifacts consumers without registry access', () => {
+it('should install only compatible packed artifacts and exclude an incompatible optional tuple without registry access', () => {
   const root = mkdtempSync(join(tmpdir(), 'prepare-artifacts-'));
   const work = join(root, 'work');
   try {
@@ -30,6 +31,14 @@ if (args[0] === 'pack') {
     expect(result.status, result.stderr).toBe(0);
     const dependency = (fixture: string) => JSON.parse(readFileSync(join(work, fixture, 'package.json'), 'utf8'))
       .dependencies['@sentropic/artifacts'] as string;
+    if (!artifactsCompatible) {
+      expect(dependency('selected')).toBeUndefined();
+      expect(dependency('latest')).toBeUndefined();
+      expect(existsSync(join(work, 'artifacts-consumer'))).toBe(false);
+      expect(JSON.parse(readFileSync(join(work, 'artifacts-compatibility.json'), 'utf8')))
+        .toEqual({ compatible: false });
+      return;
+    }
     const archive = dependency('artifacts-consumer');
     expect(archive).toMatch(/^file:/u);
     expect(dependency('selected')).toBe(archive);

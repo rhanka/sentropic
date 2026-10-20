@@ -96,14 +96,24 @@ cluster-mesh-comments-test:
 
 CM_COMMENTS_TARBALL ?= .h2a/build/cm-comments-candidate/sentropic-cluster-mesh-0.19.0.tgz
 CM_COMMENTS_REPORT ?= .h2a/build/comments-installed
+CM_COMMENTS_SIBLING_FLAGS = $(if $(SIBLING_ARCHIVES_FILE),$(if $(and $(filter 1,$(words $(SIBLING_ARCHIVES_FILE))),$(filter tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json,$(SIBLING_ARCHIVES_FILE))),-v "$(CURDIR):/workspace:ro" -e CM_COMMENTS_SIBLINGS=/workspace/$(SIBLING_ARCHIVES_FILE) -e CLUSTER_MESH_HEAD_SHA="$$(git rev-parse HEAD)",$(error SIBLING_ARCHIVES_FILE must be tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json)))
+define CM_COMMENTS_SIBLING_SETUP
+if [ -n "$${CM_COMMENTS_SIBLINGS:-}" ]; then \
+  npm install --prefix /tmp/comments-guard --ignore-scripts --no-audit --no-fund semver@7.7.2 >/dev/null; \
+  MANIFEST_GUARD_TOOL_DIR=/tmp/comments-guard node /workspace/packages/cluster-mesh/tests/storage/installed-siblings.mjs > /tmp/comments-registry-url & \
+  registry_pid=$$!; trap "kill $$registry_pid 2>/dev/null || true" EXIT; \
+  while [ ! -s /tmp/comments-registry-url ]; do kill -0 "$$registry_pid"; sleep 0.1; done; \
+  export npm_config_registry="$$(cat /tmp/comments-registry-url)"; \
+fi;
+endef
 .PHONY: cluster-mesh-comments-installed
 cluster-mesh-comments-installed: cluster-mesh-pg-up
 	@test -f "$(CM_COMMENTS_TARBALL)"
 	@mkdir -p "$(CM_COMMENTS_REPORT)"
-	@docker run --rm --init --network "$(CM_PG_NAME)" -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/comments-npm-cache \
+	@docker run --rm --init --network "$(CM_PG_NAME)" $(CM_COMMENTS_SIBLING_FLAGS) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/comments-npm-cache \
 		-e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
 		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
-		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(CM_COMMENTS_SIBLING_SETUP) \
 		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /tmp/comments-bare/; cd /tmp/comments-bare; \
 		npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz >/dev/null; node installed-bare.mjs > /reports/bare.json; \
 		cd /tmp/comments-consumer; cp /probe/installed-*.mjs .; \
@@ -129,12 +139,12 @@ cluster-mesh-pg-crash-test:
 CM_PG_NEXT_IMAGE := postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
 .PHONY: cluster-mesh-pg-major-phase cluster-mesh-pg-major-upgrade
 cluster-mesh-pg-major-phase:
-	@docker run --rm --init --network "$(CM_PG_NAME)" -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+	@docker run --rm --init --network "$(CM_PG_NAME)" $(CM_COMMENTS_SIBLING_FLAGS) -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
 		-e CM_MAJOR_PHASE="$(CM_MAJOR_PHASE)" -e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
 		-e CM_PG_UPGRADE_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME)-next:5432/storage_test" \
 		-e CM_PG_REFERENCE_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME)-next:5432/reference_test" \
 		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
-		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(CM_COMMENTS_SIBLING_SETUP) \
 		mkdir /tmp/cm-major; cd /tmp/cm-major; cp /probe/installed-major-upgrade.mjs .; \
 		npm_config_cache=/tmp/npm-cache npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz pg@8.16.3 >/dev/null; \
 		node installed-major-upgrade.mjs'
