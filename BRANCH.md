@@ -42,6 +42,7 @@ Actions with the following status should be included around tasks only if really
 - conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 - [x] `attention`: the verbatim phrase « Tout en artifacts » is required by the launch packet but was not found in the scratch sources read (`spec-v8.md`, `registry-entry-contract-v9.md`, `owner-decisions-T1-T8.md`, owner addendums); the spec quotes it with the launch packet as its source and flags the source gap in place.
 - [x] `clarification` (owner, 2026-10-19): the requested main merge imports upstream files outside the authored documentation scope. Pre-merge `make scope-check` reports those inherited paths; harness scope against `origin/main` verifies the actual PR delta. No upstream file was manually edited; the merge is isolated from the atomic spec amendments.
+- [ ] `deferred` (Sentropic maintainer, before readiness/merge): formal harness consensus was not established. Exact author/reviewer model metadata was unavailable for eligible peer selection; `.h2a/reviews/pr692-owner-decisions-20261019.md` records `selection-failed` against specification head `9f805c482`. No reviewer verdict or consensus approval is claimed; this does not change the owner's draft-only delivery instruction.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -68,14 +69,14 @@ Actions with the following status should be included around tasks only if really
   - Switch back to `tmp/worktrees/spec-mcp-registry-artifacts` after UAT: not applicable.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 5 — Owner decisions (2026-10-19)**
+- [x] **Lot 5 — Owner decisions (2026-10-19)**
   - [x] Verify PR #692 is draft/open on `docs/spec-mcp-registry-artifacts` at `261aaed6ed2a8652fdadef5107d72022240aa1cf`; `harness check branch` passes; fetch `origin`.
   - [x] Merge `origin/main` at `f5c4c36a6` (918 commits behind) without conflicts; no manual changes to inherited main files. Track containment passes for both parents (342/342 events); Track writes remain with the designated writer.
   - [x] Amend `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md`: dated verbatim decisions, federated authority, Engram/DS producer split and Sentropic annotation-model ownership; preserve the #679 historical record. All G1/G2/G3/H1 apply to #692; #694 implementation/transfer and #596 custody changes remain in their owning PRs.
   - [x] Amend `spec/SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md`: both domain modes per app, independent API-transport proposal, no exclusive A/B recommendation; domain names and exact DNS GO remain open. Include authorized storage/namespace bindings, mode/domain migration and qualification of one app in both modes followed by a second app without a fork.
-  - [ ] Review decision coverage and removed alternatives; run `make scope-check`, harness branch/scope checks and `git diff --check` before delivery.
+  - [x] Author review: all four decision quotes match the dated source verbatim; superseded alternatives removed; H1 names/DNS GO and G3 anchor details remain open. `make scope-check`, harness branch/PR-delta scope checks and `git diff --check` pass. Formal peer review is separately deferred in Feedback Loop.
   - [x] API/UI/E2E tests, typecheck, runtime lint and UAT: not applicable to documentation-only amendments; no service or port allocation, checks use `ENV=test-spec-mcp-registry-artifacts`.
-  - [ ] Commit atomic amendments through `make commit`, update PR body from `BRANCH.md`, push and verify remote HEAD/CI; retain draft status, no PR merge.
+  - [x] Commit through `make commit`: main integration `276144e73`, governance/annotation `1e00057d5` (69 changed lines), hosting `9f805c482` (85 changed lines). Specification head pushed and verified on PR #692, draft/open/unmerged; CI `39349132558` observed in progress. PR body is sourced from this file; final metadata commit/head and latest CI state are reported in the delivery handoff.
 
 - [x] **Round 1 dossier treatment (2026-10-18), findings 1/2/6/7**: restore the APP_CATALOG Q4 app kind and AppCatalogSource trace; consume host screen and server recipient bindings; pin D-P1/D-P2/D-P3 citations and balance the copied D-P3 tradeoff. Documentation only; no product qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
