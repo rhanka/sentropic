@@ -1654,6 +1654,14 @@ export class SessionContentService {
       reservation.reservation.channel,
       objectId,
     );
+    // N5: fix expiry at first durable admission, using the frozen N3
+    // retention snapshot. Upload latency cannot extend the deadline.
+    const snapshot = reservation.reservation.retentionSnapshot as RetentionByChannel;
+    const channel = reservation.reservation.channel as 'terminal.cache' | 'native.mirror';
+    const capturedAt = this.nowMs();
+    const retention = snapshot[channel] ?? { mode: 'none' as const };
+    const expiresAt =
+      retention.mode === 'none' ? null : capturedAt + retention.durationSeconds * 1000;
     await db.insert(sessionContentObjects).values({
       objectId,
       namespaceId: reservation.reservation.namespaceId,
@@ -1666,8 +1674,8 @@ export class SessionContentService {
       objectKey: key,
       bytesRaw: reservation.reservation.bytesRaw,
       bytesEncoded: reservation.reservation.bytesEncoded,
-      capturedAt: this.nowMs(),
-      expiresAt: null,
+      capturedAt,
+      expiresAt,
       state: 'staged',
       version: 1,
     });
@@ -1697,14 +1705,6 @@ export class SessionContentService {
         `upload outcome unknown, purge pending: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
-    // N3: expiry derives from the reservation's frozen retention snapshot,
-    // never from a newer policy adopted after the reservation.
-    const snapshot = reservation.reservation.retentionSnapshot as RetentionByChannel;
-    const channel = reservation.reservation.channel as 'terminal.cache' | 'native.mirror';
-    const capturedAt = this.nowMs();
-    const retention = snapshot[channel] ?? { mode: 'none' as const };
-    const expiresAt =
-      retention.mode === 'none' ? null : capturedAt + retention.durationSeconds * 1000;
     try {
       await db.transaction(async (tx) => {
         const [freshGrant] = await tx
