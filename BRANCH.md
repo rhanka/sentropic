@@ -133,7 +133,7 @@ Actions with the following status should be included around tasks only if really
 - [x] **Lot 8 — Merge origin/main, resolve in scope**
   - [x] Merge `origin/main` (merge commit, no squash, no rebase); conflicts limited to the P1 manifest + sidecar, resolved with ours then regenerated.
   - [x] Containment: `track events-contains` OK, all 342 branch event ids survive.
-- [ ] **Lot 9 — Remediate markdown-it HIGH (GHSA-253c-mchw-3w2r, GHSA-r7fv-28h4-cvq7)**
+- [x] **Lot 9 — Remediate markdown-it HIGH (GHSA-253c-mchw-3w2r, GHSA-r7fv-28h4-cvq7)**
   - [x] Pin `markdown-it@14.3.2` via root `overrides` (fixes both advisories; satisfies `^14.0.0`/`^14.1.0` dependent ranges).
   - [x] Pinned sed bump in `package-lock.json` (14.3.0) and `ui/package-lock.json` (14.1.1) via `lock-markdown-it-direct` (BR710-EX2, mirrors `lock-api-direct` precedent).
   - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock); no P1 regen expected.
