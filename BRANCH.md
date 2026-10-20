@@ -114,7 +114,7 @@
   - [x] Delivery constraints: push with a lease on remote head `6ca10d3e63406a4fc093ec4f4099866607ef3c0d`; retain the draft state and report the new GitHub run separately, without merging or publishing.
 - [ ] **Lot 9 — Astra round-1 corrections**
   - [x] Merge current `origin/main` as requested; retain draft PR #708 and keep this worktree single-writer.
-  - [ ] Bind source provenance to publication replay identity and write it only inside the idempotent operation; HTTP/MCP regressions.
+  - [x] Bind validated source presence/content (including recipe order) to the server replay hash; source writes run within the idempotent commit. HTTP/MCP regressions failed before the fix and pass 8/8 afterward.
   - [ ] Bound cumulative staged bytes by trusted upload/publication ceilings before decoding or writes; multi-chunk and override regressions.
   - [ ] Preflight upload publication metadata before consuming the session; corrected-commit regression.
   - [ ] Run artifacts, packed-consumer and L5 qualification; refresh retained P1 only if needed, then push without merging, marking ready or publishing.
