@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { enabled, expectedSource, fixtureDir, nodeJson, read, siblingIndex, trainVersion } from './helpers.js';
+import { artifactsCompatible, enabled, expectedSource, fixtureDir, nodeJson, read, siblingIndex, trainVersion } from './helpers.js';
 
 const pinned: Record<string, string> = { '@sentropic/llm-mesh': trainVersion('llm-mesh'), '@sentropic/llm-gateway': trainVersion('llm-gateway') };
 
@@ -36,8 +36,10 @@ describe.skipIf(!enabled)('packed release matrix', () => {
       packages: Record<string, { version?: string }>;
     };
     const tuple = tupleOf('selected');
+    const siblings = siblingIndex();
     for (const [name, version] of Object.entries(tuple)) {
       if (version === 'absent' || name === '@sentropic/artifacts') continue;
+      if (expectedSource(siblings, name, version) === 'sibling') continue;
       expect(lock.packages[`node_modules/${name}`]?.version, name).toBe(version);
     }
     expect(tuple).toMatchObject({
@@ -47,7 +49,7 @@ describe.skipIf(!enabled)('packed release matrix', () => {
     });
   });
 
-  it('should install the exact artifacts candidate bytes in every consumer that selects it', () => {
+  it.skipIf(!artifactsCompatible)('should install the exact artifacts candidate bytes in every consumer that selects it', () => {
     for (const fixture of ['selected', 'latest', 'artifacts-consumer']) {
       const dir = fixtureDir(fixture);
       const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));

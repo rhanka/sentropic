@@ -3,6 +3,7 @@ import {
   isProviderModuleId,
   LLM_MESH_PACKAGE,
   LLM_MESH_RANGE,
+  MCP_PLATFORM_PACKAGE,
   MODULE_CATALOG_INFO,
   PROVIDER_CATALOG,
   type PeerRequirement,
@@ -64,6 +65,18 @@ const isRefusal = (value: object): value is Refusal => 'reason' in value;
 function inspect(entry: ProviderDescriptor, anchorDir: string): Inspection | Refusal {
   const main = checkPackage(entry.packageName, entry.range, anchorDir, entry.subpath);
   if (isRefusal(main)) return main;
+  if (entry.id === 'mcp/artifacts') {
+    const declared = main.pkg.manifest?.peerDependencies as Record<string, unknown> | undefined;
+    const range = declared?.[MCP_PLATFORM_PACKAGE];
+    const selected = findInstalledPackage(MCP_PLATFORM_PACKAGE, anchorDir);
+    const owned = findInstalledPackage(MCP_PLATFORM_PACKAGE, main.pkg.dir);
+    if (typeof range !== 'string' || !selected || !owned
+      || selected.dir !== owned.dir || !satisfiesRange(selected.version, range)) {
+      return { reason: 'incompatible_version', packageName: MCP_PLATFORM_PACKAGE,
+        ...(typeof range === 'string' ? { requiredRange: range } : {}),
+        ...(selected && versionOf(selected) ? { installedVersion: versionOf(selected) } : {}) };
+    }
+  }
   if (entry.meshCoherence) {
     const gatewayMesh = findInstalledPackage(LLM_MESH_PACKAGE, main.pkg.dir);
     if (!gatewayMesh) return { reason: 'not_installed', packageName: LLM_MESH_PACKAGE, requiredRange: LLM_MESH_RANGE };
