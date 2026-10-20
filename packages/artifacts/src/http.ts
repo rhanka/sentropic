@@ -474,12 +474,13 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           const acl = await requireVisible(artifactId, request.actorId);
           assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
           const maxSize = body['maxSize'];
-          if (maxSize !== undefined && (!Number.isInteger(maxSize) || (maxSize as number) < 1)) {
+          if (maxSize !== undefined && (!Number.isSafeInteger(maxSize) || (maxSize as number) < 1)) {
             throw new Error('invalid request: maxSize must be a positive integer');
           }
+          const limits = deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS;
           const begun = await uploads.begin({
             mimeType: needString(body['mimeType'], 'mimeType'),
-            maxSize: maxSize as number | undefined,
+            maxSize: Math.min((maxSize as number | undefined) ?? Infinity, limits.maxFileBytes, limits.maxTotalBytes),
           });
           uploadOwners.set(begun.uploadId, { artifactId, ownerId: request.actorId });
           return { status: 201, body: begun };
@@ -490,12 +491,14 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           const uploadId = needString(body['uploadId'], 'uploadId');
           requireUploadOwner(uploadId, request.actorId);
           const offset = body['offset'];
-          if (!Number.isInteger(offset) || (offset as number) < 0) {
+          if (!Number.isSafeInteger(offset) || (offset as number) < 0) {
             throw new Error('invalid request: offset must be a non-negative integer');
           }
           const limits = deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS;
+          const remaining = Math.min(uploads.remainingBytes(uploadId, offset as number),
+            limits.maxFileBytes - (offset as number), limits.maxTotalBytes - (offset as number));
           const appended = await uploads.append(uploadId, offset as number,
-            needBytes(body['bytes'], Math.min(limits.maxFileBytes, limits.maxTotalBytes)));
+            needBytes(body['bytes'], remaining));
           return { status: 200, body: appended };
         }
 
