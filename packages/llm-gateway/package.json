@@ -23,6 +23,14 @@
     "./auth-hono": {
       "types": "./dist/caller-auth/auth-hono.d.ts",
       "import": "./dist/caller-auth/auth-hono.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    },
+    "./node/control-client": {
+      "types": "./dist/node/control-client.d.ts",
+      "import": "./dist/node/control-client.js"
     }
   },
   "files": [

@@ -77,12 +77,12 @@ describe('explicit 503 while B2-B4 dependencies are absent', () => {
     });
     expect(anthropic.status).toBe(503);
     expect(await anthropic.json()).toEqual({
-      type: 'error', error: { type: 'overloaded_error', message: 'service temporarily unavailable' },
+      type: 'error', error: { type: 'overloaded_error', message: 'authentication service temporarily unavailable' },
     });
     const openai = await host.app.request('/v1/chat/completions', chatRequest(true));
     expect(openai.status).toBe(503);
     expect(await openai.json()).toEqual({ error: {
-      message: 'service temporarily unavailable', type: 'rate_limit_error', code: 'overloaded',
+      message: 'authentication service temporarily unavailable', type: 'rate_limit_error', code: 'overloaded',
     } });
     const models = await host.app.request('/v1/models', { headers: { authorization: AUTHORIZATION } });
     expect(models.status).toBe(503);

@@ -9,13 +9,19 @@ import { FakeRouteDirectory, routeAccounts, routingSubject } from './fixtures/ro
 
 const request = { requestedModel: 'gemini-3.5-flash' } as const;
 
+// Explicit legacy mapping policy for fallback/health diagnostics; exact defaults are tested independently.
+const selectedTableProfiles = () => {
+  const profiles = new InMemoryRoutePolicyProfiles([{ name: 'selected-table', revision: 'v1',
+    policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true } }]);
+  profiles.activate('selected-table'); return profiles;
+};
 describe('opaque route planner', () => {
   it('orders redacted candidates without exposing executable account references', async () => {
     const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory() });
     const plan = await planner.plan(routingSubject(), request);
 
     expect(plan.diagnostics.map((item) => item.diagnosticAccountRef))
-      .toEqual(['acct_new', 'acct_old']);
+      .toEqual(['acct_new']);
     expect(plan.candidateRefs[0]).toMatch(/^candidate_/);
     expect(JSON.stringify(plan)).not.toContain('internal-new');
   });
@@ -133,7 +139,7 @@ describe('opaque route planner', () => {
     }));
   });
 
-  it('serves the stale sticky target without mutating stored state on model switch', async () => {
+  it('refuses an ungranted model switch without serving the stale sticky target', async () => {
     const directory = new FakeRouteDirectory([
       {
         accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
@@ -158,35 +164,17 @@ describe('opaque route planner', () => {
     const before = planner.describeAffinity(routingSubject(), 'switch');
     expect(before?.target.providerId).toBe('anthropic');
 
-    const fresh = await planner.plan(routingSubject(), {
+    await expect(planner.plan(routingSubject(), {
       requestedModel: 'claude-opus-5-5', affinityKey: 'switch',
-    });
-    expect(fresh.diagnostics).toHaveLength(1);
-    expect(fresh.diagnostics[0]).toMatchObject({
-      requestedModel: 'claude-opus-5-5',
-      actualProviderId: 'anthropic', actualModelId: 'claude-opus-5',
-      actualTransportProviderId: 'claude-code', reason: 'sticky',
-      cacheContinuityRisk: false,
-    });
-    // Plan time never mutates stored state.
+    })).rejects.toMatchObject({ code: 'no-route' });
+    const quote = planner.quote({ requestedModel: 'claude-opus-5-5', ceiling: { inputTokens: 1, outputTokens: 10 }, now: new Date() });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-opus-5-5', affinityKey: 'switch', quote }))
+      .rejects.toMatchObject({ code: 'no-route' });
     expect(planner.describeAffinity(routingSubject(), 'switch')).toEqual(before);
-
-    // The quoted path ignores the unquoted sticky target and plans fresh.
-    const quote = planner.quote({
-      requestedModel: 'claude-opus-5-5',
-      ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
-      now: new Date(),
-    });
-    const pinned = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'switch', quote,
-    });
-    expect(pinned.diagnostics[0]).toMatchObject({
-      actualProviderId: 'openai', actualModelId: 'gpt-6.1-sol', reason: 'alias',
-    });
-    expect(planner.describeAffinity(routingSubject(), 'switch')).toEqual(before);
+    expect(directory.prepared).toHaveLength(1);
   });
 
-  it('serves the sticky affinity when it conflicts with an explicit restriction', async () => {
+  it('refuses a conflicting explicit account restriction without changing the pin', async () => {
     const directory = new FakeRouteDirectory([
       {
         accountRef: 'codex-a', diagnosticAccountRef: 'acct_a',
@@ -203,7 +191,7 @@ describe('opaque route planner', () => {
     ]);
     const planner = new InMemoryRoutePlanner({ directory });
     const first = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'pinned',
+      requestedModel: 'gpt-6.1-sol', affinityKey: 'pinned',
       explicit: { diagnosticAccountRef: 'acct_a' },
     });
     await (await planner.prepareAttempt(
@@ -211,18 +199,14 @@ describe('opaque route planner', () => {
     )).complete();
     const before = planner.describeAffinity(routingSubject(), 'pinned');
 
-    const conflicting = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'pinned',
-      explicit: { diagnosticAccountRef: 'acct_b' },
-    });
-    expect(conflicting.diagnostics[0]).toMatchObject({
-      diagnosticAccountRef: 'acct_a', actualModelId: 'gpt-6.1-sol', reason: 'sticky',
-    });
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'gpt-6.1-sol', affinityKey: 'pinned', explicit: { diagnosticAccountRef: 'acct_b' },
+    })).rejects.toMatchObject({ code: 'no-route' });
     expect(planner.describeAffinity(routingSubject(), 'pinned')).toEqual(before);
     expect(directory.prepared).toHaveLength(1);
   });
 
-  it('serves the sticky target when the account stops advertising the model', async () => {
+  it('refuses a sticky account that no longer advertises the requested model', async () => {
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
@@ -231,7 +215,7 @@ describe('opaque route planner', () => {
     }]);
     const planner = new InMemoryRoutePlanner({ directory });
     const first = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility',
+      requestedModel: 'gpt-6.1-sol', affinityKey: 'astra-eligibility',
     });
     await (await planner.prepareAttempt(
       routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
@@ -241,17 +225,14 @@ describe('opaque route planner', () => {
     // The account stays ready but no longer advertises Sol.
     directory.accounts[0] = { ...directory.accounts[0]!, supportedModelIds: [] };
 
-    const sticky = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility',
-    });
-    expect(sticky.diagnostics[0]).toMatchObject({
-      actualModelId: 'gpt-6.1-sol', reason: 'sticky',
-    });
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'gpt-6.1-sol', affinityKey: 'astra-eligibility',
+    })).rejects.toMatchObject({ code: 'no-route' });
     expect(planner.describeAffinity(routingSubject(), 'astra-eligibility')).toEqual(before);
     expect(directory.prepared).toHaveLength(1);
   });
 
-  it('serves the quoted sticky target when the account stops advertising the model', async () => {
+  it('refuses an ineligible sticky account even when the model was quoted', async () => {
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
@@ -260,14 +241,14 @@ describe('opaque route planner', () => {
     }]);
     const planner = new InMemoryRoutePlanner({ directory });
     const first = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility-quoted',
+      requestedModel: 'gpt-6.1-sol', affinityKey: 'astra-eligibility-quoted',
     });
     await (await planner.prepareAttempt(
       routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
     )).complete();
     const before = planner.describeAffinity(routingSubject(), 'astra-eligibility-quoted');
     const quote = planner.quote({
-      requestedModel: 'claude-opus-5-5',
+      requestedModel: 'gpt-6.1-sol',
       ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
       now: new Date(),
     });
@@ -275,17 +256,14 @@ describe('opaque route planner', () => {
     // The account stays ready but no longer advertises Sol.
     directory.accounts[0] = { ...directory.accounts[0]!, supportedModelIds: [] };
 
-    const sticky = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility-quoted', quote,
-    });
-    expect(sticky.diagnostics[0]).toMatchObject({
-      actualModelId: 'gpt-6.1-sol', reason: 'sticky',
-    });
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'gpt-6.1-sol', affinityKey: 'astra-eligibility-quoted', quote,
+    })).rejects.toMatchObject({ code: 'no-route' });
     expect(planner.describeAffinity(routingSubject(), 'astra-eligibility-quoted')).toEqual(before);
     expect(directory.prepared).toHaveLength(1);
   });
 
-  it('keeps the stale affinity without migration on standard alias success', async () => {
+  it('refuses implicit policy migration while retaining the original affinity', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
       {
@@ -312,31 +290,11 @@ describe('opaque route planner', () => {
       routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
     )).complete();
 
-    const fresh = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'migrate',
-    });
-    expect(fresh.diagnostics[0]).toMatchObject({
-      reason: 'sticky', actualModelId: 'claude-opus-5',
-    });
-    await (await planner.prepareAttempt(
-      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
-    )).complete();
-
-    const kept = planner.describeAffinity(routingSubject(), 'migrate');
-    expect(kept).toMatchObject({
-      revision: 1, diagnosticAccountRef: 'anthropic-redacted',
-    });
-    expect(kept?.target).toMatchObject({
-      providerId: 'anthropic', modelId: 'claude-opus-5',
-      transportProviderId: 'claude-code',
-    });
-    expect(events).toEqual([]);
-    const sticky = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'migrate',
-    });
-    expect(sticky.diagnostics[0]).toMatchObject({
-      reason: 'sticky', actualModelId: 'claude-opus-5',
-    });
+    const before = planner.describeAffinity(routingSubject(), 'migrate');
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-opus-5-5', affinityKey: 'migrate' }))
+      .rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'migrate')).toEqual(before);
+    expect(events).toEqual([]); expect(directory.prepared).toHaveLength(1);
   });
 
   it('leaves a stale affinity untouched when the standard alias plan fails', async () => {
@@ -363,13 +321,10 @@ describe('opaque route planner', () => {
     )).complete();
     const before = planner.describeAffinity(routingSubject(), 'stale');
 
-    const fresh = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'stale',
-    });
-    await (await planner.prepareAttempt(
-      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
-    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-opus-5-5', affinityKey: 'stale' }))
+      .rejects.toMatchObject({ code: 'no-route' });
     expect(planner.describeAffinity(routingSubject(), 'stale')).toEqual(before);
+    expect(directory.prepared).toHaveLength(1);
   });
 
   it('leaves a stale affinity untouched on commit-then-failure or commit-then-cancellation', async () => {
@@ -396,62 +351,24 @@ describe('opaque route planner', () => {
       return { directory, events, planner };
     };
 
-    {
-      const { planner, events } = makeIsolatedPlanner();
-      const first = await planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-fail',
-      });
-      await (await planner.prepareAttempt(
-        routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
-      )).complete();
-      const beforeFail = planner.describeAffinity(routingSubject(), 'stale-commit-fail');
-
-      const failed = await planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-fail',
-      });
-      const failedAttempt = await planner.prepareAttempt(
-        routingSubject(), failed.planRef, failed.candidateRefs[0]!, 'req-2', 0,
-      );
-      await failedAttempt.markCommitted();
-      await failedAttempt.recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
-      expect(planner.describeAffinity(routingSubject(), 'stale-commit-fail')).toEqual(beforeFail);
-
-      // The route-scoped failure suppresses the sticky route, so a new
-      // alias plan on the same planner fails closed while the stale affinity
-      // stays untouched.
-      await expect(planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-fail',
-      })).rejects.toMatchObject({ code: 'no-route' });
-      expect(planner.describeAffinity(routingSubject(), 'stale-commit-fail')).toEqual(beforeFail);
-
-      expect(events).toEqual([]);
-    }
-
-    {
-      const { planner, events } = makeIsolatedPlanner();
-      const first = await planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-cancel',
-      });
-      await (await planner.prepareAttempt(
-        routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
-      )).complete();
-      const beforeCancel = planner.describeAffinity(routingSubject(), 'stale-commit-cancel');
-
-      const cancelled = await planner.plan(routingSubject(), {
-        requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-cancel',
-      });
-      const cancelledAttempt = await planner.prepareAttempt(
-        routingSubject(), cancelled.planRef, cancelled.candidateRefs[0]!, 'req-2', 0,
-      );
-      await cancelledAttempt.markCommitted();
-      await cancelledAttempt.releaseCancelled();
-      expect(planner.describeAffinity(routingSubject(), 'stale-commit-cancel')).toEqual(beforeCancel);
-
-      expect(events).toEqual([]);
+    for (const terminal of ['failure', 'cancelled']) {
+      const { planner, directory, events } = makeIsolatedPlanner();
+      const input = { requestedModel: 'claude-opus-5', affinityKey: terminal };
+      const first = await planner.plan(routingSubject(), input);
+      await (await planner.prepareAttempt(routingSubject(), first.planRef, first.candidateRefs[0]!, 'first', 0)).complete();
+      const before = planner.describeAffinity(routingSubject(), terminal);
+      await expect(planner.plan(routingSubject(), { ...input, requestedModel: 'claude-opus-5-5' })).rejects.toMatchObject({ code: 'no-route' });
+      const active = await planner.plan(routingSubject(), input);
+      const attempt = await planner.prepareAttempt(routingSubject(), active.planRef, active.candidateRefs[0]!, 'active', 0);
+      await attempt.markCommitted();
+      if (terminal === 'cancelled') await attempt.releaseCancelled();
+      else await attempt.recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+      expect(planner.describeAffinity(routingSubject(), terminal)).toEqual(before);
+      expect(directory.prepared).toHaveLength(2); expect(events).toEqual([]);
     }
   });
 
-  it('keeps the stale affinity without migration on commit-then-success', async () => {
+  it('keeps the original exact pin usable after refusing an implicit model upgrade', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
       {
@@ -478,30 +395,16 @@ describe('opaque route planner', () => {
       routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
     )).complete();
 
-    const fresh = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-success',
-    });
-    const attempt = await planner.prepareAttempt(
-      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
-    );
-    await attempt.markCommitted();
-    // The first validated frame must not migrate the stale affinity.
-    expect(planner.describeAffinity(routingSubject(), 'stale-commit-success')?.target.providerId)
-      .toBe('anthropic');
-    await attempt.complete();
-
-    const kept = planner.describeAffinity(routingSubject(), 'stale-commit-success');
-    expect(kept).toMatchObject({
-      revision: 1, diagnosticAccountRef: 'anthropic-redacted',
-    });
-    expect(kept?.target).toMatchObject({
-      providerId: 'anthropic', modelId: 'claude-opus-5',
-      transportProviderId: 'claude-code',
-    });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-success' }))
+      .rejects.toMatchObject({ code: 'no-route' });
+    const same = await planner.plan(routingSubject(), { requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-success' });
+    const attempt = await planner.prepareAttempt(routingSubject(), same.planRef, same.candidateRefs[0]!, 'req-2', 0);
+    await attempt.markCommitted(); await attempt.complete();
+    expect(planner.describeAffinity(routingSubject(), 'stale-commit-success')?.target.modelId).toBe('claude-opus-5');
     expect(events).toEqual([]);
   });
 
-  it('keeps the sticky model without promotion on a same-account switch', async () => {
+  it('serves the newly requested exact model on a same-account switch', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
@@ -522,19 +425,19 @@ describe('opaque route planner', () => {
     )).complete();
 
     const fresh = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'same-account',
+      requestedModel: 'gpt-6.1-sol', affinityKey: 'same-account', policyOverride: { fallbackMode: 'one-way' },
     });
     expect(fresh.diagnostics[0]).toMatchObject({
-      actualModelId: 'gpt-6-sol', reason: 'sticky',
+      actualModelId: 'gpt-6.1-sol', reason: 'sticky',
     });
     await (await planner.prepareAttempt(
       routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
     )).complete();
 
     expect(planner.describeAffinity(routingSubject(), 'same-account')).toMatchObject({
-      revision: 1, diagnosticAccountRef: 'codex-redacted',
+      revision: 2, diagnosticAccountRef: 'codex-redacted',
     });
-    expect(events).toEqual([]);
+    expect(events).toContainEqual(expect.objectContaining({ operation: 'promote', cacheContinuityRisk: false }));
   });
 
   it.each(['route', 'account', 'transport', 'provider-model'] as const)(
@@ -554,7 +457,7 @@ describe('opaque route planner', () => {
           readiness: 'ready', revision: 'r1',
         },
       ]);
-      const planner = new InMemoryRoutePlanner({ directory });
+      const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(), directory });
       const first = await planner.plan(routingSubject(), {
         requestedModel: 'claude-opus-5-5',
       });
@@ -592,7 +495,7 @@ describe('opaque route planner', () => {
       supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready', revision: 'r1',
     }]);
-    const planner = new InMemoryRoutePlanner({
+    const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(),
       directory,
       clock: { now: () => new Date(now) },
     });
@@ -629,7 +532,7 @@ describe('opaque route planner', () => {
       supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready', revision: 'r1',
     }]);
-    const planner = new InMemoryRoutePlanner({
+    const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(),
       directory,
       clock: { now: () => new Date(now) },
     });
@@ -673,7 +576,7 @@ describe('opaque route planner', () => {
         readiness: 'ready', revision: 'r1',
       },
     ]);
-    const planner = new InMemoryRoutePlanner({ directory });
+    const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(), directory });
     const first = await planner.plan(routingSubject(), {
       requestedModel: 'claude-opus-5-5', affinityKey: 'sticky-astra',
     });
@@ -690,7 +593,7 @@ describe('opaque route planner', () => {
     });
   });
 
-  it('serves only Sol on permitted rotation without rebinding the affinity', async () => {
+  it('records a permitted account rotation without changing the selected model', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
       {
@@ -706,7 +609,7 @@ describe('opaque route planner', () => {
         readiness: 'ready', revision: 'r1',
       },
     ]);
-    const planner = new InMemoryRoutePlanner({
+    const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(),
       directory,
       affinityAudit: (event) => events.push(event),
     });
@@ -727,11 +630,11 @@ describe('opaque route planner', () => {
     await (await planner.prepareAttempt(
       routingSubject(), fallback.planRef, fallback.candidateRefs[1]!, 'req-2', 1,
     )).complete();
-    // Same-triple rotation keeps the established affinity without an audit event.
+    // Same-model account rotation is still a cache-continuity change.
     expect(planner.describeAffinity(routingSubject(), 'rotate-astra')).toMatchObject({
-      diagnosticAccountRef: 'acct_new', revision: 1,
+      diagnosticAccountRef: 'acct_old', revision: 2,
     });
-    expect(events).toEqual([]);
+    expect(events).toContainEqual(expect.objectContaining({ operation: 'rebind', cacheContinuityRisk: true }));
   });
 
   it('suppresses a failed preferred route until the injected clock reaches TTL', async () => {
@@ -789,7 +692,7 @@ describe('opaque route planner', () => {
     expect(degraded.diagnostics[0]?.diagnosticAccountRef).toBe('acct_old');
   });
 
-  it('auto-drops a sticky affinity whose account is gone instead of failing closed', async () => {
+  it('refuses a deleted account pin without silently replacing it', async () => {
     const directory = new FakeRouteDirectory();
     const planner = new InMemoryRoutePlanner({ directory });
     const first = await planner.plan(routingSubject(), {
@@ -809,22 +712,13 @@ describe('opaque route planner', () => {
     expect(removed).toBeGreaterThanOrEqual(0);
     directory.accounts.splice(removed, 1);
 
-    const next = await planner.plan(routingSubject(), {
-      ...request, affinityKey: 'session-gone',
-    });
-    expect(next.diagnostics.map((entry) => entry.diagnosticAccountRef)).toEqual(['acct_new']);
-    expect(planner.describeAffinity(routingSubject(), 'session-gone')).toBeNull();
-
-    // The replacement plan must prepare on the first request: the dropped
-    // pin carries no revision into the stored plan.
-    const replacement = await planner.prepareAttempt(
-      routingSubject(), next.planRef, next.candidateRefs[0]!, 'req-2', 0,
-    );
-    await replacement.complete();
-    expect(directory.prepared.at(-1)?.accountRef).toBe('internal-new');
+    await expect(planner.plan(routingSubject(), { ...request, affinityKey: 'session-gone' }))
+      .rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'session-gone')?.diagnosticAccountRef).toBe('acct_old');
+    expect(directory.prepared).toHaveLength(1);
   });
 
-  it('prepares the replacement on the first request under round-robin after an affinity auto-drop', async () => {
+  it('refuses a deleted account pin under round-robin', async () => {
     const directory = new FakeRouteDirectory();
     const planner = new InMemoryRoutePlanner({ directory });
     const roundRobin = {
@@ -846,16 +740,10 @@ describe('opaque route planner', () => {
     expect(removed).toBeGreaterThanOrEqual(0);
     directory.accounts.splice(removed, 1);
 
-    // The dropped pin must not linger in the stored revision or the
-    // round-robin reservation: the replacement prepares immediately.
-    const next = await planner.plan(routingSubject(), {
-      ...roundRobin, affinityKey: 'session-rr-gone',
-    });
-    const replacement = await planner.prepareAttempt(
-      routingSubject(), next.planRef, next.candidateRefs[0]!, 'req-2', 0,
-    );
-    await replacement.complete();
-    expect(directory.prepared.at(-1)?.accountRef).toBe('internal-new');
+    await expect(planner.plan(routingSubject(), { ...roundRobin, affinityKey: 'session-rr-gone' }))
+      .rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'session-rr-gone')?.diagnosticAccountRef).toBe('acct_old');
+    expect(directory.prepared).toHaveLength(1);
   });
 
   it('shares new-affinity round-robin and sticky affinity across authenticated sessions', async () => {
@@ -926,7 +814,7 @@ describe('opaque route planner', () => {
       ...directory.accounts[1]!,
       supportedModelIds: ['gemini-3.5-flash', 'gemini-3.1-flash-lite'],
     };
-    const planner = new InMemoryRoutePlanner({
+    const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(),
       directory,
       council: {
         ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
@@ -1124,7 +1012,7 @@ describe('opaque route planner', () => {
   });
 
   it('keeps the requested alias and Sol triple in success diagnostics', async () => {
-    const planner = new InMemoryRoutePlanner({
+    const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(),
       directory: new FakeRouteDirectory([{
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
@@ -1157,7 +1045,7 @@ describe('opaque route planner', () => {
       listDiagnostics: () => Promise<readonly typeof codexReauth[]>;
     };
     codexDirectory.listDiagnostics = async () => [codexReauth];
-    const codexError = await new InMemoryRoutePlanner({ directory: codexDirectory })
+    const codexError = await new InMemoryRoutePlanner({ profiles: selectedTableProfiles(), directory: codexDirectory })
       .plan(routingSubject(), { requestedModel: 'claude-opus-5-5' }).then(
         () => { throw new Error('expected rejection'); },
         (error: unknown) => error,
@@ -1174,7 +1062,7 @@ describe('opaque route planner', () => {
       listDiagnostics: () => Promise<readonly typeof museReauth[]>;
     };
     museDirectory.listDiagnostics = async () => [museReauth];
-    const museError = await new InMemoryRoutePlanner({ directory: museDirectory })
+    const museError = await new InMemoryRoutePlanner({ profiles: selectedTableProfiles(), directory: museDirectory })
       .plan(routingSubject(), { requestedModel: 'claude-opus-5-5' }).then(
         () => { throw new Error('expected rejection'); },
         (error: unknown) => error,
@@ -1196,7 +1084,7 @@ describe('opaque route planner', () => {
       listDiagnostics: () => Promise<readonly (typeof codexReauth | typeof museReauth)[]>;
     };
     directory.listDiagnostics = async () => [codexReauth, museReauth];
-    const planner = new InMemoryRoutePlanner({ directory });
+    const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(), directory });
 
     const error = await planner.plan(routingSubject(), {
       requestedModel: 'claude-opus-5-5',
@@ -1226,7 +1114,7 @@ describe('opaque route planner', () => {
       listDiagnostics: () => Promise<readonly (typeof codexReauth | typeof museReauth)[]>;
     };
     directory.listDiagnostics = async () => [codexReauth, museReauth];
-    const planner = new InMemoryRoutePlanner({ directory });
+    const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(), directory });
 
     const entries = await planner.describeAvailability(routingSubject(), {
       requestedModel: 'claude-opus-5-5',

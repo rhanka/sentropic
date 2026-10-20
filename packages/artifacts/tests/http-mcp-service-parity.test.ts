@@ -81,6 +81,59 @@ async function ensureSite(app: ReturnType<typeof makeApp>['app'], actor = OWNER,
 const FILES = [{ path: 'index.html', mimeType: 'text/html', bytes: [1, 2, 3] }];
 
 describe('http service parity', () => {
+  it.each([
+    'text/html', 'text/plain', 'text/css', 'text/javascript', 'application/javascript',
+    'application/ecmascript', 'application/json', 'application/xml', 'application/ld+json',
+    'application/atom+xml', 'image/svg+xml',
+  ])('should accept empty UTF-8 text for %s', async (mimeType) => {
+    const { app } = makeApp();
+    const artifactId = await ensureSite(app);
+    const published = await app.handle(req('POST', '/publish', {
+      artifactId, files: [{ path: 'empty', mimeType, text: '' }],
+    }, OWNER));
+    expect(published.status).toBe(201);
+    const current = await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER));
+    expect(JSON.parse((current.body as { manifest: string }).manifest).files[0].size).toBe(0);
+  });
+
+  it.each([
+    { text: 'x', bytes: [120] }, { text: '', bytes: [] }, {},
+    { text: null }, { text: 42 }, { text: ['x'] }, { text: 'x', bytes: null },
+    { mimeType: 'image/png', text: 'x' }, { mimeType: 'application/pdf', text: 'x' },
+    { mimeType: 'application/octet-stream', text: 'x' }, { mimeType: 'text/', text: 'x' },
+    { mimeType: 'text/html; charset=utf-8', text: 'x' }, { mimeType: 'text/html\n', text: 'x' },
+  ])('should reject invalid text inputs without creating a release: %j', async (content) => {
+    const { app } = makeApp();
+    const artifactId = await ensureSite(app);
+    const result = await app.handle(req('POST', '/publish', {
+      artifactId, files: [{ path: 'index.html', mimeType: 'text/html', ...content }],
+    }, OWNER));
+    expect(result).toEqual({ status: 400, body: { error: 'invalid_request' } });
+    expect((await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER))).status).toBe(404);
+  });
+
+  it('should publish UTF-8 text with the same manifest as bytes', async () => {
+    const { app } = makeApp();
+    const artifactId = await ensureSite(app);
+    const text = '<h1>Été à Montréal 🏠</h1>';
+    const bytes = [...new TextEncoder().encode(text)];
+    const file = { path: 'index.html', mimeType: 'text/html' };
+    const digests = new Set<string>();
+    for (const content of [{ text }, { bytes }]) {
+      expect((await app.handle(req('POST', '/publish', {
+        artifactId, files: [{ ...file, ...content }],
+      }, OWNER))).status).toBe(201);
+      const current = await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER));
+      const manifest = JSON.parse((current.body as { manifest: string }).manifest);
+      const digest = manifest.files[0].digest;
+      digests.add(digest);
+      const served = await app.handle(req('GET', `/content/${artifactId}/${digest}`, undefined, OWNER));
+      expect(served.body).toMatchObject({ bytes, size: bytes.length, mimeType: 'text/html' });
+      expect(manifest.files[0].size).toBe(bytes.length);
+    }
+    expect(digests.size).toBe(1);
+  });
+
   it('ensures identically through HTTP and direct calls', async () => {
     const { app, artifacts } = makeApp();
     const direct = await artifacts.ensurePrivateView({
