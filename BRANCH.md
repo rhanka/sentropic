@@ -34,6 +34,7 @@
 - [x] Exception process: record BRWRAP-EXn with reason, impact and rollback before changing sensitive paths.
 
 ## Feedback Loop
+- [x] Astra round 2 P3: refresh the obsolete README Artifacts paragraph to describe the qualified twelve-tool core and optional 27-tool Mesh 0.21.0 / Platform 0.4.0 / Artifacts 0.1.3 variant.
 - [x] New-head CI repair: installed comments failed with ETARGET for embedded platform >=0.4.0 <0.5.0; reproduced locally. Guarded siblings now precede every installed qualification; comments and Postgres major-upgrade probes resolve the verified platform through a container-local candidate registry. Consumer dependencies stay unchanged. Both real probes, the 22 wiring tests, lint and scope pass; Postgres 17.11→18.6 retains the cursor and operator audit. Package archives and P1 inputs are unchanged.
 - [x] Resume gates: mesh typecheck/lint and 987 tests; platform 345 tests and strict API extraction; full memory-l5-gate with regenerated P1; 15 installed core tests plus the 27-tool variant; 77 packaging tests; 34 clean-consumer import checks; 86 manifest-guard and 18 qualifier tests. All passed with ENV=test-cm-mcp-wrap. The isolated preparation test passed in 2.16s without a timeout change.
 - [x] Packaging resume: invalidate the selected lock's cached mesh entry before Make regeneration so the rebuilt same-version archive supplies its current dependency maps. The first refreshed lock only updated platform integrity and retained the old optional-peer metadata.
