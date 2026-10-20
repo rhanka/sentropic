@@ -4,10 +4,12 @@
   "source": {
     "specSha256": "f90c927964b44fdf6ad712eee9b894762250239384643a3790931c142d3aeeca",
     "l0Commit": "60a8bfa828b5eabd360232ea5865391c23f99f48",
-    "br3Commit": "7ed41eb393396fc6d973b22a4373290d19283f82",
-    "l5Head": "9dca0b6f047b0aeaf151e2a2a9cd325dce7aad83",
+    "br3Commit": "da3063068a285d3465340c605c696cb1f1d527db",
+    "l5Head": "13ffb6329eeeccd1698fcad5d2944193e6ecc220",
     "sdkRange": "^1.31.0",
-    "declaredLockSha256": "e23ff8fb080b467d8fda8f77e186309066d3fbe38a74cf1de39d65819fe3bd99"
+    "declaredLockSha256": "e23ff8fb080b467d8fda8f77e186309066d3fbe38a74cf1de39d65819fe3bd99",
+    "lockFingerprintVersion": 1,
+    "lockFingerprint": "cd9216d59f53b379dbc5571cea741e07f998bec87b505c9733291bc828498ebc"
   },
   "artifacts": [
     {
@@ -16,7 +18,7 @@
       "version": "0.3.1",
       "sha256": "afebb47aa5e95bf555a097a96cd552d57a288edc52a2a345b846eb77c5976511",
       "integrity": "sha512-oV9cXHwJX59mud68BRLKbu6wk3Aa474OOrUyh3ards9YegQtvCdLWSgYRMDulAxZhjPadCeXgZsGGYkp1kOXAg==",
-      "sourceHead": "9dca0b6f047b0aeaf151e2a2a9cd325dce7aad83",
+      "sourceHead": "13ffb6329eeeccd1698fcad5d2944193e6ecc220",
       "archive": "tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-platform-0.3.1-afebb47aa5e95bf555a097a96cd552d57a288edc52a2a345b846eb77c5976511.tgz"
     },
     {
@@ -25,7 +27,7 @@
       "version": "0.1.0",
       "sha256": "78ce7b5017bdd260338cc9d825498e385ae4a12e72af76424ea2cc0b83516e67",
       "integrity": "sha512-/OLKT5A2CJIplFOcUlfIbac5oU2FVF5EjGQzVzNXCDtkjv4vJS5RYBCkXvrjL6hCEUaLbugS2CYlEbqj679qYg==",
-      "sourceHead": "9dca0b6f047b0aeaf151e2a2a9cd325dce7aad83",
+      "sourceHead": "13ffb6329eeeccd1698fcad5d2944193e6ecc220",
       "archive": "tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-broker-0.1.0-78ce7b5017bdd260338cc9d825498e385ae4a12e72af76424ea2cc0b83516e67.tgz"
     }
   ],
@@ -72,7 +74,7 @@
     {"path":"tools/memory-mcp-l5/fixtures/l0/schema-assets.sha256","version":"1.0.0","sha256":"667646723c163341b42c34612a2d78f3eed1461f17b80d6dec98841ffc7fe9fd"},
     {"path":"tools/memory-mcp-l5/fixtures/l0/tool-schemas.json","version":"1.0.0","sha256":"584f4aa5d09ba2b8bc6af4737962141863bc89d55a101dafbe2edff8ed822dfa"},
     {"path":"tools/memory-mcp-l5/proof-catalog-v1.json","version":"1.0.0","sha256":"c8b0f9c8a907eb3d6a42e7a81d7509e6f5149aaf0b9f557842bda928c74c84be"},
-    {"path":"tools/memory-mcp-l5/schemas/artifact-manifest-v1.schema.json","version":"1.0.0","sha256":"4a43a66928c3000cdf48fe72c242e2d9cfbd2b3cc153851e9650ebc6c0cd9d8c"},
+    {"path":"tools/memory-mcp-l5/schemas/artifact-manifest-v1.schema.json","version":"1.0.0","sha256":"70b9023c6435541dafbaefe200f097aacb7669c9959c69e5bf0d457d1b769613"},
     {"path":"tools/memory-mcp-l5/schemas/checkpoint-v1.schema.json","version":"1.0.0","sha256":"144a428ae5abf99f76c7585d1976b821c2ef207f8685bd5bfa5f2f247084f3e5"}
   ]
 }
