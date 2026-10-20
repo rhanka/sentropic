@@ -24,6 +24,9 @@ import type {
 } from '@sentropic/mcp-platform/registry';
 import type { ToolConfigurationDiagnostic } from '@sentropic/mcp-platform/tool-configuration';
 
+export { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
+export type { CompiledMcpRegistry, CompileRegistryInput, CompileRegistryResult, RegistryDefinition };
+
 /** Static mesh-supplied builtin: metadata descriptor plus a loader (no dynamic code). */
 export interface McpRegistryBuiltin {
   readonly providerId: string;
