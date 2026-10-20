@@ -84,6 +84,7 @@ export interface CreateGatewayRouterOptions {
   readonly routeMetering?: RouteMeteringSink;
   /** Trusted host/workspace/request policy projection; never reads body ownership. */
   readonly routeInput?: RouteFlowDeps['routeInput'];
+  readonly requestAudit?: RouteFlowDeps['requestAudit'];
   /** `X-Sentropic-Request-Id` source (spec §3b). Defaults to a per-call id. */
   readonly requestId?: () => string;
   /**
@@ -269,6 +270,7 @@ export const createGatewayRouter = (
         config, routePlanner: options.routePlanner, metering: options.routeMetering,
         ...(options.routeDispatch ? { dispatch: options.routeDispatch } : {}),
         ...(options.routeInput ? { routeInput: options.routeInput } : {}),
+        ...(options.requestAudit ? { requestAudit: options.requestAudit } : {}),
         ...(options.budget ? { budget: options.budget } : {}),
         nativeMessagesEnabled: options.nativeMessagesEnabled,
       }
@@ -329,9 +331,17 @@ export const createGatewayRouter = (
       return sendError(c, notImplemented(wire), id);
     }
     const flowRequest = {
+      receiptId: undefined as string | undefined,
       wire, headers, body, bodyLease, model, stream, authContext,
       signal: c.req.raw.signal,
       ...(wire === 'openai-responses' ? { responsesLimits } : {}),
+    };
+    const includeReceipt = () => { if (flowRequest.receiptId) c.header('X-Sentropic-Receipt', flowRequest.receiptId); };
+    const refuseReceipt = async () => {
+      if (flowRequest.receiptId) {
+        try { await options.requestAudit?.refuse?.(flowRequest.receiptId); } catch { /* Retain pending evidence for recovery. */ }
+      }
+      includeReceipt();
     };
     body = undefined;
     bodyLease.trackDetach(() => { flowRequest.body = undefined; });
@@ -342,6 +352,7 @@ export const createGatewayRouter = (
           ? await runRouteJsonFlow(routeFlowDeps, flowRequest)
           : await runJsonFlow(flowDeps!, flowRequest);
         const native = 'relay' in result && result.relay === 'native';
+        includeReceipt();
         forwardProviderHeaders(c, result.headers, native);
         c.header(REQUEST_ID_HEADER, id);
         if (!native) c.header(SERVED_HEADER, servedHeaderValue(result.servedTarget));
@@ -353,6 +364,7 @@ export const createGatewayRouter = (
         }
         return c.json(result.body as object, result.status as 200);
       } catch (error) {
+        await refuseReceipt();
         return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
       }
     }
@@ -372,11 +384,13 @@ export const createGatewayRouter = (
         ? await runRouteStreamFlow(routeFlowDeps, flowRequest)
         : await runStreamFlow(flowDeps!, flowRequest);
     } catch (error) {
+      await refuseReceipt();
       c.req.raw.signal.removeEventListener('abort', abort);
       return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
     }
 
     const streamNative = 'relay' in streamResult && streamResult.relay === 'native';
+    includeReceipt();
     forwardProviderHeaders(c, streamResult.headers, streamNative);
     streamResult = { ...streamResult,
       stream: retainGatewayStreamBody(streamResult.stream, bodyLease, cancellation.signal) };

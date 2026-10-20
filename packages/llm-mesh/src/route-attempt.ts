@@ -25,8 +25,8 @@ export const prepareStoredRouteAttempt = async (input: {
     candidate: RankedRouteCandidate,
     classification: RouteFailureClassification,
   ) => void;
-  readonly onCommitted: (stored: StoredPlan, candidate: RankedRouteCandidate) => void;
-  readonly onSuccess: (stored: StoredPlan, candidate: RankedRouteCandidate) => void;
+  readonly onCommitted: (stored: StoredPlan, candidate: RankedRouteCandidate) => void | Promise<void>;
+  readonly onSuccess: (stored: StoredPlan, candidate: RankedRouteCandidate) => void | Promise<void>;
   readonly onCancelled: (stored: StoredPlan, candidate: RankedRouteCandidate) => void;
 }): Promise<PreparedRouteAttempt> => {
   const { stored } = input;
@@ -87,13 +87,13 @@ export const prepareStoredRouteAttempt = async (input: {
     markCommitted: async () => {
       if (committed) return;
       committed = true;
-      input.onCommitted(stored, candidate);
+      await input.onCommitted(stored, candidate);
       await attempt.markCommitted();
     },
     complete: async (usage) => {
       if (terminal) return;
       terminal = true;
-      input.onSuccess(stored, candidate);
+      await input.onSuccess(stored, candidate);
       await attempt.complete(usage);
     },
     releaseCancelled: async () => {

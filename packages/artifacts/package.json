@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/artifacts",
-  "version": "0.1.0",
-  "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9). Single 0.1.0 candidate for L-5a–5e; unpublished.",
+  "version": "0.1.2",
+  "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -24,6 +24,15 @@
       "types": "./dist/codecs.d.ts",
       "import": "./dist/codecs.js"
     },
+    "./adapters/s3": {
+      "types": "./dist/adapters/s3.d.ts",
+      "import": "./dist/adapters/s3.js"
+    },
+    "./adapters/postgres": {
+      "types": "./dist/adapters/postgres.d.ts",
+      "import": "./dist/adapters/postgres.js"
+    },
+    "./migrations/*": "./migrations/*",
     "./server/ports": {
       "types": "./dist/server/ports.d.ts",
       "import": "./dist/server/ports.js"
@@ -131,6 +140,7 @@
   },
   "files": [
     "dist",
+    "migrations",
     "README.md",
     "LICENSE"
   ],
@@ -143,21 +153,27 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@aws-sdk/client-s3": "^3.980.0",
+    "@sentropic/mcp-platform": ">=0.3.0 <0.4.0",
     "pg": "^8.12.0"
   },
-  "peerDependencies": {
-    "@sentropic/mcp-platform": ">=0.3.0 <0.4.0"
-  },
   "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": true
+    },
     "@sentropic/mcp-platform": {
+      "optional": true
+    },
+    "pg": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.980.0",
     "@types/node": "^22.10.10",
     "@types/pg": "^8.15.5",
+    "pg": "^8.12.0",
     "typescript": "5.4.5",
     "vitest": "4.1.0"
   }

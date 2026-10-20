@@ -1,7 +1,7 @@
-# Feature: GitHub seat credential custody study — rebase and reconciliation (PR #596)
+# Feature: GitHub seat credential custody study — owner decisions (PR #596)
 
 ## Objective
-Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_SEAT_CREDENTIAL_CUSTODY.md` with main and PR #659, as a documentation-only change. No new custody design is selected and no runtime behavior changes.
+- [x] Preserve the prior reconciliation with main and PR #659; merge fetched `origin/main` and apply the owner decisions of 2026-10-19 to `spec/SPEC_STUDY_GITHUB_SEAT_CREDENTIAL_CUSTODY.md`. Documentation only; no runtime delivery or qualification is claimed.
 
 ## Scope / Guardrails
 - Scope limited to `BRANCH.md` and `spec/SPEC_STUDY_GITHUB_SEAT_CREDENTIAL_CUSTODY.md` only.
@@ -13,7 +13,7 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
 - UAT on this branch is a document review only; no browser, API, or E2E surface changes.
 - In every `make` command, `ENV=<env>` is passed as the last argument.
 - All new text in English.
-- Branch: `spec/github-seat-credential-custody` (PR #596, kept open per owner instruction 2026-10-18). Rebased base: `origin/main` at `1472d961e098908e64ef60b83835af357888d031`. ENV alias: `test-pr596-custody` (no ports allocated; documentation-only).
+- Branch: `spec/github-seat-credential-custody` (PR #596). Owner instruction 2026-10-19: push, keep open, do not merge the PR or mark ready. Integration base: fetched `origin/main` at `f5c4c36a6d9e2f236d8a7f58784c2384ba32115f`; historical study evidence retains its explicitly pinned 2026-10-18 baseline. ENV alias: `test-pr596-custody` (no ports allocated; documentation-only).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -43,6 +43,7 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] `BR596-EX2` (2026-10-19): owner-authorized merge of `origin/main` at `f5c4c36a6d9e2f236d8a7f58784c2384ba32115f`. Reason: branch behind by 918 commits. Impact: 575 upstream paths imported unchanged, no conflicts; the merge's inherited diff exceeds the normal atomic-size/scope limit. `make scope-check` reports those inherited paths against the old HEAD; harness scope is also checked against the integrated main baseline. The resulting branch-specific diff remains the two Allowed Paths. No implementation-path edits are authorized by this exception. Rollback: revert the integration commit, preserving branch work. `.track/events.jsonl` has the same blob in both parents and the merged index; no Track write or acceptance claim is made.
 - `acknowledge` (2026-10-18): Two independent reviews of head `1019ef6020b8add72a66bf017e0dbe98e629f333` returned REQUEST_CHANGES for one shared P2 finding: the retained cost-risk instruction at study §9 read as a current pre-build gate. Fixed by marking that instruction historical and superseded (D7 no-reapproval-gate and Claude decided-continuation references); the unverified cost/terms risk is retained. Treatment record: `.h2a/reviews/pr596_treatment.md`. No other finding was raised by either review.
 - `deferred`: Custody job, resolver, and live qualification remain open on main (deployable-process custody/G4 and B4). Owner: custody maintainer/conductor for G4 reconciliation; h2a owner for Claude execution qualification; platform/custody operator for preprod delivery and per-device revocation evidence. Status: recorded as existing dependencies in the study; not blockers for merging this documentation-only reconciliation. Production stays deferred under O-D3.
 - `BR596-EX1` (2026-10-18): exception for `.h2a/reviews/custody-allrepos-reconciliation.md`, the Astra reconciliation record required by the owner packet of 2026-10-18. Reason: the packet names that path as a deliverable; it sits outside the Allowed Paths above. Impact: `.h2a/` is gitignored (`.gitignore:45`), so the file is a local record only and enters no commit. Rollback: delete the file.
@@ -75,6 +76,12 @@ Rebase PR #596 onto current `origin/main` and reconcile `spec/SPEC_STUDY_GITHUB_
   - Switch back to the worktree after any review.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 6 — Owner decisions of 2026-10-19**
+  - [x] Verify PR #596's head branch with GitHub and `harness check branch`; fetch origin and merge the pinned main without conflicts (`BR596-EX2`).
+  - [ ] Apply G1's custody responsibilities and shared delivery/revocation contract; reconcile F09-F11.
+  - [ ] Apply G2's bounded Engram consumer/import consequences and H1's credential exclusion for both artifact modes; record G3 as outside this custody PR.
+  - [ ] Quote and date all four decisions; preserve sentropic-owned anchor-contract details and H1 domain names/DNS GO as open in their owning lanes.
+  - [ ] Review the two-file diff, run scope and whitespace checks, commit atomically through Make, push, and record the final head and CI status without merging or marking ready.
 - [x] **Round 1 dossier treatment (2026-10-18), finding 3**: separate the custodian workload's renewable payload and sole refresh authority from consumer access projections; reconcile F596-5 with D7, C2/C3 and the F596-3 multi-consumer proof. Documentation only; no lifecycle qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `PLAN.md`, and `plan/BRANCH_TEMPLATE.md`.

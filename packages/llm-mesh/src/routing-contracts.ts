@@ -8,6 +8,7 @@ import type {
 } from './native-messages.js';
 import type { RoutePolicy, RouteSelector } from './routing-policy.js';
 import type { TargetMapping } from './routing-targets.js';
+import type { LaunchRoutingContract } from './launch-routing-contract.js';
 
 export interface VerifiedRoutingSubject {
   readonly principalRef: string;
@@ -51,6 +52,7 @@ export interface PlannedRouteTarget {
 }
 
 export interface RoutePlanInput {
+  readonly launchRoutingContract?: LaunchRoutingContract;
   readonly requestedModel: string;
   /** Optional owner-scoped replacement; known Claude ids retain their Anthropic-first target. */
   readonly targetCandidatesOverride?: readonly TargetMapping[];
@@ -89,6 +91,7 @@ export interface RouteUsageCeiling {
 }
 
 export type RouteQuoteInput = Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'intent'
+  | 'launchRoutingContract'
   | 'requiredCapabilities' | 'requiredExecutionFeatures' | 'policyProfile' | 'policyOverride' | 'explicit'
   | 'nativeMessages'>
   & { readonly ceiling: RouteUsageCeiling; readonly now: Date };

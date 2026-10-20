@@ -162,7 +162,7 @@ describe('describeTargetRoutes (discovery)', () => {
     });
   });
 
-  it('gives a pure reader the same view with ZERO declaration (canonical entry points)', () => {
+  it('exports the shared table and requires explicit policy selection for its fallbacks', () => {
     // A consumer that declares nothing must see exactly the canonical set:
     // composing DEFAULT + LAUNCH_ALIAS is itself routing knowledge and must not
     // be re-implemented downstream.
@@ -218,13 +218,13 @@ describe('describeTargetRoutes (discovery)', () => {
         .reduce((total, targets) => total + targets.length, 0),
     );
 
-    const resolve = createCanonicalTargetResolver();
+    const resolve = createCanonicalTargetResolver({ allowEquivalentModels: true });
     expect(resolve('claude-opus-5-xhigh')?.model).toBe('claude-opus-5');
     expect(resolve('claude-opus-5')?.model).toBe('claude-opus-5');
     expect(resolve('claude-opus-4-8-xhigh')?.model).toBe('claude-opus-4-8');
     expect(resolve('claude-sonnet-5-xhigh')?.model).toBe('claude-sonnet-5');
 
-    const resolveCandidates = createCanonicalTargetCandidatesResolver();
+    const resolveCandidates = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true });
     expect(resolveCandidates('claude-opus-5-xhigh').map(
       (target) => target.transportProviderId,
     )).toEqual(['claude-code', 'muse', 'codex', 'cloud-code', 'mistral-vibe']);
@@ -234,7 +234,7 @@ describe('describeTargetRoutes (discovery)', () => {
   });
 
   it('exports every remapped Codex and Cloud Code fallback', () => {
-    const resolveCandidates = createCanonicalTargetCandidatesResolver();
+    const resolveCandidates = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true });
     const Muse = (effort: string) => ({
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-spark-1.3-contributor', effort,
@@ -297,7 +297,7 @@ describe('describeTargetRoutes (discovery)', () => {
   });
 
   it('exports the 5.5 families with muse first and no faithful target', () => {
-    const resolveCandidates = createCanonicalTargetCandidatesResolver();
+    const resolveCandidates = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true });
     const Muse = (effort: string) => ({
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-spark-1.3-contributor', effort,
@@ -363,4 +363,9 @@ describe('describeTargetRoutes (discovery)', () => {
     const serialized = JSON.stringify(routes);
     expect(serialized).not.toMatch(/token|secret|accountId/i);
   });
+});
+
+it('keeps default gateway re-export resolution exact', () => {
+  expect(createCanonicalTargetCandidatesResolver()('claude-opus-5-5')).toEqual([]);
+  expect(createCanonicalTargetResolver()('claude-opus-5')).toMatchObject({ providerId: 'anthropic', model: 'claude-opus-5' });
 });

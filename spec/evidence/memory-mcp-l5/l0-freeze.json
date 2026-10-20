@@ -1,0 +1,45 @@
+{
+  "specSha256": "f90c927964b44fdf6ad712eee9b894762250239384643a3790931c142d3aeeca",
+  "l0Commit": "60a8bfa828b5eabd360232ea5865391c23f99f48",
+  "imageDigest": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+  "checkpointSchemaSha256": "144a428ae5abf99f76c7585d1976b821c2ef207f8685bd5bfa5f2f247084f3e5",
+  "artifactManifestSchemaSha256": "4a43a66928c3000cdf48fe72c242e2d9cfbd2b3cc153851e9650ebc6c0cd9d8c",
+  "proofCatalogSha256": "c8b0f9c8a907eb3d6a42e7a81d7509e6f5149aaf0b9f557842bda928c74c84be",
+  "immutableFixtures": [
+    {
+      "path": "packages/mcp-platform/tests/wire-parity.test.ts",
+      "sha256": "7845d6ecf60abd2886bd5efe7cb51fb6eb8d94e16692c953150a6bcdf125f0a1"
+    },
+    {
+      "path": "packages/mcp-platform/src/mock/fake-connector.ts",
+      "sha256": "e39bf13a45a762fed758e385a908702af6c317e402a215c1e809a0bfe24ab9c5"
+    }
+  ],
+  "authorizedOwners": {
+    "ownerUat": [
+      "owner:antoinefa"
+    ],
+    "acceptances": {
+      "l4": [
+        "owner:l4",
+        "owner:engram-l4",
+        "owner:antoinefa"
+      ],
+      "platform": [
+        "owner:platform",
+        "owner:mcp-platform",
+        "owner:antoinefa"
+      ],
+      "broker": [
+        "owner:broker",
+        "owner:mcp-broker",
+        "owner:antoinefa"
+      ],
+      "transport": [
+        "owner:transport",
+        "owner:mcp-transport",
+        "owner:antoinefa"
+      ]
+    }
+  }
+}
