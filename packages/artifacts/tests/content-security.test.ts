@@ -30,6 +30,13 @@ const profile: ReaderProfile = {
 };
 
 describe('content headers', () => {
+  it.each(['text/html', 'text/css', 'image/png'])('should isolate %s from sibling origins', (mimeType) => {
+    for (const assetCacheSeconds of [undefined, 300]) {
+      expect(contentHeaders({ mimeType, size: 7, assetCacheSeconds })['cross-origin-resource-policy'])
+        .toBe('same-origin');
+    }
+  });
+
   it('serves HTML no-store with nosniff, frame denial and a restrictive CSP', () => {
     const headers = contentHeaders({ mimeType: 'text/html', size: 42 });
     expect(headers['content-type']).toBe('text/html; charset=utf-8');

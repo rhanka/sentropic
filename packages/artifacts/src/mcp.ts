@@ -18,10 +18,11 @@ import type {
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
 import type { ProviderParameterSchema, RegistryDefinition } from '@sentropic/mcp-platform/registry';
 import type { HttpRequest, HttpResponse } from './http.js';
+import { TEXT_MIME_PATTERN } from './http.js';
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.1.0';
+export const ARTIFACTS_PROVIDER_VERSION = '0.1.2';
 
 export const ARTIFACTS_TOOL_NAMES = [
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_ensure',
@@ -46,7 +47,13 @@ const record: Schema = {
   additionalProperties: { type: ['string', 'number', 'boolean', 'null'] },
 };
 const fileBytes: Schema = { type: 'array', items: int(0, 255) };
-const fileEntry = obj({ path: str, mimeType: str, bytes: fileBytes }, ['path', 'mimeType', 'bytes']);
+const fileEntry: Schema = {
+  ...obj({ path: str, mimeType: str, bytes: fileBytes, text: { type: 'string', description: 'UTF-8 text; mutually exclusive with bytes; text MIME types only.' } }, ['path', 'mimeType']),
+  oneOf: [
+    { required: ['bytes'], not: { required: ['text'] } },
+    { required: ['text'], not: { required: ['bytes'] }, properties: { mimeType: { pattern: TEXT_MIME_PATTERN } } },
+  ],
+};
 const sourceRef = obj(
   {
     kind: { type: 'string', enum: ['inline-original', 'base-commit', 'recipe'] },

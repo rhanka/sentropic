@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "peer": "@sentropic/comments@0.3.0",
+  "source": {
+    "path": "packages/comments/tests/conformance/comments-conformance.ts",
+    "sha256": "26cdaf181afbc73c145c57974c6762230757bc101a0418f8da0654f505fb7b00"
+  },
+  "vectors": {
+    "path": "packages/comments/tests/fixtures/revision-hash-v1.json",
+    "sha256": "26ee62b09d22f39438c344a9223564f08e696eeba95ddd0558f357407a40f0c0"
+  },
+  "artifacts": [
+    {
+      "file": "conformance.mjs",
+      "sha256": "a6ba1d58c054b5d9bbd6638586212d3fb9701b261d5c5e8b180de18f547f08f1"
+    },
+    {
+      "file": "revision-hash-v1.json",
+      "sha256": "bba49a941d968e023ba3750119b21e91213794562073f180e314a216534c3ad9"
+    }
+  ],
+  "compiler": "esbuild@0.25.5",
+  "external": "@sentropic/comments"
+}
