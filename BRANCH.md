@@ -71,7 +71,7 @@ Actions with the following status should be included around tasks only if really
 - [ ] **Lot 5 — Owner decisions (2026-10-19)**
   - [x] Verify PR #692 is draft/open on `docs/spec-mcp-registry-artifacts` at `261aaed6ed2a8652fdadef5107d72022240aa1cf`; `harness check branch` passes; fetch `origin`.
   - [x] Merge `origin/main` at `f5c4c36a6` (918 commits behind) without conflicts; no manual changes to inherited main files. Track containment passes for both parents (342/342 events); Track writes remain with the designated writer.
-  - [ ] Amend `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md`: dated verbatim decisions, federated authority, Engram/DS producer split and Sentropic annotation-model ownership; preserve the #679 historical record.
+  - [x] Amend `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md`: dated verbatim decisions, federated authority, Engram/DS producer split and Sentropic annotation-model ownership; preserve the #679 historical record. All G1/G2/G3/H1 apply to #692; #694 implementation/transfer and #596 custody changes remain in their owning PRs.
   - [ ] Amend `spec/SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md`: both domain modes per app, independent API-transport proposal, no exclusive A/B recommendation; domain names and exact DNS GO remain open.
   - [ ] Review decision coverage and removed alternatives; run `make scope-check`, harness branch/scope checks and `git diff --check` before delivery.
   - [x] API/UI/E2E tests, typecheck, runtime lint and UAT: not applicable to documentation-only amendments; no service or port allocation, checks use `ENV=test-spec-mcp-registry-artifacts`.
