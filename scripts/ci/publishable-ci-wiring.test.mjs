@@ -217,7 +217,7 @@ test('lint wiring follows baseline evidence, independently per package, before t
 });
 
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
-const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.1.3,jose@5.10.0,@sentropic/comments@0.3.0';
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.27.1,@sentropic/llm-gateway@0.21.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.1.3,jose@5.10.0,@sentropic/comments@0.3.0';
 
 test('cluster-mesh qualification installs every declared optional Sentropic peer', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages/cluster-mesh/package.json'), 'utf8'));

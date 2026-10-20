@@ -284,6 +284,10 @@
   - [x] PEERS tuple unified (ci.yml x3 + wiring test): drop mcp-platform (now regular dep, test forbids it in PEERS), artifacts 0.1.0 to 0.1.3 (merged peer range), keep mesh 0.27.0/gateway 0.21.0 qualification basis; wiring test 22 PASS.
   - [x] Stale candidate entry root-caused (same file: spec string across merge so npm reused locked metadata: platform peer 0.3.x, artifacts 0.1.0) and fixed by entry removal + refresh; packed test-lazy-package 77/15 PASS with new-head receipts.
   - [x] Gates on ENV=test-decision-v4l1 (last arg): typecheck+lint mesh/cluster PASS, full test-llm-mesh 1231/66 PASS, full test-cluster-mesh 1004 PASS/129 skipped, packed 77/15 PASS, train-lock PASS, scope-check PASS C2.
+- [x] **Lot V4-L1-PEERS — qualify gate needs unpublished judge-capable mesh (run 39385665441)**
+  - [x] Root cause: candidate has judge leaves but PEERS mesh@0.27.0 is published WITHOUT judge, so installed imports hard-fail; pre-publication design is pending-sibling-publish (exit 0 in candidate mode), which requires PEERS to name the unpublished version.
+  - [x] Fix: PEERS mesh 0.27.0 to 0.27.1 (ci.yml x3 + wiring test); gateway stays 0.21.0 (published, no judge surface); wiring test 22 PASS, ranges admit 0.27.1.
+  - [x] Gates: local qualify-published-install with candidate tarball + receipts + new PEERS must report pending-sibling-publish (exit 0); then scope-check, commit, push.
 - [x] **Lot V4-L1-MEM — memory L5 freeze mismatch from root-lock bumps (run 39384337780)**
   - [x] Root cause: memory pre-candidate manifest pins declaredLockSha256; our 0.27.1/0.21.1 bumps changed root lock sha so memory-l5-verify failed; job runs because memory_l5 filter includes package-lock.json.
   - [x] Fix per main pattern (b477879c8): retained superseded manifest in history/<sha>.json, re-pinned declaredLockSha256 to 56e03e4f, rewrote sidecar; archives/inventory untouched (platform/broker sources unchanged).
