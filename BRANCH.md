@@ -127,3 +127,7 @@
   - [x] Cover the reverse interleaving: an append held before its staging write blocks both finalization and another append, then the complete upload commits on retry. Document HTTP 409 conflicts; typecheck/lint and all 195 unit tests pass.
   - [x] All three packed proofs pass; guarded sibling archive SHA-256 is `9ea9ebb2ac3ca32496e9ddcc6a74d8a78976585d2d767a23180f395ac7c95618`. Refresh the selected fixture through Make and retain only the artifacts SHA-512 change.
   - [x] Delivery constraints: normal branch push and exact-head CI, using branch dispatch if no PR run starts; preserve draft status, with no merge or publication. CI results are reported separately after delivery.
+- [ ] **Lot 11 — Dispatch CI security repair**
+  - [x] Run `39461578087` on exact head `8d41c8d42` exposes six blocked gates from root-lock markdown-it 14.3.0: GHSA-253c-mchw-3w2r and GHSA-r7fv-28h4-cvq7.
+  - [x] Regenerate the root lock through Make/Docker to compatible markdown-it 14.3.3; only version, registry URL and integrity change. Both UI and complete production-workspace audit gates pass without exceptions.
+  - [ ] Retain P1 `014a1f01...`, regenerate its lock-bound provenance through memory-l5-pack and requalify; push and report green CI on the new exact head.
