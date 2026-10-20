@@ -494,8 +494,10 @@ load-ui:
 	@echo "📥 Loading UI image from artifact..."
 	@docker load -i ui-image.tar
 
-.PHONY: build-api-image
-build-api-image: ## Build the API Docker image for production
+.PHONY: build-api-image build-api-image-fresh
+build-api-image: ## Reuse the canonical production image when its tag exists; build only on established absence
+	@REGISTRY="$(REGISTRY)" API_IMAGE_NAME="$(API_IMAGE_NAME)" API_VERSION="$(API_VERSION)" API_IMAGE_RECEIPT="$(API_IMAGE_RECEIPT)" DOCKER_COMPOSE="$(DOCKER_COMPOSE)" bash scripts/resolve-api-image.sh
+build-api-image-fresh: ## Force a no-cache production build and record its identity (bypasses canonical-tag reuse)
 	API_IMAGE_REF= TARGET=production $(DOCKER_COMPOSE) build --no-cache api
 	@$(MAKE) record-api-image ENV=$(ENV)
 
@@ -531,6 +533,10 @@ test-ci-api-runtime: verify-api-image ## Prove the production artifact has no np
 .PHONY: test-ci-api-tag-guard
 test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision guard (absent, exists-same, exists-different)
 	@bash scripts/test-api-tag-guard.sh $(or $(CI_TAG_GUARD_CASE),all)
+
+.PHONY: test-ci-api-image-canonical
+test-ci-api-image-canonical: ci-test-env ## Regress canonical artifact resolution (reuse/absent/fail-closed) and tag inputs
+	@bash scripts/test-api-image-canonical.sh $(or $(CI_CANONICAL_CASE),all)
 
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 api-tool-version: ## Print the content-addressed CI toolbox tag
