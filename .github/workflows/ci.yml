@@ -209,6 +209,7 @@ jobs:
             api:
               - 'api/**'
               - 'apps/auth-idp/**'
+              - 'apps/llm-gateway/**'
               - 'package.json'
               - 'package-lock.json'
               - '.dockerignore'
