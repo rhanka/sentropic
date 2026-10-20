@@ -18,6 +18,16 @@ import {
 import { canonicalizeJson } from '../schema-validator.mjs';
 import { computeLockFingerprint } from '../lock-fingerprint.mjs';
 
+const SYNTH_MAKEFILE = [
+  'MEMORY_L5_NODE_IMAGE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6',
+  'build-mcp-platform:',
+  '\tnpm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node@22.20.1 >/dev/null',
+  'build-mcp-broker:',
+  '\tnpm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node@22.20.1 >/dev/null',
+  'api-extract-mcp-platform:',
+  '\tnpm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9 >/dev/null',
+].join('\n');
+
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SCHEMA_PATH = join(HERE, '..', 'schemas', 'checkpoint-v1.schema.json');
 const MANIFEST_SCHEMA_PATH = join(HERE, '..', 'schemas', 'artifact-manifest-v1.schema.json');
@@ -125,7 +135,9 @@ function buildCheckpointBundle(baseDir) {
   for (const a of artifacts) lockPackages[`node_modules/${a.name}`] = { version: a.version, resolved: a.archiveRef, integrity: a.integrity, sha256: a.sha256 };
   const lockRef = writeRef(baseDir, 'package-lock.json', { lockfileVersion: 3, packages: lockPackages });
   const instLockRef = writeRef(baseDir, 'receipts/installed-lock.json', { sdkVersion: '1.31.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'], packages: lockPackages });
-  const mfSource = { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: lockRef.sha256, lockFingerprintVersion: 1, lockFingerprint: computeLockFingerprint(JSON.parse(lockRef.bytes.toString('utf8'))) };
+  const mfSource = { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: lockRef.sha256, lockFingerprintVersion: 2,
+    lockFingerprint: computeLockFingerprint({ lockDoc: JSON.parse(lockRef.bytes.toString('utf8')), makefileText: SYNTH_MAKEFILE, configFiles: {} }),
+    declaredLockSnapshot: { path: `lock-snapshots/${lockRef.sha256}.package-lock.json`, sha256: lockRef.sha256 } };
   const toMfItem = (a) => ({ role: a.role, name: a.name, version: a.version, sha256: a.sha256, integrity: a.integrity, sourceHead: a.sourceHead, archive: a.archiveRef });
   const preMf = writeRef(baseDir, 'tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json', {
     manifestVersion: 1, stage: 'pre-candidate', source: mfSource, artifacts: [toMfItem(artifacts[1]), toMfItem(artifacts[2])], contractInventory,
