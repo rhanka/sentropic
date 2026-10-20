@@ -38,6 +38,7 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [ ] H1 concrete app/environment domain names and GO on exact DNS/TLS/rollback remain open with the owner and Sentropic hosting operator; both hosting modes are decided. No DNS work is part of #694.
 - [ ] G3 anchor-contract details remain open with the Sentropic comments/anchor maintainer; DS/Focus/Engram consumers jointly freeze and qualify them before A/B/C integration (spec FL-ANCHOR). Ownership is decided.
 - [x] DV3 owner decision closed 2026-10-18: question « quand on recopie la prod vers la preprod pour tester, est-ce qu'on copie aussi tes annotations privées (texte et captures d'écran) ? » — answer « Tout copier » = option B (Inclure); no `blocked` / `attention` item remains on this branch for DV3.
 - [x] Astra max review of PR #694 at `b9895373a` (NO-GO: 2 blocking P2, 2 P3) treated in this branch: canonical discussion-state separation, observed snapshot binding for third-party authoring, S7 source locator with digest and lot map, and commit-count freshness below; treatment table in `.h2a/reviews/spec694_treatment.md`.
@@ -70,6 +71,10 @@
 - [x] This branch has no UI change: UAT is an owner read of the promoted spec and cross-references on the draft PR; no service start and no `ENV=dev` test run.
 
 ## Plan / Todo (lot-based)
+- [x] **Lot R4-3 — H1 two-mode hosting (2026-10-19)**
+  - [x] Quote the dated H1 answer verbatim in `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md`; replace the separate-domain-only requirement with per-app subdomain or distinct-domain storage/views.
+  - [x] Specify capture/delivery qualification for both origins, namespace/resource/release and reader rights, no implicit shared session, mode-change rollback and file-level future test responsibilities; leave names/DNS GO open.
+  - [x] H1 applies to #694 as a consumer of #692's hosting standard. All four requested decisions concern this PR; #692 hosting implementation and #596 custody remain outside this amendment.
 - [x] **Lot R4-2 — G2/G3 ownership and anchor boundary (2026-10-19)**
   - [x] Quote “G2 = option 1” and “g3 = a ok” with date; apply the DS position: presentation only, opaque anchors/proposals, no DS resolution or persistence; Sentropic owns anchors, threads and persistence.
   - [x] Remove competing package homes, update A/B ownership and consumer handoffs, specify G2 semantic/profile/render bindings and required text/Focus-block/diagram anchors while retaining FL-ANCHOR as open.
