@@ -166,15 +166,20 @@ tag_inputs_exclude_global() {
     done <<< "$inputs"
   done
   test "$bad" -eq 0 || return 1
+  # .dockerignore entries are matched structurally (exact-line); the negation
+  # semantics (e2e/* + !e2e/package.json) are verified separately against the
+  # real builder, since git check-ignore reads .gitignore, not .dockerignore.
   local ignored=(
-    Makefile .github/workflows/ci.yml scripts/test-api-tag-guard.sh tools/scw-tem-mock
-    spec plan docs rules track deploy BRANCH.md
+    Makefile BRANCH.md .github/ scripts/ tools/ spec/ plan/ docs/ rules/ track/ deploy/
+    apps/llm-gateway/ packages/cowork-desktop/ packages/mcp-connector-github/
   )
-  for path in "${ignored[@]}"; do
-    git check-ignore -q "$path" || { echo "FAIL: global-only path '$path' is not dockerignored" >&2; return 1; }
+  local entry
+  for entry in "${ignored[@]}"; do
+    grep -Fxq "$entry" .dockerignore || { echo "FAIL: global-only path '$entry' is not dockerignored" >&2; return 1; }
   done
-  git check-ignore -q e2e/package.json && { echo "FAIL: e2e/package.json must stay in the build context" >&2; return 1; }
-  git check-ignore -q ui/package.json && { echo "FAIL: ui/package.json must stay in the build context" >&2; return 1; }
+  for entry in 'e2e/*' '!e2e/package.json' '!e2e/package-lock.json' 'ui/*' '!ui/package.json'; do
+    grep -Fxq "$entry" .dockerignore || { echo "FAIL: build-context rule '$entry' missing from .dockerignore" >&2; return 1; }
+  done
   echo "PASS: global-only paths stay out of the tag and out of the build context (existing tag reused)"
 }
 

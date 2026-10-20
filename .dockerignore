@@ -64,3 +64,49 @@ pnpm-debug.log*
 *.tar.gz
 *.tgz
 *.zip
+
+# API production image determinism (fix/api-image-canonical-artifact):
+# the canonical tag must equal the shipped bytes. Files no image stage
+# needs (global-only changes, docs, tooling, non-consumed packages) must
+# not enter the build context, or the production digest drifts without a
+# tag change and publish refuses a tag collision.
+Makefile
+BRANCH.md
+/*.md
+/LICENSE
+api/data.db
+*.db
+.github/
+scripts/
+tools/
+spec/
+plan/
+docs/
+rules/
+track/
+deploy/
+apps/llm-gateway/
+e2e/*
+!e2e/package.json
+!e2e/package-lock.json
+ui/*
+!ui/package.json
+packages/chat-ui/
+packages/cited-source-viewer/
+packages/cowork-bridge/
+packages/cowork-desktop/
+packages/harness/
+packages/mcp-broker/
+packages/mcp-connector-airtable/
+packages/mcp-connector-dropbox/
+packages/mcp-connector-github/
+packages/mcp-connector-gmail/
+packages/mcp-connector-googlecalendar/
+packages/mcp-connector-googledocs/
+packages/mcp-connector-googledrive/
+packages/mcp-connector-googlesheets/
+packages/mcp-connector-hubspot/
+packages/mcp-connector-linear/
+packages/mcp-connector-notion/
+packages/mcp-connector-slack/
+packages/mcp-connector-stripe/
