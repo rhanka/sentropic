@@ -2,7 +2,7 @@
 
 ## Objective
 - Consolidate into `spec/` what PR #679 merged on `main` at `1472d961e`: the host-embedded MCP provider registry, the `sentropic.artifacts` provider, the RFC 8693 token exchange, and the verbatim owner decisions.
-- Docs only: preserve the merged baseline and mark later design amendments explicitly as proposals; the 2026-10-18 owner brief authorizes the generic artifact view address, DNS/TLS ownership and reader API-access proposal.
+- Docs only: preserve the merged baseline, distinguish owner-decided requirements from remaining implementation proposals, and retain Sentropic's artifact address/DNS/TLS ownership and reader business-rights boundary.
 - Apply the 2026-10-19 owner decisions G1=1, G2=1, G3=a and H1=both to this PR's specification boundaries; retain unresolved domain names, DNS GO and Sentropic-owned anchor-contract details.
 
 ## Scope / Guardrails
@@ -72,7 +72,7 @@ Actions with the following status should be included around tasks only if really
   - [x] Verify PR #692 is draft/open on `docs/spec-mcp-registry-artifacts` at `261aaed6ed2a8652fdadef5107d72022240aa1cf`; `harness check branch` passes; fetch `origin`.
   - [x] Merge `origin/main` at `f5c4c36a6` (918 commits behind) without conflicts; no manual changes to inherited main files. Track containment passes for both parents (342/342 events); Track writes remain with the designated writer.
   - [x] Amend `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md`: dated verbatim decisions, federated authority, Engram/DS producer split and Sentropic annotation-model ownership; preserve the #679 historical record. All G1/G2/G3/H1 apply to #692; #694 implementation/transfer and #596 custody changes remain in their owning PRs.
-  - [ ] Amend `spec/SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md`: both domain modes per app, independent API-transport proposal, no exclusive A/B recommendation; domain names and exact DNS GO remain open.
+  - [x] Amend `spec/SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md`: both domain modes per app, independent API-transport proposal, no exclusive A/B recommendation; domain names and exact DNS GO remain open. Include authorized storage/namespace bindings, mode/domain migration and qualification of one app in both modes followed by a second app without a fork.
   - [ ] Review decision coverage and removed alternatives; run `make scope-check`, harness branch/scope checks and `git diff --check` before delivery.
   - [x] API/UI/E2E tests, typecheck, runtime lint and UAT: not applicable to documentation-only amendments; no service or port allocation, checks use `ENV=test-spec-mcp-registry-artifacts`.
   - [ ] Commit atomic amendments through `make commit`, update PR body from `BRANCH.md`, push and verify remote HEAD/CI; retain draft status, no PR merge.
