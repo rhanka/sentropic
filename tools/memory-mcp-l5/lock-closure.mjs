@@ -12,14 +12,13 @@ export const P1_CONSUMERS = ['packages/mcp-platform', 'packages/mcp-broker'];
 export const TEST_ONLY_DEPS = ['vitest'];
 
 export function resolveLockKey(packages, fromKey, name) {
-  const fromDir = fromKey.includes('/') ? fromKey.slice(0, fromKey.lastIndexOf('/')) : '';
-  const dirs = [fromDir];
-  let dir = fromDir;
+  const dirs = [fromKey];
+  let dir = fromKey;
   while (dir.includes('/')) {
     dir = dir.slice(0, dir.lastIndexOf('/'));
     dirs.push(dir);
   }
-  if (dir !== '') dirs.push('');
+  if (dirs[dirs.length - 1] !== '') dirs.push('');
   for (const candidate of dirs) {
     const key = candidate === '' ? `node_modules/${name}` : `${candidate}/node_modules/${name}`;
     if (Object.prototype.hasOwnProperty.call(packages, key)) return key;
