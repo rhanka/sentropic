@@ -7,6 +7,7 @@
 .env.*
 *.local
 .auth/
+.h2a/
 .agents/
 .claude/
 .codex
