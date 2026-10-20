@@ -94,31 +94,66 @@ export class CodexRuntimeClient implements OpenAIAdapterClient {
   async generate(request: GenerateRequest, context?: ProviderRuntimeContext): Promise<GenerateResponse> {
     const stream = await this.stream(request, context);
     let text = ''; let usage: TokenUsage | undefined; let responseId = 'codex_response';
+    let observedServedModelId: string | undefined;
+    const seenObserved: string[] = [];
+    let firstContradiction: string | undefined;
+    const expectedModel = request.modelId
+      ?? (typeof (request as { model?: unknown }).model === 'string' && (request as { model: string }).model.length > 0
+        ? (request as { model: string }).model
+        : undefined);
     let finishReason: GenerateResponse['finishReason'] = 'unknown';
     const toolCalls = new Map<string, ToolCall>();
-    for await (const event of stream) {
-      if (event.type === 'content_delta') text += event.data.delta;
-      else if (event.type === 'tool_call_start') {
-        // A repeated start carries the done-item argument snapshot: its
-        // arguments win over streamed fragments (never appended). An empty
-        // repeat never wipes accumulated fragments.
-        const current = toolCalls.get(event.data.toolCallId);
-        if (!current) toolCalls.set(event.data.toolCallId, event.data);
-        else if (event.data.argumentsText) {
-          toolCalls.set(event.data.toolCallId, { ...current, ...event.data });
+    const mismatchError = (cause?: unknown) => Object.assign(new Error('upstream model identity mismatch'), {
+      code: 'model_identity_mismatch',
+      retryable: false,
+      observedServedModelId: firstContradiction ?? seenObserved.at(-1),
+      observedServedModelIds: [...seenObserved],
+      ...(cause !== undefined ? { cause } : {}),
+    });
+    try {
+      for await (const event of stream) {
+        if ('metadata' in event.data && event.data.metadata && typeof event.data.metadata.observedServedModelId === 'string') {
+          const observed = event.data.metadata.observedServedModelId;
+          if (!seenObserved.includes(observed)) seenObserved.push(observed);
+          if (expectedModel && observed !== expectedModel) firstContradiction ??= observed;
+          if (seenObserved.length > 1) throw mismatchError();
+          observedServedModelId = firstContradiction ?? observed;
+        }
+        if (event.type === 'content_delta') text += event.data.delta;
+        else if (event.type === 'tool_call_start') {
+          // A repeated start carries the done-item argument snapshot: its
+          // arguments win over streamed fragments (never appended). An empty
+          // repeat never wipes accumulated fragments.
+          const current = toolCalls.get(event.data.toolCallId);
+          if (!current) toolCalls.set(event.data.toolCallId, event.data);
+          else if (event.data.argumentsText) {
+            toolCalls.set(event.data.toolCallId, { ...current, ...event.data });
+          }
+        }
+        else if (event.type === 'tool_call_delta') {
+          const current = toolCalls.get(event.data.toolCallId);
+          if (current) toolCalls.set(event.data.toolCallId, {
+            ...current, argumentsText: `${current.argumentsText}${event.data.delta}`,
+          });
+        } else if (event.type === 'error') {
+          throw Object.assign(new Error(event.data.message), event.data);
+        } else if (event.type === 'done') {
+          usage = tokenUsage(event); responseId = event.data.providerResponseId ?? responseId;
+          finishReason = event.data.finishReason ?? 'unknown';
         }
       }
-      else if (event.type === 'tool_call_delta') {
-        const current = toolCalls.get(event.data.toolCallId);
-        if (current) toolCalls.set(event.data.toolCallId, {
-          ...current, argumentsText: `${current.argumentsText}${event.data.delta}`,
-        });
-      } else if (event.type === 'error') {
-        throw Object.assign(new Error(event.data.message), event.data);
-      } else if (event.type === 'done') {
-        usage = tokenUsage(event); responseId = event.data.providerResponseId ?? responseId;
-        finishReason = event.data.finishReason ?? 'unknown';
+    } catch (streamError) {
+      if (streamError && typeof streamError === 'object' && (streamError as { code?: unknown }).code === 'model_identity_mismatch') {
+        throw streamError;
       }
+      if (firstContradiction) throw mismatchError(streamError);
+      if (observedServedModelId && streamError && typeof streamError === 'object') {
+        Object.assign(streamError, {
+          observedServedModelId,
+          observedServedModelIds: [...seenObserved],
+        });
+      }
+      throw streamError;
     }
     const calls = [...toolCalls.values()];
     // The live Codex backend can emit function-call items incrementally while
@@ -133,6 +168,7 @@ export class CodexRuntimeClient implements OpenAIAdapterClient {
         ...(calls.length > 0 ? { toolCalls: calls } : {}),
       },
       text, toolCalls: calls, finishReason, ...(usage ? { usage } : {}),
+      ...(observedServedModelId ? { providerMetadata: { observedServedModelId } } : {}),
     };
   }
 }

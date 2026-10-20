@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "type": "module",
+  "dependencies": { "@sentropic/comments": "0.3.0" },
+  "devDependencies": { "esbuild": "0.25.5" }
+}
