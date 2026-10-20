@@ -101,15 +101,15 @@ Actions with the following status should be included around tasks only if really
   - [x] Push branch and open DRAFT PR; do not merge.
 
 ## Round R1 (Astra review, CHANGES)
-- [ ] **Lot 4 — Per-consumer resolved closure (finding 1)**
-  - [ ] Add `tools/memory-mcp-l5/lock-closure.mjs`: resolve each consumer independently, follow runtime and build edges plus build-tool transitives, hash effective resolved records.
-  - [ ] Red-first packed-gate regressions: nested SDK shadow, broker nested TypeScript integrity drift, `undici-types` integrity drift fail; identical nested duplicate and unrelated entry pass.
-  - [ ] Lot gate: scoped tooling run on `ENV=test-l5-fingerprint`.
-- [ ] **Lot 5 — Derived build-input record (finding 2, BR710-EX1)**
-  - [ ] Add `tools/memory-mcp-l5/build-inputs.mjs`: derive toolchain specs from `Makefile` producing targets, hash `tsconfig` and api-extractor configs, fail closed on unpinned specs.
-  - [ ] Pin `@types/node@22.20.1` in the 3 P1-producing `Makefile` targets (BR710-EX1).
-  - [ ] Red-first regressions through the production verifier: `Makefile` pin change fails, `tsconfig` target change fails.
-  - [ ] Lot gate: scoped tooling run on `ENV=test-l5-fingerprint`.
+- [x] **Lot 4 — Per-consumer resolved closure (finding 1)**
+  - [x] Add `tools/memory-mcp-l5/lock-closure.mjs`: resolve each consumer independently, follow runtime and build edges plus build-tool transitives, hash effective resolved records.
+  - [x] Red-first packed-gate regressions: nested SDK shadow, broker nested TypeScript integrity drift, `undici-types` integrity drift fail; identical nested duplicate and unrelated entry pass.
+  - [x] Lot gate: scoped tooling run on `ENV=test-l5-fingerprint`.
+- [x] **Lot 5 — Derived build-input record (finding 2, BR710-EX1)**
+  - [x] Add `tools/memory-mcp-l5/build-inputs.mjs`: derive toolchain specs from `Makefile` producing targets, hash `tsconfig` and api-extractor configs, fail closed on unpinned specs.
+  - [x] Pin `@types/node@22.20.1` in the 3 P1-producing `Makefile` targets (BR710-EX1).
+  - [x] Red-first regressions through the production verifier: `Makefile` pin change fails, `tsconfig` target change fails.
+  - [x] Lot gate: scoped tooling run on `ENV=test-l5-fingerprint`.
 - [ ] **Lot 6 — Generation lock snapshot provenance (finding 3)**
   - [ ] `pack.mjs` writes `artifacts/lock-snapshots/<sha>.package-lock.json`, binds `declaredLockSnapshot` in manifest source, enforces clean-tree lock vs `HEAD`.
   - [ ] `precandidate.mjs` verifies snapshot bytes against `declaredLockSha256` independently of the live closure check.
