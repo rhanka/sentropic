@@ -31,7 +31,7 @@ Fix main CI publish-api-image tag collision on global-only changes while keeping
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
   - `Makefile`
-  - `<other-sensitive-paths>`
+  - `package-lock.json` (BR01-EX4 only: pinned markdown-it bump)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -46,6 +46,7 @@ Fix main CI publish-api-image tag collision on global-only changes while keeping
 - `acknowledge`: P2 completeness fixed by explicit COPYs in `api/Dockerfile` base (no blind `COPY . .`); every COPY source hashed (`ui/package.json`, e2e manifests added); regression tests `copy-sources-hashed`, `no-blind-copy`, `retained-exclusions` (proven on real prod image `local/sentropic-api:7dfcaa`); full unit (1274) + all 4 endpoints shards green in rebuilt toolbox.
 - `acknowledge`: P2 triggers fixed — both new scripts in the `global` change filter; regression test `trigger-coverage`.
 - `blocked`: audit gate fails fresh builds on new upstream markdown-it HIGH advisories (GHSA-253c-mchw-3w2r, GHSA-r7fv-28h4-cvq7); manifests/lock untouched by this branch, main equally affected on next build; HIGH fix belongs on a dedicated branch (dependabot ui/markdown-it exists). Local validation used a strictly temporary gate bypass, restored byte-for-byte (never committed).
+- `attention`: BR01-EX4 declared — `package-lock.json` (unlisted path, treated as conditional): pinned markdown-it 14.3.0 -> 14.3.3 (3-line delta: version/resolved/integrity from registry; transitive closure identical, verified uc.micro/punycode.js already locked). Reason: unblock audit/SCA gates failing on live HIGH advisories; required for CI green on this head. Impact: tag rotates to a new absent tag; prod bytes change only in the markdown-it tarball. Rollback: revert the 3 lines. `ui/package-lock.json` left to dependabot (no CI gate reads it).
 
 ## AI Flaky tests
 - Acceptance rule:
