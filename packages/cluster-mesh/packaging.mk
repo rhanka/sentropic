@@ -33,7 +33,7 @@ test-lazy-package:
 	@$(LAZY_PACKAGE_RUN) sh -lc 'set -eu; work=/tmp/lazy-package; sh tests/packaging/prepare.sh "$$work"; \
 		cp vitest.config.ts "$$work/tools/vitest.config.ts"; \
 		CLUSTER_MESH_PACKAGING_DIR="$$work" NODE_PATH="$$work/tools/node_modules" \
-		"$$work/tools/node_modules/.bin/vitest" run tests/packaging --config "$$work/tools/vitest.config.ts" --environment node'
+		"$$work/tools/node_modules/.bin/vitest" run tests/packaging --config "$$work/tools/vitest.config.ts" --environment node --maxWorkers=1'
 
 refresh-lazy-package-lock:
 	$(LAZY_SIBLING_CHECK)
