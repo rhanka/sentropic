@@ -408,8 +408,9 @@ have host-evaluated verified predicates. Protected remote access fails closed
 until the separately authorized exchange integration. This release does not
 activate Radar's receiver #865 or its production cutover.
 
-Core qualification uses twelve Immo tools. Artifacts 0.1.1 excludes platform
-0.4.0 in its own peer range; selecting that optional tuple is refused until its
-maintainer releases and qualifies compatibility. No artifact peer is widened here.
+Core qualification uses twelve Immo tools with Mesh 0.21.0 and its transitive
+Platform 0.4.0 dependency. The qualified optional variant adds Artifacts 0.1.3,
+whose platform peer range is widened to `>=0.3.0 <0.5.0`, and exposes all 27 tools
+through Mesh exports.
 The installed consumer lane is
 `make cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=test-cm-wrap`.
