@@ -14,7 +14,7 @@ function makeValidPreCandidateManifest() {
   return {
     manifestVersion: 1,
     stage: 'pre-candidate',
-    source: { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: H64 },
+    source: { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: H64, lockFingerprintVersion: 1, lockFingerprint: H64 },
     artifacts: [
       { role: 'platform', name: '@sentropic/mcp-platform', version: '0.4.0', sha256: H64, integrity: S512, sourceHead: C40, archive: 'archives/mcp-platform-0.4.0.tgz' },
       { role: 'broker', name: '@sentropic/mcp-broker', version: '0.2.0', sha256: H64, integrity: S512, sourceHead: C40, archive: 'archives/mcp-broker-0.2.0.tgz' },

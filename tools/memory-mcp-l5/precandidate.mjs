@@ -3,6 +3,7 @@ import { resolve, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { readArchive, scanGraph, graphRoots } from './contract-graph.mjs';
 import { checkArtifactManifest } from './receipt.mjs';
+import { LOCK_FINGERPRINT_VERSION, computeLockFingerprint } from './lock-fingerprint.mjs';
 
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export const integrity = bytes => `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
@@ -43,8 +44,12 @@ export function verifyPreCandidate(root, manifestPath) {
   if (failures.length) throw new Error(failures.join('\n'));
   if (manifest.stage !== 'pre-candidate' || manifest.artifacts.length !== 2) throw new Error('manifest must contain exactly the two P1 artifacts');
   const freeze = JSON.parse(readInside(root, 'spec/evidence/memory-mcp-l5/l0-freeze.json'));
-  if (manifest.source.specSha256 !== freeze.specSha256 || manifest.source.l0Commit !== freeze.l0Commit ||
-      manifest.source.declaredLockSha256 !== sha256(readInside(root, 'package-lock.json'))) throw new Error('manifest freeze/lock mismatch');
+  if (manifest.source.specSha256 !== freeze.specSha256 || manifest.source.l0Commit !== freeze.l0Commit) throw new Error('manifest freeze mismatch');
+  const liveLock = JSON.parse(readInside(root, 'package-lock.json').toString('utf8'));
+  if (manifest.source.lockFingerprintVersion !== LOCK_FINGERPRINT_VERSION ||
+      manifest.source.lockFingerprint !== computeLockFingerprint(liveLock)) {
+    throw new Error('manifest P1 lock fingerprint mismatch: relevant dependency or build inputs changed; regenerate the P1 manifest');
+  }
   const packages = new Map(), files = new Map();
   for (const artifact of manifest.artifacts) {
     const name = artifact.role === 'platform' ? '@sentropic/mcp-platform' : artifact.role === 'broker' ? '@sentropic/mcp-broker' : null;

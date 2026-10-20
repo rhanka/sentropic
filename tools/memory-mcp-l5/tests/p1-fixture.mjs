@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ANCILLARY } from '../precandidate.mjs';
+import { LOCK_FINGERPRINT_VERSION, computeLockFingerprint } from '../lock-fingerprint.mjs';
 const sha = b => createHash('sha256').update(b).digest('hex');
 export function p1Fixture(extra = {}) {
   const root = mkdtempSync(join(tmpdir(), 'p1-fixture-')), head = 'a'.repeat(40), inv = [], artifacts = [];
@@ -29,8 +30,10 @@ export function p1Fixture(extra = {}) {
     artifacts.push({ role, name, version: '0.4.0', sha256: sha(bytes), integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}`, sourceHead: head, archive });
   }
   const freeze = JSON.parse(readFileSync(join(root, 'spec/evidence/memory-mcp-l5/l0-freeze.json')));
+  const lockBytes = readFileSync('package-lock.json');
   const manifest = { manifestVersion: 1, stage: 'pre-candidate', source: { specSha256: freeze.specSha256,
-    l0Commit: freeze.l0Commit, br3Commit: head, l5Head: head, sdkRange: '^1.31.0', declaredLockSha256: sha(readFileSync('package-lock.json')) },
+    l0Commit: freeze.l0Commit, br3Commit: head, l5Head: head, sdkRange: '^1.31.0', declaredLockSha256: sha(lockBytes),
+    lockFingerprintVersion: LOCK_FINGERPRINT_VERSION, lockFingerprint: computeLockFingerprint(JSON.parse(lockBytes.toString('utf8'))) },
     artifacts, contractInventory: inv.sort((a, b) => a.path.localeCompare(b.path)) };
   const save = () => { const bytes = `${JSON.stringify(manifest, null, 2)}\n`; put('manifest.json', bytes); put('manifest.json.sha256', `${sha(bytes)}\n`); };
   save();

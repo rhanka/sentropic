@@ -74,14 +74,14 @@ Actions with the following status should be included around tasks only if really
   - [x] Run `harness check branch`.
   - [x] Confirm ENV mapping: `ENV=test-l5-fingerprint` for all make runs, ports `API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725`.
   - [x] Validate scope boundaries (no EXn expected).
-- [ ] **Lot 1 — Fingerprint the P1 dependency and build-tool closure**
-  - [ ] Add `tools/memory-mcp-l5/lock-fingerprint.mjs` (`LOCK_FINGERPRINT_VERSION=1`, `computeLockFingerprint`, relevant-key projection).
-  - [ ] `precandidate.mjs`: compare pinned fingerprint against live lockfile instead of full-file sha equality; keep `declaredLockSha256` as provenance only.
-  - [ ] `pack.mjs`: pin `lockFingerprintVersion` + `lockFingerprint` in manifest source; retain `declaredLockSha256`.
-  - [ ] `schemas/artifact-manifest-v1.schema.json`: require versioned fingerprint in `manifestSource`; keep `declaredLockSha256`.
-  - [ ] Lot gate: `make scope-check` before commit.
+- [x] **Lot 1 — Fingerprint the P1 dependency and build-tool closure**
+  - [x] Add `tools/memory-mcp-l5/lock-fingerprint.mjs` (`LOCK_FINGERPRINT_VERSION=1`, `computeLockFingerprint`, relevant-key projection).
+  - [x] `precandidate.mjs`: compare pinned fingerprint against live lockfile instead of full-file sha equality; keep `declaredLockSha256` as provenance only.
+  - [x] `pack.mjs`: pin `lockFingerprintVersion` + `lockFingerprint` in manifest source; retain `declaredLockSha256`.
+  - [x] `schemas/artifact-manifest-v1.schema.json`: require versioned fingerprint in `manifestSource`; keep `declaredLockSha256`.
+  - [x] Update `tests/p1-fixture.mjs`, `tests/artifact-manifest.test.mjs`, `tests/receipt-contract.test.mjs` fixtures for the new source fields.
+  - [x] Lot gate: `make scope-check` before commit.
 - [ ] **Lot 2 — Fixtures and regression tests**
-  - [ ] Update `tests/p1-fixture.mjs`, `tests/artifact-manifest.test.mjs`, `tests/receipt-contract.test.mjs` fixtures for the new source fields.
   - [ ] Add `tests/lock-fingerprint.test.mjs`: unrelated lockfile edits pass, relevant dependency/build-input edits fail.
   - [ ] Extend packed-gate coverage: unrelated lock edit passes, relevant lock edit fails, contract/archive drift still fails.
   - [ ] Lot gate: `make memory-l5-tooling API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
