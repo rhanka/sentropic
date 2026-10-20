@@ -55,7 +55,8 @@
   - [x] `api/package.json` (gateway range ^0.21.0 only, keeps the workspace link; BR96-EX8)
   - [x] `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.ts`, `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (coupled `<0.28.0`/`<0.22.0` peer range and 13 `.d.ts` integration leaf assertions only; BR96-EX9)
   - [x] `.github/workflows/ci.yml`, `scripts/ci/publishable-ci-wiring.test.mjs` (cluster-mesh qualification `PEERS` tuple `@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0` only; BR96-EX9)
-- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9.
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; V4-L1-MEM)
+- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, V4-L1-MEM.
 
 ## Feedback Loop
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
@@ -283,6 +284,10 @@
   - [x] PEERS tuple unified (ci.yml x3 + wiring test): drop mcp-platform (now regular dep, test forbids it in PEERS), artifacts 0.1.0 to 0.1.3 (merged peer range), keep mesh 0.27.0/gateway 0.21.0 qualification basis; wiring test 22 PASS.
   - [x] Stale candidate entry root-caused (same file: spec string across merge so npm reused locked metadata: platform peer 0.3.x, artifacts 0.1.0) and fixed by entry removal + refresh; packed test-lazy-package 77/15 PASS with new-head receipts.
   - [x] Gates on ENV=test-decision-v4l1 (last arg): typecheck+lint mesh/cluster PASS, full test-llm-mesh 1231/66 PASS, full test-cluster-mesh 1004 PASS/129 skipped, packed 77/15 PASS, train-lock PASS, scope-check PASS C2.
+- [x] **Lot V4-L1-MEM — memory L5 freeze mismatch from root-lock bumps (run 39384337780)**
+  - [x] Root cause: memory pre-candidate manifest pins declaredLockSha256; our 0.27.1/0.21.1 bumps changed root lock sha so memory-l5-verify failed; job runs because memory_l5 filter includes package-lock.json.
+  - [x] Fix per main pattern (b477879c8): retained superseded manifest in history/<sha>.json, re-pinned declaredLockSha256 to 56e03e4f, rewrote sidecar; archives/inventory untouched (platform/broker sources unchanged).
+  - [x] Gates: memory-l5-verify packed ok (30 files, 54 edges), full memory-l5-gate LOT=1 (CI ports/ENV) PASS 66/8, then re-verify scope-check.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
