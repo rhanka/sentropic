@@ -2,12 +2,12 @@
 
 ## Status and authority
 
-**Status:** consolidated record of merged behavior. This spec describes what PR #679 (`feat: immo-861-mcp-registry (Sentropic consolidation 1a + 2-IdP + 2a)`) merged on `main` at `1472d961e098908e64ef60b83835af357888d031` (merged 2026-10-17). It introduces no new design: every statement is traceable to code at that commit or to a verbatim owner decision quoted in §9. Items not merged at that commit are marked as follow-ups in §10 and are not specified as current behavior.
+**Status:** consolidated record of merged behavior with dated target amendments. Sections 1–13 describe what PR #679 (`feat: immo-861-mcp-registry (Sentropic consolidation 1a + 2-IdP + 2a)`) merged on `main` at `1472d961e098908e64ef60b83835af357888d031` (merged 2026-10-17), with follow-ups in §10. Sections 14–15 specify later targets, including the 2026-10-19 owner decisions; they are not implementation, publication or deployment receipts.
 
 **Authority:** the owner model quoted verbatim in §9.1. Sentropic owns the generic registry, provider contracts and package releases; each host owns its selection, parameterization and customizations. Immo is the first host. This spec is the repo record for the merged registry/artifacts surface; the scratch planning documents that preceded the merge are sources, not deliverables, and are listed in the source ledger (§13).
 
 Related context:
-- Proposed hosting amendment (final framing relayed 2026-10-19): [Sentropic-managed artifact view addresses and application access](SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md) compares the owner's same-site/direct-API orientation with a distinct-domain/grants/relay proposal. The artifact domain is a new decision; D5 supplies a security argument, not prior owner approval. Sentropic/package ownership and reader business writes remain decided. This amendment is distinct from the merged baseline and is not shipped behavior.
+- Hosting amendment (H1, 2026-10-19): [Sentropic-managed artifact view addresses and application access](SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md) requires both app-subdomain and distinct-domain storage/view modes per application. Concrete domain names and DNS GO remain open; API transport is a separate proposal. D5 supplies a security argument only. Sentropic/package ownership and reader business writes remain decided; neither mode is claimed shipped or qualified.
 - `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` — generic application MCP provider platform (manifest/adapter contract, elicitation, session/secret records). This spec records the registry and artifacts provider that landed under that platform framing.
 - `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` — cluster-mesh control plane, namespace contracts and D3 responsibility split.
 - `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md` — cluster-mesh as the single lazy integration surface (optional peers, static leaves, loaders). PR #679 delivers a subset of its E5 MCP contract: the registry facade, provider leaves/loaders and the `/mcp` namespace composition over bridge + platform Hono with host-supplied auth (§3, §4). The remaining E5 OAuth composition (`createMcpAuth`, `mcpAuthRoutes`, `createMcpPlatformHono` wiring inside cluster-mesh) is not merged; it is follow-up #689 (§10).
@@ -29,7 +29,7 @@ Record, in the repo, the merged contract by which:
 
 ## Non-goals
 
-- No new provider, tool, route or release is designed here. Design deltas belong to their own branches and specs.
+- No provider, tool, route or release is implemented here. The dated target amendments do not alter the historical #679 contract.
 - Radar/Immo application behavior (its own MCP tools, receiver, deployment) is host-side work, referenced only where the merged Sentropic contract binds it.
 - This spec does not retire or rewrite the platform spec (`SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md`); it records the merged subset and cross-references the rest.
 
@@ -351,7 +351,7 @@ The following meanings govern §11 and this section; they restate the app-catalo
 - Delivered artifact adapters and migrations stay as implemented (§5.2): the shipped Postgres adapter implements the combined `PostgresArtifactStore` and the S3 adapter the `PublicationBlobStore`; neither implements `KvPort`. This amendment changes no delivered storage behavior.
 - Host installation targets the generic module-storage contract: hosts inject parameterized execution and serializable transaction sessions, and the package imports neither the database driver nor application code (`spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md:46`, injected PostgreSQL installation). The artifacts store is not claimed to implement generic module registration: that claim requires its own adapter and qualification receipt, which does not exist yet (`unverified`).
 - Scoped export and erasure follow the lifecycle contracts: the physical planes stay behind their ports (`spec/SPEC_EVOL_DATA_ARCHITECTURE.md:311`, Axis E), export is one signed archive produced from the single scope enumeration (DL-8) with per-family `payloadSchemaVersion` (DL-13), and completed deletions are re-applied at restore so a restore cannot resurrect erased data (DL-17) (`spec/SPEC_EVOL_DATA_LIFECYCLE.md:95`, `:127`).
-- No shared-app database service is added by this amendment. Custody secrets stay outside this serialization path entirely (PR #596; no persisted custody access-token copy exists for an export or backup to carry).
+- No shared-app database service is added by this amendment. Custody secrets stay outside this generic serialization path (PR #596): no additional copy in ordinary databases, accounts or generic exports. Authorized secret-store projections and their backup/revocation inventory remain the custody contract's responsibility.
 
 ### 14.5 Annotations and per-app MFA connection (amendment F692-6)
 
@@ -359,16 +359,63 @@ The following meanings govern §11 and this section; they restate the app-catalo
 - Human access follows the per-app MFA client policy and its migration (PR #695 spec at its head, §4.1 client policy and §10.1 migration): the client requires an assurance **level**, never a named method; the method rides in the signed evidence. NHI workload tokens keep their own authorisation and never inherit the human session assurance (verified invocation context and generation/capacity contracts, `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md:136`, `:170`).
 - Catalogue selection, artifact content grant, and MFA assurance are three distinct facts, displayed distinctly in the catalogue view (§14.2). None implies another: selecting an entry does not grant its content, a content grant does not raise MFA assurance, and MFA assurance does not select or grant anything. The observability column (§14.1) carries invocation correlation references only; it is neither a durable security receipt nor a secret store, and the two audit record classes of PR #695 (best-effort operational logs vs transactionally committed security transitions) stay distinct.
 
-#### Questions propriétaire ouvertes (non tranchées)
+#### Settled MFA dependency (2026-10-18)
 
-Les trois arbitrages suivants appartiennent au propriétaire. Ils sont conservés ici comme questions ouvertes, sans réponse apportée par le présent amendement ; leur source normative est la spécification de la PR #695.
-
-- **D-P1 — Fenêtre de fraîcheur MFA pour `kvm-gateway`.** Quelle durée maximale entre la cérémonie MFA et l'émission d'un nouveau code OAuth pour `kvm-gateway` : (i) 300 secondes ; (ii) quelques heures, avec 8 heures comme valeur proposée par la spécification ; (iii) 24 heures ? Conséquences : (i) contient au plus court la réutilisation d'une session IdP dérobée, au prix de cérémonies WebAuthn répétées lors des réémissions ; (ii) équilibre friction et exposition, avec une fenêtre de réémission plus longue ; (iii) laisse une journée de réémission à une session dérobée. Ce choix ne fixe ni la durée du cookie de session côté `kvm-gateway`, ni la borne administrative distincte de 900 secondes pour les mutations de sécurité IdP. Source : [PR #695 §15, D-P1](https://github.com/rhanka/sentropic/blob/ef956c306be72b066f2a316d79fd6b0f8b1c4d68/spec/SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md#L844) (revision `ef956c306be72b066f2a316d79fd6b0f8b1c4d68`; section anchor `#15-décisions-propriétaire`).
-- **D-P2 — Codes de récupération pour le compte propriétaire KVM.** Faut-il construire les codes de récupération, et sous quelle forme : (i) différer les codes — deux authentificateurs indépendamment récupérables en prérequis, plus la réinitialisation d'urgence par le Job opérateur (recommandation de la spécification) ; (ii) construire les codes avec liaison en attente — le code ouvre la demande et crée un authentificateur en attente, sans jamais activer seul un accès MFA ; (iii) activation autonome code plus délai, qui consigne une racine de récupération plus faible ? Conséquences : (i) garde la surface minimale, avec une récupération de perte totale dépendante du recours opérateur ; (ii) ajoute un confort et une surface (émission sous session MFA fraîche, hachages liés au sujet et à la génération, consommation unique atomique) sans chaîne directe du code vers le MFA ; (iii) rend le vol du code éventuellement suffisant après le délai et devrait être assumé comme un affaiblissement explicite de la propriété de récupération. Source : [PR #695 §15, D-P2](https://github.com/rhanka/sentropic/blob/ef956c306be72b066f2a316d79fd6b0f8b1c4d68/spec/SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md#L846) (revision `ef956c306be72b066f2a316d79fd6b0f8b1c4d68`; section anchor `#15-décisions-propriétaire`); recovery contract §6, R-REC-6.
-- **D-P3 — Portée du durcissement des comptes.** À quels comptes la protection stockée s'applique-t-elle, celle qui ferme la récupération par le seul courriel : (i) protection activée explicitement aux transitions prévues (entrée en liste d'autorisation d'un client forcé, première émission vers un client MFA sans liste, ou activation opérateur), après les prérequis de confiance et de récupération (recommandation de la spécification) ; (ii) durcissement de tout compte dès son premier passkey, y compris pour les applications sans exigence MFA ? Conséquences : (i) préserve la récupération par courriel pour les usages non forcés et borne le changement aux comptes protégés ; (ii) ferme pour davantage de comptes la création de credentials, la session sans appareil et les mutations sensibles par email seul, y compris sans exigence MFA applicative ; cette protection élargit les préparatifs de récupération et le risque de perte d'accès. Elle exige une migration conservant les prérequis de confiance et de récupération. Pour un compte protégé avec appareils, le login email `bearer` vers un client non-MFA reste possible (§4.2) : la protection ne force pas chaque connexion. Source : [PR #695 §15, D-P3](https://github.com/rhanka/sentropic/blob/ef956c306be72b066f2a316d79fd6b0f8b1c4d68/spec/SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md#L857) (revision `ef956c306be72b066f2a316d79fd6b0f8b1c4d68`; section anchor `#15-décisions-propriétaire`).
+D-P1, D-P2 and D-P3 are closed in [PR #695 §15](https://github.com/rhanka/sentropic/blob/862c068e5de756cbf8cf3a2fbbfd09ee5ee1e433/spec/SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md#15-décisions-propriétaire), merged at `862c068e5de756cbf8cf3a2fbbfd09ee5ee1e433`. The old alternatives are removed; this catalogue consumes the decided MFA contract without reopening it. Source: the spec-review reconciliation's corrected #695 baseline and SOL-02 disposition.
 
 ### 14.6 Terminology repair and dated status layer (amendment F692-7)
 
 - Terminology repair: the cross-reference added by this branch in `spec/SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md:7` called the compiler output "compiled registry entries". That wording contradicted §4.3 and is corrected in this amendment: compilation yields a **compiled registry plan** (provider/tool maps and tool resolutions); frozen `RegistryEntry` values exist only where a caller explicitly invokes the runtime entry helpers. No merged-behavior statement in §1–§13 is rewritten by this repair.
 - Dated status layer (2026-10-18): PR #688 is merged on `main` at `441453966a4dfac12c220f154508d7ab1ee3c237` and PR #689 is open at this amendment date; §10 carries the dated update and keeps its at-writing table unchanged. Publication and deployment states stay `unverified` wherever no registry or deployment receipt is cited (§8, §12).
 - Acceptance check for this amendment: a reader can trace a skill, an agent template, an MCP tool, and an app template from the catalogue (§14.1–§14.2) through its current authorisation (per-request recheck, §14.1) to the owning runtime (host registry, §4, or app instance, §11), and can distinguish **installed / selected / compiled / published / deployed** as separate states. Any presentation diagram of this spec must draw the catalogue itself as a component with its sources, not only the host registry.
+
+## 15. Owner-decision amendment (2026-10-19)
+
+Authority: `/home/antoinefa/src/sentropic/.tmp/spec-review-v3/OWNER-DECISIONS-2026-10-19.md`, including its final G3 answer. The companion `DS-POSITION-G3-2026-10-19.md` defines the presentation boundary. The r4 portable dossier and its `dossier.json` supply the per-PR consequences; their still-proposed G3 and the older reconciliation's open G1/G2/H1 wording are superseded by these owner answers. Governance clauses C-01–C-18 remain the cross-system contract reference (`.tmp/governance-unification/study.md`). All four decisions concern #692; the following requirements are specified targets, with qualification status `unverified`.
+
+### 15.1 G1 — Federated authority per act
+
+Owner, 2026-10-19, verbatim:
+
+> G1 = option 1
+
+One accountable authority owns each act. Each project retains its code, publication and data authority; affected maintainers jointly freeze shared contracts, versions and fixtures with architecture review. Only unresolved material conflicts escalate to the owner. Neither catalogue discovery nor this decision grants merge, publication, deployment or application acceptance authority.
+
+| Act | Accountable authority | Contract and evidence required |
+|---|---|---|
+| Produce a capability descriptor | The capability producer: Engram, design-system, h2a or the host/provider owner | Producer identity, capability/descriptor revision and digest, exposure route, effect authority and activation/publication receipt; no transfer of the source record to the catalogue |
+| Compose catalogue and expose registry/MCP | Sentropic / cluster-mesh | Permission-filtered projection, descriptor-to-provider binding and invocation policy; a listed entry is not effect authorization |
+| Bind and operate an application host | That application's operator | Trusted instance-to-tenant/workspace/resource-namespace binding, storage installation, API/identity configuration and deployment receipt; `appId` is resolved through the control-plane instance authority, never inferred from a hostname |
+| Accept a capability in an application | That application's accepting owner | Consumer-specific qualification and acceptance receipt; a package publication does not accept every app in §11 |
+
+Before declaring a boundary qualified, its producing and consuming maintainers must jointly freeze: catalogue/MCP descriptors and canvas exposure; `appId` resolution to verified tenant/workspace/namespace; storage installation, scoped read/write/list/export/restore and lifecycle contracts. Each boundary record pins contract version/digest, producer and consumer package versions, compatibility fixtures, responsible maintainers and delivery/acceptance receipts. Concrete `appId` semantics and adapter contracts remain maintainer work, not new owner votes. The request→production trace joins references and receipts at their existing authorities; the catalogue neither copies Track's journal nor acquires deployment authority (dossier F01–F05, F08, F13).
+
+### 15.2 G2 — Engram profiles, design-system executor
+
+Owner, 2026-10-19, verbatim:
+
+> G2 = option 1
+
+Engram governs diagram profiles, schemas, compositions, fixtures and migrations. The design-system retains and publishes the generic `diagram-core` executor and owns rendering/layout. Catalogue sources expose Engram-declared profile/ontology descriptors and DS-declared executor/canvas descriptors; these are producer contracts to freeze under §15.1, not additional shipped `CatalogEntry` kinds beyond §14.1. No executor transfer to Engram or second diagram engine in artifacts is specified.
+
+For each canvas, the catalogue-to-MCP handoff identifies its descriptor, `ui://` module when applicable, artifact release/manifest and rendering host. Bind the view to compatible Engram profile revision/digest, DS executor package version and DS render revision, preserving `SemanticDocument`/`ViewDocument` identities and the single profile evaluator. Pin bundles/profiles at build/load; live state stays at its owning system and no MCP call belongs in the paint path. Require an actual installable `diagram-core` publication, dependency closure and consumer fixture receipts before claiming adoption. Allowed AI interactions remain explicit capabilities authorized at invocation; publishing a view grants no effect authority (F01–F02).
+
+### 15.3 G3 — DS presentation, Sentropic annotation model
+
+Owner, 2026-10-19, final answer verbatim:
+
+> g3 = a ok
+
+The design-system owns **annotate presentation only**: selection/picker with keyboard and screen-reader equivalents, markers, thread display and states. It publishes the UI descriptor, receives an opaque anchor (`label`, `kind` and typed payload) and emits proposal events. It stores nothing and resolves no anchor. Sentropic owns the single annotation data model, anchors, threads, schema versions/migrations and authorized comments persistence; cluster-mesh owns the exposure/integration surface. Host adapters supply trusted target bindings and anchor resolution; data remains in the authorized host/provider namespace, not a new central app database.
+
+The catalogue distinguishes the DS UI-descriptor producer, Sentropic model authority and comments/MCP provider. Engram governs ontology/profile meaning, with Sentropic validating operational semantics; this does not transfer annotation records or their schema to Engram. Capture, persistence, explicit h2a delivery and promotions to Track or Engram remain distinct authorized acts with separate receipts. Track work promotion uses its authorized write path (Track MCP remains read-only); Engram memory capture/admission uses its MCP route via cluster-mesh. Neither promotion is automatic on annotation save or delivery.
+
+**Open — Sentropic-owned stable anchor contract:** Sentropic must freeze the versioned anchor/`AnchorResolver` interface with DS, Focus and Engram consumers. The DS position requires text `TextQuoteSelector` (W3C Web Annotation), block identity from Focus #378 / FE-2 paragraph identity, and diagram `{diagramId, targetIds[], frame, geometry}` tied to semantic document/element identities, a pinned Engram profile and DS render revision. These are compatibility requirements, not a frozen wire schema here: exact fields, revision/re-anchoring semantics, migrations and fixtures remain Sentropic's work. Diagram profiles are referenced, not copied into another model. DS updates its anchor type in one place once frozen. Transfer/compatibility acceptance, persistence after reopening, namespace isolation and revocation receipts remain required; the owner choice alone closes no migration or consumer qualification (F06–F08).
+
+### 15.4 H1 — Both artifact hosting modes per application
+
+Owner, 2026-10-19, verbatim:
+
+> H1: il faut prevoir les 2 - pour une app sentropic donnée, permettre du stockage d'artefact en sous-domaine ou un autre domaine
+
+Every Sentropic app must be able to configure artifact storage/views on an app subdomain **or** a distinct domain through the same Sentropic-managed package contract. This replaces an exclusive A/B choice; neither capability is optional in the common mechanism. The [hosting amendment](SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md) specifies configuration, storage/origin/link continuity, security per mode and qualification requirements. Concrete domain names per app/environment and GO for exact DNS/TLS changes remain open. Reader business rights (Data=C) remain binding; API transport and execution-origin mechanics remain proposals independently of domain placement.
