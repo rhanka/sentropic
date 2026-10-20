@@ -268,6 +268,11 @@
   - [ ] API gate when needed: `make up-api-test REGISTRY=local API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge`, then scoped test-api-unit/test-api-endpoints in that slot; `make down API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge` afterward.
   - [ ] Gate: sequential mesh/gateway/cluster typecheck/lint/full affected suites and named API regressions; scope-check before each commit; write .h2a/build/lot1D_report.md and stop for Opus review.
 
+- [x] **Lot V4-L1 — Strict boundary repair (spec v4 §3-§4, Sol R3 F1-F3)**
+  - [x] Baseline: verified feat/llm-judge, fetched, merged origin/main (1dee26b5e); 3 conflicts resolved (2 specs keep TRAIN/judge, 1 lockfile takes main integrity).
+  - [x] Strict remote-client validation in packages/llm-mesh/src/judge/client.ts: exact rule echo/recomputation (P1-P3/P14), resolved-kind binding (P4), argmax/native-ID and graded index/expectation binding (P5-P6/P11-P13), servedEvaluator equality (P7), closed envelopes plus field-by-field reconstruction (P8-P9/P35), registered fail-closed.
+  - [x] Durable probes in packages/llm-mesh/tests/judge-client-v4l1.test.ts: 14 tests from real service results with one-property mutations plus valid controls (P1-P9/P11-P14); old client fails 11/14, fixed client passes 14/14.
+  - [x] Gates on ENV=test-decision-v4l1 (last arg): typecheck-llm-mesh PASS, lint-llm-mesh PASS, judge-client 50 PASS, judge-client-v4l1 14 PASS, full test-llm-mesh 1231/66 PASS, judge-compose 5 PASS, judge-receipts 4 PASS, scope-check PASS C2.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
