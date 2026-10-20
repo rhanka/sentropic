@@ -2,7 +2,7 @@
  * L-5e — installed artifacts tuple (spec-v8 §9 5e): in the packaging
  * fixture the candidate plus the candidate mcp-platform and artifacts
  * tarballs form a coherent tuple — mesh declares the artifacts peer
- * (optional, single 0.1.0 range), the installed artifacts candidate
+ * (optional, single 0.1.3 range), the installed artifacts candidate
  * satisfies both declared ranges (mesh peer, artifacts→platform peer),
  * and the leaf loads the provider definition through the real module
  * registry only when selected. Source-manifest coherence runs in every
@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { satisfiesRange } from '../../src/modules/semver.js';
 import { ARTIFACTS_PACKAGE, ARTIFACTS_RANGE, MCP_PLATFORM_RANGE, PROVIDER_CATALOG } from '../../src/modules/catalog.js';
-import { enabled, fixtureDir, nodeJson, trainVersion } from './helpers.js';
+import { artifactsCompatible, enabled, fixtureDir, nodeJson, trainVersion } from './helpers.js';
 
 interface Pkg {
   version: string;
@@ -29,11 +29,14 @@ const sourceManifest = manifest(new URL('../../package.json', import.meta.url).p
 describe('artifacts source tuple coherence', () => {
   it('declares the optional artifacts peer once, in the candidate range', () => {
     expect(sourceManifest.peerDependencies?.[ARTIFACTS_PACKAGE]).toBe(ARTIFACTS_RANGE);
-    expect(ARTIFACTS_RANGE).toBe('>=0.1.0 <0.2.0');
+    expect(ARTIFACTS_RANGE).toBe('>=0.1.3 <0.2.0');
     expect(sourceManifest.peerDependenciesMeta?.[ARTIFACTS_PACKAGE]).toEqual({ optional: true });
-    expect(sourceManifest.peerDependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
+    expect(sourceManifest.dependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
+    expect(sourceManifest.peerDependencies?.['@sentropic/mcp-platform']).toBeUndefined();
+    expect(sourceManifest.peerDependenciesMeta?.['@sentropic/mcp-platform']).toBeUndefined();
     expect(sourceManifest.exports?.['./mcp/artifacts']).toBeDefined();
     expect(sourceManifest.exports?.['./mcp/web-pages']).toBeUndefined();
+    expect(artifactsCompatible, 'artifacts must accept the candidate platform').toBe(true);
   });
 
   it('keeps the module catalog descriptor identical to the declared peer', () => {
@@ -46,7 +49,7 @@ describe('artifacts source tuple coherence', () => {
   });
 });
 
-describe.skipIf(!enabled)('installed artifacts tuple', () => {
+describe.skipIf(!enabled || !artifactsCompatible)('installed compatible artifacts tuple', () => {
   // Installed manifest of a package inside the artifacts consumer tree.
   const consumerManifest = (name: string): Pkg => manifest(join(
     fixtureDir('artifacts-consumer'), 'node_modules', ...name.split('/'), 'package.json',
@@ -56,7 +59,8 @@ describe.skipIf(!enabled)('installed artifacts tuple', () => {
     // prepare.sh always installs this consumer from the packed tarballs: the
     // dependency specs stay `file:` (never rewritten to the registry).
     const deps = manifest(join(fixtureDir('artifacts-consumer'), 'package.json')).dependencies ?? {};
-    for (const name of ['@sentropic/cluster-mesh', '@sentropic/mcp-platform', ARTIFACTS_PACKAGE]) {
+    expect(Object.keys(deps).sort()).toEqual(['@sentropic/artifacts', '@sentropic/cluster-mesh']);
+    for (const name of ['@sentropic/cluster-mesh', ARTIFACTS_PACKAGE]) {
       expect(deps[name], name).toMatch(/^file:/u);
     }
     const mesh = consumerManifest('@sentropic/cluster-mesh');
@@ -64,10 +68,10 @@ describe.skipIf(!enabled)('installed artifacts tuple', () => {
     const artifacts = consumerManifest(ARTIFACTS_PACKAGE);
     expect(artifacts.version).toBe(trainVersion('artifacts'));
     expect(satisfiesRange(artifacts.version, ARTIFACTS_RANGE)).toBe(true);
-    expect(artifacts.peerDependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
     expect(artifacts.peerDependenciesMeta?.['@sentropic/mcp-platform']).toEqual({ optional: true });
     const platform = consumerManifest('@sentropic/mcp-platform');
     expect(satisfiesRange(platform.version, MCP_PLATFORM_RANGE)).toBe(true);
+    expect(satisfiesRange(platform.version, artifacts.peerDependencies!['@sentropic/mcp-platform']!)).toBe(true);
   });
 
   it('leaves artifacts uninstalled in the plain mcp consumer', () => {

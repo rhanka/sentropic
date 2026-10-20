@@ -30,7 +30,7 @@ afterEach(() => tree.cleanup());
 
 const registry = () => createModuleRegistry({ disabled: [] as never }, { anchorDir });
 
-function fakeMcpPlatform(version = '0.3.0'): FakePackage {
+function fakeMcpPlatform(version = '0.4.0'): FakePackage {
   return {
     name: '@sentropic/mcp-platform',
     version,
@@ -40,7 +40,7 @@ function fakeMcpPlatform(version = '0.3.0'): FakePackage {
         source: moduleSource('mcp-platform/entry', ['buildRegistryEntry', 'resolveRegistryEntry']),
       },
       './transport/bridge': {
-        source: moduleSource('mcp-platform/bridge', ['registerBridgeTools', 'identityFromExtra']),
+        source: moduleSource('mcp-platform/bridge', ['registerBridgeTools', 'registerMcpWireTools', 'identityFromExtra']),
       },
       './hono': { source: moduleSource('mcp-platform/hono', ['createMcpPlatformHono']) },
     },
@@ -86,7 +86,7 @@ describe('mcp-platform loaders', () => {
     const modules = registry();
     const failure = loadMcpPlatformRegistry(modules);
     await expect(failure).rejects.toThrow(
-      'Cluster Mesh module "mcp-platform/registry" is unavailable (not_installed). Install @sentropic/mcp-platform@">=0.3.0 <0.4.0" and restart.',
+      'Cluster Mesh module "mcp-platform/registry" is unavailable (not_installed). Install @sentropic/mcp-platform@">=0.4.0 <0.5.0" and restart.',
     );
     const error = await failure.catch((caught: unknown) => caught);
     expect(error).toMatchObject({ code: 'cluster_mesh_module_unavailable', reason: 'not_installed' });
