@@ -1,0 +1,17 @@
+{
+  "specSha256": "f90c927964b44fdf6ad712eee9b894762250239384643a3790931c142d3aeeca",
+  "l0Commit": "60a8bfa828b5eabd360232ea5865391c23f99f48",
+  "coOwnerReceiptSha256": "a812b30a82140806cf829808b596011bd90541cc5168004d53eed87b4703fb73",
+  "files": [
+    {
+      "path": "tools/memory-mcp-l5/fixtures/l0/60a8bfa828b5eabd360232ea5865391c23f99f48/memory-mcp-spec-rules.ts",
+      "upstreamPath": "tests/fixtures/memory-mcp-spec-rules.ts",
+      "sha256": "64b44d834db6d07c10856118824c51422255799558d0ce6b2e96461d6caf7f2a"
+    },
+    {
+      "path": "tools/memory-mcp-l5/fixtures/l0/60a8bfa828b5eabd360232ea5865391c23f99f48/memory-mcp-sol-rules.ts",
+      "upstreamPath": "tests/fixtures/memory-mcp-sol-rules.ts",
+      "sha256": "e685748ead67be8da29bb97487176ee8902624657f90f82b209b4fc661275419"
+    }
+  ]
+}

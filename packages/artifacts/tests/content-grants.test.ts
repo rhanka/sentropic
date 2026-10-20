@@ -10,11 +10,13 @@ import {
   createHmacGrantSigner,
   createMemoryTicketStore,
   createTicketService,
+  type TicketBinding,
 } from '../src/content/grants.js';
 
 const T0 = Date.parse('2026-01-01T00:00:00.000Z');
 const ARTIFACT = '11111111-1111-4111-8111-111111111111';
 const RELEASE = '22222222-2222-4222-8222-222222222222';
+const BINDING = { subjectId: 'steve', artifactId: ARTIFACT, releaseId: RELEASE, channel: 'stable' } as const;
 
 function makeSigner(now = { t: T0 }) {
   return {
@@ -76,28 +78,66 @@ describe('content grants', () => {
       clock: () => now.t,
       ids: () => `ticket-${(seq += 1)}`,
     });
-    const issued = await tickets.issue({ subjectId: 'steve', artifactId: ARTIFACT, releaseId: RELEASE });
+    const issued = await tickets.issue(BINDING);
     expect(issued.ticketId).toBe('ticket-1');
-    await expect(tickets.redeem(issued.ticketId, { subjectId: 'mallory', artifactId: ARTIFACT }))
+    await expect(tickets.redeem(issued.ticketId, { ...BINDING, subjectId: 'mallory' }))
       .rejects.toThrow(/invalid ticket/);
-    const redeemed = await tickets.redeem(issued.ticketId, { subjectId: 'steve', artifactId: ARTIFACT });
+    const redeemed = await tickets.redeem(issued.ticketId, BINDING);
     expect(redeemed).toMatchObject({ subjectId: 'steve', artifactId: ARTIFACT, releaseId: RELEASE });
-    await expect(tickets.redeem(issued.ticketId, { subjectId: 'steve', artifactId: ARTIFACT }))
+    await expect(tickets.redeem(issued.ticketId, BINDING))
       .rejects.toThrow(/invalid ticket/);
-    await expect(tickets.redeem('ticket-404', { subjectId: 'steve', artifactId: ARTIFACT }))
+    await expect(tickets.redeem('ticket-404', BINDING))
       .rejects.toThrow(/invalid ticket/);
   });
 
-  it('refuses expired tickets', async () => {
+  it.each([
+    { subjectId: 'mallory' }, { artifactId: 'other-artifact' },
+    { releaseId: 'other-release' }, { channel: 'pinned' as const },
+  ])('should refuse a mismatched binding without consuming the ticket: %j', async (mismatch) => {
+    const tickets = createTicketService({ store: createMemoryTicketStore() });
+    const issued = await tickets.issue(BINDING);
+    await expect(tickets.redeem(issued.ticketId, { ...BINDING, ...mismatch }))
+      .rejects.toThrow(/binding mismatch/);
+    await expect(tickets.redeem(issued.ticketId, BINDING)).resolves.toMatchObject(BINDING);
+  });
+
+  it.each([
+    { subjectId: '' }, { artifactId: '' }, { releaseId: undefined }, { releaseId: '' },
+    { channel: undefined }, { channel: 'other' },
+  ])('should refuse to issue a ticket with an incomplete binding: %j', async (invalid) => {
+    const tickets = createTicketService({ store: createMemoryTicketStore() });
+    await expect(tickets.issue({ ...BINDING, ...invalid } as unknown as TicketBinding))
+      .rejects.toThrow(/invalid ticket: binding/);
+  });
+
+  it.each([0, -1, NaN, Infinity])('should refuse a non-expiring ticket lifetime: %s', (ttlSeconds) => {
+    expect(() => createTicketService({ store: createMemoryTicketStore(), ttlSeconds }))
+      .toThrow(/invalid ticket: lifetime/);
+  });
+
+  it('should redeem a ticket only once when requests race', async () => {
+    const tickets = createTicketService({ store: createMemoryTicketStore() });
+    const issued = await tickets.issue(BINDING);
+    const results = await Promise.allSettled([
+      tickets.redeem(issued.ticketId, BINDING), tickets.redeem(issued.ticketId, BINDING),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+  });
+
+  it.each([0, 1])('should refuse expired tickets at expiry plus %s ms', async (offset) => {
     const now = { t: T0 };
     const tickets = createTicketService({
       store: createMemoryTicketStore(),
       clock: () => now.t,
       ids: () => 'ticket-x',
     });
-    const issued = await tickets.issue({ subjectId: 'steve', artifactId: ARTIFACT });
-    now.t = issued.expiresAt + 1;
-    await expect(tickets.redeem(issued.ticketId, { subjectId: 'steve', artifactId: ARTIFACT }))
+    const issued = await tickets.issue(BINDING);
+    expect(issued.expiresAt).toBe(T0 + 120_000);
+    now.t = issued.expiresAt + offset;
+    await expect(tickets.redeem(issued.ticketId, BINDING))
       .rejects.toThrow(/ticket expired/);
+    now.t = T0;
+    await expect(tickets.redeem(issued.ticketId, BINDING)).rejects.toThrow(/invalid ticket/);
   });
 });

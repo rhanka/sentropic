@@ -217,7 +217,7 @@ test('lint wiring follows baseline evidence, independently per package, before t
 });
 
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
-const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/mcp-platform@0.3.0,@sentropic/artifacts@0.1.0,jose@5.10.0';
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/mcp-platform@0.3.0,@sentropic/artifacts@0.1.0,jose@5.10.0,@sentropic/comments@0.3.0';
 
 test('cluster-mesh qualification installs every declared optional Sentropic peer', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages/cluster-mesh/package.json'), 'utf8'));
@@ -241,10 +241,16 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     const steps = jobs[`validate-${slug}`].steps;
     const pack = steps.find((s) => s.id === 'pack');
     assert.equal(pack.run, `make pack-${slug} PACK_DESTINATION=tmp/ci-manifest-guard/candidate/${slug} PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-${slug}`);
-    const gated = steps.filter((s) => s.if === "steps.pack.outputs.manifest_mode == 'block'");
-    assert.equal(gated[0].run, `make pack-candidate-siblings PACKAGE=${slug} SIBLING_DIR=tmp/ci-manifest-guard/siblings/${slug} ENV=test-ci-${slug}`);
-    assert.equal(gated[1].env.CANDIDATE_TARBALL, '${{ steps.pack.outputs.tarball }}');
-    assert.equal(gated[1].run, `make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/${slug}/receipts.json${peers} REPORT_DIR=tmp/ci-manifest-guard/qualify-${slug} ENV=test-ci-${slug}`);
+    const siblings = steps.find((s) => s.run?.startsWith('make pack-candidate-siblings '));
+    const qualify = steps.find((s) => s.run?.startsWith('make qualify-published-install TARBALL='));
+    assert.equal(siblings.run, `make pack-candidate-siblings PACKAGE=${slug} SIBLING_DIR=tmp/ci-manifest-guard/siblings/${slug} ENV=test-ci-${slug}`);
+    // An unchanged mesh can still consume a BLOCK sibling; classification belongs to the sibling packer.
+    assert.equal(siblings.if, slug === 'cluster-mesh' ? undefined : "steps.pack.outputs.manifest_mode == 'block'");
+    for (const [key, value] of Object.entries(CTX)) assert.equal(siblings.env[key], value);
+    assert.ok(steps.indexOf(pack) < steps.indexOf(siblings) && steps.indexOf(siblings) < steps.indexOf(qualify), `${slug}: pack candidate and siblings before qualification`);
+    assert.equal(qualify.if, "steps.pack.outputs.manifest_mode == 'block'");
+    assert.equal(qualify.env.CANDIDATE_TARBALL, '${{ steps.pack.outputs.tarball }}');
+    assert.equal(qualify.run, `make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/${slug}/receipts.json${peers} REPORT_DIR=tmp/ci-manifest-guard/qualify-${slug} ENV=test-ci-${slug}`);
     const publish = jobs[`publish-${slug}`].steps;
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));
@@ -319,8 +325,10 @@ test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publis
     if (name.endsWith('-token')) assert.match(body, /NPM_TOKEN_FILE/);
     else assert.match(body, /-e ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
   }
-  assert.match(recipe('publish-cluster-mesh-token'), /--access public --no-provenance\)/);
-  assert.match(recipe('publish-auth-hono-token'), /--access public --provenance=false\)/);
+  for (const slug of STEADY_STATE_PUBLISHERS) {
+    assert.match(recipe(`publish-${slug}-token`) ?? '', new RegExp(`\\$\\(call manifest_guard_publish,${slug},--access public --provenance=false\\)`), `publish-${slug}-token disables provenance on the token path`);
+    assert.doesNotMatch(recipe(`publish-${slug}`) ?? '', /provenance/, `publish-${slug} keeps provenance for OIDC publishes`);
+  }
   assert.match(recipe('publish-chat-ui'), /make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/);
 });
 
