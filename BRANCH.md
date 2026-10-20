@@ -287,7 +287,7 @@
 - [x] **Lot V4-L1-PEERS — qualify gate needs unpublished judge-capable mesh (run 39385665441)**
   - [x] Root cause: candidate has judge leaves but PEERS mesh@0.27.0 is published WITHOUT judge, so installed imports hard-fail; pre-publication design is pending-sibling-publish (exit 0 in candidate mode), which requires PEERS to name the unpublished version.
   - [x] Fix: PEERS mesh 0.27.0 to 0.27.1 (ci.yml x3 + wiring test); gateway stays 0.21.0 (published, no judge surface); wiring test 22 PASS, ranges admit 0.27.1.
-  - [x] Gates: local qualify-published-install with candidate tarball + receipts + new PEERS must report pending-sibling-publish (exit 0); then scope-check, commit, push.
+  - [x] Gates: local qualify-published-install with candidate tarball + receipts + new PEERS reports status pass (mesh 0.27.1 installed from sibling-receipt, all entry points PASS incl. judge leaves); then scope-check, commit, push.
 - [x] **Lot V4-L1-MEM — memory L5 freeze mismatch from root-lock bumps (run 39384337780)**
   - [x] Root cause: memory pre-candidate manifest pins declaredLockSha256; our 0.27.1/0.21.1 bumps changed root lock sha so memory-l5-verify failed; job runs because memory_l5 filter includes package-lock.json.
   - [x] Fix per main pattern (b477879c8): retained superseded manifest in history/<sha>.json, re-pinned declaredLockSha256 to 56e03e4f, rewrote sidecar; archives/inventory untouched (platform/broker sources unchanged).
