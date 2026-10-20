@@ -16,6 +16,7 @@ import type {
   BudgetAdmissionPort, CallerAuthPort, CreateGatewayRouterOptions, GatewayConfig, RouteMeteringSink,
 } from '@sentropic/llm-gateway';
 import type { RoutePlanner } from '@sentropic/llm-mesh';
+import { startGatewayHost, type StartGatewayHostOptions } from '@sentropic/llm-gateway/node';
 
 import {
   createGatewayRoutePlane,
@@ -38,6 +39,9 @@ import {
 
 type Gateway = typeof import('@sentropic/llm-gateway');
 type Probe = (signal: AbortSignal) => Promise<boolean>;
+/** Durable launches delegate the complete listener/control lifecycle to the published package. */
+export const startDurableGatewayApp = (config: HostConfig, binding: Omit<StartGatewayHostOptions, 'listen'>) =>
+  startGatewayHost({ ...binding, listen: { host: config.host, port: config.port } });
 
 /** B2: verified caller identity and workspace directory. */
 export interface IdentityDependency { readonly callerAuth: CallerAuthPort; readonly ready: Probe }

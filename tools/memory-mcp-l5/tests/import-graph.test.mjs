@@ -30,3 +30,27 @@ describe('P10.tooling.import-graph — L5 import-graph contract and module dispo
     expect(isForbiddenImport('packages/mcp-platform/src/audit.ts')).toBe(true);
   });
 });
+
+describe('P10.tooling.import-graph — L5 Lot 1 negative graph fixtures', () => {
+  it('P10.tooling.import-graph: rejects transitive mock re-exports through a barrel', () => {
+    expect(isForbiddenImport('@sentropic/mcp-platform/mock/oidc')).toBe(true);
+    expect(isForbiddenImport('@sentropic/mcp-platform/experimental/mutation-gate')).toBe(true);
+    expect(isForbiddenImport('@sentropic/mcp-platform/testing')).toBe(true);
+  });
+
+  it('P10.tooling.import-graph: rejects in-memory factory and sibling-source specifiers', () => {
+    expect(isForbiddenImport('@sentropic/mcp-broker/createInMemoryContext')).toBe(true);
+    expect(isForbiddenImport('../../cluster-mesh/src/compose/mcp.ts')).toBe(true);
+    expect(isForbiddenImport('packages/mcp-platform/src/testing.ts')).toBe(true);
+    expect(isForbiddenImport('file:../mcp-platform')).toBe(true);
+  });
+
+  it('P10.tooling.import-graph: rejects store, audit, elicitation and record-store escapes', () => {
+    expect(isForbiddenImport('createInMemoryContext')).toBe(true);
+    expect(isForbiddenImport('@sentropic/mcp-platform/stores')).toBe(true);
+    expect(isForbiddenImport('packages/mcp-platform/src/elicitation.ts')).toBe(true);
+    expect(isForbiddenImport('MemoryRecordStore')).toBe(true);
+    expect(isForbiddenImport('FileRecordStore')).toBe(true);
+    expect(isForbiddenImport('InMemoryAuditSink')).toBe(true);
+  });
+});

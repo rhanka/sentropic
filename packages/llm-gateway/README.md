@@ -14,6 +14,71 @@ diagnostics.
 `budgetScope` is carried for attribution; quota pricing and storage remain a host/BR-47
 responsibility behind the opt-in budget admission port (see Budget admission).
 
+## Durable Node host (0.21.0 candidate)
+
+`@sentropic/llm-gateway/node` owns the HTTP/SSE listener, durable session
+issuer, authenticated private control socket, request receipts and lifecycle.
+Consumers supply a trusted mesh binding and use this host directly:
+
+```ts
+import { startGatewayHost, resolveGatewayStateDir, type MeshBinding } from '@sentropic/llm-gateway/node';
+import { createGatewayControlClient } from '@sentropic/llm-gateway/node/control-client';
+
+declare const mesh: MeshBinding; // Protected keyring, owner resolution, planner factory, metering.
+const host = await startGatewayHost({
+  stateDir: resolveGatewayStateDir({ ownerScopeRef: mesh.ownerScopeRef }),
+  mesh, listen: { host: '127.0.0.1', port: 19600 },
+});
+const control = createGatewayControlClient({ controlSocket: host.controlSocket });
+const session = await control.acquireSession({
+  ownerScopeRef: mesh.ownerScopeRef, workspaceRef: 'workspace-a', clientSessionRef: 'native-session-a',
+  routingContract: {
+    version: 1, revision: 'operator-policy-1', ownerScopeRef: mesh.ownerScopeRef,
+    exactModels: ['gpt-6.1-sol'], authorizedAccountRefs: ['owner-authorized-account-ref'],
+    rotateAccounts: false, effortPolicy: { mode: 'preserve' },
+  },
+});
+// Pass session.key only to the selected child process. Never log or persist another copy.
+await host.drain();
+await host.stop();
+```
+
+The mesh binding creates its planner with the supplied `affinityStore`; the
+gateway stores those mesh-owned records with the encrypted sessions. Native
+session identity is stable across HTTP requests and process restarts. A pin
+to an unavailable account, missing required affinity, unreadable protected
+state or conflicting policy refuses before dispatch. Account rotation needs
+independent explicit consent and stays within the authorized account set.
+Durable administrative reset/rebind currently requires a new acknowledged
+session policy; synchronous in-memory mutation cannot acknowledge a disk write.
+
+The protected mesh keyring must supply the stable 32-byte hexadecimal secret
+at `gateway/state-dek`. The gateway creates no adjacent plaintext key. Keep
+the owner-scoped state directory, initialization marker and keyring identity
+across upgrades. Files are created privately, writes use encryption, CAS,
+fsync and atomic replacement, and one live host holds the writer claim.
+Missing committed ciphertext, wrong keys and corruption refuse rather than
+resetting data. Windows remains unavailable until its ACL/control transport
+is qualified; this candidate host accepts loopback listeners.
+
+Only authenticated control returns caller keys. Reacquiring the same live
+owner/workspace/native-session triple returns the same key and expiry;
+revocation and expiry retain tombstones. Inference bearer keys cannot issue
+keys or authenticate control operations. Imported legacy keys retain their
+bytes, but an implicit legacy routing policy is not upgraded automatically.
+
+Requests acknowledge a durable receipt before provider dispatch. Receipts
+link physical attempts to selected model/account and frozen policy/mapping
+revisions; they contain no prompts or caller/provider secrets. Missing usage
+stays null. Selection and echoed model names are not provider attestation.
+Interrupted pending work becomes incomplete and is never replayed. Financial
+settlement remains the injected host metering responsibility.
+
+Client recipes and qualification (`./clients`), native Vibe/Muse acceptance,
+the h2a CI receipt and the immo-dependent lock/peer rollout are deferred.
+Muse reasoning controls remain visibly unavailable until a C-admitted probe
+proves a control-preserving transport. A named refusal is not qualification.
+
 ## Caller authentication (0.18.0)
 
 The root exports no optional auth implementations or peer types. Choose one mode:
