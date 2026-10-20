@@ -31,10 +31,9 @@ const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true 
 const HI = [104, 105];
 const HI_DIGEST = `sha256:${createHash('sha256').update(new Uint8Array(HI)).digest('hex')}`;
 
-function makeApp(withExtras = true, limits?: Partial<PublicationLimits>) {
+function makeApp(withExtras = true, limits?: Partial<PublicationLimits>, staging = createMemoryStaging()) {
   const state = createMemoryStateStore();
   const blobs = createMemoryBlobStore();
-  const staging = createMemoryStaging();
   return createHttpArtifactApp({
     parameterSchema: SCHEMA,
     artifacts: createArtifactService({ kv: createMemoryKv(), uuid: createCryptoUuid() }),
@@ -75,6 +74,25 @@ async function seededId(app: ReturnType<typeof makeApp>): Promise<string> {
 }
 
 describe('http uploads + templates routes', () => {
+  it.each([{ path: '../rejected' }, { path: '' }, { mimeType: 'text/\nplain' }, { mimeType: '' }])(
+    'should preserve a staged upload after rejected publication metadata %j', async (invalid) => {
+      const staging = createMemoryStaging();
+      const app = makeApp(true, undefined, staging);
+      const artifactId = await seededId(app);
+      const begun = await app.handle(req('POST', '/uploads', { artifactId, mimeType: 'text/plain' }, OWNER));
+      const { uploadId } = begun.body as { uploadId: string };
+      expect((await app.handle(req('POST', '/uploads/append', { uploadId, offset: 0, bytes: HI }, OWNER))).status)
+        .toBe(200);
+      const input = { artifactId, uploadId, path: 'valid.txt', mimeType: 'text/plain', digest: HI_DIGEST, size: 2 };
+      expect((await app.handle(req('POST', '/uploads/commit', { ...input, ...invalid }, OWNER))).status).toBe(400);
+      expect((await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER))).status).toBe(404);
+      expect(await staging.read(uploadId)).toEqual(new Uint8Array(HI));
+      expect((await app.handle(req('POST', '/uploads/commit', input, OWNER))).status).toBe(201);
+      await expect(async () => staging.read(uploadId)).rejects.toThrow(/unknown upload/);
+      expect((await app.handle(req('POST', '/uploads/commit', input, OWNER))).status).toBe(409);
+    },
+  );
+
   it.each([{ maxFileBytes: 2, maxTotalBytes: 4 }, { maxFileBytes: 4, maxTotalBytes: 2 }])(
     'should bound cumulative upload bytes before decoding with limits %j', async (limits) => {
       const app = makeApp(true, limits);
