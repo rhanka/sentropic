@@ -91,4 +91,4 @@ Actions with the following status should be included around tasks only if really
   - [x] Verify archives unchanged, inventory still exact 44 contracts, sidecars valid.
   - [x] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
   - [x] `make scope-check` before each commit; atomic commits via `make commit MSG="..."`.
-  - [ ] Push branch and open DRAFT PR; do not merge.
+  - [x] Push branch and open DRAFT PR; do not merge.
