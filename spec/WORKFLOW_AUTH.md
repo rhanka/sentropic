@@ -8,6 +8,7 @@
 4. **Magic link (utility, not exposed on login screen)**: API endpoints exist + UI page `/auth/magic-link/verify`, mainly for tests/E2E/ops (not a “product” login method).
 5. **Sessions**: `session` cookie `HttpOnly`, `Secure` in prod, `SameSite=Lax`, persisted in DB (`user_sessions`).
 6. **Access rules**: account status (`accountStatus` + `approvalDueAt`) and `emailVerified` impact access (see `session-manager.ts`).
+7. **Forced-MFA clients**: for accounts hardened by a required-MFA client, device-loss and magic-link enrolment assurance is governed by [SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md](SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md) (email proof alone never enrols a credential there); the flows below describe merged behaviour, and the target hardened behaviour applies only after that spec's stated BUILD lots land.
 
 ## Detailed workflows
 
@@ -355,6 +356,14 @@ sequenceDiagram
     API->>RP: 401 Unauthorized
 ```
 
+> **OAuth2 refresh token grant (`grant_type=refresh_token`, 15-day absolute family cap):** For clients explicitly registered with `grant_types` containing `'refresh_token'` and `allowed_scopes` containing `'offline_access'` (such as `immo-mcp` and other Sentropic MCP clients), `/oauth/token` issues an opaque `srt_...` refresh token rotated on every use with family-wide reuse detection and revocation. This OAuth grant is distinct from the first-party browser session cookie renewal (`POST /api/v1/auth/session/refresh`, section 4). Full specification: [SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md).
+> This is target behavior for BUILD, requiring explicit local resource-aware
+> offline consent and current client authorization. At day 15 the client starts
+> a new OAuth flow; browser-cookie reuse versus a fresh human ceremony remains
+> the unratified D-R1 choice in that spec. Browser expiry alone does not revoke
+> offline grants; local-logout effects remain D-R2. Issuer revocation immediately
+> stops renewal/new exchange, while delivered JWTs retain their bounded validity.
+
 ### 8. DPoP-bound token flow (opt-in per client)
 
 When `dpop_bound_access_tokens=true` on the OAuth client record, the RP must:
@@ -373,6 +382,7 @@ When `dpop_bound_access_tokens=true` on the OAuth client record, the RP must:
 | `OAUTH_ACCESS_TOKEN_TTL_SEC` | Access token lifetime | Optional (default: 3600) |
 | `OAUTH_ID_TOKEN_TTL_SEC` | ID token lifetime | Optional (default: 3600) |
 | `OAUTH_AUTHORIZATION_CODE_TTL_SEC` | Authorization code TTL | Optional (default: 60) |
+| `OAUTH_REFRESH_TOKEN_TTL_SEC` | Refresh token family absolute lifetime (target; see [SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md)) | Optional (default: 1296000 = 15 days) |
 | `OAUTH_DPOP_IAT_SKEW_SEC` | DPoP proof `iat` tolerance | Optional (default: 60) |
 
 ### Key bootstrap and rotation
