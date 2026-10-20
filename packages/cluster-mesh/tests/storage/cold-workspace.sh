@@ -30,6 +30,12 @@ if [ -f /source/.h2a/pg-crash-witness.json ]; then
   cp /source/.h2a/pg-crash-witness.json ../../.h2a/
 fi
 case "$CM_ACTION" in
+  platform-test)
+    cd ../mcp-platform
+    /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" --environment node --maxWorkers=1 ;;
+  stateful-consumer)
+    "$tsc" -p tsconfig.json
+    sh tests/packaging/stateful-consumer.sh ;;
   typecheck)
     "$tsc" --noEmit -p tsconfig.json
     "$tsc" --noEmit -p tsconfig.test.json ;;

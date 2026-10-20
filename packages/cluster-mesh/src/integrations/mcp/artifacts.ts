@@ -12,6 +12,7 @@ import {
 } from '@sentropic/artifacts/mcp';
 
 export type { ArtifactsDefinitionOptions };
+export { createArtifactsToolExecutor, type ArtifactsApp } from '@sentropic/artifacts/mcp';
 
 /**
  * The `sentropic.artifacts` builtin descriptor (spec-v8 §3/§9): static

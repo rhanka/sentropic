@@ -26,6 +26,15 @@ MPLATFORM="$(train_version mcp-platform)"
 ARTIFACTS="$(train_version artifacts)"
 rm -rf "$work"
 mkdir -p "$work/tools" "$work/src"
+CM_ARTIFACTS_COMPAT="$(node --input-type=module -e '
+  import fs from "node:fs";
+  import { satisfiesRange } from "./src/modules/semver.ts";
+  const platform = JSON.parse(fs.readFileSync("../mcp-platform/package.json")).version;
+  const range = JSON.parse(fs.readFileSync("../artifacts/package.json")).peerDependencies?.["@sentropic/mcp-platform"];
+  process.stdout.write(satisfiesRange(platform, range) ? "1" : "0");
+')"
+export CM_ARTIFACTS_COMPAT
+printf '{"compatible":%s}\n' "$([ "$CM_ARTIFACTS_COMPAT" = 1 ] && echo true || echo false)" > "$work/artifacts-compatibility.json"
 quiet="--no-audit --no-fund --loglevel=error"
 siblings="$work/siblings"
 
@@ -56,6 +65,17 @@ receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/artifacts 
 if [ -n "$receipt" ]; then cp "$receipt" "$artifacts_tgz"; fi
 echo "[artifacts candidate] sha256 $(sha256sum "$artifacts_tgz" | cut -d' ' -f1)"
 
+# The embedded dependency must also resolve for bare and global consumers before publication.
+(cd ../mcp-platform && npm pack --silent --pack-destination "$work/src" >/dev/null)
+platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
+receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/mcp-platform "$MPLATFORM")"
+if [ -n "$receipt" ]; then cp "$receipt" "$platform_tgz"; fi
+node "$here/candidate-platform-registry.mjs" ../mcp-platform/package.json "$platform_tgz" > "$work/registry-url" &
+registry_pid=$!
+trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
+while [ ! -s "$work/registry-url" ]; do kill -0 "$registry_pid"; sleep 0.1; done
+export npm_config_registry="$(cat "$work/registry-url")"
+
 # src NAME VERSION: a verified sibling archive (`file:`) for exactly NAME@VERSION, else the registry version.
 src() {
   node "$here/siblings.mjs" spec "$siblings" "$1" "$2"
@@ -73,6 +93,7 @@ consumer() {
     pkg.name = pkg.name ?? "fixture-" + dir.split("/").pop();
     pkg.dependencies = { ...pkg.dependencies };
     for (const pair of pairs) { const at = pair.indexOf("="); pkg.dependencies[pair.slice(0, at)] = pair.slice(at + 1); }
+    if (process.env.CM_ARTIFACTS_COMPAT !== "1") delete pkg.dependencies["@sentropic/artifacts"];
     const overrides = Object.fromEntries(Object.entries(pkg.dependencies)
       .filter(([name, spec]) => name !== "@sentropic/cluster-mesh" && spec.startsWith("file:/")));
     if (Object.keys(overrides).length) pkg.overrides = overrides; else delete pkg.overrides;
@@ -131,6 +152,7 @@ fi
 mkdir -p "$work/selected"
 cp "$fixtures/selected/package.json" "$work/selected/"
 cp "$fixtures/selected/package-lock.json" "$work/selected/committed-lock.json"
+cp "$fixtures/selected/package-lock.json" "$work/selected/package-lock.json"
 artifacts_spec="file:$artifacts_tgz"
 # Lock refresh retains the registry/verified-sibling contract of check-lock-integrity.mjs.
 if [ "${REFRESH_LOCK:-}" = 1 ]; then artifacts_spec="$(src @sentropic/artifacts "$ARTIFACTS")"; fi
@@ -141,12 +163,10 @@ consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH"
   "@sentropic/artifacts=$artifacts_spec"
 sources "$work/selected"
 if grep -q ' sibling ' "$work/selected/sources.txt" || [ "$artifacts_spec" = "file:$artifacts_tgz" ]; then
-  [ "${REFRESH_LOCK:-}" = 1 ] || cp "$fixtures/selected/package-lock.json" "$work/selected/"
   (cd "$work/selected" && npm install $quiet >/dev/null)
 elif [ "${REFRESH_LOCK:-}" = 1 ]; then
   (cd "$work/selected" && npm install $quiet >/dev/null)
 else
-  cp "$fixtures/selected/package-lock.json" "$work/selected/"
   (cd "$work/selected" && npm ci $quiet >/dev/null)
 fi
 if [ "${REFRESH_LOCK:-}" = 1 ]; then
@@ -168,13 +188,9 @@ sources "$work/selected-session"
 tuple selected-session
 fi
 
-# MCP consumer: the candidate plus the locally-packed mcp-platform sibling (unpublished 0.3.0
-# candidate, packed exactly as published; dist built by the packaging.mk prerequisite) and the
-# registry SDK. Optional peers stay absent; the leaves must resolve without them.
-(cd ../mcp-platform && npm pack --silent --pack-destination "$work/src" >/dev/null)
-platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
+# MCP consumer: only mesh is declared; platform and SDK resolve transitively.
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
-consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz"
+consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz"
 (cd "$work/mcp-consumer" && npm install $quiet >/dev/null)
 tuple mcp-consumer
 fi
@@ -182,10 +198,14 @@ fi
 # Web-pages consumer: the MCP consumer tuple plus the locally-packed artifacts sibling
 # (dist built by the packaging.mk prerequisite). The leaf must
 # load only when selected; the installed artifacts version must satisfy the declared range.
-consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz" "@sentropic/artifacts=file:$artifacts_tgz"
-sources "$work/artifacts-consumer"
-(cd "$work/artifacts-consumer" && npm install $quiet >/dev/null)
-tuple artifacts-consumer
+if [ "$CM_ARTIFACTS_COMPAT" = 1 ]; then
+  consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/artifacts=file:$artifacts_tgz"
+  sources "$work/artifacts-consumer"
+  (cd "$work/artifacts-consumer" && npm install $quiet >/dev/null)
+  tuple artifacts-consumer
+else
+  echo '[artifacts] optional tuple refused: declared platform peer excludes candidate'
+fi
 
 # installed DIR: installed versions of the candidate and both train packages in DIR.
 installed() {
