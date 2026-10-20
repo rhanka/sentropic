@@ -112,10 +112,11 @@
   - [x] Regenerate P1 through memory-l5-pack: `014a1f014c668e3cec6f724fa278073774eb2e4307b086c55bceccbaaa01986a`, lockfile `b4bc5762c8c94c29bc7cfcb43b27c2fa3f0daf80d0a2e9372377fdfa4a9b7ca3`; all 44 contracts and both archive digests/integrities are unchanged; memory-l5-gate LOT=1 passes all 228 tests.
   - [x] Rebased Cluster Mesh 0.20.0: lint/typecheck, 972 unit tests (129 conditional skips), guarded pack, all 78 parallel packed tests and clean candidate installation pass, including the SQLite entry point; artifacts candidate bytes remain `7755caf8...`.
   - [x] Delivery constraints: push with a lease on remote head `6ca10d3e63406a4fc093ec4f4099866607ef3c0d`; retain the draft state and report the new GitHub run separately, without merging or publishing.
-- [ ] **Lot 9 — Astra round-1 corrections**
+- [x] **Lot 9 — Astra round-1 corrections**
   - [x] Merge current `origin/main` as requested; retain draft PR #708 and keep this worktree single-writer.
   - [x] Bind validated source presence/content (including recipe order) to the server replay hash; source writes run within the idempotent commit. HTTP/MCP regressions failed before the fix and pass 8/8 afterward.
   - [x] Bound cumulative staged bytes by the minimum host, publication and client ceilings; check remaining capacity before decoding/writes. Three new multi-chunk/override regressions fail before the fix and pass afterward; existing upload behavior remains covered.
   - [x] Preflight upload file/path/size/MIME validation before consuming the session; four metadata regressions fail before the fix and pass afterward. No release on rejection; corrected commit succeeds with the original staged bytes, then discards them. Upload suites pass 16/16.
   - [x] Document source replay identity, direct-service source store wiring, cumulative upload limits and corrected commit retries in the package README.
-  - [ ] Run artifacts, packed-consumer and L5 qualification; refresh retained P1 only if needed, then push without merging, marking ready or publishing.
+  - [x] Final gates pass: artifacts typecheck/lint and 192 unit tests; all three packed proofs; 78 Cluster Mesh packed tests and sibling integrity guard. Retain only the updated artifacts SHA-512 in the selected test lock.
+  - [x] Retained P1 verification passes at `014a1f01...`; root lock unchanged, so no regeneration is needed. Record exact commands and the round-1 findings/fixes/regressions in the qualification receipt; deliver via normal push while keeping PR #708 draft, without merging or publishing.
