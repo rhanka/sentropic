@@ -3,7 +3,6 @@ import type { JudgeConnectionFailure, JudgeReceipt, JudgeResult, RemoteJudgeClie
 import { parseJudgeUsage, resolveJudgeCorrelationId, unreportedJudgeUsage } from './receipt.js';
 import type { JudgeError } from './errors.js';
 import { createJudgeError, isJudgeErrorCode } from './errors.js';
-import { isJudgeDecisionRule } from './criterion.js';
 import { sanitizeJevId } from './jev-response.js';
 import type { JudgeCost } from './receipt.js';
 import { parseJudgeConfidence, parseJudgeScore } from './verdict.js';
@@ -31,7 +30,6 @@ const connectionError = (code: ConnectionErrorCode, phase: 'preflight' | 'dispat
 
 const BUDGET_STATES = new Set(['not-admitted', 'released', 'settled', 'pending-reconciliation']);
 
-const DECISION_ORIGINS = new Set(['provider', 'threshold', 'labels']);
 const DISPATCH_STATES = new Set(['not-started', 'started', 'completed', 'unknown']);
 
 /** Only the three service-emitted value shapes: binary scores alone, choice
@@ -94,6 +92,7 @@ function isValidWireCost(cost: unknown): cost is JudgeCost {
 
 function isValidWireRetention(retention: unknown): boolean {
   if (!isRecord(retention)) return false;
+  if (!hasOnlyKeys(retention, ['status', 'basis', 'evidenceRefs', 'retentionDays', 'gap'])) return false;
   if (retention.status !== 'non-zdr' && retention.status !== 'unknown' && retention.status !== 'not-evaluated') return false;
   if (retention.basis !== 'published-policy' && retention.basis !== 'none') return false;
   if (!Array.isArray(retention.evidenceRefs) || !retention.evidenceRefs.every((ref) => typeof ref === 'string')) return false;
@@ -107,12 +106,18 @@ const bindsEvaluator = (candidate: unknown, request: JudgeRequest): boolean =>
   && candidate.evaluatorId === request.evaluator.evaluatorId
   && candidate.revision === request.evaluator.revision;
 
+const RECEIPT_KEYS = ['schemaVersion', 'callId', 'correlationId', 'evaluator', 'servedEvaluator',
+  'servedModelId', 'providerRequestId', 'startedAt', 'finishedAt', 'latencyMs', 'providerLatencyMs',
+  'dispatch', 'attempts', 'usage', 'cost', 'retention', 'budget', 'outcome', 'errorCode'] as const;
+
 function isValidJudgeReceipt(r: unknown, request: JudgeRequest, expectedCorrelationId: string): r is JudgeReceipt {
   if (!isRecord(r)) return false;
+  if (!hasOnlyKeys(r, RECEIPT_KEYS)) return false;
   if (r.schemaVersion !== 1 || typeof r.callId !== 'string' || !r.callId) return false;
   if (r.correlationId !== expectedCorrelationId) return false;
   if (r.evaluator !== null && !bindsEvaluator(r.evaluator, request)) return false;
   if (r.servedEvaluator !== null && (!isRecord(r.servedEvaluator)
+    || !hasOnlyKeys(r.servedEvaluator, ['providerId', 'evaluatorId', 'revision'])
     || typeof r.servedEvaluator.providerId !== 'string' || typeof r.servedEvaluator.evaluatorId !== 'string'
     || typeof r.servedEvaluator.revision !== 'string')) return false;
   if (r.servedModelId !== null && sanitizeJevId(r.servedModelId) !== r.servedModelId) return false;
@@ -125,7 +130,8 @@ function isValidJudgeReceipt(r: unknown, request: JudgeRequest, expectedCorrelat
   if (!DISPATCH_STATES.has(r.dispatch as string)) return false;
   if (r.attempts !== 0 && r.attempts !== 1) return false;
   if (!isValidWireRetention(r.retention)) return false;
-  if (!isRecord(r.budget) || !BUDGET_STATES.has(r.budget.state as string) || typeof r.budget.overrun !== 'boolean'
+  if (!isRecord(r.budget) || !hasOnlyKeys(r.budget, ['state', 'overrun', 'reservedMicroUsd'])
+    || !BUDGET_STATES.has(r.budget.state as string) || typeof r.budget.overrun !== 'boolean'
     || (r.budget.reservedMicroUsd !== undefined && !isMicroUsd(r.budget.reservedMicroUsd))) return false;
   const cost = r.cost;
   if (!isValidWireCost(cost)) return false;
@@ -136,8 +142,10 @@ function isValidJudgeReceipt(r: unknown, request: JudgeRequest, expectedCorrelat
   if (!usage) return false;
   // A verdict proves dispatch: identities served, one attempt completed,
   // provider counters reported, liability estimated under a held budget.
+  // V-I1: a successful receipt names exactly the transmitted evaluator.
   if (r.outcome === 'verdict') {
     if (r.evaluator === null || r.servedEvaluator === null || r.servedModelId === null) return false;
+    if (!bindsEvaluator(r.servedEvaluator, request)) return false;
     if (r.attempts !== 1 || r.dispatch !== 'completed') return false;
     if (usage.tokens.input.source !== 'provider' || usage.tokens.output.source !== 'provider'
       || usage.evaluatorCalls !== 1 || usage.explanations !== 0) return false;
@@ -147,35 +155,107 @@ function isValidJudgeReceipt(r: unknown, request: JudgeRequest, expectedCorrelat
   return true;
 }
 
-const wireDistributionEntries = (distribution: unknown): { outcome: string; probability: number }[] | null => {
+type WireDistributionEntry = { outcome: string; nativeOutcome: string; probability: number };
+
+const wireDistributionEntries = (distribution: unknown): WireDistributionEntry[] | null => {
   if (!Array.isArray(distribution) || !distribution.length) return null;
-  const entries: { outcome: string; probability: number }[] = [];
+  const entries: WireDistributionEntry[] = [];
   for (const entry of distribution) {
     if (!isRecord(entry) || !hasOnlyKeys(entry, ['outcome', 'nativeOutcome', 'probability'])
       || typeof entry.outcome !== 'string' || typeof entry.nativeOutcome !== 'string'
       || typeof entry.probability !== 'number' || !Number.isFinite(entry.probability)
       || entry.probability < 0 || entry.probability > 1) return null;
-    entries.push({ outcome: entry.outcome, probability: entry.probability });
+    entries.push({ outcome: entry.outcome, nativeOutcome: entry.nativeOutcome, probability: entry.probability });
   }
   if (Math.abs(entries.reduce((sum, entry) => sum + entry.probability, 0) - 1) > 1e-4) return null;
   return entries;
 };
 
-/** Distribution and label concordance: binary carries neither, choice binds both to the declared labels. */
-function isValidWireDistribution(distribution: unknown, label: unknown, request: JudgeRequest): boolean {
-  if (request.criterion.kind === 'binary') return distribution === null && label === null;
-  if (request.criterion.kind === 'choice') {
-    const declared = request.criterion.options.map((option) => option.id);
-    const entries = wireDistributionEntries(distribution);
-    if (!entries || entries.length !== declared.length) return false;
-    const seen = new Set(entries.map((entry) => entry.outcome));
-    if (seen.size !== entries.length || !declared.every((id) => seen.has(id))) return false;
-    return isRecord(label) && hasOnlyKeys(label, ['value', 'origin'])
-      && typeof label.value === 'string' && seen.has(label.value) && label.origin === 'provider';
+/** V4-L1 JEV evidence binding: exact native index/label mapping, order-independent, no invention. */
+function isValidChoiceEvidence(distribution: unknown, label: unknown, request: JudgeRequest): boolean {
+  if (request.criterion.kind !== 'choice') return false;
+  const declared = request.criterion.options.map((option) => option.id);
+  const entries = wireDistributionEntries(distribution);
+  if (!entries || entries.length !== declared.length) return false;
+  const declaredSet = new Set(declared);
+  const outcomeSet = new Set<string>();
+  const nativeSet = new Set<string>();
+  for (const entry of entries) {
+    if (entry.outcome !== entry.nativeOutcome) return false;
+    if (!declaredSet.has(entry.outcome) || !declaredSet.has(entry.nativeOutcome)) return false;
+    outcomeSet.add(entry.outcome);
+    nativeSet.add(entry.nativeOutcome);
   }
-  if (distribution !== null && !wireDistributionEntries(distribution)) return false;
-  return label === null || (isRecord(label) && hasOnlyKeys(label, ['value', 'origin'])
-    && typeof label.value === 'string' && label.origin === 'provider');
+  if (outcomeSet.size !== declared.length || nativeSet.size !== declared.length) return false;
+  if (!isRecord(label) || !hasOnlyKeys(label, ['value', 'origin'])
+    || typeof label.value !== 'string' || label.origin !== 'provider') return false;
+  if (!declaredSet.has(label.value)) return false;
+  const max = Math.max(...entries.map((entry) => entry.probability));
+  const selected = entries.find((entry) => entry.outcome === label.value);
+  return selected !== undefined && selected.probability === max;
+}
+
+function isValidGradedEvidence(distribution: unknown, score: unknown, request: JudgeRequest): boolean {
+  if (request.criterion.kind !== 'graded') return false;
+  const levels = request.criterion.levels;
+  const entries = wireDistributionEntries(distribution);
+  if (!entries || entries.length !== levels.length) return false;
+  const expectedNative = new Set(levels.map((_, index) => String(index)));
+  const seenNative = new Set<string>();
+  const seenOutcome = new Set<string>();
+  for (const entry of entries) {
+    if (!expectedNative.has(entry.nativeOutcome)) return false;
+    const index = Number(entry.nativeOutcome);
+    if (!Number.isSafeInteger(index) || index < 0 || index >= levels.length) return false;
+    if (levels[index].label !== entry.outcome) return false;
+    seenNative.add(entry.nativeOutcome);
+    seenOutcome.add(entry.outcome);
+  }
+  if (seenNative.size !== levels.length || seenOutcome.size !== levels.length) return false;
+  if (score === null || !isRecord(score) || typeof score.value !== 'number') return false;
+  const weighted = entries.reduce((sum, entry) => sum + Number(entry.nativeOutcome) * entry.probability, 0);
+  return Math.abs(weighted - (score as { value: number }).value) <= 1e-4;
+}
+
+function sameDecisionRule(left: unknown, right: JudgeRequest['decision']): boolean {
+  if (right === undefined) return false;
+  if (!isRecord(left)) return false;
+  if (right.kind === 'threshold') {
+    return hasOnlyKeys(left, ['kind', 'field', 'op', 'value'])
+      && left.kind === 'threshold' && left.field === 'score'
+      && (left.op === 'gte' || left.op === 'lte')
+      && left.op === right.op && left.value === right.value;
+  }
+  if (right.kind === 'labels') {
+    if (!hasOnlyKeys(left, ['kind', 'passing']) || left.kind !== 'labels' || !Array.isArray(left.passing)) return false;
+    const passing = left.passing as unknown[];
+    return passing.length === right.passing.length
+      && passing.every((value, index) => value === right.passing[index]);
+  }
+  return false;
+}
+
+/** V-D1/V-D2: exact rule echo and recomputation from native evidence. JEV has no native boolean. */
+function isValidWireDecision(decision: unknown, request: JudgeRequest, evidence: { score: JudgeVerdict['score']; label: JudgeVerdict['label'] }): boolean {
+  if (request.decision === undefined) return decision === null;
+  if (request.decision.kind === 'provider') return false;
+  if (decision === null) return false;
+  if (!isRecord(decision) || typeof decision.pass !== 'boolean' || typeof decision.origin !== 'string') return false;
+  if (request.decision.kind === 'threshold') {
+    if (decision.origin !== 'threshold' || !hasOnlyKeys(decision, ['pass', 'origin', 'rule'])) return false;
+    if (!sameDecisionRule(decision.rule, request.decision)) return false;
+    if (evidence.score === null) return false;
+    const value = evidence.score.value;
+    const expected = request.decision.op === 'gte' ? value >= request.decision.value : value <= request.decision.value;
+    return decision.pass === expected;
+  }
+  if (request.decision.kind === 'labels') {
+    if (decision.origin !== 'labels' || !hasOnlyKeys(decision, ['pass', 'origin', 'rule'])) return false;
+    if (!sameDecisionRule(decision.rule, request.decision)) return false;
+    if (!isRecord(evidence.label) || typeof evidence.label.value !== 'string') return false;
+    return decision.pass === request.decision.passing.includes(evidence.label.value);
+  }
+  return false;
 }
 
 /** Raw evidence is accepted only when allowlisted by the request, byte-exact,
@@ -192,28 +272,58 @@ function isValidWireProviderRaw(raw: unknown, request: JudgeRequest, verdict: {
   return wireRawAgreesWithTyped(raw.data, verdict, raw.truncated);
 }
 
+const VERDICT_KEYS = ['criterionKind', 'resolvedCriterionKind', 'score', 'decision', 'label',
+  'rationale', 'confidence', 'distribution', 'providerRaw'] as const;
+
 function isValidJudgeVerdict(v: unknown, request: JudgeRequest): v is JudgeVerdict {
   if (!isRecord(v)) return false;
+  if (!hasOnlyKeys(v, VERDICT_KEYS)) return false;
   if (v.criterionKind !== request.criterion.kind) return false;
-  if (!['binary', 'graded', 'choice'].includes(v.resolvedCriterionKind as string)) return false;
-  if (v.decision !== null && (!isRecord(v.decision) || typeof v.decision.pass !== 'boolean'
-    || !DECISION_ORIGINS.has(v.decision.origin as string)
-    || (v.decision.rule !== undefined && !isJudgeDecisionRule(v.decision.rule)))) return false;
-  if (request.criterion.kind === 'binary' && (v.score === null || parseJudgeScore(v.score) === null)) return false;
-  if (request.criterion.kind === 'choice' && (v.score !== null || parseJudgeConfidence(v.confidence) === null)) return false;
-  if (v.score !== null && parseJudgeScore(v.score) === null) return false;
-  if (v.confidence !== null && parseJudgeConfidence(v.confidence) === null) return false;
-  if (v.rationale !== null && (!isRecord(v.rationale) || typeof v.rationale.text !== 'string'
-    || v.rationale.origin !== 'provider')) return false;
+  // V-D3: direct criteria bind resolved kind to the transmitted kind. Registered has no
+  // trusted resolution in L1 and fails closed; the explicit context arrives in L2.
+  if (request.criterion.kind === 'registered') return false;
+  if (v.resolvedCriterionKind !== request.criterion.kind) return false;
+  // V-D1/V-D4: JEV declares no native boolean; any provider-origin decision is forged.
+  if (isRecord(v.decision) && v.decision.origin === 'provider') return false;
+  if (v.rationale !== null && (!isRecord(v.rationale) || !hasOnlyKeys(v.rationale, ['text', 'origin'])
+    || typeof v.rationale.text !== 'string' || !v.rationale.text.trim() || v.rationale.origin !== 'provider')) return false;
   if (!hasServiceVerdictShape(v.score, v.label, v.confidence, v.distribution)) return false;
-  if (!isValidWireDistribution(v.distribution, v.label, request)) return false;
+  if (request.criterion.kind === 'binary') {
+    if (v.score === null || v.label !== null || v.distribution !== null || v.confidence !== null) return false;
+    const score = parseJudgeScore(v.score);
+    if (!score || score.meaning !== 'probability-true' || score.scale.kind !== 'bounded'
+      || score.scale.min !== 0 || score.scale.max !== 1 || score.scale.direction !== 'unordered') return false;
+    if (!isValidWireDecision(v.decision, request, { score, label: null })) return false;
+  } else if (request.criterion.kind === 'choice') {
+    if (v.score !== null || v.label === null || v.distribution === null || v.confidence === null) return false;
+    const confidence = parseJudgeConfidence(v.confidence);
+    if (!confidence || confidence.meaning !== 'provider-confidence' || confidence.min !== 0 || confidence.max !== 1) return false;
+    if (!isValidChoiceEvidence(v.distribution, v.label, request)) return false;
+    const label = isRecord(v.label) && typeof v.label.value === 'string'
+      ? { value: v.label.value, origin: 'provider' as const } : null;
+    if (!isValidWireDecision(v.decision, request, { score: null, label: label as JudgeVerdict['label'] })) return false;
+  } else if (request.criterion.kind === 'graded') {
+    if (v.score === null || v.label !== null || v.distribution === null || v.confidence === null) return false;
+    const score = parseJudgeScore(v.score);
+    const confidence = parseJudgeConfidence(v.confidence);
+    if (!score || !confidence) return false;
+    if (score.meaning !== 'rubric-grade' || score.scale.kind !== 'bounded'
+      || score.scale.min !== 0 || score.scale.max !== request.criterion.levels.length - 1
+      || score.scale.direction !== request.criterion.direction) return false;
+    if (confidence.meaning !== 'provider-confidence' || confidence.min !== 0 || confidence.max !== 1) return false;
+    if (!isValidGradedEvidence(v.distribution, score, request)) return false;
+    if (!isValidWireDecision(v.decision, request, { score, label: null })) return false;
+  } else {
+    return false;
+  }
   return isValidWireProviderRaw(v.providerRaw, request, { score: v.score, label: v.label,
     confidence: v.confidence, distribution: v.distribution });
 }
 
 /** Wire errors never carry wording: rebuild from code, phase and receipt liability evidence. */
 function rebuildWireError(error: unknown, receipt: JudgeReceipt): JudgeError | null {
-  if (!isRecord(error) || !isJudgeErrorCode(error.code)
+  if (!isRecord(error) || !hasOnlyKeys(error, ['code', 'message', 'phase', 'retryable', 'retryAfterMs'])
+    || !isJudgeErrorCode(error.code)
     || !['preflight', 'admission', 'dispatch', 'parse', 'settlement'].includes(error.phase as string)) return null;
   const unresolved = receipt.budget.state !== 'not-admitted' && receipt.budget.state !== 'released';
   const nonRetryable = unresolved || error.retryable === false;
@@ -402,18 +512,60 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       const snapshot = snapshotBoundedJson(parsed, cap);
       if (!snapshot.ok || !isRecord(snapshot.value)) return fail('MESH_UNAVAILABLE');
       const val = snapshot.value;
+      // V-K1/V-K2: closed envelopes and field-by-field reconstruction. Undeclared
+      // content can never survive, even when raw permission is allowlisted.
+      const rebuildVerdict = (verdict: JudgeVerdict): JudgeVerdict => {
+        const rebuilt: Record<string, unknown> = {
+          criterionKind: verdict.criterionKind,
+          resolvedCriterionKind: verdict.resolvedCriterionKind,
+          score: structuredClone(verdict.score),
+          decision: structuredClone(verdict.decision),
+          label: structuredClone(verdict.label),
+          rationale: structuredClone(verdict.rationale),
+          confidence: structuredClone(verdict.confidence),
+          distribution: structuredClone(verdict.distribution),
+        };
+        if (Object.hasOwn(verdict, 'providerRaw')) rebuilt.providerRaw = structuredClone(verdict.providerRaw);
+        return rebuilt as unknown as JudgeVerdict;
+      };
+      const rebuildReceipt = (receipt: JudgeReceipt): JudgeReceipt => {
+        const rebuilt: Record<string, unknown> = {
+          schemaVersion: receipt.schemaVersion,
+          callId: receipt.callId,
+          correlationId: receipt.correlationId,
+          evaluator: receipt.evaluator === null ? null : { ...receipt.evaluator },
+          servedEvaluator: receipt.servedEvaluator === null ? null : { ...receipt.servedEvaluator },
+          servedModelId: receipt.servedModelId,
+          startedAt: receipt.startedAt,
+          finishedAt: receipt.finishedAt,
+          latencyMs: receipt.latencyMs,
+          dispatch: receipt.dispatch,
+          attempts: receipt.attempts,
+          usage: structuredClone(receipt.usage),
+          cost: structuredClone(receipt.cost),
+          retention: structuredClone(receipt.retention),
+          budget: structuredClone(receipt.budget),
+          outcome: receipt.outcome,
+        };
+        if (Object.hasOwn(receipt, 'providerRequestId')) rebuilt.providerRequestId = receipt.providerRequestId;
+        if (Object.hasOwn(receipt, 'providerLatencyMs')) rebuilt.providerLatencyMs = receipt.providerLatencyMs;
+        if (Object.hasOwn(receipt, 'errorCode')) rebuilt.errorCode = receipt.errorCode;
+        return rebuilt as unknown as JudgeReceipt;
+      };
       // Concordance and permissions bind the transmitted snapshot: the live
       // request may have mutated during auth resolution or transport.
-      if (val.kind === 'verdict' && val.ok === true
+      if (isRecord(val) && hasOnlyKeys(val, ['kind', 'ok', 'verdict', 'receipt'])
+        && val.kind === 'verdict' && val.ok === true
         && isValidJudgeReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'verdict'
         && isValidJudgeVerdict(val.verdict, outgoing.request)) {
-        return val as unknown as JudgeResult;
+        return { kind: 'verdict', ok: true, verdict: rebuildVerdict(val.verdict), receipt: rebuildReceipt(val.receipt) };
       }
-      if (val.kind === 'error' && val.ok === false
+      if (isRecord(val) && hasOnlyKeys(val, ['kind', 'ok', 'error', 'receipt'])
+        && val.kind === 'error' && val.ok === false
         && isValidJudgeReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'error') {
         const error = rebuildWireError(val.error, val.receipt);
         if (error && val.receipt.errorCode === error.code) {
-          return { kind: 'error', ok: false, error, receipt: val.receipt } as unknown as JudgeResult;
+          return { kind: 'error', ok: false, error, receipt: rebuildReceipt(val.receipt) };
         }
         return fail('MESH_UNAVAILABLE');
       }
