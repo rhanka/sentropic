@@ -15,7 +15,12 @@ MCP hosts configure `defaultStorageScopeId` or supply the trusted invocation's
 Legacy body/tool `storageScopeId` and client `paramsHash` fields remain accepted
 but are ignored. Missing host scope now returns 400. Ensure hashes cover the
 validated parameters, binding, owner and scope; publication hashes cover release
-metadata and server-derived file digests. Keys are isolated by operation and
+metadata, server-derived file digests and validated source provenance (including
+its absence and recipe step order). Source writes occur within the idempotent
+publication operation, so unchanged replays do not write provenance again.
+Direct service callers publishing a `source` pass their host `SourceStore` as
+the second argument to `publish`; the HTTP/MCP app supplies its configured store.
+Keys are isolated by operation and
 principal. A changed payload under the same key returns an explicit conflict.
 Persisted unscoped replay keys are no longer consulted after upgrading.
 
@@ -27,6 +32,11 @@ relative paths, at most 1024 UTF-8 bytes: empty/dot segments, backslashes,
 percent escapes, URL delimiters, colons and control characters are rejected.
 Existing integrations using larger bundles or noncanonical paths must adjust
 their limits or filenames. Invalid publications fail before object-store effects.
+Upload sessions cap client `maxSize` by the host `maxUploadBytes` and publication
+file/total limits. Every append checks remaining cumulative capacity before
+decoding bytes or writing staging. Upload publication metadata is validated
+before the session is consumed; a rejected path or MIME type can be corrected
+and committed using the same staged bytes.
 
 Content `HEAD` responses have the corresponding GET headers and no body,
 including errors and activation. Errors and activation responses include the
