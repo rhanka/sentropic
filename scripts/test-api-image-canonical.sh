@@ -139,7 +139,7 @@ tag_inputs_cover_builds() {
     esac
   done < <(grep -o 'npm --workspace @sentropic/[a-z0-9-]* run build' api/Dockerfile)
   test "$missing" -eq 0 || return 1
-  for required in api apps/auth-idp packages/auth-ui packages/skills packages/mcp-platform packages/llm-gateway .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore package.json package-lock.json; do
+  for required in api apps/auth-idp apps/llm-gateway e2e/tests/fixtures packages/auth-ui packages/skills packages/mcp-platform packages/llm-gateway .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore package.json package-lock.json; do
     grep -Fxq "$required" <<< "$inputs" || { echo "FAIL: shipped build input '$required' missing from API_VERSION" >&2; return 1; }
   done
   echo "PASS: every shipped build input is hashed into the canonical tag (runtime change -> new tag)"
@@ -151,7 +151,7 @@ tag_inputs_exclude_global() {
   local global_paths=(
     Makefile .github/workflows/ci.yml scripts/publish-api-image.sh scripts/resolve-api-image.sh
     tools spec plan docs rules track deploy BRANCH.md
-    ui/src e2e/tests apps/llm-gateway
+    ui/src e2e/tests
     packages/chat-ui packages/cited-source-viewer packages/cowork-bridge packages/cowork-desktop
     packages/harness packages/mcp-broker packages/mcp-connector-github
   )
@@ -171,14 +171,18 @@ tag_inputs_exclude_global() {
   # real builder, since git check-ignore reads .gitignore, not .dockerignore.
   local ignored=(
     Makefile BRANCH.md .github/ scripts/ tools/ spec/ plan/ docs/ rules/ track/ deploy/
-    apps/llm-gateway/ packages/cowork-desktop/ packages/mcp-connector-github/
   )
   local entry
   for entry in "${ignored[@]}"; do
     grep -Fxq "$entry" .dockerignore || { echo "FAIL: global-only path '$entry' is not dockerignored" >&2; return 1; }
   done
-  for entry in 'e2e/*' '!e2e/package.json' '!e2e/package-lock.json' 'ui/*' '!ui/package.json'; do
+  # Shared root context: ui and non-consumed packages stay available to the UI
+  # build; only e2e test sources are trimmed, keeping toolbox manifests/fixtures.
+  for entry in 'e2e/*' '!e2e/package.json' '!e2e/package-lock.json' '!e2e/tests/' 'e2e/tests/*' '!e2e/tests/fixtures/'; do
     grep -Fxq "$entry" .dockerignore || { echo "FAIL: build-context rule '$entry' missing from .dockerignore" >&2; return 1; }
+  done
+  for entry in 'ui/*' 'apps/llm-gateway/'; do
+    grep -Fxq "$entry" .dockerignore && { echo "FAIL: proven consumer '$entry' must stay in the build context" >&2; return 1; }
   done
   echo "PASS: global-only paths stay out of the tag and out of the build context (existing tag reused)"
 }

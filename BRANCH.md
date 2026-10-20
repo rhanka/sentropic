@@ -41,6 +41,7 @@ Fix main CI publish-api-image tag collision on global-only changes while keeping
 - `attention`: BR01-EX1 declared — `Makefile` (forbidden): extend API_VERSION hash inputs to all shipped build inputs, add resolve-api-image + canonical test targets. Impact: tag rotates once to a new absent tag; no collision possible. Rollback: revert Makefile hunk.
 - `attention`: BR01-EX2 declared — `.github/workflows/ci.yml` (conditional): build-api-image job logs in to registry and resolves canonical tag before building; api filter extended to cover new hash inputs; canonical guard test wired. Impact: CI-only; publish guard unchanged. Rollback: revert ci.yml hunks.
 - `attention`: BR01-EX3 declared — `api/Dockerfile` (allowed via Allowed Paths, recorded here for traceability): pin tar@7.5.22 (was tar@latest). Impact: deterministic toolchain input; one-time digest rotation on next absent-tag build. Rollback: revert one line.
+- `blocked` → `acknowledge`: CI run 39371588300 red (build-ui + 2 api suites). Root cause proven by job logs: shared root build context — `ui/*` ignore broke `COPY ui/nginx/default.conf`; `apps/llm-gateway/` ignore broke a test import; `e2e/*` ignore removed a PDF fixture read by a unit test. Fix: ui and non-consumed packages stay in context; e2e trimmed except manifests + tests/fixtures; apps/llm-gateway + fixtures hashed into the tag. Both suites re-run green locally (4/4, 38/38). Residual: ui bytes still perturb the api digest on ui-mixed PRs (resolve-first reuse covers all but the absent-tag race).
 
 ## AI Flaky tests
 - Acceptance rule:

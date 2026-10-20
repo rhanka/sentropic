@@ -85,28 +85,11 @@ docs/
 rules/
 track/
 deploy/
-apps/llm-gateway/
+# e2e test sources stay out, except the toolbox build manifests and the
+# fixtures imported by api unit tests (document-text-office-extension).
 e2e/*
 !e2e/package.json
 !e2e/package-lock.json
-ui/*
-!ui/package.json
-packages/chat-ui/
-packages/cited-source-viewer/
-packages/cowork-bridge/
-packages/cowork-desktop/
-packages/harness/
-packages/mcp-broker/
-packages/mcp-connector-airtable/
-packages/mcp-connector-dropbox/
-packages/mcp-connector-github/
-packages/mcp-connector-gmail/
-packages/mcp-connector-googlecalendar/
-packages/mcp-connector-googledocs/
-packages/mcp-connector-googledrive/
-packages/mcp-connector-googlesheets/
-packages/mcp-connector-hubspot/
-packages/mcp-connector-linear/
-packages/mcp-connector-notion/
-packages/mcp-connector-slack/
-packages/mcp-connector-stripe/
+!e2e/tests/
+e2e/tests/*
+!e2e/tests/fixtures/
