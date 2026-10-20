@@ -13,7 +13,6 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
 import { checkArtifactManifest } from './receipt.mjs';
 import { LOCK_FINGERPRINT_VERSION, computeLockFingerprint } from './lock-fingerprint.mjs';
 import { P1_CONFIG_FILES } from './build-inputs.mjs';
@@ -49,6 +48,10 @@ function main() {
   if (!/^[0-9a-f]{40}$/.test(l5Head) || !/^[0-9a-f]{40}$/.test(base)) {
     throw new Error('pack.mjs: --l5-head and --base must be 40-hex commits');
   }
+  const headLockSha = arg('--head-lock-sha');
+  if (!/^[0-9a-f]{64}$/.test(headLockSha || '')) {
+    throw new Error('pack.mjs: missing required --head-lock-sha (sha256 of HEAD:package-lock.json)');
+  }
   const rootDir = resolve(arg('--root') || join(HERE, '..', '..'));
 
   const platformPkg = JSON.parse(readBytes(rootDir, 'packages/mcp-platform/package.json').toString('utf8'));
@@ -62,14 +65,8 @@ function main() {
   const { packed, inventory } = packMemoryClosure(rootDir, archivesDir, l5Head);
 
   const lockBytes = readBytes(rootDir, 'package-lock.json');
-  let headLock;
-  try {
-    headLock = execFileSync('git', ['show', 'HEAD:package-lock.json'], { cwd: rootDir });
-  } catch {
-    throw new Error('pack.mjs: cannot read HEAD:package-lock.json; run from a git checkout');
-  }
-  if (!headLock.equals(lockBytes)) {
-    throw new Error('pack.mjs: package-lock.json differs from HEAD; commit the lock change first so the P1 generation stays recoverable');
+  if (sha256Of(lockBytes) !== headLockSha) {
+    throw new Error('pack.mjs: package-lock.json differs from HEAD:package-lock.json; commit the lock change first so the P1 generation stays recoverable');
   }
   const declaredLockSha256 = sha256Of(lockBytes);
   const snapshotRel = `tools/memory-mcp-l5/artifacts/lock-snapshots/${declaredLockSha256}.package-lock.json`;
