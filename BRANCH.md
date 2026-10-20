@@ -81,10 +81,10 @@ Actions with the following status should be included around tasks only if really
   - [x] `schemas/artifact-manifest-v1.schema.json`: require versioned fingerprint in `manifestSource`; keep `declaredLockSha256`.
   - [x] Update `tests/p1-fixture.mjs`, `tests/artifact-manifest.test.mjs`, `tests/receipt-contract.test.mjs` fixtures for the new source fields.
   - [x] Lot gate: `make scope-check` before commit.
-- [ ] **Lot 2 — Fixtures and regression tests**
-  - [ ] Add `tests/lock-fingerprint.test.mjs`: unrelated lockfile edits pass, relevant dependency/build-input edits fail.
-  - [ ] Extend packed-gate coverage: unrelated lock edit passes, relevant lock edit fails, contract/archive drift still fails.
-  - [ ] Lot gate: `make memory-l5-tooling API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
+- [x] **Lot 2 — Fixtures and regression tests**
+  - [x] Add `tests/lock-fingerprint.test.mjs`: unrelated lockfile edits pass, relevant dependency/build-input edits fail.
+  - [x] Extend packed-gate coverage: unrelated lock edit passes, relevant lock edit fails, contract/archive drift still fails.
+  - [x] Lot gate: `make memory-l5-tooling API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
 - [ ] **Lot 3 — Regenerate P1, full gate, PR**
   - [ ] Retain superseded manifest in `artifacts/history/` (content-sha name + sidecar).
   - [ ] Rebuild dist and repack P1 via make targets.
