@@ -36,7 +36,9 @@ Upload sessions cap client `maxSize` by the host `maxUploadBytes` and publicatio
 file/total limits. Every append checks remaining cumulative capacity before
 decoding bytes or writing staging. Upload publication metadata is validated
 before the session is consumed; a rejected path or MIME type can be corrected
-and committed using the same staged bytes.
+and committed using the same staged bytes. Finalization validates, hashes and
+publishes one copied snapshot. Overlapping append/commit operations return 409;
+failed verification or metadata validation leaves the session retryable.
 
 Content `HEAD` responses have the corresponding GET headers and no body,
 including errors and activation. Errors and activation responses include the
