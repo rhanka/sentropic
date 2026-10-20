@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -30,13 +31,13 @@ const PREFLIGHT = (mode: 'service' | 'session' | 'both') => `
   console.log(JSON.stringify(out));`;
 
 describe.skipIf(!enabled)('packed release matrix', () => {
-  it('should install the selected tuple from the committed lockfile', () => {
+  it('should preserve the selected lockfile tuple except for the packed artifacts candidate', () => {
     const lock = JSON.parse(readFileSync(join(fixtureDir('selected'), 'committed-lock.json'), 'utf8')) as {
       packages: Record<string, { version?: string }>;
     };
     const tuple = tupleOf('selected');
     for (const [name, version] of Object.entries(tuple)) {
-      if (version === 'absent') continue;
+      if (version === 'absent' || name === '@sentropic/artifacts') continue;
       expect(lock.packages[`node_modules/${name}`]?.version, name).toBe(version);
     }
     expect(tuple).toMatchObject({
@@ -44,6 +45,21 @@ describe.skipIf(!enabled)('packed release matrix', () => {
       '@sentropic/oauth-verify': '0.1.0', jose: '5.10.0', hono: '4.10.7',
       '@sentropic/auth-hono': trainVersion('auth-hono'), '@sentropic/mcp-platform': trainVersion('mcp-platform'),
     });
+  });
+
+  it('should install the exact artifacts candidate bytes in every consumer that selects it', () => {
+    for (const fixture of ['selected', 'latest', 'artifacts-consumer']) {
+      const dir = fixtureDir(fixture);
+      const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+      const spec = pkg.dependencies['@sentropic/artifacts'] as string;
+      expect(spec, fixture).toMatch(/^file:/u);
+      const integrity = `sha512-${createHash('sha512').update(readFileSync(spec.slice(5))).digest('base64')}`;
+      const installedLock = JSON.parse(readFileSync(join(dir, 'package-lock.json'), 'utf8'));
+      expect(installedLock.packages['node_modules/@sentropic/artifacts'], fixture).toMatchObject({
+        version: trainVersion('artifacts'), integrity,
+      });
+      expect(tupleOf(fixture)['@sentropic/artifacts'], fixture).toBe(trainVersion('artifacts'));
+    }
   });
 
   it('should source each train package from a verified sibling archive only when its receipt was verified', () => {

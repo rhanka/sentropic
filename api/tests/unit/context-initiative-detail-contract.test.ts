@@ -13,6 +13,41 @@ describe('generateInitiativeDetail payload contract', () => {
     vi.clearAllMocks();
   });
 
+  it.each(['json', 'wrapped', 'repaired'])('removes decoded NUL from %s generation without changing valid text', async (format) => {
+    const payload = {
+      name: 'Café\u0000 assistant',
+      problem: 'Reports\u0000 need review',
+      technologies: ['NLP\u0000'],
+      benefits: ['Faster\u0000 reports'],
+      constraints: ['Keep\u0000 data private'],
+      nextSteps: ['Review\nresults\twith café ☕'],
+      references: [{ title: 'Guide\u0000', url: 'https://example.test', excerpt: 'Literal \\u0000 stays' }],
+      valueScores: [{ axisId: 'business_value', rating: 34, description: 'High\u0000 value' }],
+      complexityScores: [],
+    };
+    const content = JSON.stringify(payload);
+    const execute = vi.mocked(executeWithToolsStream);
+    if (format === 'repaired') {
+      execute.mockResolvedValueOnce({ content: 'invalid JSON' } as Awaited<ReturnType<typeof executeWithToolsStream>>);
+    }
+    execute.mockResolvedValue({
+      content: format === 'wrapped' ? `Result:\n${content}\nEnd.` : content,
+    } as Awaited<ReturnType<typeof executeWithToolsStream>>);
+
+    const detail = await generateInitiativeDetail('Assistant', '', defaultMatrixConfig, '', 'gpt-4.1-nano');
+
+    expect(detail.name).toBe('Café assistant');
+    expect(detail.problem).toBe('Reports need review');
+    expect(detail.technologies).toEqual(['NLP']);
+    expect(detail.benefits).toEqual(['Faster reports']);
+    expect(detail.constraints).toEqual(['Keep data private']);
+    expect(detail.nextSteps).toEqual(['Review\nresults\twith café ☕']);
+    expect(detail.references).toEqual([{ title: 'Guide', url: 'https://example.test', excerpt: 'Literal \\u0000 stays' }]);
+    expect(detail.valueScores[0]).toEqual({ axisId: 'business_value', rating: 34, description: 'High value' });
+    expect(JSON.stringify(detail)).not.toContain('\\u0000"');
+    expect(execute).toHaveBeenCalledTimes(format === 'repaired' ? 2 : 1);
+  });
+
   it('returns non-empty required scalar and list fields after normalization', async () => {
     const executeWithToolsStreamMock = vi.mocked(executeWithToolsStream);
     executeWithToolsStreamMock.mockResolvedValue({

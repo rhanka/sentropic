@@ -7,7 +7,7 @@
  * host-injected secret, bound to subject + artifact (+ pinned release),
  * and verified fail-closed (signature, shape, lifetime cap, expiry,
  * future-issued beyond the skew budget). Activation tickets are
- * single-use and bound the same way; ticket IDs come from an injected
+ * single-use and bound to an exact release and channel; ticket IDs come from an injected
  * port and MUST be unguessable (default: crypto UUIDs). A grant never
  * replaces the per-request ACL recheck in the content handler.
  */
@@ -109,11 +109,13 @@ export function createHmacGrantSigner(options: {
   };
 }
 
-export interface TicketRecord {
+export interface TicketBinding extends GrantIssueInput {
+  releaseId: string;
+  channel: 'stable' | 'pinned';
+}
+
+export interface TicketRecord extends TicketBinding {
   ticketId: string;
-  subjectId: string;
-  artifactId: string;
-  releaseId?: string;
   expiresAt: number;
 }
 
@@ -141,10 +143,10 @@ export function createMemoryTicketStore(): TicketStore {
 }
 
 export interface TicketService {
-  issue(input: GrantIssueInput): Promise<{ ticketId: string; expiresAt: number }>;
+  issue(input: TicketBinding): Promise<{ ticketId: string; expiresAt: number }>;
   redeem(
     ticketId: string,
-    expected: { subjectId: string; artifactId: string },
+    expected: TicketBinding,
   ): Promise<TicketRecord>;
 }
 
@@ -158,15 +160,23 @@ export function createTicketService(options: {
   const clock = options.clock ?? (() => Date.now());
   const ids = options.ids ?? (() => crypto.randomUUID());
   const ttlMs = (options.ttlSeconds ?? CONTENT_TICKET_TTL_SECONDS) * 1000;
+  if (!Number.isFinite(ttlMs) || ttlMs <= 0) throw new Error('invalid ticket: lifetime');
   return {
     async issue(input) {
+      if (
+        typeof input.subjectId !== 'string' || input.subjectId.length === 0 ||
+        typeof input.artifactId !== 'string' || input.artifactId.length === 0 ||
+        typeof input.releaseId !== 'string' || input.releaseId.length === 0 ||
+        (input.channel !== 'stable' && input.channel !== 'pinned')
+      ) throw new Error('invalid ticket: binding');
       const ticketId = ids();
       const expiresAt = clock() + ttlMs;
       await options.store.put({
         ticketId,
         subjectId: input.subjectId,
         artifactId: input.artifactId,
-        ...(input.releaseId === undefined ? {} : { releaseId: input.releaseId }),
+        releaseId: input.releaseId,
+        channel: input.channel,
         expiresAt,
       });
       return { ticketId, expiresAt };
@@ -174,11 +184,14 @@ export function createTicketService(options: {
     async redeem(ticketId, expected) {
       const record = await options.store.peek(ticketId);
       if (record === undefined) throw new Error('invalid ticket');
-      if (clock() > record.expiresAt) {
+      if (clock() >= record.expiresAt) {
         await options.store.remove(ticketId);
         throw new Error('ticket expired');
       }
-      if (record.subjectId !== expected.subjectId || record.artifactId !== expected.artifactId) {
+      if (
+        record.subjectId !== expected.subjectId || record.artifactId !== expected.artifactId ||
+        record.releaseId !== expected.releaseId || record.channel !== expected.channel
+      ) {
         throw new Error('invalid ticket: binding mismatch');
       }
       const taken = await options.store.take(ticketId);

@@ -461,7 +461,7 @@ describe('LocalAccountTransportService', () => {
       modelId: 'gpt-6.1-sol', providerId: 'openai',
     });
 
-    const plan = await planner.plan(subject, { requestedModel: 'claude-opus-5-5' });
+    const plan = await planner.plan(subject, { requestedModel: 'gpt-6.1-sol' });
     const attempt = await planner.prepareAttempt(
       subject, plan.planRef, plan.candidateRefs[0]!, 'req-1', 0,
     );
@@ -1210,7 +1210,7 @@ describe('LocalAccountTransportService', () => {
   });
 
   it.each([false, true])(
-    'keeps the stored effort override when switching to the standard alias (quoted: %s)',
+    'refuses an implicit standard alias switch while retaining the exact pin (quoted: %s)',
     async (quoted) => {
       const service = new LocalAccountTransportService(
         new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
@@ -1234,9 +1234,10 @@ describe('LocalAccountTransportService', () => {
       const subject = { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' };
       const affinityKey = quoted ? 'effort-drop-quoted' : 'effort-drop';
 
-      // Bind the affinity through the effort-bearing Sol alias.
+      // Bind an exact model with an explicit effort control.
       const first = await planner.plan(subject, {
-        requestedModel: 'claude-opus-5-high', affinityKey,
+        requestedModel: 'gpt-6.1-sol', affinityKey,
+        targetCandidatesOverride: [{ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol', effort: 'xhigh' }],
       });
       await (await planner.prepareAttempt(
         subject, first.planRef, first.candidateRefs[0]!, 'req-1', 0,
@@ -1250,26 +1251,11 @@ describe('LocalAccountTransportService', () => {
         ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
         now: new Date(),
       }) : undefined;
-      const plan = await planner.plan(subject, {
+      await expect(planner.plan(subject, {
         requestedModel: 'claude-opus-5-5', affinityKey, ...(quote ? { quote } : {}),
-      });
-      const attempt = await planner.prepareAttempt(
-        subject, plan.planRef, plan.candidateRefs[0]!, 'req-2', 0,
-      );
-
-      // The sticky target keeps its stored effort: the runtime forces it ...
-      await attempt.generate({ messages: [{ role: 'user', content: 'hello' }] });
-      expect(generate).toHaveBeenCalledWith(expect.objectContaining({
-        providerId: 'openai', modelId: 'gpt-6.1-sol', reasoning: { effort: 'xhigh' },
-      }));
-      // ... and it overrides the request's own effort.
-      await attempt.generate({
-        messages: [{ role: 'user', content: 'hello' }],
-        reasoning: { effort: 'low' },
-      });
-      expect(generate).toHaveBeenCalledWith(expect.objectContaining({
-        providerId: 'openai', modelId: 'gpt-6.1-sol', reasoning: { effort: 'xhigh' },
-      }));
+      })).rejects.toMatchObject({ code: 'no-route' });
+      expect(planner.describeAffinity(subject, affinityKey)?.target).toMatchObject({ modelId: 'gpt-6.1-sol', effort: 'xhigh' });
+      expect(generate).not.toHaveBeenCalled();
     },
   );
 
@@ -1310,7 +1296,7 @@ describe('LocalAccountTransportService', () => {
     });
     const plan = await planner.plan(
       { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' },
-      { requestedModel: 'claude-opus-5-5' },
+      { requestedModel: 'claude-opus-5-5', policyOverride: { allowEquivalentModels: true, rotateEquivalentAccounts: true } },
     );
 
     expect(plan.diagnostics.length).toBeGreaterThan(0);
