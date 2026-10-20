@@ -5,7 +5,7 @@ let tree: PackageTree; let anchorDir: string;
 beforeEach(() => { tree = new PackageTree(); anchorDir = tree.dir('app/node_modules/@sentropic/cluster-mesh/dist/modules'); evaluations().length = 0; });
 afterEach(() => tree.cleanup());
 const install = (version = '0.3.0') => {
-  tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.19.0', exports: { './comments': { source: moduleSource('comments-module', ['createCommentsModule', 'createCommentsPostgresStorage']) } } });
+  tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.21.0', exports: { './comments': { source: moduleSource('comments-module', ['createCommentsModule', 'createCommentsPostgresStorage']) } } });
   tree.install('app', { name: '@sentropic/comments', version, exports: { '.': { source: moduleSource('comments-peer', ['createAnnotationRevision', 'validateCapacityDescriptor', 'hashRecord']) } } });
 };
 describe('delivered local comments module discovery', () => {
