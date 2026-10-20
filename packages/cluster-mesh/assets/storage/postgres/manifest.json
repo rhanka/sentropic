@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "cluster-mesh-pg/001-core@1",
+      "file": "001-core.sql",
+      "order": 1,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 0,
+      "toVersion": 1,
+      "requires": [],
+      "checksum": "40fa2bed5b4076860d505385f3e044bc60e74a2e1e1bfd524562cd911812c460"
+    },
+    {
+      "id": "cluster-mesh-pg/002-map@1",
+      "file": "002-map.sql",
+      "order": 2,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 1,
+      "toVersion": 2,
+      "requires": [
+        "cluster-mesh-pg/001-core@1"
+      ],
+      "checksum": "03a9c68bfb1ace1eb3c067a04d2293129f80d4cb354f28a22298bf66354b1dfc"
+    },
+    {
+      "id": "cluster-mesh-pg/003-staged@1",
+      "file": "003-staged.sql",
+      "order": 3,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 2,
+      "toVersion": 3,
+      "requires": [
+        "cluster-mesh-pg/002-map@1"
+      ],
+      "checksum": "1d1c6bd83bb080ecde057181742554fddd2812f08d03ea16407bf3a77ba429d5"
+    },
+    {
+      "id": "cluster-mesh-pg/004-queries@1",
+      "file": "004-queries.sql",
+      "order": 4,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 3,
+      "toVersion": 4,
+      "requires": [
+        "cluster-mesh-pg/003-staged@1"
+      ],
+      "checksum": "17a5c4a78e20efa1c9a21f0112b5cbf70b9f9acaf8d577f2e16efc6759e4b295"
+    },
+    {
+      "id": "cluster-mesh-pg/005-cleanup@1",
+      "file": "005-cleanup.sql",
+      "order": 5,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 4,
+      "toVersion": 5,
+      "requires": [
+        "cluster-mesh-pg/004-queries@1"
+      ],
+      "checksum": "f8fda33a8f9c167f53be412977418da063c1e14c0ed7f3d8a96a9feeba01fa5f"
+    },
+    {
+      "id": "cluster-mesh-pg/006-staged-coverage@1",
+      "file": "006-staged-coverage.sql",
+      "order": 6,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 5,
+      "toVersion": 6,
+      "requires": [
+        "cluster-mesh-pg/005-cleanup@1"
+      ],
+      "checksum": "82b4f485399fd195eaf5178144e23f6d6b26dd36010d78b05816b8e96079d75f"
+    }
+  ]
+}

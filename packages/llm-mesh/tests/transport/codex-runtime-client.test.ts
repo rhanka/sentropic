@@ -180,4 +180,99 @@ describe('Codex runtime client', () => {
     })).rejects.toMatchObject({ status: 401 });
     expect(fetchFn).not.toHaveBeenCalled();
   });
+
+  it('surfaces upstream response.model on status/done stream events and generate providerMetadata', async () => {
+    const makeEvents = () => [
+      { type: 'response.created', response: { id: 'resp-obs', model: 'gpt-5.6-mini-fallback' } },
+      { type: 'response.output_text.delta', delta: 'ok' },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'resp-obs', model: 'gpt-5.6-mini-fallback',
+          usage: { input_tokens: 2, output_tokens: 1, total_tokens: 3 },
+        },
+      },
+    ];
+    const client = new CodexRuntimeClient({ fetch: async () => sseResponse(makeEvents()) });
+    const events = [];
+    for await (const ev of await client.stream({
+      providerId: 'openai', modelId: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'hello' }],
+    }, auth)) {
+      events.push(ev);
+    }
+    expect(events[0]).toMatchObject({ type: 'status', data: { metadata: { observedServedModelId: 'gpt-5.6-mini-fallback' } } });
+    expect(events[events.length - 1]).toMatchObject({ type: 'done', data: { metadata: { observedServedModelId: 'gpt-5.6-mini-fallback' } } });
+
+    const generated = await client.generate({
+      providerId: 'openai', modelId: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'hello' }],
+    }, auth);
+    expect(generated.modelId).toBe('gpt-5.6-terra');
+    expect(generated.providerMetadata).toEqual({ observedServedModelId: 'gpt-5.6-mini-fallback' });
+  });
+
+  it.each([['created-contradiction', 'gpt-6-astra', 'gpt-6.1-sol'], ['completed-contradiction', 'gpt-6.1-sol', 'gpt-6-astra']])(
+    'terminates JSON aggregation when created/completed identities diverge (%s)',
+    async (_label, createdModel, completedModel) => {
+      const client = new CodexRuntimeClient({ fetch: async () => sseResponse([
+        { type: 'response.created', response: { id: 'r', model: createdModel } },
+        { type: 'response.output_text.delta', delta: 'hi' },
+        { type: 'response.completed', response: { id: 'r', model: completedModel, usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } },
+      ]) });
+      await expect(client.generate({
+        providerId: 'openai', modelId: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+      }, auth)).rejects.toMatchObject({ code: 'model_identity_mismatch', observedServedModelIds: expect.arrayContaining(['gpt-6-astra', 'gpt-6.1-sol']) });
+    },
+  );
+
+  it('retains a contradictory response.created.model as a nonretryable mismatch when the stream later emits an SSE error or read failure', async () => {
+    const sseErrorClient = new CodexRuntimeClient({ fetch: async () => sseResponse([
+      { type: 'response.created', response: { id: 'r-err', model: 'gpt-6-astra' } },
+      { type: 'error', error: { message: 'rate limit', code: 'rate_limit_exceeded', retryable: true } },
+    ]) });
+    await expect(sseErrorClient.generate({
+      providerId: 'openai', modelId: 'gpt-6.1-sol',
+      messages: [{ role: 'user', content: 'hi' }],
+    }, auth)).rejects.toMatchObject({
+      code: 'model_identity_mismatch',
+      retryable: false,
+      observedServedModelId: 'gpt-6-astra',
+      observedServedModelIds: ['gpt-6-astra'],
+    });
+
+    const readFailClient = new CodexRuntimeClient({
+      fetch: async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'response.created', response: { id: 'r-read', model: 'gpt-6-astra' } })}\n\n`));
+        },
+        pull() {
+          throw new Error('upstream socket reset');
+        },
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    });
+    await expect(readFailClient.generate({
+      providerId: 'openai', modelId: 'gpt-6.1-sol',
+      messages: [{ role: 'user', content: 'hi' }],
+    }, auth)).rejects.toMatchObject({
+      code: 'model_identity_mismatch',
+      retryable: false,
+      observedServedModelId: 'gpt-6-astra',
+      observedServedModelIds: ['gpt-6-astra'],
+    });
+
+    const matchingErrorClient = new CodexRuntimeClient({ fetch: async () => sseResponse([
+      { type: 'response.created', response: { id: 'r-ok', model: 'gpt-6.1-sol' } },
+      { type: 'error', error: { message: 'rate limit', code: 'rate_limit_exceeded', retryable: true } },
+    ]) });
+    await expect(matchingErrorClient.generate({
+      providerId: 'openai', modelId: 'gpt-6.1-sol',
+      messages: [{ role: 'user', content: 'hi' }],
+    }, auth)).rejects.toMatchObject({
+      code: 'rate_limit_exceeded',
+      retryable: true,
+      observedServedModelId: 'gpt-6.1-sol',
+    });
+  });
 });

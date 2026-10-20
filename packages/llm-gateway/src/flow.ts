@@ -104,6 +104,8 @@ export interface GatewayFlowDeps {
 
 /** Inputs the router hands the flow per request. */
 export interface GatewayFlowRequest {
+  /** Set only after durable admission by the gateway audit port. */
+  receiptId?: string;
   /** Router-owned reference/lease lifecycle; trusted pre-parsers share this owner. */
   readonly bodyLease?: CheckedGatewayBody;
   readonly authContext: CallerAuthRequestContext;

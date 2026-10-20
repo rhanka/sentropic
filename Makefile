@@ -779,16 +779,23 @@ lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned m
 # BRE-EX1: provider leaves need the optional peers' dists at dev time; link them inside the container and remove the links on
 # exit, interrupt or termination (INT/TERM exit through the EXIT trap; `docker run --init` forwards signals to the shell).
 CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2
-CLUSTER_MESH_PEER_LINKS := mkdir -p node_modules/@sentropic ../llm-gateway/node_modules/@sentropic; trap "rm -rf node_modules/@sentropic node_modules/jose ../llm-gateway/node_modules ../oauth-verify/node_modules ../mcp-auth/node_modules ../auth-hono/node_modules" EXIT; trap "exit 143" INT TERM; for pkg in llm-mesh llm-gateway mcp-auth oauth-verify auth-hono; do ln -sfn /workspace/packages/$$pkg node_modules/@sentropic/$$pkg; done; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; for pkg in llm-mesh mcp-auth oauth-verify auth-hono; do ln -sfn /workspace/packages/$$pkg ../llm-gateway/node_modules/@sentropic/$$pkg; done; ln -sfn "$$tool_dir/node_modules/jose" ../llm-gateway/node_modules/jose; for pkg in oauth-verify mcp-auth auth-hono; do mkdir -p ../$$pkg/node_modules/@sentropic; ln -sfn /workspace/packages/oauth-verify ../$$pkg/node_modules/@sentropic/oauth-verify; for peer in hono jose zod @hono @simplewebauthn semver; do ln -sfn "$$tool_dir/node_modules/$$peer" ../$$pkg/node_modules/$$peer; done; done
-typecheck-cluster-mesh: build-events build-llm-gateway build-mcp-platform build-artifacts ## Run @sentropic/cluster-mesh type checks
-	@docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node $(CLUSTER_MESH_PEER_TOOLS) >/dev/null; $(CLUSTER_MESH_PEER_LINKS); "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.test.json'
+typecheck-cluster-mesh: ## Run self-contained cold @sentropic/cluster-mesh type checks
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=typecheck ENV=$(ENV)
 
-test-cluster-mesh: build-events build-llm-gateway build-mcp-platform build-artifacts ## Run @sentropic/cluster-mesh tests
-	@docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/cluster-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.5 typescript@5.4.5 @types/node $(CLUSTER_MESH_PEER_TOOLS) >/dev/null; $(CLUSTER_MESH_PEER_LINKS); if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+test-cluster-mesh: ## Run @sentropic/cluster-mesh tests in a disposable workspace
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=test ENV=$(ENV)
 
-build-cluster-mesh: build-events build-llm-gateway build-mcp-platform build-artifacts ## Build @sentropic/cluster-mesh dist package
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
-	@docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node $(CLUSTER_MESH_PEER_TOOLS) >/dev/null; $(CLUSTER_MESH_PEER_LINKS); "$$tool_dir/node_modules/.bin/tsc" --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
+build-cluster-mesh: ## Build @sentropic/cluster-mesh without persistent dependencies
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=build ENV=$(ENV)
+
+.PHONY: cluster-mesh-workspace
+cluster-mesh-workspace:
+	@docker run --rm --init $(CM_DOCKER_NETWORK) -u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
+		-e CM_SCOPE="$(patsubst packages/cluster-mesh/%,%,$(SCOPE))" \
+		-e CM_PG_URL="$(CM_PG_URL)" -e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
+		-v "$(CURDIR):/source" $(LLM_MESH_NODE_IMAGE) \
+		sh /source/packages/cluster-mesh/tests/storage/cold-workspace.sh
 
 pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
 	$(call manifest_guard_pack,cluster-mesh)
@@ -826,7 +833,7 @@ publish-cluster-mesh-token: build-cluster-mesh ## Bootstrap-publish @sentropic/c
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cluster-mesh \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cluster-mesh,--access public --no-provenance)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cluster-mesh,--access public --provenance=false)'
 
 .PHONY: refresh-llm-model-equivalences
 refresh-llm-model-equivalences: ## Regenerate the pinned model-equivalence council
@@ -949,7 +956,7 @@ publish-llm-gateway-token: build-llm-gateway ## Publish @sentropic/llm-gateway u
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/llm-gateway \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-gateway,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-gateway,--access public --provenance=false)'
 
 .PHONY: typecheck-flow
 typecheck-flow: install-internal-packages ## Run @sentropic/flow type checks
@@ -1057,7 +1064,7 @@ publish-llm-mesh-token: verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/l
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/llm-mesh \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-mesh,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-mesh,--access public --provenance=false)'
 
 .PHONY: typecheck-chat-ui
 typecheck-chat-ui: ## Run @sentropic/chat-ui type checks
@@ -1184,7 +1191,7 @@ publish-auth-client-token: build-auth-client ## Publish @sentropic/auth-client u
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/auth-client \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,auth-client,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,auth-client,--access public --provenance=false)'
 
 .PHONY: typecheck-oauth-verify
 typecheck-oauth-verify: ## Run @sentropic/oauth-verify type checks
@@ -1243,7 +1250,7 @@ publish-oauth-verify-token: build-oauth-verify ## Publish @sentropic/oauth-verif
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/oauth-verify \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,oauth-verify,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,oauth-verify,--access public --provenance=false)'
 
 .PHONY: typecheck-mcp-auth
 typecheck-mcp-auth: build-oauth-verify ## Run @sentropic/mcp-auth type checks
@@ -1302,7 +1309,7 @@ publish-mcp-auth-token: build-mcp-auth ## Publish @sentropic/mcp-auth using NPM_
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/mcp-auth \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,mcp-auth,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,mcp-auth,--access public --provenance=false)'
 
 .PHONY: typecheck-mcp-platform
 typecheck-mcp-platform: install-internal-packages ## Run @sentropic/mcp-platform type checks
@@ -1395,7 +1402,7 @@ publish-artifacts-token: build-artifacts ## Publish @sentropic/artifacts using N
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/artifacts \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,artifacts,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,artifacts,--access public --provenance=false)'
 
 .PHONY: probe-artifacts-packed-consumer
 probe-artifacts-packed-consumer: ## Second-host packed-consumer proof of the @sentropic/artifacts tarball (L-5e proof)
@@ -1403,7 +1410,7 @@ probe-artifacts-packed-consumer: ## Second-host packed-consumer proof of the @se
 	@$(MAKE) pack-mcp-platform PACK_DESTINATION=tmp/artifacts-platform-pack ENV=$(ENV)
 	@$(MAKE) pack-artifacts PACK_DESTINATION=tmp/artifacts-pack ENV=$(ENV)
 	@cp tmp/artifacts-platform-pack/*.tgz tmp/artifacts-pack/
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs ./packed-consumer.mjs; node ./packed-consumer.mjs'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs /probe/adapter-consumer.mjs ./; node ./packed-consumer.mjs; npm install /pack/*.tgz @aws-sdk/client-s3@3.1095.0 pg@8.22.0 --no-save --no-audit --no-fund >/dev/null 2>&1; node ./adapter-consumer.mjs'
 
 .PHONY: test-mcp-platform
 test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (builds dist first for the packaged test, BR1a-EX3)
@@ -1412,9 +1419,9 @@ test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (buil
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: api-extract-mcp-platform
-api-extract-mcp-platform: install-internal-packages ## Verify @sentropic/mcp-platform public API golden report (api-extractor CI mode; fails on any etc/mcp-platform.api.md drift)
+api-extract-mcp-platform: install-internal-packages ## Verify public API reports incl. ./memory; API_EXTRACT_LOCAL=1 regenerates reports explicitly (CI defaults to strict verification)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules temp'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node @microsoft/api-extractor@7.58.9 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node @microsoft/api-extractor@7.58.9 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local); "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local) --config api-extractor.memory.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules temp'
 
 .PHONY: pack-mcp-platform
@@ -1425,7 +1432,7 @@ pack-mcp-platform: build-mcp-platform ## Validate @sentropic/mcp-platform npm pa
 probe-mcp-platform-clean-consumer: ## Clean-consumer install+import probe of the packed @sentropic/mcp-platform tarball (R2-M4 UAT, BR1a-EX3)
 	@rm -rf tmp/mcp-platform-probe
 	@$(MAKE) pack-mcp-platform PACK_DESTINATION=tmp/mcp-platform-probe ENV=$(ENV)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/mcp-platform-probe:/pack:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; node --input-type=module -e "let fetchCalls = 0; globalThis.fetch = async () => { fetchCalls += 1; throw new Error('"'"'network must not be used'"'"'); }; const { canonicalJson, compileToolConfiguration, computeCompatibilityDigest, computeHandlersDigest, computeManifestDigest, computePayloadDigest, sha256Hex } = await import('"'"'@sentropic/mcp-platform/tool-configuration'"'"'); const manifest = { appId: '"'"'probe-app'"'"', providerId: '"'"'probe-provider'"'"', version: '"'"'0.0.0'"'"', displayName: '"'"'Probe'"'"', resources: [], tools: [{ kind: '"'"'tool'"'"', name: '"'"'probe_tool'"'"', description: '"'"'Probe tool.'"'"', requiredScopes: ['"'"'probe:use'"'"'], requiredClaims: [], inputSchema: { type: '"'"'object'"'"' }, outputSchema: { type: '"'"'object'"'"' }, redactionClass: '"'"'low'"'"', mutability: '"'"'read-only'"'"', mutatesExternalSystem: false, idempotency: { required: false }, gates: { requiresElicitation: false, requiresHumanConfirmation: false, requiresPrincipalGate: false } }], prompts: [], authz: { requiredClaims: [], scopes: ['"'"'probe:use'"'"'], tenantResolution: '"'"'connector-instance'"'"' }, audit: { eventKinds: ['"'"'invoke'"'"'] }, durability: {} }; const handlers = { '"'"'local-probe'"'"': { handlerId: '"'"'local-probe'"'"', capabilityRef: '"'"'probe_tool'"'"', configSchema: { type: '"'"'object'"'"', properties: { maxResults: { type: '"'"'integer'"'"', minimum: 1, maximum: 100 } }, required: ['"'"'maxResults'"'"'], additionalProperties: false } } }; const snapshot = { schemaVersion: '"'"'v1'"'"', providerId: '"'"'probe-provider'"'"', revision: '"'"'rev-1'"'"', manifestDigest: computeManifestDigest(manifest), providerVersion: '"'"'0.0.0'"'"', platformVersion: '"'"'0.3.0'"'"', compatibilityDigest: computeCompatibilityDigest(manifest), handlersDigest: computeHandlersDigest(handlers), provenance: { approvalRef: '"'"'approval-probe-1'"'"', revision: '"'"'rev-1'"'"', manifestDigest: computeManifestDigest(manifest), reviewedBy: ['"'"'probe-owner'"'"'] }, bindings: [{ toolName: '"'"'probe_tool'"'"', capabilityRef: '"'"'probe_tool'"'"', handlerId: '"'"'local-probe'"'"', values: { maxResults: 5 } }] }; snapshot.provenance.payloadDigest = computePayloadDigest(snapshot); const result = compileToolConfiguration({ snapshot: snapshot, manifest: manifest, handlers: handlers, compatibilityDigest: computeCompatibilityDigest(manifest) }); if (!result.ok) { console.error(JSON.stringify(result.diagnostics)); process.exit(1); } console.log('"'"'CLEAN_CONSUMER_OK payloadDigest='"'"' + result.config.payloadDigest + '"'"' handlersDigest='"'"' + result.config.handlersDigest + '"'"' compiledDigest='"'"' + sha256Hex(canonicalJson(result.config)) + '"'"' fetchCalls='"'"' + fetchCalls); const expectedPayload = '"'"'81148c5dfeade5f39a71b6bc9eb72082a53a9e5d8a2e741c5470f4cb9a5c8547'"'"'; const expectedHandlers = '"'"'163e199a420dd97b7832368ab70bd6e572ca7b03b3d217a686526abeeef206b8'"'"'; const expectedCompiled = '"'"'121fbcb194e06a1c66ae6859e9a8aaa60d53c6213dc0c95d8a6e2a47ac58c9b5'"'"'; const compiledDigest = sha256Hex(canonicalJson(result.config)); if (result.config.payloadDigest !== expectedPayload || result.config.handlersDigest !== expectedHandlers || compiledDigest !== expectedCompiled || fetchCalls !== 0) { console.error(JSON.stringify({ payload: result.config.payloadDigest, handlers: result.config.handlersDigest, compiled: compiledDigest, fetchCalls })); process.exit(1); }; const { createProviderRegistry } = await import('"'"'@sentropic/mcp-platform/registry'"'"'); const registry = createProviderRegistry(); const adapter = { appId: '"'"'probe-app'"'"' }; registry.register({ manifest: manifest, adapter: adapter, parameterSchema: { properties: {} }, handlers: handlers, requiredPorts: [], provenance: snapshot.provenance, toolValues: { '"'"'probe_tool'"'"': { handlerId: '"'"'local-probe'"'"', values: { maxResults: 5 } } } }); registry.select(['"'"'probe-provider'"'"']); registry.configure('"'"'probe-provider'"'"', {}); const compiled = registry.compile({ bindings: {}, compatibility: { '"'"'probe-provider'"'"': { manifestDigest: computeManifestDigest(manifest) } } }); if (!compiled.ok) { console.error(JSON.stringify(compiled.diagnostics)); process.exit(1); } if (compiled.registry.resolveTool('"'"'probe_tool'"'"') === undefined) { console.error('"'"'registry resolve failed'"'"'); process.exit(1); }"'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/mcp-platform-probe:/pack:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; node --input-type=module -e "let fetchCalls = 0; globalThis.fetch = async () => { fetchCalls += 1; throw new Error('"'"'network must not be used'"'"'); }; const { TOOL_CONFIGURATION_PLATFORM_VERSION, canonicalJson, compileToolConfiguration, computeCompatibilityDigest, computeHandlersDigest, computeManifestDigest, computePayloadDigest, sha256Hex } = await import('"'"'@sentropic/mcp-platform/tool-configuration'"'"'); const manifest = { appId: '"'"'probe-app'"'"', providerId: '"'"'probe-provider'"'"', version: '"'"'0.0.0'"'"', displayName: '"'"'Probe'"'"', resources: [], tools: [{ kind: '"'"'tool'"'"', name: '"'"'probe_tool'"'"', description: '"'"'Probe tool.'"'"', requiredScopes: ['"'"'probe:use'"'"'], requiredClaims: [], inputSchema: { type: '"'"'object'"'"' }, outputSchema: { type: '"'"'object'"'"' }, redactionClass: '"'"'low'"'"', mutability: '"'"'read-only'"'"', mutatesExternalSystem: false, idempotency: { required: false }, gates: { requiresElicitation: false, requiresHumanConfirmation: false, requiresPrincipalGate: false } }], prompts: [], authz: { requiredClaims: [], scopes: ['"'"'probe:use'"'"'], tenantResolution: '"'"'connector-instance'"'"' }, audit: { eventKinds: ['"'"'invoke'"'"'] }, durability: {} }; const handlers = { '"'"'local-probe'"'"': { handlerId: '"'"'local-probe'"'"', capabilityRef: '"'"'probe_tool'"'"', configSchema: { type: '"'"'object'"'"', properties: { maxResults: { type: '"'"'integer'"'"', minimum: 1, maximum: 100 } }, required: ['"'"'maxResults'"'"'], additionalProperties: false } } }; const snapshot = { schemaVersion: '"'"'v1'"'"', providerId: '"'"'probe-provider'"'"', revision: '"'"'rev-1'"'"', manifestDigest: computeManifestDigest(manifest), providerVersion: '"'"'0.0.0'"'"', platformVersion: TOOL_CONFIGURATION_PLATFORM_VERSION, compatibilityDigest: computeCompatibilityDigest(manifest), handlersDigest: computeHandlersDigest(handlers), provenance: { approvalRef: '"'"'approval-probe-1'"'"', revision: '"'"'rev-1'"'"', manifestDigest: computeManifestDigest(manifest), reviewedBy: ['"'"'probe-owner'"'"'] }, bindings: [{ toolName: '"'"'probe_tool'"'"', capabilityRef: '"'"'probe_tool'"'"', handlerId: '"'"'local-probe'"'"', values: { maxResults: 5 } }] }; snapshot.provenance.payloadDigest = computePayloadDigest(snapshot); const result = compileToolConfiguration({ snapshot: snapshot, manifest: manifest, handlers: handlers, compatibilityDigest: computeCompatibilityDigest(manifest) }); if (!result.ok) { console.error(JSON.stringify(result.diagnostics)); process.exit(1); } console.log('"'"'CLEAN_CONSUMER_OK payloadDigest='"'"' + result.config.payloadDigest + '"'"' handlersDigest='"'"' + result.config.handlersDigest + '"'"' compiledDigest='"'"' + sha256Hex(canonicalJson(result.config)) + '"'"' fetchCalls='"'"' + fetchCalls); const expectedPayload = '"'"'eb0d45a5a342e09fc9953e3060f5156f7cdffc3504ce7933672bf42839b15c9a'"'"'; const expectedHandlers = '"'"'163e199a420dd97b7832368ab70bd6e572ca7b03b3d217a686526abeeef206b8'"'"'; const expectedCompiled = '"'"'924c6c18c005b532eac9ba3937047dc718f2ccb7771f2de8f015b24a586aca41'"'"'; const compiledDigest = sha256Hex(canonicalJson(result.config)); if (result.config.payloadDigest !== expectedPayload || result.config.handlersDigest !== expectedHandlers || compiledDigest !== expectedCompiled || fetchCalls !== 0) { console.error(JSON.stringify({ payload: result.config.payloadDigest, handlers: result.config.handlersDigest, compiled: compiledDigest, fetchCalls })); process.exit(1); }; const { createProviderRegistry } = await import('"'"'@sentropic/mcp-platform/registry'"'"'); const registry = createProviderRegistry(); const adapter = { appId: '"'"'probe-app'"'"' }; registry.register({ manifest: manifest, adapter: adapter, parameterSchema: { properties: {} }, handlers: handlers, requiredPorts: [], provenance: snapshot.provenance, toolValues: { '"'"'probe_tool'"'"': { handlerId: '"'"'local-probe'"'"', values: { maxResults: 5 } } } }); registry.select(['"'"'probe-provider'"'"']); registry.configure('"'"'probe-provider'"'"', {}); const compiled = registry.compile({ bindings: {}, compatibility: { '"'"'probe-provider'"'"': { manifestDigest: computeManifestDigest(manifest) } } }); if (!compiled.ok) { console.error(JSON.stringify(compiled.diagnostics)); process.exit(1); } if (compiled.registry.resolveTool('"'"'probe_tool'"'"') === undefined) { console.error('"'"'registry resolve failed'"'"'); process.exit(1); }"'
 
 .PHONY: publish-mcp-platform
 publish-mcp-platform: build-mcp-platform ## Publish @sentropic/mcp-platform from CI OIDC trusted publishing
@@ -1462,7 +1469,7 @@ publish-mcp-platform-token: build-mcp-platform ## Publish @sentropic/mcp-platfor
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/mcp-platform \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,mcp-platform,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,mcp-platform,--access public --provenance=false)'
 
 .PHONY: typecheck-auth-ui
 typecheck-auth-ui: ## Run @sentropic/auth-ui type checks
@@ -1512,7 +1519,7 @@ publish-auth-ui-token: build-auth-ui ## Publish @sentropic/auth-ui using NPM_TOK
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/auth-ui \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,auth-ui,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,auth-ui,--access public --provenance=false)'
 
 # BR-PKG-EX1 (Makefile exception): publish-chat-ui transiently rewrites package.json to dist-form,
 # runs the guarded tarball publication (BRCI-EX1), then restores the src-form package.json.
@@ -1552,7 +1559,7 @@ publish-chat-ui-token: build-chat-ui ## Publish @sentropic/chat-ui using a token
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/chat-ui \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-ui,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-ui,--access public --provenance=false)'
 
 .PHONY: typecheck-cowork-bridge
 typecheck-cowork-bridge: ## Run @sentropic/cowork-bridge type checks
@@ -1608,7 +1615,7 @@ publish-cowork-bridge-token: build-cowork-bridge ## Publish @sentropic/cowork-br
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cowork-bridge \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cowork-bridge,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cowork-bridge,--access public --provenance=false)'
 
 # --- @sentropic/harness (BR42h-EX1: additive lane; tooling-only, pure-TS, node test env) ---
 .PHONY: typecheck-harness test-harness build-harness pack-harness
@@ -1662,7 +1669,7 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/harness \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,harness,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,harness,--access public --provenance=false)'
 
 IDP_SYNC_KUBECTL_IMAGE := registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
 .PHONY: test-idp-sync-selftest
@@ -1757,7 +1764,7 @@ publish-cowork-desktop-token: build-cowork-desktop ## Publish @sentropic/cowork-
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cowork-desktop \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cowork-desktop,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cowork-desktop,--access public --provenance=false)'
 
 .PHONY: package-desktop-windows
 package-desktop-windows: ## Build the signable single Windows .exe for @sentropic/cowork-desktop (BR41a Lot 5). Signing is gated on COWORK_SIGN_PFX (+ COWORK_SIGN_PASS); skipped with a warning if absent.
@@ -1900,7 +1907,7 @@ publish-contracts-token: build-contracts ## Publish @sentropic/contracts using N
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/contracts \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,contracts,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,contracts,--access public --provenance=false)'
 
 .PHONY: publish-events
 publish-events: build-events ## Publish @sentropic/events from CI OIDC trusted publishing
@@ -1937,7 +1944,7 @@ publish-events-token: build-events ## Publish @sentropic/events using NPM_TOKEN_
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/events \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,events,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,events,--access public --provenance=false)'
 
 .PHONY: publish-chat-core
 publish-chat-core: build-chat-core ## Publish @sentropic/chat-core from CI OIDC trusted publishing
@@ -1974,7 +1981,7 @@ publish-chat-core-token: build-chat-core ## Publish @sentropic/chat-core using N
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/chat-core \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,chat-core,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,chat-core,--access public --provenance=false)'
 
 .PHONY: publish-chat-server
 publish-chat-server: build-chat-server ## Publish @sentropic/chat-server from CI OIDC trusted publishing
@@ -2011,7 +2018,7 @@ publish-chat-server-token: build-chat-server ## Publish @sentropic/chat-server u
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/chat-server \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,chat-server,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,chat-server,--access public --provenance=false)'
 
 .PHONY: publish-comments
 publish-comments: build-comments ## Publish @sentropic/comments from CI OIDC trusted publishing
@@ -2048,7 +2055,7 @@ publish-comments-token: build-comments ## Publish @sentropic/comments using NPM_
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/comments \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,comments,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,comments,--access public --provenance=false)'
 
 .PHONY: publish-flow
 publish-flow: build-flow ## Publish @sentropic/flow from CI OIDC trusted publishing
@@ -2085,7 +2092,7 @@ publish-flow-token: build-flow ## Publish @sentropic/flow using NPM_TOKEN_FILE (
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/flow \
-		$(FLOW_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,flow,--access public)'
+		$(FLOW_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,flow,--access public --provenance=false)'
 
 .PHONY: lint
 .NOTPARALLEL: lint
@@ -2395,7 +2402,7 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 # -----------------------------------------------------------------------------
 .PHONY: prepare-node-workspace
 .NOTPARALLEL: prepare-node-workspace
-prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
@@ -3683,7 +3690,7 @@ publish-cited-source-viewer-token: build-cited-source-viewer ## Publish @sentrop
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cited-source-viewer \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,cited-source-viewer,--access public)'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,cited-source-viewer,--access public --provenance=false)'
 # ---- BR-72 Wave-1 connector recoding proofs (read-only, private, not published) ----
 .PHONY: typecheck-mcp-connector-github
 typecheck-mcp-connector-github: ## Run @sentropic/mcp-connector-github type checks (BR-72 read-only benchmark proof)
@@ -3889,16 +3896,91 @@ test-connector-host: ## Run hermetic @sentropic/connector-host tests (requires E
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/connector-host $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: typecheck-mcp-broker
-typecheck-mcp-broker: ## Run @sentropic/mcp-broker type checks (BR-72 DEPTH Lot 2 broker proof)
+typecheck-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker type checks (L5 Lot 1: plan-bound broker, public platform contracts)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-mcp-broker
-test-mcp-broker: ## Run @sentropic/mcp-broker tests (BR-72 DEPTH Lot 2 broker proof, hermetic)
+test-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker tests (L5 Lot 1: plan-bound broker, public platform contracts)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-broker/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-broker/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: build-mcp-broker
+build-mcp-broker: build-mcp-platform ## Build @sentropic/mcp-broker dist package (L5 Lot 1: public platform contracts)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+MEMORY_L5_NODE_IMAGE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+memory-l5-lint memory-l5-tooling memory-l5-test memory-l5-packed memory-l5-pack memory-l5-receipt memory-l5-verify memory-l5-gate: export LLM_MESH_NODE_IMAGE = $(MEMORY_L5_NODE_IMAGE)
+
+.PHONY: memory-l5-runtime
+memory-l5-runtime: ## Verify the frozen Node image, version floor and unflagged execution
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e MEMORY_L5_IMAGE="$(MEMORY_L5_NODE_IMAGE)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/runtime.mjs
+
+.PHONY: memory-l5-lint
+memory-l5-lint: memory-l5-runtime build-mcp-platform build-mcp-broker ## L5 static source/packed import-graph lint (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-lint requires ENV=<env> last" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode source --root /workspace
+
+.PHONY: memory-l5-tooling
+memory-l5-tooling: memory-l5-runtime ## L5 tooling contract tests via Vitest JSON-capable runner (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-tooling requires ENV=<env> last" >&2; exit 1; }
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tools/memory-mcp-l5/tests --environment node'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+
+.PHONY: memory-l5-test
+memory-l5-test: memory-l5-runtime ## L5 lot-scoped package tests, LOT=<n> enumerates the exact lot file set (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-test requires ENV=<env> last" >&2; exit 1; }
+	@test "$(LOT)" = "1" || { echo "ERROR: memory-l5-test LOT=$(LOT) is owned by a later lot (only LOT=1 exists)" >&2; exit 1; }
+	@$(MAKE) test-mcp-platform SCOPE=tests/memory API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/request-identity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/wire-parity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/registry-dispatch.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker SCOPE=tests API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+
+.PHONY: memory-l5-packed
+memory-l5-packed: memory-l5-runtime ## L5 installed-consumer packed SDK suite, SCOPE=packed/<file> against ARTIFACT_MANIFEST (Lot 4)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-packed requires ENV=<env> last" >&2; exit 1; }
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-packed requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
+	@test -d tools/memory-mcp-l5/packed || { echo "ERROR: tools/memory-mcp-l5/packed is absent (arrives in Lot 4)" >&2; exit 1; }
+	@test -n "$(SCOPE)" || { echo "ERROR: memory-l5-packed requires SCOPE=packed/<file>" >&2; exit 1; }
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" "$$tool_dir/node_modules/.bin/vitest" run "$(SCOPE)" --environment node --root tools/memory-mcp-l5'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+
+.PHONY: memory-l5-pack
+memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extract-mcp-platform ## L5 packer: writes then validates ARTIFACT_MANIFEST from exact built contracts (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-pack requires ENV=<env> last" >&2; exit 1; }
+	@test "$(STAGE)" = "pre-candidate" || { echo "ERROR: memory-l5-pack STAGE=$(STAGE) is owned by a later lot (only pre-candidate exists)" >&2; exit 1; }
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-pack requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --root /workspace
+
+.PHONY: memory-l5-receipt
+memory-l5-receipt: memory-l5-runtime ## L5 receipt verifier: MODE=preflight reports obligations, MODE=checkpoint gates strictly (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-receipt requires ENV=<env> last" >&2; exit 1; }
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-receipt requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
+	@test -n "$(CHECKPOINT)" || { echo "ERROR: memory-l5-receipt requires CHECKPOINT=<path> (arrives in Lot 5+)" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/receipt.mjs --mode "$(MODE)" --checkpoint "$(CHECKPOINT)" --manifest "$(ARTIFACT_MANIFEST)" --base-dir /workspace
+
+.PHONY: memory-l5-verify
+memory-l5-verify: memory-l5-runtime ## Verify retained P1 manifest, exact inventory and packed runtime/declaration graph
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: ARTIFACT_MANIFEST is required" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode packed --root /workspace --manifest "$(ARTIFACT_MANIFEST)"
+
+.PHONY: memory-l5-gate
+memory-l5-gate: memory-l5-runtime ## L5 lot gate aggregate: lint, tooling, LOT tests (L5-EX1; later lots extend it)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-gate requires ENV=<env> last" >&2; exit 1; }
+	@test -n "$(LOT)" || { echo "ERROR: memory-l5-gate requires LOT=<n>" >&2; exit 1; }
+	@$(MAKE) memory-l5-verify ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) typecheck-mcp-platform API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) typecheck-mcp-broker API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-lint API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-tooling API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-test LOT=$(LOT) API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
 .PHONY: smoke-mcp-broker-github
 smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic-broker smoke (BR-72 DEPTH Lot 2, BR72-EX1) — hits https://api.github.com, not hermetic
