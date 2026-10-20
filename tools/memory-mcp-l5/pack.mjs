@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkArtifactManifest } from './receipt.mjs';
+import { LOCK_FINGERPRINT_VERSION, P1_BUILD_INPUTS, computeLockFingerprint } from './lock-fingerprint.mjs';
 import { packMemoryClosure } from './minimal-pack.mjs';
 import { verifyPreCandidate } from './precandidate.mjs';
 
@@ -58,7 +59,8 @@ function main() {
   mkdirSync(archivesDir, { recursive: true });
   const { packed, inventory } = packMemoryClosure(rootDir, archivesDir, l5Head);
 
-  const declaredLockSha256 = sha256Of(readBytes(rootDir, 'package-lock.json'));
+  const lockBytes = readBytes(rootDir, 'package-lock.json');
+  const declaredLockSha256 = sha256Of(lockBytes);
   const manifest = {
     manifestVersion: 1,
     stage: 'pre-candidate',
@@ -69,6 +71,8 @@ function main() {
       l5Head,
       sdkRange: SDK_RANGE,
       declaredLockSha256,
+      lockFingerprintVersion: LOCK_FINGERPRINT_VERSION,
+      lockFingerprint: computeLockFingerprint(JSON.parse(lockBytes.toString('utf8')), P1_BUILD_INPUTS),
     },
     artifacts: packed,
     contractInventory: inventory,
