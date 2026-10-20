@@ -74,6 +74,62 @@ async function seededId(app: ReturnType<typeof makeApp>): Promise<string> {
 }
 
 describe('http uploads + templates routes', () => {
+  it.each([1, 2])('should publish only the verified snapshot when an append overlaps commit size %i', async (size) => {
+    const memory = createMemoryStaging();
+    let pauseNextRead = false;
+    let captured!: () => void;
+    let resume!: () => void;
+    const capturedRead = new Promise<void>((resolve) => { captured = resolve; });
+    const continueRead = new Promise<void>((resolve) => { resume = resolve; });
+    const staging = {
+      ...memory,
+      async read(uploadId: string) {
+        const snapshot = await memory.read(uploadId);
+        if (pauseNextRead) {
+          pauseNextRead = false;
+          captured();
+          await continueRead;
+        }
+        return snapshot;
+      },
+    };
+    const app = makeApp(true, undefined, staging);
+    const artifactId = await seededId(app);
+    const begun = await app.handle(req('POST', '/uploads', { artifactId, mimeType: 'text/plain' }, OWNER));
+    const { uploadId } = begun.body as { uploadId: string };
+    expect((await app.handle(req('POST', '/uploads/append', {
+      uploadId, offset: 0, bytes: [HI[0]!],
+    }, OWNER))).status).toBe(200);
+    const digest = `sha256:${createHash('sha256').update(new Uint8Array(HI.slice(0, size))).digest('hex')}`;
+    const input = { artifactId, uploadId, path: 'hi.txt', mimeType: 'text/plain', digest, size };
+    pauseNextRead = true;
+    const committing = app.handle(req('POST', '/uploads/commit', input, OWNER));
+    await capturedRead;
+    const appended = await app.handle(req('POST', '/uploads/append', {
+      uploadId, offset: 1, bytes: [HI[1]!],
+    }, OWNER));
+    resume();
+    expect([200, 409]).toContain(appended.status);
+    const result = await committing;
+    if (result.status === 201) {
+      expect(JSON.parse((result.body as { manifest: string }).manifest).files)
+        .toEqual([{ path: 'hi.txt', mimeType: 'text/plain', digest, size }]);
+      await expect(async () => memory.read(uploadId)).rejects.toThrow(/unknown upload/);
+    } else {
+      expect(result.status).toBe(422);
+      expect((await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER))).status).toBe(404);
+      if (appended.status === 409) {
+        expect(await memory.read(uploadId)).toEqual(new Uint8Array([HI[0]!]));
+        expect((await app.handle(req('POST', '/uploads/append', {
+          uploadId, offset: 1, bytes: [HI[1]!],
+        }, OWNER))).status).toBe(200);
+      }
+      expect((await app.handle(req('POST', '/uploads/commit', {
+        ...input, digest: HI_DIGEST, size: 2,
+      }, OWNER))).status).toBe(201);
+    }
+  });
+
   it.each([{ path: '../rejected' }, { path: '' }, { mimeType: 'text/\nplain' }, { mimeType: '' }])(
     'should preserve a staged upload after rejected publication metadata %j', async (invalid) => {
       const staging = createMemoryStaging();
