@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readArchive, scanGraph, graphRoots } from './contract-graph.mjs';
 import { checkArtifactManifest } from './receipt.mjs';
 import { LOCK_FINGERPRINT_VERSION, computeLockFingerprint } from './lock-fingerprint.mjs';
+import { P1_CONFIG_FILES } from './build-inputs.mjs';
 
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export const integrity = bytes => `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
@@ -46,9 +47,23 @@ export function verifyPreCandidate(root, manifestPath) {
   const freeze = JSON.parse(readInside(root, 'spec/evidence/memory-mcp-l5/l0-freeze.json'));
   if (manifest.source.specSha256 !== freeze.specSha256 || manifest.source.l0Commit !== freeze.l0Commit) throw new Error('manifest freeze mismatch');
   const liveLock = JSON.parse(readInside(root, 'package-lock.json').toString('utf8'));
+  const makefileText = readInside(root, 'Makefile').toString('utf8');
+  const configFiles = Object.fromEntries(P1_CONFIG_FILES.map((path) => [path, readInside(root, path)]));
   if (manifest.source.lockFingerprintVersion !== LOCK_FINGERPRINT_VERSION ||
-      manifest.source.lockFingerprint !== computeLockFingerprint(liveLock)) {
+      manifest.source.lockFingerprint !== computeLockFingerprint({ lockDoc: liveLock, makefileText, configFiles })) {
     throw new Error('manifest P1 lock fingerprint mismatch: relevant dependency or build inputs changed; regenerate the P1 manifest');
+  }
+  const snapRef = manifest.source.declaredLockSnapshot;
+  let snapBytes = null;
+  try {
+    snapBytes = snapRef && typeof snapRef.path === 'string' ? readInside(root, snapRef.path) : null;
+  } catch {
+    snapBytes = null;
+  }
+  const snapSha = snapBytes ? sha256(snapBytes) : null;
+  if (!snapBytes || snapSha !== manifest.source.declaredLockSha256 || snapSha !== snapRef.sha256 ||
+      String(snapRef.path).split('/').pop() !== `${snapSha}.package-lock.json`) {
+    throw new Error('manifest P1 lock provenance snapshot missing or corrupt; regenerate the P1 manifest');
   }
   const packages = new Map(), files = new Map();
   for (const artifact of manifest.artifacts) {

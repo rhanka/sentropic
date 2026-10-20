@@ -13,8 +13,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { checkArtifactManifest } from './receipt.mjs';
-import { LOCK_FINGERPRINT_VERSION, P1_BUILD_INPUTS, computeLockFingerprint } from './lock-fingerprint.mjs';
+import { LOCK_FINGERPRINT_VERSION, computeLockFingerprint } from './lock-fingerprint.mjs';
+import { P1_CONFIG_FILES } from './build-inputs.mjs';
 import { packMemoryClosure } from './minimal-pack.mjs';
 import { verifyPreCandidate } from './precandidate.mjs';
 
@@ -60,7 +62,26 @@ function main() {
   const { packed, inventory } = packMemoryClosure(rootDir, archivesDir, l5Head);
 
   const lockBytes = readBytes(rootDir, 'package-lock.json');
+  let headLock;
+  try {
+    headLock = execFileSync('git', ['show', 'HEAD:package-lock.json'], { cwd: rootDir });
+  } catch {
+    throw new Error('pack.mjs: cannot read HEAD:package-lock.json; run from a git checkout');
+  }
+  if (!headLock.equals(lockBytes)) {
+    throw new Error('pack.mjs: package-lock.json differs from HEAD; commit the lock change first so the P1 generation stays recoverable');
+  }
   const declaredLockSha256 = sha256Of(lockBytes);
+  const snapshotRel = `tools/memory-mcp-l5/artifacts/lock-snapshots/${declaredLockSha256}.package-lock.json`;
+  const snapshotAbs = resolve(rootDir, snapshotRel);
+  if (existsSync(snapshotAbs)) {
+    if (!readFileSync(snapshotAbs).equals(lockBytes)) throw new Error('pack.mjs: lock snapshot path occupied by different bytes');
+  } else {
+    mkdirSync(dirname(snapshotAbs), { recursive: true });
+    writeFileSync(snapshotAbs, lockBytes);
+  }
+  const makefileText = readBytes(rootDir, 'Makefile').toString('utf8');
+  const configFiles = Object.fromEntries(P1_CONFIG_FILES.map((path) => [path, readBytes(rootDir, path)]));
   const manifest = {
     manifestVersion: 1,
     stage: 'pre-candidate',
@@ -72,7 +93,8 @@ function main() {
       sdkRange: SDK_RANGE,
       declaredLockSha256,
       lockFingerprintVersion: LOCK_FINGERPRINT_VERSION,
-      lockFingerprint: computeLockFingerprint(JSON.parse(lockBytes.toString('utf8')), P1_BUILD_INPUTS),
+      lockFingerprint: computeLockFingerprint({ lockDoc: JSON.parse(lockBytes.toString('utf8')), makefileText, configFiles }),
+      declaredLockSnapshot: { path: snapshotRel, sha256: declaredLockSha256 },
     },
     artifacts: packed,
     contractInventory: inventory,
