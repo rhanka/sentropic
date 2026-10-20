@@ -21,6 +21,38 @@ function owe(bytes: number[]): Uint8Array {
 }
 
 describe('bounded uploads', () => {
+  it('should reject finalization during an append write and allow a later retry', async () => {
+    const memory = createMemoryStaging();
+    let captured!: () => void;
+    let resume!: () => void;
+    const writing = new Promise<void>((resolve) => { captured = resolve; });
+    const continueWrite = new Promise<void>((resolve) => { resume = resolve; });
+    const staging = {
+      ...memory,
+      async write(uploadId: string, bytes: Uint8Array) {
+        if (bytes.length === 2) {
+          captured();
+          await continueWrite;
+        }
+        await memory.write(uploadId, bytes);
+      },
+    };
+    const uploads = createUploadService(staging, { maxUploadBytes: 2 });
+    const { uploadId } = await uploads.begin({ mimeType: 'text/plain' });
+    await uploads.append(uploadId, 0, owe([104]));
+    const appending = uploads.append(uploadId, 1, owe([105]));
+    await writing;
+    try {
+      await expect(uploads.commit(uploadId, { digest: sha(owe([104])), size: 1 })).rejects.toThrow(/conflict/);
+      await expect(uploads.append(uploadId, 1, owe([105]))).rejects.toThrow(/conflict/);
+    } finally {
+      resume();
+    }
+    await expect(appending).resolves.toEqual({ size: 2 });
+    await expect(uploads.commit(uploadId, { digest: sha(owe([104, 105])), size: 2 }))
+      .resolves.toEqual({ digest: sha(owe([104, 105])), size: 2 });
+  });
+
   it('should cap client maxSize by the host budget across multiple chunks', async () => {
     const staging = createMemoryStaging();
     const uploads = createUploadService(staging, { maxUploadBytes: 2 });
