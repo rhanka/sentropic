@@ -3,7 +3,7 @@ import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-s
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, retainRouteBody, routeUsage,
-  settleRouteRequest, terminalGatewayError,
+  markDurableAttempt, RequestAuditError, settleRouteRequest, terminalGatewayError,
   type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
@@ -50,11 +50,20 @@ const doneClassification = (
   return { reason: 'provider-5xx', retryable: false, healthScope: 'route' };
 };
 
+const observedModelOf = (event: StreamEvent): string | undefined => {
+  if ('metadata' in event.data && event.data.metadata && typeof event.data.metadata === 'object') {
+    const val = (event.data.metadata as Record<string, unknown>).observedServedModelId;
+    if (typeof val === 'string' && val.length > 0) return val;
+  }
+  return undefined;
+};
+
 /** Claim the terminal outcome before awaiting any callback or iterator cleanup. */
 const trackedExecution = (input: {
   attempt: PreparedRouteAttempt; iterator: AsyncIterator<StreamEvent>; first: StreamEvent;
   prepared: PreparedRouteFlow; request: GatewayFlowRequest; target: ResolvedTarget;
   candidateRef: string; attempts: RouteAttemptSettlement[]; responseId: string;
+  initialObservedModel?: string;
   settle: (outcome: 'success' | 'failed' | 'cancelled') => Promise<void>;
 }) => {
   const { attempt, iterator, prepared, request, target } = input;
@@ -66,7 +75,9 @@ const trackedExecution = (input: {
   let outputCharacters = 0;
   let firstObserved = false;
   let priming = true;
+  let observedServedModel = input.initialObservedModel;
   let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
+  let reportedComplete = input.first.type === 'done' && typeof input.first.data.usage?.inputTokens === 'number' && typeof input.first.data.usage?.outputTokens === 'number';
   const isCancelled = () => terminal === 'cancelled';
   const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined)
     .finally(() => request.bodyLease?.release());
@@ -81,7 +92,8 @@ const trackedExecution = (input: {
     const finalUsage = usage();
     input.attempts.push({ candidateRef: input.candidateRef, providerId: target.providerId,
       modelId: target.model, transportProviderId: target.transportProviderId,
-      outcome: terminal, usage: finalUsage });
+      outcome: terminal, usage: finalUsage, reportedUsage: reportedComplete,
+      ...(observedServedModel ? { observedServedModel } : {}) });
     finishing = (async () => {
       try {
         if (terminal === 'success') await attempt.complete(attemptUsage(finalUsage));
@@ -105,9 +117,17 @@ const trackedExecution = (input: {
         signal?.throwIfAborted();
         if (isCancelled()) return;
         const event = next.value;
+        const observed = observedModelOf(event);
+        if (observed) {
+          observedServedModel = observed;
+          if (observed !== target.model) {
+            throw Object.assign(new Error('upstream model identity mismatch'), { code: 'model_identity_mismatch' });
+          }
+        }
         if (event.type === 'error') throw event.data;
         if (event.type === 'done') {
           if (event.data.usage) reported = routeUsage(event.data.usage);
+          reportedComplete = typeof event.data.usage?.inputTokens === 'number' && typeof event.data.usage?.outputTokens === 'number';
           if (!priming) await finish(doneClassification(event.data.finishReason));
           firstObserved = true;
           yield event;
@@ -201,6 +221,7 @@ export const runRouteStreamFlow = async (
     let execution: ReturnType<typeof trackedExecution> | undefined;
     let nativeExecution: ReturnType<typeof nativeStreamExecution> | undefined;
     let committingNative = false;
+    let observedServedModel: string | undefined;
     try {
       signal?.throwIfAborted();
       attempt = await deps.routePlanner.prepareAttempt(
@@ -211,6 +232,7 @@ export const runRouteStreamFlow = async (
       const native = prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
       if (nativeInvoked && !native) throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
       signal?.throwIfAborted();
+      await markDurableAttempt(deps, prepared.cost, preparedAttempt.attemptRef, diagnostic);
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       if (native) {
@@ -249,6 +271,13 @@ export const runRouteStreamFlow = async (
       const headers: Record<string, string> = {};
       while (!first.done && (first.value.type === 'status' || first.value.type === 'tool_call_result')) {
         signal?.throwIfAborted();
+        const observed = observedModelOf(first.value);
+        if (observed) {
+          observedServedModel = observed;
+          if (observed !== diagnostic.actualModelId) {
+            throw Object.assign(new Error('upstream model identity mismatch'), { code: 'model_identity_mismatch' });
+          }
+        }
         if (first.value.type === 'status') {
           responseId = first.value.data.sentropicResponseId ?? responseId;
           const metadataHeaders = first.value.data.metadata?.responseHeaders;
@@ -262,10 +291,18 @@ export const runRouteStreamFlow = async (
       }
       signal?.throwIfAborted();
       if (first.done) throw { code: 'empty_stream' };
+      const firstObserved = observedModelOf(first.value);
+      if (firstObserved) {
+        observedServedModel = firstObserved;
+        if (firstObserved !== diagnostic.actualModelId) {
+          throw Object.assign(new Error('upstream model identity mismatch'), { code: 'model_identity_mismatch' });
+        }
+      }
       if (first.value.type === 'error') throw first.value.data;
       if (first.value.type === 'done') responseId = first.value.data.responseId ?? responseId;
       execution = trackedExecution({ attempt: preparedAttempt, iterator, first: first.value,
-        prepared, request, target: servedTargetFor(diagnostic), candidateRef, attempts, responseId, settle });
+        prepared, request, target: servedTargetFor(diagnostic), candidateRef, attempts, responseId,
+        ...(observedServedModel ? { initialObservedModel: observedServedModel } : {}), settle });
       const buffered: GatewayDispatchStreamEvent[] = [];
       do {
         const frame = await execution.encoded.next();
@@ -295,7 +332,7 @@ export const runRouteStreamFlow = async (
         try { await execution.encoded.return(undefined); } catch { /* Preserve the claimed terminal error. */ }
         throw execution.refusal ?? error;
       }
-      if (error instanceof BudgetDispatchMarkError) {
+      if (error instanceof BudgetDispatchMarkError || error instanceof RequestAuditError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
       }
       if (error instanceof NativeAttemptRefusal) {
@@ -312,6 +349,7 @@ export const runRouteStreamFlow = async (
         modelId: diagnostic.actualModelId,
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
+        ...(observedServedModel ? { observedServedModel } : {}),
       });
       const terminal = () => terminalGatewayError(
         classification, servedTargetFor(diagnostic), 'all planned streams failed', error,
