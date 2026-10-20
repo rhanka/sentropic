@@ -69,6 +69,7 @@
 
 ## AI Flaky tests
 - [ ] Storage, digest and ownership cases are deterministic blocking gates; infrastructure absence is a failure, not an accepted skip.
+- [ ] Flaky accepted (unrelated, non-systematic): `test-api-unit-integration (queue)` — `api/tests/queue/workflow-transition-runtime.test.ts` > recovers all_main joins when prerequisite tasks complete concurrently — `expected "addJob" to be called 2 times, but got 0 times`. Failed once in CI run 39355455847 (head abd7d57b3), passed on same-command rerun of the identical api tree. No `api/**` change in this branch. Owner sign-off still required before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
