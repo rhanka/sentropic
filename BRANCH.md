@@ -60,6 +60,8 @@
 
 ## Feedback Loop
 - [x] Received the final-review-approved C2/C6 exact bytes/full manifest/digest mapping and C7 scope mapping; recorded producer identities and receipt locators.
+- [x] `BR709-EX1` (conditional `tools/memory-mcp-l5/**`): regenerate the P1 pre-candidate manifest after the CI-required cluster-mesh 0.22.0 lock sync, following #704. Reason: `package-lock.json` SHA change breaks the `manifest freeze/lock mismatch` gate. Impact: new immutable history identity plus refreshed pre-candidate manifest/sidecar, old bytes retained. Rollback: restore the retained history bytes to the pre-candidate path. Authorization: CI-red packet 709 + plan P1 disposition rule.
+- [ ] Track U/R/S/P dependencies, host-provider readiness and the S0 receipt; do not mark the existing S0 item accepted without its receipt.
 - [ ] Track U/R/S/P dependencies, host-provider readiness and the S0 receipt; do not mark the existing S0 item accepted without its receipt.
 - [ ] After Engram merge/tag/CI publication, verify its provenance and integrity separately from candidate contract delivery.
 - [ ] Deliver the Sentropic qualified tuple before requesting Engram C9; record the separate Sentropic/L5 receiving ACK on that same tuple.
