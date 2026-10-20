@@ -41,10 +41,10 @@ RUN mkdir -p /tmp/glob-update && \
       mv package glob; \
     fi && \
     rm -rf /tmp/glob-update
-# Security: Force update tar in npm itself to fix CVE-2026-24842
+# Security: Force update tar in npm itself to fix CVE-2026-24842 (pinned for reproducible builds)
 RUN mkdir -p /tmp/tar-update && \
     cd /tmp/tar-update && \
-    npm pack tar@latest && \
+    npm pack tar@7.5.22 && \
     cd /usr/local/lib/node_modules/npm/node_modules && \
     if [ -d tar ]; then \
       rm -rf tar && \

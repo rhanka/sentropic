@@ -84,15 +84,17 @@ Fix main CI publish-api-image tag collision on global-only changes while keeping
     - [ ] `make check-ci-version-filters ENV=test-api-image-fix`
     - [ ] `make scope-check ENV=test-api-image-fix`
 
-- [ ] **Lot 2 — Tag inputs aligned with shipped bytes**
-  - [ ] Makefile API_VERSION: hash all consumed workspace inputs, api templates/tests, security gate files, Dockerfile inputs, .dockerignore.
-  - [ ] api/Dockerfile: pin tar@7.5.22.
-  - [ ] .dockerignore: exclude files no image stage needs (global-only and non-consumed paths).
-  - [ ] ci.yml api filter extended to cover every new hash input.
-  - [ ] Lot gate:
-    - [ ] `make test-ci-api-image-canonical ENV=test-api-image-fix`
-    - [ ] `make check-ci-version-filters ENV=test-api-image-fix`
-    - [ ] `make scope-check ENV=test-api-image-fix`
+- [x] **Lot 2 — Tag inputs aligned with shipped bytes**
+  - [x] Makefile API_VERSION: hash all consumed workspace inputs, api templates/tests, security gate files, Dockerfile inputs, .dockerignore.
+  - [x] api/Dockerfile: pin tar@7.5.22.
+  - [x] .dockerignore: exclude files no image stage needs (global-only and non-consumed paths).
+  - [x] ci.yml api filter extended to cover every new hash input.
+  - [x] Lot gate:
+    - [x] `make test-ci-api-image-canonical ENV=test-api-image-fix` (12/12)
+    - [x] `make check-ci-version-filters ENV=test-api-image-fix`
+    - [x] `make scope-check ENV=test-api-image-fix`
+  - [x] Real no-cache production build with reduced context: `local/sentropic-api:d7bfda` built, runtime verified (no npm, node v24.22.0).
+  - [x] Builder probes: `COPY Makefile` refused (excluded), `COPY e2e/package.json ui/package.json api/package.json` kept.
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
