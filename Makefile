@@ -462,6 +462,19 @@ lock-api-direct: ## Bump proxy-addr 2.0.7 -> 2.0.8 in api + root locks (pinned, 
 	@for f in api/package-lock.json package-lock.json; do test $$(sed -n '/"node_modules\/proxy-addr": {/,/^    },/p' $$f | grep -c '"version": "2.0.8"') -eq 1 || (echo "❌ proxy-addr 2.0.8 missing in $$f" && exit 1); done
 	@! grep -q 'proxy-addr-2\.0\.7\.tgz' api/package-lock.json package-lock.json || (echo "❌ stale proxy-addr 2.0.7 reference remains" && exit 1)
 	@echo "✅ proxy-addr 2.0.8 in both locks"
+MARKDOWN_IT_NEW_INTEGRITY := sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==
+MARKDOWN_IT_ROOT_OLD_INTEGRITY := sha512-RCEsPjR+sr0x+AuYp601tKTkgFG4YEPLCzHST3cQ/fhlJkqAkz1L2/Qbp1j9qw5SBwQHFBoW8+hoN5xssOF0Tw==
+MARKDOWN_IT_UI_OLD_INTEGRITY := sha512-BuU2qnTti9YKgK5N+IeMubp14ZUKUUw7yeJbkjtosvHiP0AZ5c8IAgEMk79D0eC8F23r4Ac/q8cAIFdm2FtyoA==
+.PHONY: lock-markdown-it-direct
+lock-markdown-it-direct: ## Bump markdown-it 14.3.0/14.1.1 -> 14.3.2 in root + ui locks (pinned, no stack)
+	@echo "🔒 Bumping markdown-it to 14.3.2 in package-lock.json + ui/package-lock.json..."
+	sed -i '/"node_modules\/markdown-it": {/,/^    },/ { s/"version": "14\.3\.0"/"version": "14.3.2"/; s|markdown-it-14\.3\.0\.tgz|markdown-it-14.3.2.tgz|; s|$(MARKDOWN_IT_ROOT_OLD_INTEGRITY)|$(MARKDOWN_IT_NEW_INTEGRITY)|; }' package-lock.json
+	sed -i '/"node_modules\/markdown-it": {/,/^    },/ { s/"version": "14\.1\.1"/"version": "14.3.2"/; s|markdown-it-14\.1\.1\.tgz|markdown-it-14.3.2.tgz|; s|$(MARKDOWN_IT_UI_OLD_INTEGRITY)|$(MARKDOWN_IT_NEW_INTEGRITY)|; }' ui/package-lock.json
+	@test $$(sed -n '/"node_modules\/markdown-it": {/,/^    },/p' package-lock.json | grep -c '"version": "14.3.2"') -eq 1 || (echo "❌ markdown-it 14.3.2 missing in package-lock.json" && exit 1)
+	@test $$(sed -n '/"node_modules\/markdown-it": {/,/^    },/p' ui/package-lock.json | grep -c '"version": "14.3.2"') -eq 1 || (echo "❌ markdown-it 14.3.2 missing in ui/package-lock.json" && exit 1)
+	@! grep -q 'markdown-it-14\.3\.0\.tgz' package-lock.json || (echo "❌ stale markdown-it 14.3.0 reference remains" && exit 1)
+	@! grep -q 'markdown-it-14\.1\.1\.tgz' ui/package-lock.json || (echo "❌ stale markdown-it 14.1.1 reference remains" && exit 1)
+	@echo "✅ markdown-it 14.3.2 in both locks"
 
 .PHONY: lock-root
 lock-root: ## Update root package-lock.json using Node container (workspace root)
