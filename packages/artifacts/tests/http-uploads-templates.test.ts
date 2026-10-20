@@ -75,6 +75,30 @@ async function seededId(app: ReturnType<typeof makeApp>): Promise<string> {
 }
 
 describe('http uploads + templates routes', () => {
+  it.each([{ maxFileBytes: 2, maxTotalBytes: 4 }, { maxFileBytes: 4, maxTotalBytes: 2 }])(
+    'should bound cumulative upload bytes before decoding with limits %j', async (limits) => {
+      const app = makeApp(true, limits);
+      const artifactId = await seededId(app);
+      const begun = await app.handle(req('POST', '/uploads', {
+        artifactId, mimeType: 'text/plain', maxSize: 1000,
+      }, OWNER));
+      const { uploadId } = begun.body as { uploadId: string };
+      const append = (offset: number, bytes: number[]) => app.handle(req('POST', '/uploads/append',
+        { uploadId, offset, bytes }, OWNER));
+      expect((await append(0, [HI[0]!])).status).toBe(200);
+      let decoded = false;
+      const oversized = [1, 2];
+      Object.defineProperty(oversized, 0, { get: () => { decoded = true; return 1; } });
+      expect((await append(1, oversized)).status).toBe(400);
+      expect(decoded).toBe(false);
+      expect(await append(1, [HI[1]!])).toEqual({ status: 200, body: { size: 2 } });
+      expect((await append(2, [3])).status).toBe(400);
+      expect((await app.handle(req('POST', '/uploads/commit', {
+        artifactId, uploadId, path: 'hi.txt', mimeType: 'text/plain', digest: HI_DIGEST, size: 2,
+      }, OWNER))).status).toBe(201);
+    },
+  );
+
   it('should refuse an oversized upload chunk before changing staged bytes', async () => {
     const app = makeApp(true, { maxFileBytes: 1, maxTotalBytes: 1 });
     const artifactId = await seededId(app);
