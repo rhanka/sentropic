@@ -134,3 +134,32 @@ The validated working bundle is `/home/antoinefa/src/sentropic/.tmp/focus-ci-eff
 | `dist/ci-cd-sentropic-portable.html` | Validated interactive dossier, including controls inside the diagram and linked plan steps. |
 
 The [pinned workflow](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/.github/workflows/ci.yml) and [Makefile](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/Makefile) govern historical interpretation. Every implementation branch rechecks the then-current files before changing them. The current-main 138-second UI example replaces the earlier 129-second label; the 495-second UI and 199-second scan examples belong to the broad PR. Historical publisher runs remain historical. No unmeasured cold branch, skipped test, or already-published version receives an invented duration or success credit.
+
+## 9. BR-76 implementation receipts
+
+BR-76 added `scripts/ci/ci-run-metrics.mjs` (durations from identified
+run/attempt/job timestamps; carried-forward rerun copies deduplicated),
+`scripts/ci/ci-expected-results.mjs` (required-result membership verdict),
+`spec/ci-cd-ten-minutes/capacity.md` (quota, reservation, cost, and peak
+demand inventory), and workflow receipts (PR-only cancellation, a retained
+before-dispatch expected manifest, and identified job/step captures). Verified against Main run `39113919235`
+attempt 1: 84 captured rows equal the 84 expanded execution rows; max span
+664s equals the cluster anchor; executed concurrency peak 17 (half-open
+intervals, skipped and zero-duration rows excluded; the inclusive count that
+kept them read 18). Reconciled receipts: 59 execution queue waits, p50 63s max
+972s, runner-minutes 148.25, delivery elapsed per endpoint (api-image 1775s,
+preprod 1893s, cluster-mesh 1392s, llm-mesh 737s; images partial because
+`publish-ui-image` was skipped), 20 observed matrix member names, cache
+identities to-measure. Attempts 1+2 hold 168 input rows; 58
+carried-forward copies dropped, 110 retained rows (60 measured executions,
+50 skipped rows). Remaining gaps: account quota, reservation,
+registry cost, contention budgets, rollback drill, and concurrent PR/main
+behavior.
+
+Round-2 corrections exclude skipped rows from runner queues and delivery
+timings, preserve absent readiness as null, and emit per-job/per-step spans
+through Make. The live gate reconciles the actual selected matrix set and
+unconditional validators with fresh attempt receipts; carried-forward
+classification retains its original expected-manifest attempt. Account
+inventory access remains unavailable (billing HTTP 404, missing `user`
+scope), so finite-capacity and contention acceptance remains open.
