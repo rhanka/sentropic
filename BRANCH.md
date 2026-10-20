@@ -124,4 +124,5 @@
   - [x] Reproduce the append/commit race with a staging read barrier: old code publishes one byte after verifying the two-byte digest; the manifest integrity regression fails.
   - [x] Serialize upload append/finalization per session and use one copied snapshot for metadata validation, digest/size verification and publication; rejected validation remains retryable.
   - [x] Both upload suites pass 18/18, including concurrent successful/rejected finalization and the four corrected-metadata retries.
+  - [x] Cover the reverse interleaving: an append held before its staging write blocks both finalization and another append, then the complete upload commits on retry. Document HTTP 409 conflicts; typecheck/lint and all 195 unit tests pass.
   - [ ] Run final artifacts gates and refresh the selected sibling archive integrity; push and report green CI on the exact head, using branch dispatch if no PR run starts.
