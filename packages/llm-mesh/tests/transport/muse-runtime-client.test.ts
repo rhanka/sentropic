@@ -463,16 +463,38 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
     expect(response).toMatchObject({ providerRawFinishReason: 'length' });
   });
 
-  it('never invents a reasoning slot on the Meta wire (spec §16.4)', async () => {
+  it('refuses unsupported reasoning before Meta I/O (spec §16.4)', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({
       id: 'resp-3', choices: [{ message: { content: 'ok' } }],
     }), { status: 200 }));
     const client = new MuseRuntimeClient({ fetch: fetchFn });
-    await client.generate({
+    await expect(client.generate({
       ...request, reasoning: { effort: 'max', summary: 'auto' },
-    }, auth);
-    const body = JSON.parse(String(fetchFn.mock.calls[0]![1].body)) as Record<string, unknown>;
-    expect(body).not.toHaveProperty('reasoning');
-    expect(body).not.toHaveProperty('reasoning_effort');
+    }, auth)).rejects.toMatchObject({ status: 400, code: 'unsupported_projection', param: 'reasoning' });
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('surfaces upstream-reported model in providerMetadata and stream metadata without fabricating absent evidence', async () => {
+    const clientWithModel = new MuseRuntimeClient({
+      fetch: async () => new Response(JSON.stringify({
+        id: 'resp-m1', model: 'muse-spark-1.2-fallback', output_text: 'hi',
+      }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    });
+    const generated = await clientWithModel.generate({ ...request }, auth);
+    expect(generated.modelId).toBe('muse-spark-1.3-contributor');
+    expect(generated.providerMetadata).toEqual({ observedServedModelId: 'muse-spark-1.2-fallback' });
+
+    const sse = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('data: {"model":"muse-spark-1.2-fallback","choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n'));
+        controller.close();
+      },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const streamClient = new MuseRuntimeClient({ fetch: async () => sse });
+    const events = [];
+    for await (const ev of await streamClient.stream({ ...request }, auth)) events.push(ev);
+    expect(events[0]).toMatchObject({ type: 'status', data: { metadata: { observedServedModelId: 'muse-spark-1.2-fallback' } } });
+    expect(events[events.length - 1]).toMatchObject({ type: 'done', data: { metadata: { observedServedModelId: 'muse-spark-1.2-fallback' } } });
   });
 });
