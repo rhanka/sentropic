@@ -54,3 +54,32 @@ export function authorizeDispatch(input: AuthorizeDispatchInput): DispatchDecisi
   }
   return { allowed: true, providerId: hit.providerId, capabilityName: hit.capabilityName };
 }
+
+// ---------------------------------------------------------------------------
+// Memory dispatch (L5 Lot 1)
+// ---------------------------------------------------------------------------
+
+export type AuthorizeMemoryDispatchInput = AuthorizeDispatchInput & {
+  /**
+   * Literal-true verdict from the verified-context guard (M4): only the
+   * Boolean literal `true` admits a memory call to plan resolution. Any
+   * other value refuses before resource acquisition or effect.
+   */
+  contextVerified: unknown;
+};
+
+export type MemoryDispatchDecision =
+  | DispatchDecision
+  | { allowed: false; code: 'unverified_context' };
+
+/**
+ * Authorize one memory tool call: require the verified-context verdict,
+ * then exact-name resolve plus scope/claim coverage of the effective
+ * policy. Pure and synchronous.
+ */
+export function authorizeMemoryDispatch(input: AuthorizeMemoryDispatchInput): MemoryDispatchDecision {
+  if (input.contextVerified !== true) {
+    return { allowed: false, code: 'unverified_context' };
+  }
+  return authorizeDispatch(input);
+}
