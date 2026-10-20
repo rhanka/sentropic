@@ -16,6 +16,7 @@ import { canonicalManifest, manifestDigest } from '../codecs.js';
 import type { JsonValue } from '../contracts.js';
 import type { IntentStore } from './object-intents.js';
 import type { IdempotencyStore } from './idempotency.js';
+import { parseSourceRef, type SourceRef, type SourceStore } from './sources.js';
 import { publicationLimits, validatePublicationFiles, type PublicationLimits } from './publication-limits.js';
 export { DEFAULT_PUBLICATION_LIMITS, type PublicationLimits } from './publication-limits.js';
 
@@ -110,6 +111,7 @@ export interface PublishInput {
   artifactId: string;
   profile: Record<string, JsonValue | undefined>;
   files: PublicationFileInput[];
+  source?: SourceRef;
   idempotencyKey?: string;
   /** @deprecated Ignored; the server hashes release metadata and file digests. */
   paramsHash?: string;
@@ -126,7 +128,8 @@ function shaHex(bytes: Uint8Array): string {
 
 export interface PublicationService {
   readonly limits?: Readonly<PublicationLimits>;
-  publish(input: PublishInput): Promise<PublishResult>;
+  /** The host source store participates in the idempotent commit when a source is supplied. */
+  publish(input: PublishInput, sources?: SourceStore): Promise<PublishResult>;
   getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
   getRelease(releaseId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
 }
@@ -161,7 +164,7 @@ export function createPublicationService(deps: {
     const manifest = canonicalManifest({ ...body, digest });
     return { entries, digest, manifest };
   }
-  async function commitOnce(input: PublishInput, prepared: ReturnType<typeof prepare>): Promise<PublishResult> {
+  async function commitOnce(input: PublishInput, prepared: ReturnType<typeof prepare>, sources?: SourceStore): Promise<PublishResult> {
     const releaseId = crypto.randomUUID();
     const { entries, digest, manifest } = prepared;
     const intent = await deps.intents.record('commit-release', {
@@ -196,25 +199,29 @@ export function createPublicationService(deps: {
       await deps.intents.markFailed(intent.intentId, 'commit race lost: explicit conflict');
       throw new Error(`publication conflict for ${input.artifactId}: concurrent commit won`);
     }
+    if (input.source !== undefined) await sources!.putSource(input.artifactId, input.source);
     await deps.intents.complete(intent.intentId);
     return { releaseId, manifest };
   }
 
   return {
     limits,
-    async publish(input: PublishInput): Promise<PublishResult> {
+    async publish(input: PublishInput, sources?: SourceStore): Promise<PublishResult> {
       validatePublicationFiles(input.files, limits);
-      input = { ...input, files: input.files.map((file) => ({ ...file, bytes: new Uint8Array(file.bytes) })) };
+      const source = input.source === undefined ? undefined : parseSourceRef(input.source);
+      if (source !== undefined && sources === undefined) throw new Error('invalid publication: missing source store');
+      input = { ...input, source, files: input.files.map((file) => ({ ...file, bytes: new Uint8Array(file.bytes) })) };
       const prepared = prepare(input);
+      const requestHash = createHash('sha256').update(JSON.stringify([prepared.digest, source ?? null])).digest('hex');
       if (input.idempotencyKey !== undefined && deps.idempotency !== undefined) {
         const { result } = await deps.idempotency.execute(
           JSON.stringify(['publish', input.ownerId, input.idempotencyKey]),
-          prepared.digest,
-          () => commitOnce(input, prepared),
+          requestHash,
+          () => commitOnce(input, prepared, sources),
         );
         return result;
       }
-      return commitOnce(input, prepared);
+      return commitOnce(input, prepared, sources);
     },
     async getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined> {
       const releaseId = await deps.state.getCurrentReleaseId(artifactId);
