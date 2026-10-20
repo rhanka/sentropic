@@ -278,6 +278,11 @@
   - [x] Patch bumps over published (mesh 0.27.0 published, cluster 0.21.0 published): llm-mesh 0.27.0 to 0.27.1, cluster-mesh 0.20.0 to 0.21.1; root lock mirrors, version test, TRAIN literals, selected fixture tarball name follow; ranges unchanged (0.27.1 in <0.28.0, gateway ^0.27.0 admits).
   - [x] Selected fixture lock regenerated via repo procedure (pack-llm-mesh BLOCK guard PASS, sibling-collect receipts, refresh-lazy-package-lock); mesh 0.27.1 integrity now matches PR-source sibling; stale registry S3 peer tree dropped by fresh resolve.
   - [x] Gates on ENV=test-decision-v4l1 (last arg): typecheck+lint mesh/cluster PASS, full test-llm-mesh 1231/66 PASS, full test-cluster-mesh 988 PASS/129 skipped (57 files skipped per convention), packed test-lazy-package 77/15 PASS with receipts, check-train-lock-integrity PASS, scope-check PASS C2.
+- [x] **Lot V4-L1-MERGE — restore mergeable PR so CI runs (no runs trigger on DIRTY PRs)**
+  - [x] Merged origin/main (3cca58193, 6 conflicts resolved, catalog/contracts auto-merged): keep cluster 0.21.1, root lock 0.21.1, README union (stateful + judge), fixture package.json union (main S3/platform/pg pins + our 0.21.1 tarball).
+  - [x] PEERS tuple unified (ci.yml x3 + wiring test): drop mcp-platform (now regular dep, test forbids it in PEERS), artifacts 0.1.0 to 0.1.3 (merged peer range), keep mesh 0.27.0/gateway 0.21.0 qualification basis; wiring test 22 PASS.
+  - [x] Stale candidate entry root-caused (same file: spec string across merge so npm reused locked metadata: platform peer 0.3.x, artifacts 0.1.0) and fixed by entry removal + refresh; packed test-lazy-package 77/15 PASS with new-head receipts.
+  - [x] Gates on ENV=test-decision-v4l1 (last arg): typecheck+lint mesh/cluster PASS, full test-llm-mesh 1231/66 PASS, full test-cluster-mesh 1004 PASS/129 skipped, packed 77/15 PASS, train-lock PASS, scope-check PASS C2.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
