@@ -43,6 +43,10 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] `acknowledge` (2026-10-19): owner **“G1 = option 1”** — apply federated custody ownership and jointly frozen delivery/revocation contracts in study §12.1; correct F09's persisted-copy claim and F11's resolved store/recovery questions in §§3/5/6/7/9/11.5.
+- [x] `acknowledge` (2026-10-19): owner **“G2 = option 1”** — Engram profiles; design-system-published executor/render/layout. Bounded custody consequence in §12.2: Engram/Graphify is one adoption entry; name its consuming layer and preserve neutral imports. No diagram-core transfer is part of this PR.
+- [x] `acknowledge` (2026-10-19): owner **“g3 = a ok”** — G3 does not change this custody PR: design-system owns annotate presentation only; sentropic owns anchors, threads and persistence. No custody-spec change or annotation dependency for G3. Per `DS-POSITION-G3-2026-10-19.md`, DS receives opaque anchors and emits proposals; it stores nothing and resolves no anchor. Sentropic owns the still-open stable anchor-contract details (text: TextQuoteSelector; block: Focus node/FE-2 paragraph identity; diagram: document/target IDs, frame and geometry). The earlier Engram-model alternative is superseded, not an open decision.
+- [x] `acknowledge` (2026-10-19): H1, English rendering of the owner record: **“For a given Sentropic app, support both artifact storage/view modes: a sub-domain of the app or a distinct domain.”** Apply credential exclusion in both modes in study §12.3; concrete domain names and DNS GO remain open in #692.
 - [x] `BR596-EX2` (2026-10-19): owner-authorized merge of `origin/main` at `f5c4c36a6d9e2f236d8a7f58784c2384ba32115f`. Reason: branch behind by 918 commits. Impact: 575 upstream paths imported unchanged, no conflicts; the merge's inherited diff exceeds the normal atomic-size/scope limit. `make scope-check` reports those inherited paths against the old HEAD; harness scope is also checked against the integrated main baseline. The resulting branch-specific diff remains the two Allowed Paths. No implementation-path edits are authorized by this exception. Rollback: revert the integration commit, preserving branch work. `.track/events.jsonl` has the same blob in both parents and the merged index; no Track write or acceptance claim is made.
 - `acknowledge` (2026-10-18): Two independent reviews of head `1019ef6020b8add72a66bf017e0dbe98e629f333` returned REQUEST_CHANGES for one shared P2 finding: the retained cost-risk instruction at study §9 read as a current pre-build gate. Fixed by marking that instruction historical and superseded (D7 no-reapproval-gate and Claude decided-continuation references); the unverified cost/terms risk is retained. Treatment record: `.h2a/reviews/pr596_treatment.md`. No other finding was raised by either review.
 - `deferred`: Custody job, resolver, and live qualification remain open on main (deployable-process custody/G4 and B4). Owner: custody maintainer/conductor for G4 reconciliation; h2a owner for Claude execution qualification; platform/custody operator for preprod delivery and per-device revocation evidence. Status: recorded as existing dependencies in the study; not blockers for merging this documentation-only reconciliation. Production stays deferred under O-D3.
@@ -78,10 +82,11 @@
 ## Plan / Todo (lot-based)
 - [ ] **Lot 6 — Owner decisions of 2026-10-19**
   - [x] Verify PR #596's head branch with GitHub and `harness check branch`; fetch origin and merge the pinned main without conflicts (`BR596-EX2`).
-  - [ ] Apply G1's custody responsibilities and shared delivery/revocation contract; reconcile F09-F11.
-  - [ ] Apply G2's bounded Engram consumer/import consequences and H1's credential exclusion for both artifact modes; record G3 as outside this custody PR.
-  - [ ] Quote and date all four decisions; preserve sentropic-owned anchor-contract details and H1 domain names/DNS GO as open in their owning lanes.
-  - [ ] Review the two-file diff, run scope and whitespace checks, commit atomically through Make, push, and record the final head and CI status without merging or marking ready.
+  - [x] Apply G1's custody responsibilities and shared delivery/revocation contract; reconcile F09-F11.
+  - [x] Apply G2's bounded Engram consumer/import consequences and H1's credential exclusion for both artifact modes; record G3 as outside this custody PR.
+  - [x] Quote and date all four decisions; preserve sentropic-owned anchor-contract details and H1 domain names/DNS GO as open in their owning lanes.
+  - [x] Review the two-file amendment against the owner record and dossier F09-F11; `harness check branch` PASS C1, `make scope-check ENV=test-pr596-custody` PASS C2, `git diff --check` clean; no runtime tests apply.
+  - [ ] Commit atomically through Make, push, and record the final head and CI status without merging or marking ready. Fresh independent boundary review remains a later pre-merge gate; prior-head reviews do not qualify this amendment.
 - [x] **Round 1 dossier treatment (2026-10-18), finding 3**: separate the custodian workload's renewable payload and sole refresh authority from consumer access projections; reconcile F596-5 with D7, C2/C3 and the F596-3 multi-consumer proof. Documentation only; no lifecycle qualification claimed.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `PLAN.md`, and `plan/BRANCH_TEMPLATE.md`.
@@ -97,7 +102,7 @@
   - [x] Confirm the rebased diff vs `origin/main` adds only `spec/SPEC_STUDY_GITHUB_SEAT_CREDENTIAL_CUSTODY.md` (106 lines, no same-file conflict).
 
 - [x] **Lot 2 — Reconciliation of the study (documentation-only)**
-  - [x] Mark the 2026-09-20 study as historical where superseded; keep the dated owner request and the O1/O2/O3 comparison as decision history; remove O2 as the current recommendation.
+  - [x] Mark the 2026-09-20 study as historical where superseded; keep the dated owner request. The 2026-10-19 amendment removes the superseded O1/O2/O3 menu and retains the selected GitHub Secrets boundary.
   - [x] Replace the current-tense custody, refresh, and MEP delivery descriptions with references to the controlling deployable-process D7 contract (GitHub Secrets, sole refresher, GitHub-first commit, CAS delivery, access-only projection resolver, preprod-first, production deferred).
   - [x] Correct the security boundary wording: the selected Secrets design entrusts full credentials to the GitHub secret/job boundary; no KMS-to-KMS guarantee is claimed for it.
   - [x] Remove the unconditional metered-fallback and categorical terms-safety wording; keep mono-principal personal passthrough and cite the provider-specific qualification on main.
@@ -119,7 +124,7 @@
   - [x] **E2E tests**: existing: none impacted; updated: none; new: none. No E2E run applies (documentation-only).
   - [x] Document UAT (reviewer checklist, on the pushed head):
     - [x] Open the study and confirm the status line distinguishes the 2026-09-20 historical study from the 2026-10-18 reconciliation.
-    - [x] Confirm O1/O2/O3 read as historical options and no current recommendation points to O2.
+    - [x] Confirm the 2026-10-19 amendment removes the superseded store options and retains Q3=B, the sole refresher, and the selected L3 recovery path.
     - [x] Confirm refresh and delivery wording matches D7 (sole refresher, GitHub-first commit, CAS, access-only projection, no runtime refresh of custody seats).
     - [x] Confirm fallback and terms wording carry no unconditional promise.
     - [x] Confirm the provider table matches the five-CLI envelope and marks lifecycle qualification unverified.
