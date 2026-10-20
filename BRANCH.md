@@ -52,10 +52,10 @@ Replace the live root-lockfile equality in the P1 packed gate with a versioned f
 Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
 - subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
 - conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
-- `attention`: BR710-EX1 — pin `@types/node@22.20.1` in `Makefile` targets `build-mcp-platform`, `build-mcp-broker`, `api-extract-mcp-platform` (3 recipe tokens, bare `@types/node` today).
-  - Reason: the P1 build toolchain installs an unpinned `@types/node` (floating `latest`); the fingerprint must bind the actual resolved toolchain deterministically (Astra R1 finding 2). Pin matches `packages/mcp-*/devDependencies ^22.10.10` and the lock nested resolution `22.20.1`.
-  - Impact: build `@types/node` becomes `22.20.1` instead of floating latest; `typecheck-*`/`test-*` targets untouched.
-  - Rollback: revert the 3 tokens to bare `@types/node`.
+- `attention`: BR710-EX1 — pin `@types/node@22.20.1` in `Makefile` P1-producing targets and pass the committed lock sha to the packer (4 recipe tokens, bare `@types/node` and no provenance binding today).
+  - Reason: the P1 build toolchain installs an unpinned `@types/node` (floating `latest`); the fingerprint must bind the actual resolved toolchain deterministically (Astra R1 finding 2). Pin matches `packages/mcp-*/devDependencies ^22.10.10` and the lock nested resolution `22.20.1`. The `--head-lock-sha` provenance arg enforces generation from the committed lock (Astra R1 finding 3); host-shell evaluation matches the existing `--l5-head`/`--base` args since the pack container cannot read the worktree gitdir.
+  - Impact: build `@types/node` becomes `22.20.1` instead of floating latest; `pack.mjs` refuses a dirty lockfile; `typecheck-*`/`test-*` targets untouched.
+  - Rollback: revert the 3 tokens to bare `@types/node` and drop the `--head-lock-sha` arg.
 
 ## AI Flaky tests
 - Acceptance rule:
