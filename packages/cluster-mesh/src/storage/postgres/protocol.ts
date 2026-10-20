@@ -103,6 +103,13 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
   readonly operations?: Readonly<Record<string, PgInstalledOperation>>;
   readonly purgeFinalizer?: PgPurgeFinalizer;
   readonly purgeAuthorize?: PgPurgeFinalizer;
+  /** Optional lot-1 possession seam: verified after publication callbacks
+   * (including the outbox append) and before the commit decision. A refusal
+   * rolls the transaction back. Absent by default: existing behavior is
+   * unchanged. This seam is not the full G3 guarantee: held-session
+   * admission with a deferred COMMIT guard (G-P0a/G-P0b) is still required
+   * for qualification. */
+  readonly onCommitPossession?: () => void | Promise<void>;
   readonly stagedModules?: Readonly<Record<string, PgStagedModule>>;
   readonly pgPredicates?: Readonly<
     Record<
