@@ -120,9 +120,10 @@
   - [x] Document source replay identity, direct-service source store wiring, cumulative upload limits and corrected commit retries in the package README.
   - [x] Final gates pass: artifacts typecheck/lint and 192 unit tests; all three packed proofs; 78 Cluster Mesh packed tests and sibling integrity guard. Retain only the updated artifacts SHA-512 in the selected test lock.
   - [x] Retained P1 verification passes at `014a1f01...`; root lock unchanged, so no regeneration is needed. Record exact commands and the round-1 findings/fixes/regressions in the qualification receipt; deliver via normal push while keeping PR #708 draft, without merging or publishing.
-- [ ] **Lot 10 — Astra round-2 upload snapshot correction**
+- [x] **Lot 10 — Astra round-2 upload snapshot correction**
   - [x] Reproduce the append/commit race with a staging read barrier: old code publishes one byte after verifying the two-byte digest; the manifest integrity regression fails.
   - [x] Serialize upload append/finalization per session and use one copied snapshot for metadata validation, digest/size verification and publication; rejected validation remains retryable.
   - [x] Both upload suites pass 18/18, including concurrent successful/rejected finalization and the four corrected-metadata retries.
   - [x] Cover the reverse interleaving: an append held before its staging write blocks both finalization and another append, then the complete upload commits on retry. Document HTTP 409 conflicts; typecheck/lint and all 195 unit tests pass.
-  - [ ] Run final artifacts gates and refresh the selected sibling archive integrity; push and report green CI on the exact head, using branch dispatch if no PR run starts.
+  - [x] All three packed proofs pass; guarded sibling archive SHA-256 is `9ea9ebb2ac3ca32496e9ddcc6a74d8a78976585d2d767a23180f395ac7c95618`. Refresh the selected fixture through Make and retain only the artifacts SHA-512 change.
+  - [x] Delivery constraints: normal branch push and exact-head CI, using branch dispatch if no PR run starts; preserve draft status, with no merge or publication. CI results are reported separately after delivery.
