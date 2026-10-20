@@ -117,4 +117,5 @@
   - [x] Bind validated source presence/content (including recipe order) to the server replay hash; source writes run within the idempotent commit. HTTP/MCP regressions failed before the fix and pass 8/8 afterward.
   - [x] Bound cumulative staged bytes by the minimum host, publication and client ceilings; check remaining capacity before decoding/writes. Three new multi-chunk/override regressions fail before the fix and pass afterward; existing upload behavior remains covered.
   - [x] Preflight upload file/path/size/MIME validation before consuming the session; four metadata regressions fail before the fix and pass afterward. No release on rejection; corrected commit succeeds with the original staged bytes, then discards them. Upload suites pass 16/16.
+  - [x] Document source replay identity, direct-service source store wiring, cumulative upload limits and corrected commit retries in the package README.
   - [ ] Run artifacts, packed-consumer and L5 qualification; refresh retained P1 only if needed, then push without merging, marking ready or publishing.
