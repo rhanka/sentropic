@@ -93,7 +93,11 @@ test.describe('D2 anonymous Sessions guard', () => {
   });
 
   test('returns to Sessions after actual website passkey login without granting remote control', async ({ page }) => {
-    // The virtual key exercises website login only; it never supplies D2 source/browser proof.
+    // Website login never supplies a native IdP action proof or D2 authority.
+    const effects: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('/auth/session/content/') && ['POST', 'PUT', 'DELETE'].includes(req.method())) effects.push(req.url());
+    });
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('WebAuthn.enable');
     await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal',
@@ -114,8 +118,10 @@ test.describe('D2 anonymous Sessions guard', () => {
     await page.getByRole('button', { name: 'Se connecter avec WebAuthn', exact: true }).click();
     await expect(page).toHaveURL(/\/sessions$/);
     await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
-    await expect(page.getByText("Aucune clé d'accès enregistrée utilisable dans ce navigateur.", { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Confirmer et envoyer une seule fois' })).toBeDisabled();
+    const keyboard = page.getByRole('region', { name: 'Clavier à distance', exact: true });
+    await expect(keyboard.getByText('Chaque action à distance exige une nouvelle confirmation auprès du fournisseur d’identité.', { exact: false })).toBeVisible();
+    await expect(keyboard.getByRole('button', { name: 'Confirmer et envoyer une seule fois' })).toBeDisabled();
+    expect(effects).toEqual([]);
     await cdp.detach();
   });
 });
