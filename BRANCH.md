@@ -1,7 +1,7 @@
-# Feature: Deployed UI annotation overlay — spec consolidation (DV3 = B)
+# Feature: Deployed UI annotation overlay — owner decisions of 2026-10-19
 
 ## Objective
-- Promote the reviewed scratch spec v2 into `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md` without changing its design, record the closed owner decision DV3 = B (Inclure), and add cross-references from the related SPEC_EVOL files.
+- [x] Preserve the promoted spec and DV3 = B; amend PR #694 for the owner's dated G1/G2/G3/H1 decisions, then validate and push the draft without merging or marking ready.
 
 ## Scope / Guardrails
 - Scope limited to `spec/**` and `BRANCH.md` only.
@@ -41,7 +41,7 @@
 - [x] DV3 owner decision closed 2026-10-18: question « quand on recopie la prod vers la preprod pour tester, est-ce qu'on copie aussi tes annotations privées (texte et captures d'écran) ? » — answer « Tout copier » = option B (Inclure); no `blocked` / `attention` item remains on this branch for DV3.
 - [x] Astra max review of PR #694 at `b9895373a` (NO-GO: 2 blocking P2, 2 P3) treated in this branch: canonical discussion-state separation, observed snapshot binding for third-party authoring, S7 source locator with digest and lot map, and commit-count freshness below; treatment table in `.h2a/reviews/spec694_treatment.md`.
 - [x] Astra max re-review r2 of PR #694 at `df769d99a` (GO, 1 new P3) treated in this branch: Lot N-1 checkbox qualified for the intentional S7 provenance reference; findings #1–#4 remain closed.
-- [ ] No other `blocked` / `deferred` / `cancelled` / `attention` item open; raise one here instead of guessing if a prerequisite is unresolved.
+- [ ] Implementation qualifications remain open in the spec; this amendment records decisions and future gates, not delivered functionality.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -69,6 +69,10 @@
 - [x] This branch has no UI change: UAT is an owner read of the promoted spec and cross-references on the draft PR; no service start and no `ENV=dev` test run.
 
 ## Plan / Todo (lot-based)
+- [x] **Lot R4-1 — G1 federated governance (2026-10-19)**
+  - [x] Quote “G1 = option 1” with date in `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md`; assign separate durable roles for presentation, capture/resolution, model/persistence, delivery, work and memory promotion.
+  - [x] Specify joint interface freezes, versioned fixtures/receipts, acknowledged transfers, explicit independent Track/Engram promotions and the global trace handoff; preserve future qualification as open.
+  - [x] G1 applies to #694; no changes to the separate #692 catalogue/hosting or #596 custody implementations are authorized by this lot.
 - [x] **Lot R4-0 — Refresh PR #694 baseline (2026-10-19)**
   - [x] Verify draft PR #694 targets `docs/spec-ui-annotate-overlay`, pass `harness check branch`, fetch `origin`, and merge `origin/main` as requested.
   - [x] Resolve the sole conflict in `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`: preserve main's current M1/M2 status and this branch's overlay cross-reference; retain the canonical model.
