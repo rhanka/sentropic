@@ -39,6 +39,7 @@
 - [x] BRAH-EX2 (owner second CI repair packet): allow the selected artifacts lock entry, tuple assertions and batched fixture-version reads; impact is packed-consumer verification only, with integrity enforcement and timeouts retained; rollback restores those qualification hunks.
 
 ## Feedback Loop
+- [x] BRAH-EX3 (owner round-1 packet): merge `origin/main` at `da3063068` unchanged; upstream-only files are outside the authored scope and exceed the atomic diff budget. No Track changes; rollback reverts the merge. Recheck authored changes against the merged base.
 - [x] Delivery of `6ca10d3e6` exposed GitHub `mergeable=false`, `mergeable_state=dirty` and no new run. Mechanical merge-tree against current main identifies only P1 JSON/hash conflicts; rebase resolves those files and retains both superseded manifests.
 - [x] Run `39320255479`, job `118292763317`: all 932 unit tests pass; packed lazy qualification rejects selected lock artifacts 0.1.2 against verified candidate 0.1.4 (version, registry URL and SHA-512 mismatch).
 - [x] First repaired packed run: sibling integrity and installed tuple pass; 77/78 tests pass, but the offline preparation test takes 5530 ms against 5000 ms under parallel workers. Batch tuple manifest reads instead of spawning Node for every package; retain the timeout and full parallel qualification.
@@ -111,3 +112,9 @@
   - [x] Regenerate P1 through memory-l5-pack: `014a1f014c668e3cec6f724fa278073774eb2e4307b086c55bceccbaaa01986a`, lockfile `b4bc5762c8c94c29bc7cfcb43b27c2fa3f0daf80d0a2e9372377fdfa4a9b7ca3`; all 44 contracts and both archive digests/integrities are unchanged; memory-l5-gate LOT=1 passes all 228 tests.
   - [x] Rebased Cluster Mesh 0.20.0: lint/typecheck, 972 unit tests (129 conditional skips), guarded pack, all 78 parallel packed tests and clean candidate installation pass, including the SQLite entry point; artifacts candidate bytes remain `7755caf8...`.
   - [x] Delivery constraints: push with a lease on remote head `6ca10d3e63406a4fc093ec4f4099866607ef3c0d`; retain the draft state and report the new GitHub run separately, without merging or publishing.
+- [ ] **Lot 9 — Astra round-1 corrections**
+  - [x] Merge current `origin/main` as requested; retain draft PR #708 and keep this worktree single-writer.
+  - [ ] Bind source provenance to publication replay identity and write it only inside the idempotent operation; HTTP/MCP regressions.
+  - [ ] Bound cumulative staged bytes by trusted upload/publication ceilings before decoding or writes; multi-chunk and override regressions.
+  - [ ] Preflight upload publication metadata before consuming the session; corrected-commit regression.
+  - [ ] Run artifacts, packed-consumer and L5 qualification; refresh retained P1 only if needed, then push without merging, marking ready or publishing.
