@@ -16,6 +16,7 @@ import {
   checkCheckpoint,
 } from '../receipt.mjs';
 import { canonicalizeJson } from '../schema-validator.mjs';
+import { computeLockFingerprint } from '../lock-fingerprint.mjs';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SCHEMA_PATH = join(HERE, '..', 'schemas', 'checkpoint-v1.schema.json');
@@ -124,7 +125,7 @@ function buildCheckpointBundle(baseDir) {
   for (const a of artifacts) lockPackages[`node_modules/${a.name}`] = { version: a.version, resolved: a.archiveRef, integrity: a.integrity, sha256: a.sha256 };
   const lockRef = writeRef(baseDir, 'package-lock.json', { lockfileVersion: 3, packages: lockPackages });
   const instLockRef = writeRef(baseDir, 'receipts/installed-lock.json', { sdkVersion: '1.31.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'], packages: lockPackages });
-  const mfSource = { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: lockRef.sha256 };
+  const mfSource = { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: lockRef.sha256, lockFingerprintVersion: 1, lockFingerprint: computeLockFingerprint(JSON.parse(lockRef.bytes.toString('utf8'))) };
   const toMfItem = (a) => ({ role: a.role, name: a.name, version: a.version, sha256: a.sha256, integrity: a.integrity, sourceHead: a.sourceHead, archive: a.archiveRef });
   const preMf = writeRef(baseDir, 'tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json', {
     manifestVersion: 1, stage: 'pre-candidate', source: mfSource, artifacts: [toMfItem(artifacts[1]), toMfItem(artifacts[2])], contractInventory,
