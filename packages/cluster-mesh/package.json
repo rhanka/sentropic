@@ -132,6 +132,26 @@
       "types": "./dist/compose/mcp.d.ts",
       "import": "./dist/compose/mcp.js"
     },
+    "./compose/mcp-oauth": {
+      "types": "./dist/compose/mcp-oauth.d.ts",
+      "import": "./dist/compose/mcp-oauth.js"
+    },
+    "./mcp/auth": {
+      "types": "./dist/mcp/auth.d.ts",
+      "import": "./dist/mcp/auth.js"
+    },
+    "./mcp/auth/hono": {
+      "types": "./dist/mcp/auth/hono.d.ts",
+      "import": "./dist/mcp/auth/hono.js"
+    },
+    "./loaders/mcp/auth": {
+      "types": "./dist/loaders/mcp/auth.d.ts",
+      "import": "./dist/loaders/mcp/auth.js"
+    },
+    "./loaders/mcp/auth/hono": {
+      "types": "./dist/loaders/mcp/auth/hono.d.ts",
+      "import": "./dist/loaders/mcp/auth/hono.js"
+    },
     "./mcp/artifacts": {
       "types": "./dist/integrations/mcp/artifacts.d.ts",
       "import": "./dist/integrations/mcp/artifacts.js"
@@ -156,6 +176,9 @@
     "./dist/modules/topology-guard.js",
     "./dist/modules/topology-guard-gateway.js",
     "./dist/modules/topology-guard-llm-mesh.js",
+    "./dist/modules/topology-guard-mcp-auth.js",
+    "./dist/mcp/auth*.js",
+    "./dist/mcp/auth/**",
     "./dist/integrations/**",
     "./dist/loaders/**",
     "./dist/compose/**"

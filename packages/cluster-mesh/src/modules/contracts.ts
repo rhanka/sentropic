@@ -18,12 +18,12 @@ export const CLUSTER_MESH_PROVIDER_MODULE_IDS = [
   'mcp-platform/stdio',
   'mcp/artifacts',
   'comments',
+  'mcp/auth',
+  'mcp/auth/hono',
 ] as const;
 
 /** Catalogued capabilities not delivered by this release; always gated `source_unavailable`. */
 export const CLUSTER_MESH_GATED_MODULE_IDS = [
-  'mcp/auth',
-  'mcp/auth/hono',
   'mcp/platform',
   'mcp/platform/hono',
   'mcp/platform/experimental',

@@ -3,6 +3,8 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { inspectTopology, type ClusterMeshInstanceEntry, type ClusterMeshLeafFamily } from '../../src/modules/topology.js';
 import { evaluations, fakeGateway, fakeMesh, PackageTree } from '../fixtures/package-tree.js';
+import { MCP_AUTH_RANGE, MCP_OAUTH_AUTH_RANGE } from '../../src/modules/catalog.js';
+import { satisfiesRange } from '../../src/modules/semver.js';
 
 // Automatic leaf guard: accepted provider ranges, checked on the copies the leaf actually resolves.
 let tree: PackageTree;
@@ -30,6 +32,11 @@ function refusal(run: () => unknown): { code?: string; reason?: string; paths?: 
 }
 
 describe('automatic leaf guard ranges', () => {
+  it('should preserve the gateway service floor while OAuth selects the corrected contract', () => {
+    expect(satisfiesRange('0.2.1', MCP_AUTH_RANGE)).toBe(true);
+    expect(satisfiesRange('0.2.1', MCP_OAUTH_AUTH_RANGE)).toBe(false);
+    expect(satisfiesRange('0.2.2', MCP_OAUTH_AUTH_RANGE)).toBe(true);
+  });
   it('should pass the correct tuple for both families without evaluating providers', () => {
     const guard = cluster('app');
     tree.install('app', fakeMesh('mesh'));

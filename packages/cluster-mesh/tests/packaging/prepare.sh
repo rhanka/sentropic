@@ -125,6 +125,69 @@ fixture bare
 (cd "$work/bare" && npm install $quiet "$tgz" >/dev/null)
 fi
 
+# Version-only refresh preserves the previously qualified peer pins and uses npm's
+# frozen graph without installing unpublished peers. It does not qualify that tuple.
+if [ "${REFRESH_SELECTED_ONLY:-0}" = 1 ]; then
+  [ "${REFRESH_LOCK:-}" = 1 ] || { echo 'REFRESH_SELECTED_ONLY requires lock refresh' >&2; exit 1; }
+  mkdir -p "$work/selected"
+  cp "$fixtures/selected/package.json" "$fixtures/selected/package-lock.json" "$work/selected/"
+  consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
+    "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" \
+    "@sentropic/auth-hono=$(src @sentropic/auth-hono "$AHONO")" \
+    "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")" \
+    "@sentropic/artifacts=$(src @sentropic/artifacts "$ARTIFACTS")"
+  (cd "$work/selected" && npm install --package-lock-only --ignore-scripts $quiet >/dev/null)
+  node "$here/check-lock-integrity.mjs" refresh "$work/selected/package-lock.json" \
+    "$fixtures/selected/package-lock.json" "$fixtures/selected/package.json" "$siblings"
+  exit 0
+fi
+
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
+# OAuth has its own strictly installed graph, pinned to Radar #866's SDK/Hono lock.
+# This proof needs no gateway/artifacts/auth-hono publication or workspace aliases.
+mkdir -p "$work/mcp-oauth"
+cp "$fixtures/mcp-oauth/package.json" "$work/mcp-oauth/"
+if [ "${REFRESH_LOCK:-}" = 1 ]; then
+  (cd "$work/mcp-oauth" && npm install --package-lock-only --ignore-scripts $quiet >/dev/null)
+  node "$fixtures/mcp-oauth/lock.mjs" "$work/mcp-oauth/package-lock.json" "$fixtures/mcp-oauth/package-lock.json"
+fi
+cp "$fixtures/mcp-oauth/package-lock.json" "$work/mcp-oauth/"
+(cd "$work/mcp-oauth" && npm ci --ignore-scripts $quiet >/dev/null)
+# Also exercise the SDK peer floor in a separate normal installation. The ordinary
+# pre-#684 runner can resolve a newer host workspace SDK despite its tool pins.
+for variant in mcp-oauth mcp-oauth-baseline; do
+  oauth_dir="$work/$variant"
+  if [ "$variant" = mcp-oauth-baseline ]; then
+    mkdir -p "$oauth_dir"
+    cp "$fixtures/mcp-oauth/package.json" "$oauth_dir/"
+    consumer "$oauth_dir" "@modelcontextprotocol/sdk=1.31.0" "hono=4.10.7"
+    (cd "$oauth_dir" && npm install --ignore-scripts $quiet >/dev/null)
+  fi
+  for name in host scenario; do
+    sed -e "s#'../../../../src/index.js'#'@sentropic/cluster-mesh'#g" \
+      -e "s#'../../../../src/mcp/registry.js'#'@sentropic/cluster-mesh/mcp/registry'#g" \
+      -e "s#'../../../../src/compose/mcp-oauth.js'#'@sentropic/cluster-mesh/compose/mcp-oauth'#g" \
+      "$fixtures/mcp-oauth/$name.ts" > "$oauth_dir/$name.ts"
+  done
+  cp "$fixtures/mcp-oauth/consumer.ts" "$fixtures/mcp-oauth/http.ts" "$fixtures/mcp-oauth/tools.json" "$oauth_dir/"
+  "$work/tools/node_modules/.bin/tsc" --module NodeNext --target ES2022 --esModuleInterop --strict \
+    --skipLibCheck false --types node --typeRoots "$work/tools/node_modules/@types" \
+    --outDir "$oauth_dir" --rootDir "$oauth_dir" \
+    "$oauth_dir/host.ts" "$oauth_dir/consumer.ts" "$oauth_dir/http.ts" "$oauth_dir/scenario.ts"
+  sha256sum "$tgz" > "$oauth_dir/candidate.sha256"
+  tuple "$variant"
+done
+cat "$work/mcp-oauth/candidate.sha256"
+
+# The old gateway service-auth floor remains independently usable without OAuth selection.
+consumer "$work/gateway-service-baseline" "@sentropic/cluster-mesh=file:$tgz" \
+  "@sentropic/llm-mesh=0.22.3" "@sentropic/llm-gateway=0.19.2" "@sentropic/mcp-auth=0.2.1" \
+  "hono=4.10.7" "jose=5.10.0"
+(cd "$work/gateway-service-baseline" && npm install --ignore-scripts $quiet >/dev/null)
+tuple gateway-service-baseline
+if [ "${MCP_OAUTH_ONLY:-0}" = 1 ]; then exit 0; fi
+fi
+
 # Selected consumer: start from E8's committed lock, substituting the local artifacts candidate.
 # Candidate/sibling installs are provisional (`npm install`); the committed lock is not rewritten.
 # Verified sibling receipts still require the committed registry URL and sha512 on every sibling run.
