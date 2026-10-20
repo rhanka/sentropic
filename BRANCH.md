@@ -71,24 +71,30 @@
 - [x] This branch has no UI change: UAT is an owner read of the promoted spec and cross-references on the draft PR; no service start and no `ENV=dev` test run.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot R4-3 — H1 two-mode hosting (2026-10-19)**
-  - [x] Quote the dated H1 answer verbatim in `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md`; replace the separate-domain-only requirement with per-app subdomain or distinct-domain storage/views.
-  - [x] Specify capture/delivery qualification for both origins, namespace/resource/release and reader rights, no implicit shared session, mode-change rollback and file-level future test responsibilities; leave names/DNS GO open.
-  - [x] H1 applies to #694 as a consumer of #692's hosting standard. All four requested decisions concern this PR; #692 hosting implementation and #596 custody remain outside this amendment.
-- [x] **Lot R4-2 — G2/G3 ownership and anchor boundary (2026-10-19)**
-  - [x] Quote “G2 = option 1” and “g3 = a ok” with date; apply the DS position: presentation only, opaque anchors/proposals, no DS resolution or persistence; Sentropic owns anchors, threads and persistence.
-  - [x] Remove competing package homes, update A/B ownership and consumer handoffs, specify G2 semantic/profile/render bindings and required text/Focus-block/diagram anchors while retaining FL-ANCHOR as open.
-  - [x] G2 and G3 apply to #694; no diagram-core/model transfer to Engram, new graph model or edits in the DS repository are made by this spec amendment. Historical effort estimates require re-estimation at dispatch.
-- [x] **Lot R4-1 — G1 federated governance (2026-10-19)**
-  - [x] Quote “G1 = option 1” with date in `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md`; assign separate durable roles for presentation, capture/resolution, model/persistence, delivery, work and memory promotion.
-  - [x] Specify joint interface freezes, versioned fixtures/receipts, acknowledged transfers, explicit independent Track/Engram promotions and the global trace handoff; preserve future qualification as open.
-  - [x] G1 applies to #694; no changes to the separate #692 catalogue/hosting or #596 custody implementations are authorized by this lot.
 - [x] **Lot R4-0 — Refresh PR #694 baseline (2026-10-19)**
   - [x] Verify draft PR #694 targets `docs/spec-ui-annotate-overlay`, pass `harness check branch`, fetch `origin`, and merge `origin/main` as requested.
   - [x] Resolve the sole conflict in `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`: preserve main's current M1/M2 status and this branch's overlay cross-reference; retain the canonical model.
   - [x] Scope of authored changes remains `spec/**` and `BRANCH.md`; incoming main history is the owner-authorized baseline synchronization, not a new implementation lot.
   - [x] Merge parent: `origin/main = f5c4c36a6d9e2f236d8a7f58784c2384ba32115f`. `make scope-check` reports incoming main paths against old HEAD (advisory FAIL C2); validate the four-file PR delta against the new main with `harness check scope`. No scope expansion or authored code change.
   - [x] `.track` is byte-identical on both parents and the merged tree; no event loss, Track amendment or acceptance claim is introduced.
+- [x] **Lot R4-1 — G1 federated governance (2026-10-19)**
+  - [x] Quote “G1 = option 1” with date in `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md`; assign separate durable roles for presentation, capture/resolution, model/persistence, delivery, work and memory promotion.
+  - [x] Specify joint interface freezes, versioned fixtures/receipts, acknowledged transfers, explicit independent Track/Engram promotions and the global trace handoff; preserve future qualification as open.
+  - [x] G1 applies to #694; no changes to the separate #692 catalogue/hosting or #596 custody implementations are authorized by this lot.
+- [x] **Lot R4-2 — G2/G3 ownership and anchor boundary (2026-10-19)**
+  - [x] Quote “G2 = option 1” and “g3 = a ok” with date; apply the DS position: presentation only, opaque anchors/proposals, no DS resolution or persistence; Sentropic owns anchors, threads and persistence.
+  - [x] Remove competing package homes, update A/B ownership and consumer handoffs, specify G2 semantic/profile/render bindings and required text/Focus-block/diagram anchors while retaining FL-ANCHOR as open.
+  - [x] G2 and G3 apply to #694; no diagram-core/model transfer to Engram, new graph model or edits in the DS repository are made by this spec amendment. Historical effort estimates require re-estimation at dispatch.
+- [x] **Lot R4-3 — H1 two-mode hosting (2026-10-19)**
+  - [x] Quote the dated H1 answer verbatim in `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md`; replace the separate-domain-only requirement with per-app subdomain or distinct-domain storage/views.
+  - [x] Specify capture/delivery qualification for both origins, namespace/resource/release and reader rights, no implicit shared session, mode-change rollback and file-level future test responsibilities; leave names/DNS GO open.
+  - [x] H1 applies to #694 as a consumer of #692's hosting standard. All four requested decisions concern this PR; #692 hosting implementation and #596 custody remain outside this amendment.
+- [x] **Lot R4-N — Documentation verification and handoff (2026-10-19)**
+  - [x] Reconcile the G3 handoff: A1 archive unlocks B0 consumer proof, whose receipt completes A2 before B1–B3; D/E are host wrappers of DS presentation.
+  - [x] `harness check branch`: PASS C1; each decision commit's `make scope-check ENV=test-spec-ui-annotate-overlay`: PASS C2; `git diff --check` passes for the authored delta and PR delta against merged main.
+  - [x] Documentation validation passes: 39 future Make commands with ENV last and all three ports, 17 local links, 13 tables, six fenced blocks and all four verbatim owner quotations. Scratch checker: `/home/antoinefa/src/sentropic/.tmp/spec-review-v3/pr694-document-check.pl` (Perl; no Python).
+  - [x] Atomic authored commits remain below 150 changed lines, use `make commit` and contain no AI attribution trailers. The owner-requested main merge retains incoming history; no app tests/services, DNS or deployment run is claimed.
+  - [ ] Owner read and cross-owner contract/consumer qualification remain open; historical reviews do not accept this amendment. Keep PR #694 draft; no merge or ready transition.
 - [x] **Round 1 dossier treatment (2026-10-18), findings 6/7**: replace stale D-P1/D-P2/D-P3 references with revision-pinned section/line citations; carry the corrected account-protection benefit, recovery prerequisites and remaining non-MFA login exposure. Namespace and host-mapping contracts stay intact.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `plan/BRANCH_TEMPLATE.md`, the scratch spec v2 (sha256 `5717b057b5d4ea78c78ffb7d77c71e50c198012b1219662b599c624e87543b11`), and the Astra re-review (verdict GO).
