@@ -258,10 +258,10 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
             artifactId,
             profile: (body['profile'] ?? {}) as Record<string, string | number | boolean | null | undefined>,
             files,
+            source: attached,
             idempotencyKey: typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : undefined,
             paramsHash: typeof body['paramsHash'] === 'string' ? body['paramsHash'] : undefined,
-          });
-          if (attached !== undefined) await deps.sources.putSource(artifactId, attached);
+          }, deps.sources);
           await deps.lifecycle.trackRelease(artifactId, result.releaseId);
           return { status: 201, body: result };
         }
