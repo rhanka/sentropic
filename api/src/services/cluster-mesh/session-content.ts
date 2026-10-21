@@ -488,17 +488,18 @@ export class SessionContentService {
     client: DbClient,
     tenantId: string,
     principalId: string,
+    fence = false,
   ): Promise<void> {
-    const [tenant] = await client
+    const tenantQuery = client
       .select({ status: tenants.status })
       .from(tenants)
       .where(eq(tenants.id, tenantId))
-      .for('share')
       .limit(1);
+    const [tenant] = await (fence ? tenantQuery.for('share') : tenantQuery);
     if (!tenant || tenant.status !== 'active') {
       throw new SessionContentError('membership_required', 'tenant is not active');
     }
-    const [membership] = await client
+    const membershipQuery = client
       .select({ status: tenantMemberships.status })
       .from(tenantMemberships)
       .where(
@@ -507,8 +508,8 @@ export class SessionContentService {
           eq(tenantMemberships.userId, principalId),
         ),
       )
-      .for('share')
       .limit(1);
+    const [membership] = await (fence ? membershipQuery.for('share') : membershipQuery);
     if (membership?.status !== 'approved') {
       throw new SessionContentError('membership_required', 'principal is not an approved member');
     }
@@ -540,8 +541,9 @@ export class SessionContentService {
     client: DbClient,
     workspaceId: string,
     principalId: string,
+    fence = false,
   ): Promise<void> {
-    const [membership] = await client
+    const membershipQuery = client
       .select({ workspaceId: workspaceMemberships.workspaceId })
       .from(workspaceMemberships)
       .where(
@@ -550,8 +552,8 @@ export class SessionContentService {
           eq(workspaceMemberships.userId, principalId),
         ),
       )
-      .for('share')
       .limit(1);
+    const [membership] = await (fence ? membershipQuery.for('share') : membershipQuery);
     if (!membership) {
       throw new SessionContentError('membership_required', 'principal is not an origin-workspace member');
     }
@@ -916,8 +918,14 @@ export class SessionContentService {
       if (existing.tenantId !== ctx.tenantId || existing.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'project belongs to another owner');
       }
-      const grant = await this.ownedGrant(tx, sessionId, ctx);
-      if (grant.projectId !== projectId || grant.workspaceId !== existing.workspaceId) {
+      const [grant] = await tx.select().from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId)).limit(1);
+      const [binding] = await tx.select().from(sessionWorkspaceBindings)
+        .where(eq(sessionWorkspaceBindings.sessionId, sessionId)).limit(1);
+      if ((grant && (grant.projectId !== projectId || grant.workspaceId !== existing.workspaceId
+        || grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId))
+        || (!grant && binding && (binding.tenantId !== ctx.tenantId
+          || binding.principalId !== ctx.ownerId || binding.workspaceId !== existing.workspaceId))) {
         throw new SessionContentError('cross_owner_refused', 'session belongs to another project scope');
       }
       const excluded = new Set((existing.excludedSessionIds as string[]).map(String));
@@ -935,7 +943,9 @@ export class SessionContentService {
         .set({ state: sql`CASE WHEN ${sessionContentGrants.state} IN ('revoked', 'expired')
           OR ${sessionContentGrants.readDenied} THEN ${sessionContentGrants.state} ELSE 'excluded' END`,
         updatedAt: new Date(this.nowMs()) })
-        .where(eq(sessionContentGrants.sessionId, sessionId));
+        .where(and(eq(sessionContentGrants.sessionId, sessionId),
+          eq(sessionContentGrants.projectId, projectId), eq(sessionContentGrants.tenantId, ctx.tenantId),
+          eq(sessionContentGrants.ownerId, ctx.ownerId), eq(sessionContentGrants.workspaceId, existing.workspaceId)));
       return { projectId, sessionId, exclusionRevision: existing.exclusionRevision + 1 };
     });
   }
@@ -1496,7 +1506,7 @@ export class SessionContentService {
     const epoch = await this.checkEpoch();
     const namespaceId = namespaceIdFor(ctx.tenantId, ctx.ownerId, epoch.epoch);
     return db.transaction(async (tx) => {
-      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId, true);
       const [grant] = await tx
         .select()
         .from(sessionContentGrants)
@@ -1506,7 +1516,7 @@ export class SessionContentService {
       if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
       }
-      await this.checkWorkspaceMembership(tx, grant.workspaceId, ctx.principalId);
+      await this.checkWorkspaceMembership(tx, grant.workspaceId, ctx.principalId, true);
       if (grant.state !== 'active') {
         throw new SessionContentError(grant.state === 'excluded' ? 'session_excluded' : 'grant_revoked', 'grant is not active');
       }
@@ -1645,8 +1655,8 @@ export class SessionContentService {
       if (!grant || grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'reservation belongs elsewhere');
       }
-      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
-      await this.checkWorkspaceMembership(tx, grant.workspaceId, ctx.principalId);
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId, true);
+      await this.checkWorkspaceMembership(tx, grant.workspaceId, ctx.principalId, true);
       if (grant.state !== 'active') {
         throw new SessionContentError('grant_revoked', 'grant is not active; late upload refused');
       }
@@ -1716,8 +1726,8 @@ export class SessionContentService {
     const expiresAt =
       retention.mode === 'none' ? null : capturedAt + retention.durationSeconds * 1000;
     await db.transaction(async (tx) => {
-      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
-      await this.checkWorkspaceMembership(tx, reservation.grant.workspaceId, ctx.principalId);
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId, true);
+      await this.checkWorkspaceMembership(tx, reservation.grant.workspaceId, ctx.principalId, true);
       const [parent] = await tx.select().from(sessionContentProjects)
         .where(eq(sessionContentProjects.projectId, reservation.grant.projectId)).for('update').limit(1);
       const [grant] = await tx.select().from(sessionContentGrants)
@@ -1790,8 +1800,8 @@ export class SessionContentService {
       await db.transaction(async (tx) => {
         // Membership withdrawal serializes with this final commit. No row
         // lock is held over the network PUT; withdrawal during it wins.
-        await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
-        await this.checkWorkspaceMembership(tx, reservation.grant.workspaceId, ctx.principalId);
+        await this.checkMembership(tx, ctx.tenantId, ctx.principalId, true);
+        await this.checkWorkspaceMembership(tx, reservation.grant.workspaceId, ctx.principalId, true);
         const [project] = await tx.select().from(sessionContentProjects)
           .where(eq(sessionContentProjects.projectId, reservation.grant.projectId)).for('update').limit(1);
         const [freshGrant] = await tx

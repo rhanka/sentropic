@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 compatibility gate: scope membership locks to reserve/admission/publication, preserving refresh/offboard interleavings and concurrent accept CAS. Pre-grant exclusion validates any D1 scope and updates only matching grants. Authenticated-owner refusal precedes the old ghost-principal membership error. Combined consent/adoption/auth-roots/namespace gate passes 143/143 (n5_api_full_scoped_green.log).
+
 - [x] N5 R3/R5 domain follow-through: three additional red cases reproduce read restoration after replacement binding and owner/tenant transfer by amendment. Preserve the denial floor, bind history to its original binding, and enforce immutable amendment scope; 58/58 domain tests pass (n5_domain_scope_{red,green}.log).
 
 - [x] N5 R1/R2 supplementary coverage: lost real PUT acknowledgement remains unknown/charged/pending across restart; purge after known settlement releases quota. Five automatic offboarding/upload cases include valid tenant DELETE prerequisites and tenant offboard; disabled-consumer baseline reproduces five physical-cleanup failures (n5_r2_api_red_final.log). Storage-failure retry never reports false completion; final six-case consumer green is n5_r2_api_green_final.log.
