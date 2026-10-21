@@ -57,7 +57,7 @@
     "manifestSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["specSha256", "l0Commit", "br3Commit", "l5Head", "sdkRange", "declaredLockSha256", "lockFingerprintVersion", "lockFingerprint", "declaredLockSnapshot"],
+      "required": ["specSha256", "l0Commit", "br3Commit", "l5Head", "sdkRange", "declaredLockSha256", "lockFingerprintVersion", "lockFingerprint", "declaredLockSnapshot", "toolchainSnapshots"],
       "properties": {
         "specSha256": { "$ref": "#/$defs/sha256" },
         "l0Commit": { "$ref": "#/$defs/commit" },
@@ -65,9 +65,10 @@
         "l5Head": { "$ref": "#/$defs/commit" },
         "sdkRange": { "const": "^1.31.0" },
         "declaredLockSha256": { "$ref": "#/$defs/sha256" },
-        "lockFingerprintVersion": { "const": 2 },
+        "lockFingerprintVersion": { "const": 3 },
         "lockFingerprint": { "$ref": "#/$defs/sha256" },
-        "declaredLockSnapshot": { "$ref": "#/$defs/evidence" }
+        "declaredLockSnapshot": { "$ref": "#/$defs/evidence" },
+        "toolchainSnapshots": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/evidence" } }
       }
     },
     "artifactItem": {
