@@ -74,7 +74,7 @@ Actions with the following status should be included around tasks only if really
   - [x] Record traceability, kit acceptance, sequencing and the five P3 advisories.
   - [ ] Lot gate: `make scope-check` before every commit; each commit under 150 lines.
 - [ ] **Lot L01a — Data contract and fixed vectors (2–3 atomic commits, no backend change)**
-  - [ ] Add `packages/cluster-mesh/src/storage/common-contract.ts` data-only types/validators.
+  - [x] Add `packages/cluster-mesh/src/storage/common-contract.ts` data-only types/validators.
   - [ ] Add `packages/cluster-mesh/tests/storage/common-rule/vectors.ts` fixed expected vectors.
   - [ ] Add `packages/cluster-mesh/tests/storage/common-rule/contract.spec.ts` structural tests.
   - [ ] No encoder, adapter, SQL asset, publication path, claim, connection or credential change.
