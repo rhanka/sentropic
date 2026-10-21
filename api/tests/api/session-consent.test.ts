@@ -160,6 +160,32 @@ describe('session consent durable lifecycle', () => {
     nowMs: () => now, storage: fixture.config, storageClient: fixture.client,
     readStorageAuthorization: fixture.readStorageAuthorization });
 
+  it.each(['revoke', 'exclude', 'suppress'] as const)('should fence N5 R8 stale child INSERT after project %s', async (denial) => {
+    await acceptProject();
+    await deriveSession('n5-insert-template');
+    let entered!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => { entered = resolve; });
+    const resume = new Promise<void>((resolve) => { release = resolve; });
+    const stale = db.transaction(async (tx) => {
+      const snapshot = await tx.execute(sql`SELECT * FROM control.session_content_grants`);
+      const row = { ...snapshot.rows[0], grant_id: 'n5-stale-child', session_id: 'n5-stale-child' };
+      entered(); await resume;
+      await tx.execute(sql`INSERT INTO control.session_content_grants SELECT
+        (jsonb_populate_record(NULL::control.session_content_grants, ${JSON.stringify(row)}::jsonb)).*`);
+    });
+    // Attach rejection handling before releasing the blocked insert.
+    const outcome = stale.then(() => null, (error: unknown) => error);
+    await paused;
+    try {
+      if (denial === 'revoke') await service.revokeProject('sess-content-project-1', ctx);
+      else if (denial === 'exclude') await service.excludeSession('sess-content-project-1', 'n5-stale-child', ctx);
+      else await service.clearExclusion('sess-content-project-1', 'unrelated', ctx);
+    } finally { release(); }
+    expect(await outcome).toMatchObject({ cause: { code: '23514' } });
+    expect(await db.select().from(sessionContentGrants).where(eq(sessionContentGrants.sessionId, 'n5-stale-child'))).toEqual([]);
+  });
+
   it.each(['project', 'grant-revoke', 'grant-exclude', 'grant-close', 'grant-local', 'history'] as const)(
     'should enforce N5 R8 database denial against stale concurrent %s writes', async (scope) => {
       await acceptProject();
@@ -233,7 +259,7 @@ describe('session consent durable lifecycle', () => {
         history.authorizationId), 'grant_revoked');
     });
 
-  it.each(['exclusions', 'suppression'] as const)('should preserve N5 R8 project %s under stale SQL', async (scope) => {
+  it.each(['exclusions', 'suppression', 'amend-after-clear'] as const)('should preserve N5 R8 project %s under stale SQL', async (scope) => {
     await acceptProject();
     let entered!: () => void;
     let release!: () => void;
@@ -243,12 +269,13 @@ describe('session consent durable lifecycle', () => {
       const [snapshot] = await tx.select().from(sessionContentProjects);
       entered(); await resume;
       await tx.update(sessionContentProjects).set({ excludedSessionIds: snapshot!.excludedSessionIds,
-        exclusionRevision: snapshot!.exclusionRevision, requiresFreshAmendment: false });
+        exclusionRevision: snapshot!.exclusionRevision, requiresFreshAmendment: false,
+        ...(scope === 'amend-after-clear' ? { projectRevision: snapshot!.projectRevision + 1 } : {}) });
     });
     await paused;
     try {
       await service.excludeSession('sess-content-project-1', 'future-denied', ctx);
-      if (scope === 'suppression') await service.clearExclusion('sess-content-project-1', 'future-denied', ctx);
+      if (scope !== 'exclusions') await service.clearExclusion('sess-content-project-1', 'future-denied', ctx);
     } finally { release(); }
     await stale;
     const [project] = await db.select().from(sessionContentProjects);

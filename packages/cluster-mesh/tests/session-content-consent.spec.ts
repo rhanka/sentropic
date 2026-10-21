@@ -89,6 +89,26 @@ const sharedChildInput = (overrides: Partial<DeriveChildInput> = {}): DeriveChil
 });
 
 describe('content consent retention validation', () => {
+  it.each(['revoke', 'exclude', 'suppress'] as const)('should refuse N5 R8 in-flight derivation after project %s', async (denial) => {
+    const { service, store } = await readyConsent();
+    let entered!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => { entered = resolve; });
+    const resume = new Promise<void>((resolve) => { release = resolve; });
+    const concurrent = createContentConsentService({ ...store, async writeGrant(version, next) {
+      entered(); await resume; return store.writeGrant(version, next);
+    } });
+    const stale = concurrent.deriveChild(sharedChildInput());
+    await paused;
+    try {
+      if (denial === 'revoke') await service.revokeProject('project-1');
+      else if (denial === 'exclude') await service.excludeSession('project-1', 'session-1');
+      else await service.clearExclusion('project-1', 'unrelated');
+    } finally { release(); }
+    await expect(stale).rejects.toBeInstanceOf(ContentConsentError);
+    expect(await service.readGrant('session-1')).toBeNull();
+  });
+
   it.each(['project', 'grant'] as const)('should preserve N5 R8 capture denial in the concurrent %s repro', async (scope) => {
     const { service } = setupConsent();
     const prepared = service.prepareProject(sharedBaseInput({ channels: {
@@ -171,7 +191,7 @@ describe('content consent retention validation', () => {
         ]).exportable, `${operation}/${denial}`).toEqual([]);
     });
 
-  it.each(['exclude', 'amend', 'clear'] as const)('should preserve N5 R8 project suppression against stale %s', async (operation) => {
+  it.each(['exclude', 'amend', 'clear', 'amend-after-clear'] as const)('should preserve N5 R8 project suppression against stale %s', async (operation) => {
     const { service, store } = await readyConsent();
     let entered!: () => void;
     let release!: () => void;
@@ -182,13 +202,18 @@ describe('content consent retention validation', () => {
       return store.writeProject(revision, next);
     } });
     const amendment = concurrent.prepareProject(sharedBaseInput({ expectedProjectRevision: 1 }));
-    const stale = operation === 'amend' ? concurrent.acceptProject(amendment, { challengeId: amendment.challengeId })
+    const stale = operation.startsWith('amend') ? concurrent.acceptProject(amendment, { challengeId: amendment.challengeId })
       : operation === 'clear' ? concurrent.clearExclusion('project-1', 'unrelated')
         : concurrent.excludeSession('project-1', 'unrelated');
     await paused;
-    try { await service.excludeSession('project-1', 'session-1'); } finally { release(); }
+    try {
+      await service.excludeSession('project-1', 'session-1');
+      if (operation === 'amend-after-clear') await service.clearExclusion('project-1', 'session-1');
+    } finally { release(); }
     await stale;
-    expect((await service.readProject('project-1'))?.excludedSessionIds).toContain('session-1');
+    const project = (await service.readProject('project-1'))!;
+    if (operation === 'amend-after-clear') expect(project.requiresFreshAmendment).toBe(true);
+    else expect(project.excludedSessionIds).toContain('session-1');
     await expect(service.deriveChild(sharedChildInput())).rejects.toBeInstanceOf(ContentConsentError);
   });
 
