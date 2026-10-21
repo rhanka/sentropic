@@ -41,10 +41,10 @@ RUN mkdir -p /tmp/glob-update && \
       mv package glob; \
     fi && \
     rm -rf /tmp/glob-update
-# Security: Force update tar in npm itself to fix CVE-2026-24842
+# Security: Force update tar in npm itself to fix CVE-2026-24842 (pinned for reproducible builds)
 RUN mkdir -p /tmp/tar-update && \
     cd /tmp/tar-update && \
-    npm pack tar@latest && \
+    npm pack tar@7.5.22 && \
     cd /usr/local/lib/node_modules/npm/node_modules && \
     if [ -d tar ]; then \
       rm -rf tar && \
@@ -103,7 +103,34 @@ RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-ro
 # (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
-COPY . .
+# Explicit production inputs only (fix/api-image-canonical-artifact): no blind
+# `COPY . .`, so unhashed sources (ui/**, e2e suites, non-consumed packages)
+# can never perturb the canonical tag. Every source below is hashed into
+# API_VERSION; the regression suite fails on any COPY/hash divergence.
+COPY api ./api
+COPY packages/artifacts ./packages/artifacts
+COPY packages/auth-client ./packages/auth-client
+COPY packages/auth-hono ./packages/auth-hono
+COPY packages/chat-core ./packages/chat-core
+COPY packages/chat-server ./packages/chat-server
+COPY packages/cluster-mesh ./packages/cluster-mesh
+COPY packages/comments ./packages/comments
+COPY packages/connector-host ./packages/connector-host
+COPY packages/contracts ./packages/contracts
+COPY packages/events ./packages/events
+COPY packages/flow ./packages/flow
+COPY packages/llm-gateway ./packages/llm-gateway
+COPY packages/llm-mesh ./packages/llm-mesh
+COPY packages/mcp-auth ./packages/mcp-auth
+COPY packages/mcp-connector-google ./packages/mcp-connector-google
+COPY packages/mcp-platform ./packages/mcp-platform
+COPY packages/oauth-verify ./packages/oauth-verify
+COPY packages/skills ./packages/skills
+COPY packages/ubo-contracts ./packages/ubo-contracts
+COPY apps/auth-idp ./apps/auth-idp
+COPY apps/llm-gateway ./apps/llm-gateway
+COPY e2e/package.json e2e/package-lock.json ./e2e/
+COPY e2e/tests/fixtures ./e2e/tests/fixtures
 RUN npm --workspace @sentropic/llm-mesh run build
 RUN npm --workspace @sentropic/oauth-verify run build
 RUN npm --workspace @sentropic/mcp-auth run build
