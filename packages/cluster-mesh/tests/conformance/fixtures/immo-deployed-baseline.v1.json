@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "externalResource": "https://preprod.immo.sent-tech.ca/mcp",
+  "image": "ghcr.io/rhanka/radar-api@sha256:96a0f646b1316bce58231252cf45a766b31c46fdd7fb49ab359ada8834d3f221",
+  "imageTag": "ghcr.io/rhanka/radar-api:4dc37c8",
+  "buildCommit": "4dc37c8bc6d067af1c8c7a5a3643e113cf7e86e1",
+  "capturedAt": "2026-10-16T00:58:05.449Z",
+  "entrypoint": {
+    "path": "packages/immo-mcp/dist/server-http.js",
+    "format": "esbuild bundle",
+    "bytes": 1193389
+  },
+  "versions": {
+    "@radar/immo-mcp": "0.0.1",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@sentropic/mcp-auth": "0.1.0",
+    "@sentropic/oauth-verify": "0.1.0",
+    "jose (immo-mcp)": "5.10.0",
+    "jose (root)": "6.2.3",
+    "hono": "4.13.13",
+    "node": "v24.21.0"
+  },
+  "versionEvidence": "Lockfile at the build commit; SDK, Hono and jose confirmed in the image. mcp-auth and oauth-verify are bundled.",
+  "production": {
+    "externalResource": "https://immo.sent-tech.ca/mcp",
+    "image": "ghcr.io/rhanka/radar-api@sha256:73dc465bbe579932fcb644ee9e2538d6bb716542776d912dc7cbc19c25792f10",
+    "imageTag": "ghcr.io/rhanka/radar-api:ea90951",
+    "buildCommit": "ea90951ca253bd300c26daa44ce0ce416602a271",
+    "comparison": "The supplied receipt reports no packages/immo-mcp diff between the production and preproduction source commits."
+  },
+  "captureMethod": {
+    "transport": "Streamable HTTP",
+    "client": "Official MCP SDK from the digest-pinned image",
+    "resource": "http://mcp:8848/mcp",
+    "issuer": "Ephemeral local test issuer with generated RS256 keys",
+    "data": "Synthetic only: local fake Radar API returns one signal for /api/graph-signals/longueuil and 404 elsewhere; separate simulation run without RADAR_API_BASE_URL."
+  },
+  "sourceCaptures": [
+    {
+      "file": "capture-http.json",
+      "sha256": "f3757d683ae1331e91df2e57c553b1322b2cab8ed913490690708bf3a9f00ab6",
+      "capturedAt": "2026-10-16T00:58:05.449Z",
+      "mode": "http"
+    },
+    {
+      "file": "capture-simulation.json",
+      "sha256": "e0549252d34df963d74d55e4df8c3a7838dd8c5ae6b467a15c15be6187d33f7c",
+      "capturedAt": "2026-10-16T00:58:00.534Z",
+      "mode": "simulation"
+    }
+  ],
+  "receiptSource": "RECU-IMAGE-DEPLOYEE.md supplied by i-cond on 2026-10-16 UTC",
+  "toolFixture": "immo-tools.v1.json",
+  "toolFixtureSha256": "31487e8fb9b85019fc707ed3a7296e33156c46fb5fd3071d456d6dae1b44d998",
+  "toolCount": 12,
+  "normalization": [
+    {
+      "field": "captures.http.calls.*.result.content[].text (not_wired_yet errors only)",
+      "from": "base=http://issuer:9100",
+      "to": "base=https://radar-api.example.test"
+    },
+    {
+      "field": "correlationId in error JSON text",
+      "rule": "Captured UUIDs are retained. Comparisons validate UUID v4 format and replace only the UUID value with a fixed UUID; all other bytes remain unchanged."
+    }
+  ],
+  "gaps": [
+    "The deployed image contains only the HTTP entrypoint; no deployed stdio capture exists. In-memory source-server tests are not deployed stdio evidence.",
+    "The captures exercise the identified image locally with synthetic data and an ephemeral issuer, not the external production or preproduction ingress.",
+    "The HTTP capture preserves five not_wired_yet stubs and 404 raw-data responses. Simulation results are stored separately and are not evidence of wired production behavior.",
+    "mcp-auth 0.1.0 advertises /mcp/.well-known/oauth-protected-resource. Its root router alone does not expose /.well-known/oauth-protected-resource/mcp.",
+    "The captured server forwards the original bearer for search_signals. API receiver enforcement is implemented separately; MCP exchange/cache and secure live cutover remain pending.",
+    "Missing coarse scope immo:read returns HTTP 401 invalid_token with the deployed mcp-auth 0.1.0. With mcp-auth 0.2.x (0.2.2 fix, RFC 6750 section 3.1) the same case becomes HTTP 403 insufficient_scope; after that upgrade the hosted client must not be asked to reconnect (UAT criterion)."
+  ]
+}
+
