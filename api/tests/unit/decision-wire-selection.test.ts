@@ -17,14 +17,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   const original = mesh.getProviderProfile;
   vi.spyOn(mesh, 'getProviderProfile').mockImplementation((id) => (
-    id === 'muse' ? { ...original(id), judgeOnly: true } : original(id)
+    id === 'muse' ? { ...original(id), decisionOnly: true } : original(id)
   ));
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe('judge-only gateway wire selection', () => {
+describe('decision-only gateway wire selection', () => {
   it.each(['muse', 'typesafe', 'unknown-provider'])('refuses unsupported targets before either runtime call (%s)', async (providerId) => {
-    const error = providerId === 'unknown-provider' ? 'unsupported provider' : 'Judge-only providers';
+    const error = providerId === 'unknown-provider' ? 'unsupported provider' : 'Decision-only providers';
     await expect(applicationGatewayRuntime.generate(subject, undefined, target(providerId), request)).rejects.toThrow(error);
     await expect(applicationGatewayRuntime.stream(subject, undefined, target(providerId), request)).rejects.toThrow(error);
     expect(callLLM).not.toHaveBeenCalled();

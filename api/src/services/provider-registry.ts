@@ -45,7 +45,7 @@ class ProviderRegistry {
   }
 
   // Chat surface: eight runtimes for nine mesh catalog IDs. TypeSafe is
-  // judge-only; cloudcode-pa is transport-only. Neither is listed for chat.
+  // decision-only; cloudcode-pa is transport-only. Neither is listed for chat.
   listProviders(): ProviderDescriptor[] {
     return [...this.providers.values()].map((runtime) => runtime.provider);
   }

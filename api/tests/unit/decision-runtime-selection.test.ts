@@ -27,7 +27,7 @@ beforeEach(() => {
   vi.mocked(settingsService.getAISettings).mockResolvedValue(defaults);
   const original = mesh.getProviderProfile;
   vi.spyOn(mesh, 'getProviderProfile').mockImplementation((id) => (
-    id === 'muse' ? { ...original(id), judgeOnly: true } : original(id)
+    id === 'muse' ? { ...original(id), decisionOnly: true } : original(id)
   ));
 });
 afterEach(() => vi.restoreAllMocks());
@@ -40,22 +40,22 @@ const expectNoDispatch = () => {
   expect(createMistralVibeAccountAuthInput).not.toHaveBeenCalled();
 };
 
-describe('judge-only runtime selection', () => {
+describe('decision-only runtime selection', () => {
   it.each(['explicit', 'stored'])('refuses real TypeSafe without credentials or dispatch (%s)', async (selection) => {
     vi.mocked(settingsService.getAISettings).mockResolvedValue({ ...defaults, defaultProviderId: 'typesafe' });
     const options = { messages: [], model: 'gpt-4.1-nano',
       ...(selection === 'explicit' ? { providerId: 'typesafe' as const } : {}) };
-    await expect(resolveRuntimeSelection(options)).rejects.toThrow('Judge-only providers');
-    await expect(callLLM(options)).rejects.toThrow('Judge-only providers');
-    await expect(callLLMStream(options).next()).rejects.toThrow('Judge-only providers');
+    await expect(resolveRuntimeSelection(options)).rejects.toThrow('Decision-only providers');
+    await expect(callLLM(options)).rejects.toThrow('Decision-only providers');
+    await expect(callLLMStream(options).next()).rejects.toThrow('Decision-only providers');
     expectNoDispatch();
   });
   it.each(['', 'gpt-4.1-nano', 'gpt-5.2'])(
     'refuses an explicit marked provider before defaults or dispatch (%s)', async (model) => {
       const options = { providerId: 'muse' as const, model, messages: [], userId: 'synthetic-user' };
-      await expect(resolveRuntimeSelection(options)).rejects.toThrow('Judge-only providers');
-      await expect(callLLM(options)).rejects.toThrow('Judge-only providers');
-      await expect(callLLMStream(options).next()).rejects.toThrow('Judge-only providers');
+      await expect(resolveRuntimeSelection(options)).rejects.toThrow('Decision-only providers');
+      await expect(callLLM(options)).rejects.toThrow('Decision-only providers');
+      await expect(callLLMStream(options).next()).rejects.toThrow('Decision-only providers');
       expect(settingsService.getAISettings).not.toHaveBeenCalled();
       expectNoDispatch();
     });
@@ -64,10 +64,10 @@ describe('judge-only runtime selection', () => {
     'refuses a stored marked default before model inference (%s)', async (providerId) => {
       vi.mocked(settingsService.getAISettings).mockResolvedValue({ ...defaults, defaultProviderId: 'muse' });
       await expect(resolveRuntimeSelection({ providerId, model: 'gpt-4.1-nano' }))
-        .rejects.toThrow('Judge-only providers');
-      await expect(callLLM({ messages: [], userId: 'synthetic-user' })).rejects.toThrow('Judge-only providers');
+        .rejects.toThrow('Decision-only providers');
+      await expect(callLLM({ messages: [], userId: 'synthetic-user' })).rejects.toThrow('Decision-only providers');
       await expect(callLLMStream({ messages: [], userId: 'synthetic-user' }).next())
-        .rejects.toThrow('Judge-only providers');
+        .rejects.toThrow('Decision-only providers');
       expectNoDispatch();
     });
 
