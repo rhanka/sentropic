@@ -1388,7 +1388,7 @@ typecheck-mcp-platform: install-internal-packages ## Run @sentropic/mcp-platform
 
 .PHONY: build-mcp-platform
 build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform dist package
-	@test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE must equal the frozen MEMORY_L5_NODE_IMAGE (build via memory-l5-pack without image overrides)" >&2; exit 1; }
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line or environment must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
@@ -1490,7 +1490,7 @@ test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (buil
 
 .PHONY: api-extract-mcp-platform
 api-extract-mcp-platform: install-internal-packages ## Verify public API reports incl. ./memory; API_EXTRACT_LOCAL=1 regenerates reports explicitly (CI defaults to strict verification)
-	@test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE must equal the frozen MEMORY_L5_NODE_IMAGE (build via memory-l5-pack without image overrides)" >&2; exit 1; }
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line or environment must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules temp'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local); "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local) --config api-extractor.memory.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules temp'
@@ -3980,7 +3980,7 @@ test-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker tests (L5 Lot 1
 
 .PHONY: build-mcp-broker
 build-mcp-broker: build-mcp-platform ## Build @sentropic/mcp-broker dist package (L5 Lot 1: public platform contracts)
-	@test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE must equal the frozen MEMORY_L5_NODE_IMAGE (build via memory-l5-pack without image overrides)" >&2; exit 1; }
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line or environment must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
@@ -4035,7 +4035,7 @@ memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extrac
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-pack requires ENV=<env> last" >&2; exit 1; }
 	@test "$(STAGE)" = "pre-candidate" || { echo "ERROR: memory-l5-pack STAGE=$(STAGE) is owned by a later lot (only pre-candidate exists)" >&2; exit 1; }
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-pack requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
-	@test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE must equal the frozen MEMORY_L5_NODE_IMAGE (build via memory-l5-pack without image overrides)" >&2; exit 1; }
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line or environment must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --head-lock-sha "$$(git show HEAD:package-lock.json | sha256sum | cut -d' ' -f1)" --root /workspace
 
 .PHONY: memory-l5-receipt

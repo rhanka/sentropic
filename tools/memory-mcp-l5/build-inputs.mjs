@@ -34,10 +34,14 @@ const LLM_MESH_EXPORT_PATTERN = /^([A-Za-z0-9_.\-\s]+):\s*export\s+LLM_MESH_NODE
 const PACK_PREREQUISITES_PATTERN = /^memory-l5-pack\s*:(.*)$/m;
 const DOCKER_IMAGE_PATTERN = /docker run\b[\s\S]*?(\$\([A-Za-z_][A-Za-z0-9_]*\)|[^\s'"]+)\s+sh\s+-lc/;
 // The pack-time equality guard every P1-touching recipe carries; the parser requires its
-// presence (comparison plus refusal) and the fingerprint binds the recipe text. The guard
-// compares the make-expanded values, so an invocation-level `LLM_MESH_NODE_IMAGE=...`
-// override fails the recipe before anything is produced.
+// presence and the fingerprint binds the recipe text. The guard only constrains values
+// arriving from outside the makefile (command line or environment): those must equal the
+// frozen pin, so an invocation-level `LLM_MESH_NODE_IMAGE=...` override fails the recipe
+// before anything is produced. Makefile-internal values (the `?=` default, the
+// target-scoped export) keep their existing behavior — direct builds such as CI's
+// `make build-mcp-platform` are unaffected.
 export const IMAGE_GUARD_COMPARISON = 'test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)"';
+export const IMAGE_GUARD_ORIGIN = '$(origin LLM_MESH_NODE_IMAGE)';
 
 function singleMatch(text, pattern, what) {
   const matches = [...text.matchAll(new RegExp(pattern.source, 'gm'))];
@@ -84,7 +88,7 @@ function parseRecipeImages(recipeLines, target, image) {
 }
 
 function hasImageGuard(recipeLines) {
-  return recipeLines.some((line) => line.includes(IMAGE_GUARD_COMPARISON) && line.includes('exit 1'));
+  return recipeLines.some((line) => line.includes(IMAGE_GUARD_ORIGIN) && line.includes(IMAGE_GUARD_COMPARISON) && line.includes('exit 1'));
 }
 
 // Every LLM_MESH_NODE_IMAGE definition must be one of the two known lines (the `?=`

@@ -82,7 +82,7 @@ Actions with the following status should be included around tasks only if really
   - Rollback: revert the lock hunks and the target/vars.
 - `attention`: BR710-EX7 — add one effective-image equality guard line to each of the 3 P1-producing `Makefile` recipes plus the `memory-l5-pack` recipe (Astra R3 P1: execution-contract enforcement).
   - Reason: the finding's invocation-level repro (`make memory-l5-pack LLM_MESH_NODE_IMAGE=node:22 ...`) changes the effective image of every producing recipe without touching recipe text; the parser requires the guard and the fingerprint binds it, but only a recipe-executed equality test refuses the override before anything is produced.
-  - Impact: 4 additive recipe lines; default wiring expands to a passing `pin = pin` test; any `LLM_MESH_NODE_IMAGE`/`MEMORY_L5_NODE_IMAGE` invocation override fails the first P1-touching recipe; all other targets untouched.
+  - Impact: 4 additive recipe lines; the guard only constrains values arriving from outside the makefile (`$(origin ...)` is `command line`/`environment`/`environment override`) — those must equal the pin; makefile-internal values (`?=` default, target-scoped export) keep their behavior, so direct builds such as CI's `make build-mcp-platform` are unaffected. A first unconditional version refused those legitimate direct builds (CI `typecheck-lint-api`, `validate-artifacts`, `validate-mcp-platform` red via `prepare-node-workspace`/`build-mcp-platform`); the origin-gated version keeps the finding closed while restoring them. All other targets untouched.
   - Rollback: drop the 4 guard lines and revert the parser's guard requirement with them.
 - `attention`: BR710-EX8 — align the `ui/package-lock.json` markdown-it 14.3.3 record's dependency metadata to the published ranges (`entities ^4.5.0`, `linkify-it ^5.0.2`; Astra R3 non-blocking).
   - Reason: the 14.3.3 record still declares the 14.3.2 ranges (`^4.4.0`/`^5.0.0`) while the installed tree resolves entities 6.0.1 + linkify-it 5.0.2; metadata-only, resolved/integrity bytes untouched, satisfies both ranges.
@@ -208,8 +208,8 @@ Actions with the following status should be included around tasks only if really
   - [x] Lot gate: tooling suite + `memory-l5-verify` on the merged tree; scope-check; diff-check.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
 - [x] **Lot 18 — Astra R3 P1: bind the effective target wiring (BR710-EX7)**
-  - [x] Parser binds the export target membership (`llmMeshExport.targets`, `memory-l5-pack` required), the pack prerequisites (all producers + `memory-l5-runtime` required) and the per-recipe effective-image guard; any extra `LLM_MESH_NODE_IMAGE` binding fails closed.
-  - [x] One equality guard line in each producing recipe + the pack recipe; fingerprint v4 binds the new wiring; production-verifier regressions for both single-line mutations plus the execution-contract check (extracted guard passes on the pin, refuses the invocation override; runtime prerequisite closes the loop against the freeze file).
+  - [x] Parser binds the export target membership (`llmMeshExport.targets`, `memory-l5-pack` required), the pack prerequisites (all producers + `memory-l5-runtime` required) and the per-recipe effective-image guard (origin gate + comparison + refusal); any extra `LLM_MESH_NODE_IMAGE` binding fails closed.
+  - [x] One origin-gated equality guard line in each producing recipe + the pack recipe; fingerprint v4 binds the new wiring; production-verifier regressions for both single-line mutations plus the execution-contract check (extracted guard passes on makefile-internal values and on an explicit pin, refuses command-line/environment overrides; runtime prerequisite closes the loop against the freeze file).
   - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-astra-r3`.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
 - [x] **Lot 19 — Astra R3 non-blocking (BR710-EX8) + P1 regen v4**
