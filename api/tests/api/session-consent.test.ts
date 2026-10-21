@@ -233,6 +233,44 @@ describe('session consent durable lifecycle', () => {
         history.authorizationId), 'grant_revoked');
     });
 
+  it.each(['exclusions', 'suppression'] as const)('should preserve N5 R8 project %s under stale SQL', async (scope) => {
+    await acceptProject();
+    let entered!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => { entered = resolve; });
+    const resume = new Promise<void>((resolve) => { release = resolve; });
+    const stale = db.transaction(async (tx) => {
+      const [snapshot] = await tx.select().from(sessionContentProjects);
+      entered(); await resume;
+      await tx.update(sessionContentProjects).set({ excludedSessionIds: snapshot!.excludedSessionIds,
+        exclusionRevision: snapshot!.exclusionRevision, requiresFreshAmendment: false });
+    });
+    await paused;
+    try {
+      await service.excludeSession('sess-content-project-1', 'future-denied', ctx);
+      if (scope === 'suppression') await service.clearExclusion('sess-content-project-1', 'future-denied', ctx);
+    } finally { release(); }
+    await stale;
+    const [project] = await db.select().from(sessionContentProjects);
+    if (scope === 'exclusions') expect(project!.excludedSessionIds).toContain('future-denied');
+    else expect(project!.requiresFreshAmendment).toBe(true);
+  });
+
+  it.each(['before-admission', 'during-upload'] as const)('should refuse N5 R8 publication when local denial lands %s', async (phase) => {
+    await acceptProject();
+    await deriveSession('n5-local-writer');
+    const hold = await service.reserveBeforeUpload('n5-local-writer', 'native.mirror',
+      { raw: 1, encoded: 1 }, 'local-writer', ctx);
+    const writer = phase === 'during-upload' ? makeService({ publishHooks: {
+      afterUpload: async () => { await service.recordLocalDeny('n5-local-writer', ctx); },
+    } }) : storageService();
+    if (phase === 'before-admission') await service.recordLocalDeny('n5-local-writer', ctx);
+    const sent = vi.spyOn(fixture.client, 'send');
+    await expect(writer.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx)).rejects.toBeInstanceOf(SessionContentError);
+    expect((await db.select().from(sessionContentObjects)).filter((row) => row.state === 'committed')).toEqual([]);
+    if (phase === 'before-admission') expect(sent.mock.calls.filter(([command]) => command instanceof PutObjectCommand)).toEqual([]);
+  });
+
   it.each(['unapproved', 'review-forbidden-compliance-p10y'])(
     'should issue zero commands for N5 R7 %s content storage', async (destination) => {
       await acceptProject();
