@@ -235,7 +235,7 @@
 - [x] Generated routes JSON, portable HTML, static images and validation evidence stay in their own logical commits and may exceed 150 lines. Record this exception in commit message bodies, without trailers.
 - [x] Restore this plan to the owner's validated bytes in the final delivery commit.
 - [x] Release squash lot 1.
-- [ ] Release squash lot 2.
+- [x] Release squash lot 2.
 - [ ] Release squash lot 3.
 - [ ] Release squash lot 4.
 - [ ] Release squash lot 5.
