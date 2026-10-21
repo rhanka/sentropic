@@ -9,6 +9,10 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R8 returned-authority regressions require stale mutations to return the persisted denial or refuse, rather than hand callers an active pre-write snapshot. Added current-project export fence vectors and project-suppression publication interleavings.
+
+- [x] N5 R8 audit correction: storage preserves project exclusions/suppression; API clear/exclude serialize their read-modify-write. Native export checks current project/grant capture eligibility, channel and pending denial. Upload admission and final publication reject pending local denial; capture-only transitions do not imply read denial.
+
 - [x] N5 R8 extended domain audit reproduces lost concurrent project exclusions and pending-local-denial export/derivation. Native-boundary fixtures now explicitly enable mirroring and acknowledge amendments before positive export, preserving discriminating positive controls.
 
 - [x] N5 R8 root correction: atomic memory writes and additive database migration 0019 preserve capture lifecycle denial and pending local denial independently of the existing read floor; revoked history authority also stays revoked.

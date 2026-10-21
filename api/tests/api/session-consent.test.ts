@@ -256,15 +256,19 @@ describe('session consent durable lifecycle', () => {
     else expect(project!.requiresFreshAmendment).toBe(true);
   });
 
-  it.each(['before-admission', 'during-upload'] as const)('should refuse N5 R8 publication when local denial lands %s', async (phase) => {
+  it.each((['before-admission', 'during-upload'] as const).flatMap((phase) =>
+    (['local', 'suppression'] as const).map((denial) => [phase, denial] as const)))(
+    'should refuse N5 R8 publication when %s sees %s denial', async (phase, denial) => {
     await acceptProject();
     await deriveSession('n5-local-writer');
     const hold = await service.reserveBeforeUpload('n5-local-writer', 'native.mirror',
       { raw: 1, encoded: 1 }, 'local-writer', ctx);
-    const writer = phase === 'during-upload' ? makeService({ publishHooks: {
-      afterUpload: async () => { await service.recordLocalDeny('n5-local-writer', ctx); },
-    } }) : storageService();
-    if (phase === 'before-admission') await service.recordLocalDeny('n5-local-writer', ctx);
+    const deny = async () => {
+      if (denial === 'local') await service.recordLocalDeny('n5-local-writer', ctx);
+      else await service.clearExclusion('sess-content-project-1', 'unrelated', ctx);
+    };
+    const writer = phase === 'during-upload' ? makeService({ publishHooks: { afterUpload: deny } }) : storageService();
+    if (phase === 'before-admission') await deny();
     const sent = vi.spyOn(fixture.client, 'send');
     await expect(writer.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx)).rejects.toBeInstanceOf(SessionContentError);
     expect((await db.select().from(sessionContentObjects)).filter((row) => row.state === 'committed')).toEqual([]);
