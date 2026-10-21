@@ -11,7 +11,12 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+
+const coreOnly = process.argv.includes("--core-only");
 
 let fetchCalls = 0;
 globalThis.fetch = async () => {
@@ -19,7 +24,7 @@ globalThis.fetch = async () => {
   throw new Error("network must not be used");
 };
 
-await import("@sentropic/artifacts");
+await import(coreOnly ? "@sentropic/artifacts/mcp-core" : "@sentropic/artifacts");
 const packageRoot = new URL("../", import.meta.resolve("@sentropic/artifacts"));
 const manifest = JSON.parse(readFileSync(new URL("package.json", packageRoot), "utf8"));
 for (const adapter of ["s3", "postgres"]) {
@@ -42,7 +47,25 @@ for (const driver of ["@aws-sdk/client-s3", "pg"]) {
   assert.equal(manifest.peerDependenciesMeta[driver]?.optional, true);
 }
 
-const mcp = await import("@sentropic/artifacts/mcp");
+if (!coreOnly) {
+  const consumer = mkdtempSync(join(tmpdir(), "artifacts-core-"));
+  try {
+    execFileSync("npm", ["install", `/pack/sentropic-artifacts-${manifest.version}.tgz`,
+      "--omit=optional", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: consumer, stdio: "pipe" });
+    writeFileSync(join(consumer, "probe.mjs"), readFileSync(new URL(import.meta.url)));
+    execFileSync(process.execPath, ["probe.mjs", "--core-only"], { cwd: consumer, stdio: "inherit" });
+  } finally {
+    rmSync(consumer, { recursive: true, force: true });
+  }
+} else {
+  for (const entry of ["@sentropic/mcp-platform", "@sentropic/mcp-platform/tool-configuration",
+    "@sentropic/artifacts/mcp"]) {
+    await assert.rejects(import(entry), { code: "ERR_MODULE_NOT_FOUND" });
+  }
+  assert.equal(manifest.peerDependenciesMeta["@sentropic/mcp-platform"]?.optional, true);
+}
+const mcp = await import(coreOnly ? "@sentropic/artifacts/mcp-core" : "@sentropic/artifacts/mcp");
+assert.equal(mcp.ARTIFACTS_PROVIDER_VERSION, manifest.version);
 assert.equal(Object.keys(mcp).some((name) => /WEB_PAGES|WebPages/u.test(name)), false);
 const http = await import("@sentropic/artifacts/http");
 const service = await import("@sentropic/artifacts/server/service");
@@ -55,8 +78,8 @@ const access = await import("@sentropic/artifacts/server/access");
 const sources = await import("@sentropic/artifacts/server/sources");
 const ports = await import("@sentropic/artifacts/server/ports");
 const params = await import("@sentropic/artifacts/parameters");
-const kernel = await import("@sentropic/mcp-platform/registry");
-const toolConfig = await import("@sentropic/mcp-platform/tool-configuration");
+const kernel = coreOnly ? undefined : await import("@sentropic/mcp-platform/registry");
+const toolConfig = coreOnly ? undefined : await import("@sentropic/mcp-platform/tool-configuration");
 
 if (mcp.ARTIFACTS_PROVIDER_ID !== "sentropic.artifacts") throw new Error("provider id mismatch");
 const EXPECTED_TOOLS = [
@@ -93,23 +116,26 @@ const app = http.createHttpArtifactApp({
   blobs,
 });
 
-const definition = mcp.createArtifactsRegistryDefinition({ app, defaultStorageScopeId: "scope-1" });
-const registry = kernel.createProviderRegistry();
-registry.register(definition);
-assert.throws(() => registry.select(["sentropic.web-pages"]), /unknown provider/u);
-assert.throws(() => registry.configure("sentropic.web-pages", {}), /unknown provider/u);
-registry.select(["sentropic.artifacts"]);
-registry.configure("sentropic.artifacts", { defaultStorageScopeId: "scope-1" });
-const compiled = registry.compile({
-  bindings: {},
-  compatibility: {
-    "sentropic.artifacts": { manifestDigest: toolConfig.computeManifestDigest(definition.manifest) },
-  },
-});
-if (!compiled.ok) throw new Error("kernel compile refused: " + JSON.stringify(compiled.diagnostics));
-for (const name of EXPECTED_TOOLS) {
-  if (compiled.registry.resolveTool(name)?.providerId !== "sentropic.artifacts") {
-    throw new Error("unresolved tool " + name);
+const options = { app, defaultStorageScopeId: "scope-1" };
+const definition = coreOnly ? mcp.createArtifactsAdapter(options) : mcp.createArtifactsRegistryDefinition(options);
+if (!coreOnly) {
+  const registry = kernel.createProviderRegistry();
+  registry.register(definition);
+  assert.throws(() => registry.select(["sentropic.web-pages"]), /unknown provider/u);
+  assert.throws(() => registry.configure("sentropic.web-pages", {}), /unknown provider/u);
+  registry.select(["sentropic.artifacts"]);
+  registry.configure("sentropic.artifacts", { defaultStorageScopeId: "scope-1" });
+  const compiled = registry.compile({
+    bindings: {},
+    compatibility: {
+      "sentropic.artifacts": { manifestDigest: toolConfig.computeManifestDigest(definition.manifest) },
+    },
+  });
+  if (!compiled.ok) throw new Error("kernel compile refused: " + JSON.stringify(compiled.diagnostics));
+  for (const name of EXPECTED_TOOLS) {
+    if (compiled.registry.resolveTool(name)?.providerId !== "sentropic.artifacts") {
+      throw new Error("unresolved tool " + name);
+    }
   }
 }
 
@@ -117,7 +143,7 @@ const executor = mcp.createArtifactsToolExecutor({ app, defaultStorageScopeId: "
 const ensured = await executor.invoke({
   tool: "artifacts_ensure",
   actorId: "owner-1",
-  args: { bindingName: "site", idempotencyKey: "k-1", paramsHash: "h-1", parameters: { title: "Hi" } },
+  args: { bindingName: "site", storageScopeId: "forged", idempotencyKey: "k-1", paramsHash: "h-1", parameters: { title: "Hi" } },
 });
 if (ensured.status !== 201) throw new Error("ensure status " + ensured.status);
 const artifactId = ensured.body.artifactId;
@@ -143,6 +169,7 @@ const request = (method, path, body) => app.handle({ method, path, body, actorId
 const current = await request("GET", `/current/${artifactId}`);
 assert.equal(current.status, 200);
 const files = JSON.parse(current.body.manifest).files;
+assert.equal(JSON.parse(current.body.manifest).storageScopeId, "scope-1");
 const html = files.find((entry) => entry.path === "index.html");
 assert.equal(html.digest, "sha256:" + createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex"));
 assert.equal(html.size, expectedBytes.length);
@@ -170,8 +197,8 @@ const listed = await executor.invoke({ tool: "artifacts_list", actorId: "owner-1
 if (listed.body.total !== 1) throw new Error("list total mismatch");
 if (fetchCalls !== 0) throw new Error("network was used");
 console.log(
-  "PACKED_CONSUMER_OK tools=15 manifestDigest=" +
-    toolConfig.computeManifestDigest(definition.manifest) +
+  (coreOnly ? "PACKED_MCP_CORE_OK platform=absent" : "PACKED_CONSUMER_OK") +
+    " tools=15 manifestDigest=" + (coreOnly ? "platform-free" : toolConfig.computeManifestDigest(definition.manifest)) +
     " version=" + manifest.version + " utf8Bytes=" + expectedBytes.length +
     " textValidation=ok corp=same-origin fetchCalls=" + fetchCalls,
 );

@@ -54,14 +54,18 @@ export interface UploadServiceOptions {
 
 interface Session {
   committed: boolean;
+  busy: boolean;
   maxSize: number;
   size: number;
 }
 
 export interface UploadService {
   begin(input: BeginUploadInput): Promise<{ uploadId: string }>;
+  /** Check that the session is open and optionally validate its sequential offset before decoding. */
+  remainingBytes(uploadId: string, offset?: number): number;
   append(uploadId: string, offset: number, chunk: Uint8Array): Promise<{ size: number }>;
-  commit(uploadId: string, expected: BlobRef): Promise<BlobRef>;
+  /** Validate the commit snapshot before consuming the session; rejected validation remains retryable. */
+  commit(uploadId: string, expected: BlobRef, validate?: (bytes: Uint8Array) => void): Promise<BlobRef>;
 }
 
 /** Create an upload service over an injected staging store (no S3 imports). */
@@ -70,50 +74,78 @@ export function createUploadService(
   options: UploadServiceOptions,
   ids: () => string = () => crypto.randomUUID(),
 ): UploadService {
+  if (!Number.isSafeInteger(options.maxUploadBytes) || options.maxUploadBytes < 1) {
+    throw new Error('invalid upload byte budget');
+  }
   const sessions = new Map<string, Session>();
+  function openSession(uploadId: string): Session {
+    const session = sessions.get(uploadId);
+    if (session === undefined) throw new Error(`unknown upload: ${uploadId}`);
+    if (session.committed) throw new Error(`upload already committed: ${uploadId}`);
+    if (session.busy) throw new Error(`upload conflict: operation in progress for ${uploadId}`);
+    return session;
+  }
+  async function exclusive<T>(uploadId: string, run: (session: Session) => Promise<T>): Promise<T> {
+    const session = openSession(uploadId);
+    session.busy = true;
+    try {
+      return await run(session);
+    } finally {
+      session.busy = false;
+    }
+  }
+  function remainingBytes(uploadId: string, offset?: number): number {
+    const session = openSession(uploadId);
+    if (offset !== undefined && (!Number.isSafeInteger(offset) || offset !== session.size)) {
+      throw new Error(`upload offset mismatch for ${uploadId}: expected ${session.size}, got ${offset}`);
+    }
+    return session.maxSize - session.size;
+  }
   return {
+    remainingBytes,
     async begin(input: BeginUploadInput): Promise<{ uploadId: string }> {
+      if (input.maxSize !== undefined && (!Number.isSafeInteger(input.maxSize) || input.maxSize < 1)) {
+        throw new Error('invalid upload byte budget');
+      }
       const uploadId = ids();
       sessions.set(uploadId, {
         committed: false,
-        maxSize: input.maxSize ?? options.maxUploadBytes,
+        busy: false,
+        maxSize: Math.min(input.maxSize ?? options.maxUploadBytes, options.maxUploadBytes),
         size: 0,
       });
       await staging.write(uploadId, new Uint8Array(0));
       return { uploadId };
     },
     async append(uploadId: string, offset: number, chunk: Uint8Array): Promise<{ size: number }> {
-      const session = sessions.get(uploadId);
-      if (session === undefined) throw new Error(`unknown upload: ${uploadId}`);
-      if (session.committed) throw new Error(`upload already committed: ${uploadId}`);
-      if (offset !== session.size) {
-        throw new Error(`upload offset mismatch for ${uploadId}: expected ${session.size}, got ${offset}`);
-      }
-      if (session.size + chunk.length > session.maxSize) {
-        throw new Error(`upload budget exceeded for ${uploadId}: max ${session.maxSize} bytes`);
-      }
-      const current = await staging.read(uploadId);
-      const next = new Uint8Array(current.length + chunk.length);
-      next.set(current, 0);
-      next.set(chunk, current.length);
-      await staging.write(uploadId, next);
-      session.size = next.length;
-      return { size: session.size };
+      const remaining = remainingBytes(uploadId, offset);
+      return exclusive(uploadId, async (session) => {
+        if (chunk.length > remaining) {
+          throw new Error(`upload budget exceeded for ${uploadId}: max ${session.maxSize} bytes`);
+        }
+        const current = await staging.read(uploadId);
+        const next = new Uint8Array(current.length + chunk.length);
+        next.set(current, 0);
+        next.set(chunk, current.length);
+        await staging.write(uploadId, next);
+        session.size = next.length;
+        return { size: session.size };
+      });
     },
-    async commit(uploadId: string, expected: BlobRef): Promise<BlobRef> {
-      const session = sessions.get(uploadId);
-      if (session === undefined) throw new Error(`unknown upload: ${uploadId}`);
-      if (session.committed) throw new Error(`upload already committed: ${uploadId}`);
-      const bytes = await staging.read(uploadId);
-      if (bytes.length !== expected.size) {
-        throw new Error(`upload size mismatch for ${uploadId}: staged ${bytes.length}, declared ${expected.size}`);
-      }
-      const actual = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-      if (actual !== expected.digest) {
-        throw new Error(`upload digest mismatch for ${uploadId}: staged ${actual}`);
-      }
-      session.committed = true;
-      return { digest: actual, size: bytes.length };
+    async commit(uploadId: string, expected: BlobRef, validate?: (bytes: Uint8Array) => void): Promise<BlobRef> {
+      return exclusive(uploadId, async (session) => {
+        const bytes = new Uint8Array(await staging.read(uploadId));
+        validate?.(bytes);
+        if (bytes.length !== expected.size) {
+          throw new Error(`upload size mismatch for ${uploadId}: staged ${bytes.length}, declared ${expected.size}`);
+        }
+        const actual = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+        if (actual !== expected.digest) {
+          throw new Error(`upload digest mismatch for ${uploadId}: staged ${actual}`);
+        }
+        session.committed = true;
+        return { digest: actual, size: bytes.length };
+      });
     },
   };
 }
