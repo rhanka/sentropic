@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 author verification: 27 added durable cases pass within 143/143 API consent/adoption/auth-roots/namespace tests; domain 58/58 and full package 1046 passed/129 opt-in skips. Package/API typechecks pass; API lint has 0 errors/220 warnings. The initial SQLite timeout passes scoped 8/8 and in the complete rerun without timeout changes. All 14 implementation/test commits are under 150 changed lines. Updated lot2_n5_report.md records R1–R6, additive control 0017, exact commands, isolated tmpfs MinIO and CI handoff; preserved 0012–0016 and no COMPLIANCE write.
+
 - [x] N5 R1 SDK retry fence: a retryable lost acknowledgement reproduced three physical PUT attempts for one admitted writer (n5_r1_sdk_retries_red.log). The production S3 client permits one attempt; unknown outcomes remain pending. The same real-MinIO lost-ack regression now requires exactly one PUT (n5_r1_sdk_retries_green.log).
 
 - [x] N5 compatibility gate: scope membership locks to reserve/admission/publication, preserving refresh/offboard interleavings and concurrent accept CAS. Pre-grant exclusion validates any D1 scope and updates only matching grants. Authenticated-owner refusal precedes the old ghost-principal membership error. Combined consent/adoption/auth-roots/namespace gate passes 143/143 (n5_api_full_scoped_green.log).
