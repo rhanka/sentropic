@@ -7,10 +7,10 @@ import { sanitizeJevId } from './jev-response.js';
 import type { DecisionCost } from './receipt.js';
 import { parseDecisionConfidence, parseDecisionScore } from './verdict.js';
 import type { DecisionVerdict } from './verdict.js';
-import { DECISION_MAX_JSON_BYTES, has, hasOnlyKeys, isMicroUsd, isRecord, snapshotBoundedJson } from './validation.js';
+import { DECISION_MAX_JSON_BYTES, has, hasOnlyKeys, isMicroUsd, isRecord, isText, snapshotBoundedJson } from './validation.js';
 import { freezeDecisionData } from './descriptor-validation.js';
 import { parseDecisionValidationContext, type DecisionValidationContext,
-  type DecisionValidationContextResolver } from './validation-context.js';
+  type DecisionValidationContextResolver, type DecisionValidationSemantics } from './validation-context.js';
 
 export interface RemoteDecisionClientOptions {
   baseUrl: string;
@@ -250,8 +250,14 @@ function sameDecisionRule(left: unknown, right: DecisionRequest['decision']): bo
   return false;
 }
 
-/** V-D1/V-D2: exact rule echo and recomputation from native evidence. JEV has no native boolean. */
-function isValidWireDecision(decision: unknown, request: DecisionRequest, evidence: { score: DecisionVerdict['score']; label: DecisionVerdict['label'] }): boolean {
+/** V-D1/V-D2: exact rule echo and recomputation from evidence. P18: a declared
+ * native boolean passes without a rule key; anything else provider-origin is forged. */
+function isValidWireDecision(decision: unknown, request: DecisionRequest,
+  evidence: { score: DecisionVerdict['score']; label: DecisionVerdict['label'] },
+  sem: DecisionValidationSemantics): boolean {
+  if (isRecord(decision) && decision.origin === 'provider') {
+    return sem.nativeDecision && (request.decision === undefined || request.decision.kind === 'provider');
+  }
   if (request.decision === undefined) return decision === null;
   if (request.decision.kind === 'provider') return false;
   if (decision === null) return false;
@@ -294,6 +300,39 @@ function isValidWireProviderRaw(raw: unknown, request: DecisionRequest, verdict:
 const VERDICT_KEYS = ['criterionKind', 'resolvedCriterionKind', 'score', 'decision', 'label',
   'rationale', 'confidence', 'distribution', 'providerRaw'] as const;
 
+/** scalar-label-v1 (§3.4): descriptor-declared scalar or label evidence only.
+ * Distribution is absent; confidence and rationale follow the declared
+ * semantics. P19: a substituted scale is rejected even when the decision is
+ * self-consistent. P20: undeclared confidence is rejected. */
+function isValidScalarVerdict(v: unknown, request: DecisionRequest,
+  effective: DecisionRequest, sem: DecisionValidationSemantics): boolean {
+  if (!isRecord(v)) return false;
+  if (v.distribution !== null) return false;
+  if (!confidenceMatchesSemantics(v.confidence, sem)) return false;
+  const criterion = effective.criterion;
+  if (criterion.kind === 'binary') {
+    if (v.label !== null || !scoreMatchesSemantics(v.score, sem)) return false;
+    const score = v.score === null ? null : parseDecisionScore(v.score);
+    if (v.score !== null && score === null) return false;
+    return isValidWireDecision(v.decision, request, { score, label: null }, sem);
+  }
+  if (criterion.kind === 'choice') {
+    if (v.score !== null) return false;
+    if (!isRecord(v.label) || !hasOnlyKeys(v.label, ['value', 'origin']) || v.label.origin !== 'provider') return false;
+    const labelValue = v.label.value;
+    if (typeof labelValue !== 'string' || !criterion.options.some((option) => option.id === labelValue)) return false;
+    const label = { value: labelValue, origin: 'provider' as const };
+    return isValidWireDecision(v.decision, request, { score: null, label }, sem);
+  }
+  if (criterion.kind === 'graded') {
+    if (v.label !== null || !scoreMatchesSemantics(v.score, sem)) return false;
+    const score = v.score === null ? null : parseDecisionScore(v.score);
+    if (v.score !== null && score === null) return false;
+    return isValidWireDecision(v.decision, request, { score, label: null }, sem);
+  }
+  return false;
+}
+
 function isValidDecisionVerdict(v: unknown, request: DecisionRequest,
   validation: DecisionValidationContext | null): v is DecisionVerdict {
   if (!isRecord(v)) return false;
@@ -307,26 +346,35 @@ function isValidDecisionVerdict(v: unknown, request: DecisionRequest,
   if (request.criterion.kind === 'registered' && v.resolvedCriterionKind !== resolution?.resolvedKind) return false;
   if (request.criterion.kind !== 'registered' && v.resolvedCriterionKind !== request.criterion.kind) return false;
   const effective = resolution ? { ...request, criterion: resolution.criterion } : request;
-  // V-D1/V-D4: JEV declares no native boolean; any provider-origin decision is forged.
-  if (isRecord(v.decision) && v.decision.origin === 'provider') return false;
-  // V-D4: the implicit native profile declares no rationale capability and JEV
-  // always emits rationale null, so any rationale is invented evidence.
-  if (v.rationale !== null) return false;
+  // Evidence semantics come from the trusted context when bound, else the
+  // implicit JEV profile. A response never selects its own profile.
+  const sem = validation?.semantics ?? IMPLICIT_JEV_SEMANTICS;
+  const scalar = validation?.validationProfile.profile === 'scalar-label-v1';
+  // P18/V-D1: a provider-origin boolean is forged unless the selected profile
+  // declares native-boolean support; then exactly {pass, origin} with no rule.
+  if (isRecord(v.decision) && v.decision.origin === 'provider') {
+    if (!sem.nativeDecision || (request.decision !== undefined && request.decision.kind !== 'provider')
+      || !hasOnlyKeys(v.decision, ['pass', 'origin']) || typeof v.decision.pass !== 'boolean') return false;
+  }
+  if (!isValidRationale(v.rationale, sem)) return false;
+  if (scalar) return isValidScalarVerdict(v, request, effective, sem);
   if (!hasServiceVerdictShape(v.score, v.label, v.confidence, v.distribution)) return false;
   if (effective.criterion.kind === 'binary') {
     if (v.score === null || v.label !== null || v.distribution !== null || v.confidence !== null) return false;
     const score = parseDecisionScore(v.score);
     if (!score || score.meaning !== 'probability-true' || score.scale.kind !== 'bounded'
       || score.scale.min !== 0 || score.scale.max !== 1 || score.scale.direction !== 'unordered') return false;
-    if (!isValidWireDecision(v.decision, request, { score, label: null })) return false;
+    if (validation && !scoreMatchesSemantics(v.score, sem)) return false;
+    if (!isValidWireDecision(v.decision, request, { score, label: null }, sem)) return false;
   } else if (effective.criterion.kind === 'choice') {
     if (v.score !== null || v.label === null || v.distribution === null || v.confidence === null) return false;
     const confidence = parseDecisionConfidence(v.confidence);
     if (!confidence || confidence.meaning !== 'provider-confidence' || confidence.min !== 0 || confidence.max !== 1) return false;
+    if (validation && !confidenceMatchesSemantics(v.confidence, sem)) return false;
     if (!isValidChoiceEvidence(v.distribution, v.label, effective)) return false;
     const label = isRecord(v.label) && typeof v.label.value === 'string'
       ? { value: v.label.value, origin: 'provider' as const } : null;
-    if (!isValidWireDecision(v.decision, request, { score: null, label: label as DecisionVerdict['label'] })) return false;
+    if (!isValidWireDecision(v.decision, request, { score: null, label: label as DecisionVerdict['label'] }, sem)) return false;
   } else if (effective.criterion.kind === 'graded') {
     if (v.score === null || v.label !== null || v.distribution === null || v.confidence === null) return false;
     const score = parseDecisionScore(v.score);
@@ -336,8 +384,9 @@ function isValidDecisionVerdict(v: unknown, request: DecisionRequest,
       || score.scale.min !== 0 || score.scale.max !== effective.criterion.levels.length - 1
       || score.scale.direction !== effective.criterion.direction) return false;
     if (confidence.meaning !== 'provider-confidence' || confidence.min !== 0 || confidence.max !== 1) return false;
+    if (validation && (!scoreMatchesSemantics(v.score, sem) || !confidenceMatchesSemantics(v.confidence, sem))) return false;
     if (!isValidGradedEvidence(v.distribution, score, effective)) return false;
-    if (!isValidWireDecision(v.decision, request, { score, label: null })) return false;
+    if (!isValidWireDecision(v.decision, request, { score, label: null }, sem)) return false;
   } else {
     return false;
   }
@@ -361,6 +410,36 @@ function rebuildWireError(error: unknown, receipt: DecisionReceipt): DecisionErr
   }
   return rebuilt;
 }
+
+/** Implicit JEV evidence semantics (V4-L1 migration path when no trusted context resolves). */
+const IMPLICIT_JEV_SEMANTICS: DecisionValidationSemantics = { nativeDecision: false,
+  score: { meaning: 'probability-true', min: 0, max: 1 },
+  confidence: { meaning: 'provider-confidence', min: 0, max: 1 },
+  rationale: 'forbidden' };
+
+const scoreMatchesSemantics = (score: unknown, sem: DecisionValidationSemantics): boolean => {
+  const parsed = score === null ? null : parseDecisionScore(score);
+  if (parsed === null && score !== null) return false;
+  if (sem.score === null) return parsed === null;
+  if (parsed === null) return false;
+  return parsed.meaning === sem.score.meaning && parsed.scale.kind === 'bounded'
+    && parsed.scale.min === sem.score.min && parsed.scale.max === sem.score.max;
+};
+
+const confidenceMatchesSemantics = (confidence: unknown, sem: DecisionValidationSemantics): boolean => {
+  if (confidence === null) return sem.confidence === null;
+  if (sem.confidence === null) return false;
+  const parsed = parseDecisionConfidence(confidence);
+  return !!parsed && parsed.meaning === sem.confidence.meaning
+    && parsed.min === sem.confidence.min && parsed.max === sem.confidence.max;
+};
+
+const isValidRationale = (rationale: unknown, sem: DecisionValidationSemantics): boolean => {
+  if (rationale === null) return true;
+  if (sem.rationale === 'forbidden') return false;
+  return isRecord(rationale) && hasOnlyKeys(rationale, ['text', 'origin'])
+    && isText(rationale.text) && rationale.origin === 'provider';
+};
 
 /** Remote decision client calling an authenticated mesh endpoint without custody of provider keys. */
 export function createRemoteDecisionClient(options: RemoteDecisionClientOptions): RemoteDecisionClient {
