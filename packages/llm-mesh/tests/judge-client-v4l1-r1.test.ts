@@ -185,3 +185,43 @@ describe('V4-L1-R1 F2 out-of-scale threshold', () => {
     }
   });
 });
+
+describe('V4-L1-R1 F3 invented native rationale', () => {
+  const fabricated = { text: 'REVIEW-FABRICATED-RATIONALE', origin: 'provider' };
+
+  it('F3a rejects a fabricated rationale on a binary result', async () => {
+    const request = judgeRequest({ correlationId: 'l1r1-f3a' });
+    const served = structuredClone(await realServiceResult(request)) as unknown as Record<string, unknown>;
+    expect(await viaClient(request, served)).toMatchObject({ kind: 'verdict', ok: true });
+    const tampered = structuredClone(served) as unknown as Record<string, unknown>;
+    (tampered.verdict as unknown as Record<string, unknown>).rationale = { ...fabricated };
+    const { result, fetch } = await viaClientCounted(request, tampered);
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(JSON.stringify(result)).not.toContain('REVIEW-FABRICATED-RATIONALE');
+    expect(fetch.mock.calls).toHaveLength(1);
+  });
+
+  it('F3b rejects a fabricated rationale on a choice result', async () => {
+    const request = judgeRequest({ correlationId: 'l1r1-f3b', criterion: choiceCriterion });
+    const served = structuredClone(await realServiceResult(request, choiceNative())) as unknown as Record<string, unknown>;
+    expect(await viaClient(request, served)).toMatchObject({ kind: 'verdict', ok: true });
+    const tampered = structuredClone(served) as unknown as Record<string, unknown>;
+    (tampered.verdict as unknown as Record<string, unknown>).rationale = { ...fabricated };
+    const { result, fetch } = await viaClientCounted(request, tampered);
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(JSON.stringify(result)).not.toContain('REVIEW-FABRICATED-RATIONALE');
+    expect(fetch.mock.calls).toHaveLength(1);
+  });
+
+  it('F3c rejects a fabricated rationale on a graded result', async () => {
+    const request = judgeRequest({ correlationId: 'l1r1-f3c', criterion: gradedCriterion });
+    const served = structuredClone(await realServiceResult(request, gradedNative())) as unknown as Record<string, unknown>;
+    expect(await viaClient(request, served)).toMatchObject({ kind: 'verdict', ok: true });
+    const tampered = structuredClone(served) as unknown as Record<string, unknown>;
+    (tampered.verdict as unknown as Record<string, unknown>).rationale = { ...fabricated };
+    const { result, fetch } = await viaClientCounted(request, tampered);
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(JSON.stringify(result)).not.toContain('REVIEW-FABRICATED-RATIONALE');
+    expect(fetch.mock.calls).toHaveLength(1);
+  });
+});
