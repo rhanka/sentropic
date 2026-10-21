@@ -27,9 +27,8 @@ Consolidate the approved common-rule amendment (CR-1..CR-5) into the storage spe
   - `packages/cluster-mesh/src/storage/**` (except `common-contract.ts`)
   - `packages/cluster-mesh/tests/storage/**` (except `common-rule/**`)
   - `packages/artifacts/**`
-  - All other `spec/**`, `packages/**`, `api/**`, `apps/**`, `e2e/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - None.
+  - `packages/cluster-mesh/package.json` (version bump only, via BR01-EX1)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -39,6 +38,7 @@ Consolidate the approved common-rule amendment (CR-1..CR-5) into the storage spe
 Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
 - subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
 - conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
+- `attention` BR01-EX1 (CI-mandated version bump): `enforce-package-bump` fails without a bump for `packages/cluster-mesh/src/**` changes, so this branch bumps `packages/cluster-mesh/package.json` 0.21.0 → 0.22.0 (minor: additive data-only contract, no breaking change; strictly above npm-published 0.21.0). Impact is manifest metadata only; no runtime, dependency or lockfile change (workspace link, no dependents on a range). Rollback restores 0.21.0. No other conditional/forbidden path is touched.
 
 ## AI Flaky tests
 - Acceptance rule:
