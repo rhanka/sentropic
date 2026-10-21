@@ -70,7 +70,7 @@ Actions with the following status should be included around tasks only if really
 - [ ] **Lot L00 — Documentation consolidation only (3–4 atomic commits, no code)**
   - [x] Consolidate authority, scope, surfaces, CR-1 and CR-2 into the storage spec.
   - [x] Consolidate CR-3, CR-4 and CR-5 into the storage spec.
-  - [ ] Record contract shape, admission, activation and the parity register.
+  - [x] Record contract shape, admission, activation and the parity register.
   - [ ] Record traceability, kit acceptance, sequencing and the five P3 advisories.
   - [ ] Lot gate: `make scope-check` before every commit; each commit under 150 lines.
 - [ ] **Lot L01a — Data contract and fixed vectors (2–3 atomic commits, no backend change)**

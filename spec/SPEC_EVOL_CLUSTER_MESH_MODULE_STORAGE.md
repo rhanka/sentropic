@@ -351,3 +351,119 @@ cross-surface update.
   clients MUST NOT receive the same unrestricted capability as ordinary
   readers/writers. Tests MUST exercise real runtime and deployment
   restrictions, not only TypeScript assignability.
+
+## Common contract shape and compatibility
+
+L00 consolidates documentation. The first code lot, L01a, specifies the
+data-only envelope, publication-condition, bounded-page and capability
+contracts plus fixed expected vectors; L01b1–L01b4 add the reusable
+conformance harness and its test-only reference in separate assertion
+families. These lots change no backend. The contract distinguishes
+create-or-verify, prepare/seal, publish (expected boundary, operation
+identity), committed read, bounded enumerate and authorized collect. It keeps
+existing error mappings where applicable and makes conflict, denied,
+corrupt/unavailable, limit/incomplete and indeterminate-publication outcomes
+distinguishable.
+
+Common-rule conformance is a mandatory versioned baseline in binding and
+admission, in addition to the existing eleven functional profiles. It MUST NOT
+be advertised as an optional `s3` or `low-frequency` profile in `PROFILE_IDS`.
+Baseline admission MUST cover ordinary writes, direct-ID reads and
+maintenance, so callers cannot bypass it through a staged/export API. An
+offered restore path faces the same admission and incarnation checks, without
+requiring restore on backends that do not claim it.
+
+New neutral leaves MUST preserve dependency neutrality: the closed consumer
+set gains no database drivers or provider SDKs. Drivers and credentials stay
+in host-injected backend leaves. The object bridge depends only on a
+structural neutral port; a host injects an artifacts implementation
+structurally.
+
+### Qualification-bound admission
+
+The baseline claim digest MUST commit to the common-contract/manifest
+versions, adapter identity and version, exact package/code digest, effective
+configuration digest, payload and control-store composition, offered surfaces
+and functional profiles, and an immutable qualification evidence identifier
+plus its report digest. Configuration uses secret references, never secret
+values. The referenced record MUST be a successful complete qualification run
+for that exact tuple, with the expected test inventory, zero skips/todos and
+all required mutant kills. A flag, a self-declaration or a report for another
+configuration cannot authorize admission.
+
+The host admission guard MUST resolve the record from its trusted
+release/evidence registry, verify its integrity and exact tuple match, and
+refuse missing, failing, altered or mismatched evidence. Loss of evidence on
+an already activated store makes the binding unavailable; it never enables
+legacy fallback.
+
+### One-way store activation and legacy sunset
+
+Activation applies to the entire store incarnation, never to individual
+callers or scopes. A durable activation record MUST bind the minimum
+contract/store-format version, incarnation, admission claim digests,
+profile-parity register digest, validated inventory boundary and activation
+fence. For object compositions it also binds the namespace/deny-policy
+evidence.
+
+Consumer parity is a precondition: the host MUST inventory all bound consumers
+across every scope, including saved bindings, their `CONSUMER_REQUIREMENTS`
+claims and required profiles. Activation MUST be refused while any bound
+consumer lacks a passing common-contract proof for its required profiles and
+installed claim composition on the exact target tuple. Missing, pending, stale
+or mismatched proof leaves the store unactivated and usable under its old
+contract.
+
+Inventory validation MUST support bounded, resumable pre-validation while old
+writers run, with durable progress and receipts bound to incarnation, exact
+object versions/digests, retained boundary and validation rules. After the
+cutover fence, only the delta since the recorded boundary is validated under
+explicit item/byte/work and cutover-deadline budgets; an over-budget delta
+aborts without a marker and restores old-contract service. Pre-activation
+handles, pending operations and old credentials MUST NOT commit across the
+successful activation boundary.
+
+After activation, old-contract write, publish, maintain and collect admission
+MUST fail on every scope and path, including saved handles and after restart.
+Preexisting bytes enter an activated root only through explicit bounded
+verification and sealing under the new envelope; legacy-written units without
+that coverage read as unqualified, never as verified success. Rollback after
+activation may select only a previously qualified common-compatible
+binary/configuration or stop service; it MUST NOT clear the marker or
+downgrade the store. L22 deletes the replaced neutral legacy admission and
+mutation dispatch paths only after the parity and release conditions below;
+a conditional fallback branch is not an acceptable sunset.
+
+### Profile-parity register and release gate (seed)
+
+The register below is seeded from the priority-backend advertisements at the
+evidence pin `7c395f43`, then re-read at the consolidation base `6ec93105`.
+Every implementation row MUST identify backend/module/configuration, profile
+and frozen claim digest, affected consumer claims/bindings, target tuple,
+named common and existing K-corpus cases, immutable passing evidence
+IDs/digests, status and responsible owner. Status is `pending`,
+`requalified` or `withdrawn`; all rows in this draft are **pending**, not
+qualification results.
+
+| Profile to account for | Priority backend | Named regression anchors, in addition to the full common corpus |
+| --- | --- | --- |
+| `atomic-units-v1` | SQLite, Postgres | CT-04/05/06; `atomic-corpus.ts`, `sqlite-corpus.spec.ts`, `postgres-corpus.spec.ts` |
+| `immutable-chains-v1` | SQLite, Postgres | CT-01/02/03; `chain-corpus.ts`, `sqlite-corpus.spec.ts`, `postgres-corpus.spec.ts` |
+| `immutable-boundaries-v1` | Postgres | CT-02/03/07/08; `read-corpus.ts`, `postgres-manifest.spec.ts` |
+| `scope-outbox-v1` | Postgres with resync | CT-04/05/06/07; `root-journal.spec.ts`, `postgres-external-journal.spec.ts` |
+| `visibility-barriers-v1` | Postgres | CT-04/09/12; `barrier-corpus.ts`, `postgres-barriers.spec.ts` |
+| `staged-units-v1` | Postgres/comments | CT-04/05/06/14; `staged-corpus.ts`, `staged-integrity-corpus.ts`, `postgres-staged.spec.ts` |
+| `fenced-writers-v1` | Postgres | CT-04/06/09/14; `authority-corpus.ts`, `postgres-authority.spec.ts` |
+| `purge-jobs-v1` | Postgres | CT-10/11-purge/14; `lifecycle-corpus.ts`, `postgres-hidden-purge.spec.ts` |
+
+For configured Postgres/comments bindings, the register MUST expand
+`m1-adapter`, `comments-operational`, `comments-c4` and `comments-purge` from
+the frozen `CONSUMER_REQUIREMENTS`. A withdrawn advertisement MUST name the
+affected consumer claims, the replacement/migration or explicit retirement,
+and the artifacts/comments co-owner review; review alone never waives a live
+binding proof. Silently deleting a claim or a register row is forbidden. L11
+gates on complete priority-backend accounting and passing proofs for every
+retained/bound claim; L21 reconciles the register against installed
+consumers and exact proposed release tuples. L22 and the final release MUST
+wait while any in-scope legacy-only store has consumers that cannot activate;
+documenting such claims as pending does not authorize shipping the sunset.
