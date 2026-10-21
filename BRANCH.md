@@ -153,11 +153,11 @@ Actions with the following status should be included around tasks only if really
   - [x] `build-inputs.mjs`: record per-target recipe lines, docker image tokens, and `LLM_MESH_NODE_IMAGE` export/default bindings; fail closed on unknown image tokens and missing bindings.
   - [x] Red-first regressions: single-line `tsc` flag change fails via fingerprint mismatch and image token swap fails closed (unit + packed gate).
   - [x] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2` (11 files / 83 tests).
-- [ ] **Lot 12 — Actual resolved toolchain record (finding 2, BR710-EX3)**
-  - [ ] Committed union toolchain snapshot (`artifacts/toolchain/`); the 3 producing recipes consume it via `npm ci`; fingerprint v3 binds snapshot content plus spec satisfaction.
-  - [ ] Explicit regen via `pack.mjs --snapshot-toolchain` and the `memory-l5-toolchain-snapshot` target; pack and verify refuse a stale snapshot.
-  - [ ] Red-first regressions: snapshot transitive change and edge deletion fail (unit + packed gate); spec/snapshot mismatch throws.
-  - [ ] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2`.
+- [x] **Lot 12 — Actual resolved toolchain record (finding 2, BR710-EX3)**
+  - [x] Committed union toolchain snapshot (`artifacts/toolchain/`); the 3 producing recipes consume it via `npm ci`; fingerprint v3 binds snapshot content plus spec satisfaction.
+  - [x] Explicit regen via `pack.mjs --snapshot-toolchain` and the `memory-l5-toolchain-snapshot` target; pack and verify refuse a stale snapshot.
+  - [x] Red-first regressions: snapshot transitive change and edge deletion fail (unit + packed gate); spec/snapshot mismatch throws.
+  - [x] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2` (11 files / 88 tests).
 - [ ] **Lot 13 — Regenerate P1, full gate, push, CI green**
   - [ ] Retain superseded manifest in `artifacts/history/`; rebuild dist and repack P1 via make targets; inventory stays exact 44 contracts.
   - [ ] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-pr710-fix-r2`.
