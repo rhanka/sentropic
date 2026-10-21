@@ -240,5 +240,5 @@
 - [x] Release squash lot 4.
 - [x] Release squash lot 5.
 - [x] Release squash lot 6.
-- [ ] Release squash lot 7.
+- [x] Release squash lot 7.
 - [ ] Release squash lot 8.
