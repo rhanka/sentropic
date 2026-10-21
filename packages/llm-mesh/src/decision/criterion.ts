@@ -1,9 +1,9 @@
-import type { DecisionRule, JudgeCriterion } from './request.js';
+import type { DecisionRule, DecisionCriterion } from './request.js';
 import { has, hasOnlyKeys, isRecord, isText } from './validation.js';
 
 export const scoreDirections = ['higher-is-better', 'lower-is-better', 'unordered'] as const;
 
-export function isJudgeCriterion(value: unknown): value is JudgeCriterion {
+export function isDecisionCriterion(value: unknown): value is DecisionCriterion {
   if (!isRecord(value)) return false;
   if (value.kind === 'registered') {
     return hasOnlyKeys(value, ['kind', 'criteriaId', 'revision'])
@@ -34,7 +34,7 @@ export function isJudgeCriterion(value: unknown): value is JudgeCriterion {
   });
 }
 
-export function isJudgeDecisionRule(value: unknown): value is DecisionRule {
+export function isDecisionRule(value: unknown): value is DecisionRule {
   if (!isRecord(value)) return false;
   if (value.kind === 'provider') return hasOnlyKeys(value, ['kind']);
   if (value.kind === 'threshold') {

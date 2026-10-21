@@ -1,8 +1,8 @@
-import type { EvaluatorRef, JudgeCriterion } from './request.js';
+import type { EvaluatorRef, DecisionCriterion } from './request.js';
 import type { RetentionReceipt } from './receipt.js';
 
-export type ResolvedJudgeCriterion = Exclude<JudgeCriterion, { kind: 'registered' }>;
-export interface EvaluatorDescriptor {
+export type ResolvedDecisionCriterion = Exclude<DecisionCriterion, { kind: 'registered' }>;
+export interface DecisionEvaluatorDescriptor {
   evaluator: EvaluatorRef;
   wireModel: string;
   acceptedServedModelIds: readonly string[];
@@ -15,12 +15,12 @@ export interface EvaluatorDescriptor {
   scoreNativeKeys: 'index-string';
   nativeDecision: false;
   confidence: { meaning: 'provider-confidence'; meaningRef: string; min: 0; max: 1 };
-  registeredCriteria: readonly { criteriaId: string; revision: string; criterion: ResolvedJudgeCriterion }[];
+  registeredCriteria: readonly { criteriaId: string; revision: string; criterion: ResolvedDecisionCriterion }[];
   retention: RetentionReceipt;
 }
 
 /** Byte limits are local admission limits, not claims about provider tokenization. */
-export const jevDescriptor: EvaluatorDescriptor = {
+export const jevDescriptor: DecisionEvaluatorDescriptor = {
   evaluator: { providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'jev-1.13.0-mesh-v1-unqualified' },
   wireModel: 'jev-1.13.0', acceptedServedModelIds: [],
   qualification: { servedIdentity: 'unqualified', billingBound: 'unqualified', evidenceRefs: [] },

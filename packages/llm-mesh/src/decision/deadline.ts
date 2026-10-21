@@ -1,15 +1,15 @@
-import type { JudgeErrorCode } from './errors.js';
-import { createJudgeError } from './errors.js';
-import type { JudgeExecution } from './execution.js';
-import { copyJudgeReceipt } from './execution.js';
-import type { JudgeReceipt, JudgeResult } from './receipt.js';
+import type { DecisionErrorCode } from './errors.js';
+import { createDecisionError } from './errors.js';
+import type { DecisionExecution } from './execution.js';
+import { copyDecisionReceipt } from './execution.js';
+import type { DecisionReceipt, DecisionResult } from './receipt.js';
 
-function interruptedResult(execution: JudgeExecution, code: JudgeErrorCode): JudgeResult {
-  const error = execution.phase === 'settlement' ? createJudgeError(code, 'settlement')
-    : execution.phase === 'dispatch' ? createJudgeError(code, 'dispatch')
-      : execution.phase === 'admission' ? createJudgeError(code, 'admission')
-        : execution.phase === 'parse' ? createJudgeError(code, 'parse') : createJudgeError(code, 'preflight');
-  const receipt: JudgeReceipt = structuredClone(execution.receipt);
+function interruptedResult(execution: DecisionExecution, code: DecisionErrorCode): DecisionResult {
+  const error = execution.phase === 'settlement' ? createDecisionError(code, 'settlement')
+    : execution.phase === 'dispatch' ? createDecisionError(code, 'dispatch')
+      : execution.phase === 'admission' ? createDecisionError(code, 'admission')
+        : execution.phase === 'parse' ? createDecisionError(code, 'parse') : createDecisionError(code, 'preflight');
+  const receipt: DecisionReceipt = structuredClone(execution.receipt);
   if (receipt.budget.state !== 'not-admitted' && receipt.budget.state !== 'released') {
     receipt.budget.state = 'pending-reconciliation';
     error.retryable = false;
@@ -20,19 +20,19 @@ function interruptedResult(execution: JudgeExecution, code: JudgeErrorCode): Jud
   receipt.latencyMs = Math.max(0, execution.clock.monotonic() - execution.start);
   receipt.outcome = 'error';
   receipt.errorCode = error.code;
-  return { kind: 'error', ok: false, error, receipt: copyJudgeReceipt(receipt) };
+  return { kind: 'error', ok: false, error, receipt: copyDecisionReceipt(receipt) };
 }
 
 /** The caller has a bounded wait even when a host ignores cancellation. The one
  * worker continues accounting on late acknowledgements, fenced by the same callId;
  * its expired/aborted signal forbids a later provider dispatch. It never re-evaluates.
  */
-export async function runWithJudgeDeadline(execution: JudgeExecution, work: () => Promise<JudgeResult>): Promise<JudgeResult> {
+export async function runWithDecisionDeadline(execution: DecisionExecution, work: () => Promise<DecisionResult>): Promise<DecisionResult> {
   const caller = execution.signal;
   const controller = new AbortController();
   execution.signal = controller.signal;
-  let resolve!: (result: JudgeResult) => void;
-  const interruption = new Promise<JudgeResult>((done) => { resolve = done; });
+  let resolve!: (result: DecisionResult) => void;
+  const interruption = new Promise<DecisionResult>((done) => { resolve = done; });
   let finished = false;
   const stop = (code: 'TIMEOUT' | 'CANCELLED') => {
     if (finished) return;

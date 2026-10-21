@@ -1,15 +1,15 @@
-import { parseJudgeRequest, type JudgeRequest } from './request.js';
-import type { JudgeConnectionFailure, JudgeReceipt, JudgeResult, RemoteJudgeClient } from './receipt.js';
-import { parseJudgeUsage, resolveJudgeCorrelationId, unreportedJudgeUsage } from './receipt.js';
-import type { JudgeError } from './errors.js';
-import { createJudgeError, isJudgeErrorCode } from './errors.js';
+import { parseDecisionRequest, type DecisionRequest } from './request.js';
+import type { DecisionConnectionFailure, DecisionReceipt, DecisionResult, RemoteDecisionClient } from './receipt.js';
+import { parseDecisionUsage, resolveDecisionCorrelationId, unreportedDecisionUsage } from './receipt.js';
+import type { DecisionError } from './errors.js';
+import { createDecisionError, isDecisionErrorCode } from './errors.js';
 import { sanitizeJevId } from './jev-response.js';
-import type { JudgeCost } from './receipt.js';
-import { parseJudgeConfidence, parseJudgeScore } from './verdict.js';
-import type { JudgeVerdict } from './verdict.js';
-import { JUDGE_MAX_JSON_BYTES, has, hasOnlyKeys, isMicroUsd, isRecord, snapshotBoundedJson } from './validation.js';
+import type { DecisionCost } from './receipt.js';
+import { parseDecisionConfidence, parseDecisionScore } from './verdict.js';
+import type { DecisionVerdict } from './verdict.js';
+import { DECISION_MAX_JSON_BYTES, has, hasOnlyKeys, isMicroUsd, isRecord, snapshotBoundedJson } from './validation.js';
 
-export interface RemoteJudgeClientOptions {
+export interface RemoteDecisionClientOptions {
   baseUrl: string;
   fetch?: typeof globalThis.fetch;
   headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>);
@@ -21,12 +21,12 @@ export interface RemoteJudgeClientOptions {
 
 const resolveEndpoint = (base: string) => {
   const trimmed = base.replace(/\/+$/, '');
-  return trimmed.endsWith('/judge') ? trimmed : `${trimmed}/judge`;
+  return trimmed.endsWith('/decision') ? trimmed : `${trimmed}/decision`;
 };
 
 type ConnectionErrorCode = 'MESH_UNAVAILABLE' | 'TRANSPORT_FAILED' | 'TIMEOUT' | 'CANCELLED';
 const connectionError = (code: ConnectionErrorCode, phase: 'preflight' | 'dispatch') =>
-  createJudgeError(code, phase) as JudgeError & { code: ConnectionErrorCode };
+  createDecisionError(code, phase) as DecisionError & { code: ConnectionErrorCode };
 
 const BUDGET_STATES = new Set(['not-admitted', 'released', 'settled', 'pending-reconciliation']);
 
@@ -73,7 +73,7 @@ const wireRawAgreesWithTyped = (data: Record<string, unknown>, verdict: {
 };
 
 /** Cost union invariant: an unincurred or estimated cost never carries a spent amount. */
-function isValidWireCost(cost: unknown): cost is JudgeCost {
+function isValidWireCost(cost: unknown): cost is DecisionCost {
   if (!isRecord(cost)) return false;
   if (cost.status === 'actual') {
     return hasOnlyKeys(cost, ['status', 'amountMicroUsd', 'source', 'priceRevision', 'rounding'])
@@ -103,7 +103,7 @@ function isValidWireRetention(retention: unknown): boolean {
 
 const EVALUATOR_KEYS = ['providerId', 'evaluatorId', 'revision'] as const;
 
-const bindsEvaluator = (candidate: unknown, request: JudgeRequest): boolean =>
+const bindsEvaluator = (candidate: unknown, request: DecisionRequest): boolean =>
   isRecord(candidate) && hasOnlyKeys(candidate, EVALUATOR_KEYS)
   && candidate.providerId === request.evaluator.providerId
   && candidate.evaluatorId === request.evaluator.evaluatorId
@@ -113,7 +113,7 @@ const RECEIPT_KEYS = ['schemaVersion', 'callId', 'correlationId', 'evaluator', '
   'servedModelId', 'providerRequestId', 'startedAt', 'finishedAt', 'latencyMs', 'providerLatencyMs',
   'dispatch', 'attempts', 'usage', 'cost', 'retention', 'budget', 'outcome', 'errorCode'] as const;
 
-function isValidJudgeReceipt(r: unknown, request: JudgeRequest, expectedCorrelationId: string): r is JudgeReceipt {
+function isValidDecisionReceipt(r: unknown, request: DecisionRequest, expectedCorrelationId: string): r is DecisionReceipt {
   if (!isRecord(r)) return false;
   if (!hasOnlyKeys(r, RECEIPT_KEYS)) return false;
   if (r.schemaVersion !== 1 || typeof r.callId !== 'string' || !r.callId) return false;
@@ -141,7 +141,7 @@ function isValidJudgeReceipt(r: unknown, request: JudgeRequest, expectedCorrelat
   if (r.outcome !== 'verdict' && r.outcome !== 'error') return false;
   if (r.outcome === 'error' && (typeof r.errorCode !== 'string' || !r.errorCode)) return false;
   if (r.outcome === 'verdict' && r.errorCode !== undefined) return false;
-  const usage = parseJudgeUsage(r.usage);
+  const usage = parseDecisionUsage(r.usage);
   if (!usage) return false;
   // A verdict proves dispatch: identities served, one attempt completed,
   // provider counters reported, liability estimated under a held budget.
@@ -175,7 +175,7 @@ const wireDistributionEntries = (distribution: unknown): WireDistributionEntry[]
 };
 
 /** V4-L1 JEV evidence binding: exact native index/label mapping, order-independent, no invention. */
-function isValidChoiceEvidence(distribution: unknown, label: unknown, request: JudgeRequest): boolean {
+function isValidChoiceEvidence(distribution: unknown, label: unknown, request: DecisionRequest): boolean {
   if (request.criterion.kind !== 'choice') return false;
   const declared = request.criterion.options.map((option) => option.id);
   const entries = wireDistributionEntries(distribution);
@@ -198,7 +198,7 @@ function isValidChoiceEvidence(distribution: unknown, label: unknown, request: J
   return selected !== undefined && selected.probability === max;
 }
 
-function isValidGradedEvidence(distribution: unknown, score: unknown, request: JudgeRequest): boolean {
+function isValidGradedEvidence(distribution: unknown, score: unknown, request: DecisionRequest): boolean {
   if (request.criterion.kind !== 'graded') return false;
   const levels = request.criterion.levels;
   const entries = wireDistributionEntries(distribution);
@@ -220,7 +220,7 @@ function isValidGradedEvidence(distribution: unknown, score: unknown, request: J
   return Math.abs(weighted - (score as { value: number }).value) <= 1e-4;
 }
 
-function sameDecisionRule(left: unknown, right: JudgeRequest['decision']): boolean {
+function sameDecisionRule(left: unknown, right: DecisionRequest['decision']): boolean {
   if (right === undefined) return false;
   if (!isRecord(left)) return false;
   if (right.kind === 'threshold') {
@@ -239,7 +239,7 @@ function sameDecisionRule(left: unknown, right: JudgeRequest['decision']): boole
 }
 
 /** V-D1/V-D2: exact rule echo and recomputation from native evidence. JEV has no native boolean. */
-function isValidWireDecision(decision: unknown, request: JudgeRequest, evidence: { score: JudgeVerdict['score']; label: JudgeVerdict['label'] }): boolean {
+function isValidWireDecision(decision: unknown, request: DecisionRequest, evidence: { score: DecisionVerdict['score']; label: DecisionVerdict['label'] }): boolean {
   if (request.decision === undefined) return decision === null;
   if (request.decision.kind === 'provider') return false;
   if (decision === null) return false;
@@ -249,7 +249,7 @@ function isValidWireDecision(decision: unknown, request: JudgeRequest, evidence:
     if (!sameDecisionRule(decision.rule, request.decision)) return false;
     if (evidence.score === null) return false;
     // V-D2: the threshold must lie within the trusted native bounded scale.
-    const parsed = parseJudgeScore(evidence.score);
+    const parsed = parseDecisionScore(evidence.score);
     if (parsed === null || parsed.scale.kind !== 'bounded') return false;
     if (request.decision.value < parsed.scale.min || request.decision.value > parsed.scale.max) return false;
     const value = parsed.value;
@@ -267,7 +267,7 @@ function isValidWireDecision(decision: unknown, request: JudgeRequest, evidence:
 
 /** Raw evidence is accepted only when allowlisted by the request, byte-exact,
  * and in full agreement with the typed verdict it was derived with. */
-function isValidWireProviderRaw(raw: unknown, request: JudgeRequest, verdict: {
+function isValidWireProviderRaw(raw: unknown, request: DecisionRequest, verdict: {
   score: unknown; label: unknown; confidence: unknown; distribution: unknown }): boolean {
   if (raw === undefined) return true;
   if (!isRecord(raw) || request.raw?.mode !== 'allowlisted') return false;
@@ -282,7 +282,7 @@ function isValidWireProviderRaw(raw: unknown, request: JudgeRequest, verdict: {
 const VERDICT_KEYS = ['criterionKind', 'resolvedCriterionKind', 'score', 'decision', 'label',
   'rationale', 'confidence', 'distribution', 'providerRaw'] as const;
 
-function isValidJudgeVerdict(v: unknown, request: JudgeRequest): v is JudgeVerdict {
+function isValidDecisionVerdict(v: unknown, request: DecisionRequest): v is DecisionVerdict {
   if (!isRecord(v)) return false;
   if (!hasOnlyKeys(v, VERDICT_KEYS)) return false;
   if (v.criterionKind !== request.criterion.kind) return false;
@@ -298,22 +298,22 @@ function isValidJudgeVerdict(v: unknown, request: JudgeRequest): v is JudgeVerdi
   if (!hasServiceVerdictShape(v.score, v.label, v.confidence, v.distribution)) return false;
   if (request.criterion.kind === 'binary') {
     if (v.score === null || v.label !== null || v.distribution !== null || v.confidence !== null) return false;
-    const score = parseJudgeScore(v.score);
+    const score = parseDecisionScore(v.score);
     if (!score || score.meaning !== 'probability-true' || score.scale.kind !== 'bounded'
       || score.scale.min !== 0 || score.scale.max !== 1 || score.scale.direction !== 'unordered') return false;
     if (!isValidWireDecision(v.decision, request, { score, label: null })) return false;
   } else if (request.criterion.kind === 'choice') {
     if (v.score !== null || v.label === null || v.distribution === null || v.confidence === null) return false;
-    const confidence = parseJudgeConfidence(v.confidence);
+    const confidence = parseDecisionConfidence(v.confidence);
     if (!confidence || confidence.meaning !== 'provider-confidence' || confidence.min !== 0 || confidence.max !== 1) return false;
     if (!isValidChoiceEvidence(v.distribution, v.label, request)) return false;
     const label = isRecord(v.label) && typeof v.label.value === 'string'
       ? { value: v.label.value, origin: 'provider' as const } : null;
-    if (!isValidWireDecision(v.decision, request, { score: null, label: label as JudgeVerdict['label'] })) return false;
+    if (!isValidWireDecision(v.decision, request, { score: null, label: label as DecisionVerdict['label'] })) return false;
   } else if (request.criterion.kind === 'graded') {
     if (v.score === null || v.label !== null || v.distribution === null || v.confidence === null) return false;
-    const score = parseJudgeScore(v.score);
-    const confidence = parseJudgeConfidence(v.confidence);
+    const score = parseDecisionScore(v.score);
+    const confidence = parseDecisionConfidence(v.confidence);
     if (!score || !confidence) return false;
     if (score.meaning !== 'rubric-grade' || score.scale.kind !== 'bounded'
       || score.scale.min !== 0 || score.scale.max !== request.criterion.levels.length - 1
@@ -329,13 +329,13 @@ function isValidJudgeVerdict(v: unknown, request: JudgeRequest): v is JudgeVerdi
 }
 
 /** Wire errors never carry wording: rebuild from code, phase and receipt liability evidence. */
-function rebuildWireError(error: unknown, receipt: JudgeReceipt): JudgeError | null {
+function rebuildWireError(error: unknown, receipt: DecisionReceipt): DecisionError | null {
   if (!isRecord(error) || !hasOnlyKeys(error, ['code', 'message', 'phase', 'retryable', 'retryAfterMs'])
-    || !isJudgeErrorCode(error.code)
+    || !isDecisionErrorCode(error.code)
     || !['preflight', 'admission', 'dispatch', 'parse', 'settlement'].includes(error.phase as string)) return null;
   const unresolved = receipt.budget.state !== 'not-admitted' && receipt.budget.state !== 'released';
   const nonRetryable = unresolved || error.retryable === false;
-  const rebuilt = createJudgeError(error.code, error.phase as JudgeError['phase'],
+  const rebuilt = createDecisionError(error.code, error.phase as DecisionError['phase'],
     { retryAfterMs: !nonRetryable && has(error, 'retryAfterMs') && typeof error.retryAfterMs === 'number'
       ? error.retryAfterMs : undefined });
   if (nonRetryable) {
@@ -345,28 +345,28 @@ function rebuildWireError(error: unknown, receipt: JudgeReceipt): JudgeError | n
   return rebuilt;
 }
 
-/** Remote judge client calling an authenticated mesh endpoint without custody of provider keys. */
-export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): RemoteJudgeClient {
+/** Remote decision client calling an authenticated mesh endpoint without custody of provider keys. */
+export function createRemoteDecisionClient(options: RemoteDecisionClientOptions): RemoteDecisionClient {
   const fetchFn = options.fetch ?? globalThis.fetch;
-  const cap = options.maxResponseBytes ?? JUDGE_MAX_JSON_BYTES;
+  const cap = options.maxResponseBytes ?? DECISION_MAX_JSON_BYTES;
   const endpoint = resolveEndpoint(options.baseUrl);
   const generate = options.generateId ?? (() => globalThis.crypto.randomUUID());
 
   return {
-    async judge(request: JudgeRequest, callOptions?: { signal?: AbortSignal }): Promise<JudgeResult | JudgeConnectionFailure> {
+    async decide(request: DecisionRequest, callOptions?: { signal?: AbortSignal }): Promise<DecisionResult | DecisionConnectionFailure> {
       let correlationId = 'unknown';
       try {
         const raw = request.correlationId !== undefined
-          ? resolveJudgeCorrelationId(request.correlationId, generate)
-          : resolveJudgeCorrelationId(generate(), () => globalThis.crypto.randomUUID());
+          ? resolveDecisionCorrelationId(request.correlationId, generate)
+          : resolveDecisionCorrelationId(generate(), () => globalThis.crypto.randomUUID());
         if (!raw) {
           return { kind: 'connection-failure', ok: false, error: connectionError('MESH_UNAVAILABLE', 'preflight'),
-            receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId: 'unknown' };
+            receipt: null, usage: unreportedDecisionUsage('not-dispatched'), callStatus: 'not-sent', correlationId: 'unknown' };
         }
         correlationId = raw;
       } catch {
         return { kind: 'connection-failure', ok: false, error: connectionError('MESH_UNAVAILABLE', 'preflight'),
-          receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId: 'unknown' };
+          receipt: null, usage: unreportedDecisionUsage('not-dispatched'), callStatus: 'not-sent', correlationId: 'unknown' };
       }
       const serverTimeout = request.policy?.timeoutMs ?? 10_000;
       const serverWithMargin = serverTimeout + 1_000;
@@ -379,19 +379,19 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       const timer = setTimeout(() => { timedOut = true; void reader?.cancel().catch(() => {}); controller.abort(); }, timeoutMs);
       callOptions?.signal?.addEventListener('abort', onAbort, { once: true });
 
-      const preflightFail = (code: ConnectionErrorCode): JudgeConnectionFailure => {
+      const preflightFail = (code: ConnectionErrorCode): DecisionConnectionFailure => {
         clearTimeout(timer);
         callOptions?.signal?.removeEventListener('abort', onAbort);
         return {
           kind: 'connection-failure', ok: false, error: connectionError(code, 'preflight'),
-          receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId,
+          receipt: null, usage: unreportedDecisionUsage('not-dispatched'), callStatus: 'not-sent', correlationId,
         };
       };
       if (callOptions?.signal?.aborted) return preflightFail('CANCELLED');
 
       // Detached 256-KiB snapshot before any async resolution: later caller
       // mutation, NaN/undefined smuggling, depth and size abuse never egress.
-      const outgoing = parseJudgeRequest({ ...request, correlationId });
+      const outgoing = parseDecisionRequest({ ...request, correlationId });
       if (!outgoing.ok) return preflightFail('MESH_UNAVAILABLE');
 
       const racePreflight = async <T>(promiseOrValue: T | Promise<T>): Promise<T> => {
@@ -426,9 +426,9 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       }
       if (controller.signal.aborted || callOptions?.signal?.aborted) return preflightFail(timedOut ? 'TIMEOUT' : 'CANCELLED');
 
-      const fail = (code: ConnectionErrorCode): JudgeConnectionFailure => ({
+      const fail = (code: ConnectionErrorCode): DecisionConnectionFailure => ({
         kind: 'connection-failure', ok: false, error: connectionError(code, 'dispatch'),
-        receipt: null, usage: unreportedJudgeUsage('unknown'), callStatus: 'unknown', correlationId,
+        receipt: null, usage: unreportedDecisionUsage('unknown'), callStatus: 'unknown', correlationId,
       });
 
       // Race dispatch against deadline/cancellation: an injected fetch that
@@ -522,7 +522,7 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       const val = snapshot.value;
       // V-K1/V-K2: closed envelopes and field-by-field reconstruction. Undeclared
       // content can never survive, even when raw permission is allowlisted.
-      const rebuildVerdict = (verdict: JudgeVerdict): JudgeVerdict => {
+      const rebuildVerdict = (verdict: DecisionVerdict): DecisionVerdict => {
         const rebuilt: Record<string, unknown> = {
           criterionKind: verdict.criterionKind,
           resolvedCriterionKind: verdict.resolvedCriterionKind,
@@ -534,9 +534,9 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
           distribution: structuredClone(verdict.distribution),
         };
         if (Object.hasOwn(verdict, 'providerRaw')) rebuilt.providerRaw = structuredClone(verdict.providerRaw);
-        return rebuilt as unknown as JudgeVerdict;
+        return rebuilt as unknown as DecisionVerdict;
       };
-      const rebuildReceipt = (receipt: JudgeReceipt): JudgeReceipt => {
+      const rebuildReceipt = (receipt: DecisionReceipt): DecisionReceipt => {
         const rebuilt: Record<string, unknown> = {
           schemaVersion: receipt.schemaVersion,
           callId: receipt.callId,
@@ -560,19 +560,19 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
         if (Object.hasOwn(receipt, 'providerRequestId')) rebuilt.providerRequestId = receipt.providerRequestId;
         if (Object.hasOwn(receipt, 'providerLatencyMs')) rebuilt.providerLatencyMs = receipt.providerLatencyMs;
         if (Object.hasOwn(receipt, 'errorCode')) rebuilt.errorCode = receipt.errorCode;
-        return rebuilt as unknown as JudgeReceipt;
+        return rebuilt as unknown as DecisionReceipt;
       };
       // Concordance and permissions bind the transmitted snapshot: the live
       // request may have mutated during auth resolution or transport.
       if (isRecord(val) && hasOnlyKeys(val, ['kind', 'ok', 'verdict', 'receipt'])
         && val.kind === 'verdict' && val.ok === true
-        && isValidJudgeReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'verdict'
-        && isValidJudgeVerdict(val.verdict, outgoing.request)) {
+        && isValidDecisionReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'verdict'
+        && isValidDecisionVerdict(val.verdict, outgoing.request)) {
         return { kind: 'verdict', ok: true, verdict: rebuildVerdict(val.verdict), receipt: rebuildReceipt(val.receipt) };
       }
       if (isRecord(val) && hasOnlyKeys(val, ['kind', 'ok', 'error', 'receipt'])
         && val.kind === 'error' && val.ok === false
-        && isValidJudgeReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'error') {
+        && isValidDecisionReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'error') {
         const error = rebuildWireError(val.error, val.receipt);
         if (error && val.receipt.errorCode === error.code) {
           return { kind: 'error', ok: false, error, receipt: rebuildReceipt(val.receipt) };

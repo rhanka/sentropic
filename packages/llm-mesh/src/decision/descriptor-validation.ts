@@ -1,17 +1,17 @@
-import type { EvaluatorDescriptor } from './jev-descriptor.js';
-import { isJudgeCriterion } from './criterion.js';
+import type { DecisionEvaluatorDescriptor } from './descriptor.js';
+import { isDecisionCriterion } from './criterion.js';
 import { sanitizeJevId } from './jev-response.js';
 import { hasOnlyKeys, isCorrelationId, isRecord, isText, snapshotBoundedJson } from './validation.js';
 
 /** Freeze only detached parser output, never the caller's object. */
-export function freezeJudgeData<T>(value: T): T {
+export function freezeDecisionData<T>(value: T): T {
   if (value !== null && typeof value === 'object') {
-    for (const child of Object.values(value)) freezeJudgeData(child);
+    for (const child of Object.values(value)) freezeDecisionData(child);
     Object.freeze(value);
   }
   return value;
 }
-export function parseEvaluatorDescriptor(candidate: unknown): EvaluatorDescriptor | null {
+export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEvaluatorDescriptor | null {
   const snapshot = snapshotBoundedJson(candidate);
   if (!snapshot.ok || !isRecord(snapshot.value)) return null;
   const value = snapshot.value;
@@ -48,10 +48,10 @@ export function parseEvaluatorDescriptor(candidate: unknown): EvaluatorDescripto
   for (const entry of value.registeredCriteria) {
     if (!isRecord(entry) || !hasOnlyKeys(entry, ['criteriaId', 'revision', 'criterion'])
       || !isCorrelationId(entry.criteriaId) || !isCorrelationId(entry.revision)
-      || !isJudgeCriterion(entry.criterion) || entry.criterion.kind === 'registered') return null;
+      || !isDecisionCriterion(entry.criterion) || entry.criterion.kind === 'registered') return null;
     const key = JSON.stringify([entry.criteriaId, entry.revision]);
     if (refs.has(key)) return null;
     refs.add(key);
   }
-  return freezeJudgeData(value as unknown as EvaluatorDescriptor);
+  return freezeDecisionData(value as unknown as DecisionEvaluatorDescriptor);
 }
