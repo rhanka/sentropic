@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createJevTransport, JEV_ENDPOINT } from '../../src/transport/jev.js';
-import { jevResponse } from '../judge-fixtures.js';
+import { jevResponse } from '../decision-fixtures.js';
 
 describe('fixed-destination single-send JEV transport', () => {
   it('constructs without I/O and sends one bearer-authenticated JSON request', async () => {

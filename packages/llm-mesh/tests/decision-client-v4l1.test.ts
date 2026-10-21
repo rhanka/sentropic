@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRemoteJudgeClient } from '../src/judge/client.js';
-import { createJudgeService } from '../src/judge/service.js';
-import { judgeRequest, judgeServiceFixture, jevResponse } from './judge-fixtures.js';
-import type { JudgeRequest } from '../src/judge/request.js';
+import { createRemoteDecisionClient } from '../src/decision/client.js';
+import { createDecisionService } from '../src/decision/service.js';
+import { decisionRequest, decisionServiceFixture, jevResponse } from './decision-fixtures.js';
+import type { DecisionRequest } from '../src/decision/request.js';
 
 const choiceCriterion = { kind: 'choice' as const, instructions: 'Pick.',
   options: [{ id: 'a', description: 'A' }, { id: 'b', description: 'B' }] };
@@ -13,30 +13,30 @@ const gradedNative = () => ({ score: 1.25, probabilities: { '0': 0.1, '1': 0.55,
   legend: { '0': 'Low evidence', '1': 'Middle evidence', '2': 'High evidence' }, confidence: 0.7 });
 const choiceNative = () => ({ choice: 'a', probabilities: { a: 0.7, b: 0.3 }, confidence: 0.7 });
 
-async function realServiceResult(request: JudgeRequest, nativeAnswer?: unknown) {
-  const fixture = judgeServiceFixture();
+async function realServiceResult(request: DecisionRequest, nativeAnswer?: unknown) {
+  const fixture = decisionServiceFixture();
   if (nativeAnswer !== undefined) {
     fixture.transport.send.mockResolvedValue({ ok: true, body: jevResponse(nativeAnswer) });
   }
-  const service = createJudgeService(fixture.options);
-  const served = await service.judge(request);
+  const service = createDecisionService(fixture.options);
+  const served = await service.decide(request);
   if (!served.ok) throw new Error(`fixture service failed: ${JSON.stringify(served)}`);
   return served;
 }
 
-async function viaClient(request: JudgeRequest, payload: unknown) {
+async function viaClient(request: DecisionRequest, payload: unknown) {
   const fetch = vi.fn(async () => new Response(JSON.stringify(payload),
     { status: 200, headers: { 'content-type': 'application/json' } }));
-  const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+  const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
     fetch: fetch as unknown as typeof globalThis.fetch });
-  return client.judge(request);
+  return client.decide(request);
 }
 
 describe('V4-L1 strict remote boundary', () => {
   it('P10 accepts valid no-rule and negative threshold service results', async () => {
-    const noRule = judgeRequest({ correlationId: 'l1-p10-norule' });
+    const noRule = decisionRequest({ correlationId: 'l1-p10-norule' });
     expect(await viaClient(noRule, await realServiceResult(noRule))).toMatchObject({ kind: 'verdict', ok: true });
-    const threshold = judgeRequest({ correlationId: 'l1-p10-neg',
+    const threshold = decisionRequest({ correlationId: 'l1-p10-neg',
       decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.9 } });
     const neg = await viaClient(threshold, await realServiceResult(threshold));
     expect(neg).toMatchObject({ kind: 'verdict', ok: true });
@@ -44,7 +44,7 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P1 rejects a flipped threshold boolean from a real service result', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p1',
+    const request = decisionRequest({ correlationId: 'l1-p1',
       decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.9 } });
     const served = structuredClone(await realServiceResult(request)) as unknown as Record<string, unknown>;
     const verdict = served.verdict as unknown as Record<string, unknown>;
@@ -54,7 +54,7 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P2 rejects a null decision despite a requested threshold', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p2',
+    const request = decisionRequest({ correlationId: 'l1-p2',
       decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.9 } });
     const served = structuredClone(await realServiceResult(request)) as unknown as Record<string, unknown>;
     (served.verdict as unknown as Record<string, unknown>).decision = null;
@@ -62,7 +62,7 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P3 rejects a substituted threshold rule with a matching boolean', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p3',
+    const request = decisionRequest({ correlationId: 'l1-p3',
       decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.9 } });
     const served = structuredClone(await realServiceResult(request)) as unknown as Record<string, unknown>;
     const decision = (served.verdict as unknown as Record<string, unknown>).decision as unknown as Record<string, unknown>;
@@ -72,14 +72,14 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P4 rejects an altered resolved kind on a direct binary response', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p4' });
+    const request = decisionRequest({ correlationId: 'l1-p4' });
     const served = structuredClone(await realServiceResult(request)) as unknown as Record<string, unknown>;
     (served.verdict as unknown as Record<string, unknown>).resolvedCriterionKind = 'choice';
     expect(await viaClient(request, served)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
   });
 
   it('P5 rejects a below-argmax label and swapped native IDs', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p5', criterion: choiceCriterion });
+    const request = decisionRequest({ correlationId: 'l1-p5', criterion: choiceCriterion });
     const served = structuredClone(await realServiceResult(request, choiceNative())) as unknown as Record<string, unknown>;
     const verdict = served.verdict as unknown as Record<string, unknown>;
     const below = structuredClone(served) as unknown as Record<string, unknown>;
@@ -96,7 +96,7 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P6 rejects graded out-of-domain evidence and inconsistent scores', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p6', criterion: gradedCriterion });
+    const request = decisionRequest({ correlationId: 'l1-p6', criterion: gradedCriterion });
     const served = await realServiceResult(request, gradedNative());
     const badLabel = structuredClone(served) as unknown as Record<string, unknown>;
     const distribution = (badLabel.verdict as unknown as Record<string, unknown>).distribution as unknown as Record<string, unknown>[];
@@ -108,7 +108,7 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P7 rejects a foreign served evaluator on success', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p7' });
+    const request = decisionRequest({ correlationId: 'l1-p7' });
     const served = structuredClone(await realServiceResult(request)) as unknown as Record<string, unknown>;
     (served.receipt as unknown as Record<string, unknown>).servedEvaluator = {
       providerId: 'gcp', evaluatorId: 'foreign-evaluator', revision: 'foreign-revision' };
@@ -116,7 +116,7 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P8 rejects undeclared canaries and never returns them', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p8' });
+    const request = decisionRequest({ correlationId: 'l1-p8' });
     const served = await realServiceResult(request);
     for (const mutate of [
       (value: Record<string, unknown>) => { value.unexpected = 'canary'; },
@@ -142,11 +142,11 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P9 rejects malformed error identity but keeps valid foreign diagnostic errors', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p9' });
+    const request = decisionRequest({ correlationId: 'l1-p9' });
     const served = structuredClone(await realServiceResult(request)) as unknown as Record<string, unknown>;
     const receipt = served.receipt as unknown as Record<string, unknown>;
     const errorPayload = { kind: 'error', ok: false,
-      error: { code: 'TIMEOUT', message: 'Judge deadline exceeded.', phase: 'dispatch', retryable: true },
+      error: { code: 'TIMEOUT', message: 'Decision deadline exceeded.', phase: 'dispatch', retryable: true },
       receipt: { ...receipt, outcome: 'error', errorCode: 'TIMEOUT' } };
     const malformed = structuredClone(errorPayload) as unknown as Record<string, unknown>;
     ((malformed.receipt as unknown as Record<string, unknown>).servedModelId as unknown) = { invalid: true };
@@ -158,7 +158,7 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P11 rejects a duplicated graded outcome preserving total and expectation', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p11', criterion: gradedCriterion });
+    const request = decisionRequest({ correlationId: 'l1-p11', criterion: gradedCriterion });
     const served = structuredClone(await realServiceResult(request, gradedNative())) as unknown as Record<string, unknown>;
     const verdict = served.verdict as unknown as Record<string, unknown>;
     verdict.distribution = [
@@ -170,7 +170,7 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P12 rejects omitted/remapped graded indices but accepts reordered entries', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p12', criterion: gradedCriterion });
+    const request = decisionRequest({ correlationId: 'l1-p12', criterion: gradedCriterion });
     const served = await realServiceResult(request, gradedNative());
     const omitted = structuredClone(served) as unknown as Record<string, unknown>;
     (omitted.verdict as unknown as Record<string, unknown>).distribution = [
@@ -194,7 +194,7 @@ describe('V4-L1 strict remote boundary', () => {
   it('P13 accepts a later tied choice with a matching labels decision', async () => {
     const tiedCriterion = { kind: 'choice' as const, instructions: 'Choose.',
       options: [{ id: 'B', description: 'Second' }, { id: 'A', description: 'First' }] };
-    const request = judgeRequest({ correlationId: 'l1-p13', criterion: tiedCriterion,
+    const request = decisionRequest({ correlationId: 'l1-p13', criterion: tiedCriterion,
       decision: { kind: 'labels', passing: ['A'] } });
     const served = await realServiceResult(request,
       { choice: 'A', probabilities: { A: 0.5, B: 0.5 }, confidence: 0.8 });
@@ -207,7 +207,7 @@ describe('V4-L1 strict remote boundary', () => {
   });
 
   it('P14 rejects a provider-origin boolean against a threshold request', async () => {
-    const request = judgeRequest({ correlationId: 'l1-p14',
+    const request = decisionRequest({ correlationId: 'l1-p14',
       decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.9 } });
     const served = structuredClone(await realServiceResult(request)) as unknown as Record<string, unknown>;
     (served.verdict as unknown as Record<string, unknown>).decision = { pass: false, origin: 'provider' };

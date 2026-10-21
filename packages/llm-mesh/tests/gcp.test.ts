@@ -17,7 +17,7 @@ const GCP_CATALOG_KEYS = [
 ] as const;
 
 describe('gcp provider package surface', () => {
-  it('keeps gcp in the ordered provider catalog including the judge-only provider', () => {
+  it('keeps gcp in the ordered provider catalog including the decision-only provider', () => {
     expect(providerIds).toContain('gcp');
     expect(providerIds).toHaveLength(9);
     expect([...providerIds]).toEqual([
