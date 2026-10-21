@@ -4,9 +4,10 @@
 // dependencies independently following npm's ancestor walk, so a nested record that shadows
 // the root installation changes that consumer's closure. Only resolved records
 // ({version, resolved, integrity}) are hashed — never range strings — and traversal below
-// the direct dependencies continues only inside the build-toolchain subtree (the packages
-// the Makefile build actually installs), so unrelated runtime subtrees cannot invalidate P1.
-// The test runner (`vitest`) is excluded: it qualifies P1 but never feeds the packed bytes.
+// the direct dependencies continues transitively inside the build-toolchain subtree (every
+// descendant of a package the Makefile build actually installs), so unrelated runtime
+// subtrees cannot invalidate P1. The test runner (`vitest`) is excluded: it qualifies P1
+// but never feeds the packed bytes.
 export const P1_CONSUMERS = ['packages/mcp-platform', 'packages/mcp-broker'];
 
 export const TEST_ONLY_DEPS = ['vitest'];
@@ -63,9 +64,15 @@ export function buildP1Closure(lockDoc, recurseNames) {
   const tools = recurseNames instanceof Set ? recurseNames : new Set(recurseNames || []);
   const memo = new Map();
   const active = new Set();
-  const expand = (key, name) => {
+  const expand = (key, name, inToolchain) => {
     if (key === null) return null;
-    if (memo.has(key)) return memo.get(key);
+    const entered = inToolchain || tools.has(name);
+    if (memo.has(key)) {
+      const prior = memo.get(key);
+      const locked = prior === null || typeof prior !== 'object' || prior.link || 'deps' in prior || 'cycle' in prior;
+      if (!entered || locked) return prior;
+      memo.delete(key);
+    }
     if (active.has(key)) return { cycle: key };
     const base = projectNode(packages, key);
     if (!base || base.link) {
@@ -74,11 +81,11 @@ export function buildP1Closure(lockDoc, recurseNames) {
     }
     active.add(key);
     let node = base;
-    if (tools.has(name)) {
+    if (entered) {
       const names = childNames(packages[key]);
       if (names.length > 0) {
         node = { ...base, deps: {} };
-        for (const child of names) node.deps[child] = expand(resolveLockKey(packages, key, child), child);
+        for (const child of names) node.deps[child] = expand(resolveLockKey(packages, key, child), child, true);
       }
     }
     active.delete(key);
@@ -89,7 +96,7 @@ export function buildP1Closure(lockDoc, recurseNames) {
   for (const consumer of P1_CONSUMERS) {
     const entry = packages[consumer];
     const deps = {};
-    for (const name of declaredNames(entry)) deps[name] = expand(resolveLockKey(packages, consumer, name), name);
+    for (const name of declaredNames(entry)) deps[name] = expand(resolveLockKey(packages, consumer, name), name, false);
     closure[consumer] = {
       version: entry && typeof entry.version === 'string' ? entry.version : null,
       deps,
