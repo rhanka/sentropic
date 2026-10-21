@@ -138,13 +138,20 @@ export function parseDecisionValidationContext(candidate: unknown, request: Deci
   const registered = request.criterion.kind === 'registered';
   if (registered && !isRegisteredResolution(candidate.registeredResolution, request, nowMs)) return null;
   if (!registered && candidate.registeredResolution !== undefined) return null;
-  const context: DecisionValidationContext = registered
-    ? { evaluator: { ...candidate.evaluator }, validationProfile: { ...(profile as DecisionValidationProfile) },
-      acceptedServedModelIds: [...models as string[]], semantics: { ...(semantics as DecisionValidationSemantics) },
-      registeredResolution: candidate.registeredResolution as DecisionRegisteredResolution,
-      definitionDigest: candidate.definitionDigest as string }
-    : { evaluator: { ...candidate.evaluator }, validationProfile: { ...(profile as DecisionValidationProfile) },
-      acceptedServedModelIds: [...models as string[]], semantics: { ...(semantics as DecisionValidationSemantics) },
-      definitionDigest: candidate.definitionDigest as string };
+  const ref = candidate.evaluator as EvaluatorRef;
+  const context: DecisionValidationContext = {
+    evaluator: { providerId: ref.providerId, evaluatorId: ref.evaluatorId, revision: ref.revision },
+    validationProfile: { profile: (profile as { profile: DecisionValidationProfile['profile'] }).profile,
+      version: (profile as { version: string }).version },
+    acceptedServedModelIds: [...(models as string[])],
+    semantics: { nativeDecision: (semantics as { nativeDecision: boolean }).nativeDecision,
+      score: (semantics as { score: DecisionValidationSemantics['score'] }).score,
+      confidence: (semantics as { confidence: DecisionValidationSemantics['confidence'] }).confidence,
+      rationale: (semantics as { rationale: 'forbidden' | 'optional' }).rationale },
+    definitionDigest: candidate.definitionDigest as string,
+  };
+  if (registered) {
+    context.registeredResolution = candidate.registeredResolution as DecisionRegisteredResolution;
+  }
   return freezeDecisionData(context);
 }
