@@ -1,15 +1,15 @@
-// memory aggregate round-trip on the installed generic SQLite kernel,
-// on a disposable temp path: governed writes persist across close/reopen,
-// and a conflicting higher-version write is refused against real stored
-// state through the module's current-state resolver. This is functional
-// composition evidence on throwaway storage: NOT a qualified provider
-// composition, NOT durable profiles, NOT an S0 receipt.
-
+// memory aggregate round-trip on the installed generic SQLite kernel, on a
+// disposable temp path: mandatory validation and effects share one backend
+// transaction per write (sequential validation against fresh stored
+// state), so a second completion validated after the first commits
+// rereads committed state and is refused. This is NOT concurrent-writer
+// serializability proof, NOT a qualified provider composition, NOT
+// durable profiles, NOT S0.
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { ScopeGrant } from '../../src/storage/authority.js';
+import type { ScopeGrant } from '../../src/storage/root-facade.js';
 import type { RootScopedRuntime } from '../../src/storage/root-facade.js';
 import { createSqliteKernel, type SqliteKernel } from '../../src/storage/sqlite/index.js';
 import {
@@ -66,19 +66,15 @@ describe('memory SQLite round-trip on the installed kernel', () => {
     const kernel = openKernel(dir);
     try {
       const bound = kernel.bindNew(grantFor()) as RootScopedRuntime;
-      // Live backend reader: every validation rereads the kernel, never a cache.
-      let backendReads = 0;
-      const resolveCurrent = resolveMemoryCurrentFromAggregates(async (key: string) => {
-        backendReads += 1;
-        const found = await bound.readAggregate(key);
-        if (found === null) return null;
-        return { value: found.value } as never;
-      });
-      const unit = { ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 1, creation())] };
-      await validateMemoryEffects(unit as never, resolveCurrent);
-      // The governed path reread the live backend, it did not assume absence.
-      expect(backendReads).toBe(1);
+      // Mandatory validation and effects share one backend transaction.
       await bound.transact({}, async (tx) => {
+        const resolveCurrent = resolveMemoryCurrentFromAggregates(async (key: string) => {
+          const found = await tx.readAggregate(key);
+          if (found === null) return null;
+          return { value: found.value } as never;
+        });
+        const unit = { ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 1, creation())] };
+        await validateMemoryEffects(unit as never, resolveCurrent);
         await tx.apply(unit as never);
       });
       const stored = await bound.readAggregate(CAPTURE_KEY);
@@ -104,62 +100,59 @@ describe('memory SQLite round-trip on the installed kernel', () => {
     }
   });
 
-  it('should refuse a conflicting higher-version write against real stored state', async () => {
+  it('should refuse a second completion validated after the first commits', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cm-engram-memory-rt-'));
     const kernel = openKernel(dir);
+    // Controlled schedule mirroring the R3 probe: validate+apply the first
+    // completion, then validate the second one. The second validation
+    // rereads committed state inside its own transaction and is refused,
+    // so it can never reach effects.
+    const applyGoverned = async (
+      bound: RootScopedRuntime,
+      key: string,
+      version: number,
+      value: unknown,
+    ): Promise<void> => {
+      await bound.transact({}, async (tx) => {
+        const resolveCurrent = resolveMemoryCurrentFromAggregates(async (currentKey: string) => {
+          const found = await tx.readAggregate(currentKey);
+          if (found === null) return null;
+          return { value: found.value } as never;
+        });
+        const unit = { ...emptyUnit(), updates: [updateFor(key, version, value)] };
+        await validateMemoryEffects(unit as never, resolveCurrent);
+        await tx.apply(unit as never);
+      });
+    };
     try {
       const bound = kernel.bindNew(grantFor()) as RootScopedRuntime;
-      const completed = { ...creation(), revision: 2, recordDigest: 'sha256:abc' };
-      // Live backend reader: every validation rereads the kernel, never a
-      // cache, so the refusal below is proven against the completed value at
-      // the backend transaction boundary, not a first-read snapshot.
-      let backendReads = 0;
-      const resolveCurrent = resolveMemoryCurrentFromAggregates(async (key: string) => {
-        backendReads += 1;
-        const found = await bound.readAggregate(key);
-        if (found === null) return null;
-        return { value: found.value } as never;
-      });
-      await validateMemoryEffects({ ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 1, creation())] }, resolveCurrent);
-      await bound.transact({}, async (tx) => {
-        await tx.apply({ ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 1, creation())] } as never);
-      });
+      const completedA = { ...creation(), revision: 2, recordDigest: 'sha256:first' };
+      const completedB = { ...creation(), revision: 3, recordDigest: 'sha256:second' };
+      await applyGoverned(bound, CAPTURE_KEY, 1, creation());
+      await applyGoverned(bound, CAPTURE_KEY, 2, completedA);
+      // Identical replay of the committed completion is accepted (read-only
+      // check, no transaction needed). This positive control alone does not
+      // establish which state was consulted: replay is also valid against a
+      // stale or absent read. Liveness rests on the refusal reason below.
       await validateMemoryEffects(
-        { ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 2, completed)] },
-        resolveCurrent,
+        { ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 2, completedA)] },
+        resolveMemoryCurrentFromAggregates(async (currentKey: string) => {
+          const found = await bound.readAggregate(currentKey);
+          if (found === null) return null;
+          return { value: found.value } as never;
+        }),
       );
-      await bound.transact({}, async (tx) => {
-        await tx.apply({ ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 2, completed)] } as never);
-      });
-      // Identical replay of the completed value is accepted: the resolver
-      // tracks live backend state, not a stale first read.
-      await validateMemoryEffects(
-        { ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 2, completed)] },
-        resolveCurrent,
+      // The refusal reason proves live consultation: against the committed
+      // rev2 the validator reports the completed proof immutable, whereas a
+      // stale rev1 read would report the revision-advance rule and an absent
+      // read would refuse as a non-1 creation revision. The second
+      // transaction therefore reread committed state before its own effects.
+      await expect(applyGoverned(bound, CAPTURE_KEY, 3, completedB)).rejects.toThrow(
+        /completed capture proof is immutable/,
       );
-      await expect(
-        validateMemoryEffects(
-          {
-            ...emptyUnit(),
-            updates: [
-              updateFor(CAPTURE_KEY, 99, {
-                ...creation(),
-                revision: 99,
-                recordDigest: 'sha256:changed',
-                createdCursor: '999',
-                proof: { changed: true },
-              }),
-            ],
-          },
-          resolveCurrent,
-        ),
-      ).rejects.toThrow(/immutable/);
-      // Every validation above performed a live backend read: creation,
-      // completion, replay, and the refused mutation.
-      expect(backendReads).toBe(4);
       const unchanged = await bound.readAggregate(CAPTURE_KEY);
       expect(unchanged?.version).toBe(2);
-      expect(JSON.parse((unchanged?.value as { data: string }).data)).toEqual(completed);
+      expect(JSON.parse((unchanged?.value as { data: string }).data)).toEqual(completedA);
     } finally {
       kernel.close();
       rmSync(dir, { recursive: true, force: true });
