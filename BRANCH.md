@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 exact-head CI 39574578936 reproduced four HIGH CVE-2026-111943 findings in the CI toolbox's esbuild copies (Go stdlib 1.26.9). Rebuilt unchanged esbuild versions with fixed Go 1.26.10 and an official-image digest pin: npm/Vitest and both TypeScript transform/Node interface checks pass; the real rebuilt image's Trivy scan has zero findings. No register exception or weakened gate.
+
 - [x] N5 R8 author remediation validated at a9e960b1b: full package 1087 passed / 129 opt-in skipped (99 consent); four API suites 176/176 (125 consent) on fresh migrated PostgreSQL/MinIO; package/API typechecks and API lint pass. Exact old-domain control fails 32 cases with 67 controls passing. Operations, commit mapping and deterministic red/green logs are recorded in `.h2a/build/lot2_n5_report.md`; migration 0019 is additive and 0012–0018 are preserved. Exact-head CI evidence is recorded separately in the N5 report.
 
 - [x] N5 R8 resumed audit: stale amendments that predate exclusion clearing cannot remove suppression by advancing only the policy revision; domain and direct SQL barriers reproduce the bypass. Parent admission checks preserve denial-only updates after an amendment.
@@ -250,6 +252,7 @@
   - [ ] Cowork implementation, `packages/comments/**`, M2 storage, Graphify/Engram/L3a implementation, and L6a source/migrations.
   - [ ] All h2a repository paths for the Sentropic implementer; h-cond owns its separate implementation and qualification.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] BR76-EX15: `api/Dockerfile` ci-esbuild compiler image only, to resolve blocking CVE-2026-111943 under the owner's get-CI-green instruction. Impact: patched embedded Go runtime in four CI-only esbuild binaries; Node interfaces and application dependencies stay fixed. Rollback restores the previous compiler pin and reinstates the blocking scan finding.
   - [x] BR76-EX14: owner-requested N5 R8 permits additive `api/drizzle/control/0019_session_content_capture_floor.sql` and the existing journal/data-model paths for capture/history denial floors under concurrency. Impact: stale writes cannot reactivate denied authority. Rollback fences capture, drains writers and removes only the new triggers/function; 0012–0018 and COMPLIANCE remain untouched.
   - [x] BR76-EX13: owner-authorized N5 round-2 remediation permits new additive `api/drizzle/control/0018_session_content_denial_floor.sql` plus existing journal/data-model paths for a database-enforced monotonic denial floor. Impact: stale writes cannot reset denial; rollback fences capture, drains writers and removes only the new triggers/function. Migrations 0012–0017 remain byte-identical; no COMPLIANCE operation is authorized.
   - [x] BR76-EX12: owner-requested N5 R1–R6 remediation permits `api/drizzle/control/0017_session_content_safety.sql`, `api/src/services/cluster-mesh/session-content-purge.ts`, and `api/src/index.ts` for additive durable writer/read-denial state and production purge scheduling only. Existing schema/journal/data-model exceptions apply. Impact: unknown writers block completion after restart; rollback disables new capture/consumer, settles/purges writers, then removes additive fields. Migrations 0012–0016 and COMPLIANCE P10Y remain untouched.
