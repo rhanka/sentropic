@@ -1,0 +1,226 @@
+{
+  "status": "passed",
+  "checks": [
+    {
+      "file": "overview-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 2708,
+      "height": 1523.25,
+      "groups": 5,
+      "edges": 10,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-h2a-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 2409.62744140625,
+      "height": 521.6272583007812,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-surfaces-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 2409.626953125,
+      "height": 533.6272583007812,
+      "groups": 1,
+      "edges": 1,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-cluster-mesh-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 4441.62744140625,
+      "height": 2207.627197265625,
+      "groups": 6,
+      "edges": 4,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-cm-catalog-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 1821.62744140625,
+      "height": 1210.627197265625,
+      "groups": 2,
+      "edges": 0,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-cat-mcp-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 1789.62744140625,
+      "height": 491.6273193359375,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-cm-storage-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 549.62744140625,
+      "height": 1210.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-cm-security-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 549.627685546875,
+      "height": 1210.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-cm-cluster-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 549.626953125,
+      "height": 1210.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-engram-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 1169.627197265625,
+      "height": 552.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "frame-design-system-en.svg",
+      "theme": "light",
+      "failures": [],
+      "width": 2409.626953125,
+      "height": 552.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#ffffff"
+    },
+    {
+      "file": "overview-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 2708,
+      "height": 1523.25,
+      "groups": 5,
+      "edges": 10,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-h2a-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 2409.62744140625,
+      "height": 521.6272583007812,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-surfaces-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 2409.626953125,
+      "height": 533.6272583007812,
+      "groups": 1,
+      "edges": 1,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-cluster-mesh-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 4441.62744140625,
+      "height": 2207.627197265625,
+      "groups": 6,
+      "edges": 4,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-cm-catalog-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 1821.62744140625,
+      "height": 1210.627197265625,
+      "groups": 2,
+      "edges": 0,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-cat-mcp-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 1789.62744140625,
+      "height": 491.6273193359375,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-cm-storage-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 549.62744140625,
+      "height": 1210.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-cm-security-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 549.627685546875,
+      "height": 1210.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-cm-cluster-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 549.626953125,
+      "height": 1210.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-engram-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 1169.627197265625,
+      "height": 552.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#1e293b"
+    },
+    {
+      "file": "frame-design-system-en.svg",
+      "theme": "dark",
+      "failures": [],
+      "width": 2409.626953125,
+      "height": 552.627197265625,
+      "groups": 1,
+      "edges": 0,
+      "surface": "#1e293b"
+    }
+  ],
+  "errors": []
+}
