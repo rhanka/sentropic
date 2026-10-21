@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] Main convergence 2026-10-21: merge main 6ec93105b (#708), preserve artifacts 0.1.4 hardening and its packaging changes plus the already-qualified Vite 8.2.4 security patch. Retain this D2 plan; main plan is preserved verbatim at .h2a/build/main_merge_pr708_branch.md and in its ancestor commit. Consumed Memory L5 archives/inventory are unchanged; refresh the root-lock provenance after the merge commit. Control migrations 0012–0016 are unchanged.
+
 - [x] Follow-up main merge 2026-10-20: main advanced to feb741083 while validation ran. Resolve BRANCH.md by retaining this active D2 plan; preserve main PR #712 plan verbatim in .h2a/build/main_merge_pr712_branch.md and its ancestor commit. Keep verified Memory L5 manifest 7fce9279… and retain incoming main manifest 781aa206… by content hash. Root lock and all D2 application/test source are unchanged; control migrations 0012–0016 still match original digests.
 
 - [x] Main integration 2026-10-20: owner requires merge, no rebase or force-push; use ENV=test-pr677-main only, API 9384 / UI 5584 / Maildev 1484 (verified free). Six metadata conflicts resolved by retaining main additions and selecting cluster-mesh 0.21.1 above published 0.21.0. Locks regenerate through Make; Memory L5 provenance regenerated against merge 75cceadf9 and verified: 30 files, 54 edges, initial manifest 27de5fa8… (superseded by the verified security-lock provenance refresh); both exact predecessor manifests retained under their content hashes. Control migrations 0012–0016 stay byte-for-byte unchanged. No COMPLIANCE P10Y write, publication, PR merge or readiness change is authorized.
@@ -51,6 +53,52 @@
 ## Branch Scope Boundaries (MANDATORY)
 
 - [ ] **Allowed Paths (implementation scope)**:
+  - [x] BR76-EX11: owner-authorized merge of main 6ec93105b (#708 artifacts hardening and security locks); the following exact paths may inherit main changes in this merge only. Keep D2 behavior and consent tests; rollback reverts this integration.
+  - [x] `BRANCH.md` — inherited main integration (BR76-EX11).
+  - [x] `package-lock.json` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/README.md` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/package.json` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/probe/HARDENING_QUALIFICATION.md` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/probe/packed-consumer.mjs` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/src/content/handler.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/src/http.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/src/mcp-core.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/src/mcp.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/src/server/publication-limits.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/src/server/publication.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/src/server/service.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/src/server/uploads.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/tests/content.e2e.test.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/tests/http-mcp-service-parity.test.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/tests/http-routes.test.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/tests/http-security.test.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/tests/http-uploads-templates.test.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/tests/mcp.test.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/tests/publication-security.test.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/tests/service.test.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/artifacts/tests/uploads.test.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` — inherited main integration (BR76-EX11).
+  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` — inherited main integration (BR76-EX11).
+  - [x] `packages/cluster-mesh/tests/packaging/prepare.sh` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/014a1f014c668e3cec6f724fa278073774eb2e4307b086c55bceccbaaa01986a.json` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/014a1f014c668e3cec6f724fa278073774eb2e4307b086c55bceccbaaa01986a.json.sha256` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/0324f58246c351b8ae3d04e958d5e58cc409429bf4c5e886195575033e4be6eb.json` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/0324f58246c351b8ae3d04e958d5e58cc409429bf4c5e886195575033e4be6eb.json.sha256` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/43d05fde570ecbd901c03e3474c9603f45a0335a2ee0bcde569de5029c3c1f36.json` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/43d05fde570ecbd901c03e3474c9603f45a0335a2ee0bcde569de5029c3c1f36.json.sha256` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/65bad76804dac9b4db5e253c462926439b95961eaf7192999d73a7ebe0edfa1f.json` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/65bad76804dac9b4db5e253c462926439b95961eaf7192999d73a7ebe0edfa1f.json.sha256` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/6ba9f634fa161cad88ac0a50cd1157f2ae1a93f240840b090c05ece6ab10d615.json` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/6ba9f634fa161cad88ac0a50cd1157f2ae1a93f240840b090c05ece6ab10d615.json.sha256` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/781aa20653d218a9b648007e633881e3d90dae3d2ebc28bd6a0acf970ac9fa80.json` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/781aa20653d218a9b648007e633881e3d90dae3d2ebc28bd6a0acf970ac9fa80.json.sha256` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/ca14388d51de2be5687561a8b652f18261aa6f09d0e308be55bf43110d12f15b.json` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/ca14388d51de2be5687561a8b652f18261aa6f09d0e308be55bf43110d12f15b.json.sha256` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/d59d629bd7515c7c8cf3d53e76b272bde459d9c0241ddbde6a20abfeec6ab8de.json` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/history/d59d629bd7515c7c8cf3d53e76b272bde459d9c0241ddbde6a20abfeec6ab8de.json.sha256` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` — inherited main integration (BR76-EX11).
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256` — inherited main integration (BR76-EX11).
   - [x] BR76-EX10: owner-authorized follow-up merge of main feb741083 (#712); preserve its canonical image resolution/build/CI behavior and this branch D2 test plumbing. Exact inherited paths: `.dockerignore`, `Makefile`, `api/Dockerfile`, `scripts/resolve-api-image.sh`, `scripts/test-api-image-canonical.sh`. No unrelated edits; rollback reverts this integration.
   - [x] BR76-EX8: owner-authorized merge of origin/main 7c395f439 into this branch on 2026-10-20; the following exact paths may receive main changes in this merge only. Preserve main intent; no unrelated edits. Rollback: revert the integration commit.
   - [x] `.github/workflows/ci.yml` — inherited main integration (BR76-EX8).
@@ -143,6 +191,7 @@
   - [ ] Cowork implementation, `packages/comments/**`, M2 storage, Graphify/Engram/L3a implementation, and L6a source/migrations.
   - [ ] All h2a repository paths for the Sentropic implementer; h-cond owns its separate implementation and qualification.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] BR76-EX11: `tools/memory-mcp-l5/artifacts/history/2bff16f81fbb2f02587f1040480704315d6316af0fd95c8e0eea6b2c683b4176.json`, `tools/memory-mcp-l5/artifacts/history/2bff16f81fbb2f02587f1040480704315d6316af0fd95c8e0eea6b2c683b4176.json.sha256` retain the exact predecessor before the artifacts-0.1.4 root-lock provenance refresh.
   - [x] BR76-EX9: `tools/memory-mcp-l5/artifacts/history/7fce9279e1e8804c89b538905ea0628d5d7e7dc8bb74baf186a06267ebb0a83d.json`, `tools/memory-mcp-l5/artifacts/history/7fce9279e1e8804c89b538905ea0628d5d7e7dc8bb74baf186a06267ebb0a83d.json.sha256` preserve the exact manifest before binding provenance to the audited nested-tool Vite patch.
   - [x] BR76-EX10: `tools/memory-mcp-l5/artifacts/history/781aa20653d218a9b648007e633881e3d90dae3d2ebc28bd6a0acf970ac9fa80.json`, `tools/memory-mcp-l5/artifacts/history/781aa20653d218a9b648007e633881e3d90dae3d2ebc28bd6a0acf970ac9fa80.json.sha256` preserve the exact incoming main manifest. Keep the already verified branch manifest because the merged root lock and consumed archives/inventory are unchanged.
   - [x] BR76-EX9: `tools/memory-mcp-l5/artifacts/history/18a0f16965f7e9fecb5493908ab324c451638c1b8a0fed31590bf5101c32faf0.json`, `tools/memory-mcp-l5/artifacts/history/18a0f16965f7e9fecb5493908ab324c451638c1b8a0fed31590bf5101c32faf0.json.sha256` only to preserve the predecessor before binding provenance to the verified Vite patch lock.
