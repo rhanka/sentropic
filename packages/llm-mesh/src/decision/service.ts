@@ -22,6 +22,9 @@ export interface DecisionSelectionOptions {
   registry: ProviderRegistry;
   resolveEvaluator(ref: EvaluatorRef): DecisionEvaluatorDescriptor | null | Promise<DecisionEvaluatorDescriptor | null>;
   policy?: DecisionHostPolicy;
+  /** Explicit evaluator allowlist (P28): when present, only exactly listed
+   * evaluator references are admitted. Absent, the registry inventory decides. */
+  evaluatorAllowlist?: readonly EvaluatorRef[];
 }
 export type DecisionSelection = { ok: true; request: DecisionRequest; descriptor: DecisionEvaluatorDescriptor; adapter: ProviderAdapter }
   | { ok: false; code: DecisionErrorCode };
@@ -34,6 +37,11 @@ function canonicalDecisionJson(value: unknown): string {
   }
   return JSON.stringify(value) ?? 'null';
 }
+
+/** An allowlist entry admits one exact evaluator reference; nothing else matches. */
+const allowlistsEvaluator = (allowlist: readonly unknown[] | undefined, ref: EvaluatorRef): boolean =>
+  allowlist !== undefined && allowlist.some((entry) => isRecord(entry)
+    && entry.providerId === ref.providerId && entry.evaluatorId === ref.evaluatorId && entry.revision === ref.revision);
 
 /** Preflight binds one authoritative descriptor: any request-affecting disagreement refuses before credentials or spend. */
 function sameDecisionDescriptor(left: DecisionEvaluatorDescriptor, right: DecisionEvaluatorDescriptor): boolean {
@@ -65,6 +73,12 @@ export async function preflightDecisionRequest(candidate: unknown, options: Deci
   const parsed = parseDecisionRequest(candidate);
   if (!parsed.ok) return parsed;
   const request = freezeDecisionData(parsed.request);
+  // P28: an explicit allowlist refuses before provider lookup; a general
+  // catalogue entry never implies admission and no provider route is touched.
+  if (options.evaluatorAllowlist !== undefined
+    && !allowlistsEvaluator(options.evaluatorAllowlist, request.evaluator)) {
+    return { ok: false, code: 'EVALUATOR_UNKNOWN' };
+  }
   try {
     const adapter = options.registry.getProvider(request.evaluator.providerId);
     if (!adapter || adapter.provider.providerId !== request.evaluator.providerId) return { ok: false, code: 'PROVIDER_UNAVAILABLE' };
@@ -109,18 +123,30 @@ export async function resolveDecisionAuth(descriptor: DecisionEvaluatorDescripto
   } catch { return { ok: false, code: 'CREDENTIAL_MISSING' }; }
 }
 
+/** An explicit allowlist holds only exact, well-shaped evaluator references. */
+const isEvaluatorAllowlist = (value: unknown): value is readonly EvaluatorRef[] =>
+  Array.isArray(value) && value.every((entry) => isRecord(entry)
+    && hasOnlyKeys(entry, ['providerId', 'evaluatorId', 'revision'])
+    && typeof entry.providerId === 'string' && entry.providerId !== ''
+    && typeof entry.evaluatorId === 'string' && entry.evaluatorId !== ''
+    && typeof entry.revision === 'string' && entry.revision !== '');
+
 /** Trusted composition only. Construction performs no discovery, key resolution or I/O. */
 export function createDecisionService(supplied: DecisionServiceOptions): DecisionClient {
   const policy = snapshotBoundedJson(supplied.policy ?? {});
   if (!supplied.registry || ![supplied.resolveEvaluator, supplied.resolveAuth, supplied.resolvePrice, supplied.authorize,
     supplied.budget?.admit, supplied.budget?.markDispatched, supplied.budget?.release, supplied.budget?.settle,
-    supplied.receipts?.persist].every((port) => typeof port === 'function') || !policy.ok || !isRecord(policy.value)
+    supplied.receipts?.persist].every((port) => typeof port === 'function')
+    || (supplied.evaluatorAllowlist !== undefined && !isEvaluatorAllowlist(supplied.evaluatorAllowlist))
+    || !policy.ok || !isRecord(policy.value)
     || !hasOnlyKeys(policy.value, ['timeoutMs', 'maxCostMicroUsd', 'allowRaw'])
     || (policy.value.timeoutMs !== undefined && (!Number.isSafeInteger(policy.value.timeoutMs)
       || typeof policy.value.timeoutMs !== 'number' || policy.value.timeoutMs < 1 || policy.value.timeoutMs > 60000))
     || (policy.value.maxCostMicroUsd !== undefined && !isMicroUsd(policy.value.maxCostMicroUsd))
     || (policy.value.allowRaw !== undefined && typeof policy.value.allowRaw !== 'boolean')) throw new Error('Invalid decision host configuration.');
-  const options = { ...supplied, policy: freezeDecisionData(policy.value as DecisionHostPolicy) };
+  const options = { ...supplied, policy: freezeDecisionData(policy.value as DecisionHostPolicy),
+    ...(supplied.evaluatorAllowlist === undefined ? {}
+      : { evaluatorAllowlist: freezeDecisionData(supplied.evaluatorAllowlist.map((entry) => ({ ...entry }))) }) };
   return { async decide(candidate, callOptions) {
     const execution = beginDecisionExecution(candidate, { clock: options.clock, generateId: options.generateId,
       timeoutMs: options.policy.timeoutMs, signal: callOptions?.signal });
