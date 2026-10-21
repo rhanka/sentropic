@@ -212,10 +212,11 @@ Actions with the following status should be included around tasks only if really
   - [x] One equality guard line in each producing recipe + the pack recipe; fingerprint v4 binds the new wiring; production-verifier regressions for both single-line mutations plus the execution-contract check (extracted guard passes on the pin, refuses the invocation override; runtime prerequisite closes the loop against the freeze file).
   - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-astra-r3`.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [ ] **Lot 19 — Astra R3 non-blocking (BR710-EX8) + P1 regen v4**
-  - [ ] Align `ui/package-lock.json` markdown-it metadata (`entities ^4.5.0`, `linkify-it ^5.0.2`); severity precision in EX4/EX6/Lot 14/Lot 16 titles.
-  - [ ] Retain `f5254a27` manifest to history, regenerate P1 via `make` (provenance + exact 44-contract inventory), verify + gate.
+- [x] **Lot 19 — Astra R3 non-blocking (BR710-EX8) + P1 regen v4**
+  - [x] Align `ui/package-lock.json` markdown-it metadata (`entities ^4.5.0`, `linkify-it ^5.0.2`); severity precision in EX4/EX6/Lot 14/Lot 16 titles.
+  - [x] Retain `f5254a27` manifest to history, regenerate P1 via `make` (provenance + exact 44-contract inventory), verify + gate.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [ ] **Lot 20 — Merge origin/main (6ec93105b, PR #708), verify, push, CI green**
-  - [ ] Merge (no rebase); resolve preserving both intents; `make` regen; keep all R3 fixes; verify merged tree.
+- [x] **Lot 20 — Merge origin/main (6ec93105b, PR #708), verify, push, CI green**
+  - [x] Merge (no rebase); BRANCH.md kept as this branch's live plan; locks auto-merged (identical security triples + main's `artifacts 0.1.4`); manifest conflict resolved to branch side then regenerated.
+  - [x] Regen `9c9bc3d0` (v4, declaredLock = merged lock, 44 contracts; only deltas vs `f5254a27`: schema v3→v4 hash + new sourceHead, tuple bytes identical); verify + gate + tooling green.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green on the exact head, then report head SHA + CI URL.
