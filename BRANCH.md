@@ -143,9 +143,10 @@
   - [x] Merge commit `6b640c0ca` preserves both parents; regenerate P1 `43d05fde...` from that committed source, retaining the intermediate manifest. Its 44 contracts and both archive digests/integrities remain identical to main.
   - [x] Full memory-l5-gate LOT=1 passes all 228 tests, typechecks and source/packed graphs. All local Artifacts/L5 commands use `ENV=test-pr708-main` last, no Python and one Docker build at a time.
   - [x] Delivery constraints: commit through Make and normal push; qualify CI on the exact head, using branch workflow_dispatch if no run starts. Retain draft status without merging the PR; report the final CI result separately.
-- [ ] **Lot 13 — Exact-head CI dependency repair**
+- [x] **Lot 13 — Exact-head CI dependency repair**
   - [x] Run `39522466383` passes Artifacts and L5, but API image audit blocks follow-redirects 1.16.0 (GHSA-q3jh-wrc6-jgq8, GHSA-8r9p-f939-6h3c) and SCA blocks Vite's GHSA-587h-7wmj-h5pm.
   - [x] Generate isolated npm lock entries through Make/Docker for follow-redirects 1.16.1, Vite 7.3.7 and both nested Vite 8.2.4 entries. Assert their dependency/peer/bin/engine metadata is unchanged; retain only version, URL and integrity fields (24 changed lines).
   - [x] Complete workspace npm ci with install scripts disabled passes; API/UI SCA pass without new exceptions. Keep every Artifacts implementation/test file and selected fixture unchanged.
-  - [ ] Pass both production audit gates, retain P1 43d05fde and regenerate provenance from the committed dependency repair; rerun L5 for the new lock.
+  - [x] Both production audit gates pass without remaining HIGH/CRITICAL advisories; dependency repair commit is `00f11a1eb` and root lock SHA-256 is `5fed2990...`.
+  - [x] Retain P1 `43d05fde...` and regenerate P1 `d59d629b...` from the committed dependency repair; all 44 contracts and both archive digests/integrities remain identical to main. Full L5 gate passes all 228 tests, typechecks and source/packed graphs for the new lock.
   - [x] Delivery constraints: Make-only commits, normal push and green CI on the exact new head; preserve draft status without merging or publishing.
