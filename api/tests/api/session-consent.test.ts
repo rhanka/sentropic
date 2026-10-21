@@ -145,6 +145,109 @@ describe('session consent durable lifecycle', () => {
     return binding.bindingId;
   };
 
+  const deriveSession = async (sessionId: string) => service.deriveGrant({
+    projectId: 'sess-content-project-1', sessionId,
+    bindingId: await adoptSession(sessionId), bindingVersion: 1, d1Version: 1,
+    d1Incarnation: 1, d1StartSeq: 0, workspaceId, sessionCreatedAt: now + 1,
+    sourceGeneration: 'src-1', sourceTrustVersion: 'tv-1', nativeStartSeq: 0,
+  }, ctx);
+
+  it.each(['tenant', 'owner', 'principal'] as const)(
+    'should refuse N5 R5 accept-at-revision by a different %s without transferring the project', async (scope) => {
+      await acceptProject();
+      const before = await db.select().from(sessionContentProjects);
+      const actor = scope === 'principal' ? { ...ctx, principalId: other.id } : {
+        tenantId: scope === 'tenant' ? TENANT_B : TENANT_A,
+        ownerId: scope === 'tenant' ? outsider.id : other.id,
+        principalId: scope === 'tenant' ? outsider.id : other.id,
+      };
+      await expectContentError(() => acceptProject({ projectRevision: 0,
+        tenantId: actor.tenantId }, actor), 'cross_owner_refused');
+      expect(await db.select().from(sessionContentProjects)).toEqual(before);
+    });
+
+  it.each(['reserve', 'admit', 'workspace-publish', 'tenant-publish'] as const)(
+    'should refuse N5 R6 capture after membership withdrawal at %s', async (phase) => {
+      await acceptProject();
+      await deriveSession('n5-membership');
+      const body = new Uint8Array([1]);
+      const seed = await service.reserveBeforeUpload('n5-membership', 'terminal.cache',
+        { raw: 1, encoded: 1 }, 'n5-seed', ctx);
+      await service.publishAfterUpload(seed.reservationId, body, ctx);
+      const [committed] = await db.select().from(sessionContentObjects);
+      const withdraw = async () => {
+        if (phase === 'tenant-publish') await db.delete(tenantMemberships)
+          .where(and(eq(tenantMemberships.tenantId, TENANT_A), eq(tenantMemberships.userId, owner.id)));
+        else await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+      };
+      if (phase === 'reserve') {
+        await withdraw();
+        await expectContentError(() => service.reserveBeforeUpload('n5-membership', 'terminal.cache',
+          { raw: 1, encoded: 1 }, 'n5-denied', ctx), 'membership_required');
+      } else {
+        const next = await service.reserveBeforeUpload('n5-membership', 'terminal.cache',
+          { raw: 1, encoded: 1 }, 'n5-denied', ctx);
+        if (phase === 'admit') await withdraw();
+        const writer = makeService({ publishHooks: { afterUpload: withdraw } });
+        await expectContentError(() => writer.publishAfterUpload(next.reservationId, body, ctx), 'membership_required');
+      }
+      expect(await db.select().from(sessionContentObjects).where(eq(sessionContentObjects.state, 'committed'))).toEqual([committed]);
+      const handles = await service.listRetainedHandles(owner.id);
+      expect(handles.length).toBeGreaterThan(0);
+      await service.requestRetainedPurge(handles[0]!.retainedScopeId, owner.id);
+      expect(await fixture.listPhysical('')).toEqual([]);
+    });
+
+  it.each(['grant', 'project', 'exclude', 'close'] as const)(
+    'should preserve N5 R3 durable read denial after %s transitions', async (transition) => {
+      await acceptProject();
+      await deriveSession('n5-denial');
+      const reservation = await service.reserveBeforeUpload('n5-denial', 'terminal.cache',
+        { raw: 1, encoded: 1 }, 'n5-denial', ctx);
+      await service.publishAfterUpload(reservation.reservationId, new Uint8Array([1]), ctx);
+      await service.closeGrant('n5-denial', ctx);
+      const history = await service.grantHistoryAuthorization('n5-denial', ctx);
+      if (transition === 'project') await service.revokeProject('sess-content-project-1', ctx);
+      else await service.revokeGrant('n5-denial', ctx);
+      if (transition === 'exclude') {
+        const [handle] = await service.listRetainedHandles(owner.id);
+        await service.denyBindingContent(handle!.bindingId, owner.id, 'exclude');
+      }
+      if (transition === 'close') await service.closeGrant('n5-denial', ctx).catch(() => undefined);
+      await expectContentError(() => service.grantHistoryAuthorization('n5-denial', ctx), 'grant_revoked');
+      await expectContentError(() => service.readCommitted('n5-denial', 'terminal.cache', ctx, history.authorizationId), 'grant_revoked');
+      expect(await fixture.listPhysical('')).toHaveLength(1);
+    });
+
+  it.each([['project', 'exclude'], ['owner', 'exclude'], ['tenant', 'exclude'],
+    ['owner', 'deny'], ['tenant', 'deny'], ['owner', 'unknown'], ['tenant', 'unknown']] as const)(
+    'should refuse N5 R4 %s/%s mutations without changing victim rows', async (scope, mutation) => {
+      await acceptProject();
+      await deriveSession('n5-victim');
+      const reservation = await service.reserveBeforeUpload('n5-victim', 'terminal.cache',
+        { raw: 1, encoded: 1 }, 'n5-victim', ctx);
+      const actor = scope === 'project' ? ctx : {
+        tenantId: scope === 'tenant' ? TENANT_B : TENANT_A,
+        principalId: scope === 'tenant' ? outsider.id : other.id,
+        ownerId: scope === 'tenant' ? outsider.id : other.id,
+      };
+      await acceptProject({ projectId: 'n5-attacker', tenantId: actor.tenantId }, actor);
+      const before = {
+        projects: await db.select().from(sessionContentProjects),
+        grants: await db.select().from(sessionContentGrants),
+        reservations: await db.select().from(sessionContentReservations),
+        attempts: await db.select().from(sessionContentAttempts),
+      };
+      await expectContentError(() => mutation === 'exclude'
+        ? service.excludeSession('n5-attacker', 'n5-victim', actor)
+        : mutation === 'deny' ? service.recordLocalDeny('n5-victim', actor)
+          : service.markAttemptUnknown(reservation.reservationId, actor), 'cross_owner_refused');
+      expect(await db.select().from(sessionContentProjects)).toEqual(before.projects);
+      expect(await db.select().from(sessionContentGrants)).toEqual(before.grants);
+      expect(await db.select().from(sessionContentReservations)).toEqual(before.reservations);
+      expect(await db.select().from(sessionContentAttempts)).toEqual(before.attempts);
+    });
+
   const refreshAck = async (
     sessionId: string,
     projectRevision: number,

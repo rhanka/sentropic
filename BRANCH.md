@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R3–R6 durable test-first reproduction: 16 failures and 3 passing controls in n5_r3_r6_api_red.log, including seven isolated R4 mutations and all three R5 identities. Tests retain victim-row snapshots and committed deadlines/cleanup checks.
+
 - [x] N5 R3 domain red: four revoke-after-close/revoke-exclude/revoke-close cases returned readable. Independent read denial now dominates every retained-history authorization/check; scoped green recorded in n5_r3_domain_green.log.
 
 - [x] N5 R4 domain regression reproduces cross-project/tenant/owner exclusion; validate immutable grant scope before either project or grant mutation. Owner remediation uses ENV=test-pr677-n5fix and isolated ports 9385/5585/1485; migrations 0012–0016 stay unchanged.
