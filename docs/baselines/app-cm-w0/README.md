@@ -7,6 +7,7 @@
 | [baseline.md](baseline.md) | Pinned source/owner GO, runtime unknowns, observed public endpoints, domains and legacy content sources |
 | [owner-decisions.md](owner-decisions.md) | Verbatim Q1–Q4 answers superseding the original staffing/window and signer/key choices |
 | [cluster-readings.md](cluster-readings.md) | Dated inactive-cluster metadata, hashes, actual RBAC denials and exact missing serving-cluster/DB/object access |
+| [tenant-readings-2026-10-21.md](tenant-readings-2026-10-21.md) | Owner-authorized tenant GETs: prod/preprod/remote digests, pod/controller identities, content-role absence and config names/resourceVersions; B02/B03 pending |
 | [recovery-readings.md](recovery-readings.md) | Existing CI SQL restore metadata, offline archive/frontier/count observations and their limits |
 | [published-tuple.json](published-tuple.json) | Exact published selectors/integrities, all nine selected cluster peers, source lock/config hashes and explicit null live digests |
 | [host-fit.md](host-fit.md) | W2 host-owned registry, unchanged URLs/resource semantics, prototype boundary and acceptance files |

@@ -1,5 +1,7 @@
 # F1 read-only cluster observations and access limits
 
+Historical record: the owner-authorized [21 October tenant-admin collection](tenant-readings-2026-10-21.md) supersedes the missing runtime/config metadata below, with successful GETs in all three namespaces. The 19 October scoped-account denials and inactive-cluster observations remain dated evidence; B02/B03 access is still pending.
+
 Collection date: **19 October 2026 UTC**, `AGENT_SIG:7f3a9c2e1b`. Existing kubeconfigs were passed explicitly to read-only GETs; no credential was exported, no Secret resource read, and no pod exec, restart, apply, migration or backup action performed. The accessible Scaleway objects below have **zero replicas and zero pods**. They cannot identify the images serving the public app/preprod endpoints. B01/B02 remain open for the actual serving tenant cluster.
 
 The standalone [readings.mk](readings.mk) contains the complete commands and output projections. Commands below use `rtk make -f docs/baselines/app-cm-w0/readings.mk <targets> <arguments> ENV=test-app-cm-w0`. It loads no repository `.env`; default `W0_KUBECONFIG=/home/antoinefa/.kube/config` points to cluster `poc-979c11ad-9f84-4847-a334-c42a5e797976` at `979c11ad-9f84-4847-a334-c42a5e797976.api.k8s.fr-par.scw.cloud:6443`.

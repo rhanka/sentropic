@@ -6,17 +6,17 @@ Source authority: `9ed96eb83cd77da710f1adeb83a19e425d6c4910` (initial HEAD = ori
 
 ## Evidence boundary
 
-Initial observations began at 23:26 UTC with registry/GitHub GETs, unauthenticated HTTPS GETs and pinned source reads. The 19 October follow-up collected [read-only cluster metadata and precise access denials](cluster-readings.md), plus [existing archive/CI recovery evidence and historical counts](recovery-readings.md). The accessible Scaleway namespaces have zero replicas/pods; OVH's local scoped account cannot list either app namespace. Their observations cannot identify the serving deployment. Current tenant DB/object inventories remain **pending**, not empty. This record does not qualify W0 for downstream dispatch until [authorization.md](authorization.md) closes.
+Initial observations began at 23:26 UTC with registry/GitHub GETs, unauthenticated HTTPS GETs and pinned source reads. The 19 October follow-up collected [inactive-cluster metadata and scoped-account denials](cluster-readings.md), plus [archive/CI recovery evidence and historical counts](recovery-readings.md). The [21 October tenant-admin metadata collection](tenant-readings-2026-10-21.md), explicitly authorized by the owner, now records running prod/preprod/remote images, controller ownership and config revisions without RBAC refusal. The older zero-pod observations describe a different cluster. Endpoint-to-cluster binding and rendered config hashes were not collected. Current tenant DB/object inventories remain **pending**, not empty. This record does not qualify W0 for downstream dispatch until [authorization.md](authorization.md) closes.
 
 | Required runtime fact | Frozen value / receipt |
 |---|---|
-| Production API, UI and IdP `imageID` digests; pod UID/start time | **Pending B01**; source HEAD and `:main` are not running-image evidence |
-| Preprod API, UI and IdP digests | **Pending B01**; health 200 alone does not identify an image |
-| Content role digest | No content Deployment in pinned source; live absence not verified; pending B01 |
-| Live config revision and rendered config hash | **Pending B01**; source config hashes are in `published-tuple.json` |
+| Production API, UI and IdP `imageID` digests; pod UID/start time | **Recorded B01**, 2026-10-21 13:10:10–18 UTC; API/IdP `sha256:f2173e9d37f525a3cef0d6148dded71765c594b775d54426486df90d82a2cbe3`, UI `sha256:a3b3458814a7e91aaf1b94728d51222c1b8c35c196ec980c152c9c17e684b316`; UIDs/start times and verified controller chains in [tenant readings](tenant-readings-2026-10-21.md) |
+| Preprod API, UI and IdP digests; pod UID/start time | **Recorded B01**, same collection; API/IdP `sha256:bb1c2e72882e8bfeb91afb2a1af940b8c44a7cca8b764a585dcf94f91c1e8561`, UI `sha256:a3b3458814a7e91aaf1b94728d51222c1b8c35c196ec980c152c9c17e684b316`; UIDs/start times and verified controller chains in [tenant readings](tenant-readings-2026-10-21.md) |
+| Content role digest | No `artifact-content` or other content-role Deployment in prod, preprod or remote; all Deployment/pod owners accounted for in tenant readings; no content digest exists in this inventory |
+| Live config revision and rendered config hash | ConfigMap/Secret names/resourceVersions and Deployment revisions/references **recorded B01** in tenant readings; rendered hashes uncollected because ConfigMap/Secret data reads are excluded; source hashes retain their original pin in `published-tuple.json` |
 | Applied product/control/package migration frontier | **Pending live B02**; archived SQL checksums identify product `0041`/control `0007`; source maxima remain product `0043`, control `0011` |
 | Active author, generation, cutover and lease records | **Pending B02**; no source constant is promoted to live authority |
-| Verified backup/object checkpoint and isolated restore | **Partial B03**; existing CI-reported SQL backup/restore/smoke receipt collected; current object checkpoint and data/deny-state recovery pending; Q1 assigns human recovery ownership to the owner |
+| Verified backup/object checkpoint and isolated restore | **Pending live B03**; existing CI-reported SQL backup/restore/smoke receipt retained as historical evidence; current object checkpoint and data/deny-state recovery pending; Q1 assigns human recovery ownership to the owner |
 | Existing generated-content counts and mapping decision | **Partial B04**; dated local archive: 15 documents, 0 versions, 258 jobs, 141 messages; current inventory, objects/ACLs and disposition pending |
 
 ## Existing authorities and endpoint parity
