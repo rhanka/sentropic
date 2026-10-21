@@ -72,6 +72,10 @@ Actions with the following status should be included around tasks only if really
   - Reason: CI audit-gate/SCA red on the R2 head (6 jobs plus `ci-gate`); the advisories were published after the last green run and are unrelated to the R2 diff (identical ui/api locks were green at `27a560ce4`).
   - Impact: markdown-it 14.3.2→14.3.3 in root + ui locks only; P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
   - Rollback: revert the override, both lock hunks, and the target/var.
+- `attention`: BR710-EX5 — remediate the follow-redirects HIGH pair (GHSA-q3jh-wrc6-jgq8, GHSA-8r9p-f939-6h3c; fixed in 1.16.1) with the same pinned-sed procedure (root `overrides` pin, root lock hunk, integrity var + bump target).
+  - Reason: CI `build-api-image` + `security-sast-sca` red on the post-EX4 head; the advisories were published mid-run (narrow `>=1.16.0 <1.16.1` range, single parent `centra ^1.15.6`); unrelated to the R2 diff.
+  - Impact: follow-redirects 1.16.0→1.16.1 in the root lock only; P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
+  - Rollback: revert the override, the lock hunk, and the target/var.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -172,6 +176,12 @@ Actions with the following status should be included around tasks only if really
 - [x] **Lot 14 — Remediate markdown-it HIGH (GHSA-vfgh-jcmw-g37q, GHSA-gfr2-rv44-r23c)**
   - [x] Pin `markdown-it@14.3.3` via root `overrides` (fixes both advisories; satisfies `^14.0.0`/`^14.1.0` dependent ranges).
   - [x] Pinned sed bump in `package-lock.json` (14.3.2) and `ui/package-lock.json` (14.3.2) via `lock-markdown-it-14-3-3` (BR710-EX4, mirrors `lock-markdown-it-direct` precedent).
+  - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock passes, 44 contracts); no P1 regen.
+  - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
+  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
+- [x] **Lot 15 — Remediate follow-redirects HIGH (GHSA-q3jh-wrc6-jgq8, GHSA-8r9p-f939-6h3c)**
+  - [x] Pin `follow-redirects@1.16.1` via root `overrides` (fixes both advisories; single parent `centra ^1.15.6`).
+  - [x] Pinned sed bump in `package-lock.json` (1.16.0) via `lock-follow-redirects-1-16-1` (BR710-EX5).
   - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock passes, 44 contracts); no P1 regen.
   - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
