@@ -23,6 +23,8 @@ import { buildEnsureRequest } from './client.js';
 import type { ParameterSchema } from './parameters.js';
 import type { ArtifactService } from './server/service.js';
 import type { PublicationBlobStore, PublicationService } from './server/publication.js';
+import { DEFAULT_PUBLICATION_LIMITS } from './server/publication.js';
+import { validatePublicationFiles } from './server/publication-limits.js';
 import { createContentRuntime } from './server/runtime.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import type { ForkRecord, ForkService } from './server/fork.js';
@@ -37,6 +39,8 @@ export interface HttpRequest {
   path: string;
   body: unknown;
   actorId: string;
+  /** Trusted host context, resolved alongside actorId; never copy from the body. */
+  storageScopeId?: string;
 }
 
 export interface HttpResponse {
@@ -109,8 +113,9 @@ function needString(value: unknown, name: string): string {
   return value;
 }
 
-function needBytes(value: unknown): Uint8Array {
+function needBytes(value: unknown, maxBytes: number): Uint8Array {
   if (!Array.isArray(value)) throw new Error('invalid file bytes: must be an array');
+  if (value.length > maxBytes) throw new Error('invalid publication byte budget');
   const bytes = new Uint8Array(value.length);
   for (let i = 0; i < value.length; i += 1) {
     const byte = value[i];
@@ -125,14 +130,15 @@ function needBytes(value: unknown): Uint8Array {
 /** Canonical text MIME types; parameters are omitted (encoding is always UTF-8). */
 export const TEXT_MIME_PATTERN = '^(?:text/[a-z0-9!#$&^_.+-]+|application/(?:javascript|ecmascript|json|xml|[a-z0-9!#$&^_.+-]+\\+(?:json|xml))|image/svg\\+xml)(?![\\s\\S])';
 
-function needFileBytes(entry: Record<string, unknown>, mimeType: string): Uint8Array {
+function needFileBytes(entry: Record<string, unknown>, mimeType: string, maxBytes: number): Uint8Array {
   const hasBytes = 'bytes' in entry;
   const hasText = 'text' in entry;
   if (hasBytes === hasText) throw new Error('invalid file: supply exactly one of bytes or text');
-  if (hasBytes) return needBytes(entry['bytes']);
+  if (hasBytes) return needBytes(entry['bytes'], maxBytes);
   if (typeof entry['text'] !== 'string' || !new RegExp(TEXT_MIME_PATTERN).test(mimeType)) {
     throw new Error('invalid file text: expected a string and a canonical text MIME type');
   }
+  if (Buffer.byteLength(entry['text'], 'utf8') > maxBytes) throw new Error('invalid publication byte budget');
   return new TextEncoder().encode(entry['text']);
 }
 
@@ -197,9 +203,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
         if (request.method === 'POST' && request.path === '/ensure') {
           const ensured = buildEnsureRequest(deps.parameterSchema, {
             bindingName: needString(body['bindingName'], 'bindingName'),
-            storageScopeId: needString(body['storageScopeId'], 'storageScopeId'),
+            storageScopeId: needString(request.storageScopeId, 'host storageScopeId'),
             idempotencyKey: needString(body['idempotencyKey'], 'idempotencyKey'),
-            paramsHash: typeof body['paramsHash'] === 'string' ? body['paramsHash'] : '',
+            paramsHash: '',
             parameters: (body['parameters'] ?? {}) as Record<string, string | number | boolean | null | undefined>,
           });
           const result = await deps.artifacts.ensurePrivateView({
@@ -208,7 +214,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
             storageScopeId: ensured.storageScopeId,
             bindingName: ensured.bindingName,
             idempotencyKey: ensured.idempotencyKey,
-            paramsHash: ensured.paramsHash,
+            parameters: ensured.parameters,
           });
           if ((await deps.acls.getArtifactAcl(result.artifactId)) === undefined) {
             await deps.acls.putArtifactAcl(result.artifactId, {
@@ -229,14 +235,20 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
           if (acl.storageScopeId === undefined) throw new Error('invalid request: missing storage scope');
           const rawFiles = body['files'];
-          if (!Array.isArray(rawFiles)) throw new Error('invalid request: missing files');
+          const limits = deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS;
+          if (!Array.isArray(rawFiles) || rawFiles.length === 0 || rawFiles.length > limits.maxFiles) {
+            throw new Error('invalid publication file count budget');
+          }
+          let remaining = limits.maxTotalBytes;
           const files = rawFiles.map((file: unknown) => {
             const entry = needObject(file);
             const mimeType = needString(entry['mimeType'], 'file.mimeType');
+            const bytes = needFileBytes(entry, mimeType, Math.min(limits.maxFileBytes, remaining));
+            remaining -= bytes.byteLength;
             return {
               path: needString(entry['path'], 'file.path'),
               mimeType,
-              bytes: needFileBytes(entry, mimeType),
+              bytes,
             };
           });
           const source = body['source'];
@@ -247,10 +259,10 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
             artifactId,
             profile: (body['profile'] ?? {}) as Record<string, string | number | boolean | null | undefined>,
             files,
+            source: attached,
             idempotencyKey: typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : undefined,
             paramsHash: typeof body['paramsHash'] === 'string' ? body['paramsHash'] : undefined,
-          });
-          if (attached !== undefined) await deps.sources.putSource(artifactId, attached);
+          }, deps.sources);
           await deps.lifecycle.trackRelease(artifactId, result.releaseId);
           return { status: 201, body: result };
         }
@@ -463,12 +475,13 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           const acl = await requireVisible(artifactId, request.actorId);
           assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
           const maxSize = body['maxSize'];
-          if (maxSize !== undefined && (!Number.isInteger(maxSize) || (maxSize as number) < 1)) {
+          if (maxSize !== undefined && (!Number.isSafeInteger(maxSize) || (maxSize as number) < 1)) {
             throw new Error('invalid request: maxSize must be a positive integer');
           }
+          const limits = deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS;
           const begun = await uploads.begin({
             mimeType: needString(body['mimeType'], 'mimeType'),
-            maxSize: maxSize as number | undefined,
+            maxSize: Math.min((maxSize as number | undefined) ?? Infinity, limits.maxFileBytes, limits.maxTotalBytes),
           });
           uploadOwners.set(begun.uploadId, { artifactId, ownerId: request.actorId });
           return { status: 201, body: begun };
@@ -479,10 +492,14 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           const uploadId = needString(body['uploadId'], 'uploadId');
           requireUploadOwner(uploadId, request.actorId);
           const offset = body['offset'];
-          if (!Number.isInteger(offset) || (offset as number) < 0) {
+          if (!Number.isSafeInteger(offset) || (offset as number) < 0) {
             throw new Error('invalid request: offset must be a non-negative integer');
           }
-          const appended = await uploads.append(uploadId, offset as number, needBytes(body['bytes']));
+          const limits = deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS;
+          const remaining = Math.min(uploads.remainingBytes(uploadId, offset as number),
+            limits.maxFileBytes - (offset as number), limits.maxTotalBytes - (offset as number));
+          const appended = await uploads.append(uploadId, offset as number,
+            needBytes(body['bytes'], remaining));
           return { status: 200, body: appended };
         }
 
@@ -501,21 +518,24 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           if (!Number.isInteger(size) || (size as number) < 0) {
             throw new Error('invalid request: size must be a non-negative integer');
           }
+          const files = [{
+            path: needString(body['path'], 'path'),
+            mimeType: needString(body['mimeType'], 'mimeType'),
+            bytes: new Uint8Array(0),
+          }];
           await uploads.commit(uploadId, {
             digest: needString(body['digest'], 'digest'),
             size: size as number,
+          }, (bytes) => {
+            files[0]!.bytes = bytes;
+            validatePublicationFiles(files, deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS);
           });
-          const bytes = await staging.read(uploadId);
           const result = await deps.publication.publish({
             ownerId: acl.ownerId,
             storageScopeId: acl.storageScopeId,
             artifactId,
             profile: (body['profile'] ?? {}) as Record<string, string | number | boolean | null | undefined>,
-            files: [{
-              path: needString(body['path'], 'path'),
-              mimeType: needString(body['mimeType'], 'mimeType'),
-              bytes,
-            }],
+            files,
             idempotencyKey: typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : undefined,
             paramsHash: typeof body['paramsHash'] === 'string' ? body['paramsHash'] : undefined,
           });
