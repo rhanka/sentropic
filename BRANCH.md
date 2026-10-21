@@ -159,7 +159,7 @@ Actions with the following status should be included around tasks only if really
   - [x] Red-first regressions: snapshot transitive change and edge deletion fail (unit + packed gate); spec/snapshot mismatch throws.
   - [x] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2` (11 files / 88 tests).
 - [ ] **Lot 13 — Regenerate P1, full gate, push, CI green**
-  - [ ] Retain superseded manifest in `artifacts/history/`; rebuild dist and repack P1 via make targets; inventory stays exact 44 contracts.
-  - [ ] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-pr710-fix-r2`.
-  - [ ] `make scope-check` before each commit; atomic commits via `make commit MSG="..."`.
+  - [x] Retain superseded manifest in `artifacts/history/`; rebuild dist and repack P1 via make targets; inventory stays exact 44 contracts.
+  - [x] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-pr710-fix-r2`.
+  - [x] `make scope-check` before each commit; atomic commits via `make commit MSG="..."`.
   - [ ] Push branch; PR stays DRAFT, do not merge, do not mark ready; CI green on the exact head.

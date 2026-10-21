@@ -5,15 +5,25 @@
     "specSha256": "f90c927964b44fdf6ad712eee9b894762250239384643a3790931c142d3aeeca",
     "l0Commit": "60a8bfa828b5eabd360232ea5865391c23f99f48",
     "br3Commit": "7c395f439a242e2de0890c9c89121eda26216b56",
-    "l5Head": "b4a710c951b52a3d5849d6b18c2e3ec8540594db",
+    "l5Head": "002e74f4f4897f952a194b6ce7bab685a41c8030",
     "sdkRange": "^1.31.0",
-    "declaredLockSha256": "ecda75e7256418ad799a8d6dd9433ccdce0b3f20ff3894e1c82472afdd0cc054",
-    "lockFingerprintVersion": 2,
-    "lockFingerprint": "388b88af1d722cf044f953dbc851ba1d4d09a29f0dea7b5a79d90dd600bf3e63",
+    "declaredLockSha256": "cffe5de7f1fc2051fb32019891cf1960ae0814215945676b7515652faa15b4ae",
+    "lockFingerprintVersion": 3,
+    "lockFingerprint": "81bd54a33054e7d4f0a65f61e4d89c01e0429b23a02c82d2bf6a52482276e57e",
     "declaredLockSnapshot": {
-      "path": "tools/memory-mcp-l5/artifacts/lock-snapshots/ecda75e7256418ad799a8d6dd9433ccdce0b3f20ff3894e1c82472afdd0cc054.package-lock.json",
-      "sha256": "ecda75e7256418ad799a8d6dd9433ccdce0b3f20ff3894e1c82472afdd0cc054"
-    }
+      "path": "tools/memory-mcp-l5/artifacts/lock-snapshots/cffe5de7f1fc2051fb32019891cf1960ae0814215945676b7515652faa15b4ae.package-lock.json",
+      "sha256": "cffe5de7f1fc2051fb32019891cf1960ae0814215945676b7515652faa15b4ae"
+    },
+    "toolchainSnapshots": [
+      {
+        "path": "tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json",
+        "sha256": "e9f607b93cd3499d19b34f9fd48a361b29ee83eddbd610ffa685db6092487c32"
+      },
+      {
+        "path": "tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json",
+        "sha256": "5d750b7c6e9bc46803e046a55b659f37e41f37a1b3209d55eb74b298ad56fff0"
+      }
+    ]
   },
   "artifacts": [
     {
@@ -22,7 +32,7 @@
       "version": "0.4.0",
       "sha256": "2ad8a40fa38f4289fe177f58d75bc3317a50dd1b7a3ca693cf55cff2ff72cc9d",
       "integrity": "sha512-fPALSD/CUU49dZ41rrMaqeRUHzNPgfxzCc7g3vutAGHyNkHcDdrm6AKP6QUxnxv/acuL8+x8MSqx9OX4RIkc/w==",
-      "sourceHead": "b4a710c951b52a3d5849d6b18c2e3ec8540594db",
+      "sourceHead": "002e74f4f4897f952a194b6ce7bab685a41c8030",
       "archive": "tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-platform-0.4.0-2ad8a40fa38f4289fe177f58d75bc3317a50dd1b7a3ca693cf55cff2ff72cc9d.tgz"
     },
     {
@@ -31,7 +41,7 @@
       "version": "0.1.0",
       "sha256": "5fede653683acc8d803f7e735526f09a1d79b062ae4a37b0b9933bfd289444fa",
       "integrity": "sha512-zJaMGrey2c5ZK5EfZVURkhOBuvqH+y4EfHzoD8dih3SsOqorIkQBCDeIuXCdLQjiZSvjmmdO/lcGIbpRcvwNJg==",
-      "sourceHead": "b4a710c951b52a3d5849d6b18c2e3ec8540594db",
+      "sourceHead": "002e74f4f4897f952a194b6ce7bab685a41c8030",
       "archive": "tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-broker-0.1.0-5fede653683acc8d803f7e735526f09a1d79b062ae4a37b0b9933bfd289444fa.tgz"
     }
   ],
@@ -78,7 +88,7 @@
     {"path":"tools/memory-mcp-l5/fixtures/l0/schema-assets.sha256","version":"1.0.0","sha256":"667646723c163341b42c34612a2d78f3eed1461f17b80d6dec98841ffc7fe9fd"},
     {"path":"tools/memory-mcp-l5/fixtures/l0/tool-schemas.json","version":"1.0.0","sha256":"584f4aa5d09ba2b8bc6af4737962141863bc89d55a101dafbe2edff8ed822dfa"},
     {"path":"tools/memory-mcp-l5/proof-catalog-v1.json","version":"1.0.0","sha256":"c8b0f9c8a907eb3d6a42e7a81d7509e6f5149aaf0b9f557842bda928c74c84be"},
-    {"path":"tools/memory-mcp-l5/schemas/artifact-manifest-v1.schema.json","version":"1.0.0","sha256":"332df14b8f16aa5dc6b52f3f3ee07b13d82d891cb1170c086928bb4e21c4656a"},
+    {"path":"tools/memory-mcp-l5/schemas/artifact-manifest-v1.schema.json","version":"1.0.0","sha256":"e3207cecac1a013730cbb63fc5f1df371d9971b29ba300157cf8357fe0c76238"},
     {"path":"tools/memory-mcp-l5/schemas/checkpoint-v1.schema.json","version":"1.0.0","sha256":"144a428ae5abf99f76c7585d1976b821c2ef207f8685bd5bfa5f2f247084f3e5"}
   ]
 }
