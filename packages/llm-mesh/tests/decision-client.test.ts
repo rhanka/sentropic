@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRemoteJudgeClient } from '../src/judge/client.js';
-import { createJudgeService } from '../src/judge/service.js';
-import { judgeRequest, judgeServiceFixture, qualifiedDescriptor } from './judge-fixtures.js';
-import type { JudgeReceipt, JudgeResult } from '../src/judge/receipt.js';
-import type { JudgeRequest } from '../src/judge/request.js';
+import { createRemoteDecisionClient } from '../src/decision/client.js';
+import { createDecisionService } from '../src/decision/service.js';
+import { decisionRequest, decisionServiceFixture, qualifiedDescriptor } from './decision-fixtures.js';
+import type { DecisionReceipt, DecisionResult } from '../src/decision/receipt.js';
+import type { DecisionRequest } from '../src/decision/request.js';
 
-const mockReceipt = (correlationId = 'test-corr-1'): JudgeReceipt => ({
+const mockReceipt = (correlationId = 'test-corr-1'): DecisionReceipt => ({
   schemaVersion: 1, callId: 'test-call-1', correlationId,
   evaluator: qualifiedDescriptor().evaluator, servedEvaluator: qualifiedDescriptor().evaluator,
   servedModelId: 'synthetic-served-model', startedAt: '2026-10-12T00:00:00.000Z',
@@ -18,7 +18,7 @@ const mockReceipt = (correlationId = 'test-corr-1'): JudgeReceipt => ({
   budget: { state: 'settled', overrun: false }, outcome: 'verdict',
 });
 
-const mockVerdictResult = (correlationId = 'test-corr-1'): JudgeResult => ({
+const mockVerdictResult = (correlationId = 'test-corr-1'): DecisionResult => ({
   kind: 'verdict', ok: true,
   verdict: {
     criterionKind: 'binary', resolvedCriterionKind: 'binary',
@@ -43,21 +43,21 @@ const choiceVerdict = () => ({
 const rawBytes = (data: unknown) => new TextEncoder().encode(JSON.stringify(data)).byteLength;
 
 /** Serve a real service result through the remote client over a JSON wire. */
-const roundTrip = async (request: JudgeRequest) => {
-  const service = createJudgeService(judgeServiceFixture().options);
-  const served = await service.judge(request);
+const roundTrip = async (request: DecisionRequest) => {
+  const service = createDecisionService(decisionServiceFixture().options);
+  const served = await service.decide(request);
   const fetch = vi.fn(async () => new Response(JSON.stringify(served),
     { status: 200, headers: { 'content-type': 'application/json' } }));
-  const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+  const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
     fetch: fetch as unknown as typeof globalThis.fetch });
-  return client.judge(request);
+  return client.decide(request);
 };
 
-/** Fail fast when an uncooperative fetch would otherwise hang judge() past the test timeout. */
-const failAfterHang = <T>(judged: Promise<T>): Promise<T> => Promise.race([judged,
-  new Promise<never>((_, reject) => setTimeout(() => reject(new Error('judge() hung on an uncooperative fetch')), 500))]);
+/** Fail fast when an uncooperative fetch would otherwise hang decision() past the test timeout. */
+const failAfterHang = <T>(decisiond: Promise<T>): Promise<T> => Promise.race([decisiond,
+  new Promise<never>((_, reject) => setTimeout(() => reject(new Error('decision() hung on an uncooperative fetch')), 500))]);
 
-describe('remote judge client', () => {
+describe('remote decision client', () => {
   it('authenticates to mesh without JEV key and returns valid verdict result', async () => {
     let capturedUrl = '';
     let capturedInit: RequestInit | undefined;
@@ -67,18 +67,18 @@ describe('remote judge client', () => {
       const corr = JSON.parse(String(init?.body)).correlationId;
       return new Response(JSON.stringify(mockVerdictResult(corr)), { status: 200, headers: { 'content-type': 'application/json' } });
     });
-    const client = createRemoteJudgeClient({
+    const client = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal/llm-mesh',
       authToken: 'mesh-bearer-token',
       fetch: fetch as unknown as typeof globalThis.fetch,
     });
-    const result = await client.judge(judgeRequest({ correlationId: 'custom-corr-1' }));
+    const result = await client.decide(decisionRequest({ correlationId: 'custom-corr-1' }));
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.kind).toBe('verdict');
       expect(result.receipt.callId).toBe('test-call-1');
     }
-    expect(capturedUrl).toBe('https://mesh.internal/llm-mesh/judge');
+    expect(capturedUrl).toBe('https://mesh.internal/llm-mesh/decision');
     expect((capturedInit?.headers as Record<string, string>)?.authorization).toBe('Bearer mesh-bearer-token');
     const sentBody = JSON.parse(String(capturedInit?.body));
     expect(sentBody.correlationId).toBe('custom-corr-1');
@@ -90,11 +90,11 @@ describe('remote judge client', () => {
       sentBody = JSON.parse(String(init?.body));
       return new Response(JSON.stringify(mockVerdictResult(sentBody?.correlationId as string)), { status: 200, headers: { 'content-type': 'application/json' } });
     });
-    const client = createRemoteJudgeClient({
-      baseUrl: 'https://mesh.internal/llm-mesh/judge',
+    const client = createRemoteDecisionClient({
+      baseUrl: 'https://mesh.internal/llm-mesh/decision',
       fetch: fetch as unknown as typeof globalThis.fetch,
     });
-    const result = await client.judge(judgeRequest());
+    const result = await client.decide(decisionRequest());
     expect(result.ok).toBe(true);
     expect(typeof sentBody?.correlationId).toBe('string');
     expect((sentBody?.correlationId as string).length).toBeGreaterThan(0);
@@ -104,26 +104,26 @@ describe('remote judge client', () => {
     let sentCorr = '';
     const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
       sentCorr = JSON.parse(String(init?.body)).correlationId;
-      const errorResult: JudgeResult = {
+      const errorResult: DecisionResult = {
         kind: 'error', ok: false,
-        error: { code: 'REQUEST_INVALID', message: 'Invalid judge request.', phase: 'preflight', retryable: false },
+        error: { code: 'REQUEST_INVALID', message: 'Invalid decision request.', phase: 'preflight', retryable: false },
         receipt: { ...mockReceipt(sentCorr), outcome: 'error', errorCode: 'REQUEST_INVALID' },
       };
       return new Response(JSON.stringify(errorResult), { status: 400, headers: { 'content-type': 'application/json' } });
     });
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest());
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest());
     expect(result).toEqual({
       kind: 'error', ok: false,
-      error: { code: 'REQUEST_INVALID', message: 'Invalid judge request.', phase: 'preflight', retryable: false },
+      error: { code: 'REQUEST_INVALID', message: 'Invalid decision request.', phase: 'preflight', retryable: false },
       receipt: { ...mockReceipt(sentCorr), outcome: 'error', errorCode: 'REQUEST_INVALID' },
     });
   });
 
   it('returns connection failure on network error without retrying', async () => {
     const fetch = vi.fn(async () => { throw new Error('ECONNREFUSED'); });
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: 'fail-corr' }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: 'fail-corr' }));
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false,
       error: { code: 'TRANSPORT_FAILED', phase: 'dispatch' },
@@ -137,8 +137,8 @@ describe('remote judge client', () => {
     const fetch = vi.fn();
     const controller = new AbortController();
     controller.abort();
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest(), { signal: controller.signal });
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest(), { signal: controller.signal });
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false,
       error: { code: 'CANCELLED', phase: 'preflight' },
@@ -154,8 +154,8 @@ describe('remote judge client', () => {
       controller.abort();
       throw new Error('aborted');
     });
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest(), { signal: controller.signal });
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest(), { signal: controller.signal });
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false,
       error: { code: 'CANCELLED', phase: 'dispatch' },
@@ -168,12 +168,12 @@ describe('remote judge client', () => {
   it('returns connection failure when response exceeds byte bound', async () => {
     const big = JSON.stringify({ kind: 'verdict', ok: true, padding: 'x'.repeat(1000) });
     const fetch = vi.fn(async () => new Response(big, { status: 200, headers: { 'content-length': '1500' } }));
-    const client = createRemoteJudgeClient({
+    const client = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       maxResponseBytes: 500,
       fetch: fetch as unknown as typeof globalThis.fetch,
     });
-    const result = await client.judge(judgeRequest());
+    const result = await client.decide(decisionRequest());
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false,
       error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
@@ -188,8 +188,8 @@ describe('remote judge client', () => {
       receipt: { ...mockReceipt('weird-corr'), outcome: 'error' as const, errorCode: 'NONEXISTENT_ERROR_CODE' as any },
     };
     const fetch = vi.fn(async () => new Response(JSON.stringify(weird), { status: 500, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: 'weird-corr' }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: 'weird-corr' }));
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false,
       error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
@@ -207,8 +207,8 @@ describe('remote judge client', () => {
       receipt: { ...mockReceipt('phase-corr'), outcome: 'error' as const, errorCode: 'TIMEOUT' },
     };
     const fetch = vi.fn(async () => new Response(JSON.stringify(weirdPhase), { status: 500, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: 'phase-corr' }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: 'phase-corr' }));
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false,
       error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
@@ -220,10 +220,10 @@ describe('remote judge client', () => {
 
   it('refuses responses with discordant kind/outcome, mismatched error codes, or invalid shapes', async () => {
     const corr = 'disc-corr';
-    const client = (body: unknown) => createRemoteJudgeClient({
+    const client = (body: unknown) => createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: vi.fn(async () => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
-    }).judge(judgeRequest({ correlationId: corr }));
+    }).decide(decisionRequest({ correlationId: corr }));
 
     const r1 = await client({ ...mockVerdictResult(corr), receipt: { ...mockReceipt(corr), outcome: 'error', errorCode: 'TIMEOUT' } });
     expect(r1).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' } });
@@ -246,8 +246,8 @@ describe('remote judge client', () => {
     const receipt = { ...mockReceipt(corr), evaluator: { ...mockReceipt(corr).evaluator, evaluatorId: 'foreign-evaluator' } };
     const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: corr }));
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     expect(fetch).toHaveBeenCalledOnce();
   });
@@ -257,8 +257,8 @@ describe('remote judge client', () => {
     const receipt = { ...mockReceipt(corr), cost: { status: 'not-incurred', amountMicroUsd: '42', source: 'no-dispatch' } };
     const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: corr }));
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     expect(fetch).toHaveBeenCalledOnce();
   });
@@ -272,11 +272,11 @@ describe('remote judge client', () => {
     };
     const fetch = vi.fn(async () => new Response(JSON.stringify(forged),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: corr }));
     expect(result).toEqual({
       kind: 'error', ok: false,
-      error: { code: 'TIMEOUT', message: 'Judge deadline exceeded.', phase: 'settlement', retryable: false },
+      error: { code: 'TIMEOUT', message: 'Decision deadline exceeded.', phase: 'settlement', retryable: false },
       receipt: forged.receipt,
     });
   });
@@ -286,8 +286,8 @@ describe('remote judge client', () => {
     const verdict = { ...mockVerdictResult(corr).verdict, providerRaw: { data: { noul: 0.05 }, bytes: 13, truncated: false } };
     const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: corr }));
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     expect(fetch).toHaveBeenCalledOnce();
   });
@@ -297,20 +297,20 @@ describe('remote judge client', () => {
     const verdict = { ...mockVerdictResult(corr).verdict, providerRaw: { data: { noul: 0.05 }, bytes: 999999, truncated: false } };
     const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const request = judgeRequest({ correlationId: corr, raw: { mode: 'allowlisted' } });
-    const result = await client.judge(request);
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const request = decisionRequest({ correlationId: corr, raw: { mode: 'allowlisted' } });
+    const result = await client.decide(request);
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     expect(fetch).toHaveBeenCalledOnce();
   });
 
   it('rejects verdicts with invalid confidence or an unbalanced distribution', async () => {
     const corr = 'dist-corr';
-    const client = (verdict: unknown) => createRemoteJudgeClient({
+    const client = (verdict: unknown) => createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
         { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
-    }).judge(judgeRequest({ correlationId: corr }));
+    }).decide(decisionRequest({ correlationId: corr }));
 
     const badConfidence = { ...mockVerdictResult(corr).verdict,
       confidence: { value: 'high', min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'x', origin: 'provider' } };
@@ -326,14 +326,14 @@ describe('remote judge client', () => {
     const verdict = { ...mockVerdictResult(corr).verdict, criterionKind: 'choice' };
     const fetch = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: corr }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: corr }));
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     expect(fetch).toHaveBeenCalledOnce();
   });
 
   it('accepts a service no-rule verdict with absent decision through a round trip', async () => {
-    const request = judgeRequest({ correlationId: 'rt-null-corr' });
+    const request = decisionRequest({ correlationId: 'rt-null-corr' });
     const result = await roundTrip(request);
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -346,7 +346,7 @@ describe('remote judge client', () => {
   });
 
   it('accepts a service negative threshold verdict through a round trip', async () => {
-    const request = judgeRequest({ correlationId: 'rt-neg-corr',
+    const request = decisionRequest({ correlationId: 'rt-neg-corr',
       decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.9 } });
     const result = await roundTrip(request);
     expect(result.ok).toBe(true);
@@ -361,32 +361,32 @@ describe('remote judge client', () => {
     const serve = (receipt: unknown) => vi.fn(async () => new Response(
       JSON.stringify({ ...mockVerdictResult('mutrev-corr'), receipt }),
       { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch;
-    const mutatingAuth = (request: JudgeRequest) => async () => {
+    const mutatingAuth = (request: DecisionRequest) => async () => {
       request.evaluator.revision = 'different-revision';
       return 'token';
     };
     // Receipt bound to the transmitted revision is accepted despite the mutation.
     const original = mockVerdictResult('mutrev-corr').receipt;
-    const requestA = judgeRequest({ correlationId: 'mutrev-corr' });
-    const clientA = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: serve(original),
+    const requestA = decisionRequest({ correlationId: 'mutrev-corr' });
+    const clientA = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: serve(original),
       authToken: mutatingAuth(requestA) });
-    expect(await clientA.judge(requestA)).toMatchObject({ kind: 'verdict', ok: true });
+    expect(await clientA.decide(requestA)).toMatchObject({ kind: 'verdict', ok: true });
     // Receipt matching only the mutation is refused.
     const mutated = { ...mockReceipt('mutrev-corr'),
       evaluator: { ...mockReceipt('mutrev-corr').evaluator, revision: 'different-revision' } };
-    const requestB = judgeRequest({ correlationId: 'mutrev-corr' });
-    const clientB = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: serve(mutated),
+    const requestB = decisionRequest({ correlationId: 'mutrev-corr' });
+    const clientB = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: serve(mutated),
       authToken: mutatingAuth(requestB) });
-    expect(await clientB.judge(requestB)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await clientB.decide(requestB)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     // Mutation during transport is equally ignored.
-    const requestC = judgeRequest({ correlationId: 'mutrev-corr' });
+    const requestC = decisionRequest({ correlationId: 'mutrev-corr' });
     const transportMutant = vi.fn(async () => {
       requestC.evaluator.revision = 'transport-revision';
       return new Response(JSON.stringify(mockVerdictResult('mutrev-corr')),
         { status: 200, headers: { 'content-type': 'application/json' } });
     }) as unknown as typeof globalThis.fetch;
-    const clientC = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: transportMutant });
-    expect(await clientC.judge(requestC)).toMatchObject({ kind: 'verdict', ok: true });
+    const clientC = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: transportMutant });
+    expect(await clientC.decide(requestC)).toMatchObject({ kind: 'verdict', ok: true });
   });
 
   it('binds criterion concordance to the transmitted snapshot', async () => {
@@ -395,18 +395,18 @@ describe('remote judge client', () => {
     const serve = (verdict: unknown) => vi.fn(async () => new Response(
       JSON.stringify({ ...mockVerdictResult('mutkind-corr'), verdict }),
       { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch;
-    const mutatingAuth = (request: JudgeRequest) => async () => {
+    const mutatingAuth = (request: DecisionRequest) => async () => {
       request.criterion = choiceCriterion;
       return 'token';
     };
-    const requestA = judgeRequest({ correlationId: 'mutkind-corr' });
-    const clientA = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+    const requestA = decisionRequest({ correlationId: 'mutkind-corr' });
+    const clientA = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
       fetch: serve(mockVerdictResult('mutkind-corr').verdict), authToken: mutatingAuth(requestA) });
-    expect(await clientA.judge(requestA)).toMatchObject({ kind: 'verdict', ok: true });
-    const requestB = judgeRequest({ correlationId: 'mutkind-corr' });
-    const clientB = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+    expect(await clientA.decide(requestA)).toMatchObject({ kind: 'verdict', ok: true });
+    const requestB = decisionRequest({ correlationId: 'mutkind-corr' });
+    const clientB = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
       fetch: serve(choiceVerdict()), authToken: mutatingAuth(requestB) });
-    expect(await clientB.judge(requestB)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await clientB.decide(requestB)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
   });
 
   it('binds raw permission to the transmitted snapshot', async () => {
@@ -415,24 +415,24 @@ describe('remote judge client', () => {
     const serve = vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult('mutraw-corr'), verdict: rawVerdict }),
       { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch;
     // Mutation enabling raw after the snapshot does not authorize returned raw data.
-    const requestA = judgeRequest({ correlationId: 'mutraw-corr' });
-    const clientA = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: serve,
+    const requestA = decisionRequest({ correlationId: 'mutraw-corr' });
+    const clientA = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: serve,
       authToken: async () => { requestA.raw = { mode: 'allowlisted' }; return 'token'; } });
-    expect(await clientA.judge(requestA)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(await clientA.decide(requestA)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     // Mutation disabling raw after the snapshot does not revoke the transmitted permission.
-    const requestB = judgeRequest({ correlationId: 'mutraw-corr', raw: { mode: 'allowlisted' } });
-    const clientB = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: serve,
+    const requestB = decisionRequest({ correlationId: 'mutraw-corr', raw: { mode: 'allowlisted' } });
+    const clientB = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: serve,
       authToken: async () => { requestB.raw = { mode: 'none' }; return 'token'; } });
-    expect(await clientB.judge(requestB)).toMatchObject({ kind: 'verdict', ok: true });
+    expect(await clientB.decide(requestB)).toMatchObject({ kind: 'verdict', ok: true });
   });
 
   it('rejects verdicts with unbound or absent identities', async () => {
     const corr = 'ident-corr';
-    const client = (receipt: unknown) => createRemoteJudgeClient({
+    const client = (receipt: unknown) => createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
         { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
-    }).judge(judgeRequest({ correlationId: corr }));
+    }).decide(decisionRequest({ correlationId: corr }));
 
     expect(await client({ ...mockReceipt(corr), evaluator: null }))
       .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
@@ -446,11 +446,11 @@ describe('remote judge client', () => {
 
   it('rejects verdicts that claim no execution took place', async () => {
     const corr = 'exec-corr';
-    const client = (receipt: unknown) => createRemoteJudgeClient({
+    const client = (receipt: unknown) => createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
         { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
-    }).judge(judgeRequest({ correlationId: corr }));
+    }).decide(decisionRequest({ correlationId: corr }));
 
     expect(await client({ ...mockReceipt(corr), attempts: 0 }))
       .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
@@ -462,11 +462,11 @@ describe('remote judge client', () => {
 
   it('rejects verdicts without admitted accounting', async () => {
     const corr = 'acct-corr';
-    const client = (receipt: unknown) => createRemoteJudgeClient({
+    const client = (receipt: unknown) => createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), receipt }),
         { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
-    }).judge(judgeRequest({ correlationId: corr }));
+    }).decide(decisionRequest({ correlationId: corr }));
 
     expect(await client({ ...mockReceipt(corr), budget: { state: 'not-admitted', overrun: false } }))
       .toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
@@ -483,13 +483,13 @@ describe('remote judge client', () => {
 
   it('rejects error envelopes with malformed identity evidence', async () => {
     const corr = 'errident-corr';
-    const client = (receipt: unknown) => createRemoteJudgeClient({
+    const client = (receipt: unknown) => createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: vi.fn(async () => new Response(JSON.stringify({ kind: 'error', ok: false,
-        error: { code: 'TIMEOUT', message: 'Judge deadline exceeded.', phase: 'dispatch', retryable: true },
+        error: { code: 'TIMEOUT', message: 'Decision deadline exceeded.', phase: 'dispatch', retryable: true },
         receipt }),
         { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
-    }).judge(judgeRequest({ correlationId: corr }));
+    }).decide(decisionRequest({ correlationId: corr }));
     const errorReceipt = { ...mockReceipt(corr), outcome: 'error' as const, errorCode: 'TIMEOUT' };
 
     expect(await client({ ...errorReceipt, servedModelId: { invalid: true } }))
@@ -502,11 +502,11 @@ describe('remote judge client', () => {
 
   it('rejects raw native values that disagree with the typed verdict', async () => {
     const corr = 'rawval-corr';
-    const serve = (verdict: unknown) => createRemoteJudgeClient({
+    const serve = (verdict: unknown) => createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr), verdict }),
         { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
-    }).judge(judgeRequest({ correlationId: corr, raw: { mode: 'allowlisted' } }));
+    }).decide(decisionRequest({ correlationId: corr, raw: { mode: 'allowlisted' } }));
     const raw = (data: unknown, truncated: boolean) => ({ ...mockVerdictResult(corr).verdict,
       providerRaw: { data, bytes: rawBytes(data), truncated } });
 
@@ -528,15 +528,15 @@ describe('remote judge client', () => {
 
   it('checks raw probabilities and truncation against the distribution', async () => {
     const corr = 'rawprob-corr';
-    const request = judgeRequest({ correlationId: corr, raw: { mode: 'allowlisted' },
+    const request = decisionRequest({ correlationId: corr, raw: { mode: 'allowlisted' },
       criterion: { kind: 'choice', instructions: 'Pick.',
         options: [{ id: 'a', description: 'A' }, { id: 'b', description: 'B' }] } });
-    const serve = (data: unknown, truncated: boolean) => createRemoteJudgeClient({
+    const serve = (data: unknown, truncated: boolean) => createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: vi.fn(async () => new Response(JSON.stringify({ ...mockVerdictResult(corr),
         verdict: { ...choiceVerdict(), providerRaw: { data, bytes: rawBytes(data), truncated } } }),
         { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
-    }).judge(request);
+    }).decide(request);
     const full = { choice: 'a', probabilities: { a: 0.7, b: 0.3 }, confidence: 0.7 };
 
     expect(await serve(full, false)).toMatchObject({ kind: 'verdict', ok: true });
@@ -553,8 +553,8 @@ describe('remote judge client', () => {
   it('refuses NaN inputs before any egress without inventing a receipt', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('nan-corr')),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: 'nan-corr', inputs: { output: NaN } }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: 'nan-corr', inputs: { output: NaN } }));
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'not-sent',
       error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' }, correlationId: 'nan-corr' });
     expect(fetch).not.toHaveBeenCalled();
@@ -563,8 +563,8 @@ describe('remote judge client', () => {
   it('refuses present undefined properties before any egress', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('undef-corr')),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: 'undef-corr', inputs: { output: null, state: undefined } }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: 'undef-corr', inputs: { output: null, state: undefined } }));
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'not-sent',
       error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' }, correlationId: 'undef-corr' });
     expect(fetch).not.toHaveBeenCalled();
@@ -573,8 +573,8 @@ describe('remote judge client', () => {
   it('refuses over-256-KiB requests before any egress', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('big-corr')),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest({ correlationId: 'big-corr', inputs: { output: 'x'.repeat(300_000) } }));
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest({ correlationId: 'big-corr', inputs: { output: 'x'.repeat(300_000) } }));
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'not-sent',
       error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' }, correlationId: 'big-corr' });
     expect(fetch).not.toHaveBeenCalled();
@@ -583,12 +583,12 @@ describe('remote judge client', () => {
   it('refuses excessively deep requests before any egress', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('depth-corr')),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const request = judgeRequest({ correlationId: 'depth-corr' }) as unknown as { inputs: { output: unknown } };
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const request = decisionRequest({ correlationId: 'depth-corr' }) as unknown as { inputs: { output: unknown } };
     let deep: unknown = 'leaf';
     for (let i = 0; i < 24; i++) deep = [deep];
     request.inputs.output = deep;
-    const result = await client.judge(request as unknown as Parameters<typeof client.judge>[0]);
+    const result = await client.decide(request as unknown as Parameters<typeof client.decision>[0]);
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'not-sent',
       error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' }, correlationId: 'depth-corr' });
     expect(fetch).not.toHaveBeenCalled();
@@ -601,11 +601,11 @@ describe('remote judge client', () => {
       return new Response(JSON.stringify(mockVerdictResult('mut-corr')),
         { status: 200, headers: { 'content-type': 'application/json' } });
     });
-    const request = judgeRequest({ correlationId: 'mut-corr', inputs: { output: 'original' } });
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+    const request = decisionRequest({ correlationId: 'mut-corr', inputs: { output: 'original' } });
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
       fetch: fetch as unknown as typeof globalThis.fetch,
       authToken: async () => { request.inputs.output = 'mutated-during-auth'; return 'token'; } });
-    const result = await client.judge(request);
+    const result = await client.decide(request);
     expect(result.ok).toBe(true);
     expect(JSON.parse(sentBody).inputs).toEqual({ output: 'original' });
     expect(fetch).toHaveBeenCalledOnce();
@@ -613,9 +613,9 @@ describe('remote judge client', () => {
 
   it('times out a fetch that ignores abort without retrying', async () => {
     const fetch = vi.fn(() => new Promise<Response>(() => {}));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
       fetch: fetch as unknown as typeof globalThis.fetch, timeoutMs: 5 });
-    const result = await failAfterHang(client.judge(judgeRequest({ correlationId: 'hang-corr' })));
+    const result = await failAfterHang(client.decide(decisionRequest({ correlationId: 'hang-corr' })));
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'unknown',
       error: { code: 'TIMEOUT' }, correlationId: 'hang-corr' });
     expect(fetch).toHaveBeenCalledOnce();
@@ -623,10 +623,10 @@ describe('remote judge client', () => {
 
   it('cancels a hanging fetch on caller abort without retrying', async () => {
     const fetch = vi.fn(() => new Promise<Response>(() => {}));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
       fetch: fetch as unknown as typeof globalThis.fetch, timeoutMs: 10_000 });
     const caller = new AbortController();
-    const pending = client.judge(judgeRequest({ correlationId: 'abort-corr' }), { signal: caller.signal });
+    const pending = client.decide(decisionRequest({ correlationId: 'abort-corr' }), { signal: caller.signal });
     caller.abort();
     const result = await failAfterHang(pending);
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'unknown',
@@ -637,9 +637,9 @@ describe('remote judge client', () => {
   it('ignores a late fetch settlement after timeout without retrying', async () => {
     let release: ((response: Response) => void) | undefined;
     const fetch = vi.fn(() => new Promise<Response>((resolve) => { release = resolve; }));
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
       fetch: fetch as unknown as typeof globalThis.fetch, timeoutMs: 5 });
-    const pending = client.judge(judgeRequest({ correlationId: 'late-corr' }));
+    const pending = client.decide(decisionRequest({ correlationId: 'late-corr' }));
     const result = await failAfterHang(pending);
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'unknown',
       error: { code: 'TIMEOUT' }, correlationId: 'late-corr' });
@@ -652,8 +652,8 @@ describe('remote judge client', () => {
   it('never retries the call automatically on 502/503/429 status', async () => {
     for (const status of [429, 502, 503, 504]) {
       const fetch = vi.fn(async () => new Response('HTML Gateway Error', { status }));
-      const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-      const result = await client.judge(judgeRequest());
+      const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+      const result = await client.decide(decisionRequest());
       expect(result.ok).toBe(false);
       expect(result.kind).toBe('connection-failure');
       expect(fetch).toHaveBeenCalledOnce();
@@ -667,8 +667,8 @@ describe('remote judge client', () => {
         start() {},
       });
       const fetch = vi.fn(async () => new Response(stream, { status: 200 }));
-      const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', timeoutMs: 1000, fetch: fetch as unknown as typeof globalThis.fetch });
-      const resultPromise = client.judge(judgeRequest());
+      const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', timeoutMs: 1000, fetch: fetch as unknown as typeof globalThis.fetch });
+      const resultPromise = client.decide(decisionRequest());
       await vi.advanceTimersByTimeAsync(1000);
       const result = await resultPromise;
       expect(result).toMatchObject({
@@ -691,8 +691,8 @@ describe('remote judge client', () => {
       setTimeout(() => controller.abort(), 10);
       return new Response(stream, { status: 200 });
     });
-    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-    const result = await client.judge(judgeRequest(), { signal: controller.signal });
+    const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.decide(decisionRequest(), { signal: controller.signal });
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false, error: { code: 'CANCELLED', phase: 'dispatch' },
       receipt: null, callStatus: 'unknown',
@@ -704,14 +704,14 @@ describe('remote judge client', () => {
     let capturedInit: RequestInit | undefined;
     const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
       capturedInit = init;
-      return new Response(null, { status: 307, headers: { location: 'https://evil.internal/judge' } });
+      return new Response(null, { status: 307, headers: { location: 'https://evil.internal/decision' } });
     });
-    const client = createRemoteJudgeClient({
+    const client = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       headers: { 'x-custom-secret': 'secret-value' },
       fetch: fetch as unknown as typeof globalThis.fetch,
     });
-    const result = await client.judge(judgeRequest());
+    const result = await client.decide(decisionRequest());
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
       receipt: null, callStatus: 'unknown',
@@ -722,12 +722,12 @@ describe('remote judge client', () => {
 
   it('returns typed not-sent connection failure on token resolution exception or abort', async () => {
     const fetch = vi.fn();
-    const failingAuthClient = createRemoteJudgeClient({
+    const failingAuthClient = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       authToken: () => { throw new Error('vault unreachable'); },
       fetch: fetch as unknown as typeof globalThis.fetch,
     });
-    const result1 = await failingAuthClient.judge(judgeRequest());
+    const result1 = await failingAuthClient.decide(decisionRequest());
     expect(result1).toMatchObject({
       kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' },
       receipt: null, callStatus: 'not-sent',
@@ -735,7 +735,7 @@ describe('remote judge client', () => {
     expect(fetch).not.toHaveBeenCalled();
 
     const controller = new AbortController();
-    const abortingAuthClient = createRemoteJudgeClient({
+    const abortingAuthClient = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       authToken: async () => {
         controller.abort();
@@ -743,7 +743,7 @@ describe('remote judge client', () => {
       },
       fetch: fetch as unknown as typeof globalThis.fetch,
     });
-    const result2 = await abortingAuthClient.judge(judgeRequest(), { signal: controller.signal });
+    const result2 = await abortingAuthClient.decide(decisionRequest(), { signal: controller.signal });
     expect(result2).toMatchObject({
       kind: 'connection-failure', ok: false, error: { code: 'CANCELLED', phase: 'preflight' },
       receipt: null, callStatus: 'not-sent',
@@ -757,13 +757,13 @@ describe('remote judge client', () => {
       const fetch = vi.fn((_url: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
       }));
-      const client = createRemoteJudgeClient({
+      const client = createRemoteDecisionClient({
         baseUrl: 'https://mesh.internal',
         timeoutMs: 500,
         fetch: fetch as unknown as typeof globalThis.fetch,
       });
-      const req = { ...judgeRequest(), policy: { timeoutMs: 10_000 } };
-      const promise = client.judge(req);
+      const req = { ...decisionRequest(), policy: { timeoutMs: 10_000 } };
+      const promise = client.decide(req);
       await vi.advanceTimersByTimeAsync(500);
       const result = await promise;
       expect(result).toMatchObject({
@@ -781,8 +781,8 @@ describe('remote judge client', () => {
       const fetch = vi.fn((_url: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
       }));
-      const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-      const p1 = client.judge(judgeRequest());
+      const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+      const p1 = client.decide(decisionRequest());
       let p1Settled = false;
       p1.finally(() => { p1Settled = true; });
       await vi.advanceTimersByTimeAsync(10_000);
@@ -792,7 +792,7 @@ describe('remote judge client', () => {
       expect(p1Settled).toBe(true);
       expect(await p1).toMatchObject({ kind: 'connection-failure', error: { code: 'TIMEOUT', phase: 'dispatch' } });
 
-      const p2 = client.judge({ ...judgeRequest(), policy: { timeoutMs: 60_000 } });
+      const p2 = client.decide({ ...decisionRequest(), policy: { timeoutMs: 60_000 } });
       let p2Settled = false;
       p2.finally(() => { p2Settled = true; });
       await vi.advanceTimersByTimeAsync(60_000);
@@ -807,7 +807,7 @@ describe('remote judge client', () => {
 
   it('leaves no abort event listeners on caller signal after preflight completion', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('corr-1')), { status: 200 }));
-    const client = createRemoteJudgeClient({
+    const client = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       authToken: async () => 'test-token',
       headers: async () => ({ 'x-custom': 'val' }),
@@ -816,7 +816,7 @@ describe('remote judge client', () => {
     const controller = new AbortController();
     const addSpy = vi.spyOn(controller.signal, 'addEventListener');
     const removeSpy = vi.spyOn(controller.signal, 'removeEventListener');
-    await client.judge(judgeRequest({ correlationId: 'corr-1' }), { signal: controller.signal });
+    await client.decide(decisionRequest({ correlationId: 'corr-1' }), { signal: controller.signal });
     expect(addSpy).toHaveBeenCalledTimes(1);
     expect(removeSpy).toHaveBeenCalledTimes(1);
   });
@@ -825,18 +825,18 @@ describe('remote judge client', () => {
     vi.useFakeTimers();
     try {
       const fetch = vi.fn();
-      const client = createRemoteJudgeClient({
+      const client = createRemoteDecisionClient({
         baseUrl: 'https://mesh.internal',
         authToken: () => new Promise<string>(() => {}),
         fetch: fetch as unknown as typeof globalThis.fetch,
       });
-      const p1 = client.judge(judgeRequest());
+      const p1 = client.decide(decisionRequest());
       await vi.advanceTimersByTimeAsync(11_000);
       expect(await p1).toMatchObject({ kind: 'connection-failure', error: { code: 'TIMEOUT', phase: 'preflight' }, callStatus: 'not-sent' });
       expect(fetch).not.toHaveBeenCalled();
 
       const controller = new AbortController();
-      const p2 = client.judge(judgeRequest(), { signal: controller.signal });
+      const p2 = client.decide(decisionRequest(), { signal: controller.signal });
       controller.abort();
       expect(await p2).toMatchObject({ kind: 'connection-failure', error: { code: 'CANCELLED', phase: 'preflight' }, callStatus: 'not-sent' });
       expect(fetch).not.toHaveBeenCalled();
@@ -855,12 +855,12 @@ describe('remote judge client', () => {
       cancel() { cancelled = true; },
     });
     const fetch = vi.fn(async () => new Response(stream, { status: 200 }));
-    const client = createRemoteJudgeClient({
+    const client = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       maxResponseBytes: 500,
       fetch: fetch as unknown as typeof globalThis.fetch,
     });
-    const result = await client.judge(judgeRequest());
+    const result = await client.decide(decisionRequest());
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false,
       error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
@@ -879,8 +879,8 @@ describe('remote judge client', () => {
         const corr = JSON.parse(String(init?.body)).correlationId;
         return new Response(JSON.stringify(mockVerdictResult(corr)), { status: 200 });
       });
-      const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
-      const result = await client.judge(judgeRequest());
+      const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+      const result = await client.decide(decisionRequest());
       expect(result.ok).toBe(true);
       const headers = capturedInit?.headers as Record<string, string>;
       expect(headers.authorization).toBeUndefined();
@@ -895,25 +895,25 @@ describe('remote judge client', () => {
   it('refuses invalid mesh response shapes with MESH_UNAVAILABLE', async () => {
     const fetchWithBody = (body: unknown) => {
       const fn = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
-      return createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fn as unknown as typeof globalThis.fetch });
+      return createRemoteDecisionClient({ baseUrl: 'https://mesh.internal', fetch: fn as unknown as typeof globalThis.fetch });
     };
 
     const badCorr = mockVerdictResult('different-corr');
-    const res1 = await fetchWithBody(badCorr).judge(judgeRequest({ correlationId: 'sent-corr' }));
+    const res1 = await fetchWithBody(badCorr).decide(decisionRequest({ correlationId: 'sent-corr' }));
     expect(res1).toMatchObject({
       kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
       receipt: null, callStatus: 'unknown',
     });
 
     const badSchema = { ...mockVerdictResult('my-corr'), receipt: { ...mockReceipt('my-corr'), schemaVersion: 2 } };
-    const res2 = await fetchWithBody(badSchema).judge(judgeRequest({ correlationId: 'my-corr' }));
+    const res2 = await fetchWithBody(badSchema).decide(decisionRequest({ correlationId: 'my-corr' }));
     expect(res2).toMatchObject({
       kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
       receipt: null, callStatus: 'unknown',
     });
 
     const badUsage = { ...mockVerdictResult('my-corr'), receipt: { ...mockReceipt('my-corr'), usage: { tokens: null } } };
-    const res3 = await fetchWithBody(badUsage).judge(judgeRequest({ correlationId: 'my-corr' }));
+    const res3 = await fetchWithBody(badUsage).decide(decisionRequest({ correlationId: 'my-corr' }));
     expect(res3).toMatchObject({
       kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
       receipt: null, callStatus: 'unknown',
@@ -921,11 +921,11 @@ describe('remote judge client', () => {
   });
 
   it('retains non-retryable timeout across service-to-client round trip when admitted liability is pending reconciliation', async () => {
-    const f = judgeServiceFixture();
+    const f = decisionServiceFixture();
     f.transport.send.mockImplementationOnce(() => new Promise(() => {}));
-    const service = createJudgeService({ ...f.options, policy: { timeoutMs: 5 } });
-    const request = judgeRequest({ correlationId: 'rt-pending-timeout', policy: { timeoutMs: 5 } });
-    const served = await service.judge(request);
+    const service = createDecisionService({ ...f.options, policy: { timeoutMs: 5 } });
+    const request = decisionRequest({ correlationId: 'rt-pending-timeout', policy: { timeoutMs: 5 } });
+    const served = await service.decide(request);
     expect(served).toMatchObject({
       kind: 'error', ok: false,
       error: { code: 'TIMEOUT', phase: 'dispatch', retryable: false },
@@ -933,11 +933,11 @@ describe('remote judge client', () => {
     });
     const fetch = vi.fn(async () => new Response(JSON.stringify(served),
       { status: 200, headers: { 'content-type': 'application/json' } }));
-    const client = createRemoteJudgeClient({
+    const client = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: fetch as unknown as typeof globalThis.fetch,
     });
-    const result = await client.judge(request);
+    const result = await client.decide(request);
     expect(result).toMatchObject({
       kind: 'error', ok: false,
       error: { code: 'TIMEOUT', phase: 'dispatch', retryable: false },
@@ -949,12 +949,12 @@ describe('remote judge client', () => {
       ...served,
       error: { code: 'TIMEOUT', message: 'forged', phase: 'dispatch', retryable: true, retryAfterMs: 250 },
     };
-    const forgedClient = createRemoteJudgeClient({
+    const forgedClient = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       fetch: vi.fn(async () => new Response(JSON.stringify(forgedPending),
         { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
     });
-    const forgedResult = await forgedClient.judge(request);
+    const forgedResult = await forgedClient.decide(request);
     expect(forgedResult).toMatchObject({
       kind: 'error', ok: false,
       error: { code: 'TIMEOUT', phase: 'dispatch', retryable: false },
@@ -974,13 +974,13 @@ describe('remote judge client', () => {
       },
     });
     const fetch = vi.fn(async () => new Response(stream, { status: 200 }));
-    const client = createRemoteJudgeClient({
+    const client = createRemoteDecisionClient({
       baseUrl: 'https://mesh.internal',
       maxResponseBytes: 500,
       timeoutMs: 5,
       fetch: fetch as unknown as typeof globalThis.fetch,
     });
-    const result = await failAfterHang(client.judge(judgeRequest({ correlationId: 'oversize-cancel-hang' })));
+    const result = await failAfterHang(client.decide(decisionRequest({ correlationId: 'oversize-cancel-hang' })));
     expect(result).toMatchObject({
       kind: 'connection-failure', ok: false,
       error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
