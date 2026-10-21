@@ -244,8 +244,8 @@ export interface HistoryReadAuthorization {
   readonly createdAt: number;
 }
 
-/** CAS writes must atomically preserve read denial, independently of policy
- * revisions. Durable adapters must enforce the same floor in the database. */
+/** CAS writes preserve capture and read denial independently under the write
+ * lock. Durable adapters enforce these floors in the database as well. */
 export interface ContentConsentStore {
   readProject(projectId: string): Promise<ProjectContentConsent | null>;
   writeProject(expectedRevision: number | null, next: ProjectContentConsent): Promise<boolean>;
@@ -269,6 +269,7 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
         if (existing) return false;
       } else if (!existing || existing.projectRevision !== expectedRevision) return false;
       projects.set(next.projectId, { ...next,
+        state: existing && existing.state !== 'active' && next.state !== 'revoked' ? existing.state : next.state,
         readDenied: existing?.readDenied === true || existing?.state === 'revoked'
           || next.readDenied === true || next.state === 'revoked',
       });
@@ -280,7 +281,16 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
       if (expectedVersion === null) {
         if (existing) return false;
       } else if (!existing || existing.version !== expectedVersion) return false;
+      // Only a new binding/child, with the required confirmed amendment after
+      // revocation/exclusion, can establish new capture authority.
+      const replacement = existing && next.grantId !== existing.grantId && next.bindingId !== existing.bindingId
+        && (existing.state === 'closed' || next.projectRevision > existing.projectRevision);
+      const state = existing && !replacement && next.state !== 'revoked'
+        && (existing.state === 'revoked' || (existing.state !== 'active' && next.state === 'active'))
+        ? existing.state : next.state;
       grants.set(next.sessionId, { ...next,
+        state,
+        localDenyPending: next.localDenyPending || (existing?.localDenyPending === true && state !== 'revoked'),
         readDenied: existing?.readDenied === true || existing?.state === 'revoked'
           || next.readDenied === true || next.state === 'revoked',
       });
@@ -297,7 +307,9 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
       if (expectedVersion === null) {
         if (existing) return false;
       } else if (!existing || existing.version !== expectedVersion) return false;
-      historyAuthorizations.set(next.authorizationId, next);
+      historyAuthorizations.set(next.authorizationId, { ...next,
+        state: existing?.state === 'revoked' ? 'revoked' : next.state,
+      });
       return true;
     },
     projectCount() { return projects.size; },
