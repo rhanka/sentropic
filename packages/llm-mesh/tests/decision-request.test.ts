@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { isBoundedJson, isCorrelationId, isMicroUsd } from '../src/judge/validation.js';
-import { isJudgeCriterion, isJudgeDecisionRule } from '../src/judge/criterion.js';
-import { parseJudgeRequest } from '../src/judge/request.js';
+import { isBoundedJson, isCorrelationId, isMicroUsd } from '../src/decision/validation.js';
+import { isDecisionCriterion, isDecisionRule } from '../src/decision/criterion.js';
+import { parseDecisionRequest } from '../src/decision/request.js';
 
-describe('judge request JSON boundary', () => {
+describe('decision request JSON boundary', () => {
   it('should preserve valid JSON and reject values JSON would silently coerce', () => {
     expect(isBoundedJson({ output: null, state: [0, false, 'text'] })).toBe(true);
     for (const value of [NaN, Infinity, undefined, 1n, new Date(), [undefined], Array(1)]) {
@@ -55,25 +55,25 @@ const request = () => ({ schemaVersion: 1,
   inputs: { output: null, state: { text: 'Synthetic content' } },
   criterion: { kind: 'binary', instructions: 'Check supplied state' } });
 
-describe('strict judge request parsing', () => {
+describe('strict decision request parsing', () => {
   it.each([{ output: null }, { state: null }, { output: null, state: null }])(
     'should accept explicit null candidate values without adding absent fields: %j', (inputs) => {
       const candidate = { ...request(), inputs };
-      expect(parseJudgeRequest(candidate)).toStrictEqual({ ok: true, request: candidate });
+      expect(parseDecisionRequest(candidate)).toStrictEqual({ ok: true, request: candidate });
     });
   it.each([{}, { input: null }, { reference: null }, { output: undefined }, { state: undefined },
     { output: undefined, state: undefined }, { output: null, state: undefined }, { output: undefined, state: null }])(
     'should refuse absent candidates or undefined fields rather than treating them as null: %j', (inputs) => {
-      expect(parseJudgeRequest({ ...request(), inputs })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+      expect(parseDecisionRequest({ ...request(), inputs })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
     });
   it('should refuse an absent or undefined inputs envelope', () => {
     const { inputs: _inputs, ...candidate } = request();
-    expect(parseJudgeRequest(candidate)).toEqual({ ok: false, code: 'REQUEST_INVALID' });
-    expect(parseJudgeRequest({ ...candidate, inputs: undefined })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+    expect(parseDecisionRequest(candidate)).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+    expect(parseDecisionRequest({ ...candidate, inputs: undefined })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
   });
   it('should retain significant null inputs and snapshot data without inventing defaults', () => {
     const input = request();
-    const result = parseJudgeRequest(input);
+    const result = parseDecisionRequest(input);
     input.inputs.state.text = 'Changed';
     expect(result).toEqual({ ok: true, request: request() });
   });
@@ -86,16 +86,16 @@ describe('strict judge request parsing', () => {
         return Reflect.get(target, key, receiver);
       },
     });
-    expect(parseJudgeRequest(candidate)).toEqual({ ok: true, request: request() });
+    expect(parseDecisionRequest(candidate)).toEqual({ ok: true, request: request() });
   });
   it('should refuse caller credentials, endpoints, fan-out and tenant selectors', () => {
     for (const key of ['auth', 'endpoint', 'fallback', 'batch', 'tenantId']) {
-      expect(parseJudgeRequest({ ...request(), [key]: 'dummy' })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+      expect(parseDecisionRequest({ ...request(), [key]: 'dummy' })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
     }
-    expect(parseJudgeRequest({ ...request(), policy: { zdr: true }, fallback: [] })).toEqual({ ok: false, code: 'CAPABILITY_UNSUPPORTED' });
-    expect(parseJudgeRequest({ ...request(), policy: { zdr: true } })).toEqual({ ok: false, code: 'CAPABILITY_UNSUPPORTED' });
-    expect(parseJudgeRequest({ ...request(), inputs: { input: 'No candidate' } }).ok).toBe(false);
-    expect(parseJudgeRequest({ ...request(), evaluator: { ...request().evaluator, providerId: 'unknown' } })).toEqual({ ok: false, code: 'PROVIDER_UNKNOWN' });
+    expect(parseDecisionRequest({ ...request(), policy: { zdr: true }, fallback: [] })).toEqual({ ok: false, code: 'CAPABILITY_UNSUPPORTED' });
+    expect(parseDecisionRequest({ ...request(), policy: { zdr: true } })).toEqual({ ok: false, code: 'CAPABILITY_UNSUPPORTED' });
+    expect(parseDecisionRequest({ ...request(), inputs: { input: 'No candidate' } }).ok).toBe(false);
+    expect(parseDecisionRequest({ ...request(), evaluator: { ...request().evaluator, providerId: 'unknown' } })).toEqual({ ok: false, code: 'PROVIDER_UNKNOWN' });
   });
   it.each([
     { schemaVersion: 2 },
@@ -107,18 +107,18 @@ describe('strict judge request parsing', () => {
     { criterion: { kind: 'graded', instructions: 'Grade', direction: 'unordered', levels: [{ label: 'a', description: 'A' }] }, decision: { kind: 'labels', passing: ['b'] } },
     { decision: { kind: 'labels', passing: ['true'] } },
   ])('should refuse malformed request structure or undeclared labels: %j', (patch) => {
-    expect(parseJudgeRequest({ ...request(), ...patch })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+    expect(parseDecisionRequest({ ...request(), ...patch })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
   });
   it('should reject malformed policy bounds while accepting an explicit zero spend cap', () => {
     for (const policy of [{ timeoutMs: 0 }, { timeoutMs: 60_001 }, { timeoutMs: 1.5 }, { budget: { maxCostMicroUsd: '01' } }, { budget: {} }, { explanation: 'fabricated' }]) {
-      expect(parseJudgeRequest({ ...request(), policy }).ok).toBe(false);
+      expect(parseDecisionRequest({ ...request(), policy }).ok).toBe(false);
     }
-    expect(parseJudgeRequest({ ...request(), policy: { budget: { maxCostMicroUsd: '0' }, timeoutMs: 60_000 } }).ok).toBe(true);
-    expect(parseJudgeRequest({ ...request(), policy: { budget: { maxCostMicroUsd: '9'.repeat(256) } } }).ok).toBe(true);
-    expect(parseJudgeRequest({ ...request(), raw: { mode: 'allowlisted', maxBytes: 16_385 } }).ok).toBe(false);
+    expect(parseDecisionRequest({ ...request(), policy: { budget: { maxCostMicroUsd: '0' }, timeoutMs: 60_000 } }).ok).toBe(true);
+    expect(parseDecisionRequest({ ...request(), policy: { budget: { maxCostMicroUsd: '9'.repeat(256) } } }).ok).toBe(true);
+    expect(parseDecisionRequest({ ...request(), raw: { mode: 'allowlisted', maxBytes: 16_385 } }).ok).toBe(false);
   });
   it('should refuse excessive bytes, nesting and cyclic data before serialization', () => {
-    expect(parseJudgeRequest({ ...request(), inputs: { output: 'é'.repeat(131_072) } }).ok).toBe(false);
+    expect(parseDecisionRequest({ ...request(), inputs: { output: 'é'.repeat(131_072) } }).ok).toBe(false);
     let nested: unknown = null;
     for (let i = 0; i < 16; i++) nested = [nested];
     expect(isBoundedJson(nested)).toBe(true);
@@ -128,12 +128,12 @@ describe('strict judge request parsing', () => {
   });
 });
 
-describe('judge criteria and explicit decision rules', () => {
+describe('decision criteria and explicit decision rules', () => {
   it('should preserve ordered labels and allow capabilities beyond JEV cardinalities', () => {
     const levels = Array.from({ length: 11 }, (_, i) => ({ label: String(i), description: `Level ${i}` }));
-    expect(isJudgeCriterion({ kind: 'graded', instructions: 'Grade', direction: 'unordered', levels })).toBe(true);
-    expect(isJudgeCriterion({ kind: 'graded', instructions: 'Grade', direction: 'unordered', levels: [...levels, levels[0]] })).toBe(false);
-    expect(isJudgeCriterion({ kind: 'registered', criteriaId: 'support', revision: 'v1' })).toBe(true);
+    expect(isDecisionCriterion({ kind: 'graded', instructions: 'Grade', direction: 'unordered', levels })).toBe(true);
+    expect(isDecisionCriterion({ kind: 'graded', instructions: 'Grade', direction: 'unordered', levels: [...levels, levels[0]] })).toBe(false);
+    expect(isDecisionCriterion({ kind: 'registered', criteriaId: 'support', revision: 'v1' })).toBe(true);
   });
   it('should reject empty rubrics, duplicate choices and unrecognized criterion fields', () => {
     const option = { id: 'safe', description: 'Safe answer' };
@@ -144,13 +144,13 @@ describe('judge criteria and explicit decision rules', () => {
       { kind: 'choice', instructions: 'Choose', options: [option, option] },
       { kind: 'choice', instructions: 'Choose', options: [{ ...option, weight: 1 }] },
       { kind: 'registered', criteriaId: 'support', revision: '' },
-    ]) expect(isJudgeCriterion(criterion)).toBe(false);
+    ]) expect(isDecisionCriterion(criterion)).toBe(false);
   });
   it('should require finite thresholds, declared rule fields and unique passing labels', () => {
     const threshold = { kind: 'threshold', field: 'score', op: 'gte', value: 0.7 };
-    expect(isJudgeDecisionRule(threshold)).toBe(true);
-    expect(isJudgeDecisionRule({ ...threshold, value: Infinity })).toBe(false);
-    expect(isJudgeDecisionRule({ kind: 'provider', threshold: 0.5 })).toBe(false);
-    expect(isJudgeDecisionRule({ kind: 'labels', passing: ['a', 'a'] })).toBe(false);
+    expect(isDecisionRule(threshold)).toBe(true);
+    expect(isDecisionRule({ ...threshold, value: Infinity })).toBe(false);
+    expect(isDecisionRule({ kind: 'provider', threshold: 0.5 })).toBe(false);
+    expect(isDecisionRule({ kind: 'labels', passing: ['a', 'a'] })).toBe(false);
   });
 });
