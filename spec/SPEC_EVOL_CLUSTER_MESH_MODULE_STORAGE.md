@@ -253,3 +253,101 @@ cross-surface update.
   manifest or successful publication. Manifests and their pages obey the CR-4
   bounds. SQL atomicity and provider checksums do not replace this
   interface-level inventory commitment.
+
+### CR-3 — One atomic publication
+
+- Preparation, uploads, checksum verification and manifest sealing MUST remain
+  invisible as committed data. One linearization point MUST switch the
+  publication unit from its captured predecessor root to the complete successor.
+  Public reads by current pointer, historical ID, manifest digest or other
+  handles MUST NOT bypass this visibility decision.
+- The publication authority MUST durably compare the expected predecessor,
+  scope, incarnation and writer epoch/fence, revalidate current rights, and
+  publish the manifest/root plus the recoverable receipt as one atomic decision.
+  Two writers on the same predecessor MUST NOT both win. A stale writer MUST NOT
+  gain authority by rereading a newer head; rebasing needs a new explicit
+  preparation decision.
+- For SQLite/Postgres first, the authoritative root and durable receipt MUST
+  commit in one database transaction. For S3 payload placement, objects are
+  prepared first and the same SQL-controlled publication decision makes them
+  visible. A provider atomic PUT of one object never commits a collection. An
+  optional backend MUST expose exactly one authoritative publication root, never
+  independently visible SQL and catalog pointers.
+- The logical operation identity, parameter/manifest commitment and original
+  receipt MUST survive restart. Concurrent identical retries and retry after a
+  lost acknowledgement resolve to one committed effect and the original receipt.
+  Reusing an operation identity with different parameters MUST fail. An unknown
+  outcome after a possible commit MUST be resolved from durable state, never by
+  a blind second publication.
+- Failures before the linearization point MUST leave the previous publication
+  readable and complete; failures after it MUST leave the successor readable
+  and recoverable. Abandoned preparations stay invisible and become eligible
+  for bounded, authorized cleanup only after their protection is released.
+
+### CR-4 — Bounded listings and traversal
+
+- Every enumeration (objects, manifests, roots, intents, recovery, graph
+  adjacency, GC candidates) MUST expose explicit item and encoded-byte bounds, a
+  bounded work/deadline budget and resumable continuation. Limits MUST include
+  the full returned envelope and cursor. Oversized single entries MUST fail
+  with an explicit limit result, never by defeating the bound.
+- The implementation MUST enforce bounds through the backend, never by loading
+  all rows/keys and slicing afterward. It MUST NOT accumulate provider pages or
+  perform an unbounded global sort. S3 `MaxKeys` alone is not a byte/work
+  bound; SQL `LIMIT` alone is not a bound on scanned work. Indexed traversal,
+  bounded provider calls and finite transaction/query deadlines back the
+  budgets.
+- Continuations MUST bind scope, enumeration kind and retained boundary with an
+  opaque integrity-protected state or equivalent server-side binding, and MUST
+  revalidate current authority on each use. A foreign, malformed,
+  stale-incarnation, looping or non-progressing continuation MUST fail or end
+  with an explicit incomplete outcome, never report false completion. Key
+  material MUST NOT appear in the repository, logs, cursors or qualification
+  evidence; rotation MUST invalidate old continuations with an explicit stale
+  outcome.
+- Publication completeness and ordinary reads MUST follow the committed
+  manifest and retained boundary. Backend LIST operations MUST NOT establish
+  publication completeness. Reconciliation observes weaker concurrent views and
+  MUST document them; it MUST NOT treat LIST absence as deletion authority.
+- Bounded work also covers preparation and recovery. A small update MUST NOT
+  serialize all historical state. Hot transactional/live paths MUST use
+  incremental commitments and indexed access, never whole-history scans.
+
+### CR-5 — Separated rights
+
+- The neutral interface MUST separate **read**, **write/prepare**,
+  **publish** and **maintain/delete** authority, scoped to module,
+  tenant/workspace and resources. One right MUST NOT silently confer another. A
+  public content reader and an administrative storage reader are distinct
+  bindings; neither receives storage credentials by implication.
+- A writer may prepare objects but MUST NOT publish or delete them without the
+  matching grant. A publisher may promote an authorized, verified prepared unit
+  but MUST NOT rewrite its bytes. A maintainer may reconcile, retain or purge
+  but MUST NOT publish application data. An operation that both writes and
+  commits MUST hold explicit write and publish authority through composed
+  policy, with final revalidation.
+- Rights MUST be checked before data, payload or provider I/O, at each
+  continuation, after waits, on retry, at publication and before deletion. The
+  entry gate first applies locally decidable checks (missing right, foreign
+  scope, expiry, revocation in a host-local revocation set); a local denial
+  MUST cause zero storage calls, including control-store SQL. After the gate
+  passes, bounded durable authority reads on the control store establish
+  current authority before any data/payload access; absence from the local
+  revocation set is not proof of durable validity. Revoked or expired grants,
+  stale authority/policy revisions, foreign scope and superseded writer epochs
+  MUST fail closed. A manifest digest or historical receipt is not an access
+  grant.
+- Capability types MUST be backed by runtime enforcement. Database handles and
+  administrative credentials stay outside untrusted consumer reach (trusted
+  broker plus file permissions on SQLite; scoped runtime capabilities with
+  least-privilege database/service identities on Postgres/Spanner; scoped IAM
+  and bucket permissions on object stores; catalog plus object-store
+  restrictions on Iceberg/Neo4j). Combining rights for a trusted host MUST be
+  explicit and auditable: the record binds principal, module/scope, composed
+  rights, policy/grant revision, operation identity and decision, without
+  exposing credentials or grant secrets.
+- Listing permission is scoped separately from arbitrary bucket/database
+  enumeration; a caller-supplied prefix is not proof of authority. Maintenance
+  clients MUST NOT receive the same unrestricted capability as ordinary
+  readers/writers. Tests MUST exercise real runtime and deployment
+  restrictions, not only TypeScript assignability.
