@@ -56,7 +56,7 @@
   - [x] `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.ts`, `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (coupled `<0.28.0`/`<0.22.0` peer range and 13 `.d.ts` integration leaf assertions only; BR96-EX9)
   - [x] `.github/workflows/ci.yml`, `scripts/ci/publishable-ci-wiring.test.mjs` (cluster-mesh qualification `PEERS` tuple `@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0` only; BR96-EX9)
   - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; V4-L1-MEM)
-- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, V4-L1-MEM.
+- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, V4-L1-MEM.
 
 ## Feedback Loop
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
@@ -308,6 +308,8 @@
   - [x] No rebase, no force-push. Conflicts (3): BRANCH.md keeps ours (main carries another merged branch plan); memory manifest/sidecar take main provenance (br3Commit 6ec93105b, l5Head 4dd9dcc4b) and re-pin declaredLockSha256 to the merged root lock (unchanged d009ebd7); main history pruning of superseded manifests accepted.
   - [x] Verified both intents present: cm-s3 contract/spec/tests, artifacts 0.1.4 + llm-mesh 0.27.1/gateway 0.21.0 fixture pins, selected mesh integrity wD4K, EX10 bumps intact on all copies, R1 fixes intact.
   - [x] Regenerated via repo procedures: sibling receipts re-packed on the merged tree, lazy-package 78/15 PASS, R1 10/10 PASS, V4-L1 14/14 PASS, full test-llm-mesh 1241 PASS, typecheck+lint PASS, memory-l5-verify 30 files/54 edges PASS.
+- [x] **BR96-EX11 — cluster-mesh 0.21.1 to 0.21.2 patch bump (CI enforce-package-bump)**
+  - [x] Rationale: merging main #716 moved the bump gate baseline to 0.21.1, equal to the branch version, while the branch still carries cluster-mesh src changes (judge surfaces); the gate requires a strictly newer version. Impact: version line only in packages/cluster-mesh/package.json, TRAIN_CLUSTER_MESH_VERSION, selected fixture tarball name and root-lock workspace entry; no range, source or allowlist change; no unpublished-version skew (0.21.2 absent from registry). Rollback: revert the four version lines.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
