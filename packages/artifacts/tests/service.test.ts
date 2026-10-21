@@ -73,9 +73,29 @@ describe('artifact service', () => {
       service.ensurePrivateView({
         actorUserId: 'owner-1',
         idempotencyKey: 'k-1',
-        paramsHash: 'h-2',
+        paramsHash: 'h-1',
         ...VIEW,
+        bindingName: 'other',
       }),
     ).rejects.toThrow(/idempotency conflict/);
+  });
+
+  it('should isolate identical keys between principals', async () => {
+    const service = makeService();
+    const ensure = (ownerId: string) => service.ensurePrivateView({
+      ...VIEW, ownerId, actorUserId: ownerId, idempotencyKey: 'shared', paramsHash: 'forged',
+    });
+    const first = await ensure('alice');
+    const second = await ensure('bob');
+    expect(second.artifactId).not.toBe(first.artifactId);
+    expect(second.replayed).toBe(false);
+  });
+
+  it('should ignore caller hashes and bind validated parameters', async () => {
+    const service = makeService();
+    const input = { ...VIEW, actorUserId: VIEW.ownerId, idempotencyKey: 'same', paramsHash: 'a' };
+    const first = await service.ensurePrivateView(input);
+    expect(await service.ensurePrivateView({ ...input, paramsHash: 'b' }))
+      .toMatchObject({ artifactId: first.artifactId, replayed: true });
   });
 });
