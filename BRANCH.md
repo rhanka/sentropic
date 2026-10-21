@@ -236,7 +236,7 @@
 - [x] Restore this plan to the owner's validated bytes in the final delivery commit.
 - [x] Release squash lot 1.
 - [x] Release squash lot 2.
-- [ ] Release squash lot 3.
+- [x] Release squash lot 3.
 - [ ] Release squash lot 4.
 - [ ] Release squash lot 5.
 - [ ] Release squash lot 6.
