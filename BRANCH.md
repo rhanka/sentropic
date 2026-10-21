@@ -1,90 +1,56 @@
-# Feature: cluster-mesh common storage rule — L00 docs + L01a contract
+# Feature: fix(security): patch Go stdlib CVE-2026-111943 in API toolbox
 
 ## Objective
-Consolidate the approved common-rule amendment (CR-1..CR-5) into the storage spec (L00, docs only), then add the data-only common contract with fixed vectors (L01a, no backend change).
+- [ ] Remove Go 1.26.9 from scanned toolbox binaries using the first patched release, Go 1.26.10, pinned by exact digest.
 
 ## Scope / Guardrails
-- Scope limited to L00 documentation and L01a data contract as the amendment rows define them.
-- No backend, encoder, adapter, SQL asset, claim, connection or credential change.
-- Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree `tmp/worktrees/cm-s3-common-rule`.
-- Automated tests run on `ENV=test-cm-s3-l01a`, never on `ENV=dev`.
-- 0 Python. One Docker build at a time.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
+- [x] Worktree: `tmp/worktrees/fix-go-stdlib-cve`; branch: `fix/go-stdlib-cve-2026-111943`; base: `origin/main` at `50e612a0e`.
+- [x] Make-only; `ENV=test-go-cve` last; zero Python; one Docker build at a time.
+- [x] No CVE exceptions, allowlist changes, floating pins, merge, or publication.
+- [x] No services or host ports needed; containers run without published ports.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md`
-  - `packages/cluster-mesh/src/storage/common-contract.ts`
-  - `packages/cluster-mesh/tests/storage/common-rule/**`
-  - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/cluster-mesh/src/storage/**` (except `common-contract.ts`)
-  - `packages/cluster-mesh/tests/storage/**` (except `common-rule/**`)
-  - `packages/artifacts/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `packages/cluster-mesh/package.json` (version bump only, via BR01-EX1)
-  - `package-lock.json` (root lockfile version sync only, via BR01-EX1)
-  - `tools/memory-mcp-l5/artifacts/**` (P1 manifest regeneration via Make only, via BR01-EX1)
-  - `packages/cluster-mesh/tests/packaging/fixtures/**` (selected-tuple lock refresh via Make only, via BR01-EX1)
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+- [x] **Allowed Paths (implementation scope)**:
+  - [x] `api/Dockerfile`
+  - [x] `BRANCH.md`
+- [x] **Forbidden Paths (must not change in this branch)**:
+  - [x] `Makefile`
+  - [x] `docker-compose*.yml`
+  - [x] `.cursor/rules/**`
+  - [x] `.security/**`
+  - [x] `package*.json`
+  - [x] `plan/**`
+- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] `.github/workflows/**` (not authorized)
+- [x] **Exception process**:
+  - [x] No scope exceptions; limit implementation to the vulnerable Go base-image pin.
 
 ## Feedback Loop
-Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
-- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
-- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
-- `attention` BR01-EX1 (CI-mandated version bump): `enforce-package-bump` fails without a bump for `packages/cluster-mesh/src/**` changes. The frozen installed consumer `@sentropic/comments@0.3.0` accepts mesh `>=0.21.0 <0.22.0`, so this branch bumps patch 0.21.0 → 0.21.1 (strictly above npm-published 0.21.0) instead of minor, and the `changes` train lock-sync gate fails without the matching root lockfile entry, so it syncs the single `packages/cluster-mesh` version line in `package-lock.json`. The lockfile change invalidates the frozen L5 P1 `declaredLockSha256`, so this branch regenerates `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (+ sidecar, retained parent archives untouched) through the sanctioned `make memory-l5-pack STAGE=pre-candidate` flow only — no hand edit of frozen evidence. The version bump also renames the packed candidate tarball, so the lazy-surface gate's frozen selected tuple is refreshed through the sanctioned `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` flow only (public tuple stays pinned; candidate integrity updated). Impact is manifest metadata only; no runtime, dependency or range change. Rollback restores 0.21.0/0.21.0, the previous P1 manifest and the previous selected tuple. No other conditional/forbidden path is touched.
+- [x] Main run `39597025379`, job `119215921954`: four HIGH `CVE-2026-111943_api-tool_stdlib_v1.26.9` findings; #709 EX5 identifies fixes 1.26.10 and 1.27.3.
+- [x] Coverage: CI scans API production, API toolbox and UI production; only toolbox copies binaries rebuilt with Go 1.26.9, from `ci-esbuild`.
+- [x] Inventory: `/workspace/node_modules/{@esbuild/linux-ARCH/bin/esbuild,esbuild/bin/esbuild}` (0.19.12), and both paths under `@esbuild-kit/core-utils/node_modules` (0.18.20).
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-- Capture explicit user sign-off before merge.
+- [x] No flaky-test exemptions; security and toolbox runtime checks are blocking.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: L00 then L01a land sequentially on one branch with atomic commits; one final CI cycle on the draft PR.
+- [x] **Mono-branch**: one author, isolated branch, sequential builds and validation.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in L00/L01a: UAT not applicable.
+- [x] No user-facing change; qualify both esbuild Node interfaces with the existing runtime gate.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read the amendment, the r3 review with its five P3 advisories, and the owner orientations.
-  - [x] Create isolated worktree `tmp/worktrees/cm-s3-common-rule` on `feat/cm-s3-common-rule` from `origin/main`.
-  - [x] Verify branch before any work.
-  - [x] Capture Makefile targets for debug/testing.
-  - [x] Define environment mapping: tests on `ENV=test-cm-s3-l01a`, never `ENV=dev`.
-  - [x] Confirm command style: `make ... ENV=<env>` with `ENV` last.
-  - [x] Confirm scope and guardrails.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`); no exceptions needed.
-- [ ] **Lot L00 — Documentation consolidation only (3–4 atomic commits, no code)**
-  - [x] Consolidate authority, scope, surfaces, CR-1 and CR-2 into the storage spec.
-  - [x] Consolidate CR-3, CR-4 and CR-5 into the storage spec.
-  - [x] Record contract shape, admission, activation and the parity register.
-  - [x] Record traceability, kit acceptance, sequencing and the five P3 advisories.
-  - [ ] Lot gate: `make scope-check` before every commit; each commit under 150 lines.
-- [ ] **Lot L01a — Data contract and fixed vectors (2–3 atomic commits, no backend change)**
-  - [x] Add `packages/cluster-mesh/src/storage/common-contract.ts` data-only types/validators.
-  - [x] Add `packages/cluster-mesh/tests/storage/common-rule/vectors.ts` fixed expected vectors.
-  - [x] Add `packages/cluster-mesh/tests/storage/common-rule/contract.spec.ts` structural tests.
-  - [ ] No encoder, adapter, SQL asset, publication path, claim, connection or credential change.
-  - [ ] Lot gate: `make typecheck-cluster-mesh`, `make lint-cluster-mesh`, scoped spec run with `ENV=test-cm-s3-l01a` last.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read rules, template, Make targets, CI failure and #709; create worktree; pass `harness check branch`.
+  - [x] Inventory Go pins and scanned stages; verify the patched digest in the registry.
+- [ ] **Lot 1 — Patch and qualify**
+  - [ ] Change only the `ci-esbuild` pin to Go 1.26.10.
+  - [ ] `make build-api-tool-image REGISTRY=local ENV=test-go-cve`.
+  - [ ] `make test-api-tool-security-container REGISTRY=local ENV=test-go-cve`; inspect complete Go package inventory.
+  - [ ] `make test-ci-api-tool-runtime REGISTRY=local ENV=test-go-cve`: npm, Vitest, both esbuild transforms and Node protocols.
+  - [ ] `make test-ci-api-tooling ENV=test-go-cve`: existing `scripts/test-api-tooling.sh`; no new test files.
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest scoped L01a spec (`ENV=test-cm-s3-l01a`)
-  - [ ] Push branch and open DRAFT PR titled `feat(cluster-mesh): common storage rule — L00 docs + L01a contract`.
-  - [ ] Verify CI green on the exact head; do not merge, do not mark ready.
-  - [ ] Report PR number, commits, head SHA, CI run URL, frozen contract file and its sha256.
+  - [ ] `make scope-check ENV=test-go-cve` before every selective-stage, make-only commit.
+  - [ ] Push; open draft PR with this file as body; post three-step plan.
+  - [ ] Verify CI green on the exact head; leave draft and unmerged.
+  - [ ] Report image, old/new digest, PR number and CI URL.
