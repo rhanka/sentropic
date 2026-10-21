@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 round-2 final local gates: R3 62/62 domain cases (four concurrent cases fail against exact c2c36f248); PostgreSQL stale-writer and forbidden/unapproved PUT probes fail before fixes and pass after. API consent 109/109, combined consent/adoption/auth-roots/namespace 160/160; full cluster-mesh 1050 passed/129 opt-in skips. Package/API typechecks and API lint pass (0 errors/220 warnings). Updated .h2a/build/lot2_n5_report.md maps R3/R7 to commits/evidence; original 0012–0017 remain unchanged. No COMPLIANCE write, merge or readiness change.
+
 - [x] N5 R7 round 2: content PUT requires a current operations-owned owner approval bound to endpoint/region/bucket and deletable-content purpose, defaulting off. Recheck after the pre-PUT barrier and verify Object Lock is disabled; forbid COMPLIANCE/P10Y/epoch/WORM destinations. Fixtures inject synthetic approvals only for randomized local buckets.
 
 - [x] N5 R3 round 2: memory-store atomic writes preserve the denial floor; new additive control 0018 installs INSERT/UPDATE row triggers for both project/grant tables. Stale concurrent SQL cannot lower denial even when bypassing application checks. Original 0012–0017 are unchanged.
