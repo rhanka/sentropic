@@ -5,11 +5,11 @@
     "specSha256": "f90c927964b44fdf6ad712eee9b894762250239384643a3790931c142d3aeeca",
     "l0Commit": "60a8bfa828b5eabd360232ea5865391c23f99f48",
     "br3Commit": "6ec93105b380bc65063994417716dfacfaceb462",
-    "l5Head": "c3fc42415b7c8d56689224d1b0046e0f74c9f8bc",
+    "l5Head": "8a824d46ce96963a369a87281716d9de02ba6078",
     "sdkRange": "^1.31.0",
     "declaredLockSha256": "5fed299021820c64d0ccd4996e28022ad20e24d5c8977a0566d0f106ce3e851a",
     "lockFingerprintVersion": 4,
-    "lockFingerprint": "ee415c7b140b18ba5570c908780fe261cb89161419a5156e84f0d1d5d76172fd",
+    "lockFingerprint": "2e050e2fdc588d95fed978b3c46d4e14e61156e02809ce73d72457d0238f74c2",
     "declaredLockSnapshot": {
       "path": "tools/memory-mcp-l5/artifacts/lock-snapshots/5fed299021820c64d0ccd4996e28022ad20e24d5c8977a0566d0f106ce3e851a.package-lock.json",
       "sha256": "5fed299021820c64d0ccd4996e28022ad20e24d5c8977a0566d0f106ce3e851a"
@@ -32,7 +32,7 @@
       "version": "0.4.0",
       "sha256": "2ad8a40fa38f4289fe177f58d75bc3317a50dd1b7a3ca693cf55cff2ff72cc9d",
       "integrity": "sha512-fPALSD/CUU49dZ41rrMaqeRUHzNPgfxzCc7g3vutAGHyNkHcDdrm6AKP6QUxnxv/acuL8+x8MSqx9OX4RIkc/w==",
-      "sourceHead": "c3fc42415b7c8d56689224d1b0046e0f74c9f8bc",
+      "sourceHead": "8a824d46ce96963a369a87281716d9de02ba6078",
       "archive": "tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-platform-0.4.0-2ad8a40fa38f4289fe177f58d75bc3317a50dd1b7a3ca693cf55cff2ff72cc9d.tgz"
     },
     {
@@ -41,7 +41,7 @@
       "version": "0.1.0",
       "sha256": "5fede653683acc8d803f7e735526f09a1d79b062ae4a37b0b9933bfd289444fa",
       "integrity": "sha512-zJaMGrey2c5ZK5EfZVURkhOBuvqH+y4EfHzoD8dih3SsOqorIkQBCDeIuXCdLQjiZSvjmmdO/lcGIbpRcvwNJg==",
-      "sourceHead": "c3fc42415b7c8d56689224d1b0046e0f74c9f8bc",
+      "sourceHead": "8a824d46ce96963a369a87281716d9de02ba6078",
       "archive": "tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-broker-0.1.0-5fede653683acc8d803f7e735526f09a1d79b062ae4a37b0b9933bfd289444fa.tgz"
     }
   ],
