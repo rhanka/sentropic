@@ -1,5 +1,5 @@
 import { providerRegistry } from './provider-registry';
-import { isJudgeOnlyProvider, isProviderId, type ModelCatalogEntry, type ProviderId } from './provider-runtime';
+import { isDecisionOnlyProvider, isProviderId, type ModelCatalogEntry, type ProviderId } from './provider-runtime';
 import { settingsService } from './settings';
 import { findLegacyModelCutoverRule, normalizeLegacyModelSelection } from './model-selection-legacy';
 
@@ -113,8 +113,8 @@ export const resolveDefaultSelection = (
   },
   models: CatalogModel[]
 ): ModelSelectionPair => {
-  if (isJudgeOnlyProvider((input.providerId ?? '').trim())) {
-    throw new Error('Judge-only providers cannot be selected for chat');
+  if (isDecisionOnlyProvider((input.providerId ?? '').trim())) {
+    throw new Error('Decision-only providers cannot be selected for chat');
   }
   const normalizedInput = normalizeLegacyModelSelection(input);
   const inferredProviderId = inferProviderFromModelIdWithLegacy(
@@ -127,8 +127,8 @@ export const resolveDefaultSelection = (
       ? normalizedInput.providerId
       : inferredProviderId || FALLBACK_DEFAULT.provider_id;
 
-  if (isJudgeOnlyProvider(providerId)) {
-    throw new Error('Judge-only providers cannot be selected for chat');
+  if (isDecisionOnlyProvider(providerId)) {
+    throw new Error('Decision-only providers cannot be selected for chat');
   }
   const targetModelId = normalizedInput.modelId || '';
   const exact = findModel(models, providerId, targetModelId);

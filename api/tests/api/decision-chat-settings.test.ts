@@ -12,7 +12,7 @@ beforeEach(async () => {
   vi.spyOn(queueManager, 'reloadSettings').mockResolvedValue();
   const original = mesh.getProviderProfile;
   vi.spyOn(mesh, 'getProviderProfile').mockImplementation((id) => (
-    id === 'muse' ? { ...original(id), judgeOnly: true } : original(id)
+    id === 'muse' ? { ...original(id), decisionOnly: true } : original(id)
   ));
 });
 afterEach(async () => {
@@ -20,8 +20,8 @@ afterEach(async () => {
   await cleanupAuthData();
 });
 
-describe('judge-only chat settings', () => {
-  it('recovers a stored global judge-only default through the generic admin route', async () => {
+describe('decision-only chat settings', () => {
+  it('recovers a stored global decision-only default through the generic admin route', async () => {
     const ordinary = await settingsService.getAISettings();
     let provider = 'typesafe';
     vi.spyOn(settingsService, 'getAISettings').mockImplementation(async () => ({
