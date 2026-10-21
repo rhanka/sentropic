@@ -76,6 +76,10 @@ Actions with the following status should be included around tasks only if really
   - Reason: CI `build-api-image` + `security-sast-sca` red on the post-EX4 head; the advisories were published mid-run (narrow `>=1.16.0 <1.16.1` range, single parent `centra ^1.15.6`); unrelated to the R2 diff.
   - Impact: follow-redirects 1.16.0→1.16.1 in the root lock only; P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
   - Rollback: revert the override, the lock hunk, and the target/var.
+- `attention`: BR710-EX6 — remediate the vite launch-editor HIGHs (GHSA-587h-7wmj-h5pm incl. CVE-2026-112942, GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw; vite fixed in 7.3.7/8.2.4) with the same pinned-sed procedure (root + api lock hunks, integrity vars + bump target; no single-version override exists across the 7/8 lines so none is added).
+  - Reason: CI `security-sast-sca` (api workspace, dev included) + `security-container` (api-tool image) red; advisories published 10/20, after the last green run; unrelated to the R2 diff.
+  - Impact: vite 7.3.6→7.3.7 (root top) and 8.2.2→8.2.4 (root nested ×2, api nested ×1); ui/auth-idp vite copies untouched (their gates green, minimal diff); P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
+  - Rollback: revert the lock hunks and the target/vars.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -183,5 +187,10 @@ Actions with the following status should be included around tasks only if really
   - [x] Pin `follow-redirects@1.16.1` via root `overrides` (fixes both advisories; single parent `centra ^1.15.6`).
   - [x] Pinned sed bump in `package-lock.json` (1.16.0) via `lock-follow-redirects-1-16-1` (BR710-EX5).
   - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock passes, 44 contracts); no P1 regen.
+  - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
+  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
+- [x] **Lot 16 — Remediate vite launch-editor HIGHs (GHSA-587h-7wmj-h5pm incl. CVE-2026-112942, GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw)**
+  - [x] Bump vite 7.3.6→7.3.7 (root top) and 8.2.2→8.2.4 (root nested ×2, api nested ×1) via `lock-vite-737-824` (BR710-EX6; no cross-line override possible).
+  - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped locks passes, 44 contracts); no P1 regen.
   - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.

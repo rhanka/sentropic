@@ -483,6 +483,21 @@ lock-follow-redirects-1-16-1: ## Bump follow-redirects 1.16.0 -> 1.16.1 in the r
 	@test $$(grep -c '"version": "1.16.1"' package-lock.json) -eq 1 || (echo "❌ follow-redirects 1.16.1 missing in package-lock.json" && exit 1)
 	@! grep -q 'follow-redirects-1.16.0.tgz' package-lock.json || (echo "❌ stale follow-redirects 1.16.0 reference remains" && exit 1)
 	@echo "✅ follow-redirects 1.16.1 in the root lock"
+VITE_736_INTEGRITY := sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==
+VITE_737_INTEGRITY := sha512-AHEzTORMbi7/7aXp7w7KZ5+DCUdSeLsJz0grY8xHpc9DHdYb0vQu6DqJfm2tOw3gDExNgPgnJTXxM6syYFHaCA==
+VITE_822_INTEGRITY := sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q==
+VITE_824_INTEGRITY := sha512-lfauXnrf2x0p+UoA+wXh0dgFWnUjCyG6Js95KBkgaCwUU9k0DAHI4W6Q0WCx+h+5g+Alce1y4Zi2QjjK0UvGBw==
+.PHONY: lock-vite-737-824
+lock-vite-737-824: ## Bump vite 7.3.6->7.3.7 and 8.2.2->8.2.4 in root + api locks (pinned, no stack; BR710-EX6)
+	@echo "🔒 Bumping vite to 7.3.7 / 8.2.4 in package-lock.json + api/package-lock.json..."
+	sed -i 's|"version": "7.3.6"|"version": "7.3.7"|; s|vite-7.3.6.tgz|vite-7.3.7.tgz|; s|$(VITE_736_INTEGRITY)|$(VITE_737_INTEGRITY)|' package-lock.json
+	sed -i 's|"version": "8.2.2"|"version": "8.2.4"|; s|vite-8.2.2.tgz|vite-8.2.4.tgz|; s|$(VITE_822_INTEGRITY)|$(VITE_824_INTEGRITY)|' package-lock.json api/package-lock.json
+	@test $$(grep -c '"version": "7.3.7"' package-lock.json) -eq 1 || (echo "❌ vite 7.3.7 missing in package-lock.json" && exit 1)
+	@test $$(grep -c '"version": "8.2.4"' package-lock.json) -eq 2 || (echo "❌ vite 8.2.4 count wrong in package-lock.json" && exit 1)
+	@test $$(grep -c '"version": "8.2.4"' api/package-lock.json) -eq 1 || (echo "❌ vite 8.2.4 missing in api/package-lock.json" && exit 1)
+	@! grep -q 'vite-7.3.6.tgz' package-lock.json || (echo "❌ stale vite 7.3.6 reference remains" && exit 1)
+	@! grep -q 'vite-8.2.2.tgz' package-lock.json api/package-lock.json || (echo "❌ stale vite 8.2.2 reference remains" && exit 1)
+	@echo "✅ vite 7.3.7 / 8.2.4 in root + api locks"
 .PHONY: lock-markdown-it-direct
 lock-markdown-it-direct: ## Bump markdown-it 14.3.0/14.1.1 -> 14.3.2 in root + ui locks (pinned, no stack)
 	@echo "🔒 Bumping markdown-it to 14.3.2 in package-lock.json + ui/package-lock.json..."
