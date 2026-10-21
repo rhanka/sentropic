@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] Follow-up main merge 2026-10-20: main advanced to feb741083 while validation ran. Resolve BRANCH.md by retaining this active D2 plan; preserve main PR #712 plan verbatim in .h2a/build/main_merge_pr712_branch.md and its ancestor commit. Keep verified Memory L5 manifest 7fce9279… and retain incoming main manifest 781aa206… by content hash. Root lock and all D2 application/test source are unchanged; control migrations 0012–0016 still match original digests.
+
 - [x] Main integration 2026-10-20: owner requires merge, no rebase or force-push; use ENV=test-pr677-main only, API 9384 / UI 5584 / Maildev 1484 (verified free). Six metadata conflicts resolved by retaining main additions and selecting cluster-mesh 0.21.1 above published 0.21.0. Locks regenerate through Make; Memory L5 provenance regenerated against merge 75cceadf9 and verified: 30 files, 54 edges, initial manifest 27de5fa8… (superseded by the verified security-lock provenance refresh); both exact predecessor manifests retained under their content hashes. Control migrations 0012–0016 stay byte-for-byte unchanged. No COMPLIANCE P10Y write, publication, PR merge or readiness change is authorized.
 
 - [ ] Implement D2 and the reachable Sessions/control UI: explicit project/named-history sharing, live/offline/closed reading, per-action IdP confirmation, capture exclusion, read denial and explicit purge.
@@ -49,6 +51,7 @@
 ## Branch Scope Boundaries (MANDATORY)
 
 - [ ] **Allowed Paths (implementation scope)**:
+  - [x] BR76-EX10: owner-authorized follow-up merge of main feb741083 (#712); preserve its canonical image resolution/build/CI behavior and this branch D2 test plumbing. Exact inherited paths: `.dockerignore`, `Makefile`, `api/Dockerfile`, `scripts/resolve-api-image.sh`, `scripts/test-api-image-canonical.sh`. No unrelated edits; rollback reverts this integration.
   - [x] BR76-EX8: owner-authorized merge of origin/main 7c395f439 into this branch on 2026-10-20; the following exact paths may receive main changes in this merge only. Preserve main intent; no unrelated edits. Rollback: revert the integration commit.
   - [x] `.github/workflows/ci.yml` — inherited main integration (BR76-EX8).
   - [x] `package-lock.json` — inherited main integration (BR76-EX8).
@@ -140,6 +143,7 @@
   - [ ] Cowork implementation, `packages/comments/**`, M2 storage, Graphify/Engram/L3a implementation, and L6a source/migrations.
   - [ ] All h2a repository paths for the Sentropic implementer; h-cond owns its separate implementation and qualification.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] BR76-EX10: `tools/memory-mcp-l5/artifacts/history/781aa20653d218a9b648007e633881e3d90dae3d2ebc28bd6a0acf970ac9fa80.json`, `tools/memory-mcp-l5/artifacts/history/781aa20653d218a9b648007e633881e3d90dae3d2ebc28bd6a0acf970ac9fa80.json.sha256` preserve the exact incoming main manifest. Keep the already verified branch manifest because the merged root lock and consumed archives/inventory are unchanged.
   - [x] BR76-EX9: `tools/memory-mcp-l5/artifacts/history/18a0f16965f7e9fecb5493908ab324c451638c1b8a0fed31590bf5101c32faf0.json`, `tools/memory-mcp-l5/artifacts/history/18a0f16965f7e9fecb5493908ab324c451638c1b8a0fed31590bf5101c32faf0.json.sha256` only to preserve the predecessor before binding provenance to the verified Vite patch lock.
   - [x] BR76-EX9: `tools/memory-mcp-l5/artifacts/history/27de5fa8d40cbcd3b97623b8e50e8ac41ff60fa5740490e8e436e205091cb294.json`, `tools/memory-mcp-l5/artifacts/history/27de5fa8d40cbcd3b97623b8e50e8ac41ff60fa5740490e8e436e205091cb294.json.sha256` only to preserve the previous manifest before the security-lock provenance refresh.
   - [x] BR76-EX9: `ui/package-lock.json` and the already allowed root lock, only for blocking security patches markdown-it 14.3.3, follow-redirects 1.16.1 and Vite 7.3.7. Owner: PR #677 implementer; root Docker audit-gate reproduced HIGH denial-of-service and credential-header leakage advisories. Locks refreshed through Make; full root production audit-gate and API/UI workspace SCA pass with no gate or security-exception changes. Rollback: restore matching predecessor locks and retained manifest.
