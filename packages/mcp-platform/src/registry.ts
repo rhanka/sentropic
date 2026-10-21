@@ -150,6 +150,8 @@ export type CompiledProvider = {
 
 /** Pure plan-resolution hit for one exact public tool name. */
 export type CompiledToolResolution = {
+  /** Digest-bound, frozen manifest schema; never supplied independently by the caller. */
+  readonly inputSchema: unknown;
   providerId: string;
   capabilityName: string;
   values: Record<string, unknown>;
@@ -598,6 +600,7 @@ export function createProviderRegistry(): ProviderRegistry {
             };
           }
           tools.set(entry.toolName, {
+            inputSchema: definition.manifest.tools.find(tool => tool.name === entry.toolName)!.inputSchema,
             providerId,
             capabilityName: entry.toolName,
             values: entry.values,
