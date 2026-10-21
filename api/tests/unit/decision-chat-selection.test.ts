@@ -1,67 +1,67 @@
 import * as mesh from '@sentropic/llm-mesh';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isJudgeOnlyProvider, isProviderId } from '../../src/services/provider-runtime';
+import { isDecisionOnlyProvider, isProviderId } from '../../src/services/provider-runtime';
 import { getModelCatalogPayload, resolveDefaultSelection } from '../../src/services/model-catalog';
 import { settingsService } from '../../src/services/settings';
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('judge-only chat selection', () => {
+describe('decision-only chat selection', () => {
   it('recognizes real TypeSafe identity without offering chat models or fallback', () => {
     expect(isProviderId('typesafe')).toBe(true);
-    expect(isJudgeOnlyProvider('typesafe')).toBe(true);
+    expect(isDecisionOnlyProvider('typesafe')).toBe(true);
     expect(mesh.knownModelIdsByProvider.typesafe).toEqual([]);
     expect(mesh.listModelProfilesByProvider('typesafe')).toEqual([]);
     expect(mesh.getProviderProfile('typesafe')).toMatchObject({ family: 'typesafe', status: 'planned',
-      capabilities: { judge: { support: 'supported' }, tools: { support: 'unsupported' },
+      capabilities: { decision: { support: 'supported' }, tools: { support: 'unsupported' },
         streaming: { support: 'unsupported' }, structuredOutput: { support: 'unsupported' },
         reasoning: { support: 'unsupported' }, modalities: { input: [], output: [] },
         auth: { tokenSources: ['environment-token'], accountTransports: [] } } });
-    expect(mesh.listProviderProfiles().filter((profile) => profile.judgeOnly).map((profile) => profile.providerId))
+    expect(mesh.listProviderProfiles().filter((profile) => profile.decisionOnly).map((profile) => profile.providerId))
       .toEqual(['typesafe']);
     expect(() => resolveDefaultSelection({ providerId: 'typesafe', modelId: 'gpt-5.2' }, []))
-      .toThrow('Judge-only providers');
+      .toThrow('Decision-only providers');
   });
-  it('uses the explicit profile marker before real judge-provider activation', () => {
-    expect(isJudgeOnlyProvider('muse')).toBe(false);
-    expect(mesh.getProviderProfile('muse').judgeOnly).toBeUndefined();
+  it('uses the explicit profile marker before real decision-provider activation', () => {
+    expect(isDecisionOnlyProvider('muse')).toBe(false);
+    expect(mesh.getProviderProfile('muse').decisionOnly).toBeUndefined();
     const original = mesh.getProviderProfile;
     const profile = vi.spyOn(mesh, 'getProviderProfile').mockImplementation((id) => (
-      id === 'muse' ? { ...original(id), judgeOnly: true } : original(id)
+      id === 'muse' ? { ...original(id), decisionOnly: true } : original(id)
     ));
 
     expect(isProviderId('muse')).toBe(true);
-    expect(isJudgeOnlyProvider('muse')).toBe(true);
-    expect(isJudgeOnlyProvider('openai')).toBe(false);
+    expect(isDecisionOnlyProvider('muse')).toBe(true);
+    expect(isDecisionOnlyProvider('openai')).toBe(false);
     profile.mockClear();
-    expect(isJudgeOnlyProvider('unknown-provider')).toBe(false);
+    expect(isDecisionOnlyProvider('unknown-provider')).toBe(false);
     expect(profile).not.toHaveBeenCalled();
   });
 
   it('keeps an unmarked local provider with an empty model inventory eligible', () => {
     expect(mesh.listModelProfilesByProvider('local')).toEqual([]);
-    expect(mesh.getProviderProfile('local').judgeOnly).toBeUndefined();
-    expect(isJudgeOnlyProvider('local')).toBe(false);
+    expect(mesh.getProviderProfile('local').decisionOnly).toBeUndefined();
+    expect(isDecisionOnlyProvider('local')).toBe(false);
   });
 
   it.each(['', 'gpt-4.1-nano', 'gpt-5.2'])(
     'refuses an explicit marked choice before empty-inventory or legacy fallback (%s)', (modelId) => {
       const original = mesh.getProviderProfile;
       vi.spyOn(mesh, 'getProviderProfile').mockImplementation((id) => (
-        id === 'muse' ? { ...original(id), judgeOnly: true } : original(id)
+        id === 'muse' ? { ...original(id), decisionOnly: true } : original(id)
       ));
       expect(() => resolveDefaultSelection({ providerId: 'muse', modelId }, []))
-        .toThrow('Judge-only providers cannot be selected for chat');
+        .toThrow('Decision-only providers cannot be selected for chat');
       expect(() => resolveDefaultSelection({ providerId: ' muse ', modelId }, []))
-        .toThrow('Judge-only providers cannot be selected for chat');
+        .toThrow('Decision-only providers cannot be selected for chat');
     });
 
   it.each([[null, 'muse'], ['synthetic-user', 'muse'], [null, 'typesafe'], ['synthetic-user', 'typesafe']] as const)(
     'refuses a stored marked default before legacy migration (%s, %s)', async (userId, providerId) => {
     const original = mesh.getProviderProfile;
     vi.spyOn(mesh, 'getProviderProfile').mockImplementation((id) => (
-      id === 'muse' ? { ...original(id), judgeOnly: true } : original(id)
+      id === 'muse' ? { ...original(id), decisionOnly: true } : original(id)
     ));
     vi.spyOn(settingsService, 'getNumber').mockResolvedValue(10);
     const get = vi.spyOn(settingsService, 'get').mockImplementation(async (key) => (
@@ -70,7 +70,7 @@ describe('judge-only chat selection', () => {
     expect(await settingsService.getAISettings({ userId })).toMatchObject({
       defaultProviderId: providerId, defaultModel: 'gpt-5.2',
     });
-    await expect(getModelCatalogPayload({ userId })).rejects.toThrow('Judge-only providers');
+    await expect(getModelCatalogPayload({ userId })).rejects.toThrow('Decision-only providers');
     expect(get).toHaveBeenCalledWith('default_provider_id', { userId, fallbackToGlobal: true });
   });
 
@@ -88,10 +88,10 @@ describe('judge-only chat selection', () => {
       .toEqual({ provider_id: 'openai', model_id: 'gpt-4.1-nano' });
     const original = mesh.getProviderProfile;
     vi.spyOn(mesh, 'getProviderProfile').mockImplementation((id) => (
-      id === 'muse' ? { ...original(id), judgeOnly: true } : original(id)
+      id === 'muse' ? { ...original(id), decisionOnly: true } : original(id)
     ));
-    expect(() => resolveDefaultSelection({ modelId: 'synthetic-judge' }, [
-      { ...models[0], provider_id: 'muse', model_id: 'synthetic-judge' },
-    ])).toThrow('Judge-only providers');
+    expect(() => resolveDefaultSelection({ modelId: 'synthetic-decision' }, [
+      { ...models[0], provider_id: 'muse', model_id: 'synthetic-decision' },
+    ])).toThrow('Decision-only providers');
   });
 });
