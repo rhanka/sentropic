@@ -57,6 +57,69 @@ describe('memory capture completion', () => {
   });
 });
 
+describe('memory stateful first-proof enforcement', () => {
+  const storedCapture = {
+    candidateId: 'candidate-1',
+    revision: 1,
+    recordDigest: null,
+    createdCursor: '0',
+    proof: { intent: 'capture' },
+  };
+  const storedOutcome = { candidateId: 'candidate-1', outcome: 'accepted', proof: { decision: 'accept' } };
+  const captureKey = JSON.stringify(['memory-capture-idempotency-v1', 'candidate-1']);
+  const outcomeKey = JSON.stringify(['memory-admission-outcome-v1', 'candidate-1']);
+  const updateFor = (key: string, version: number, value: unknown) => ({
+    key,
+    version,
+    value: { format: 'utf8', data: JSON.stringify(value) },
+  });
+  const resolveCurrent = (stored: ReadonlyMap<string, unknown>) => async (key: string): Promise<unknown> =>
+    stored.get(key);
+
+  it('should refuse a higher-version write that changes the original capture proof', async () => {
+    const stored = new Map<string, unknown>([[captureKey, storedCapture]]);
+    await expect(
+      validateMemoryEffects(
+        {
+          ...emptyUnit(),
+          updates: [
+            updateFor(captureKey, 99, {
+              ...storedCapture,
+              revision: 99,
+              recordDigest: 'sha256:changed',
+              createdCursor: '999',
+              proof: { changed: true },
+            }),
+          ],
+        },
+        resolveCurrent(stored),
+      ),
+    ).rejects.toThrow(/immutable/);
+  });
+
+  it('should refuse a higher-version write that changes the admission outcome', async () => {
+    const stored = new Map<string, unknown>([[outcomeKey, storedOutcome]]);
+    await expect(
+      validateMemoryEffects(
+        {
+          ...emptyUnit(),
+          updates: [updateFor(outcomeKey, 2, { ...storedOutcome, outcome: 'rejected', proof: { changed: true } })],
+        },
+        resolveCurrent(stored),
+      ),
+    ).rejects.toThrow(/immutable/);
+  });
+
+  it('should accept identical replay against the stored first proof', async () => {
+    const completed = { ...storedCapture, revision: 2, recordDigest: 'sha256:abc' };
+    const stored = new Map<string, unknown>([[captureKey, completed]]);
+    await validateMemoryEffects(
+      { ...emptyUnit(), updates: [updateFor(captureKey, 2, { ...completed })] },
+      resolveCurrent(stored),
+    );
+  });
+});
+
 describe('memory P3 commit identity', () => {
   it('should proceed on unknown events, reuse same intents and conflict on divergence', () => {
     expect(classifyCommitReplay({}, { eventId: 'e1', intentHash: 'h1' })).toEqual({ kind: 'proceed' });
