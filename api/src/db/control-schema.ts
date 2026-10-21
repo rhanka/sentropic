@@ -1015,6 +1015,7 @@ export const sessionContentProjects = controlSchema.table(
     workspaceIncarnation: integer('workspace_incarnation').notNull().default(1),
     ownerId: text('owner_id').notNull(),
     state: text('state').notNull().default('active'),
+    readDenied: boolean('read_denied').notNull().default(false),
     channels: jsonb('channels').notNull(),
     futureSessions: boolean('future_sessions').notNull().default(false),
     selectedSessionIds: jsonb('selected_session_ids').notNull(),
@@ -1075,6 +1076,7 @@ export const sessionContentGrants = controlSchema.table(
     channels: jsonb('channels').notNull(),
     retentionSnapshot: jsonb('retention_snapshot').notNull(),
     state: text('state').notNull().default('active'),
+    readDenied: boolean('read_denied').notNull().default(false),
     version: integer('version').notNull().default(1),
     lastFreshnessAckAt: bigint('last_freshness_ack_at', { mode: 'number' }).notNull().default(0),
     localDenyPending: boolean('local_deny_pending').notNull().default(false),
@@ -1187,6 +1189,7 @@ export const sessionContentObjects = controlSchema.table(
     capturedAt: bigint('captured_at', { mode: 'number' }).notNull().default(0),
     expiresAt: bigint('expires_at', { mode: 'number' }),
     state: text('state').notNull().default('staged'),
+    writerState: text('writer_state').notNull().default('unknown'),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
@@ -1196,6 +1199,8 @@ export const sessionContentObjects = controlSchema.table(
     bindingIdx: index('session_content_objects_binding_idx').on(table.bindingId),
     sessionIdx: index('session_content_objects_session_idx').on(table.sessionId),
     reservationIdx: index('session_content_objects_reservation_idx').on(table.reservationId),
+    writerStateCheck: check('session_content_objects_writer_state_check',
+      sql`${table.writerState} IN ('admitted', 'settled', 'unknown')`),
     bucketKeyUnique: uniqueIndex('session_content_objects_bucket_key_unique').on(
       table.bucket,
       table.objectKey,
@@ -1302,6 +1307,7 @@ export const sessionContentPurgeJobs = controlSchema.table(
   },
   (table) => ({
     namespaceIdx: index('session_content_purge_jobs_namespace_idx').on(table.namespaceId),
+    pendingIdx: index('session_content_purge_jobs_pending_idx').on(table.state, table.updatedAt, table.purgeJobId),
     stateCheck: check(
       'session_content_purge_jobs_state_check',
       sql`${table.state} IN ('pending', 'in_progress', 'complete')`,

@@ -2395,6 +2395,13 @@ Source of truth: `api/src/db/control-schema.ts` (control stream) + migration
   digest and a forward boundary; unreconciled local denials pause capture.
 
 Tables (`control` schema, soft references only, no cross-namespace FK):
+- Additive control migration `0017_session_content_safety` preserves `0012`–`0016`.
+  Projects/grants carry monotonic `read_denied` independently of capture lifecycle;
+  existing revoked rows are backfilled. Objects carry durable `writer_state`
+  (`admitted`, `settled`, `unknown`). Only settled writers permit verified deletion.
+  Preexisting uncommitted rows default to unknown and remain charged/pending:
+  a restart or missing object is never evidence that a remote PUT has settled.
+  Purge scheduling uses the `(state, updated_at, purge_job_id)` index.
 - `session_content_projects` (PK `project_id`): durable owner-confirmed
   consent, CAS revision, owner-only `retention_by_channel` + source-verified
   `retention_digest`, exclusion/suppression floors.

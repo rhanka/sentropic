@@ -152,6 +152,37 @@ describe('session consent durable lifecycle', () => {
     sourceGeneration: 'src-1', sourceTrustVersion: 'tv-1', nativeStartSeq: 0,
   }, ctx);
 
+  it('should keep N5 R1 purge pending across restart until a delayed admitted PUT settles', async () => {
+    await acceptProject();
+    await deriveSession('n5-writer');
+    const bytes = { raw: 1, encoded: 1 };
+    const seed = await service.reserveBeforeUpload('n5-writer', 'terminal.cache', bytes, 'seed', ctx);
+    await service.publishAfterUpload(seed.reservationId, new Uint8Array([1]), ctx);
+    const next = await service.reserveBeforeUpload('n5-writer', 'terminal.cache', bytes, 'delayed', ctx);
+    let entered!: () => void;
+    let release!: () => void;
+    const admitted = new Promise<void>((resolve) => { entered = resolve; });
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    const writer = makeService({ publishHooks: { beforePut: async () => { entered(); await barrier; } } });
+    const upload = expectContentError(() => writer.publishAfterUpload(next.reservationId, new Uint8Array([2]), ctx), 'grant_revoked');
+    await admitted;
+    const [handle] = await service.listRetainedHandles(owner.id);
+    let jobId = '';
+    try {
+      const purge = await service.requestRetainedPurge(handle!.retainedScopeId, owner.id);
+      jobId = purge.purgeJobId;
+      expect(purge.remainingObjects).toBeGreaterThan(0);
+      const restarted = makeService();
+      expect((await restarted.runPurge(jobId)).remainingObjects).toBeGreaterThan(0);
+      const [job] = await db.select().from(sessionContentPurgeJobs).where(eq(sessionContentPurgeJobs.purgeJobId, jobId));
+      expect(job!.state).not.toBe('complete');
+      const usage = await restarted.accountUsage({ sessionId: 'n5-writer' });
+      expect(usage.stagedBytes + usage.pendingDeletionBytes).toBe(1);
+    } finally { release(); await upload; }
+    expect((await makeService().runPurge(jobId)).remainingObjects).toBe(0);
+    expect(await fixture.listPhysical('')).toEqual([]);
+  });
+
   it.each(['tenant', 'owner', 'principal'] as const)(
     'should refuse N5 R5 accept-at-revision by a different %s without transferring the project', async (scope) => {
       await acceptProject();
