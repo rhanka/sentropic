@@ -13,6 +13,7 @@ export const PORT_SLOT_COUNT = 11; // Includes a true centre port.
 // radar-immobilier fa8133c2, focus/scenes.js:13; reference CSS pixels (scale 1).
 export const CARD_WIDTH = 460;
 export const CARD_HEIGHT = 200;
+export const CARD_STACK_GAP = 72;
 
 const textWidths = new Map();
 export function textWidth(text, size) {
@@ -85,7 +86,7 @@ export function frameHeaderContent(group, width) {
 export function groupContent(group, width, collapsed = false) {
   const title = group.title.replace(/ · (\p{Ll})/gu, (_, c) => ' · ' + c.toUpperCase());
   const header = frameHeaderContent({ ...group, title }, width);
-  return { title, ...header, headerHeight: header.headerTextHeight + (collapsed ? 0 : 64) };
+  return { title, ...header, headerHeight: header.headerTextHeight + (collapsed ? 0 : CARD_STACK_GAP - 8) };
 }
 
 export function nodeTextStyles(data) {
