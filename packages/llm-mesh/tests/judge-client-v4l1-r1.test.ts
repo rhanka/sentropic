@@ -35,6 +35,14 @@ async function viaClientCounted(request: JudgeRequest, payload: unknown) {
   return { result: await client.judge(request), fetch };
 }
 
+async function viaClient(request: JudgeRequest, payload: unknown) {
+  const fetch = vi.fn(async () => new Response(JSON.stringify(payload),
+    { status: 200, headers: { 'content-type': 'application/json' } }));
+  const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal',
+    fetch: fetch as unknown as typeof globalThis.fetch });
+  return client.judge(request);
+}
+
 const CANARY = 'REVIEW-CONTENT-CANARY';
 
 function withEvaluatorCanary(payload: Record<string, unknown>) {
@@ -99,5 +107,81 @@ describe('V4-L1-R1 F1 undeclared receipt.evaluator fields', () => {
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
     expect(JSON.stringify(result)).not.toContain(CANARY);
     expect(fetch.mock.calls).toHaveLength(1);
+  });
+});
+
+const choiceCriterion = { kind: 'choice' as const, instructions: 'Pick.',
+  options: [{ id: 'a', description: 'A' }, { id: 'b', description: 'B' }] };
+const gradedCriterion = { kind: 'graded' as const, instructions: 'Grade.', direction: 'lower-is-better' as const,
+  levels: [{ label: 'low', description: 'Low evidence' }, { label: 'middle', description: 'Middle evidence' },
+    { label: 'high', description: 'High evidence' }] };
+const gradedNative = () => ({ score: 1.25, probabilities: { '0': 0.1, '1': 0.55, '2': 0.35 },
+  legend: { '0': 'Low evidence', '1': 'Middle evidence', '2': 'High evidence' }, confidence: 0.7 });
+const choiceNative = () => ({ choice: 'a', probabilities: { a: 0.7, b: 0.3 }, confidence: 0.7 });
+
+describe('V4-L1-R1 F2 out-of-scale threshold', () => {
+  it('F2a rejects a contradictory out-of-scale binary threshold; service is REQUEST_INVALID', async () => {
+    const request = judgeRequest({ correlationId: 'l1r1-f2a',
+      decision: { kind: 'threshold', field: 'score', op: 'gte', value: 2 } });
+    const direct = await createJudgeService(judgeServiceFixture().options).judge(request);
+    expect(direct).toMatchObject({ kind: 'error', ok: false });
+    if (!direct.ok && direct.kind === 'error') expect(direct.error.code).toBe('REQUEST_INVALID');
+    const base = judgeRequest({ correlationId: 'l1r1-f2a',
+      decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.9 } });
+    const served = structuredClone(await realServiceResult(base)) as unknown as Record<string, unknown>;
+    (served.verdict as unknown as Record<string, unknown>).decision = { pass: false,
+      origin: 'threshold', rule: { kind: 'threshold', field: 'score', op: 'gte', value: 2 } };
+    const { result, fetch } = await viaClientCounted(request, served);
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    expect(fetch.mock.calls).toHaveLength(1);
+  });
+
+  it('F2b accepts binary endpoint thresholds and rejects just-outside values', async () => {
+    for (const decision of [
+      { kind: 'threshold', field: 'score', op: 'gte', value: 0 },
+      { kind: 'threshold', field: 'score', op: 'gte', value: 1 },
+      { kind: 'threshold', field: 'score', op: 'lte', value: 0 },
+      { kind: 'threshold', field: 'score', op: 'lte', value: 1 },
+    ] as const) {
+      const request = judgeRequest({ correlationId: `l1r1-f2b-${decision.op}-${decision.value}`, decision });
+      expect(await viaClient(request, await realServiceResult(request))).toMatchObject({ kind: 'verdict', ok: true });
+    }
+    for (const decision of [
+      { kind: 'threshold', field: 'score', op: 'gte', value: 1.5 },
+      { kind: 'threshold', field: 'score', op: 'lte', value: -0.5 },
+    ] as const) {
+      const request = judgeRequest({ correlationId: `l1r1-f2b-${decision.op}-${decision.value}`, decision });
+      const base = judgeRequest({ correlationId: request.correlationId,
+        decision: { kind: 'threshold', field: 'score', op: decision.op, value: 0.9 } });
+      const served = structuredClone(await realServiceResult(base)) as unknown as Record<string, unknown>;
+      (served.verdict as unknown as Record<string, unknown>).decision = { pass: false,
+        origin: 'threshold',
+        rule: { kind: 'threshold', field: 'score', op: decision.op, value: decision.value } };
+      expect(await viaClient(request, served)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    }
+  });
+
+  it('F2c rejects an out-of-scale graded threshold and keeps endpoint thresholds', async () => {
+    const request = judgeRequest({ correlationId: 'l1r1-f2c', criterion: gradedCriterion,
+      decision: { kind: 'threshold', field: 'score', op: 'gte', value: 3 } });
+    const direct = await createJudgeService(judgeServiceFixture().options).judge(request);
+    expect(direct).toMatchObject({ kind: 'error', ok: false });
+    if (!direct.ok && direct.kind === 'error') expect(direct.error.code).toBe('REQUEST_INVALID');
+    const base = judgeRequest({ correlationId: 'l1r1-f2c', criterion: gradedCriterion,
+      decision: { kind: 'threshold', field: 'score', op: 'gte', value: 2 } });
+    const served = structuredClone(await realServiceResult(base, gradedNative())) as unknown as Record<string, unknown>;
+    (served.verdict as unknown as Record<string, unknown>).decision = { pass: false,
+      origin: 'threshold', rule: { kind: 'threshold', field: 'score', op: 'gte', value: 3 } };
+    expect(await viaClient(request, served)).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null });
+    for (const decision of [
+      { kind: 'threshold', field: 'score', op: 'gte', value: 0 },
+      { kind: 'threshold', field: 'score', op: 'gte', value: 2 },
+      { kind: 'threshold', field: 'score', op: 'lte', value: 2 },
+    ] as const) {
+      const endpoint = judgeRequest({ correlationId: `l1r1-f2c-${decision.op}-${decision.value}`,
+        criterion: gradedCriterion, decision });
+      expect(await viaClient(endpoint, await realServiceResult(endpoint, gradedNative())))
+        .toMatchObject({ kind: 'verdict', ok: true });
+    }
   });
 });
