@@ -68,8 +68,11 @@ describe('memory K8 admission first proof', () => {
   });
 
   it('should refuse a proof replacement smuggled through __proto__', () => {
+    // Retains decision:'accept' and adds only the own __proto__ property:
+    // the defective codec drops it (assignment hits the inherited setter)
+    // and accepts the replacement, so this vector distinguishes the fix.
     const tampered = JSON.parse(
-      '{"candidateId":"candidate-1","outcome":"accepted","proof":{"__proto__":{"changed":true}}}',
+      '{"candidateId":"candidate-1","outcome":"accepted","proof":{"decision":"accept","__proto__":{"changed":true}}}',
     ) as Record<string, unknown>;
     expect(validateAdmissionTransition(outcome(), tampered).ok).toBe(false);
   });
