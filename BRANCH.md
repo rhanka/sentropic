@@ -38,7 +38,7 @@
   - [x] `BR142-EX2`: owner follow-up explicitly requested merging origin/main `cf0ad8ee44f9bb7cf4ad1222a468172f0f77fc2d` into W0. Integrated unchanged upstream bytes at fe26214df; temporary allowances removed. Impact: main history and its existing package/lock/CI/spec/plan changes entered this branch; rollback: owner-authorized merge revert. No PR merge or deployment is authorized.
 
 ## Feedback Loop
-- [ ] `attention`: F1/F2 read-only collection is recorded in cluster-readings.md and recovery-readings.md; serving-tenant Kubernetes/DB/object access and current recovery/ACL/disposition evidence remain missing.
+- [ ] `attention`: 21 October tenant-readings-2026-10-21.md supplies owner-authorized Kubernetes image/controller/config metadata with no RBAC refusal; endpoint/config-hash remainder, DB/object access and current recovery/ACL/disposition evidence remain missing.
 - [x] `acknowledge`: F3/F4 owner answers Q1–Q4 copied verbatim into owner-decisions.md; owner holds all human roles, agents execute, no staffed windows or temporal slot bookings are required because there are no users; owner signs with a later-enrolled dedicated identity/key.
 - [ ] `blocked`: W0 acceptance remains gated by F1/B01–B03, F2/B04, B06 nonlocal migration-0017 reconciliation and exact-head independent review B08 in `docs/baselines/app-cm-w0/authorization.md`; later enrollment/infra/promotion receipts retain their downstream gates.
 - [x] `clarification`: D2 owns control 0012–0016 and O1 owns 9495/5695/1595; W1 reserves 0017, with app test ports 9710–9717 and e2e 9720–9727 (full triples in reservations.md).
@@ -64,6 +64,7 @@
   - [x] F1/F2 follow-up: add standalone read-only metadata/archive collectors; validate COPY counting with a two-table fixture before recording historical aggregates.
   - [x] F1/F2 follow-up: preserve dated offline journal/content counts and existing CI SQL backup/restore metadata in recovery-readings.md; current tenant recovery/object/ACL proof remains open.
   - [x] F1 follow-up: record inactive-cluster deployment/config identities and hashes, zero pod lists, actual OVH RBAC denials and exact missing current-tenant access in cluster-readings.md.
+  - [x] 21 October B01 follow-up: verify branch/pull; tenant-admin GETs only; record prod/preprod/remote running digests, pod UID/start, controller chains, content-role absence and config names/resourceVersions; delete temporary mode-600 kubeconfig; B02/B03 remain pending, no DB access.
 - [ ] **Lot 1 — Frozen implementation handoffs**
   - [x] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
   - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
