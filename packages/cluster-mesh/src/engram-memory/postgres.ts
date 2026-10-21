@@ -5,15 +5,19 @@
 // migration execution in registration. A host cannot override mandatory
 // validation, recovery or ownership through the storage factory.
 
-import { createPostgresKernel } from '../storage/postgres/index.js';
 import type { PostgresStorageOptions } from '../storage/postgres/protocol.js';
 import { loadPgAssets } from '../storage/postgres/migrations.js';
-import { StorageInvalidCommandError } from '../storage/errors.js';
+import { StorageInvalidCommandError, StorageUnavailableError } from '../storage/errors.js';
 import type { AtomicUnit } from '../storage/atomic.js';
 import { MEMORY_DESCRIPTOR } from './manifest.js';
 import { MEMORY_PG_QUERIES } from './postgres-queries.js';
-import { MEMORY_STORAGE_LIMITS, requireMemoryStorageLimits } from './limits.js';
-import { isMemoryAdmissionOutcome, isMemoryCaptureProof } from './validation.js';
+import { MEMORY_STORAGE_LIMITS } from './limits.js';
+import {
+  isMemoryAdmissionOutcome,
+  isMemoryCaptureProof,
+  validateAdmissionTransition,
+  validateCaptureTransition,
+} from './validation.js';
 
 export interface MemoryPostgresRegistration {
   readonly assets: Awaited<ReturnType<typeof loadPgAssets>>;
@@ -47,12 +51,25 @@ const updateKind = (key: string): string | null => {
 };
 
 /**
+ * Current-state reader for stateful enforcement: returns the decoded
+ * aggregate value already stored under the key, or undefined when absent.
+ * The G1b transactional projection will supply a backend-backed reader;
+ * tests and offline composition supply their own.
+ */
+export type MemoryCurrentStateResolver = (key: string) => Promise<unknown>;
+
+/**
  * Mandatory structural validation before projection: capture and admission
  * aggregates must carry well-formed proofs, and capture completion units
- * carry strictly zero appends. Stateful current-versus-proposed transition
- * checks run in the G1b transactional projection with backend reads.
+ * carry strictly zero appends. When a current-state resolver is supplied,
+ * K7 capture and K8 admission transitions are enforced statefully: a
+ * higher-version write that changes the original proof or outcome is
+ * refused before effects, and identical replay passes through.
  */
-export const validateMemoryEffects = async (effects: AtomicUnit): Promise<void> => {
+export const validateMemoryEffects = async (
+  effects: AtomicUnit,
+  resolveCurrent?: MemoryCurrentStateResolver,
+): Promise<void> => {
   let touchesCapture = false;
   for (const update of effects.updates) {
     const kind = updateKind(update.key);
@@ -63,9 +80,27 @@ export const validateMemoryEffects = async (effects: AtomicUnit): Promise<void> 
       if (!isMemoryCaptureProof(value)) {
         throw new StorageInvalidCommandError('memory capture update requires a capture proof value');
       }
+      if (resolveCurrent !== undefined) {
+        const current = await resolveCurrent(update.key);
+        const transition = validateCaptureTransition(current ?? null, value);
+        if (!transition.ok) {
+          throw new StorageInvalidCommandError(
+            `memory capture first proof is immutable: ${transition.errors.join('; ')}`,
+          );
+        }
+      }
     } else if (kind === 'memory-admission-outcome-v1') {
       if (!isMemoryAdmissionOutcome(value)) {
         throw new StorageInvalidCommandError('memory admission update requires an admission outcome value');
+      }
+      if (resolveCurrent !== undefined) {
+        const current = await resolveCurrent(update.key);
+        const transition = validateAdmissionTransition(current ?? null, value);
+        if (!transition.ok) {
+          throw new StorageInvalidCommandError(
+            `memory admission first proof is immutable: ${transition.errors.join('; ')}`,
+          );
+        }
       }
     }
   }
@@ -85,21 +120,23 @@ export const createMemoryPostgresRegistration = async (): Promise<MemoryPostgres
     limits: MEMORY_STORAGE_LIMITS,
   });
 
+/**
+ * Postgres storage composition. FAILS CLOSED in this increment: the public
+ * raw factory installed no G1b stateful projection, so admitting any write
+ * lane would let a higher-version update replace a frozen first proof
+ * (the generic kernel accepts higher aggregate versions). The K7/K8
+ * transition core is enforced through `validateMemoryEffects` with a
+ * current-state resolver; the factory itself refuses until G1b wires a
+ * backend-backed resolver and transactional projection.
+ */
 export const createMemoryPostgresStorage = async (
   options: Omit<
     PostgresStorageOptions,
     'moduleId' | 'assets' | 'descriptor' | 'projection' | 'validateEffects' | 'queries' | 'operations'
   >,
-) => {
-  const registration = await createMemoryPostgresRegistration();
-  return createPostgresKernel({
-    ...options,
-    moduleId: 'engram-memory',
-    assets: registration.assets,
-    descriptor: registration.descriptor,
-    validateEffects: registration.validateEffects,
-    queries: registration.queries,
-    operations: {},
-    limits: requireMemoryStorageLimits(options.limits),
-  });
+): Promise<never> => {
+  void options;
+  throw new StorageUnavailableError(
+    'memory Postgres composition requires the G1b stateful projection with backend reads',
+  );
 };

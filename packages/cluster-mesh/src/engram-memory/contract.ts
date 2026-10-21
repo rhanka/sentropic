@@ -79,6 +79,7 @@ export {
   createMemoryPostgresRegistration,
   createMemoryPostgresStorage,
   validateMemoryEffects,
+  type MemoryCurrentStateResolver,
   type MemoryPostgresRegistration,
 } from './postgres.js';
 export {

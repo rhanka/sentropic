@@ -9,8 +9,10 @@ import { validateModuleDescriptor } from '../../src/storage/descriptor.js';
 import { MEMORY_CONTRACT_DIGEST, MEMORY_DESCRIPTOR, MEMORY_MODULE_ID } from '../../src/engram-memory/manifest.js';
 import {
   createMemoryPostgresRegistration,
+  createMemoryPostgresStorage,
   validateMemoryEffects,
 } from '../../src/engram-memory/postgres.js';
+import { StorageUnavailableError } from '../../src/storage/errors.js';
 import { MEMORY_STORAGE_LIMITS, requireMemoryStorageLimits } from '../../src/engram-memory/limits.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 
@@ -129,5 +131,10 @@ describe('memory Postgres registration', () => {
   it('should keep installed limits fixed against weaker host limits', () => {
     expect(requireMemoryStorageLimits()).toEqual(MEMORY_STORAGE_LIMITS);
     expect(() => requireMemoryStorageLimits({ maxRecords: 1, maxAppends: 1, maxEncodedBytes: 1 })).toThrow();
+  });
+
+  it('should fail closed at Postgres composition until the G1b stateful projection is wired', async () => {
+    await expect(createMemoryPostgresStorage({} as never)).rejects.toThrowError(StorageUnavailableError);
+    await expect(createMemoryPostgresStorage({} as never)).rejects.toThrow(/G1b/);
   });
 });
