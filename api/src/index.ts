@@ -11,6 +11,8 @@ import { runChatTracePurge } from './services/chat-trace-sweep';
 import { runQueueReaperSweep } from './services/queue-reaper-sweep';
 import { loadReservationReaperConfig, runReservationReaperSweep, startReservationReaper } from './services/llm-metering/reservation-reaper';
 import { runStreamEventsPurge } from './services/chat/stream-purge-sweep';
+import { SessionContentService, resolveSessionContentIssuer } from './services/cluster-mesh/session-content';
+import { startSessionContentPurgeConsumer } from './services/cluster-mesh/session-content-purge';
 import { outboxDispatcher } from './services/outbox/outbox-dispatcher';
 import { objectTypeRegistry } from './services/object-registry';
 import { ensureOpportunityTypeRegistered } from './services/object-registry/opportunity-type';
@@ -145,6 +147,11 @@ const reservationReaper = startReservationReaper(reservationReaperConfig,
 process.once('exit', () => { void reservationReaper.stop(); });
 
 if (process.env.NODE_ENV !== 'test') {
+  const contentPurgeConsumer = startSessionContentPurgeConsumer(
+    new SessionContentService({ issuer: resolveSessionContentIssuer() }),
+    { onError: () => { logger.error('Session content purge sweep failed'); } },
+  );
+  process.once('exit', () => { void contentPurgeConsumer.stop(); });
   try {
     await runAdminApprovalSweep();
   } catch (error) {
