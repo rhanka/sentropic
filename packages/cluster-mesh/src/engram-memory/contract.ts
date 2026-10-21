@@ -78,9 +78,11 @@ export {
 export {
   createMemoryPostgresRegistration,
   createMemoryPostgresStorage,
+  resolveMemoryCurrentFromAggregates,
   validateMemoryEffects,
   type MemoryCurrentStateResolver,
   type MemoryPostgresRegistration,
+  type MemoryStoredAggregate,
 } from './postgres.js';
 export {
   MEMORY_PG_QUERIES,

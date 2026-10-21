@@ -1,9 +1,10 @@
-// G1 host composition: binds the cluster-mesh neutral contract and the
-// explicitly injected host SQLite driver to Engram's memory-substrate
-// provisional constructor. Engram receives the neutral binding only: no
-// driver, no raw connection, no cluster-mesh import crosses into Engram.
-// Durable profiles stay S-gated: the host handle refuses every I/O entry
-// with a typed StorageUnavailableError instead of selecting a fallback.
+// G1a host composition (refusal): binds the cluster-mesh neutral contract
+// and the explicitly injected host SQLite driver to Engram's
+// memory-substrate provisional constructor. Engram receives the neutral
+// binding only: no driver, no raw connection, no cluster-mesh import
+// crosses into Engram. Durable profiles stay S-gated: the host handle
+// refuses every I/O entry with a typed StorageUnavailableError instead of
+// selecting a fallback. No G1d/S0 composition is claimed here.
 
 import {
   openModuleStorageCanonicalMemoryStoreV1,

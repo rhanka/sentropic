@@ -58,6 +58,25 @@ const updateKind = (key: string): string | null => {
  */
 export type MemoryCurrentStateResolver = (key: string) => Promise<unknown>;
 
+/** Stored aggregate envelope as returned by kernel aggregate reads. */
+export interface MemoryStoredAggregate {
+  readonly value: { readonly format: 'utf8' | 'base64'; readonly data: string };
+}
+
+/**
+ * Build a current-state resolver from a kernel-style aggregate reader.
+ * Stored bytes decode through the same envelope path as proposed updates,
+ * so transition validators compare identical representations. G1b will
+ * supply the backend-backed reader from its transactional projection.
+ */
+export const resolveMemoryCurrentFromAggregates = (
+  readAggregate: (key: string) => Promise<MemoryStoredAggregate | null>,
+): MemoryCurrentStateResolver => async (key: string): Promise<unknown> => {
+  const found = await readAggregate(key);
+  if (found === null || found === undefined) return undefined;
+  return decodeUpdateValue(found.value);
+};
+
 /**
  * Mandatory structural validation before projection: capture and admission
  * aggregates must carry well-formed proofs, and capture completion units
