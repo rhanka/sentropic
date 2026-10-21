@@ -130,9 +130,9 @@ describe('content consent retention validation', () => {
     await expect(service.deriveChild(sharedChildInput())).rejects.toBeInstanceOf(ContentConsentError);
   });
 
-  it.each(['freshness', 'close', 'refresh', 'local'] as const)(
-    'should fence N5 R8 stale %s against every capture denial', async (operation) => {
-      for (const denial of ['revoke', 'exclude', 'close', 'pending', 'reconcile'] as const) {
+  it.each((['freshness', 'close', 'refresh', 'local'] as const).flatMap((operation) =>
+    (['revoke', 'exclude', 'close', 'pending', 'reconcile'] as const).map((denial) => [operation, denial] as const)))(
+    'should fence N5 R8 stale %s against %s', async (operation, denial) => {
         const { service, store } = await readyConsent();
         await service.deriveChild(sharedChildInput());
         const amendment = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1 }));
@@ -165,7 +165,6 @@ describe('content consent retention validation', () => {
         expect(partitionExportableNativeRecords(grant, project, [
           { seq: 42, lineage: 'l', conversationId: 'c', ordered: true },
         ]).exportable, `${operation}/${denial}`).toEqual([]);
-      }
     });
 
   it.each(['grant-close', 'project-exclude'] as const)(

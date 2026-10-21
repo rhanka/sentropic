@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R8 database repro: direct stale transactions replay active project/grant/history state or clear pending local denial only after the denial operation commits. Assertions require the persisted denial and refusal of new native-mirror reservations; each interleaving runs independently.
+
 - [x] N5 round 3: mechanically verified and pulled clean head 6f970cc2b. Added exact R8 Promise.all reproductions and deterministic stale project/grant mutation barriers covering revocation, exclusion, close and local denial; remediation uses ENV=test-pr677-n5fix3 only.
 
 - [x] N5 round-2 final local gates: R3 62/62 domain cases (four concurrent cases fail against exact c2c36f248); PostgreSQL stale-writer and forbidden/unapproved PUT probes fail before fixes and pass after. API consent 109/109, combined consent/adoption/auth-roots/namespace 160/160; full cluster-mesh 1050 passed/129 opt-in skips. Package/API typechecks and API lint pass (0 errors/220 warnings). Updated .h2a/build/lot2_n5_report.md maps R3/R7 to commits/evidence; original 0012–0017 remain unchanged. No COMPLIANCE write, merge or readiness change.
