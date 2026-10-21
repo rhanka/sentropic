@@ -350,33 +350,33 @@ authority escalation and lineage conflicts. Package enrollment keeps existing id
 `gemini` route. Native profile variants stay unverified until observed; see
 `spec/SPEC_EVOL_CI_SEATS.md` and `tests/enrollment/seat-bundle.test.ts`.
 
-## Generic Judge Capability
+## Generic Decision Capability
 
-`@sentropic/llm-mesh` provides strict judge evaluation contracts, portable client execution, and a deterministic JEV (Judge Evaluator/Verdict) host service via three distinct export subpaths:
+`@sentropic/llm-mesh` provides strict decision evaluation contracts, portable client execution, and a deterministic JEV host service via three distinct export subpaths:
 
-- `@sentropic/llm-mesh/judge`: Consumer contracts (`EvaluatorRef`, `JudgeRequest`, `JudgeResult`, `JudgeVerdict`, `JudgeReceipt`) and portable remote client (`createRemoteJudgeClient`).
-- `@sentropic/llm-mesh/judge/host`: Trusted host factory (`createJudgeService`) and JEV adapter (`createJevAdapter`).
+- `@sentropic/llm-mesh/decision`: Consumer contracts (`EvaluatorRef`, `DecisionRequest`, `DecisionResult`, `DecisionVerdict`, `DecisionReceipt`) and portable remote client (`createRemoteDecisionClient`).
+- `@sentropic/llm-mesh/decision/host`: Trusted host factory (`createDecisionService`) and JEV adapter (`createJevAdapter`).
 - `@sentropic/llm-mesh/transport/jev`: Deterministic JEV transport (`createJevTransport`).
 
 ### Consumer usage
 
 ```ts
-import { createRemoteJudgeClient } from '@sentropic/llm-mesh/judge';
+import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
 
-const client = createRemoteJudgeClient({
+const client = createRemoteDecisionClient({
   baseUrl: 'https://llm.sent-tech.ca',
   authToken: 'secret-bearer-token',
   // Client timeout defaults to server deadline + 1 000 ms margin (11 000 ms default).
   // Optional: timeoutMs can be provided to bound client wait below server deadline + margin.
 });
 
-const result = await client.judge({
+const result = await client.decide({
   schemaVersion: 1,
   evaluator: { providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'syn-v1' },
   inputs: { output: 'Candidate completion', state: null },
   criterion: { kind: 'binary', instructions: 'Verify output correctness' },
   decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 },
-  correlationId: 'corr-judge-100',
+  correlationId: 'corr-decision-100',
   policy: { timeoutMs: 10_000 }, // Server deadline: 10 000 ms (client waits 11 000 ms with margin)
 });
 ```
@@ -384,7 +384,7 @@ const result = await client.judge({
 ### Host usage
 
 ```ts
-import { createJudgeService, createJevAdapter, jevDescriptor } from '@sentropic/llm-mesh/judge/host';
+import { createDecisionService, createJevAdapter, jevDescriptor } from '@sentropic/llm-mesh/decision/host';
 import { createJevTransport } from '@sentropic/llm-mesh/transport/jev';
 import { createProviderRegistry } from '@sentropic/llm-mesh';
 
@@ -392,7 +392,7 @@ const adapter = createJevAdapter({
   descriptor: jevDescriptor,
   transport: createJevTransport({ fetch: globalThis.fetch }),
 });
-const service = createJudgeService({
+const service = createDecisionService({
   registry: createProviderRegistry([adapter]),
   resolveEvaluator,
   resolvePrice,

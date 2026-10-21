@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { providerRegistry } from '../../src/services/provider-registry';
-import { isJudgeOnlyProvider, providerIds } from '../../src/services/provider-runtime';
+import { isDecisionOnlyProvider, providerIds } from '../../src/services/provider-runtime';
 
 describe('ProviderRegistry expansion', () => {
   it('should list all 8 providers', () => {
@@ -27,7 +27,7 @@ describe('ProviderRegistry expansion', () => {
   });
 
   it('should resolve each provider via getProvider', () => {
-    for (const id of providerIds.filter((id) => !isJudgeOnlyProvider(id))) {
+    for (const id of providerIds.filter((id) => !isDecisionOnlyProvider(id))) {
       const provider = providerRegistry.getProvider(id);
       expect(provider).not.toBeNull();
       expect(provider!.provider.providerId).toBe(id);
@@ -35,7 +35,7 @@ describe('ProviderRegistry expansion', () => {
   });
 
   it('should resolve each provider via requireProvider', () => {
-    for (const id of providerIds.filter((id) => !isJudgeOnlyProvider(id))) {
+    for (const id of providerIds.filter((id) => !isDecisionOnlyProvider(id))) {
       expect(() => providerRegistry.requireProvider(id)).not.toThrow();
     }
   });
@@ -46,7 +46,7 @@ describe('ProviderRegistry expansion', () => {
     ).toThrow('Provider not found');
   });
 
-  it('keeps a known judge provider outside chat runtime registration and model inventory', () => {
+  it('keeps a known decision provider outside chat runtime registration and model inventory', () => {
     expect(providerRegistry.getProvider('typesafe')).toBeNull();
     expect(() => providerRegistry.requireProvider('typesafe')).toThrow('Provider not found');
     expect(providerRegistry.listModels().some((model) => model.providerId === 'typesafe')).toBe(false);
