@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R3 round 2: memory-store atomic writes preserve the denial floor; new additive control 0018 installs INSERT/UPDATE row triggers for both project/grant tables. Stale concurrent SQL cannot lower denial even when bypassing application checks. Original 0012–0017 are unchanged.
+
 - [x] N5 round 2: branch mechanically verified at c2c36f248 and pulled; four domain regressions reproduce both exact concurrent denial-overwrite cases, including deterministic stale-write barriers. API regression coverage adds database stale-writer and intercepted forbidden/unapproved destination probes. Use only ENV=test-pr677-n5fix2; no COMPLIANCE writes.
 
 - [x] N5 R1 test typing: explicitly require the purge result's durable job variant before using purgeJobId; the regression now narrows the service's purge/denial return union and fails explicitly if no job is created.

@@ -120,6 +120,13 @@
       "when": 1792180000000,
       "tag": "0017_session_content_safety",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792190000000,
+      "tag": "0018_session_content_denial_floor",
+      "breakpoints": true
     }
   ]
 }
