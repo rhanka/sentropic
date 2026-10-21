@@ -5,13 +5,17 @@
 
 import {
   errResult,
+  isDecimalCounter,
   isHexDigest,
+  isPositiveSafeInteger,
   isSafeInteger,
   isStorageModuleId,
   okResult,
   validateStorageScope,
+  validateWriterFence,
   type StorageScope,
   type ValidationResult,
+  type WriterFence,
 } from './contracts.js';
 
 export const COMMON_CONTRACT_VERSION = '1' as const;
@@ -130,7 +134,8 @@ export const validateCommonManifestBody = (value: unknown): ValidationResult => 
   const boundaryResult = validateCommonSourceBoundary(candidate['sourceBoundary']);
   if (!boundaryResult.ok) return boundaryResult;
   for (const field of ['schemaVersion', 'descriptorVersion', 'encodingVersion'] as const) {
-    if (typeof candidate[field] !== 'string' || candidate[field].length === 0) {
+    const entry: unknown = candidate[field];
+    if (typeof entry !== 'string' || entry.length === 0) {
       return errResult(`${field} must be non-empty`);
     }
   }
