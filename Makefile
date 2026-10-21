@@ -465,6 +465,15 @@ lock-api-direct: ## Bump proxy-addr 2.0.7 -> 2.0.8 in api + root locks (pinned, 
 MARKDOWN_IT_NEW_INTEGRITY := sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==
 MARKDOWN_IT_ROOT_OLD_INTEGRITY := sha512-RCEsPjR+sr0x+AuYp601tKTkgFG4YEPLCzHST3cQ/fhlJkqAkz1L2/Qbp1j9qw5SBwQHFBoW8+hoN5xssOF0Tw==
 MARKDOWN_IT_UI_OLD_INTEGRITY := sha512-BuU2qnTti9YKgK5N+IeMubp14ZUKUUw7yeJbkjtosvHiP0AZ5c8IAgEMk79D0eC8F23r4Ac/q8cAIFdm2FtyoA==
+MARKDOWN_IT_1432_INTEGRITY := sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==
+MARKDOWN_IT_1433_INTEGRITY := sha512-L//tDAkjTjJCU6pBUSBTgs3Kg4InVaZuUZog/b6V12UKhcDQ7S78877ibbCanRExwPuYP1CZD7Gd2dxSy1GXRg==
+.PHONY: lock-markdown-it-14-3-3
+lock-markdown-it-14-3-3: ## Bump markdown-it 14.3.2 -> 14.3.3 in root + ui locks (pinned, no stack; BR710-EX4)
+	@echo "🔒 Bumping markdown-it to 14.3.3 in package-lock.json + ui/package-lock.json..."
+	sed -i 's|"version": "14.3.2"|"version": "14.3.3"|; s|markdown-it-14.3.2.tgz|markdown-it-14.3.3.tgz|; s|$(MARKDOWN_IT_1432_INTEGRITY)|$(MARKDOWN_IT_1433_INTEGRITY)|' package-lock.json ui/package-lock.json
+	@for f in package-lock.json ui/package-lock.json; do test $$(grep -c '"version": "14.3.3"' $$f) -eq 1 || (echo "❌ markdown-it 14.3.3 missing in $$f" && exit 1); done
+	@! grep -q 'markdown-it-14.3.2.tgz' package-lock.json ui/package-lock.json || (echo "❌ stale markdown-it 14.3.2 reference remains" && exit 1)
+	@echo "✅ markdown-it 14.3.3 in both locks"
 .PHONY: lock-markdown-it-direct
 lock-markdown-it-direct: ## Bump markdown-it 14.3.0/14.1.1 -> 14.3.2 in root + ui locks (pinned, no stack)
 	@echo "🔒 Bumping markdown-it to 14.3.2 in package-lock.json + ui/package-lock.json..."
