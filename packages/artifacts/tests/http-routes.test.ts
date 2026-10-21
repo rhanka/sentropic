@@ -49,7 +49,7 @@ function makeApp() {
 }
 
 function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
-  return { method, path, body, actorId };
+  return { method, path, body, actorId, storageScopeId: "scope-1" };
 }
 
 type App = ReturnType<typeof makeApp>;
