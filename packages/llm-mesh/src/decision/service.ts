@@ -57,6 +57,11 @@ function sameDecisionDescriptor(left: DecisionEvaluatorDescriptor, right: Decisi
     || left.scoreNativeKeys !== right.scoreNativeKeys || left.nativeDecision !== right.nativeDecision
     || left.confidence.meaning !== right.confidence.meaning || left.confidence.meaningRef !== right.confidence.meaningRef
     || left.confidence.min !== right.confidence.min || left.confidence.max !== right.confidence.max
+    || left.compilation.templateDigest !== right.compilation.templateDigest
+    || left.compilation.schemaDigest !== right.compilation.schemaDigest
+    || left.compilation.readout !== right.compilation.readout
+    || left.priceProtocol.authority !== right.priceProtocol.authority
+    || left.priceProtocol.revision !== right.priceProtocol.revision
     || left.registeredCriteria.length !== right.registeredCriteria.length
     || left.retention.status !== right.retention.status || left.retention.basis !== right.retention.basis
     || left.retention.retentionDays !== right.retention.retentionDays || left.retention.gap !== right.retention.gap

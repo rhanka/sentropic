@@ -15,6 +15,11 @@ export interface DecisionEvaluatorDescriptor {
   scoreNativeKeys: 'index-string';
   nativeDecision: false;
   confidence: { meaning: 'provider-confidence'; meaningRef: string; min: 0; max: 1 };
+  /** Compilation (§3.2): revisioned instruction template and closed output
+   * schema digests plus the sampling/readout identity. */
+  compilation: { templateDigest: string; schemaDigest: string; readout: string };
+  /** Accounting (§3.2): price authority reference and protocol-specific pricing revision. */
+  priceProtocol: { authority: string; revision: string };
   registeredCriteria: readonly { criteriaId: string; revision: string; criterion: ResolvedDecisionCriterion }[];
   retention: RetentionReceipt;
 }
@@ -28,6 +33,8 @@ export const jevDescriptor: DecisionEvaluatorDescriptor = {
   maxBillableInputTokens: 65_536, maxRequestBytes: 256 * 1024, maxStateQuestionBytes: 32 * 1024,
   probabilityTolerance: 1e-4, scoreNativeKeys: 'index-string', nativeDecision: false,
   confidence: { meaning: 'provider-confidence', meaningRef: 'https://docs.typesafe.ai/confidence.md', min: 0, max: 1 },
+  compilation: { templateDigest: '0'.repeat(64), schemaDigest: '1'.repeat(64), readout: 'jev-native-v1' },
+  priceProtocol: { authority: 'fixture:synthetic-tariff', revision: 'fixture-price-v1' },
   registeredCriteria: [],
   retention: { status: 'unknown', basis: 'published-policy', retentionDays: null,
     gap: 'unknown (source-gap)', evidenceRefs: ['https://docs.typesafe.ai/legal.md',
