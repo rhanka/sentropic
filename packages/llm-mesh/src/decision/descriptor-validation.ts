@@ -16,7 +16,7 @@ export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEv
   if (!snapshot.ok || !isRecord(snapshot.value)) return null;
   const value = snapshot.value;
   if (!hasOnlyKeys(value, ['evaluator', 'wireModel', 'acceptedServedModelIds', 'qualification', 'maxBillableInputTokens',
-    'maxRequestBytes', 'maxStateQuestionBytes', 'probabilityTolerance', 'scoreNativeKeys', 'nativeDecision', 'confidence', 'registeredCriteria', 'retention'])
+    'maxRequestBytes', 'maxStateQuestionBytes', 'probabilityTolerance', 'scoreNativeKeys', 'nativeDecision', 'confidence', 'compilation', 'priceProtocol', 'registeredCriteria', 'retention'])
     || !isRecord(value.evaluator) || !hasOnlyKeys(value.evaluator, ['providerId', 'evaluatorId', 'revision'])
     || value.evaluator.providerId !== 'typesafe' || typeof value.wireModel !== 'string'
     || !/^jev-\d+\.\d+\.\d+$/.test(value.wireModel) || value.evaluator.evaluatorId !== value.wireModel
@@ -36,6 +36,12 @@ export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEv
     || value.scoreNativeKeys !== 'index-string' || value.nativeDecision !== false
     || !isRecord(value.confidence) || !hasOnlyKeys(value.confidence, ['meaning', 'meaningRef', 'min', 'max'])
     || value.confidence.meaning !== 'provider-confidence' || !isText(value.confidence.meaningRef) || value.confidence.min !== 0 || value.confidence.max !== 1
+    || !isRecord(value.compilation) || !hasOnlyKeys(value.compilation, ['templateDigest', 'schemaDigest', 'readout'])
+    || typeof value.compilation.templateDigest !== 'string' || !/^[0-9a-f]{64}$/.test(value.compilation.templateDigest)
+    || typeof value.compilation.schemaDigest !== 'string' || !/^[0-9a-f]{64}$/.test(value.compilation.schemaDigest)
+    || !isText(value.compilation.readout)
+    || !isRecord(value.priceProtocol) || !hasOnlyKeys(value.priceProtocol, ['authority', 'revision'])
+    || !isText(value.priceProtocol.authority) || !isText(value.priceProtocol.revision)
     || !Array.isArray(value.registeredCriteria) || !isRecord(value.retention)
     || !hasOnlyKeys(value.retention, ['status', 'basis', 'evidenceRefs', 'retentionDays', 'gap'])
     || (value.retention.status !== 'unknown' && value.retention.status !== 'non-zdr' && value.retention.status !== 'not-evaluated')
