@@ -39,6 +39,7 @@
 - [x] BRAH-EX2 (owner second CI repair packet): allow the selected artifacts lock entry, tuple assertions and batched fixture-version reads; impact is packed-consumer verification only, with integrity enforcement and timeouts retained; rollback restores those qualification hunks.
 
 ## Feedback Loop
+- [x] BRAH-EX4 (owner main integration packet): merge `origin/main` at `7c395f439` without rebase or force push. Upstream-only files are inherited integration changes outside the authored scope and atomic diff budget; preserve both parents, regenerate conflicted locks/P1 through Make, and retain every round-2 fix. Rollback reverts this merge.
 - [x] BRAH-EX3 (owner round-1 packet): merge `origin/main` at `da3063068` unchanged; upstream-only files are outside the authored scope and exceed the atomic diff budget. No Track changes; rollback reverts the merge. Recheck authored changes against the merged base.
 - [x] Delivery of `6ca10d3e6` exposed GitHub `mergeable=false`, `mergeable_state=dirty` and no new run. Mechanical merge-tree against current main identifies only P1 JSON/hash conflicts; rebase resolves those files and retains both superseded manifests.
 - [x] Run `39320255479`, job `118292763317`: all 932 unit tests pass; packed lazy qualification rejects selected lock artifacts 0.1.2 against verified candidate 0.1.4 (version, registry URL and SHA-512 mismatch).
@@ -132,3 +133,12 @@
   - [x] Regenerate the root lock through Make/Docker to compatible markdown-it 14.3.3; only version, registry URL and integrity change. Both UI and complete production-workspace audit gates pass without exceptions.
   - [x] Retain P1 `014a1f01...`; memory-l5-pack produces `6ba9f634fa161cad88ac0a50cd1157f2ae1a93f240840b090c05ece6ab10d615` for root lock `c0015b72...`, with all 44 contracts and both archive digests/integrities unchanged. Full memory-l5-gate LOT=1 passes 228 tests.
   - [x] Delivery constraints: push the security/provenance repair and qualify the new exact head by branch dispatch when no PR run starts; preserve draft status and report the CI result separately.
+- [ ] **Lot 12 — Merge main and qualify PR #708**
+  - [x] Mechanical branch check passes on clean `fix/artifacts-hardening` at `7dd90ecc9`; fetch and merge `origin/main` at `7c395f439`, preserving both histories.
+  - [x] Keep Artifacts 0.1.4 and both peer-range assertions; preserve main's compatible-tuple guard and packaging changes. Round-2 upload implementation and regression tests remain unchanged.
+  - [x] Regenerate both conflicted lockfiles through Make/Docker: keep Artifacts 0.1.4, markdown-it 14.3.3 and main's remaining dependency graph. The selected fixture changes only the three Artifacts version/URL/integrity fields against main.
+  - [x] Retain branch P1 `6ba9f634...` and main P1 `732b96bc...`; regenerate P1 `65bad768...` through memory-l5-pack with main's 44 contracts and both archive digests/integrities unchanged. Re-anchor it after the merge commit.
+  - [x] Artifacts typecheck/lint, 195 unit tests, 30 integration/E2E tests and all three packed-consumer proofs pass with platform 0.4.0. The guarded Artifacts archive remains byte-identical to round 2 (`9ea9ebb2...`).
+  - [x] Run make scope-check before the merge commit: its advisory C2 findings are inherited main paths covered by BRAH-EX4. Mechanical C2 against origin/main passes; authored whitespace checks pass, and inherited fixture whitespace remains unchanged.
+  - [ ] Run Artifacts and L5 suites with `ENV=test-pr708-main` last, no Python and one Docker build at a time.
+  - [ ] Commit through Make, normal push, and green CI on the exact head; retain draft status without merging the PR.

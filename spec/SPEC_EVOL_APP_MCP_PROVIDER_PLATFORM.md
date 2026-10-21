@@ -13,6 +13,8 @@ Related context:
 - Correction Antoine: no immo-specific tenant architecture; domain apps are consumers only.
 - `spec/SPEC_STUDY_39_MCP_AUTHKIT_ELICITATION_GAPS.md` — historical BR-39 auth-kit/elicitation study feeding this platform/auth decomposition; not a competing product/platform spec.
 - `spec/SPEC_STUDY_39_MCP_LIBRARIZATION.md` — historical BR-39 librarization study feeding candidate implementation decomposition; not a competing product/platform spec.
+- `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md` — consolidated record of the merged PR #679 delivery under this platform framing: host-embedded provider registry (`select`/`configure`/`compile`), the `sentropic.artifacts` provider (15 `artifacts_*` tools), and the RFC 8693 token exchange.
+- `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md` — deployed UI annotation overlay consumer; its explicit `/api/v1/artifacts-mcp` audience/scope widening for UI annotations stays gated by the E0 contract/security review and per-annotation delivery grant, not by this platform spec alone.
 
 Any remaining immo-specific MCP spec in the tree must be treated as consumer-only domain framing or explicitly retracted; it is not a Sentropic platform green-light.
 
