@@ -277,6 +277,7 @@ describe('session consent durable lifecycle', () => {
     let jobId = '';
     try {
       const purge = await service.requestRetainedPurge(handle!.retainedScopeId, owner.id);
+      if (!('purgeJobId' in purge)) throw new Error('purge did not create a durable job');
       jobId = purge.purgeJobId;
       expect(purge.remainingObjects).toBeGreaterThan(0);
       const restarted = makeService();
