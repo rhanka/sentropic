@@ -9,7 +9,7 @@
 
 ## Scope / Guardrails
 
-- [x] Main convergence 2026-10-21: merge main 6ec93105b (#708), preserve artifacts 0.1.4 hardening and its packaging changes plus the already-qualified Vite 8.2.4 security patch. Retain this D2 plan; main plan is preserved verbatim at .h2a/build/main_merge_pr708_branch.md and in its ancestor commit. Consumed Memory L5 archives/inventory are unchanged; refresh the root-lock provenance after the merge commit. Control migrations 0012–0016 are unchanged.
+- [x] Main convergence 2026-10-21: merge main 6ec93105b (#708), preserve artifacts 0.1.4 hardening and its packaging changes plus the already-qualified Vite 8.2.4 security patch. Retain this D2 plan; main plan is preserved verbatim at .h2a/build/main_merge_pr708_branch.md and in its ancestor commit. Consumed Memory L5 archives/inventory are unchanged; root-lock provenance is regenerated against the merged source and verified without changing consumed archives/inventory. Control migrations 0012–0016 are unchanged.
 
 - [x] Follow-up main merge 2026-10-20: main advanced to feb741083 while validation ran. Resolve BRANCH.md by retaining this active D2 plan; preserve main PR #712 plan verbatim in .h2a/build/main_merge_pr712_branch.md and its ancestor commit. Keep verified Memory L5 manifest 7fce9279… and retain incoming main manifest 781aa206… by content hash. Root lock and all D2 application/test source are unchanged; control migrations 0012–0016 still match original digests.
 
@@ -191,6 +191,7 @@
   - [ ] Cowork implementation, `packages/comments/**`, M2 storage, Graphify/Engram/L3a implementation, and L6a source/migrations.
   - [ ] All h2a repository paths for the Sentropic implementer; h-cond owns its separate implementation and qualification.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] BR76-EX11: `tools/memory-mcp-l5/artifacts/history/9466d77741102d88cd8df6d57536b434769499eb26d6c236ef2c89ed05b1bd9d.json`, `tools/memory-mcp-l5/artifacts/history/9466d77741102d88cd8df6d57536b434769499eb26d6c236ef2c89ed05b1bd9d.json.sha256` preserve main incoming provenance before binding the regenerated merged lock.
   - [x] BR76-EX11: `tools/memory-mcp-l5/artifacts/history/2bff16f81fbb2f02587f1040480704315d6316af0fd95c8e0eea6b2c683b4176.json`, `tools/memory-mcp-l5/artifacts/history/2bff16f81fbb2f02587f1040480704315d6316af0fd95c8e0eea6b2c683b4176.json.sha256` retain the exact predecessor before the artifacts-0.1.4 root-lock provenance refresh.
   - [x] BR76-EX9: `tools/memory-mcp-l5/artifacts/history/7fce9279e1e8804c89b538905ea0628d5d7e7dc8bb74baf186a06267ebb0a83d.json`, `tools/memory-mcp-l5/artifacts/history/7fce9279e1e8804c89b538905ea0628d5d7e7dc8bb74baf186a06267ebb0a83d.json.sha256` preserve the exact manifest before binding provenance to the audited nested-tool Vite patch.
   - [x] BR76-EX10: `tools/memory-mcp-l5/artifacts/history/781aa20653d218a9b648007e633881e3d90dae3d2ebc28bd6a0acf970ac9fa80.json`, `tools/memory-mcp-l5/artifacts/history/781aa20653d218a9b648007e633881e3d90dae3d2ebc28bd6a0acf970ac9fa80.json.sha256` preserve the exact incoming main manifest. Keep the already verified branch manifest because the merged root lock and consumed archives/inventory are unchanged.
