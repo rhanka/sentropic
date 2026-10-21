@@ -66,8 +66,18 @@ describe('memory SQLite round-trip on the installed kernel', () => {
     const kernel = openKernel(dir);
     try {
       const bound = kernel.bindNew(grantFor()) as RootScopedRuntime;
+      // Live backend reader: every validation rereads the kernel, never a cache.
+      let backendReads = 0;
+      const resolveCurrent = resolveMemoryCurrentFromAggregates(async (key: string) => {
+        backendReads += 1;
+        const found = await bound.readAggregate(key);
+        if (found === null) return null;
+        return { value: found.value } as never;
+      });
       const unit = { ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 1, creation())] };
-      await validateMemoryEffects(unit as never);
+      await validateMemoryEffects(unit as never, resolveCurrent);
+      // The governed path reread the live backend, it did not assume absence.
+      expect(backendReads).toBe(1);
       await bound.transact({}, async (tx) => {
         await tx.apply(unit as never);
       });
@@ -100,12 +110,14 @@ describe('memory SQLite round-trip on the installed kernel', () => {
     try {
       const bound = kernel.bindNew(grantFor()) as RootScopedRuntime;
       const completed = { ...creation(), revision: 2, recordDigest: 'sha256:abc' };
-      const stored = new Map<string, unknown>();
+      // Live backend reader: every validation rereads the kernel, never a
+      // cache, so the refusal below is proven against the completed value at
+      // the backend transaction boundary, not a first-read snapshot.
+      let backendReads = 0;
       const resolveCurrent = resolveMemoryCurrentFromAggregates(async (key: string) => {
-        if (stored.has(key)) return { value: { format: 'utf8', data: JSON.stringify(stored.get(key)) } } as never;
+        backendReads += 1;
         const found = await bound.readAggregate(key);
         if (found === null) return null;
-        stored.set(key, JSON.parse((found.value as { data: string }).data));
         return { value: found.value } as never;
       });
       await validateMemoryEffects({ ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 1, creation())] }, resolveCurrent);
@@ -119,6 +131,12 @@ describe('memory SQLite round-trip on the installed kernel', () => {
       await bound.transact({}, async (tx) => {
         await tx.apply({ ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 2, completed)] } as never);
       });
+      // Identical replay of the completed value is accepted: the resolver
+      // tracks live backend state, not a stale first read.
+      await validateMemoryEffects(
+        { ...emptyUnit(), updates: [updateFor(CAPTURE_KEY, 2, completed)] },
+        resolveCurrent,
+      );
       await expect(
         validateMemoryEffects(
           {
@@ -136,6 +154,9 @@ describe('memory SQLite round-trip on the installed kernel', () => {
           resolveCurrent,
         ),
       ).rejects.toThrow(/immutable/);
+      // Every validation above performed a live backend read: creation,
+      // completion, replay, and the refused mutation.
+      expect(backendReads).toBe(4);
       const unchanged = await bound.readAggregate(CAPTURE_KEY);
       expect(unchanged?.version).toBe(2);
       expect(JSON.parse((unchanged?.value as { data: string }).data)).toEqual(completed);
