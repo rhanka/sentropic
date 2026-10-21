@@ -214,3 +214,87 @@ describe('lock-fingerprint — derived P1 build inputs and provenance', () => {
     expect(r.stderr).toMatch(/provenance snapshot/);
   });
 });
+
+const FROZEN_IMAGE = 'node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6';
+const dropExportMember = (text) => text.replace(
+  'memory-l5-lint memory-l5-tooling memory-l5-test memory-l5-packed memory-l5-pack memory-l5-receipt memory-l5-verify memory-l5-gate: export',
+  'memory-l5-lint memory-l5-tooling memory-l5-test memory-l5-packed memory-l5-receipt memory-l5-verify memory-l5-gate: export');
+const dropPackPrereq = (text) => text.replace(
+  'memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extract-mcp-platform',
+  'memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker');
+// A make recipe line `$(VAR)` expands before the shell runs; model that expansion so the
+// extracted guard executes under the shell exactly as make would run it.
+const guardShell = (line) => line.replace(/^@/, '')
+  .replaceAll('$(LLM_MESH_NODE_IMAGE)', '${LLM_MESH_NODE_IMAGE}')
+  .replaceAll('$(MEMORY_L5_NODE_IMAGE)', '${MEMORY_L5_NODE_IMAGE}');
+const runGuard = (line, env) => spawnSync('sh', ['-c', guardShell(line)], { encoding: 'utf8', env: { ...process.env, ...env } });
+const guardLines = (toolchain) => [
+  ...P1_PRODUCING_TARGETS.flatMap((target) => toolchain.recipes[target]),
+  ...(toolchain.packRecipes || []),
+].filter((line) => line.includes('LLM_MESH_NODE_IMAGE)" = "'));
+
+describe('lock-fingerprint — effective target wiring', () => {
+  it('binds the export target membership and the pack prerequisites', () => {
+    const toolchain = parseToolchainSpecs(REAL_MAKEFILE);
+    expect(toolchain.llmMeshExport.value).toBe('$(MEMORY_L5_NODE_IMAGE)');
+    expect(toolchain.llmMeshExport.targets).toContain('memory-l5-pack');
+    expect([...toolchain.llmMeshExport.targets].sort()).toEqual(toolchain.llmMeshExport.targets);
+    for (const target of [...P1_PRODUCING_TARGETS, 'memory-l5-runtime']) {
+      expect(toolchain.packPrerequisites).toContain(target);
+    }
+  });
+
+  it('changes the fingerprint when the wiring changes', () => {
+    const base = fingerprint();
+    expect(fingerprint(REAL_LOCK, REAL_MAKEFILE.replace(
+      'memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extract-mcp-platform',
+      'memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extract-mcp-platform memory-l5-tooling'))).not.toBe(base);
+  });
+
+  it.each([
+    ['extra unconditional export line', (text) => `${text}\nexport LLM_MESH_NODE_IMAGE = node:22-bookworm-slim\n`],
+    ['extra plain assignment line', (text) => `${text}\nLLM_MESH_NODE_IMAGE = node:22-bookworm-slim\n`],
+    ['duplicated member export line', (text) => `${text}\nmemory-l5-pack: export LLM_MESH_NODE_IMAGE = $(MEMORY_L5_NODE_IMAGE)\n`],
+    ['export member removed', dropExportMember],
+    ['dropped pack prerequisite', dropPackPrereq],
+    ['dropped runtime prerequisite', (text) => text.replace('memory-l5-pack: memory-l5-runtime build-mcp-platform', 'memory-l5-pack: build-mcp-platform')],
+  ])('fails closed on %s', (_, mut) => {
+    expect(() => parseToolchainSpecs(mut(REAL_MAKEFILE))).toThrow(/build inputs/);
+  });
+
+  it('carries an executable equality guard in every producing recipe and the pack recipe', () => {
+    const toolchain = parseToolchainSpecs(REAL_MAKEFILE);
+    for (const target of P1_PRODUCING_TARGETS) {
+      expect(guardLines(toolchain).filter((line) => toolchain.recipes[target].includes(line)).length).toBeGreaterThan(0);
+    }
+    expect(guardLines(toolchain).filter((line) => (toolchain.packRecipes || []).includes(line)).length).toBeGreaterThan(0);
+  });
+
+  it('the extracted guard passes on the frozen wiring and refuses the invocation override', () => {
+    const toolchain = parseToolchainSpecs(REAL_MAKEFILE);
+    const lines = guardLines(toolchain);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      expect(runGuard(line, { LLM_MESH_NODE_IMAGE: FROZEN_IMAGE, MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).toBe(0);
+      expect(runGuard(line, { LLM_MESH_NODE_IMAGE: 'node:22-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).not.toBe(0);
+    }
+  });
+
+  it('closes the loop: the runtime prerequisite refuses an overridden frozen image', () => {
+    const frozen = `${FROZEN_IMAGE}`;
+    expect(checkQualificationRuntime({ imageDigest: frozen, nodeVersion: '24.11.0', execArgv: [], nodeOptions: '' }, frozen)).toEqual([]);
+    expect(checkQualificationRuntime({ imageDigest: 'evil', nodeVersion: '24.11.0', execArgv: [], nodeOptions: '' }, frozen).length).toBeGreaterThan(0);
+  });
+
+  it('refuses the packed gate when the export member is removed', () => {
+    const r = gated((lock, f) => { f.put('Makefile', dropExportMember(readFileSync(`${f.root}/Makefile`, 'utf8'))); });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/build inputs: LLM_MESH_NODE_IMAGE export does not cover/);
+  });
+
+  it('refuses the packed gate when a pack prerequisite is dropped', () => {
+    const r = gated((lock, f) => { f.put('Makefile', dropPackPrereq(readFileSync(`${f.root}/Makefile`, 'utf8'))); });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/build inputs: memory-l5-pack does not schedule/);
+  });
+});

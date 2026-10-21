@@ -68,7 +68,7 @@ Actions with the following status should be included around tasks only if really
   - Reason: Astra R2 finding 2 — the recipes fresh-install transitive ranges, so root-lock records describe a different installation (api-extractor 7.58.12 vs actual 7.58.9). One resolved toolchain record must be consumed by the producing build and checked by the verifier.
   - Impact: builds install the byte-identical locked tree (same direct pins `typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9`); snapshot regen is explicit and reviewable; fingerprint v3 binds snapshot content plus spec satisfaction; all other targets untouched.
   - Rollback: revert the 3 install tokens to `npm install <specs>` and drop the snapshot target; keep or revert the `v3` modules with the snapshot files retained.
-- `attention`: BR710-EX4 — remediate the NEW markdown-it HIGH pair (GHSA-vfgh-jcmw-g37q, GHSA-gfr2-rv44-r23c; fixed in 14.3.3) with the same pinned-sed procedure as BR710-EX2 (root `overrides` 14.3.2→14.3.3, lock bumps in root + ui, integrity var + bump target).
+- `attention`: BR710-EX4 — remediate the NEW markdown-it advisories (GHSA-vfgh-jcmw-g37q low, GHSA-gfr2-rv44-r23c high; fixed in 14.3.3) with the same pinned-sed procedure as BR710-EX2 (root `overrides` 14.3.2→14.3.3, lock bumps in root + ui, integrity var + bump target).
   - Reason: CI audit-gate/SCA red on the R2 head (6 jobs plus `ci-gate`); the advisories were published after the last green run and are unrelated to the R2 diff (identical ui/api locks were green at `27a560ce4`).
   - Impact: markdown-it 14.3.2→14.3.3 in root + ui locks only; P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
   - Rollback: revert the override, both lock hunks, and the target/var.
@@ -76,10 +76,18 @@ Actions with the following status should be included around tasks only if really
   - Reason: CI `build-api-image` + `security-sast-sca` red on the post-EX4 head; the advisories were published mid-run (narrow `>=1.16.0 <1.16.1` range, single parent `centra ^1.15.6`); unrelated to the R2 diff.
   - Impact: follow-redirects 1.16.0→1.16.1 in the root lock only; P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
   - Rollback: revert the override, the lock hunk, and the target/var.
-- `attention`: BR710-EX6 — remediate the vite launch-editor HIGHs (GHSA-587h-7wmj-h5pm incl. CVE-2026-112942, GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw; vite fixed in 7.3.7/8.2.4) with the same pinned-sed procedure (root + api lock hunks, integrity vars + bump target; no single-version override exists across the 7/8 lines so none is added).
+- `attention`: BR710-EX6 — remediate the vite launch-editor advisories (GHSA-587h-7wmj-h5pm HIGH incl. CVE-2026-112942, GHSA-698v-4r3x-3vcv medium, GHSA-r825-w8mm-5pxw medium; vite fixed in 7.3.7/8.2.4) with the same pinned-sed procedure (root + api lock hunks, integrity vars + bump target; no single-version override exists across the 7/8 lines so none is added).
   - Reason: CI `security-sast-sca` (api workspace, dev included) + `security-container` (api-tool image) red; advisories published 10/20, after the last green run; unrelated to the R2 diff.
   - Impact: vite 7.3.6→7.3.7 (root top) and 8.2.2→8.2.4 (root nested ×2, api nested ×1); ui/auth-idp vite copies untouched (their gates green, minimal diff); P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
   - Rollback: revert the lock hunks and the target/vars.
+- `attention`: BR710-EX7 — add one effective-image equality guard line to each of the 3 P1-producing `Makefile` recipes plus the `memory-l5-pack` recipe (Astra R3 P1: execution-contract enforcement).
+  - Reason: the finding's invocation-level repro (`make memory-l5-pack LLM_MESH_NODE_IMAGE=node:22 ...`) changes the effective image of every producing recipe without touching recipe text; the parser requires the guard and the fingerprint binds it, but only a recipe-executed equality test refuses the override before anything is produced.
+  - Impact: 4 additive recipe lines; default wiring expands to a passing `pin = pin` test; any `LLM_MESH_NODE_IMAGE`/`MEMORY_L5_NODE_IMAGE` invocation override fails the first P1-touching recipe; all other targets untouched.
+  - Rollback: drop the 4 guard lines and revert the parser's guard requirement with them.
+- `attention`: BR710-EX8 — align the `ui/package-lock.json` markdown-it 14.3.3 record's dependency metadata to the published ranges (`entities ^4.5.0`, `linkify-it ^5.0.2`; Astra R3 non-blocking).
+  - Reason: the 14.3.3 record still declares the 14.3.2 ranges (`^4.4.0`/`^5.0.0`) while the installed tree resolves entities 6.0.1 + linkify-it 5.0.2; metadata-only, resolved/integrity bytes untouched, satisfies both ranges.
+  - Impact: 2 metadata tokens in the ui lock; installs reproducible (`npm ci` unaffected); P1 closure untouched.
+  - Rollback: revert the 2 tokens.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -177,7 +185,7 @@ Actions with the following status should be included around tasks only if really
   - [ ] Push branch; PR stays DRAFT, do not merge, do not mark ready; CI green on the exact head.
 
 ## Round R2-CI (registry advisories postdating the R2 head)
-- [x] **Lot 14 — Remediate markdown-it HIGH (GHSA-vfgh-jcmw-g37q, GHSA-gfr2-rv44-r23c)**
+- [x] **Lot 14 — Remediate markdown-it advisories (GHSA-vfgh-jcmw-g37q low, GHSA-gfr2-rv44-r23c high)**
   - [x] Pin `markdown-it@14.3.3` via root `overrides` (fixes both advisories; satisfies `^14.0.0`/`^14.1.0` dependent ranges).
   - [x] Pinned sed bump in `package-lock.json` (14.3.2) and `ui/package-lock.json` (14.3.2) via `lock-markdown-it-14-3-3` (BR710-EX4, mirrors `lock-markdown-it-direct` precedent).
   - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock passes, 44 contracts); no P1 regen.
@@ -189,7 +197,7 @@ Actions with the following status should be included around tasks only if really
   - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock passes, 44 contracts); no P1 regen.
   - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [x] **Lot 16 — Remediate vite launch-editor HIGHs (GHSA-587h-7wmj-h5pm incl. CVE-2026-112942, GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw)**
+- [x] **Lot 16 — Remediate vite launch-editor advisories (GHSA-587h-7wmj-h5pm high incl. CVE-2026-112942, GHSA-698v-4r3x-3vcv medium, GHSA-r825-w8mm-5pxw medium)**
   - [x] Bump vite 7.3.6→7.3.7 (root top) and 8.2.2→8.2.4 (root nested ×2, api nested ×1) via `lock-vite-737-824` (BR710-EX6; no cross-line override possible).
   - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped locks passes, 44 contracts); no P1 regen.
   - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
@@ -199,3 +207,15 @@ Actions with the following status should be included around tasks only if really
   - [x] BRANCH.md kept as this branch's live plan (main's BR01 record stays in main history); manifest kept at v3 (no regen — merged P1 inputs unchanged).
   - [x] Lot gate: tooling suite + `memory-l5-verify` on the merged tree; scope-check; diff-check.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
+- [x] **Lot 18 — Astra R3 P1: bind the effective target wiring (BR710-EX7)**
+  - [x] Parser binds the export target membership (`llmMeshExport.targets`, `memory-l5-pack` required), the pack prerequisites (all producers + `memory-l5-runtime` required) and the per-recipe effective-image guard; any extra `LLM_MESH_NODE_IMAGE` binding fails closed.
+  - [x] One equality guard line in each producing recipe + the pack recipe; fingerprint v4 binds the new wiring; production-verifier regressions for both single-line mutations plus the execution-contract check (extracted guard passes on the pin, refuses the invocation override; runtime prerequisite closes the loop against the freeze file).
+  - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-astra-r3`.
+  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
+- [ ] **Lot 19 — Astra R3 non-blocking (BR710-EX8) + P1 regen v4**
+  - [ ] Align `ui/package-lock.json` markdown-it metadata (`entities ^4.5.0`, `linkify-it ^5.0.2`); severity precision in EX4/EX6/Lot 14/Lot 16 titles.
+  - [ ] Retain `f5254a27` manifest to history, regenerate P1 via `make` (provenance + exact 44-contract inventory), verify + gate.
+  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
+- [ ] **Lot 20 — Merge origin/main (6ec93105b, PR #708), verify, push, CI green**
+  - [ ] Merge (no rebase); resolve preserving both intents; `make` regen; keep all R3 fixes; verify merged tree.
+  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green on the exact head, then report head SHA + CI URL.
