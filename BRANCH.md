@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R8 final implementation: every domain mutation returns the canonical stored record after the atomic denial floor; API writer admission/publication also check project suppression/exclusions. Deterministic returned-authority and project-suppression tests reproduce the prior unsafe outcomes.
+
 - [x] N5 R8 returned-authority regressions require stale mutations to return the persisted denial or refuse, rather than hand callers an active pre-write snapshot. Added current-project export fence vectors and project-suppression publication interleavings.
 
 - [x] N5 R8 audit correction: storage preserves project exclusions/suppression; API clear/exclude serialize their read-modify-write. Native export checks current project/grant capture eligibility, channel and pending denial. Upload admission and final publication reject pending local denial; capture-only transitions do not imply read denial.

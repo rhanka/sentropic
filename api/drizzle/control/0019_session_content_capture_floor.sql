@@ -1,6 +1,6 @@
 -- UPDATE row triggers see the latest locked tuple, including for stale SQL.
 -- Read denial remains independent in 0018; no ratified migration is changed.
-CREATE FUNCTION "control"."session_content_preserve_capture_denial"() RETURNS trigger
+CREATE OR REPLACE FUNCTION "control"."session_content_preserve_capture_denial"() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF OLD.state = 'revoked' OR (OLD.state <> 'active' AND NEW.state = 'active') THEN
@@ -11,6 +11,18 @@ BEGIN
   IF TG_TABLE_NAME = 'session_content_grants' THEN
     NEW.local_deny_pending := NEW.local_deny_pending
       OR (OLD.local_deny_pending AND NEW.state <> 'revoked');
+  ELSIF TG_TABLE_NAME = 'session_content_projects' THEN
+    -- Removing an exclusion requires an advancing clear operation, which
+    -- itself suppresses capture until a confirmed policy amendment.
+    IF NOT (NEW.requires_fresh_amendment AND NEW.exclusion_revision > OLD.exclusion_revision) THEN
+      SELECT COALESCE(jsonb_agg(value ORDER BY value), '[]'::jsonb)
+      INTO NEW.excluded_session_ids
+      FROM (SELECT DISTINCT value FROM jsonb_array_elements(OLD.excluded_session_ids || NEW.excluded_session_ids)) ids;
+    END IF;
+    NEW.exclusion_revision := GREATEST(OLD.exclusion_revision, NEW.exclusion_revision);
+    IF NEW.project_revision <= OLD.project_revision THEN
+      NEW.requires_fresh_amendment := OLD.requires_fresh_amendment OR NEW.requires_fresh_amendment;
+    END IF;
   END IF;
   RETURN NEW;
 END;

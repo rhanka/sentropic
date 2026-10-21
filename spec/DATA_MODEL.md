@@ -2415,6 +2415,8 @@ Tables (`control` schema, soft references only, no cross-namespace FK):
   Additive `0019_session_content_capture_floor` preserves revoked lifecycle state,
   nonactive capture state and pending local denial under the row write lock;
   revoked history authorizations cannot reactivate. Capture-only exclusions and
+  clear-exclusion suppression survive stale writes; only an advancing explicit
+  clear removes an exclusion, and only a later policy revision clears suppression.
   closure retain their independent read semantics. The durable service never
   reuses an existing grant row for a new binding. Rollback first fences capture
   and drains writers, then removes the three new triggers and their function.
