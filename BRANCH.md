@@ -39,6 +39,7 @@
 - [x] BRAH-EX2 (owner second CI repair packet): allow the selected artifacts lock entry, tuple assertions and batched fixture-version reads; impact is packed-consumer verification only, with integrity enforcement and timeouts retained; rollback restores those qualification hunks.
 
 ## Feedback Loop
+- [x] BRAH-EX5 (owner PR #708 conflict repair): merge `origin/main` at `feb741083` without rebase or force push. Inherit #712's canonical API image changes unchanged, retain this branch's plan and every round-2 fix, and archive both P1 parents before Make regeneration. Inherited main paths and retained provenance are exempt from the authored atomic diff budget; rollback reverts this merge.
 - [x] BRAH-EX4 (owner main integration packet): merge `origin/main` at `7c395f439` without rebase or force push. Upstream-only files are inherited integration changes outside the authored scope and atomic diff budget; preserve both parents, regenerate conflicted locks/P1 through Make, and retain every round-2 fix. Rollback reverts this merge.
 - [x] BRAH-EX3 (owner round-1 packet): merge `origin/main` at `da3063068` unchanged; upstream-only files are outside the authored scope and exceed the atomic diff budget. No Track changes; rollback reverts the merge. Recheck authored changes against the merged base.
 - [x] Delivery of `6ca10d3e6` exposed GitHub `mergeable=false`, `mergeable_state=dirty` and no new run. Mechanical merge-tree against current main identifies only P1 JSON/hash conflicts; rebase resolves those files and retains both superseded manifests.
@@ -150,3 +151,11 @@
   - [x] Both production audit gates pass without remaining HIGH/CRITICAL advisories; dependency repair commit is `00f11a1eb` and root lock SHA-256 is `5fed2990...`.
   - [x] Retain P1 `43d05fde...` and regenerate P1 `d59d629b...` from the committed dependency repair; all 44 contracts and both archive digests/integrities remain identical to main. Full L5 gate passes all 228 tests, typechecks and source/packed graphs for the new lock.
   - [x] Delivery constraints: Make-only commits, normal push and green CI on the exact new head; preserve draft status without merging or publishing.
+- [ ] **Lot 14 — Integrate canonical API image main**
+  - [x] Mechanical branch check passes at `4bb6cae2b`; merge main `feb741083` with both histories intact. Resolve the independent BRANCH.md plans by retaining #708's plan; preserve #712's implementation unchanged.
+  - [x] Keep root lock and every Artifacts implementation/test byte unchanged from the verified branch head; the same copied upload snapshot remains the one validated, verified and published.
+  - [x] Retain branch P1 `d59d629b...` and main P1 `781aa206...`; memory-l5-pack generates P1 `0324f582...` with all 44 contracts and both archive digests/integrities unchanged from both parents.
+  - [x] First integration run: publication crash-recovery exceeds the unchanged 5s timeout while host load is 47.49 and disk wait is 17–23%. The unmodified scoped E2E rerun passes both tests; crash recovery takes 508ms. Require a successful complete rerun and exact-head CI, without a timeout increase or waiver.
+  - [x] Artifacts typecheck/lint, 195 unit tests, full 30-test integration/E2E rerun and all three packed proofs pass on ENV=test-pr708-main. Archive SHA-256 remains `9ea9ebb2ac3ca32496e9ddcc6a74d8a78976585d2d767a23180f395ac7c95618`, identical to round 2.
+  - [ ] Re-anchor P1 after the merge commit and run full memory-l5-gate LOT=1 on ENV=test-pr708-main.
+  - [ ] Check scope, commit through Make, push normally and obtain green CI on the exact head; dispatch if no run appears. Do not merge or change PR readiness.
