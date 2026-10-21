@@ -2387,6 +2387,17 @@ Notes :
 
 ## Session content consent (D2, BRCM2-EX2, Lot 2)
 
+Content PUT additionally requires an external, operations-owned JSON owner approval
+at `SESSION_CONTENT_STORAGE_AUTHORIZATION_PATH`; absent/unreadable/invalid means off.
+The record must contain `enabled:true`, `purpose:"deletable-session-content"`, a
+nonempty `ownerApprovalId`, a future integer `validUntil`, and the exact configured
+`endpoint`, `region`, `bucket`. The application never creates this approval or an
+epoch/WORM bucket. Approval is rechecked after the pre-PUT barrier; a read-only
+Object Lock probe must establish absence of configuration before writing. Named
+COMPLIANCE/P10Y/epoch/WORM buckets, locked buckets and uncertain probes are refused.
+Application IAM must exclude epoch-write authority; this change neither activates
+storage nor authorizes any COMPLIANCE write.
+
 Source of truth: `api/src/db/control-schema.ts` (control stream) + migration
 `api/drizzle/control/0012_session_content_consent.sql` (hand-written triggers;
 `db-generate-control` cannot emit or track them) + Lot 2b `0013` (epoch pins)
