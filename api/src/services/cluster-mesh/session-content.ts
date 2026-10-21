@@ -305,6 +305,9 @@ const requireContext = (ctx: SessionContentContext): void => {
       throw new SessionContentError('invalid_request', `${field} is required`);
     }
   }
+  if (ctx.principalId !== ctx.ownerId) {
+    throw new SessionContentError('cross_owner_refused', 'authenticated principal must be the owner');
+  }
 };
 
 export interface SessionContentPublishHooks {
@@ -504,6 +507,16 @@ export class SessionContentService {
     if (membership?.status !== 'approved') {
       throw new SessionContentError('membership_required', 'principal is not an approved member');
     }
+  }
+
+  private async ownedGrant(client: DbClient, sessionId: string, ctx: SessionContentContext) {
+    const [grant] = await client.select().from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, sessionId)).limit(1);
+    if (!grant) throw new SessionContentError('grant_not_found', 'unknown grant');
+    if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+      throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
+    }
+    return grant;
   }
 
   /** R6: bounded reads additionally require origin-workspace membership.
@@ -875,6 +888,10 @@ export class SessionContentService {
       if (!existing) throw new SessionContentError('project_not_found', 'unknown project');
       if (existing.tenantId !== ctx.tenantId || existing.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'project belongs to another owner');
+      }
+      const grant = await this.ownedGrant(tx, sessionId, ctx);
+      if (grant.projectId !== projectId || grant.workspaceId !== existing.workspaceId) {
+        throw new SessionContentError('cross_owner_refused', 'session belongs to another project scope');
       }
       const excluded = new Set((existing.excludedSessionIds as string[]).map(String));
       excluded.add(sessionId);
@@ -1843,6 +1860,10 @@ export class SessionContentService {
         .where(eq(sessionContentReservations.reservationId, reservationId))
         .limit(1);
       if (!existing) throw new SessionContentError('not_found', 'unknown reservation');
+      const grant = await this.ownedGrant(tx, existing.sessionId, ctx);
+      if (existing.namespaceId !== namespaceIdFor(grant.tenantId, grant.ownerId, grant.authorityEpoch)) {
+        throw new SessionContentError('cross_owner_refused', 'reservation namespace belongs elsewhere');
+      }
       await tx
         .update(sessionContentReservations)
         .set({ state: 'stale', updatedAt: new Date(this.nowMs()) })
@@ -2338,10 +2359,13 @@ export class SessionContentService {
    * indefinitely under no expiry (O2=B). */
   async recordLocalDeny(sessionId: string, ctx: SessionContentContext) {
     requireContext(ctx);
-    await db
-      .update(sessionContentGrants)
-      .set({ localDenyPending: true, updatedAt: new Date(this.nowMs()) })
-      .where(eq(sessionContentGrants.sessionId, sessionId));
+    await db.transaction(async (tx) => {
+      await this.ownedGrant(tx, sessionId, ctx);
+      await tx.update(sessionContentGrants)
+        .set({ localDenyPending: true, updatedAt: new Date(this.nowMs()) })
+        .where(and(eq(sessionContentGrants.sessionId, sessionId),
+          eq(sessionContentGrants.tenantId, ctx.tenantId), eq(sessionContentGrants.ownerId, ctx.ownerId)));
+    });
     return { sessionId, localDenyPending: true as const };
   }
 
