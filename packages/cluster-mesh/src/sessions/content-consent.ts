@@ -633,6 +633,11 @@ export const createContentConsentService = (
     }
     const existing = await store.readProject(prepared.policy.projectId);
     if (!existing) throw new ContentConsentError('project_not_found', 'no project to amend');
+    if (existing.tenantId !== prepared.policy.tenantId || existing.ownerId !== prepared.policy.ownerId
+      || existing.workspaceId !== prepared.policy.workspaceId
+      || existing.workspaceIncarnation !== prepared.policy.workspaceIncarnation) {
+      throw new ContentConsentError('cross_owner_refused', 'existing project has a different immutable scope');
+    }
     if (existing.state !== 'active') throw new ContentConsentError('project_not_active', 'project is not active');
     if (existing.projectRevision !== prepared.expectedRevision) {
       throw new ContentConsentError('revision_conflict', 'project revision changed; re-prepare the amendment');
@@ -763,6 +768,7 @@ export const createContentConsentService = (
       },
       state: 'active',
       version: (existing?.version ?? 0) + 1,
+      readDenied: existing?.readDenied === true || existing?.state === 'revoked',
       lastFreshnessAckAt: timestamp,
       localDenyPending: false,
       retainedCopies: existing?.retainedCopies ?? false,
@@ -1061,6 +1067,7 @@ export const createContentConsentService = (
     return authorization !== null
       && authorization.state === 'active'
       && authorization.sessionId === sessionId
+      && authorization.bindingId === grant.bindingId
       && authorization.projectId === grant.projectId;
   };
 

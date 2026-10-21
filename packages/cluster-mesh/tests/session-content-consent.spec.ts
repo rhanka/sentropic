@@ -87,6 +87,33 @@ const sharedChildInput = (overrides: Partial<DeriveChildInput> = {}): DeriveChil
 });
 
 describe('content consent retention validation', () => {
+  it('should preserve N5 R3 read denial when a confirmed amendment derives a replacement binding', async () => {
+    const { service } = await readyConsent();
+    await service.deriveChild(sharedChildInput());
+    await service.closeGrant('session-1');
+    const history = await service.authorizeHistoryRead('session-1', { 'terminal.cache': null, 'native.mirror': null });
+    await service.revokeGrant('session-1');
+    const amendment = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1 }));
+    await service.acceptProject(amendment, { challengeId: amendment.challengeId });
+    await service.deriveChild(sharedChildInput({ bindingId: 'replacement', bindingVersion: 2 }));
+    expect(await service.canReadClosed('session-1', history.authorizationId)).toBe(false);
+    await expectConsentCodeAsync(() => service.authorizeHistoryRead('session-1', {
+      'terminal.cache': null, 'native.mirror': null,
+    }), 'grant_revoked');
+  });
+
+  it.each(['owner', 'tenant'] as const)('should refuse N5 R5 domain amendment scope transfer by %s', async (scope) => {
+    const { service } = await readyConsent();
+    const before = await service.readProject('project-1');
+    const amendment = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1,
+      ...(scope === 'owner' ? { ownerId: 'user-b' } : { tenantId: 'tenant-b' }),
+    }));
+    await expectConsentCodeAsync(() => service.acceptProject(amendment, {
+      challengeId: amendment.challengeId,
+    }), 'cross_owner_refused');
+    expect(await service.readProject('project-1')).toEqual(before);
+  });
+
   it.each(['grant', 'project', 'exclude', 'close'] as const)(
     'should preserve N5 R3 closed-history denial after %s transitions', async (transition) => {
       const { service } = await readyConsent();
