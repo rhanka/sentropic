@@ -2416,8 +2416,11 @@ Tables (`control` schema, soft references only, no cross-namespace FK):
   nonactive capture state and pending local denial under the row write lock;
   revoked history authorizations cannot reactivate. Capture-only exclusions and
   clear-exclusion suppression survive stale writes; only an advancing explicit
-  clear removes an exclusion, and only a later policy revision clears suppression.
-  closure retain their independent read semantics. The durable service never
+  clear removes an exclusion; clearing suppression requires a later policy revision
+  based on the current exclusion revision, so a stale amendment cannot bypass denial.
+  A child INSERT takes a shared parent-row lock and refuses a denied, excluded,
+  suppressed or stale parent tuple, including children absent from a revoke scan.
+  Capture-only exclusion and closure retain independent read semantics. The durable service never
   reuses an existing grant row for a new binding. Rollback first fences capture
   and drains writers, then removes the three new triggers and their function.
   Existing revoked rows are backfilled. Objects carry durable `writer_state`

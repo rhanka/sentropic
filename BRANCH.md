@@ -9,6 +9,10 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R8 resumed audit: stale amendments that predate exclusion clearing cannot remove suppression by advancing only the policy revision; domain and direct SQL barriers reproduce the bypass. Parent admission checks preserve denial-only updates after an amendment.
+
+- [x] N5 R8 cross-row audit: deterministic derivation/INSERT barriers cover a child whose parent is revoked, excluded or suppressed after its first read. Admission must recheck the latest locked parent before creating capture authority.
+
 - [x] N5 R8 final implementation: every domain mutation returns the canonical stored record after the atomic denial floor; API writer admission/publication also check project suppression/exclusions. Deterministic returned-authority and project-suppression tests reproduce the prior unsafe outcomes.
 
 - [x] N5 R8 returned-authority regressions require stale mutations to return the persisted denial or refuse, rather than hand callers an active pre-write snapshot. Added current-project export fence vectors and project-suppression publication interleavings.

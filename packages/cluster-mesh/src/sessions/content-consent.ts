@@ -274,7 +274,7 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
           ? [...new Set([...existing.excludedSessionIds, ...next.excludedSessionIds])] : next.excludedSessionIds,
         exclusionRevision: Math.max(existing?.exclusionRevision ?? 0, next.exclusionRevision),
         requiresFreshAmendment: next.requiresFreshAmendment || (existing?.requiresFreshAmendment === true
-          && next.projectRevision <= existing.projectRevision),
+          && (next.projectRevision <= existing.projectRevision || next.exclusionRevision !== existing.exclusionRevision)),
         readDenied: existing?.readDenied === true || existing?.state === 'revoked'
           || next.readDenied === true || next.state === 'revoked',
       });
@@ -284,7 +284,9 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
     async writeGrant(expectedVersion: number | null, next: SessionContentGrant) {
       const existing = grants.get(next.sessionId) ?? null;
       const project = projects.get(next.projectId);
-      if (next.state === 'active' && (!project || project.state !== 'active')) return false;
+      const admitsCapture = !existing || next.grantId !== existing.grantId || next.projectRevision !== existing.projectRevision;
+      if (admitsCapture && next.state === 'active' && (!project || project.state !== 'active' || project.requiresFreshAmendment
+        || project.excludedSessionIds.includes(next.sessionId) || project.projectRevision !== next.projectRevision)) return false;
       if (expectedVersion === null) {
         if (existing) return false;
       } else if (!existing || existing.version !== expectedVersion) return false;
