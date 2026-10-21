@@ -44,13 +44,13 @@
   - [x] Read rules, template, Make targets, CI failure and #709; create worktree; pass `harness check branch`.
   - [x] Inventory Go pins and scanned stages; verify the patched digest in the registry.
 - [ ] **Lot 1 — Patch and qualify**
-  - [ ] Change only the `ci-esbuild` pin to Go 1.26.10.
+  - [x] Change only the `ci-esbuild` pin to Go 1.26.10.
   - [ ] `make build-api-tool-image REGISTRY=local ENV=test-go-cve`.
   - [ ] `make test-api-tool-security-container REGISTRY=local ENV=test-go-cve`; inspect complete Go package inventory.
   - [ ] `make test-ci-api-tool-runtime REGISTRY=local ENV=test-go-cve`: npm, Vitest, both esbuild transforms and Node protocols.
-  - [ ] `make test-ci-api-tooling ENV=test-go-cve`: existing `scripts/test-api-tooling.sh`; no new test files.
+  - [x] `make test-ci-api-tooling ENV=test-go-cve`: existing `scripts/test-api-tooling.sh`; all registry/cache/hash regressions pass; no new test files.
 - [ ] **Lot N — Final validation**
-  - [ ] `make scope-check ENV=test-go-cve` before every selective-stage, make-only commit.
+  - [x] `make scope-check ENV=test-go-cve` before every selective-stage, make-only commit; C2 passes.
   - [ ] Push; open draft PR with this file as body; post three-step plan.
   - [ ] Verify CI green on the exact head; leave draft and unmerged.
   - [ ] Report image, old/new digest, PR number and CI URL.
