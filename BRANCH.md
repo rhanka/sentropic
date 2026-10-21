@@ -56,7 +56,7 @@
   - [x] `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.ts`, `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (coupled `<0.28.0`/`<0.22.0` peer range and 13 `.d.ts` integration leaf assertions only; BR96-EX9)
   - [x] `.github/workflows/ci.yml`, `scripts/ci/publishable-ci-wiring.test.mjs` (cluster-mesh qualification `PEERS` tuple `@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0` only; BR96-EX9)
   - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; V4-L1-MEM)
-- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, V4-L1-MEM.
+- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, V4-L1-MEM.
 
 ## Feedback Loop
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
@@ -298,6 +298,8 @@
   - [x] F2: threshold validated against the trusted native bounded scale before verdict acceptance, mirroring the host REQUEST_INVALID bound; binary/graded boundary and outside-bound controls incl. gte/lte.
   - [x] F3: null rationale enforced for the implicit native profile on binary/choice/graded results; fabricated rationale rejected with a single fetch and no leak.
   - [x] Durable probes in packages/llm-mesh/tests/judge-client-v4l1-r1.test.ts: 10 tests fail on the pre-fix client and pass on the fixed client; existing V4-L1 suite stays 14/14.
+- [x] **BR96-EX10 — pinned patch bumps for CI audit-gate HIGHs (no allowlist change)**
+  - [x] Rationale: GHSA-r7fv-28h4-cvq7 (markdown-it) published 2026-10-20T14:34Z and GHSA-q3jh-wrc6-jgq8/GHSA-8r9p-f939-6h3c (follow-redirects) synced after the last green run; NOT from this branch (zero lock changes in the Sol diff). Impact: version/resolved/integrity lines only: package-lock.json markdown-it 14.3.0 to 14.3.3 and follow-redirects 1.16.0 to 1.16.1; ui/package-lock.json markdown-it 14.1.1 to 14.3.3 plus entities/linkify-it range lines to 14.3.3 metadata; transitive pins unchanged and still satisfy ranges. Rollback: revert the lock hunks.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
