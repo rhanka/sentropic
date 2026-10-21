@@ -3,9 +3,10 @@
 // The record is parsed from the Makefile producing targets, the compiler configuration
 // files and the pinned Node image — never from a second manual declaration. Changing any
 // real build input (compiler pin, unpinned spec, tsconfig, api-extractor config, image,
-// emitting command or effective build image) changes the fingerprint, so P1 must be
-// regenerated. A missing declaration, unknown build images and unpinned specs fail
-// closed: the parser must be updated, not bypassed.
+// emitting command, effective build image, export target membership, pack prerequisites
+// or per-recipe effective-image guard) changes the fingerprint, so P1 must be
+// regenerated. A missing declaration, unknown build images, unpinned specs, unexpected
+// image bindings and missing guards fail closed: the parser must be updated, not bypassed.
 import { createHash } from 'node:crypto';
 
 export const P1_PRODUCING_TARGETS = ['build-mcp-platform', 'build-mcp-broker', 'api-extract-mcp-platform'];
@@ -29,13 +30,25 @@ export const TOOLCHAIN_SNAPSHOT_FILES = [
 const IMAGE_PATTERN = /^MEMORY_L5_NODE_IMAGE\s*:=\s*(\S+)\s*$/m;
 const TOOLCHAIN_VAR_PATTERN = /^MEMORY_L5_TOOLCHAIN\s*:=\s*(.+?)\s*$/m;
 const LLM_MESH_DEFAULT_PATTERN = /^export\s+LLM_MESH_NODE_IMAGE\s*\?=\s*(\S+)\s*$/m;
-const LLM_MESH_EXPORT_PATTERN = /^[A-Za-z0-9_.\-\s]+:\s*export\s+LLM_MESH_NODE_IMAGE\s*=\s*(\S+)\s*$/m;
+const LLM_MESH_EXPORT_PATTERN = /^([A-Za-z0-9_.\-\s]+):\s*export\s+LLM_MESH_NODE_IMAGE\s*=\s*(\S+)\s*$/m;
+const PACK_PREREQUISITES_PATTERN = /^memory-l5-pack\s*:(.*)$/m;
 const DOCKER_IMAGE_PATTERN = /docker run\b[\s\S]*?(\$\([A-Za-z_][A-Za-z0-9_]*\)|[^\s'"]+)\s+sh\s+-lc/;
+// The pack-time equality guard every P1-touching recipe carries; the parser requires its
+// presence (comparison plus refusal) and the fingerprint binds the recipe text. The guard
+// compares the make-expanded values, so an invocation-level `LLM_MESH_NODE_IMAGE=...`
+// override fails the recipe before anything is produced.
+export const IMAGE_GUARD_COMPARISON = 'test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)"';
 
 function singleMatch(text, pattern, what) {
   const matches = [...text.matchAll(new RegExp(pattern.source, 'gm'))];
   if (matches.length !== 1) throw new Error(`build inputs: expected exactly one ${what}; update the parser`);
   return matches[0][1];
+}
+
+function singleGroups(text, pattern, what) {
+  const matches = [...text.matchAll(new RegExp(pattern.source, 'gm'))];
+  if (matches.length !== 1) throw new Error(`build inputs: expected exactly one ${what}; update the parser`);
+  return matches[0].slice(1);
 }
 
 export function specName(spec) {
@@ -70,11 +83,55 @@ function parseRecipeImages(recipeLines, target, image) {
   return images;
 }
 
+function hasImageGuard(recipeLines) {
+  return recipeLines.some((line) => line.includes(IMAGE_GUARD_COMPARISON) && line.includes('exit 1'));
+}
+
+// Every LLM_MESH_NODE_IMAGE definition must be one of the two known lines (the `?=`
+// default and the single target-scoped export). Any extra definition — an unconditional
+// export, a plain assignment, a second scoped export — changes the effective image of at
+// least one P1-touching target outside the fingerprinted wiring, so it fails closed.
+function assertNoExtraImageBindings(text, defaultLine, memberLine) {
+  for (const line of text.split('\n')) {
+    if (!line.includes('LLM_MESH_NODE_IMAGE') || line.includes('$(LLM_MESH_NODE_IMAGE)')) continue;
+    if (/LLM_MESH_NODE_IMAGE\s*[:?+]?=/.test(line) || /^\s*(?:export|unexport|override|private)\s+LLM_MESH_NODE_IMAGE\s*$/.test(line)) {
+      const trimmed = line.trim();
+      if (trimmed !== defaultLine.trim() && trimmed !== memberLine.trim()) {
+        throw new Error(`build inputs: unexpected LLM_MESH_NODE_IMAGE binding ${trimmed}; update the parser`);
+      }
+    }
+  }
+}
+
+function parsePackPrerequisites(text) {
+  const candidates = [...text.matchAll(new RegExp(PACK_PREREQUISITES_PATTERN.source, 'gm'))]
+    .map((match) => match[1])
+    .filter((deps) => !deps.includes('export'));
+  if (candidates.length !== 1) throw new Error('build inputs: expected exactly one memory-l5-pack prerequisites line; update the parser');
+  const prereqs = candidates[0].split('#')[0].trim().split(/\s+/).filter((token) => token !== '');
+  for (const target of [...P1_PRODUCING_TARGETS, 'memory-l5-runtime']) {
+    if (!prereqs.includes(target)) {
+      throw new Error(`build inputs: memory-l5-pack does not schedule ${target}; update the parser`);
+    }
+  }
+  return prereqs;
+}
+
 export function parseToolchainSpecs(makefileText) {
   const text = String(makefileText);
   const image = singleMatch(text, IMAGE_PATTERN, 'MEMORY_L5_NODE_IMAGE pin');
   const llmMeshDefault = singleMatch(text, LLM_MESH_DEFAULT_PATTERN, 'LLM_MESH_NODE_IMAGE default');
-  const llmMeshExport = singleMatch(text, LLM_MESH_EXPORT_PATTERN, 'LLM_MESH_NODE_IMAGE export');
+  const [exportTargetsRaw, exportValue] = singleGroups(text, LLM_MESH_EXPORT_PATTERN, 'LLM_MESH_NODE_IMAGE export');
+  const memberLine = [...text.matchAll(new RegExp(LLM_MESH_EXPORT_PATTERN.source, 'gm'))][0][0];
+  assertNoExtraImageBindings(text, [...text.matchAll(new RegExp(LLM_MESH_DEFAULT_PATTERN.source, 'gm'))][0][0], memberLine);
+  const llmMeshExport = {
+    targets: [...new Set(exportTargetsRaw.trim().split(/\s+/).filter((token) => token !== ''))].sort(),
+    value: exportValue,
+  };
+  if (!llmMeshExport.targets.includes('memory-l5-pack')) {
+    throw new Error('build inputs: LLM_MESH_NODE_IMAGE export does not cover memory-l5-pack; update the parser');
+  }
+  const packPrerequisites = parsePackPrerequisites(text);
   const blocks = {};
   let current = null;
   for (const line of text.split('\n')) {
@@ -83,7 +140,7 @@ export function parseToolchainSpecs(makefileText) {
       continue;
     }
     const header = line.match(/^([A-Za-z0-9_.-]+)\s*:/);
-    current = header && P1_PRODUCING_TARGETS.includes(header[1]) ? header[1] : null;
+    current = header && (P1_PRODUCING_TARGETS.includes(header[1]) || header[1] === 'memory-l5-pack') ? header[1] : null;
   }
   const specs = parseUnionSpecs(text);
   const targets = {};
@@ -94,8 +151,15 @@ export function parseToolchainSpecs(makefileText) {
     targets[target] = specs;
     recipes[target] = lines.map((line) => line.trim()).filter((line) => line !== '');
     images[target] = parseRecipeImages(lines, target, image);
+    if (!hasImageGuard(recipes[target])) {
+      throw new Error(`build inputs: ${target} carries no effective-image guard; update the parser`);
+    }
   }
-  return { image, llmMeshDefault, llmMeshExport, targets, recipes, images };
+  const packRecipes = (blocks['memory-l5-pack'] || []).map((line) => line.trim()).filter((line) => line !== '');
+  if (!hasImageGuard(packRecipes)) {
+    throw new Error('build inputs: memory-l5-pack carries no effective-image guard; update the parser');
+  }
+  return { image, llmMeshDefault, llmMeshExport, packPrerequisites, targets, recipes, images, packRecipes };
 }
 
 export function toolchainSpecUnion(toolchain) {

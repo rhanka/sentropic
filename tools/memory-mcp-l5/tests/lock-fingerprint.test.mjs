@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { LOCK_FINGERPRINT_VERSION, computeLockFingerprint } from '../lock-fingerprint.mjs';
 import { parseToolchainSpecs, hashConfigFiles, P1_PRODUCING_TARGETS } from '../build-inputs.mjs';
+import { checkQualificationRuntime } from '../runtime.mjs';
 import { p1Fixture } from './p1-fixture.mjs';
 
 const scan = root => spawnSync(process.execPath, ['tools/memory-mcp-l5/import-graph.mjs', '--mode', 'packed', '--root', root, '--manifest', 'manifest.json'], { encoding: 'utf8' });
@@ -38,7 +39,7 @@ function replaceInTargetBlock(makefileText, target, search, replacement) {
   return makefileText.slice(0, start) + block.replace(search, replacement) + makefileText.slice(end < 0 ? makefileText.length : end);
 }
 const withImageSwap = (text) =>
-  replaceInTargetBlock(text, 'api-extract-mcp-platform', '$(LLM_MESH_NODE_IMAGE)', 'node:22-bookworm-slim');
+  replaceInTargetBlock(text, 'api-extract-mcp-platform', '$(LLM_MESH_NODE_IMAGE) sh -lc', 'node:22-bookworm-slim sh -lc');
 
 function gated(mut) {
   const f = p1Fixture();
@@ -51,8 +52,8 @@ function gated(mut) {
 }
 
 describe('lock-fingerprint — derived P1 build inputs and provenance', () => {
-  it('exposes fingerprint version 3 over the three producing targets', () => {
-    expect(LOCK_FINGERPRINT_VERSION).toBe(3);
+  it('exposes fingerprint version 4 over the three producing targets', () => {
+    expect(LOCK_FINGERPRINT_VERSION).toBe(4);
     expect(P1_PRODUCING_TARGETS).toEqual(['build-mcp-platform', 'build-mcp-broker', 'api-extract-mcp-platform']);
   });
 
@@ -67,7 +68,7 @@ describe('lock-fingerprint — derived P1 build inputs and provenance', () => {
   it('binds emitting commands, effective image tokens, and llm-mesh image bindings', () => {
     const toolchain = parseToolchainSpecs(REAL_MAKEFILE);
     expect(toolchain.llmMeshDefault).toBe('node:24-bookworm-slim');
-    expect(toolchain.llmMeshExport).toBe('$(MEMORY_L5_NODE_IMAGE)');
+    expect(toolchain.llmMeshExport.value).toBe('$(MEMORY_L5_NODE_IMAGE)');
     for (const target of P1_PRODUCING_TARGETS) {
       expect(toolchain.images[target].length).toBeGreaterThan(0);
       for (const token of toolchain.images[target]) expect(token).toBe('$(LLM_MESH_NODE_IMAGE)');

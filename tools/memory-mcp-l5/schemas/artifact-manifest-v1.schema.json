@@ -65,7 +65,7 @@
         "l5Head": { "$ref": "#/$defs/commit" },
         "sdkRange": { "const": "^1.31.0" },
         "declaredLockSha256": { "$ref": "#/$defs/sha256" },
-        "lockFingerprintVersion": { "const": 3 },
+        "lockFingerprintVersion": { "const": 4 },
         "lockFingerprint": { "$ref": "#/$defs/sha256" },
         "declaredLockSnapshot": { "$ref": "#/$defs/evidence" },
         "toolchainSnapshots": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/evidence" } }
