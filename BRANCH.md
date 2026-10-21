@@ -69,7 +69,7 @@ Actions with the following status should be included around tasks only if really
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`); no exceptions needed.
 - [ ] **Lot L00 — Documentation consolidation only (3–4 atomic commits, no code)**
   - [x] Consolidate authority, scope, surfaces, CR-1 and CR-2 into the storage spec.
-  - [ ] Consolidate CR-3, CR-4 and CR-5 into the storage spec.
+  - [x] Consolidate CR-3, CR-4 and CR-5 into the storage spec.
   - [ ] Record contract shape, admission, activation and the parity register.
   - [ ] Record traceability, kit acceptance, sequencing and the five P3 advisories.
   - [ ] Lot gate: `make scope-check` before every commit; each commit under 150 lines.
