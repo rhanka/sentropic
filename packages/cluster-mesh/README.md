@@ -415,9 +415,9 @@ through Mesh exports.
 The installed consumer lane is
 `make cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=test-cm-wrap`.
 
-## LLM Mesh Composition with Judge Support
+## LLM Mesh Composition with Decision Support
 
-`createLlmMeshNamespaceModule` supports optional judge hosting via `{ judge: true }`. When `judge` is omitted or false, judge subpaths are not acquired.
+`createLlmMeshNamespaceModule` supports optional decision hosting via `{ decision: true }`. When `decision` is omitted or false, decision subpaths are not acquired.
 
 ```ts
 import { Hono } from 'hono';
@@ -426,10 +426,10 @@ import { createLlmMeshNamespaceModule } from '@sentropic/cluster-mesh/compose/ll
 
 const module = await createLlmMeshNamespaceModule(createClusterMeshModules(), {
   enabled: true,
-  judge: true,
-  createRouter: ({ llmMesh, judgeHost, context, receipts }) => {
+  decision: true,
+  createRouter: ({ llmMesh, decisionHost, context, receipts }) => {
     const router = new Hono();
-    // Route handlers use loaded llmMesh and host judge capability (judgeHost) when judge: true
+    // Route handlers use loaded llmMesh and host decision capability (decisionHost) when decision: true
     return router;
   },
 });
