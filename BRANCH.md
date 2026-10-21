@@ -194,3 +194,8 @@ Actions with the following status should be included around tasks only if really
   - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped locks passes, 44 contracts); no P1 regen.
   - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
+- [x] **Lot 17 — Merge origin/main (feb741083, PR #712)**
+  - [x] Auto-merged main-only regions (api image canonical artifact, ci.yml, api/Dockerfile, scripts); locks byte-identical to tip (identical 14.3.3 triple both sides).
+  - [x] BRANCH.md kept as this branch's live plan (main's BR01 record stays in main history); manifest kept at v3 (no regen — merged P1 inputs unchanged).
+  - [x] Lot gate: tooling suite + `memory-l5-verify` on the merged tree; scope-check; diff-check.
+  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
