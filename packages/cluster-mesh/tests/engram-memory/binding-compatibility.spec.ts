@@ -1,6 +1,7 @@
-// G1 binding compatibility: the host grant, scope binding and clock shape
-// the installed Engram substrate accepts, over both the flat-handle and the
-// grant-binding paths. Sync and async bind are both consumed.
+// G1a constructor/refusal compatibility with the installed substrate: the
+// host grant, scope binding and clock shape the installed Engram substrate
+// accepts, over both the flat-handle and the grant-binding paths. Sync and
+// async bind are both consumed. No successful store composition is claimed.
 
 import { describe, expect, it } from 'vitest';
 import { MEMORY_DESCRIPTOR } from '../../src/engram-memory/manifest.js';
