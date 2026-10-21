@@ -2412,6 +2412,12 @@ Tables (`control` schema, soft references only, no cross-namespace FK):
   triggers under PostgreSQL's write lock, preserving denial against stale concurrent
   snapshots even outside the service. Rollback requires capture fenced and writers
   drained before dropping both denial-floor triggers and their shared function.
+  Additive `0019_session_content_capture_floor` preserves revoked lifecycle state,
+  nonactive capture state and pending local denial under the row write lock;
+  revoked history authorizations cannot reactivate. Capture-only exclusions and
+  closure retain their independent read semantics. The durable service never
+  reuses an existing grant row for a new binding. Rollback first fences capture
+  and drains writers, then removes the three new triggers and their function.
   Existing revoked rows are backfilled. Objects carry durable `writer_state`
   (`admitted`, `settled`, `unknown`). Only settled writers permit verified deletion.
   Preexisting uncommitted rows default to unknown and remain charged/pending:
