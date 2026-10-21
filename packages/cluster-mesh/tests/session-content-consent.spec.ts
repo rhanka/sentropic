@@ -127,7 +127,8 @@ describe('content consent retention validation', () => {
         : concurrent.acceptProject(amendment, { challengeId: amendment.challengeId });
     await paused;
     try { await service.revokeProject('project-1'); } finally { release(); }
-    await stale.catch((error: unknown) => { expect(error).toBeInstanceOf(ContentConsentError); });
+    const returned = await stale.catch((error: unknown) => { expect(error).toBeInstanceOf(ContentConsentError); });
+    if (returned) expect(returned.state).toBe('revoked');
     expect((await service.readProject('project-1'))?.state).toBe('revoked');
     await expect(service.deriveChild(sharedChildInput())).rejects.toBeInstanceOf(ContentConsentError);
   });
@@ -160,7 +161,8 @@ describe('content consent retention validation', () => {
           if (denial === 'pending' || denial === 'reconcile') await service.recordLocalDeny('session-1');
           if (denial === 'reconcile') await service.reconcileLocalDeny('session-1');
         } finally { release(); }
-        await stale.catch((error: unknown) => { expect(error).toBeInstanceOf(ContentConsentError); });
+        const returned = await stale.catch((error: unknown) => { expect(error).toBeInstanceOf(ContentConsentError); });
+        if (returned) expect(returned.state !== 'active' || returned.localDenyPending, `returned ${operation}/${denial}`).toBe(true);
         const grant = (await service.readGrant('session-1'))!;
         expect(grant.state !== 'active' || grant.localDenyPending, `${operation}/${denial}`).toBe(true);
         const project = (await service.readProject('project-1'))!;
@@ -201,6 +203,21 @@ describe('content consent retention validation', () => {
     expect(pending.readDenied).toBe(false);
     expect(partitionExportableNativeRecords(pending, project, records).exportable).toEqual([]);
     await expect(service.deriveChild(sharedChildInput())).rejects.toBeInstanceOf(ContentConsentError);
+  });
+
+  it.each(['revoke', 'exclude', 'amend', 'mirror-off'] as const)('should refuse N5 R8 export with a current %s project fence', async (fence) => {
+    const { service } = await readyConsent({ channels: mirrorChannels });
+    const grant = await service.deriveChild(sharedChildInput());
+    if (fence === 'revoke') await service.revokeProject('project-1');
+    else if (fence === 'exclude') await service.excludeSession('project-1', 'session-1');
+    else {
+      const prepared = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1,
+        channels: { ...mirrorChannels, 'native.mirror': fence !== 'mirror-off' } }));
+      await service.acceptProject(prepared, { challengeId: prepared.challengeId });
+    }
+    expect(partitionExportableNativeRecords(grant, (await service.readProject('project-1'))!, [
+      { seq: 41, lineage: 'l', conversationId: 'c', ordered: true },
+    ]).exportable).toEqual([]);
   });
 
   it.each(['grant-close', 'project-exclude'] as const)(
