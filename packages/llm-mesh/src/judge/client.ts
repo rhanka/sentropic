@@ -101,8 +101,11 @@ function isValidWireRetention(retention: unknown): boolean {
   return retention.gap === undefined || retention.gap === 'unknown (source-gap)';
 }
 
+const EVALUATOR_KEYS = ['providerId', 'evaluatorId', 'revision'] as const;
+
 const bindsEvaluator = (candidate: unknown, request: JudgeRequest): boolean =>
-  isRecord(candidate) && candidate.providerId === request.evaluator.providerId
+  isRecord(candidate) && hasOnlyKeys(candidate, EVALUATOR_KEYS)
+  && candidate.providerId === request.evaluator.providerId
   && candidate.evaluatorId === request.evaluator.evaluatorId
   && candidate.revision === request.evaluator.revision;
 
@@ -245,7 +248,11 @@ function isValidWireDecision(decision: unknown, request: JudgeRequest, evidence:
     if (decision.origin !== 'threshold' || !hasOnlyKeys(decision, ['pass', 'origin', 'rule'])) return false;
     if (!sameDecisionRule(decision.rule, request.decision)) return false;
     if (evidence.score === null) return false;
-    const value = evidence.score.value;
+    // V-D2: the threshold must lie within the trusted native bounded scale.
+    const parsed = parseJudgeScore(evidence.score);
+    if (parsed === null || parsed.scale.kind !== 'bounded') return false;
+    if (request.decision.value < parsed.scale.min || request.decision.value > parsed.scale.max) return false;
+    const value = parsed.value;
     const expected = request.decision.op === 'gte' ? value >= request.decision.value : value <= request.decision.value;
     return decision.pass === expected;
   }
@@ -285,8 +292,9 @@ function isValidJudgeVerdict(v: unknown, request: JudgeRequest): v is JudgeVerdi
   if (v.resolvedCriterionKind !== request.criterion.kind) return false;
   // V-D1/V-D4: JEV declares no native boolean; any provider-origin decision is forged.
   if (isRecord(v.decision) && v.decision.origin === 'provider') return false;
-  if (v.rationale !== null && (!isRecord(v.rationale) || !hasOnlyKeys(v.rationale, ['text', 'origin'])
-    || typeof v.rationale.text !== 'string' || !v.rationale.text.trim() || v.rationale.origin !== 'provider')) return false;
+  // V-D4: the implicit native profile declares no rationale capability and JEV
+  // always emits rationale null, so any rationale is invented evidence.
+  if (v.rationale !== null) return false;
   if (!hasServiceVerdictShape(v.score, v.label, v.confidence, v.distribution)) return false;
   if (request.criterion.kind === 'binary') {
     if (v.score === null || v.label !== null || v.distribution !== null || v.confidence !== null) return false;
@@ -533,8 +541,10 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
           schemaVersion: receipt.schemaVersion,
           callId: receipt.callId,
           correlationId: receipt.correlationId,
-          evaluator: receipt.evaluator === null ? null : { ...receipt.evaluator },
-          servedEvaluator: receipt.servedEvaluator === null ? null : { ...receipt.servedEvaluator },
+          evaluator: receipt.evaluator === null ? null : { providerId: receipt.evaluator.providerId,
+            evaluatorId: receipt.evaluator.evaluatorId, revision: receipt.evaluator.revision },
+          servedEvaluator: receipt.servedEvaluator === null ? null : { providerId: receipt.servedEvaluator.providerId,
+            evaluatorId: receipt.servedEvaluator.evaluatorId, revision: receipt.servedEvaluator.revision },
           servedModelId: receipt.servedModelId,
           startedAt: receipt.startedAt,
           finishedAt: receipt.finishedAt,
