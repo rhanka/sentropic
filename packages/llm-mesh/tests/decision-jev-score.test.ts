@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { decodeJevVerdict } from '../src/judge/jev-verdict.js';
-import { judgeRequest, qualifiedDescriptor } from './judge-fixtures.js';
+import { decodeJevVerdict } from '../src/decision/jev-verdict.js';
+import { decisionRequest, qualifiedDescriptor } from './decision-fixtures.js';
 
-const request = judgeRequest({ criterion: { kind: 'graded', instructions: 'Grade.', direction: 'lower-is-better',
+const request = decisionRequest({ criterion: { kind: 'graded', instructions: 'Grade.', direction: 'lower-is-better',
   levels: [{ label: 'low', description: 'Low evidence' }, { label: 'middle', description: 'Middle evidence' },
     { label: 'high', description: 'High evidence' }] } });
 const native = () => ({ score: 1.25, probabilities: { '2': 0.35, '0': 0.1, '1': 0.55 },
