@@ -310,6 +310,9 @@
   - [x] Regenerated via repo procedures: sibling receipts re-packed on the merged tree, lazy-package 78/15 PASS, R1 10/10 PASS, V4-L1 14/14 PASS, full test-llm-mesh 1241 PASS, typecheck+lint PASS, memory-l5-verify 30 files/54 edges PASS.
 - [x] **BR96-EX11 — cluster-mesh 0.21.1 to 0.21.2 patch bump (CI enforce-package-bump)**
   - [x] Rationale: merging main #716 moved the bump gate baseline to 0.21.1, equal to the branch version, while the branch still carries cluster-mesh src changes (judge surfaces); the gate requires a strictly newer version. Impact: version line only in packages/cluster-mesh/package.json, TRAIN_CLUSTER_MESH_VERSION, selected fixture tarball name and root-lock workspace entry; no range, source or allowlist change; no unpublished-version skew (0.21.2 absent from registry). Rollback: revert the four version lines.
+- [x] **Lot MERGE-MAIN-3 — integrate origin/main after #717 (3f3f3fd78)**
+  - [x] No rebase, no force-push. Single conflict: BRANCH.md keeps ours (main carries the merged Go-CVE branch plan); api/Dockerfile Go 1.26.9 to 1.26.10 digest pin auto-merges from main.
+  - [x] Judge code, versions, locks and memory pin untouched by this merge; R1 fixes and EX10/EX11 intact. Gates: R1 10/10 PASS, V4-L1 14/14 PASS, memory-l5-verify ok.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
