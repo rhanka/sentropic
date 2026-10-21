@@ -160,6 +160,44 @@ describe('session consent durable lifecycle', () => {
     nowMs: () => now, storage: fixture.config, storageClient: fixture.client,
     readStorageAuthorization: fixture.readStorageAuthorization });
 
+  it.each(['project', 'grant-revoke', 'grant-exclude', 'grant-close', 'grant-local', 'history'] as const)(
+    'should enforce N5 R8 database denial against stale concurrent %s writes', async (scope) => {
+      await acceptProject();
+      await deriveSession('n5-capture-floor');
+      const history = scope === 'history' ? await service.grantHistoryAuthorization('n5-capture-floor', ctx) : null;
+      const table = scope === 'project' ? sql`control.session_content_projects`
+        : scope === 'history' ? sql`control.session_content_history_authorizations` : sql`control.session_content_grants`;
+      let entered!: () => void;
+      let release!: () => void;
+      const paused = new Promise<void>((resolve) => { entered = resolve; });
+      const resume = new Promise<void>((resolve) => { release = resolve; });
+      const stale = db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT * FROM ${table}`);
+        entered(); await resume;
+        if (scope === 'grant-local') await tx.execute(sql`UPDATE ${table} SET local_deny_pending = false`);
+        else await tx.execute(sql`UPDATE ${table} SET state = 'active'`);
+      });
+      await paused;
+      try {
+        if (scope === 'project') await service.revokeProject('sess-content-project-1', ctx);
+        if (scope === 'grant-revoke') await service.revokeGrant('n5-capture-floor', ctx);
+        if (scope === 'grant-exclude') await service.excludeSession('sess-content-project-1', 'n5-capture-floor', ctx);
+        if (scope === 'grant-close') await service.closeGrant('n5-capture-floor', ctx);
+        if (scope === 'grant-local') await service.recordLocalDeny('n5-capture-floor', ctx);
+        if (history) await service.revokeHistoryAuthorization(history.authorizationId, ctx);
+      } finally { release(); }
+      await stale;
+      if (scope === 'history') {
+        const rows = await db.select().from(sessionContentHistoryAuthorizations);
+        expect(rows[0]?.state).toBe('revoked');
+      } else {
+        const row = await db.execute(sql`SELECT * FROM ${table}`);
+        expect(scope === 'grant-local' ? row.rows[0]!.local_deny_pending : row.rows[0]!.state !== 'active').toBe(true);
+        await expect(service.reserveBeforeUpload('n5-capture-floor', 'native.mirror',
+          { raw: 1, encoded: 1 }, 'capture-after-denial', ctx)).rejects.toBeInstanceOf(SessionContentError);
+      }
+    });
+
   it.each(['grant', 'project'] as const)(
     'should enforce N5 R3 monotonic denial in PostgreSQL against a stale concurrent %s writer', async (scope) => {
       await acceptProject();
