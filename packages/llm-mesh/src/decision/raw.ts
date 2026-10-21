@@ -1,13 +1,13 @@
-import type { JudgeRequest, Json } from './request.js';
-import type { JudgeVerdict } from './verdict.js';
+import type { DecisionRequest, Json } from './request.js';
+import type { DecisionVerdict } from './verdict.js';
 import { hasOnlyKeys, isRecord, snapshotBoundedJson } from './validation.js';
 
 const fields = ['noul', 'score', 'choice', 'probabilities', 'confidence'] as const;
 const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
-const limit = (request: JudgeRequest) => Math.min(16384, request.raw?.maxBytes ?? 16384);
+const limit = (request: DecisionRequest) => Math.min(16384, request.raw?.maxBytes ?? 16384);
 
 /** Drop whole optional native fields to fit; never truncate the typed verdict. */
-export function makeJevProviderRaw(native: unknown, request: JudgeRequest): JudgeVerdict['providerRaw'] {
+export function makeJevProviderRaw(native: unknown, request: DecisionRequest): DecisionVerdict['providerRaw'] {
   if (request.raw?.mode !== 'allowlisted' || limit(request) < 2) return undefined;
   const snapshot = snapshotBoundedJson(native);
   if (!snapshot.ok || !isRecord(snapshot.value)) return undefined;
@@ -23,7 +23,7 @@ export function makeJevProviderRaw(native: unknown, request: JudgeRequest): Judg
 }
 
 /** Raw remains optional, bounded and tied to the already validated native evidence. */
-export function parseJevProviderRaw(candidate: unknown, native: unknown, request: JudgeRequest): JudgeVerdict['providerRaw'] | null {
+export function parseJevProviderRaw(candidate: unknown, native: unknown, request: DecisionRequest): DecisionVerdict['providerRaw'] | null {
   const snapshot = snapshotBoundedJson(candidate);
   if (request.raw?.mode !== 'allowlisted' || !snapshot.ok || !isRecord(snapshot.value) || !isRecord(native)) return null;
   const value = snapshot.value;

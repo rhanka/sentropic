@@ -1,5 +1,5 @@
-import type { DecisionRule, Json, JudgeCriterion } from './request.js';
-import { isJudgeDecisionRule, scoreDirections } from './criterion.js';
+import type { DecisionRule, Json, DecisionCriterion } from './request.js';
+import { isDecisionRule, scoreDirections } from './criterion.js';
 import { has, hasOnlyKeys, isRecord, isText, snapshotBoundedJson } from './validation.js';
 
 export type ScoreScale =
@@ -7,17 +7,17 @@ export type ScoreScale =
       direction: 'higher-is-better' | 'lower-is-better' | 'unordered' }
   | { kind: 'unknown'; reason: 'unknown (source-gap)' };
 
-export interface JudgeScore {
+export interface DecisionScore {
   value: number;
   scale: ScoreScale;
   meaning: 'rubric-grade' | 'probability-true' | 'support' | 'provider-defined';
   normalized?: { value: number; transform: 'linear-min-max' };
 }
 
-export interface JudgeVerdict {
-  criterionKind: JudgeCriterion['kind'];
+export interface DecisionVerdict {
+  criterionKind: DecisionCriterion['kind'];
   resolvedCriterionKind: 'binary' | 'graded' | 'choice';
-  score: JudgeScore | null;
+  score: DecisionScore | null;
   decision: { pass: boolean; origin: 'provider' | 'threshold' | 'labels'; rule?: DecisionRule } | null;
   label: { value: string; origin: 'provider' } | null;
   rationale: { text: string; origin: 'provider' } | null;
@@ -28,7 +28,7 @@ export interface JudgeVerdict {
 }
 
 /** Preserve native values and direction; normalization is relative position, not accuracy. */
-export function parseJudgeScore(candidate: unknown): JudgeScore | null {
+export function parseDecisionScore(candidate: unknown): DecisionScore | null {
   const snapshot = snapshotBoundedJson(candidate);
   if (!snapshot.ok) return null;
   const value = snapshot.value;
@@ -52,12 +52,12 @@ export function parseJudgeScore(candidate: unknown): JudgeScore | null {
     || !hasOnlyKeys(value.normalized, ['value', 'transform']) || position === undefined
     || value.normalized.transform !== 'linear-min-max' || typeof value.normalized.value !== 'number'
     || !Number.isFinite(value.normalized.value) || value.normalized.value !== position)) return null;
-  return { value: value.value, scale: { ...scale } as ScoreScale, meaning: value.meaning as JudgeScore['meaning'],
+  return { value: value.value, scale: { ...scale } as ScoreScale, meaning: value.meaning as DecisionScore['meaning'],
     ...(position === undefined ? {} : { normalized: { value: position, transform: 'linear-min-max' as const } }) };
 }
 
 /** A descriptor supplies the documented meaning; this never derives confidence from score. */
-export function parseJudgeConfidence(candidate: unknown): JudgeVerdict['confidence'] {
+export function parseDecisionConfidence(candidate: unknown): DecisionVerdict['confidence'] {
   const snapshot = snapshotBoundedJson(candidate);
   if (!snapshot.ok) return null;
   const value = snapshot.value;
@@ -73,8 +73,8 @@ export function parseJudgeConfidence(candidate: unknown): JudgeVerdict['confiden
 }
 
 /** Map an exact, descriptor-owned native key set, preserving order and probabilities. */
-export function mapJudgeDistribution(candidate: unknown,
-  declared: readonly { outcome: string; nativeOutcome: string }[]): JudgeVerdict['distribution'] {
+export function mapDecisionDistribution(candidate: unknown,
+  declared: readonly { outcome: string; nativeOutcome: string }[]): DecisionVerdict['distribution'] {
   const snapshot = snapshotBoundedJson(candidate);
   const outcomeSnapshot = snapshotBoundedJson(declared);
   if (!snapshot.ok || !outcomeSnapshot.ok || !Array.isArray(outcomeSnapshot.value)) return null;
@@ -84,7 +84,7 @@ export function mapJudgeDistribution(candidate: unknown,
   let sum = 0;
   const outcomeIds = new Set<string>();
   const nativeIds = new Set<string>();
-  const entries: NonNullable<JudgeVerdict['distribution']>[number][] = [];
+  const entries: NonNullable<DecisionVerdict['distribution']>[number][] = [];
   for (const item of outcomes) {
     if (!isRecord(item) || !hasOnlyKeys(item, ['outcome', 'nativeOutcome'])) return null;
     const { outcome, nativeOutcome } = item;
@@ -101,14 +101,14 @@ export function mapJudgeDistribution(candidate: unknown,
   return entries;
 }
 
-export type JudgeDecisionResult =
-  | { ok: true; decision: JudgeVerdict['decision'] }
+export type DecisionDerivation =
+  | { ok: true; decision: DecisionVerdict['decision'] }
   | { ok: false; code: 'REQUEST_INVALID' | 'CAPABILITY_UNSUPPORTED' | 'VERDICT_INVALID' };
 
-export function deriveJudgeDecision(input: { rule?: DecisionRule; score: JudgeScore | null;
-  label: string | null; providerDecision: boolean | null; declaredLabels?: readonly string[] }): JudgeDecisionResult {
+export function deriveDecision(input: { rule?: DecisionRule; score: DecisionScore | null;
+  label: string | null; providerDecision: boolean | null; declaredLabels?: readonly string[] }): DecisionDerivation {
   const { rule, score, label, providerDecision } = input;
-  if (rule !== undefined && !isJudgeDecisionRule(rule)) return { ok: false, code: 'REQUEST_INVALID' };
+  if (rule !== undefined && !isDecisionRule(rule)) return { ok: false, code: 'REQUEST_INVALID' };
   if (providerDecision !== null) {
     if (typeof providerDecision !== 'boolean') return { ok: false, code: 'VERDICT_INVALID' };
     if (rule && rule.kind !== 'provider') return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
@@ -118,7 +118,7 @@ export function deriveJudgeDecision(input: { rule?: DecisionRule; score: JudgeSc
   if (rule.kind === 'provider') return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
   if (rule.kind === 'threshold') {
     if (score === null) return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
-    const checked = parseJudgeScore(score);
+    const checked = parseDecisionScore(score);
     if (checked === null) return { ok: false, code: 'VERDICT_INVALID' };
     if (checked.scale.kind === 'unknown') return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
     if (rule.value < checked.scale.min || rule.value > checked.scale.max) return { ok: false, code: 'REQUEST_INVALID' };
@@ -134,8 +134,8 @@ export function deriveJudgeDecision(input: { rule?: DecisionRule; score: JudgeSc
 }
 
 /** Primary values must be meaningful; false and zero are valid evidence. */
-export function hasJudgeVerdictValue(value: Pick<JudgeVerdict, 'score' | 'decision' | 'label'>): boolean {
-  if (value.score !== null && parseJudgeScore(value.score) === null) return false;
+export function hasDecisionVerdictValue(value: Pick<DecisionVerdict, 'score' | 'decision' | 'label'>): boolean {
+  if (value.score !== null && parseDecisionScore(value.score) === null) return false;
   if (value.decision !== null && (!isRecord(value.decision) || typeof value.decision.pass !== 'boolean'
     || !['provider', 'threshold', 'labels'].includes(value.decision.origin))) return false;
   if (value.label !== null && (!isRecord(value.label) || !isText(value.label.value) || value.label.origin !== 'provider')) return false;
