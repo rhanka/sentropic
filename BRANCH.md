@@ -304,6 +304,10 @@
   - [x] No rebase, no force-push. Conflicts (3): BRANCH.md add/add keeps ours (main carries the merged artifacts-hardening plan by mistake); memory manifest/sidecar take main provenance (br3Commit feb741083, l5Head 466b404a2) and re-pin declaredLockSha256 to the merged root lock; all other files auto-merge with R1 fixes and EX10 bumps intact.
   - [x] Regenerated via repo procedures: sibling receipts re-packed on the merged tree, selected fixture lock verified unchanged (mesh wD4K), memory sidecar rewritten with newline.
   - [x] Gates on ENV=test-pr693-fix (last arg): lazy-package 78/15 PASS, R1 10/10 PASS, V4-L1 14/14 PASS, full test-llm-mesh 1241 PASS, typecheck+lint PASS, memory-l5-verify 30 files/54 edges PASS. Scope-check FAIL C2 is main's own delta (advisory only).
+- [x] **Lot MERGE-MAIN-2 — integrate origin/main after #716 (50e612a0e)**
+  - [x] No rebase, no force-push. Conflicts (3): BRANCH.md keeps ours (main carries another merged branch plan); memory manifest/sidecar take main provenance (br3Commit 6ec93105b, l5Head 4dd9dcc4b) and re-pin declaredLockSha256 to the merged root lock (unchanged d009ebd7); main history pruning of superseded manifests accepted.
+  - [x] Verified both intents present: cm-s3 contract/spec/tests, artifacts 0.1.4 + llm-mesh 0.27.1/gateway 0.21.0 fixture pins, selected mesh integrity wD4K, EX10 bumps intact on all copies, R1 fixes intact.
+  - [x] Regenerated via repo procedures: sibling receipts re-packed on the merged tree, lazy-package 78/15 PASS, R1 10/10 PASS, V4-L1 14/14 PASS, full test-llm-mesh 1241 PASS, typecheck+lint PASS, memory-l5-verify 30 files/54 edges PASS.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
