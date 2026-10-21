@@ -68,6 +68,10 @@ Actions with the following status should be included around tasks only if really
   - Reason: Astra R2 finding 2 — the recipes fresh-install transitive ranges, so root-lock records describe a different installation (api-extractor 7.58.12 vs actual 7.58.9). One resolved toolchain record must be consumed by the producing build and checked by the verifier.
   - Impact: builds install the byte-identical locked tree (same direct pins `typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9`); snapshot regen is explicit and reviewable; fingerprint v3 binds snapshot content plus spec satisfaction; all other targets untouched.
   - Rollback: revert the 3 install tokens to `npm install <specs>` and drop the snapshot target; keep or revert the `v3` modules with the snapshot files retained.
+- `attention`: BR710-EX4 — remediate the NEW markdown-it HIGH pair (GHSA-vfgh-jcmw-g37q, GHSA-gfr2-rv44-r23c; fixed in 14.3.3) with the same pinned-sed procedure as BR710-EX2 (root `overrides` 14.3.2→14.3.3, lock bumps in root + ui, integrity var + bump target).
+  - Reason: CI audit-gate/SCA red on the R2 head (6 jobs plus `ci-gate`); the advisories were published after the last green run and are unrelated to the R2 diff (identical ui/api locks were green at `27a560ce4`).
+  - Impact: markdown-it 14.3.2→14.3.3 in root + ui locks only; P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
+  - Rollback: revert the override, both lock hunks, and the target/var.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -163,3 +167,11 @@ Actions with the following status should be included around tasks only if really
   - [x] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-pr710-fix-r2`.
   - [x] `make scope-check` before each commit; atomic commits via `make commit MSG="..."`.
   - [ ] Push branch; PR stays DRAFT, do not merge, do not mark ready; CI green on the exact head.
+
+## Round R2-CI (registry advisories postdating the R2 head)
+- [x] **Lot 14 — Remediate markdown-it HIGH (GHSA-vfgh-jcmw-g37q, GHSA-gfr2-rv44-r23c)**
+  - [x] Pin `markdown-it@14.3.3` via root `overrides` (fixes both advisories; satisfies `^14.0.0`/`^14.1.0` dependent ranges).
+  - [x] Pinned sed bump in `package-lock.json` (14.3.2) and `ui/package-lock.json` (14.3.2) via `lock-markdown-it-14-3-3` (BR710-EX4, mirrors `lock-markdown-it-direct` precedent).
+  - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock passes, 44 contracts); no P1 regen.
+  - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
+  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
