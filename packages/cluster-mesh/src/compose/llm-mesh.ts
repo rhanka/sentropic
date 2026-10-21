@@ -5,20 +5,20 @@ import type { Hono } from 'hono';
 import type { ClusterMeshHonoNamespaceModule } from '../hono/plugin.js';
 import type { ClusterMeshModules } from '../modules/contracts.js';
 import { loadLlmMesh } from '../loaders/llm-mesh/index.js';
-import { loadLlmMeshJudgeHost } from '../loaders/llm-mesh/judge/host.js';
+import { loadLlmMeshDecisionHost } from '../loaders/llm-mesh/decision/host.js';
 import { disabledNamespaceModule } from './disabled.js';
 
 export interface LlmMeshRouterInput {
   readonly llmMesh: typeof import('@sentropic/llm-mesh');
-  readonly judgeHost?: typeof import('@sentropic/llm-mesh/judge/host');
+  readonly decisionHost?: typeof import('@sentropic/llm-mesh/decision/host');
   readonly context: VerifiedInvocationContextPort;
   readonly receipts: InvocationReceiptPort;
 }
 
 export interface LlmMeshNamespaceOptions {
   readonly enabled: boolean;
-  /** Whether the host judge module should be acquired and provided to the router. */
-  readonly judge?: boolean;
+  /** Whether the host decision module should be acquired and provided to the router. */
+  readonly decision?: boolean;
   /** Host-injected router factory (llm-mesh exports no router); never imported from application source. */
   readonly createRouter: (input: LlmMeshRouterInput) => Hono;
 }
@@ -34,10 +34,10 @@ export async function createLlmMeshNamespaceModule(
 ): Promise<ClusterMeshHonoNamespaceModule> {
   if (!options.enabled) return disabledNamespaceModule('/llm-mesh');
   const llmMesh = await loadLlmMesh(modules);
-  const judgeHost = options.judge ? await loadLlmMeshJudgeHost(modules) : undefined;
+  const decisionHost = options.decision ? await loadLlmMeshDecisionHost(modules) : undefined;
   return {
     namespace: '/llm-mesh',
     enabled: true,
-    createRouter: ({ context, receipts }) => options.createRouter({ llmMesh, judgeHost, context, receipts }),
+    createRouter: ({ context, receipts }) => options.createRouter({ llmMesh, decisionHost, context, receipts }),
   };
 }
