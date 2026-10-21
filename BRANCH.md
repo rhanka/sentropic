@@ -71,7 +71,7 @@ Actions with the following status should be included around tasks only if really
   - [x] Consolidate authority, scope, surfaces, CR-1 and CR-2 into the storage spec.
   - [x] Consolidate CR-3, CR-4 and CR-5 into the storage spec.
   - [x] Record contract shape, admission, activation and the parity register.
-  - [ ] Record traceability, kit acceptance, sequencing and the five P3 advisories.
+  - [x] Record traceability, kit acceptance, sequencing and the five P3 advisories.
   - [ ] Lot gate: `make scope-check` before every commit; each commit under 150 lines.
 - [ ] **Lot L01a — Data contract and fixed vectors (2–3 atomic commits, no backend change)**
   - [ ] Add `packages/cluster-mesh/src/storage/common-contract.ts` data-only types/validators.
