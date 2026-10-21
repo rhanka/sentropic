@@ -17,7 +17,7 @@ const MUSE_CATALOG_KEYS = [
 ] as const;
 
 describe('muse provider package surface', () => {
-  it('keeps muse in the ordered provider catalog including the judge-only provider', () => {
+  it('keeps muse in the ordered provider catalog including the decision-only provider', () => {
     expect(providerIds).toContain('muse');
     expect(providerIds).toHaveLength(9);
     expect([...providerIds]).toEqual([
