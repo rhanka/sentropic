@@ -8,6 +8,7 @@
 - Scope: evolve `@sentropic/cluster-mesh` into an optional Hono composition plugin with an integrated control runtime, then migrate the 29 r13 namespaces one by one.
 - Provenance qualification: the r9/r10 wording in the dossier is conductor-normalized. The complete raw owner capture for those rounds is a source-gap; this specification does not describe that wording as verbatim.
 - Transverse invariant: **D1=B everywhere**. Every provider remains independently integrable, testable and disableable, owns its domain runtime/data/secrets, and never imports `@sentropic/cluster-mesh` merely to operate.
+- Merged MCP registry record: `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md` consolidates what PR #679 delivered on this surface (provider registry, `sentropic.artifacts`, RFC 8693 token exchange) at `1472d961e`.
 
 ## Reading convention
 

@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] Main integration 2026-10-20: owner requires merge, no rebase or force-push; use ENV=test-pr677-main only, API 9384 / UI 5584 / Maildev 1484 (verified free). Six metadata conflicts resolved by retaining main additions and selecting cluster-mesh 0.21.1 above published 0.21.0. Locks regenerate through Make; Memory L5 provenance follows in a separate atomic commit. Control migrations 0012–0016 stay byte-for-byte unchanged. No COMPLIANCE P10Y write, publication, PR merge or readiness change is authorized.
+
 - [ ] Implement D2 and the reachable Sessions/control UI: explicit project/named-history sharing, live/offline/closed reading, per-action IdP confirmation, capture exclusion, read denial and explicit purge.
 - [x] N5 rebase completed onto `origin/main 5202dd87c6f16d37b8bcdc188acd92c32f5e0492` on 2026-10-17; 151 commits replayed without merge/squash or conflicts. Main still ends at control migration 0011; ratified 0012–0016 stay unchanged. Post-Rebase package-version gate is recorded below.
 - [x] Recovery 2026-10-19 first preserved the old PR and complete local history on remote `recovery/session-content-consent-20261019-{pr-head,pre-rebase}` refs and pushed `bc2324205` to PR #677 with an explicit lease. Then rebased all 171 feature commits onto `origin/main da3063068a285d3465340c605c696cb1f1d527db`; 170 patches are identical and only the package-version conflict changed. No merge/squash; control migrations 0012–0016 remain byte-for-byte unchanged.
@@ -47,6 +49,85 @@
 ## Branch Scope Boundaries (MANDATORY)
 
 - [ ] **Allowed Paths (implementation scope)**:
+  - [x] BR76-EX8: owner-authorized merge of origin/main 7c395f439 into this branch on 2026-10-20; the following exact paths may receive main changes in this merge only. Preserve main intent; no unrelated edits. Rollback: revert the integration commit.
+  - [x] `.github/workflows/ci.yml` — inherited main integration (BR76-EX8).
+  - [x] `package-lock.json` — inherited main integration (BR76-EX8).
+  - [x] `packages/artifacts/package.json` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/README.md` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/package.json` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/packaging.mk` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/compose/mcp-stateful.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/integrations/mcp/artifacts.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/loaders/mcp/index.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/loaders/mcp/result-codec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/loaders/mcp/tool-schemas.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/mcp/registry.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/mcp/stateful-context.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/mcp/stateful-contracts.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/mcp/stateful-preflight.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/modules/catalog.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/modules/contracts.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/src/modules/registry.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/comments-module.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/conformance/STATEFUL_WRAP_QUALIFICATION.md` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/conformance/fixtures/README.md` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/conformance/fixtures/immo-deployed-baseline.v1.json` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/conformance/fixtures/immo-tools.v1.json` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/conformance/immo-stateful-artifacts.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/conformance/immo-stateful-wrap.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/conformance/stateful-fixture.mjs` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/conformance/stateful-host-auth.mjs` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/conformance/stateful-host.mjs` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/loaders/mcp-platform.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/mcp-stateful-authority.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/mcp-stateful-boundaries.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/mcp-stateful-lifetime.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/mcp-stateful-wrap.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/candidate-platform-registry.mjs` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/helpers.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/mcp-tuple.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/prepare.sh` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/release-matrix.spec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/packaging/stateful-consumer.sh` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/storage/cold-workspace.sh` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/storage/installed-siblings.mjs` — inherited main integration (BR76-EX8).
+  - [x] `packages/cluster-mesh/tests/storage/postgres.mk` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-broker/package.json` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/README.md` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/etc/mcp-wire.api.md` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/package.json` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/src/registry.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/src/tool-configuration.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/src/transport/bridge-kernel.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/src/transport/bridge.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/src/transport/result-codec.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/src/transport/tool-json.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/src/transport/tool-schemas.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/tests/fixtures/native-wire-server.mjs` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/tests/mcp-wire-results.test.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/tests/mcp-wire-schema.test.ts` — inherited main integration (BR76-EX8).
+  - [x] `packages/mcp-platform/tests/tool-configuration.test.ts` — inherited main integration (BR76-EX8).
+  - [x] `scripts/ci/publishable-ci-wiring.test.mjs` — inherited main integration (BR76-EX8).
+  - [x] `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` — inherited main integration (BR76-EX8).
+  - [x] `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` — inherited main integration (BR76-EX8).
+  - [x] `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md` — inherited main integration (BR76-EX8).
+  - [x] `spec/SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md` — inherited main integration (BR76-EX8).
+  - [x] `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md` — inherited main integration (BR76-EX8).
+  - [x] `spec/SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md` — inherited main integration (BR76-EX8).
+  - [x] `spec/SPEC_EVOL_UI_ANNOTATE_OVERLAY.md` — inherited main integration (BR76-EX8).
+  - [x] `spec/SPEC_PROPOSAL_ARTIFACT_VIEW_HOSTING.md` — inherited main integration (BR76-EX8).
+  - [x] `spec/SPEC_STUDY_GITHUB_SEAT_CREDENTIAL_CUSTODY.md` — inherited main integration (BR76-EX8).
+  - [x] `tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-broker-0.1.0-5fede653683acc8d803f7e735526f09a1d79b062ae4a37b0b9933bfd289444fa.tgz` — inherited main integration (BR76-EX8).
+  - [x] `tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-platform-0.4.0-2ad8a40fa38f4289fe177f58d75bc3317a50dd1b7a3ca693cf55cff2ff72cc9d.tgz` — inherited main integration (BR76-EX8).
+  - [x] `tools/memory-mcp-l5/artifacts/history/68181613ff36b601d7f6bb62550294fdcd2c0ad26f2ed25cc1ad2fa633fafd5a.json` — inherited main integration (BR76-EX8).
+  - [x] `tools/memory-mcp-l5/artifacts/history/68181613ff36b601d7f6bb62550294fdcd2c0ad26f2ed25cc1ad2fa633fafd5a.json.sha256` — inherited main integration (BR76-EX8).
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` — inherited main integration (BR76-EX8).
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256` — inherited main integration (BR76-EX8).
   - [ ] `packages/cluster-mesh/src/sessions/content-consent.ts` — new neutral consent domain and ports.
   - [ ] `api/src/services/cluster-mesh/session-content.ts` — new application service, durable consent/index/quota/purge and private object adapters.
   - [ ] `api/src/services/cluster-mesh-adapter.ts` — compose the source/content ports without activating the qualification-only controller.

@@ -1,0 +1,853 @@
+{
+  "schemaVersion": 1,
+  "serverVersion": {
+    "name": "immo",
+    "version": "0.0.1"
+  },
+  "serverCapabilities": {
+    "tools": {
+      "listChanged": true
+    }
+  },
+  "tools": [
+    {
+      "name": "search_lots",
+      "title": "Search lots",
+      "description": "Recherche de lots par ville et critères (zone, no_lot, superficie min). Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (ex: longueuil, valleyfield)"
+          },
+          "zone": {
+            "type": "string",
+            "description": "Code de zonage (ex: H-203)"
+          },
+          "no_lot": {
+            "type": "string",
+            "description": "Numéro de lot cadastral exact"
+          },
+          "minArea": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Superficie minimale en m²"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_lot_card",
+      "title": "Get lot card",
+      "description": "Fiche détaillée d'un lot (zonage, superficie, signaux liés). Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "no_lot": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Numéro de lot cadastral exact"
+          }
+        },
+        "required": [
+          "city",
+          "no_lot"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "search_signals",
+      "title": "Search signals",
+      "description": "Recherche de signaux réglementaires par ville (étape, mot-clé). Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "etape": {
+            "type": "string",
+            "description": "Étape du processus (ex: avis_motion, adoption, consultation)"
+          },
+          "query": {
+            "type": "string",
+            "description": "Mot-clé libre"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_opportunity_dossier",
+      "title": "Get opportunity dossier",
+      "description": "Dossier d'opportunité consolidé (score, lots et signaux liés, rationale). Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "opportunityId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "city",
+          "opportunityId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_documents",
+      "title": "List documents",
+      "description": "Liste les documents sources archivés (procès-verbaux, etc.) par ville. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "read_document_excerpt",
+      "title": "Read document excerpt",
+      "description": "Lit un extrait borné d'un document source. La sortie est passée par la redaction anti-PII. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "maxChars": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4000,
+            "default": 1200
+          }
+        },
+        "required": [
+          "documentId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_zones_geojson",
+      "title": "Get zones GeoJSON",
+      "description": "FeatureCollection GeoJSON des zones de zonage d'une ville (code de zone, kind, grille PDF et propriétés sources). Réponse BORNÉE : limit défaut 500 (max 2000), bbox [minLon,minLat,maxLon,maxLat] OBLIGATOIRE pour limit > 500. numberMatched/numberReturned/truncated indiquent ce qui reste : si truncated, resserrez le bbox. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (slug, ex: longueuil, valleyfield, delson)"
+          },
+          "bbox": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "description": "Emprise [minLon, minLat, maxLon, maxLat] en WGS84 (ex: [-73.53, 45.52, -73.5, 45.55]). Obligatoire quand limit > 500."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000,
+            "default": 500,
+            "description": "Nombre max de features retournées (défaut 500, max 2000 — bbox obligatoire au-delà de 500)."
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_lots_geojson",
+      "title": "Get lots GeoJSON",
+      "description": "FeatureCollection GeoJSON des lots cadastraux d'une ville, enrichis server-side : zone jointe (zone.code/kind/densiteLogHa/usages/grillePdfUrl), zoneCode, multifamilial4plus (+ multifamilial4plusSource: grille|heuristique), superficieM2, tod/priorite quand la source les porte. Réponse BORNÉE : limit défaut 500 (max 2000), bbox OBLIGATOIRE pour limit > 500 ; une ville peut dépasser 15 000 lots — paginez par bbox. Filtres optionnels only4Plus/superficieMinM2 appliqués sur la page récupérée. truncated=true → resserrez le bbox. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (slug, ex: longueuil, valleyfield, delson)"
+          },
+          "bbox": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "description": "Emprise [minLon, minLat, maxLon, maxLat] en WGS84 (ex: [-73.53, 45.52, -73.5, 45.55]). Obligatoire quand limit > 500."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000,
+            "default": 500,
+            "description": "Nombre max de features retournées (défaut 500, max 2000 — bbox obligatoire au-delà de 500)."
+          },
+          "only4Plus": {
+            "type": "boolean",
+            "description": "Ne garder que les lots dont multifamilial4plus === true"
+          },
+          "superficieMinM2": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Superficie minimale en m² (champ superficieM2)"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_grille_pdf",
+      "title": "Get grille de zonage PDF",
+      "description": "URL de la grille de zonage PDF (grillePdfUrl) d'une zone d'une ville, quand la source municipale la porte. L'URL retournée est publique : elle peut être lue directement. Retourne found=false si la zone est inconnue, grillePdfUrl=null si la zone existe sans grille. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (slug, ex: longueuil)"
+          },
+          "zone": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Code de zonage (ex: H-203)"
+          }
+        },
+        "required": [
+          "city",
+          "zone"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_pv_pdf",
+      "title": "Get PV source PDF",
+      "description": "URL servie du procès-verbal source (PDF archivé) d'un signal, à partir de sa référence brute rawRef (ex: raw/proces-verbaux-<ville>/cas/<sha>.pdf, telle que portée par les signaux/documents) + métadonnées (ville, content-type). Le PDF lui-même n'est jamais inliné dans la réponse. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rawRef": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Référence brute du document (rawRef S3, ex: raw/proces-verbaux-longueuil/cas/<sha>.pdf ; en mode mock: l'id de document, ex: doc-longueuil-pv-2026-04-14)"
+          }
+        },
+        "required": [
+          "rawRef"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_reglement_provenance",
+      "title": "Get règlement de zonage provenance",
+      "description": "Provenance du règlement de zonage en vigueur d'une ville — numéro, millésime, page source, URL publique du règlement — telle que geo la stampe sur la grille de normes (qc-zonage-norms), + la relation « modifie » (règlement ancien) quand servie. Passthrough VERBATIM : un champ absent = null, jamais deviné/dérivé ; seul reglement_url est l'URL publique (le breadcrumb interne _source_url n'est jamais exposé). La provenance est muni-uniforme : zone_code est accepté mais n'affecte pas le résultat (réservé au lien events, tool à venir). found=false si la grille de normes n'est pas publiée pour la ville. Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "muni_slug": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (slug, ex: longueuil)"
+          },
+          "zone_code": {
+            "type": "string",
+            "description": "Code de zone — accepté mais no-op pour la provenance (muni-uniforme)"
+          }
+        },
+        "required": [
+          "muni_slug"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "query_zoning_events",
+      "title": "Query zoning lifecycle events",
+      "description": "Timeline des events de cycle de vie du zonage d'une ville (avis de motion, projets de règlement, adoptions, entrées en vigueur, dérogations, CPTAQ…) servis par geo. Filtres exacts optionnels : zone_code (events liés à cette zone via zone_codes_resolus), document_type (avis_motion|projet_reglement|adoption|entree_en_vigueur|abrogation), decision_state (planned|decided). Chaque event est renvoyé VERBATIM (§2 : document_type, decision_state, type_instrument, bylaw_numero, date_iso, zone_codes_resolus, libelles_relation, url_pdf, provenance…) ; les clés internes préfixées « _ » (breadcrumbs) ne sont jamais exposées. decision_state=planned n'est JAMAIS présenté comme adopté (planned ≠ decided). Read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "muni_slug": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ville (slug, ex: longueuil)"
+          },
+          "zone_code": {
+            "type": "string",
+            "description": "Filtre : events liés à ce code de zone (exact, via zone_codes_resolus)"
+          },
+          "document_type": {
+            "type": "string",
+            "description": "Filtre exact : avis_motion|projet_reglement|adoption|entree_en_vigueur|abrogation"
+          },
+          "decision_state": {
+            "type": "string",
+            "description": "Filtre exact : planned|decided"
+          }
+        },
+        "required": [
+          "muni_slug"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ],
+  "captures": {
+    "http": {
+      "capturedAt": "2026-10-16T00:58:05.449Z",
+      "calls": {
+        "search_lots": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"not_wired_yet:http_data_source GET /api/geo/:city/lots (use get_lots_geojson) base=https://radar-api.example.test (only search_signals is wired to the real radar API in this seam)\",\n  \"tool\": \"search_lots\",\n  \"correlationId\": \"b3b46607-86bc-4f48-a348-bbacb0c093a8\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "get_lot_card": {
+          "args": {
+            "city": "longueuil",
+            "no_lot": "1234567"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"not_wired_yet:http_data_source GET /api/geo/:city/lots?no_lot= base=https://radar-api.example.test (only search_signals is wired to the real radar API in this seam)\",\n  \"tool\": \"get_lot_card\",\n  \"correlationId\": \"a4ea15da-7c54-4bfe-8407-9262cf33b398\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "search_signals": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 1,\n  \"signals\": [\n    {\n      \"id\": \"sig-synthetique-1\",\n      \"city\": \"longueuil\",\n      \"type\": \"reglement\",\n      \"etape\": \"\",\n      \"regulatoryStatus\": \"anticipation\",\n      \"etape_date\": \"\",\n      \"reglement_number\": \"\",\n      \"zone_ref\": \"\",\n      \"no_lot\": null,\n      \"summary\": \"\",\n      \"source_document_id\": \"\"\n    }\n  ]\n}"
+              }
+            ]
+          }
+        },
+        "get_opportunity_dossier": {
+          "args": {
+            "city": "longueuil",
+            "opportunityId": "opp-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"not_wired_yet:http_data_source GET /api/opportunites + /api/signals/:city/detail base=https://radar-api.example.test (only search_signals is wired to the real radar API in this seam)\",\n  \"tool\": \"get_opportunity_dossier\",\n  \"correlationId\": \"8722dfbd-43a9-4f84-ad41-47c373274614\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "list_documents": {
+          "args": {},
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"not_wired_yet:http_data_source GET /api/documents/raw (list) base=https://radar-api.example.test (only search_signals is wired to the real radar API in this seam)\",\n  \"tool\": \"list_documents\",\n  \"correlationId\": \"7492b6ba-15b0-4295-983b-7a10334c1663\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "read_document_excerpt": {
+          "args": {
+            "documentId": "doc-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"not_wired_yet:http_data_source GET /api/documents/raw (bounded excerpt) base=https://radar-api.example.test (only search_signals is wired to the real radar API in this seam)\",\n  \"tool\": \"read_document_excerpt\",\n  \"correlationId\": \"9e4d38e9-7fea-417a-8c30-f0faec241196\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "get_zones_geojson": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"collection_not_found:qc-zonage-longueuil — ville inconnue ou couche non publiée\",\n  \"tool\": \"get_zones_geojson\",\n  \"correlationId\": \"6c41fc7f-307b-4669-9c0a-20ad7b3a5e35\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "get_lots_geojson": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"collection_not_found:qc-lots-longueuil — ville inconnue ou couche non publiée\",\n  \"tool\": \"get_lots_geojson\",\n  \"correlationId\": \"96b7df4c-8dfe-4d66-8b00-393e0670ec84\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "get_grille_pdf": {
+          "args": {
+            "city": "longueuil",
+            "zone": "H-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"collection_not_found:qc-zonage-longueuil — ville inconnue ou couche non publiée\",\n  \"tool\": \"get_grille_pdf\",\n  \"correlationId\": \"f9ba1376-c40f-449b-819a-410e04084545\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        },
+        "get_pv_pdf": {
+          "args": {
+            "rawRef": "pv/longueuil/2026-04-14.pdf"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"rawRef\": \"pv/longueuil/2026-04-14.pdf\",\n  \"note\": \"statut api: 404\"\n}"
+              }
+            ]
+          }
+        },
+        "get_reglement_provenance": {
+          "args": {
+            "muni_slug": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"city\": \"longueuil\",\n  \"reglement_url\": null,\n  \"reglement_numero\": null,\n  \"reglement_millesime\": null,\n  \"reglement_page_source\": null,\n  \"reglement_ancien_numero\": null,\n  \"reglement_ancien_millesime\": null,\n  \"reglement_ancien_source\": null,\n  \"has_ancien\": null,\n  \"note\": \"grille de normes non publiée pour cette ville (qc-zonage-norms absent)\"\n}"
+              }
+            ]
+          }
+        },
+        "query_zoning_events": {
+          "args": {
+            "muni_slug": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 0,\n  \"events\": [],\n  \"numberMatched\": 0,\n  \"truncated\": false,\n  \"note\": \"aucun event de zonage servi pour cette ville (qc-zoning-events absent)\"\n}"
+              }
+            ]
+          }
+        }
+      },
+      "limitedScope": {
+        "token": "immo:read seulement",
+        "calls": {
+          "search_signals": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:search\",\n  \"tool\": \"search_signals\",\n  \"correlationId\": \"9df4fb49-3a00-476c-b4bb-79ffe02ec55b\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "list_documents": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:documents:read\",\n  \"tool\": \"list_documents\",\n  \"correlationId\": \"73f811b8-d150-4702-9acc-bddcb102d948\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "search_lots": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:search\",\n  \"tool\": \"search_lots\",\n  \"correlationId\": \"7a3d2f2e-45ed-4702-9089-672ff3392ace\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "get_zones_geojson": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"collection_not_found:qc-zonage-longueuil — ville inconnue ou couche non publiée\",\n  \"tool\": \"get_zones_geojson\",\n  \"correlationId\": \"3825ff2c-58c6-4961-bd95-5ee01584c63b\"\n}"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      "missingCoarseScope": {
+        "name": "Error",
+        "code": 401,
+        "message": "Streamable HTTP error: Error POSTing to endpoint: {\"error\":{\"code\":\"invalid_token\",\"message\":\"Missing required scope: immo:read.\"}}"
+      }
+    },
+    "simulation": {
+      "capturedAt": "2026-10-16T00:58:00.534Z",
+      "calls": {
+        "search_lots": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 3,\n  \"lots\": [\n    {\n      \"no_lot\": \"6 359 591\",\n      \"city\": \"longueuil\",\n      \"zone\": \"H-203\",\n      \"area_m2\": 1240,\n      \"frontage_m\": 24,\n      \"address_street\": \"rue Saint-Charles Ouest\",\n      \"usage\": \"résidentiel basse densité\",\n      \"serviced\": true\n    },\n    {\n      \"no_lot\": \"6 359 612\",\n      \"city\": \"longueuil\",\n      \"zone\": \"H-203\",\n      \"area_m2\": 1985,\n      \"frontage_m\": 31,\n      \"address_street\": \"rue Saint-Charles Ouest\",\n      \"usage\": \"résidentiel basse densité\",\n      \"serviced\": true\n    },\n    {\n      \"no_lot\": \"4 102 884\",\n      \"city\": \"longueuil\",\n      \"zone\": \"C-101\",\n      \"area_m2\": 760,\n      \"frontage_m\": 18,\n      \"address_street\": \"boulevard Curé-Poirier\",\n      \"usage\": \"commercial\",\n      \"serviced\": true\n    }\n  ]\n}"
+              }
+            ]
+          }
+        },
+        "get_lot_card": {
+          "args": {
+            "city": "longueuil",
+            "no_lot": "1234567"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"city\": \"longueuil\",\n  \"no_lot\": \"1234567\"\n}"
+              }
+            ]
+          }
+        },
+        "search_signals": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 2,\n  \"signals\": [\n    {\n      \"id\": \"sig-longueuil-001\",\n      \"city\": \"longueuil\",\n      \"type\": \"modification_zonage\",\n      \"etape\": \"avis_motion\",\n      \"regulatoryStatus\": \"anticipation\",\n      \"etape_date\": \"2026-04-14\",\n      \"reglement_number\": \"CO-2026-1187\",\n      \"zone_ref\": \"H-203\",\n      \"no_lot\": \"6 359 591\",\n      \"summary\": \"Avis de motion pour permettre l'habitation multifamiliale jusqu'à 4 étages dans la zone H-203.\",\n      \"source_document_id\": \"doc-longueuil-pv-2026-04-14\"\n    },\n    {\n      \"id\": \"sig-longueuil-002\",\n      \"city\": \"longueuil\",\n      \"type\": \"usage_conditionnel\",\n      \"etape\": \"adoption\",\n      \"regulatoryStatus\": \"firm\",\n      \"etape_date\": \"2026-05-12\",\n      \"reglement_number\": \"USC-2026-044\",\n      \"zone_ref\": \"C-101\",\n      \"no_lot\": \"4 102 884\",\n      \"summary\": \"Adoption d'un usage conditionnel autorisant la mixité commerce/logement sur le boulevard Curé-Poirier.\",\n      \"source_document_id\": \"doc-longueuil-pv-2026-05-12\"\n    }\n  ]\n}"
+              }
+            ]
+          }
+        },
+        "get_opportunity_dossier": {
+          "args": {
+            "city": "longueuil",
+            "opportunityId": "opp-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"city\": \"longueuil\",\n  \"opportunityId\": \"opp-1\"\n}"
+              }
+            ]
+          }
+        },
+        "list_documents": {
+          "args": {},
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"count\": 3,\n  \"documents\": [\n    {\n      \"id\": \"doc-longueuil-pv-2026-04-14\",\n      \"city\": \"longueuil\",\n      \"title\": \"Procès-verbal — séance ordinaire du conseil municipal\",\n      \"doc_type\": \"proces_verbal\",\n      \"published_at\": \"2026-04-14\",\n      \"source\": \"Ville de Longueuil\",\n      \"archive_url\": \"s3://radar-archive/longueuil/pv/2026-04-14.pdf\",\n      \"page_count\": 18\n    },\n    {\n      \"id\": \"doc-longueuil-pv-2026-05-12\",\n      \"city\": \"longueuil\",\n      \"title\": \"Procès-verbal — séance ordinaire du conseil municipal\",\n      \"doc_type\": \"proces_verbal\",\n      \"published_at\": \"2026-05-12\",\n      \"source\": \"Ville de Longueuil\",\n      \"archive_url\": \"s3://radar-archive/longueuil/pv/2026-05-12.pdf\",\n      \"page_count\": 22\n    },\n    {\n      \"id\": \"doc-valleyfield-pv-2026-03-02\",\n      \"city\": \"valleyfield\",\n      \"title\": \"Procès-verbal — assemblée de consultation publique\",\n      \"doc_type\": \"proces_verbal\",\n      \"published_at\": \"2026-03-02\",\n      \"source\": \"Ville de Salaberry-de-Valleyfield\",\n      \"archive_url\": \"s3://radar-archive/valleyfield/pv/2026-03-02.pdf\",\n      \"page_count\": 12\n    }\n  ]\n}"
+              }
+            ]
+          }
+        },
+        "read_document_excerpt": {
+          "args": {
+            "documentId": "doc-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"documentId\": \"doc-1\"\n}"
+              }
+            ]
+          }
+        },
+        "get_zones_geojson": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"city\":\"longueuil\",\"collectionId\":\"qc-zonage-longueuil\",\"featureCollection\":{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.52,45.53],[-73.50999999999999,45.53],[-73.50999999999999,45.54],[-73.52,45.54],[-73.52,45.53]]]},\"properties\":{\"citySlug\":\"longueuil\",\"ZONE\":\"H-203\",\"DENSITE\":35,\"URL_GRILLE\":\"https://longueuil.example/grilles/H-203.pdf\",\"kind\":\"H\",\"reglement_url\":\"https://longueuil.example/reglements/CO-2016-1187.pdf\",\"reglement_numero\":\"CO-2016-1187\",\"reglement_millesime\":\"2016\",\"reglement_page_source\":\"12\",\"reglement_ancien_numero\":\"CO-2009-500\",\"reglement_ancien_source\":\"https://longueuil.example/reglements/CO-2009-500.pdf\",\"has_ancien\":true,\"_source_url\":\"https://interne.capture/breadcrumb-ne-jamais-exposer\"}},{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.5,45.51],[-73.49,45.51],[-73.49,45.519999999999996],[-73.5,45.519999999999996],[-73.5,45.51]]]},\"properties\":{\"citySlug\":\"longueuil\",\"ZONE\":\"C-101\",\"kind\":\"C\"}}]},\"numberReturned\":2,\"numberMatched\":2,\"truncated\":false,\"note\":\"mode mock: fixtures déterministes (aucun réseau)\"}"
+              }
+            ]
+          }
+        },
+        "get_lots_geojson": {
+          "args": {
+            "city": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"city\":\"longueuil\",\"collectionId\":\"qc-lots-longueuil\",\"featureCollection\":{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.518,45.532],[-73.516,45.532],[-73.516,45.534],[-73.518,45.534],[-73.518,45.532]]]},\"properties\":{\"citySlug\":\"longueuil\",\"NO_LOT\":\"6 359 591\",\"zoneCode\":\"H-203\",\"zoneJoin\":\"code\",\"zone\":{\"code\":\"H-203\",\"kind\":\"H\",\"densiteLogHa\":35,\"usages\":[\"habitation\"],\"grillePdfUrl\":\"https://longueuil.example/grilles/H-203.pdf\"},\"multifamilial4plus\":true,\"multifamilial4plusSource\":\"grille\",\"superficieM2\":1240}},{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.516,45.534],[-73.51400000000001,45.534],[-73.51400000000001,45.536],[-73.516,45.536],[-73.516,45.534]]]},\"properties\":{\"citySlug\":\"longueuil\",\"NO_LOT\":\"6 359 612\",\"zoneCode\":\"H-203\",\"zoneJoin\":\"centroid\",\"zone\":{\"code\":\"H-203\",\"kind\":\"H\",\"densiteLogHa\":35,\"usages\":[\"habitation\"],\"grillePdfUrl\":\"https://longueuil.example/grilles/H-203.pdf\"},\"multifamilial4plus\":true,\"multifamilial4plusSource\":\"grille\",\"superficieM2\":1985}},{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.498,45.512],[-73.49600000000001,45.512],[-73.49600000000001,45.514],[-73.498,45.514],[-73.498,45.512]]]},\"properties\":{\"citySlug\":\"longueuil\",\"NO_LOT\":\"4 102 884\",\"zoneCode\":\"C-101\",\"zoneJoin\":\"code\",\"zone\":{\"code\":\"C-101\",\"kind\":\"C\",\"densiteLogHa\":null,\"usages\":[],\"grillePdfUrl\":null},\"multifamilial4plus\":false,\"multifamilial4plusSource\":\"heuristique\",\"superficieM2\":760}}]},\"numberReturned\":3,\"numberMatched\":3,\"truncated\":false,\"note\":\"mode mock: fixtures déterministes (aucun réseau)\"}"
+              }
+            ]
+          }
+        },
+        "get_grille_pdf": {
+          "args": {
+            "city": "longueuil",
+            "zone": "H-1"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"city\": \"longueuil\",\n  \"zone\": \"H-1\"\n}"
+              }
+            ]
+          }
+        },
+        "get_pv_pdf": {
+          "args": {
+            "rawRef": "pv/longueuil/2026-04-14.pdf"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": false,\n  \"rawRef\": \"pv/longueuil/2026-04-14.pdf\"\n}"
+              }
+            ]
+          }
+        },
+        "get_reglement_provenance": {
+          "args": {
+            "muni_slug": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"found\": true,\n  \"city\": \"longueuil\",\n  \"reglement_url\": \"https://longueuil.example/reglements/CO-2016-1187.pdf\",\n  \"reglement_numero\": \"CO-2016-1187\",\n  \"reglement_millesime\": \"2016\",\n  \"reglement_page_source\": \"12\",\n  \"reglement_ancien_numero\": \"CO-2009-500\",\n  \"reglement_ancien_millesime\": null,\n  \"reglement_ancien_source\": \"https://longueuil.example/reglements/CO-2009-500.pdf\",\n  \"has_ancien\": true,\n  \"note\": \"mode mock: fixtures déterministes (aucun réseau)\"\n}"
+              }
+            ]
+          }
+        },
+        "query_zoning_events": {
+          "args": {
+            "muni_slug": "longueuil"
+          },
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"city\": \"longueuil\",\n  \"count\": 2,\n  \"events\": [\n    {\n      \"citySlug\": \"longueuil\",\n      \"event_id\": \"evt-longueuil-001\",\n      \"state\": \"active\",\n      \"document_type\": \"avis_motion\",\n      \"decision_state\": \"planned\",\n      \"type_instrument\": \"zonage\",\n      \"bylaw_numero\": \"CO-2026-1200\",\n      \"date_iso\": \"2026-04-14\",\n      \"zone_codes_resolus\": [\n        {\n          \"zone_code\": \"H-203\",\n          \"relation_type\": \"cite\",\n          \"score_confiance\": 1,\n          \"provenance\": \"exact_geom\"\n        }\n      ],\n      \"libelles_relation\": [\n        \"modifie CO-2016-1187\"\n      ],\n      \"url_pdf\": \"https://longueuil.example/pv/2026-04-14.pdf\",\n      \"provenance\": {\n        \"producer\": \"geo-wp3\",\n        \"source_url\": \"https://longueuil.example/pv/2026-04-14.pdf\",\n        \"as_of_date\": \"2026-04-15\"\n      }\n    },\n    {\n      \"citySlug\": \"longueuil\",\n      \"event_id\": \"evt-longueuil-002\",\n      \"state\": \"active\",\n      \"document_type\": \"adoption\",\n      \"decision_state\": \"decided\",\n      \"type_instrument\": \"zonage\",\n      \"bylaw_numero\": \"CO-2026-1187\",\n      \"date_iso\": \"2026-06-09\",\n      \"zone_codes_resolus\": [\n        {\n          \"zone_code\": \"C-101\",\n          \"relation_type\": \"cite\",\n          \"score_confiance\": 1,\n          \"provenance\": \"exact_geom\"\n        }\n      ],\n      \"provenance\": {\n        \"producer\": \"geo-wp3\",\n        \"source_url\": \"https://longueuil.example/pv/2026-06-09.pdf\",\n        \"as_of_date\": \"2026-06-10\"\n      }\n    }\n  ],\n  \"numberMatched\": 2,\n  \"truncated\": false,\n  \"note\": \"mode mock: fixtures déterministes (aucun réseau)\"\n}"
+              }
+            ]
+          }
+        }
+      },
+      "limitedScope": {
+        "token": "immo:read seulement",
+        "calls": {
+          "search_signals": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:search\",\n  \"tool\": \"search_signals\",\n  \"correlationId\": \"d318e0bb-e13b-489d-bf1c-7199da2e94f5\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "list_documents": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:documents:read\",\n  \"tool\": \"list_documents\",\n  \"correlationId\": \"fda3d360-faa8-4dda-b385-579d7d452ddb\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "search_lots": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"error\": \"scope_denied:immo:search\",\n  \"tool\": \"search_lots\",\n  \"correlationId\": \"c4c0b973-cb5a-4a2b-ac93-43a1834354d1\"\n}"
+              }
+            ],
+            "isError": true
+          },
+          "get_zones_geojson": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"city\":\"longueuil\",\"collectionId\":\"qc-zonage-longueuil\",\"featureCollection\":{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.52,45.53],[-73.50999999999999,45.53],[-73.50999999999999,45.54],[-73.52,45.54],[-73.52,45.53]]]},\"properties\":{\"citySlug\":\"longueuil\",\"ZONE\":\"H-203\",\"DENSITE\":35,\"URL_GRILLE\":\"https://longueuil.example/grilles/H-203.pdf\",\"kind\":\"H\",\"reglement_url\":\"https://longueuil.example/reglements/CO-2016-1187.pdf\",\"reglement_numero\":\"CO-2016-1187\",\"reglement_millesime\":\"2016\",\"reglement_page_source\":\"12\",\"reglement_ancien_numero\":\"CO-2009-500\",\"reglement_ancien_source\":\"https://longueuil.example/reglements/CO-2009-500.pdf\",\"has_ancien\":true,\"_source_url\":\"https://interne.capture/breadcrumb-ne-jamais-exposer\"}},{\"type\":\"Feature\",\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-73.5,45.51],[-73.49,45.51],[-73.49,45.519999999999996],[-73.5,45.519999999999996],[-73.5,45.51]]]},\"properties\":{\"citySlug\":\"longueuil\",\"ZONE\":\"C-101\",\"kind\":\"C\"}}]},\"numberReturned\":2,\"numberMatched\":2,\"truncated\":false,\"note\":\"mode mock: fixtures déterministes (aucun réseau)\"}"
+              }
+            ]
+          }
+        }
+      },
+      "missingCoarseScope": {
+        "name": "Error",
+        "code": 401,
+        "message": "Streamable HTTP error: Error POSTing to endpoint: {\"error\":{\"code\":\"invalid_token\",\"message\":\"Missing required scope: immo:read.\"}}"
+      }
+    }
+  }
+}
+
