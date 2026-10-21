@@ -10,7 +10,6 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `docs/governance/**`
   - `README.md`
   - `docs/governance/images/**`
   - `BRANCH.md`
@@ -228,17 +227,3 @@
   - [x] Reject subtitle textLength, lengthAdjust and letter/word spacing overrides; verify all ten zones and byte-identical fully expanded groups, cards, geometry and edges against the starting head.
   - [x] Rebuild the portable; verify offline Chromium title, visible diagram and zero console errors, clipped fields or ellipses; save 1920px FR/EN overviews and 200% Sentropic crops under root `.tmp/governance-unification/center28-shots/`.
   - [x] Pass source, 102-scene geometry, 16-capture/600-interaction browser, content, unchanged performance budgets and scope checks; refresh checksums and prepare one selective make commit/push. Delivery requires exact-head green CI with PR #711 draft and unmerged.
-
-## Release integration — PR #711 (2026-10-21)
-- [x] Owner explicitly authorizes eight logical history commits, exact-lease force-push, merging main and final PR merge; this supersedes the earlier draft-only guardrails.
-- [x] BR711-EX4: Preserve validated tree b6783fc385319199fc763e19d5f2748f832f4c61 exactly after squashing. Group imported source, licensed assets, owner screenshots and generated delivery artifacts into eight logical commits; these imports may exceed 150 lines and 15 files. Impact: history only, no final content change. Rollback: restore refs/release-backups/pr-711-validated-20261021.
-- [x] Generated routes JSON, portable HTML, static images and validation evidence stay in their own logical commits and may exceed 150 lines. Record this exception in commit message bodies, without trailers.
-- [x] Restore this plan to the owner's validated bytes in the final delivery commit.
-- [x] Release squash lot 1.
-- [x] Release squash lot 2.
-- [x] Release squash lot 3.
-- [x] Release squash lot 4.
-- [x] Release squash lot 5.
-- [x] Release squash lot 6.
-- [x] Release squash lot 7.
-- [ ] Release squash lot 8.
