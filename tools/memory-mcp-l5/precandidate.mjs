@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readArchive, scanGraph, graphRoots } from './contract-graph.mjs';
 import { checkArtifactManifest } from './receipt.mjs';
 import { LOCK_FINGERPRINT_VERSION, computeLockFingerprint } from './lock-fingerprint.mjs';
-import { P1_CONFIG_FILES } from './build-inputs.mjs';
+import { P1_CONFIG_FILES, TOOLCHAIN_SNAPSHOT_FILES } from './build-inputs.mjs';
 
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export const integrity = bytes => `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
@@ -49,9 +49,28 @@ export function verifyPreCandidate(root, manifestPath) {
   const liveLock = JSON.parse(readInside(root, 'package-lock.json').toString('utf8'));
   const makefileText = readInside(root, 'Makefile').toString('utf8');
   const configFiles = Object.fromEntries(P1_CONFIG_FILES.map((path) => [path, readInside(root, path)]));
+  const toolchainLocks = {};
+  const toolchainSnapshots = [];
+  for (const path of TOOLCHAIN_SNAPSHOT_FILES) {
+    const bytes = readInside(root, path);
+    toolchainSnapshots.push({ path, sha256: sha256(bytes) });
+    try {
+      toolchainLocks[path.endsWith('.package-lock.json') ? 'lock' : 'pkg'] = JSON.parse(bytes.toString('utf8'));
+    } catch {
+      throw new Error('manifest P1 toolchain snapshot is not valid JSON; regenerate the P1 manifest');
+    }
+  }
   if (manifest.source.lockFingerprintVersion !== LOCK_FINGERPRINT_VERSION ||
-      manifest.source.lockFingerprint !== computeLockFingerprint({ lockDoc: liveLock, makefileText, configFiles })) {
+      manifest.source.lockFingerprint !== computeLockFingerprint({ lockDoc: liveLock, makefileText, configFiles, toolchainLocks })) {
     throw new Error('manifest P1 lock fingerprint mismatch: relevant dependency or build inputs changed; regenerate the P1 manifest');
+  }
+  const boundToolchain = manifest.source.toolchainSnapshots;
+  if (!Array.isArray(boundToolchain) || boundToolchain.length !== toolchainSnapshots.length ||
+      boundToolchain.some((ref) => {
+        const live = toolchainSnapshots.find((entry) => entry.path === ref.path);
+        return !live || live.sha256 !== ref.sha256;
+      })) {
+    throw new Error('manifest P1 toolchain snapshot missing or corrupt; regenerate the P1 manifest');
   }
   const snapRef = manifest.source.declaredLockSnapshot;
   let snapBytes = null;
