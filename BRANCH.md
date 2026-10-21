@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R1/R2 supplementary coverage: lost real PUT acknowledgement remains unknown/charged/pending across restart; purge after known settlement releases quota. Five automatic offboarding/upload cases include valid tenant DELETE prerequisites and tenant offboard; disabled-consumer baseline reproduces five physical-cleanup failures (n5_r2_api_red_final.log). Storage-failure retry never reports false completion; final six-case consumer green is n5_r2_api_green_final.log.
+
 - [x] N5 R2 red: physical objects remain after user/tenant/workspace deletion and interrupted upload (four failures, n5_r2_api_red.log). Production boot now starts the bounded non-overlapping pending/in-progress consumer; storage failures retry without completion. Automatic restart regressions use its lifecycle, never runPurge or deleted-owner credentials (n5_r2_api_green.log).
 
 - [x] N5 R1: atomically recheck/fence admission before staging; one writer per locked reservation. Persist admitted/settled/unknown state through SDK completion, and never purge an unsettled writer. Delete settled keys then verify physical absence; jobs/quota remain pending until the final inventory is empty. Restart/delayed-PUT regression now passes (n5_r1_api_green.log).

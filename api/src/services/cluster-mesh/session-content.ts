@@ -322,6 +322,7 @@ export interface SessionContentOptions {
   readonly newId?: () => string;
   readonly quotas?: Partial<SessionContentQuotas>;
   readonly storage?: Partial<SessionContentStorageConfig>;
+  readonly storageClient?: S3Client;
   readonly epochs?: ContentAuthorityEpochPort;
   /** Explicit authority issuer configuration (R10): no hidden default. */
   readonly issuer: string;
@@ -429,6 +430,7 @@ export class SessionContentService {
     this.newId = options.newId ?? (() => crypto.randomUUID());
     this.quotas = { ...DEFAULT_SESSION_CONTENT_QUOTAS, ...options.quotas };
     this.explicitStorage = options.storage;
+    this.s3 = options.storageClient ?? null;
     this.epochs = options.epochs ?? createFileContentAuthorityEpochPort(
       readEnv('SESSION_CONTENT_AUTHORITY_RECORD_PATH') ?? '',
       () => Date.now(),
@@ -450,7 +452,7 @@ export class SessionContentService {
         );
       }
       this.storageConfig = config;
-      this.s3 = createSessionContentS3Client(config);
+      this.s3 ??= createSessionContentS3Client(config);
     }
     return { client: this.s3, config: this.storageConfig };
   }

@@ -153,7 +153,74 @@ describe('session consent durable lifecycle', () => {
     sourceGeneration: 'src-1', sourceTrustVersion: 'tv-1', nativeStartSeq: 0,
   }, ctx);
 
-  it.each(['user', 'tenant', 'workspace', 'failed-upload'] as const)(
+  const storageService = () => new SessionContentService({ issuer: 'test-issuer', epochs: fakeEpoch,
+    nowMs: () => now, storage: fixture.config, storageClient: fixture.client });
+
+  it('should retry N5 R2 storage failures without reporting completion', async () => {
+    await acceptProject();
+    await deriveSession('n5-retry');
+    const hold = await service.reserveBeforeUpload('n5-retry', 'terminal.cache', { raw: 1, encoded: 1 }, 'retry', ctx);
+    await service.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx);
+    await db.delete(users).where(eq(users.id, owner.id));
+    let attempts = 0;
+    let allowDelete = false;
+    fixture.client.middlewareStack.add((next) => async (args) => {
+      if ((args.request as { method: string }).method === 'DELETE' && !allowDelete) {
+        attempts++;
+        throw new Error('storage unavailable');
+      }
+      return next(args);
+    }, { step: 'finalizeRequest', name: 'retryDelete' });
+    const consumer = startSessionContentPurgeConsumer(storageService(), { intervalMs: 5 });
+    try {
+      await expect.poll(() => attempts).toBeGreaterThan(0);
+      expect((await db.select().from(sessionContentPurgeJobs))[0]!.state).not.toBe('complete');
+      expect(await fixture.listPhysical('')).toHaveLength(1);
+      allowDelete = true;
+      await expect.poll(() => fixture.listPhysical('')).toHaveLength(0);
+      await expect.poll(async () => (await db.select().from(sessionContentPurgeJobs))[0]!.state).toBe('complete');
+    } finally { await consumer.stop(); fixture.client.middlewareStack.remove('retryDelete'); }
+  });
+
+  it('should keep N5 R1 an unknown remote PUT pending and charged after restart', async () => {
+    await acceptProject();
+    await deriveSession('n5-unknown');
+    const hold = await service.reserveBeforeUpload('n5-unknown', 'terminal.cache', { raw: 1, encoded: 1 }, 'unknown', ctx);
+    fixture.client.middlewareStack.add((next) => async (args) => {
+      const response = await next(args);
+      if ((args.request as { method: string }).method === 'PUT') throw new Error('PUT acknowledgement lost');
+      return response;
+    }, { step: 'deserialize', name: 'losePutAcknowledgement' });
+    try {
+      await expectContentError(() => storageService().publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx), 'unknown_outcome');
+    } finally { fixture.client.middlewareStack.remove('losePutAcknowledgement'); }
+    expect(await fixture.listPhysical('')).toHaveLength(1);
+    const [object] = await db.select().from(sessionContentObjects);
+    expect(object!.writerState).toBe('unknown');
+    const [job] = await db.select().from(sessionContentPurgeJobs);
+    const restarted = makeService();
+    expect((await restarted.runPurge(job!.purgeJobId)).remainingObjects).toBe(1);
+    expect((await restarted.accountUsage({ sessionId: 'n5-unknown' })).pendingDeletionBytes).toBe(1);
+    expect(await fixture.listPhysical('')).toHaveLength(1);
+    expect((await db.select().from(sessionContentPurgeJobs))[0]!.state).toBe('pending');
+  });
+
+  it('should release N5 R1 quota when purge finishes between PUT settlement and failed publication', async () => {
+    await acceptProject();
+    await deriveSession('n5-settled');
+    const seed = await service.reserveBeforeUpload('n5-settled', 'terminal.cache', { raw: 1, encoded: 1 }, 'seed', ctx);
+    await service.publishAfterUpload(seed.reservationId, new Uint8Array([1]), ctx);
+    const [handle] = await service.listRetainedHandles(owner.id);
+    const hold = await service.reserveBeforeUpload('n5-settled', 'terminal.cache', { raw: 1, encoded: 1 }, 'late', ctx);
+    const writer = makeService({ publishHooks: { afterUpload: async () => {
+      await service.requestRetainedPurge(handle!.retainedScopeId, owner.id);
+    } } });
+    await expectContentError(() => writer.publishAfterUpload(hold.reservationId, new Uint8Array([2]), ctx), 'grant_revoked');
+    expect(await fixture.listPhysical('')).toEqual([]);
+    expect((await service.accountUsage({ sessionId: 'n5-settled' })).reservedBytes).toBe(0);
+  });
+
+  it.each(['user', 'tenant', 'tenant-offboard', 'workspace', 'failed-upload'] as const)(
     'should automatically consume N5 R2 %s purge jobs after restart without owner authentication', async (event) => {
       await acceptProject();
       await deriveSession('n5-consumer');
@@ -161,7 +228,11 @@ describe('session consent durable lifecycle', () => {
       const seed = await service.reserveBeforeUpload('n5-consumer', 'terminal.cache', bytes, 'seed', ctx);
       await service.publishAfterUpload(seed.reservationId, new Uint8Array([1]), ctx);
       if (event === 'user') await db.delete(users).where(eq(users.id, owner.id));
-      if (event === 'tenant') await db.delete(tenants).where(eq(tenants.id, TENANT_A));
+      if (event === 'tenant') {
+        await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+        await db.delete(tenants).where(eq(tenants.id, TENANT_A));
+      }
+      if (event === 'tenant-offboard') await db.update(tenants).set({ status: 'offboarded' }).where(eq(tenants.id, TENANT_A));
       if (event === 'workspace') await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
       if (event === 'failed-upload') {
         const next = await service.reserveBeforeUpload('n5-consumer', 'terminal.cache', bytes, 'failed', ctx);
