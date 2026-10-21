@@ -35,11 +35,13 @@ const PACK_PREREQUISITES_PATTERN = /^memory-l5-pack\s*:(.*)$/m;
 const DOCKER_IMAGE_PATTERN = /docker run\b[\s\S]*?(\$\([A-Za-z_][A-Za-z0-9_]*\)|[^\s'"]+)\s+sh\s+-lc/;
 // The pack-time equality guard every P1-touching recipe carries; the parser requires its
 // presence and the fingerprint binds the recipe text. The guard only constrains values
-// arriving from outside the makefile (command line or environment): those must equal the
-// frozen pin, so an invocation-level `LLM_MESH_NODE_IMAGE=...` override fails the recipe
-// before anything is produced. Makefile-internal values (the `?=` default, the
-// target-scoped export) keep their existing behavior — direct builds such as CI's
-// `make build-mcp-platform` are unaffected.
+// that override the makefile (command line or `make -e`): those must equal the frozen
+// pin, so an invocation-level `LLM_MESH_NODE_IMAGE=...` override fails the recipe before
+// anything is produced. Plain environment values are exempt: they carry make's own
+// export plumbing (the `?=` default reaches `$(MAKE)` sub-makes that way) and the
+// qualified pack path forces the pin over them via the target-scoped export, so direct
+// builds and sub-make chains such as CI's `make probe-artifacts-packed-consumer` keep
+// their behavior.
 export const IMAGE_GUARD_COMPARISON = 'test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)"';
 export const IMAGE_GUARD_ORIGIN = '$(origin LLM_MESH_NODE_IMAGE)';
 

@@ -271,7 +271,7 @@ describe('lock-fingerprint — effective target wiring', () => {
     expect(guardLines(toolchain).filter((line) => (toolchain.packRecipes || []).includes(line)).length).toBeGreaterThan(0);
   });
 
-  it('the extracted guard passes on makefile-internal values and refuses outside overrides', () => {
+  it('the extracted guard passes on makefile-internal values and refuses overriding invocations', () => {
     const toolchain = parseToolchainSpecs(REAL_MAKEFILE);
     const lines = guardLines(toolchain);
     expect(lines.length).toBeGreaterThan(0);
@@ -280,10 +280,13 @@ describe('lock-fingerprint — effective target wiring', () => {
       // such as CI's `make build-mcp-platform`) and the target-scoped export both pass.
       expect(runGuard(line, { GUARD_ORIGIN: 'file', LLM_MESH_NODE_IMAGE: 'node:24-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).toBe(0);
       expect(runGuard(line, { GUARD_ORIGIN: 'file', LLM_MESH_NODE_IMAGE: FROZEN_IMAGE, MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).toBe(0);
+      // Plain environment values pass too: they carry make's own export plumbing to
+      // `$(MAKE)` sub-makes (e.g. `probe-artifacts-packed-consumer`), and the qualified
+      // pack path forces the pin over them via the target-scoped export.
+      expect(runGuard(line, { GUARD_ORIGIN: 'environment', LLM_MESH_NODE_IMAGE: 'node:24-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).toBe(0);
       // An explicit pin from the outside is permitted; anything else is refused.
       expect(runGuard(line, { GUARD_ORIGIN: 'command line', LLM_MESH_NODE_IMAGE: FROZEN_IMAGE, MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).toBe(0);
       expect(runGuard(line, { GUARD_ORIGIN: 'command line', LLM_MESH_NODE_IMAGE: 'node:22-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).not.toBe(0);
-      expect(runGuard(line, { GUARD_ORIGIN: 'environment', LLM_MESH_NODE_IMAGE: 'node:22-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).not.toBe(0);
       expect(runGuard(line, { GUARD_ORIGIN: 'environment override', LLM_MESH_NODE_IMAGE: 'node:22-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).not.toBe(0);
     }
   });
