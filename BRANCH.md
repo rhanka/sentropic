@@ -84,6 +84,10 @@ Actions with the following status should be included around tasks only if really
   - Reason: the finding's invocation-level repro (`make memory-l5-pack LLM_MESH_NODE_IMAGE=node:22 ...`) changes the effective image of every producing recipe without touching recipe text; the parser requires the guard and the fingerprint binds it, but only a recipe-executed equality test refuses the override before anything is produced.
   - Impact: 4 additive recipe lines; the guard only constrains values that override the makefile (`$(origin ...)` is `command line` or `environment override`) — those must equal the pin. Plain environment values are exempt (they carry make's own export plumbing to `$(MAKE)` sub-makes); makefile-internal values (`?=` default, target-scoped export) are untouched. An unconditional first version refused legitimate direct builds (CI `typecheck-lint-api`, `validate-artifacts`, `validate-mcp-platform` red); the origin-gated version restored them, and exempting plain environment restored the `probe-artifacts-packed-consumer` sub-make chain. The finding stays closed: the qualified pack path forces the pin over plain env via the target-scoped export, while command-line and `make -e` overrides are refused. All other targets untouched.
   - Rollback: drop the 4 guard lines and revert the parser's guard requirement with them.
+- `attention`: BR710-EX9 — bump the `ci-esbuild` Go base image `1.26.9→1.26.10` (amd64 digest pin) in `api/Dockerfile` to remediate CVE-2026-111943 (Go stdlib HIGH, published mid-run; main red on the same `security-container` job).
+  - Reason: CI `security-container` + `ci-gate` red on the post-merge head; the api-tool image embeds the Go 1.26.9 toolchain; Go 1.26.10 carries the stdlib fix; single pin site; unrelated to the branch diff.
+  - Impact: api-tool image rebuilds on Go 1.26.10 (same Alpine 3.23, same esbuild pins); production target untouched (toolbox only).
+  - Rollback: revert the FROM line.
 - `attention`: BR710-EX8 — align the `ui/package-lock.json` markdown-it 14.3.3 record's dependency metadata to the published ranges (`entities ^4.5.0`, `linkify-it ^5.0.2`; Astra R3 non-blocking).
   - Reason: the 14.3.3 record still declares the 14.3.2 ranges (`^4.4.0`/`^5.0.0`) while the installed tree resolves entities 6.0.1 + linkify-it 5.0.2; metadata-only, resolved/integrity bytes untouched, satisfies both ranges.
   - Impact: 2 metadata tokens in the ui lock; installs reproducible (`npm ci` unaffected); P1 closure untouched.
@@ -220,6 +224,9 @@ Actions with the following status should be included around tasks only if really
   - [x] Merge (no rebase); BRANCH.md kept as this branch's live plan; locks auto-merged (identical security triples + main's `artifacts 0.1.4`); manifest conflict resolved to branch side then regenerated.
   - [x] Regen `9c9bc3d0` (v4, declaredLock = merged lock, 44 contracts; only deltas vs `f5254a27`: schema v3→v4 hash + new sourceHead, tuple bytes identical); verify + gate + tooling green.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green on the exact head, then report head SHA + CI URL.
+- [x] **Lot 21b — Remediate Go stdlib CVE-2026-111943 (BR710-EX9)**
+  - [x] Bump `ci-esbuild` Go base `1.26.9→1.26.10` (amd64 digest pin) in `api/Dockerfile`; proven with Trivy before commit (1.26.9 fires the CVE, 1.26.10 clean).
+  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
 - [x] **Lot 21 — Merge origin/main (50e612a0e, PR #716), verify, push, CI green**
   - [x] Merge (no rebase); BRANCH.md kept as this branch's live plan; main's net delta is cluster-mesh common-rule + spec + fixtures and a `cluster-mesh 0.21.0→0.21.1` version-metadata lock hunk (auto-merged); manifest conflict (main's old-format regen) resolved to branch side then regenerated.
   - [x] Regen `0f366625` (v4, fingerprint identical — main touched no P1 inputs; declaredLock = merged lock, 44 contracts byte-identical, tuple bytes identical); verify + gate + tooling green.
