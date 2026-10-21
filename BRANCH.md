@@ -30,6 +30,7 @@ Consolidate the approved common-rule amendment (CR-1..CR-5) into the storage spe
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `packages/cluster-mesh/package.json` (version bump only, via BR01-EX1)
   - `package-lock.json` (root lockfile version sync only, via BR01-EX1)
+  - `tools/memory-mcp-l5/artifacts/**` (P1 manifest regeneration via Make only, via BR01-EX1)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -39,7 +40,7 @@ Consolidate the approved common-rule amendment (CR-1..CR-5) into the storage spe
 Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
 - subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
 - conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
-- `attention` BR01-EX1 (CI-mandated version bump): `enforce-package-bump` fails without a bump for `packages/cluster-mesh/src/**` changes, so this branch bumps `packages/cluster-mesh/package.json` 0.21.0 → 0.22.0 (minor: additive data-only contract, no breaking change; strictly above npm-published 0.21.0), and the `changes` train lock-sync gate fails without the matching root lockfile entry, so it syncs the single `packages/cluster-mesh` version line in `package-lock.json`. Impact is manifest metadata only; no runtime, dependency or range change. Rollback restores 0.21.0 in both files. No other conditional/forbidden path is touched.
+- `attention` BR01-EX1 (CI-mandated version bump): `enforce-package-bump` fails without a bump for `packages/cluster-mesh/src/**` changes. The frozen installed consumer `@sentropic/comments@0.3.0` accepts mesh `>=0.21.0 <0.22.0`, so this branch bumps patch 0.21.0 → 0.21.1 (strictly above npm-published 0.21.0) instead of minor, and the `changes` train lock-sync gate fails without the matching root lockfile entry, so it syncs the single `packages/cluster-mesh` version line in `package-lock.json`. The lockfile change invalidates the frozen L5 P1 `declaredLockSha256`, so this branch regenerates `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (+ sidecar, retained parent archives untouched) through the sanctioned `make memory-l5-pack STAGE=pre-candidate` flow only — no hand edit of frozen evidence. Impact is manifest metadata only; no runtime, dependency or range change. Rollback restores 0.21.0/0.21.0 and the previous P1 manifest. No other conditional/forbidden path is touched.
 
 ## AI Flaky tests
 - Acceptance rule:
