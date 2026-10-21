@@ -521,6 +521,15 @@ export class SessionContentService {
     return grant;
   }
 
+  private async requireRetainedRead(client: DbClient, grant: typeof sessionContentGrants.$inferSelect) {
+    const [project] = await client.select().from(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, grant.projectId)).limit(1);
+    if (grant.readDenied || !['active', 'closed', 'excluded'].includes(grant.state)
+      || !project || project.readDenied || project.state === 'revoked') {
+      throw new SessionContentError('grant_revoked', 'retained reading is denied');
+    }
+  }
+
   /** R6: bounded reads additionally require origin-workspace membership.
    * Provisioning creates the membership row (see workspace-provisioning),
    * so the row — not bare ownership — is the authority. */
@@ -698,6 +707,9 @@ export class SessionContentService {
             || locked.workspaceId !== policy.workspaceId
             || locked.workspaceIncarnation !== Number(policy['workspaceIncarnation'] ?? 1)) {
             throw new SessionContentError('cross_owner_refused', 'existing project has a different immutable scope');
+          }
+          if (locked.state !== 'active' || locked.readDenied) {
+            throw new SessionContentError('project_not_active', 'project is not active');
           }
           if (locked.projectRevision !== expectedRevision) {
             throw new SessionContentError('revision_conflict', 'project revision mismatch');
@@ -878,11 +890,11 @@ export class SessionContentService {
       }
       await tx
         .update(sessionContentProjects)
-        .set({ state: 'revoked', updatedAt: new Date(this.nowMs()) })
+        .set({ state: 'revoked', readDenied: true, updatedAt: new Date(this.nowMs()) })
         .where(eq(sessionContentProjects.projectId, projectId));
       await tx
         .update(sessionContentGrants)
-        .set({ state: 'revoked', updatedAt: new Date(this.nowMs()) })
+        .set({ state: 'revoked', readDenied: true, updatedAt: new Date(this.nowMs()) })
         .where(eq(sessionContentGrants.projectId, projectId));
       return { projectId, state: 'revoked' as const };
     });
@@ -917,7 +929,9 @@ export class SessionContentService {
         .where(eq(sessionContentProjects.projectId, projectId));
       await tx
         .update(sessionContentGrants)
-        .set({ state: 'excluded', updatedAt: new Date(this.nowMs()) })
+        .set({ state: sql`CASE WHEN ${sessionContentGrants.state} IN ('revoked', 'expired')
+          OR ${sessionContentGrants.readDenied} THEN ${sessionContentGrants.state} ELSE 'excluded' END`,
+        updatedAt: new Date(this.nowMs()) })
         .where(eq(sessionContentGrants.sessionId, sessionId));
       return { projectId, sessionId, exclusionRevision: existing.exclusionRevision + 1 };
     });
@@ -1242,7 +1256,7 @@ export class SessionContentService {
       }
       await tx
         .update(sessionContentGrants)
-        .set({ state: 'revoked', updatedAt: new Date(this.nowMs()) })
+        .set({ state: 'revoked', readDenied: true, updatedAt: new Date(this.nowMs()) })
         .where(eq(sessionContentGrants.sessionId, sessionId));
       await tx
         .update(sessionContentReservations)
@@ -1268,10 +1282,14 @@ export class SessionContentService {
         .select()
         .from(sessionContentGrants)
         .where(eq(sessionContentGrants.sessionId, sessionId))
+        .for('update')
         .limit(1);
       if (!grant) throw new SessionContentError('grant_not_found', 'unknown grant');
       if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
+      }
+      if (grant.readDenied || grant.state === 'revoked' || grant.state === 'expired') {
+        throw new SessionContentError('grant_revoked', 'grant is revoked');
       }
       const [committed] = await tx
         .select({ count: sql<number>`count(*)::int` })
@@ -1322,6 +1340,7 @@ export class SessionContentService {
       if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
       }
+      await this.requireRetainedRead(tx, grant);
       await this.checkWorkspaceMembership(tx, grant.workspaceId, ctx.principalId);
       await this.requireEpochScope(tx, grant.authorityEpoch, namespaceIdFor(ctx.tenantId, ctx.ownerId, grant.authorityEpoch));
       if (!['active', 'closed', 'excluded'].includes(grant.state)) {
@@ -1916,6 +1935,7 @@ export class SessionContentService {
       if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
       }
+      await this.requireRetainedRead(tx, grant);
       await this.checkWorkspaceMembership(tx, grant.workspaceId, ctx.principalId);
       await this.requireEpochScope(
         tx,
@@ -2402,7 +2422,7 @@ export class SessionContentService {
       if (!grant.localDenyPending) return { sessionId, reconciled: false as const };
       await tx
         .update(sessionContentGrants)
-        .set({ state: 'revoked', localDenyPending: false, updatedAt: new Date(this.nowMs()) })
+        .set({ state: 'revoked', readDenied: true, localDenyPending: false, updatedAt: new Date(this.nowMs()) })
         .where(eq(sessionContentGrants.sessionId, sessionId));
       return { sessionId, reconciled: true as const };
     });
@@ -2583,7 +2603,10 @@ export class SessionContentService {
         }).where(eq(sessionContentProjects.projectId, projectId));
       }
       await tx.update(sessionContentGrants)
-        .set({ state: intent === 'exclude' ? 'excluded' : 'revoked',
+        .set({ state: intent === 'exclude'
+          ? sql`CASE WHEN ${sessionContentGrants.state} IN ('revoked', 'expired')
+            OR ${sessionContentGrants.readDenied} THEN ${sessionContentGrants.state} ELSE 'excluded' END` : 'revoked',
+        readDenied: intent === 'revoke' ? true : sql`${sessionContentGrants.readDenied}`,
           version: sql`${sessionContentGrants.version} + 1`, updatedAt: new Date(this.nowMs()) })
         .where(and(eq(sessionContentGrants.bindingId, bindingId as string),
           eq(sessionContentGrants.tenantId, namespace.tenantId), eq(sessionContentGrants.ownerId, ownerId),
