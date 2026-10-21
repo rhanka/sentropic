@@ -225,6 +225,7 @@ const dropPackPrereq = (text) => text.replace(
 // A make recipe line `$(VAR)` expands before the shell runs; model that expansion so the
 // extracted guard executes under the shell exactly as make would run it.
 const guardShell = (line) => line.replace(/^@/, '')
+  .replaceAll('$(origin LLM_MESH_NODE_IMAGE)', '${GUARD_ORIGIN}')
   .replaceAll('$(LLM_MESH_NODE_IMAGE)', '${LLM_MESH_NODE_IMAGE}')
   .replaceAll('$(MEMORY_L5_NODE_IMAGE)', '${MEMORY_L5_NODE_IMAGE}');
 const runGuard = (line, env) => spawnSync('sh', ['-c', guardShell(line)], { encoding: 'utf8', env: { ...process.env, ...env } });
@@ -270,13 +271,20 @@ describe('lock-fingerprint — effective target wiring', () => {
     expect(guardLines(toolchain).filter((line) => (toolchain.packRecipes || []).includes(line)).length).toBeGreaterThan(0);
   });
 
-  it('the extracted guard passes on the frozen wiring and refuses the invocation override', () => {
+  it('the extracted guard passes on makefile-internal values and refuses outside overrides', () => {
     const toolchain = parseToolchainSpecs(REAL_MAKEFILE);
     const lines = guardLines(toolchain);
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) {
-      expect(runGuard(line, { LLM_MESH_NODE_IMAGE: FROZEN_IMAGE, MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).toBe(0);
-      expect(runGuard(line, { LLM_MESH_NODE_IMAGE: 'node:22-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).not.toBe(0);
+      // Makefile-internal values keep their behavior: the `?=` default (direct builds
+      // such as CI's `make build-mcp-platform`) and the target-scoped export both pass.
+      expect(runGuard(line, { GUARD_ORIGIN: 'file', LLM_MESH_NODE_IMAGE: 'node:24-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).toBe(0);
+      expect(runGuard(line, { GUARD_ORIGIN: 'file', LLM_MESH_NODE_IMAGE: FROZEN_IMAGE, MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).toBe(0);
+      // An explicit pin from the outside is permitted; anything else is refused.
+      expect(runGuard(line, { GUARD_ORIGIN: 'command line', LLM_MESH_NODE_IMAGE: FROZEN_IMAGE, MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).toBe(0);
+      expect(runGuard(line, { GUARD_ORIGIN: 'command line', LLM_MESH_NODE_IMAGE: 'node:22-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).not.toBe(0);
+      expect(runGuard(line, { GUARD_ORIGIN: 'environment', LLM_MESH_NODE_IMAGE: 'node:22-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).not.toBe(0);
+      expect(runGuard(line, { GUARD_ORIGIN: 'environment override', LLM_MESH_NODE_IMAGE: 'node:22-bookworm-slim', MEMORY_L5_NODE_IMAGE: FROZEN_IMAGE }).status).not.toBe(0);
     }
   });
 
