@@ -1,6 +1,7 @@
-// G1c scope mapping (C7): one tenant/workspace pair per store, durable
-// store identity, grant module and operation binding, lexical keys scoped
-// before bounds, and tombstone reads treated as absent.
+// G1c grant/key scope checks (C7 liaison pending G1d/S0): one
+// tenant/workspace pair per store, grant module and operation binding,
+// lexical keys scoped before bounds, and tombstone reads treated as absent.
+// The authoritative candidate-to-scope liaison is not established here.
 
 import { describe, expect, it } from 'vitest';
 import { validateScopeGrant } from '../../src/storage/authority.js';

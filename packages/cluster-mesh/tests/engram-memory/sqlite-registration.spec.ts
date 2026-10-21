@@ -1,7 +1,8 @@
-// G1d SQLite registration: the host registers the memory module against
-// the installed Engram substrate with an explicitly injected driver.
-// S0 cases: engine floor, qualification shape, and the neutral descriptor
-// the substrate gates construction on.
+// G1a SQLite registration (refusal): the host registers the memory module
+// shape against the installed Engram substrate with an explicitly injected
+// driver. Refusal cases: engine floor, qualification shape, and the neutral
+// descriptor the substrate gates construction on. Durable provider
+// composition and S0 remain pending G1d/S and are not claimed here.
 
 import { describe, expect, it } from 'vitest';
 import { createMemoryPortV2, openModuleStorageCanonicalMemoryStoreV1 } from '@sentropic/engram/memory-substrate';
