@@ -22,6 +22,7 @@ import {
 } from '../../src/db/schema';
 import {
   createFakeContentAuthorityEpochPort,
+  createSessionContentS3Client,
   SessionContentError,
   SessionContentService,
   type SessionContentContext,
@@ -186,14 +187,22 @@ describe('session consent durable lifecycle', () => {
     await acceptProject();
     await deriveSession('n5-unknown');
     const hold = await service.reserveBeforeUpload('n5-unknown', 'terminal.cache', { raw: 1, encoded: 1 }, 'unknown', ctx);
-    fixture.client.middlewareStack.add((next) => async (args) => {
+    const storageClient = createSessionContentS3Client(fixture.config);
+    let puts = 0;
+    storageClient.middlewareStack.add((next) => async (args) => {
       const response = await next(args);
-      if ((args.request as { method: string }).method === 'PUT') throw new Error('PUT acknowledgement lost');
+      if ((args.request as { method: string }).method === 'PUT') {
+        puts++;
+        throw Object.assign(new Error('PUT acknowledgement lost'), { name: 'TimeoutError', $retryable: {} });
+      }
       return response;
     }, { step: 'deserialize', name: 'losePutAcknowledgement' });
     try {
-      await expectContentError(() => storageService().publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx), 'unknown_outcome');
-    } finally { fixture.client.middlewareStack.remove('losePutAcknowledgement'); }
+      const writer = new SessionContentService({ issuer: 'test-issuer', epochs: fakeEpoch, nowMs: () => now,
+        storage: fixture.config, storageClient });
+      await expectContentError(() => writer.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx), 'unknown_outcome');
+    } finally { storageClient.destroy(); }
+    expect(puts).toBe(1);
     expect(await fixture.listPhysical('')).toHaveLength(1);
     const [object] = await db.select().from(sessionContentObjects);
     expect(object!.writerState).toBe('unknown');
