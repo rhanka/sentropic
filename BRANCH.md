@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R8 author remediation validated at a9e960b1b: full package 1087 passed / 129 opt-in skipped (99 consent); four API suites 176/176 (125 consent) on fresh migrated PostgreSQL/MinIO; package/API typechecks and API lint pass. Exact old-domain control fails 32 cases with 67 controls passing. Operations, commit mapping and deterministic red/green logs are recorded in `.h2a/build/lot2_n5_report.md`; migration 0019 is additive and 0012–0018 are preserved. Exact-head CI evidence is recorded separately in the N5 report.
+
 - [x] N5 R8 resumed audit: stale amendments that predate exclusion clearing cannot remove suppression by advancing only the policy revision; domain and direct SQL barriers reproduce the bypass. Parent admission checks preserve denial-only updates after an amendment.
 
 - [x] N5 R8 cross-row audit: deterministic derivation/INSERT barriers cover a child whose parent is revoked, excluded or suppressed after its first read. Admission must recheck the latest locked parent before creating capture authority.
