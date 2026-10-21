@@ -474,6 +474,15 @@ lock-markdown-it-14-3-3: ## Bump markdown-it 14.3.2 -> 14.3.3 in root + ui locks
 	@for f in package-lock.json ui/package-lock.json; do test $$(grep -c '"version": "14.3.3"' $$f) -eq 1 || (echo "❌ markdown-it 14.3.3 missing in $$f" && exit 1); done
 	@! grep -q 'markdown-it-14.3.2.tgz' package-lock.json ui/package-lock.json || (echo "❌ stale markdown-it 14.3.2 reference remains" && exit 1)
 	@echo "✅ markdown-it 14.3.3 in both locks"
+FOLLOW_REDIRECTS_1160_INTEGRITY := sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==
+FOLLOW_REDIRECTS_1161_INTEGRITY := sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==
+.PHONY: lock-follow-redirects-1-16-1
+lock-follow-redirects-1-16-1: ## Bump follow-redirects 1.16.0 -> 1.16.1 in the root lock (pinned, no stack; BR710-EX5)
+	@echo "🔒 Bumping follow-redirects to 1.16.1 in package-lock.json..."
+	sed -i 's|"version": "1.16.0"|"version": "1.16.1"|; s|follow-redirects-1.16.0.tgz|follow-redirects-1.16.1.tgz|; s|$(FOLLOW_REDIRECTS_1160_INTEGRITY)|$(FOLLOW_REDIRECTS_1161_INTEGRITY)|' package-lock.json
+	@test $$(grep -c '"version": "1.16.1"' package-lock.json) -eq 1 || (echo "❌ follow-redirects 1.16.1 missing in package-lock.json" && exit 1)
+	@! grep -q 'follow-redirects-1.16.0.tgz' package-lock.json || (echo "❌ stale follow-redirects 1.16.0 reference remains" && exit 1)
+	@echo "✅ follow-redirects 1.16.1 in the root lock"
 .PHONY: lock-markdown-it-direct
 lock-markdown-it-direct: ## Bump markdown-it 14.3.0/14.1.1 -> 14.3.2 in root + ui locks (pinned, no stack)
 	@echo "🔒 Bumping markdown-it to 14.3.2 in package-lock.json + ui/package-lock.json..."
