@@ -59,6 +59,35 @@ function childNames(entry) {
   return [...names].sort();
 }
 
+function projectToolchainNode(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  if (entry.link) return { link: typeof entry.resolved === 'string' ? entry.resolved : null };
+  const node = {
+    version: typeof entry.version === 'string' ? entry.version : null,
+    resolved: typeof entry.resolved === 'string' ? entry.resolved : null,
+    integrity: typeof entry.integrity === 'string' ? entry.integrity : null,
+  };
+  for (const map of ['dependencies', 'optionalDependencies']) {
+    if (entry[map] && typeof entry[map] === 'object' && entry[map] !== null) node[map] = { ...entry[map] };
+  }
+  return node;
+}
+
+// buildToolchainClosure — content projection of one resolved toolchain installation.
+//
+// The snapshot is already the minimal install the producing build consumes, so every
+// record is projected by lock key: resolved versions, registries, integrity values and
+// dependency edges. Any added, removed or altered record changes the projection.
+export function buildToolchainClosure(lockDoc) {
+  const packages = lockDoc && typeof lockDoc.packages === 'object' && lockDoc.packages !== null ? lockDoc.packages : {};
+  const closure = {};
+  for (const key of Object.keys(packages).sort()) {
+    if (key === '') continue;
+    closure[key] = projectToolchainNode(packages[key]);
+  }
+  return closure;
+}
+
 export function buildP1Closure(lockDoc, recurseNames) {
   const packages = lockDoc && typeof lockDoc.packages === 'object' && lockDoc.packages !== null ? lockDoc.packages : {};
   const tools = recurseNames instanceof Set ? recurseNames : new Set(recurseNames || []);
