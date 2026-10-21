@@ -1,8 +1,8 @@
-import type { JudgeAdapterResult } from './adapter.js';
-import type { JudgeRequest } from './request.js';
-import type { EvaluatorDescriptor } from './jev-descriptor.js';
-import { createJudgeError, isJudgeErrorCode } from './errors.js';
-import { parseJudgeUsage, unreportedJudgeUsage } from './receipt.js';
+import type { DecisionAdapterResult } from './adapter.js';
+import type { DecisionRequest } from './request.js';
+import type { DecisionEvaluatorDescriptor } from './descriptor.js';
+import { createDecisionError, isDecisionErrorCode } from './errors.js';
+import { parseDecisionUsage, unreportedDecisionUsage } from './receipt.js';
 import { encodeJevRequest } from './jev-codec.js';
 import { decodeJevVerdict } from './jev-verdict.js';
 import { sanitizeJevId } from './jev-response.js';
@@ -10,11 +10,11 @@ import { isRecord, snapshotBoundedJson } from './validation.js';
 import { parseJevProviderRaw } from './raw.js';
 
 /** Rebuild the JEV verdict from native evidence, never return a live plugin envelope. */
-export function parseJudgeAdapterResult(candidate: unknown, request: JudgeRequest,
-  descriptor: EvaluatorDescriptor, secret: string): JudgeAdapterResult {
+export function parseDecisionAdapterResult(candidate: unknown, request: DecisionRequest,
+  descriptor: DecisionEvaluatorDescriptor, secret: string): DecisionAdapterResult {
   const snapshot = snapshotBoundedJson(candidate);
   const value = snapshot.ok && isRecord(snapshot.value) ? snapshot.value : {};
-  const usage = parseJudgeUsage(value.usage) ?? unreportedJudgeUsage('unknown');
+  const usage = parseDecisionUsage(value.usage) ?? unreportedDecisionUsage('unknown');
   const safeId = (id: unknown) => typeof id === 'string' && id.includes(secret) ? undefined : sanitizeJevId(id);
   const servedModelId = safeId(value.servedModelId) ?? null;
   const providerRequestId = safeId(value.providerRequestId);
@@ -23,11 +23,11 @@ export function parseJudgeAdapterResult(candidate: unknown, request: JudgeReques
     ...(providerRequestId ? { providerRequestId } : {}),
     ...(typeof value.providerLatencyMs === 'number' && Number.isFinite(value.providerLatencyMs) && value.providerLatencyMs >= 0
       ? { providerLatencyMs: value.providerLatencyMs } : {}) };
-  const failed = (code: Parameters<typeof createJudgeError>[0], phase: 'dispatch' | 'parse' = 'parse'): JudgeAdapterResult =>
-    ({ ok: false, error: createJudgeError(code, phase), ...evidence });
+  const failed = (code: Parameters<typeof createDecisionError>[0], phase: 'dispatch' | 'parse' = 'parse'): DecisionAdapterResult =>
+    ({ ok: false, error: createDecisionError(code, phase), ...evidence });
   if (value.ok === false) {
     const error = isRecord(value.error) ? value.error : {};
-    return failed(isJudgeErrorCode(error.code) ? error.code : 'VERDICT_INVALID', error.phase === 'parse' ? 'parse' : 'dispatch');
+    return failed(isDecisionErrorCode(error.code) ? error.code : 'VERDICT_INVALID', error.phase === 'parse' ? 'parse' : 'dispatch');
   }
   if (value.ok !== true) return failed('VERDICT_INVALID');
   if (!matched) return failed('SERVED_IDENTITY_MISMATCH');
