@@ -18,7 +18,7 @@ import {
 import { canonicalizeJson } from '../schema-validator.mjs';
 import { computeLockFingerprint } from '../lock-fingerprint.mjs';
 
-const SYNTH_GUARD = '@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: guard" >&2; exit 1; };; esac';
+const SYNTH_GUARD = '@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: guard" >&2; exit 1; };; esac';
 const SYNTH_MAKEFILE = [
   'MEMORY_L5_NODE_IMAGE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6',
   'MEMORY_L5_TOOLCHAIN := typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9',
