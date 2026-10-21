@@ -20,6 +20,14 @@ function check(scene,name){
   if(header.headerTextHeight-16>g.height)throw Error(name+': collapsed header overflow '+g.id);
  }
  if(!baseline)for(const g of scene.groups)if(/ · \p{Ll}/u.test(g.title))throw Error(name+': frame title capitalization '+g.id);
+ if(!baseline)for(const g of scene.groups.filter(g=>!g.collapsed)){
+  const children=[...scene.groups,...scene.nodes].filter(n=>n.parentId===g.id);
+  if(children.length&&Math.min(...children.map(n=>n.position.y))-g.position.y-g.headerTextHeight+8!==72)throw Error(name+': noncompact header gap '+g.id);
+ }
+ if(!baseline&&scene.id==='central')for(const ids of [['h2a','surfaces'],['engram','design-system'],['cm-catalog','cm-storage','cm-security','cm-cluster']]){
+  const row=scene.groups.filter(g=>ids.includes(g.id));
+  if(row.length===ids.length&&new Set(row.map(g=>g.position.y)).size!==1)throw Error(name+': row alignment '+ids.join('/'));
+ }
  const frame=sceneFrame(scene);
  const allCollapsed=scene.id==='central'&&!scene.nodes.length&&scene.groups.length&&scene.groups.every(g=>g.collapsed);
  if(!allCollapsed&&Math.abs(frame.width/frame.height-16/9)>.00001)throw Error(name+': aspect ratio');
@@ -59,7 +67,7 @@ function check(scene,name){
    }
   }
   for(const b of boxes)if(overlap(label,b,4))fail('labelCardCollisions',edge.id+'/'+b.id);
-  for(const g of scene.groups.filter(g=>!g.collapsed))if(overlap(label,{...nodeRect(g),bottom:g.position.y+g.headerTextHeight},4))fail('headerIntrusions','label '+edge.id+'/'+g.id);
+  for(const g of scene.groups.filter(g=>!g.collapsed))if(overlap(label,{...nodeRect(g),bottom:g.position.y+g.headerTextHeight+(baseline?0:64)},4))fail('headerIntrusions','label '+edge.id+'/'+g.id);
   for(const s of segments)if(s.id!==edge.id&&segmentCrossesRect(s.from,s.to,{left:label.left-4,right:label.right+4,top:label.top-4,bottom:label.bottom+4}))fail('edgeLabelCollisions',s.id+'/'+edge.id);
  }
  for(const bank of banks.values()){

@@ -20,7 +20,6 @@ export function packStudyScene(scene) {
     const children = layout([...entries.values()].filter(child=>child.parentId===item.id));
     item.width = Math.max(CARD_WIDTH, children.width + pad*2);
     Object.assign(item,groupContent(item,item.width));
-    item.headerHeight += 64;
     item.height=item.headerHeight+children.height+pad;
     return {item,width:item.width,height:item.height,setHeight(h){this.height=item.height=h;},place(x,y){item.position={x,y};children.place(x+pad,y+item.headerHeight);}};
   }

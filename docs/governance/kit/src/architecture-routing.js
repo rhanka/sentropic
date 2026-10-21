@@ -1,4 +1,4 @@
-import { labelSize, PORT_SLOT_COUNT, textWidth } from './architecture-layout.js';
+import { labelSize, PORT_SLOT_COUNT, textWidth, CARD_STACK_GAP } from './architecture-layout.js';
 
 // A 21px, one-line edge pill is 38px tall and needs 6px to the next card.
 export const ROUTE_CLEARANCE = 28;
@@ -313,8 +313,9 @@ function allocatePorts(edges, nodes, sides) {
   }
   for (const bank of banks.values()) {
     const {side, node} = bank[0], axis = ['left','right'].includes(side) ? 'y' : 'x';
-    bank.sort((a,b) => center(nodeRect(byId.get(a.edge[a.end === 'source' ? 'target' : 'source'])))[axis]
-      - center(nodeRect(byId.get(b.edge[b.end === 'source' ? 'target' : 'source'])))[axis] || a.edge.id.localeCompare(b.edge.id));
+    const direction = !node.collapsed && bank.every(({edge,end}) => sides.get(edge.id)[(end === 'source' ? 'target' : 'source') + 'Side'] === side) ? -1 : 1;
+    bank.sort((a,b) => direction * (center(nodeRect(byId.get(a.edge[a.end === 'source' ? 'target' : 'source'])))[axis]
+      - center(nodeRect(byId.get(b.edge[b.end === 'source' ? 'target' : 'source'])))[axis]) || a.edge.id.localeCompare(b.edge.id));
     const length = axis === 'y' ? node.height : node.width;
     const spacing = Math.min(64, length / (bank.length + 1));
     bank.forEach(({edge,end},rank) => {
@@ -331,7 +332,9 @@ function sideChoices(edge, nodes) {
   if (edge.data?.summary) return [preferred];
   const horizontal = center(a).x <= center(b).x ? {sourceSide:'right',targetSide:'left'} : {sourceSide:'left',targetSide:'right'};
   const vertical = center(a).y <= center(b).y ? {sourceSide:'bottom',targetSide:'top'} : {sourceSide:'top',targetSide:'bottom'};
-  return [preferred, horizontal, vertical,
+  return [
+    ...(nodes.find(n=>n.id===edge.source).parentId !== nodes.find(n=>n.id===edge.target).parentId && center(a).y === center(b).y ? [{sourceSide:'bottom',targetSide:'bottom'}] : []),
+    preferred, horizontal, vertical,
     ...['left','right','bottom','top'].flatMap(sourceSide=>['left','right','bottom','top'].map(targetSide=>({sourceSide,targetSide})))
   ].filter((p,i,all)=>all.findIndex(q=>q.sourceSide===p.sourceSide&&q.targetSide===p.targetSide)===i)
    .filter(p=>!(nodes.find(n=>n.id===edge.source).collapsed&&p.sourceSide==='top')
@@ -339,18 +342,10 @@ function sideChoices(edge, nodes) {
 }
 
 function frameObstacles(edge, nodes, groups) {
-  const byId = new Map([...nodes, ...groups].map(node => [node.id, node]));
-  const related = new Set();
-  for (const id of [edge.source, edge.target]) {
-    let parentId = byId.get(id)?.parentId;
-    while (parentId) {
-      related.add(parentId);
-      parentId = byId.get(parentId)?.parentId;
-    }
-  }
-  return groups.filter(group => !group.collapsed).map(group => related.has(group.id)
-    ? { id: `header:${group.id}`, left: group.position.x, right: group.position.x + group.width, top: group.position.y, bottom: group.position.y + (group.headerTextHeight ?? group.headerHeight ?? 66) }
-    : nodeRect(group, ROUTE_CLEARANCE));
+  // Expanded frames permit transit in card gutters, while headers stay solid.
+  return groups.filter(group => !group.collapsed).map(group => (
+    { id: `header:${group.id}`, left: group.position.x, right: group.position.x + group.width, top: group.position.y, bottom: group.position.y + (group.headerTextHeight ?? group.headerHeight ?? 66) }
+  ));
 }
 
 export function routeEdge(edge, nodes, previousEdges = [], sceneEdges = [edge], groups = [], ports) {
@@ -417,6 +412,15 @@ export function routeEdge(edge, nodes, previousEdges = [], sceneEdges = [edge], 
   const cheapPaths = (start, end) => {
     const xs = new Set([start.x, end.x]), ys = new Set([start.y, end.y]);
     obstacles.forEach(r => { xs.add(r.left); xs.add(r.right); ys.add(r.top); ys.add(r.bottom); });
+    const pillHeight = Math.ceil((edge.data?.labelFontSize ?? 14) * 1.3 + 10);
+    for (const previous of previousLabels) {
+      const r = previous.data.labelBox;
+      if (r) { ys.add(r.top - pillHeight / 2 - 6); ys.add(r.bottom + pillHeight / 2 + 6); }
+    }
+    if (groups.some(g=>!g.collapsed)) for (const coordinates of [xs,ys]) {
+      const sorted=[...coordinates].sort((a,b)=>a-b);
+      sorted.slice(1).forEach((value,i)=>coordinates.add((value+sorted[i])/2));
+    }
     return [
       ...[...xs].map(x => [start, {x, y:start.y}, {x, y:end.y}, end]),
       ...[...ys].map(y => [start, {x:start.x, y}, {x:end.x, y}, end]),
@@ -550,7 +554,7 @@ function adjacentLabelCandidates(edge) {
   return candidates;
 }
 
-function labelCandidates(edge) {
+function labelCandidates(edge, allowShift = false) {
   if (!edge.data?.pillLabel) return adjacentLabelCandidates(edge);
   const size = edge.data.labelFontSize ?? 14;
   const segments = edgeSegments(edge);
@@ -572,7 +576,12 @@ function labelCandidates(edge) {
       }
       const dimensions = { width: Math.max(...lines.map(line => labelDimensions(line, size).width)), height: Math.ceil(lines.length * size * 1.3 + 10) };
       if (dimensions.width > maxWidth || (horizontal ? dimensions.width : dimensions.height) > length - 24) continue;
-      candidates.push({ point, anchor: point, fraction: (travelled + length / 2) / total, offset: 0, segment, dimensions, lines });
+      for (const fraction of allowShift ? [.5,.25,.75] : [.5]) {
+        const inset = (horizontal ? dimensions.width : dimensions.height) / 2 + 12;
+        const offset = Math.max(inset,Math.min(length-inset,length*fraction)), ratio=offset/length;
+        const anchor = fraction===.5 ? point : {x:segment.from.x+(segment.to.x-segment.from.x)*ratio,y:segment.from.y+(segment.to.y-segment.from.y)*ratio};
+        candidates.push({ point:anchor, anchor, fraction: (travelled + offset) / total, offset: 0, segment, dimensions, lines });
+      }
     }
     travelled += length;
   }
@@ -596,9 +605,9 @@ export function placeLabels(edges, nodes, groups = []) {
     if (!edge.label?.trim()) return edge;
     let dimensions = labelDimensions(edge.label, edge.data?.labelFontSize);
     const frames = frameObstacles(edge, nodes, groups);
-    const placement = labelCandidates(edge).find((candidate) => {
+    const placement = labelCandidates(edge,groups.some(g=>!g.collapsed)).find((candidate) => {
       const box = boxAt(candidate.point, candidate.dimensions ?? dimensions);
-      if (bounds && (box.left < bounds.left || box.right > bounds.right)) return false;
+      if (bounds && groups.every(g=>g.collapsed) && (box.left < bounds.left || box.right > bounds.right)) return false;
       const strokePaddedBox = {
         left: box.left - 6,
         right: box.right + 6,
@@ -607,6 +616,10 @@ export function placeLabels(edges, nodes, groups = []) {
       };
       if (nodeBoxes.some((nodeBox) => rectsOverlap(box, nodeBox))) return false;
       if (frames.some(frame => rectsOverlap(box, frame, 4))) return false;
+      // The standard stacked-card gap is spacing, never a label lane.
+      if (groups.some(g=>!g.collapsed && rectsOverlap(box, {
+        ...nodeRect(g), bottom:g.position.y+g.headerTextHeight+CARD_STACK_GAP-8,
+      },4))) return false;
       if (placed.some(({ box: placedBox }) => rectsOverlap(box, placedBox, 6))) return false;
       return allSegments.every((segment) => (
         (segment.edgeId === edge.id && (!edge.data?.pillLabel ||
@@ -620,6 +633,15 @@ export function placeLabels(edges, nodes, groups = []) {
     dimensions = placement.dimensions ?? dimensions;
     const point = placement.point;
     const box = boxAt(point, dimensions);
+    // Keep the moved pill at an explicit carrier midpoint without adding a bend.
+    const routedPoints = edge.data.routedPoints.flatMap((p,i,all)=>{
+      const s=placement.segment, next=all[i+1];
+      if(!s||!next||p.x!==s.from.x||p.y!==s.from.y||next.x!==s.to.x||next.y!==s.to.y)return [p];
+      const distance=q=>Math.abs(point.x-q.x)+Math.abs(point.y-q.y);
+      if(Math.abs(distance(p)-distance(next))<EPSILON)return [p];
+      const end=distance(p)<distance(next)?p:next;
+      return [p,{x:2*point.x-end.x,y:2*point.y-end.y}];
+    });
     placed.push({ edgeId: edge.id, box });
     return {
       ...edge,
@@ -627,6 +649,7 @@ export function placeLabels(edges, nodes, groups = []) {
         ...(edge.data ?? {}),
         labelPoint: point,
         labelBox: box,
+        routedPoints, routePoints:routedPoints.slice(1,-1),
         ...(placement.lines ? { labelLines: placement.lines } : {}),
         labelAnchor: placement.anchor,
         labelEdgeFraction: placement.fraction,
@@ -666,7 +689,7 @@ export function routeScene(scene) {
     const sides = sideChoices(edge, scene.nodes)[0];
     const from = handlePoint(nodeRect(nodeById.get(edge.source)), sides.sourceSide);
     const to = handlePoint(nodeRect(nodeById.get(edge.target)), sides.targetSide);
-    if ((from.x === to.x || from.y === to.y) && segmentIsClear(from, to, [
+    if (sides.sourceSide !== sides.targetSide && (from.x === to.x || from.y === to.y) && segmentIsClear(from, to, [
       ...obstacleNodes.map(n => nodeRect(n)), ...frameObstacles(edge, scene.nodes, scene.groups ?? []),
     ])) {
       aligned.add(edge.id);
@@ -713,6 +736,7 @@ export function routeScene(scene) {
   const routeAttempts = new Map();
   const attempted = new Set();
   let lastError = null;
+  let promoted = 0;
 
   const choices = new Map(scene.edges.map(e=>[e.id,sideChoices(e,scene.nodes).sort((a,b)=>{
     const penalty = p => ['source','target'].reduce((sum,end)=>{
@@ -726,6 +750,7 @@ export function routeScene(scene) {
     if (attempted.has(signature)) continue;
     attempted.add(signature);
     const choice = new Map(scene.edges.map(e=>[e.id,0]));
+    let blocked;
     // A failed corridor changes the side plan, then reallocates EVERY affected
     // port. A route with a shifted or asymmetric bank is never returned.
     for (let attempt=0; attempt<scene.edges.length*5+1; attempt++) {
@@ -748,11 +773,23 @@ export function routeScene(scene) {
           routedEdges.push(result.edge);
         }
         const routedById = new Map(routedEdges.map(e=>[e.id,e]));
-        return {...scene,edges:placeLabels(scene.edges.map(e=>routedById.get(e.id)),obstacleNodes,scene.groups ?? [])};
-      } catch (error) { lastError=error; }
-      const next = choice.get(failed)+1;
-      if (next>=choices.get(failed).length) break;
-      choice.set(failed,next);
+        // Keep the validated incremental label order when frames are open.
+        const labelOrder = scene.groups?.some(g=>!g.collapsed) ? routedEdges : scene.edges.map(e=>routedById.get(e.id));
+        const placedById = new Map(placeLabels(labelOrder,obstacleNodes,scene.groups ?? []).map(e=>[e.id,e]));
+        return {...scene,edges:scene.edges.map(e=>placedById.get(e.id))};
+      } catch (error) { lastError=error; blocked=failed; }
+      let index = routingOrder.findIndex(({edge})=>edge.id===failed);
+      while (index >= 0 && choice.get(failed)+1 >= choices.get(failed).length) {
+        choice.set(failed,0);
+        failed = routingOrder[--index]?.edge.id;
+      }
+      if (index < 0) break;
+      choice.set(failed,choice.get(failed)+1);
+    }
+    // Give a blocked relation its corridor before shorter routes enclose it.
+    if (blocked && promoted++ < scene.edges.length * 2) {
+      const next = [routingOrder.find(({edge})=>edge.id===blocked), ...routingOrder.filter(({edge})=>edge.id!==blocked)];
+      routingOrders.splice(routingOrders.indexOf(routingOrder)+1,0,next);
     }
   }
 

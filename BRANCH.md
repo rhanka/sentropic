@@ -227,3 +227,9 @@
   - [x] Reject subtitle textLength, lengthAdjust and letter/word spacing overrides; verify all ten zones and byte-identical fully expanded groups, cards, geometry and edges against the starting head.
   - [x] Rebuild the portable; verify offline Chromium title, visible diagram and zero console errors, clipped fields or ellipses; save 1920px FR/EN overviews and 200% Sentropic crops under root `.tmp/governance-unification/center28-shots/`.
   - [x] Pass source, 102-scene geometry, 16-capture/600-interaction browser, content, unchanged performance budgets and scope checks; refresh checksums and prepare one selective make commit/push. Delivery requires exact-head green CI with PR #711 draft and unmerged.
+- [x] **Lot 30 — Compact every expanded zone without a label band**
+  - [x] Verify and pull `docs/governance-contract` at `04461681f`; preserve the interrupted author's changes that serve this correction.
+  - [x] Reuse the 72px stacked-card gap below every expanded header rule in FR/EN; align separators and child rows, shrink frames and route readable labels through card gutters or outside frames.
+  - [x] Preserve card content, dimensions, icons, header wording and fully collapsed geometry/routes; reject the starting head with the strengthened geometry gate.
+  - [x] Rebuild the portable and pass source, all-scene geometry, offline Chromium, 16-capture/600-interaction browser, content and unchanged performance budgets; capture the three requested expanded zones at 1920px in FR/EN under root `.tmp/governance-unification/gap30-shots/`.
+  - [x] Refresh checksums and prepare one selective `make commit` plus normal push; require green CI on the exact head before handoff and leave PR #711 draft/unmerged for owner review.
