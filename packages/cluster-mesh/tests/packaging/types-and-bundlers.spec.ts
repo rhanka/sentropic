@@ -56,7 +56,7 @@ describe.skipIf(!enabled)('packed declarations and bundlers', () => {
 
   it('should emit provider leaves as the guard import plus export-star only', () => {
     const leaves = files(join(packageDir('bare'), 'dist/integrations'));
-    // 12 re-export leaves, including local comments and the three judge leaves, plus the mcp/artifacts builtin-factory leaf
+    // 12 re-export leaves, including local comments and the three decision leaves, plus the mcp/artifacts builtin-factory leaf
     // (asserted separately below: it carries mesh code, so it is no export-star).
     expect(leaves.filter((file) => file.endsWith('.d.ts'))).toHaveLength(13);
     for (const file of leaves.filter((path) => /\.(d\.ts|js)$/u.test(path))) {
