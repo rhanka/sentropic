@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R1: atomically recheck/fence admission before staging; one writer per locked reservation. Persist admitted/settled/unknown state through SDK completion, and never purge an unsettled writer. Delete settled keys then verify physical absence; jobs/quota remain pending until the final inventory is empty. Restart/delayed-PUT regression now passes (n5_r1_api_green.log).
+
 - [x] N5 R3 API: grant/project read_denied is independent of capture state; history issuance and reads inspect both. Exclusion/close cannot replace revocation; accept-at-revision cannot reopen a revoked project. Four durable transition cases pass (n5_r3_api_green.log).
 
 - [x] N5 safety schema: owner permits new additive migration 0017 when unavoidable; persist writer settlement and independent read denial, conservatively backfill unknown writers, index pending jobs. Preserve every byte of migrations 0012–0016; no external migration or COMPLIANCE operation.

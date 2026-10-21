@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -1712,7 +1713,25 @@ export class SessionContentService {
     const retention = snapshot[channel] ?? { mode: 'none' as const };
     const expiresAt =
       retention.mode === 'none' ? null : capturedAt + retention.durationSeconds * 1000;
-    await db.insert(sessionContentObjects).values({
+    await db.transaction(async (tx) => {
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      await this.checkWorkspaceMembership(tx, reservation.grant.workspaceId, ctx.principalId);
+      const [parent] = await tx.select().from(sessionContentProjects)
+        .where(eq(sessionContentProjects.projectId, reservation.grant.projectId)).for('update').limit(1);
+      const [grant] = await tx.select().from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, reservation.grant.sessionId)).for('update').limit(1);
+      const [hold] = await tx.select().from(sessionContentReservations)
+        .where(eq(sessionContentReservations.reservationId, reservationId)).for('update').limit(1);
+      if (!grant || grant.state !== 'active') throw new SessionContentError('grant_revoked', 'writer was fenced');
+      if (!parent || parent.state !== 'active' || parent.projectRevision !== hold?.projectRevision
+        || grant.version !== hold?.grantVersion || grant.projectRevision !== parent.projectRevision) {
+        throw new SessionContentError('project_revision_changed', 'writer authorization changed');
+      }
+      const [duplicate] = await tx.select({ objectId: sessionContentObjects.objectId }).from(sessionContentObjects)
+        .where(eq(sessionContentObjects.reservationId, reservationId)).limit(1);
+      if (hold.state !== 'reserved' || duplicate) throw new SessionContentError('unknown_outcome', 'writer already admitted');
+      await this.requireEpochScope(tx, grant.authorityEpoch, hold.namespaceId);
+      await tx.insert(sessionContentObjects).values({
       objectId,
       namespaceId: reservation.reservation.namespaceId,
       authorityEpoch: reservation.grant.authorityEpoch,
@@ -1727,23 +1746,33 @@ export class SessionContentService {
       capturedAt,
       expiresAt,
       state: 'staged',
+      writerState: 'admitted',
       version: 1,
+      });
     });
     // N5: a PUT/hook failure keeps purge pending and quota charged: the
     // staged row becomes purge_pending with an object-scoped job, the
     // reservation goes stale and the attempt unknown. Retrying the same
     // reservation refuses (stale) instead of staging a second row.
+    let putStarted = false;
+    let putSettled = false;
     try {
       if (this.publishHooks?.beforePut) {
         await this.publishHooks.beforePut(key);
       }
+      putStarted = true;
       await client.send(
         new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body }),
       );
+      putSettled = true;
+      await db.update(sessionContentObjects).set({ writerState: 'settled' })
+        .where(eq(sessionContentObjects.objectId, objectId));
       if (this.publishHooks?.afterUpload) {
         await this.publishHooks.afterUpload(key);
       }
     } catch (err) {
+      await db.update(sessionContentObjects).set({ writerState: putStarted && !putSettled ? 'unknown' : 'settled' })
+        .where(eq(sessionContentObjects.objectId, objectId));
       await this.queueStagedDeletion(
         objectId,
         reservation.reservation.namespaceId,
@@ -1761,6 +1790,8 @@ export class SessionContentService {
         // lock is held over the network PUT; withdrawal during it wins.
         await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
         await this.checkWorkspaceMembership(tx, reservation.grant.workspaceId, ctx.principalId);
+        const [project] = await tx.select().from(sessionContentProjects)
+          .where(eq(sessionContentProjects.projectId, reservation.grant.projectId)).for('update').limit(1);
         const [freshGrant] = await tx
           .select()
           .from(sessionContentGrants)
@@ -1784,12 +1815,6 @@ export class SessionContentService {
         // wins and publication refuses. The locked project row shares one
         // order with the amendment CAS; authority is never reconstructed
         // from the latest grant but rechecked against the frozen tuple T.
-        const [project] = await tx
-          .select()
-          .from(sessionContentProjects)
-          .where(eq(sessionContentProjects.projectId, freshGrant.projectId))
-          .for('update')
-          .limit(1);
         if (!project || project.state !== 'active') {
           throw new SessionContentError('project_not_active', 'project changed during upload');
         }
@@ -2172,17 +2197,26 @@ export class SessionContentService {
     const inScope = isObjectJob || !job.bindingId
       ? objects
       : objects.filter((o) => o.bindingId === job.bindingId);
+    // Durable settlement survives process loss. Neither SQL cancellation
+    // nor an absent key can settle an admitted/unknown remote PUT.
+    const deletable = inScope.filter((object) => object.writerState === 'settled');
     let deletedBytes = 0;
     const deletedKeys: string[] = [];
-    for (const object of inScope) {
+    for (const object of deletable) {
       await client.send(
         new DeleteObjectCommand({ Bucket: object.bucket, Key: object.objectKey }),
       );
+      try {
+        await client.send(new HeadObjectCommand({ Bucket: object.bucket, Key: object.objectKey }));
+        throw new SessionContentError('purge_pending', 'object still exists after deletion');
+      } catch (error) {
+        if ((error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode !== 404) throw error;
+      }
       deletedBytes += object.bytesEncoded;
       deletedKeys.push(object.objectKey);
     }
     const evidence = await db.transaction(async (tx) => {
-      for (const object of inScope) {
+      for (const object of deletable) {
         await tx
           .update(sessionContentObjects)
           .set({ state: 'purged', updatedAt: new Date(this.nowMs()) })
@@ -2193,7 +2227,7 @@ export class SessionContentService {
       // nothing. Other scopes keep the namespace-wide settlement.
       const linkedReservationIds = [
         ...new Set(
-          inScope
+          deletable
             .map((o) => o.reservationId)
             .filter((id: string | null): id is string => (id?.length ?? 0) > 0),
         ),
@@ -2247,7 +2281,7 @@ export class SessionContentService {
           ),
         );
       const record = {
-        deletedObjects: inScope.length,
+        deletedObjects: deletable.length,
         deletedBytes,
         deletedKeys,
         remainingObjects: remaining?.count ?? 0,
@@ -2256,9 +2290,9 @@ export class SessionContentService {
       await tx
         .update(sessionContentPurgeJobs)
         .set({
-          state: 'complete',
+          state: (remaining?.count ?? 0) === 0 ? 'complete' : 'pending',
           evidence: record,
-          completedAt: new Date(this.nowMs()),
+          completedAt: (remaining?.count ?? 0) === 0 ? new Date(this.nowMs()) : null,
           updatedAt: new Date(this.nowMs()),
         })
         .where(eq(sessionContentPurgeJobs.purgeJobId, purgeJobId));
