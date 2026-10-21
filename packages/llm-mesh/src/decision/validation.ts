@@ -1,6 +1,6 @@
-export const JUDGE_MAX_JSON_BYTES = 256 * 1024;
-export const JUDGE_MAX_JSON_DEPTH = 16;
-export const JUDGE_MAX_RAW_BYTES = 16 * 1024;
+export const DECISION_MAX_JSON_BYTES = 256 * 1024;
+export const DECISION_MAX_JSON_DEPTH = 16;
+export const DECISION_MAX_RAW_BYTES = 16 * 1024;
 const unsafeKeys = new Set(['__proto__', 'constructor', 'prototype']);
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -17,7 +17,7 @@ export const isCorrelationId = (value: unknown): value is string =>
 
 /** Copy data descriptors only; never serialize or read fields from the live caller object. */
 function copyJson(value: unknown, depth: number, budget: { remaining: number }): unknown {
-  if (--budget.remaining < 0 || depth > JUDGE_MAX_JSON_DEPTH) throw new Error('Invalid JSON.');
+  if (--budget.remaining < 0 || depth > DECISION_MAX_JSON_DEPTH) throw new Error('Invalid JSON.');
   if (typeof value === 'string') {
     budget.remaining -= value.length;
     if (budget.remaining < 0) throw new Error('Invalid JSON.');
@@ -47,7 +47,7 @@ function copyJson(value: unknown, depth: number, budget: { remaining: number }):
   return copy;
 }
 
-export function snapshotBoundedJson(value: unknown, maxBytes = JUDGE_MAX_JSON_BYTES):
+export function snapshotBoundedJson(value: unknown, maxBytes = DECISION_MAX_JSON_BYTES):
   { ok: true; value: unknown } | { ok: false } {
   try {
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) return { ok: false };
@@ -60,5 +60,5 @@ export function snapshotBoundedJson(value: unknown, maxBytes = JUDGE_MAX_JSON_BY
   }
 }
 
-export const isBoundedJson = (value: unknown, maxBytes = JUDGE_MAX_JSON_BYTES): boolean =>
+export const isBoundedJson = (value: unknown, maxBytes = DECISION_MAX_JSON_BYTES): boolean =>
   snapshotBoundedJson(value, maxBytes).ok;
