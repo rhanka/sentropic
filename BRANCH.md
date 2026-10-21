@@ -61,6 +61,7 @@
 ## Feedback Loop
 - [x] Received the final-review-approved C2/C6 exact bytes/full manifest/digest mapping and C7 scope mapping; recorded producer identities and receipt locators.
 - [x] `BR709-EX1` (conditional `tools/memory-mcp-l5/**`): regenerate the P1 pre-candidate manifest after the CI-required cluster-mesh 0.22.0 lock sync, following #704. Reason: `package-lock.json` SHA change breaks the `manifest freeze/lock mismatch` gate. Impact: new immutable history identity plus refreshed pre-candidate manifest/sidecar, old bytes retained. Rollback: restore the retained history bytes to the pre-candidate path. Authorization: CI-red packet 709 + plan P1 disposition rule.
+- [x] `BR709-EX2` (forbidden `Makefile`, one token on `CLUSTER_MESH_PEER_TOOLS` + `--install-strategy=shallow` in `tests/storage/cold-workspace.sh`): pin `@sentropic/engram@0.21.0` for the disposable test workspace so G1 specs import the published memory-substrate. Reason: cold-workspace resolves bare imports only from the peer-tools install; shallow keeps transitive dependents nested so an installed `@sentropic/*` (engram requires llm-mesh ^0.19.0) can never shadow a workspace symlink and break sibling builds. Impact: test-only, exact pin; no runtime, packaging or prod change (devDep excluded from the packed candidate). Rollback: remove the pin and flag and the G1 specs. Authorization: engram publication packet 709-engram-0210-muse (gr-conductor C9 path).
 - [ ] Track U/R/S/P dependencies, host-provider readiness and the S0 receipt; do not mark the existing S0 item accepted without its receipt.
 - [ ] Track U/R/S/P dependencies, host-provider readiness and the S0 receipt; do not mark the existing S0 item accepted without its receipt.
 - [ ] After Engram merge/tag/CI publication, verify its provenance and integrity separately from candidate contract delivery.
@@ -108,7 +109,7 @@
     - [ ] Completion/replay/destruction preserve first proofs, bypass attempts refuse, and Comments equal-digest replacement remains valid.
 - [ ] **Lot 4 — G1d host-injected SQLite and neutral integration**
   - [ ] Integrate only after S0 and required S/U/R/backend ownership gates; wire the explicit host provider without changing the owner process isolation.
-  - [ ] Tests: `packages/cluster-mesh/tests/engram-memory/sqlite-registration.spec.ts`, `packages/cluster-mesh/tests/engram-memory/sqlite-driver-injection.spec.ts`, `packages/cluster-mesh/tests/engram-memory/binding-compatibility.spec.ts`, `packages/cluster-mesh/tests/engram-memory/binding-errors.spec.ts`.
+  - [x] Tests: `packages/cluster-mesh/tests/engram-memory/sqlite-registration.spec.ts`, `packages/cluster-mesh/tests/engram-memory/sqlite-driver-injection.spec.ts`, `packages/cluster-mesh/tests/engram-memory/binding-compatibility.spec.ts`, `packages/cluster-mesh/tests/engram-memory/binding-errors.spec.ts`.
   - [ ] Lot gate:
     - [ ] Installed provider lifecycle, engine checks, typed refusals and sync/async bind pass; missing capabilities cannot select a fallback.
     - [ ] Final SQLite owner/provider tuple has affected S0 cases repeated and common memory corpus results.
