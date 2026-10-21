@@ -467,3 +467,117 @@ retained/bound claim; L21 reconciles the register against installed
 consumers and exact proposed release tuples. L22 and the final release MUST
 wait while any in-scope legacy-only store has consumers that cannot activate;
 documenting such claims as pending does not authorize shipping the sunset.
+
+## Common-rule evidence, conformance kit and sequencing
+
+### Traceability (re-pinned to the consolidation base)
+
+The consolidation branch resolves its merge base with its target to
+`6ec93105b380bc65063994417716dfacfaceb462` and re-reads every evidence
+citation there. All 75 `file:line@7c395f43` citations resolve in range at the
+new base. The 65 cluster-mesh storage citations are byte-identical between
+the evidence pin and the consolidation base. Observed drift is recorded below;
+no citation is dropped.
+
+| Drift | Old location | New location and semantic consequence |
+| --- | --- | --- |
+| Artifacts hardening (#708) in `packages/artifacts/src/server/publication.ts` | Cited ranges `:29-43`, `:46-50`, `:80-82`, `:131-136`, `:139-174`, `:163-189`, `:205-216` | Ranges shift down as the service gains `source` refs, publication limits and defensive input byte-copy. The create-only gap stays open: the public port still writes unconditionally and no digest/key comparison guards conflicts. |
+| Artifacts release line | `packages/artifacts/package.json:2-3` pinned `0.1.3` | Base carries `0.1.4`; the staged 0.2.0 migration notes now start from 0.1.4. The additive-V2 and co-owner review obligations are unchanged. |
+| Make target | `Makefile:802` (`test-cluster-mesh`) | Now `Makefile:808`; `sqlite.mk:4` and `postgres.mk:48` are unchanged. |
+| Ownership boundary sentence | `spec/...MODULE_STORAGE.md:70-71` at pin | Same section intact at the new base, line 71 region; SQLite and live-generation ownership unchanged. |
+
+Profile advertisements re-verified at the consolidation base:
+`C/sqlite/index.ts:52-63` (SQLite advertises only `atomic-units-v1` and
+`immutable-chains-v1`), `C/postgres/profiles.ts:5-22` and `:33-40`
+(conditional `staged-units-v1` on `comments`, conditional `scope-outbox-v1` on
+resync), `C/profiles.ts:44-100` (`comments-c4` and `comments-purge`
+expansions). All 15 register test anchors and all 17 reuse anchors exist at
+the new base. Key gap preserved: no grant carries an enforced publish
+requirement in storage mutation paths; explicit write+publish composition and
+host-grant migration remain required.
+
+### Conformance-test kit (acceptance summary)
+
+The kit MUST accept an injected backend fixture with separate reader,
+preparer, publisher and maintainer bindings, two independent contenders,
+restart/reopen controls, fault checkpoints, measured backend work and
+inspectable committed outcomes, and MUST run unchanged semantic assertions
+against each adapter. It includes a positive test-only reference and a
+recorded broken fixture for each of CT-01 through CT-14 plus QG-01; every
+mutant MUST be killed by its designated semantic assertion. Existing adapter
+failures are gaps, never skipped passes.
+
+CT-01 covers create-only convergence, digest/key mismatch refusal, caller
+buffer mutation and two-scope dedupe without foreign disclosure. CT-02 covers
+the fixed envelope vectors, ordering semantics, unknown-version refusal and
+L3a hash preservation. CT-03 covers corrupt/missing/wrong-scope reads,
+bounded streaming verification and verified-subtree reuse. CT-04 covers the
+single-winner race and pending-state invisibility. CT-05 covers crash at
+every pre/post-commit checkpoint with original-receipt recovery. CT-06 covers
+same-operation idempotency, changed-parameter conflict and revoked-authority
+refusal. CT-07 covers item/byte/work budgets, backend-measured bounds,
+continuation integrity and secret rotation. CT-08 covers LIST-independent
+read/verification. CT-09 covers the full rights matrix with zero backend
+calls on locally decidable denial and durable revocation detection before
+data I/O. CT-10 covers scoped pin/delete races including two scopes sharing
+a digest. CT-11 covers claimed purge/restore implementation assertions plus
+mandatory refusal of unclaimed operations. CT-12 covers per-surface coherent
+boundaries and undeclared-surface refusal. CT-13 covers N to 10N counter
+budgets with whole-history serialization failing. CT-14 covers store
+activation with legacy handles, parity refusal, delta-only cutover budgets
+and the live 0.1 put/collect/delete denial probe. QG-01 enumerates every
+shipped adapter claim and tests admission refusal for absent, failing,
+altered, wrong-tuple or skip-bearing evidence.
+
+A qualification run MUST declare its tuple and expected inventory before
+execution; the make lane MUST exit nonzero on any skipped, todo, missing,
+undiscovered or unexecuted required test, on a surviving mutant, on missing
+instrumentation, or on a missing fixture environment. CT-11 always runs its
+selected cases; unclaimed optional functionality is recorded as not claimed,
+never as a skip.
+
+### Ordered implementation lots
+
+Lot order is L00 documentation, then L01a data contract, then L01b1–L01b4 kit
+families (objects/manifests, publication/activation, bounds/rights/GC/work,
+lifecycle/surfaces/admission/runner), then L02 production envelope and
+admission helpers, then SQLite (L03–L07), host-grant migration (L07g),
+Postgres (L08–L11), S3/object (L12–L18), additional surfaces (L19–L20), L21
+release preparation and L22 legacy sunset. L02 starts after L01b1 alone.
+Backend lots wait for the families they exercise; qualification waits for the
+complete kit. Optional backends do not delay the sequence.
+
+Each lot is one small PR with one acceptance gate (S: 150–300 changed
+lines, 2–4 files; M: 300–500 changed lines, 3–7 files; atomic commits below
+approximately 150 lines). A delta over 500 changed lines MUST split by
+rule/acceptance sections before implementation.
+
+### Advisory carry-over into the lots (review r3, all P3)
+
+- P3-1 (CT-14/legacy-object probe vs common layouts): where the common layout
+  cannot be addressed by 0.1 code, record that structural refusal and run the
+  same legacy principals through a raw-SDK fixture (`PutObject`, `CopyObject`,
+  multipart completion, `DeleteObject` with and without `VersionId`),
+  requiring provider access denied for each call. Keep the literal 0.1
+  put/collect/delete probe for the dedicated-bucket layout. Carried into L14
+  and L18.
+- P3-2 (Postgres parity work has no implementing lot): when L00 seeds the
+  register, assign each pending Postgres row to an implementing lot (L09 or
+  L10 sub-lots) so L11 stays a qualification-only S lot. Wire reused anchors
+  into a lane that fails when the environment is missing instead of skipping.
+  Carried into L11.
+- P3-3 (SQLite activation inputs not durable at pin): require a version fence
+  so all writers emit change capture before pre-validation starts; define
+  record-level capture granularity for the frozen SQLite path; name the
+  durable binding registry and its revision counter that the parity recheck
+  reads. Carried into L05 and L06.
+- P3-4 (post-L22 activation path and "in-scope" meaning): state in the
+  release notes that a legacy store MUST activate on the last release before
+  L22 or ship a bounded migration tool keeping legacy-format reads for
+  activation only; define the in-scope store inventory (stores recorded by
+  host integrators in the release registry) so the L22 gate evaluates
+  mechanically. Carried into L21.
+- P3-5 (terminology): this consolidation uses "active binding" for a bound
+  consumer and "not-yet-validated changes" for mutations not yet validated,
+  reserving "uncovered units" for legacy units excluded from coverage and
+  the live-graph sense of "live" for surface bindings such as `engram-live`.
