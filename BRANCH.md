@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R8 extended domain audit reproduces lost concurrent project exclusions and pending-local-denial export/derivation. Native-boundary fixtures now explicitly enable mirroring and acknowledge amendments before positive export, preserving discriminating positive controls.
+
 - [x] N5 R8 root correction: atomic memory writes and additive database migration 0019 preserve capture lifecycle denial and pending local denial independently of the existing read floor; revoked history authority also stays revoked.
 
 - [x] N5 R8 database repro: direct stale transactions replay active project/grant/history state or clear pending local denial only after the denial operation commits. Assertions require the persisted denial and refusal of new native-mirror reservations; each interleaving runs independently.

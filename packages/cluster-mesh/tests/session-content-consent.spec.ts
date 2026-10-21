@@ -61,9 +61,11 @@ const setupConsent = () => {
   return { store, service, advance: (ms: number) => { nowMs += ms; }, now: () => nowMs };
 };
 
-const readyConsent = async () => {
+const mirrorChannels = { 'terminal.live': true, 'terminal.cache': true, 'native.mirror': true, 'keyboard.control': false };
+
+const readyConsent = async (overrides: Partial<ProjectPrepareInput> = {}) => {
   const context = setupConsent();
-  const prepared = context.service.prepareProject(sharedBaseInput());
+  const prepared = context.service.prepareProject(sharedBaseInput(overrides));
   await context.service.acceptProject(prepared, { challengeId: prepared.challengeId });
   return context;
 };
@@ -133,9 +135,9 @@ describe('content consent retention validation', () => {
   it.each((['freshness', 'close', 'refresh', 'local'] as const).flatMap((operation) =>
     (['revoke', 'exclude', 'close', 'pending', 'reconcile'] as const).map((denial) => [operation, denial] as const)))(
     'should fence N5 R8 stale %s against %s', async (operation, denial) => {
-        const { service, store } = await readyConsent();
+        const { service, store } = await readyConsent({ channels: mirrorChannels });
         await service.deriveChild(sharedChildInput());
-        const amendment = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1 }));
+        const amendment = service.prepareProject(sharedBaseInput({ channels: mirrorChannels, expectedProjectRevision: 1 }));
         await service.acceptProject(amendment, { challengeId: amendment.challengeId });
         let entered!: () => void;
         let release!: () => void;
@@ -166,6 +168,40 @@ describe('content consent retention validation', () => {
           { seq: 42, lineage: 'l', conversationId: 'c', ordered: true },
         ]).exportable, `${operation}/${denial}`).toEqual([]);
     });
+
+  it.each(['exclude', 'amend', 'clear'] as const)('should preserve N5 R8 project suppression against stale %s', async (operation) => {
+    const { service, store } = await readyConsent();
+    let entered!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => { entered = resolve; });
+    const resume = new Promise<void>((resolve) => { release = resolve; });
+    const concurrent = createContentConsentService({ ...store, async writeProject(revision, next) {
+      entered(); await resume;
+      return store.writeProject(revision, next);
+    } });
+    const amendment = concurrent.prepareProject(sharedBaseInput({ expectedProjectRevision: 1 }));
+    const stale = operation === 'amend' ? concurrent.acceptProject(amendment, { challengeId: amendment.challengeId })
+      : operation === 'clear' ? concurrent.clearExclusion('project-1', 'unrelated')
+        : concurrent.excludeSession('project-1', 'unrelated');
+    await paused;
+    try { await service.excludeSession('project-1', 'session-1'); } finally { release(); }
+    await stale;
+    expect((await service.readProject('project-1'))?.excludedSessionIds).toContain('session-1');
+    await expect(service.deriveChild(sharedChildInput())).rejects.toBeInstanceOf(ContentConsentError);
+  });
+
+  it('should refuse N5 R8 export and derivation after a pending local denial while retaining read semantics', async () => {
+    const { service } = await readyConsent({ channels: mirrorChannels });
+    const grant = await service.deriveChild(sharedChildInput());
+    const project = (await service.readProject('project-1'))!;
+    const records = [{ seq: 41, lineage: 'l', conversationId: 'c', ordered: true }];
+    expect(partitionExportableNativeRecords(grant, project, records).exportable).toHaveLength(1);
+    await service.recordLocalDeny('session-1');
+    const pending = (await service.readGrant('session-1'))!;
+    expect(pending.readDenied).toBe(false);
+    expect(partitionExportableNativeRecords(pending, project, records).exportable).toEqual([]);
+    await expect(service.deriveChild(sharedChildInput())).rejects.toBeInstanceOf(ContentConsentError);
+  });
 
   it.each(['grant-close', 'project-exclude'] as const)(
     'should preserve N5 R3 denial across deterministic concurrent %s writes', async (race) => {
@@ -746,7 +782,7 @@ describe('content consent native boundary (CM2-R4-4)', () => {
 
   it('should copy only new eligible records for a child resuming an old conversation', async () => {
     const { service } = setupConsent();
-    const prepared = service.prepareProject(sharedBaseInput());
+    const prepared = service.prepareProject(sharedBaseInput({ channels: mirrorChannels }));
     const project = await service.acceptProject(prepared, { challengeId: prepared.challengeId });
     const grant = await service.deriveChild(sharedChildInput({
       resumedConversation: { conversationId: 'conv-old', lineage: 'lineage-old', ordered: true },
@@ -764,11 +800,13 @@ describe('content consent native boundary (CM2-R4-4)', () => {
 
   it('should add only the exact named older range after an amendment', async () => {
     const { service } = setupConsent();
-    const prepared = service.prepareProject(sharedBaseInput());
+    const prepared = service.prepareProject(sharedBaseInput({ channels: mirrorChannels }));
     await service.acceptProject(prepared, { challengeId: prepared.challengeId });
-    const grant = await service.deriveChild(sharedChildInput());
-    const rePrepared = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1, namedHistories: [namedRange] }));
+    await service.deriveChild(sharedChildInput());
+    const rePrepared = service.prepareProject(sharedBaseInput({ channels: mirrorChannels, expectedProjectRevision: 1, namedHistories: [namedRange] }));
     const amended = await service.acceptProject(rePrepared, { challengeId: rePrepared.challengeId });
+    const grant = await service.refreshChild({ ...sharedChildInput(), expectedProjectRevision: 2,
+      policyDigest: amended.retentionDigest, nativeBoundarySeq: 40 });
     const partition = partitionExportableNativeRecords(grant, amended, [
       { seq: 12, lineage: 'lineage-old', conversationId: 'conv-old', ordered: true },
       { seq: 3, lineage: 'lineage-old', conversationId: 'conv-old', ordered: true },
