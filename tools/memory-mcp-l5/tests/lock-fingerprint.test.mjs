@@ -10,12 +10,22 @@ const scan = root => spawnSync(process.execPath, ['tools/memory-mcp-l5/import-gr
 
 const REAL_MAKEFILE = readFileSync('Makefile', 'utf8');
 const REAL_LOCK = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+const REAL_TOOLCHAIN_LOCKS = {
+  lock: JSON.parse(readFileSync('tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json', 'utf8')),
+  pkg: JSON.parse(readFileSync('tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json', 'utf8')),
+};
 const REAL_CONFIGS = {
   'packages/mcp-platform/tsconfig.json': readFileSync('packages/mcp-platform/tsconfig.json'),
   'packages/mcp-broker/tsconfig.json': readFileSync('packages/mcp-broker/tsconfig.json'),
 };
-const fingerprint = (lockDoc = REAL_LOCK, makefileText = REAL_MAKEFILE, configFiles = REAL_CONFIGS) =>
-  computeLockFingerprint({ lockDoc, makefileText, configFiles });
+const fingerprint = (lockDoc = REAL_LOCK, makefileText = REAL_MAKEFILE, configFiles = REAL_CONFIGS, toolchainLocks = REAL_TOOLCHAIN_LOCKS) =>
+  computeLockFingerprint({ lockDoc, makefileText, configFiles, toolchainLocks });
+
+const mutatedToolchainLocks = (mut) => {
+  const clone = JSON.parse(JSON.stringify(REAL_TOOLCHAIN_LOCKS));
+  mut(clone);
+  return clone;
+};
 
 const TSC_ANCHOR = '"$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run';
 const withTscFlag = (text) => text.replace(TSC_ANCHOR,
@@ -41,8 +51,8 @@ function gated(mut) {
 }
 
 describe('lock-fingerprint — derived P1 build inputs and provenance', () => {
-  it('exposes fingerprint version 2 over the three producing targets', () => {
-    expect(LOCK_FINGERPRINT_VERSION).toBe(2);
+  it('exposes fingerprint version 3 over the three producing targets', () => {
+    expect(LOCK_FINGERPRINT_VERSION).toBe(3);
     expect(P1_PRODUCING_TARGETS).toEqual(['build-mcp-platform', 'build-mcp-broker', 'api-extract-mcp-platform']);
   });
 
@@ -81,11 +91,37 @@ describe('lock-fingerprint — derived P1 build inputs and provenance', () => {
     expect(() => fingerprint(REAL_LOCK, withImageSwap(REAL_MAKEFILE))).toThrow(/unknown build image/);
   });
 
+  it('fingerprints the installed toolchain records, not the workspace resolutions', () => {
+    const closure = REAL_TOOLCHAIN_LOCKS.lock.packages;
+    expect(closure['node_modules/@microsoft/api-extractor'].version).toBe('7.58.9');
+    expect(closure['node_modules/@microsoft/api-extractor-model'].version).toBe('7.33.8');
+    expect(closure['node_modules/@rushstack/node-core-library'].version).toBe('5.23.1');
+    expect(REAL_LOCK.packages['node_modules/@microsoft/api-extractor'].version).not.toBe('7.58.9');
+  });
+
+  it('changes the fingerprint on installed-toolchain transitive change and edge deletion', () => {
+    const base = fingerprint();
+    expect(fingerprint(REAL_LOCK, REAL_MAKEFILE, REAL_CONFIGS, mutatedToolchainLocks((t) => {
+      t.lock.packages['node_modules/fs-extra'].integrity = 'sha512-review';
+    }))).not.toBe(base);
+    expect(fingerprint(REAL_LOCK, REAL_MAKEFILE, REAL_CONFIGS, mutatedToolchainLocks((t) => {
+      delete t.lock.packages['node_modules/@rushstack/node-core-library'].dependencies['fs-extra'];
+    }))).not.toBe(base);
+  });
+
+  it('fails closed when the snapshot no longer satisfies the declared specs', () => {
+    expect(() => fingerprint(REAL_LOCK, REAL_MAKEFILE, REAL_CONFIGS, mutatedToolchainLocks((t) => {
+      delete t.pkg.dependencies.typescript;
+    }))).toThrow(/does not satisfy/);
+    expect(() => fingerprint(REAL_LOCK, REAL_MAKEFILE, REAL_CONFIGS, mutatedToolchainLocks((t) => {
+      t.pkg.dependencies.typescript = '5.5.4';
+    }))).toThrow(/does not satisfy/);
+  });
+
   it.each([
-    ['unpinned spec', 'build-mcp-platform:\n\tnpm install --prefix x --no-save typescript@5.4.5 @types/node >/dev/null'],
-    ['unknown flag', 'build-mcp-platform:\n\tnpm install --prefix x --no-save --fast typescript@5.4.5 >/dev/null'],
-    ['missing producing target', 'other-target:\n\tnpm install typescript@5.4.5 >/dev/null'],
-    ['unknown image token', 'build-mcp-platform:\n\tdocker run --rm node:22-bookworm-slim sh -lc \'x\'; npm install --prefix x --no-save typescript@5.4.5 >/dev/null'],
+    ['unpinned spec', 'MEMORY_L5_TOOLCHAIN := typescript@5.4.5 @types/node'],
+    ['missing declaration', 'build-mcp-platform:\n\tdocker run --rm $(LLM_MESH_NODE_IMAGE) sh -lc \'x\''],
+    ['unknown image token', 'MEMORY_L5_TOOLCHAIN := typescript@5.4.5\nbuild-mcp-platform:\n\tdocker run --rm node:22-bookworm-slim sh -lc \'x\''],
   ])('fails closed on %s', (_, block) => {
     expect(() => parseToolchainSpecs(`MEMORY_L5_NODE_IMAGE := img\nexport LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim\nmemory-l5-pack: export LLM_MESH_NODE_IMAGE = $(MEMORY_L5_NODE_IMAGE)\n${block}`)).toThrow(/build inputs/);
   });
@@ -104,7 +140,12 @@ describe('lock-fingerprint — derived P1 build inputs and provenance', () => {
     const unrelated = JSON.parse(JSON.stringify(REAL_LOCK));
     unrelated.packages['node_modules/some-unrelated-pkg'] = { version: '9.9.9', resolved: 'https://r/u.tgz', integrity: 'sha512-u==' };
     expect(fingerprint(unrelated)).toBe(base);
-    expect(fingerprint(REAL_LOCK, REAL_MAKEFILE.replaceAll('typescript@5.4.5', 'typescript@5.5.4'))).not.toBe(base);
+    expect(() => fingerprint(REAL_LOCK, REAL_MAKEFILE.replace(
+      'MEMORY_L5_TOOLCHAIN := typescript@5.4.5',
+      'MEMORY_L5_TOOLCHAIN := typescript@5.5.4'))).toThrow(/does not satisfy/);
+    expect(() => fingerprint(REAL_LOCK, REAL_MAKEFILE.replace(
+      '@microsoft/api-extractor@7.58.9',
+      '@microsoft/api-extractor@7.58.10'))).toThrow(/does not satisfy/);
     expect(fingerprint(REAL_LOCK, REAL_MAKEFILE, {
       ...REAL_CONFIGS, 'packages/mcp-platform/tsconfig.json': Buffer.from('{"compilerOptions":{"target":"ES2023"}}'),
     })).not.toBe(base);
@@ -116,13 +157,44 @@ describe('lock-fingerprint — derived P1 build inputs and provenance', () => {
   });
 
   it.each([
-    ['Makefile compiler pin change', (lock, f) => { f.put('Makefile', readFileSync(`${f.root}/Makefile`, 'utf8').replaceAll('typescript@5.4.5', 'typescript@5.5.4')); }],
     ['tsconfig target change', (lock, f) => { f.put('packages/mcp-platform/tsconfig.json', readFileSync(`${f.root}/packages/mcp-platform/tsconfig.json`, 'utf8').replace('ES2022', 'ES2023')); }],
     ['emitting tsc flag change', (lock, f) => { f.put('Makefile', withTscFlag(readFileSync(`${f.root}/Makefile`, 'utf8'))); }],
   ])('refuses the packed gate on %s', (_, mut) => {
     const r = gated(mut);
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/lock fingerprint mismatch/);
+  });
+
+  it('refuses the packed gate on a stale toolchain snapshot after a compiler pin change', () => {
+    const r = gated((lock, f) => { f.put('Makefile', readFileSync(`${f.root}/Makefile`, 'utf8').replace(
+      'MEMORY_L5_TOOLCHAIN := typescript@5.4.5', 'MEMORY_L5_TOOLCHAIN := typescript@5.5.4')); });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/does not satisfy/);
+  });
+
+  it.each([
+    ['installed-toolchain transitive drift', (snap) => { snap.packages['node_modules/fs-extra'].integrity = 'sha512-review'; }],
+    ['installed-toolchain edge deletion', (snap) => { delete snap.packages['node_modules/@rushstack/node-core-library'].dependencies['fs-extra']; }],
+  ])('refuses the packed gate on %s', (_, mutateSnap) => {
+    const r = gated((lock, f) => {
+      const rel = 'tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json';
+      const snap = JSON.parse(readFileSync(`${f.root}/${rel}`, 'utf8'));
+      mutateSnap(snap);
+      f.put(rel, JSON.stringify(snap));
+    });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/lock fingerprint mismatch/);
+  });
+
+  it('refuses the packed gate when the snapshot package no longer satisfies the specs', () => {
+    const r = gated((lock, f) => {
+      const rel = 'tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json';
+      const pkg = JSON.parse(readFileSync(`${f.root}/${rel}`, 'utf8'));
+      pkg.dependencies.typescript = '5.5.4';
+      f.put(rel, JSON.stringify(pkg));
+    });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/does not satisfy/);
   });
 
   it('refuses the packed gate on an unmodelled effective image token', () => {
