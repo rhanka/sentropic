@@ -1,10 +1,10 @@
 import { vi } from 'vitest';
 import { createProviderRegistry } from '../src/registry.js';
-import { createJevAdapter } from '../src/judge/adapter.js';
-import type { JudgeServiceOptions } from '../src/judge/host-options.js';
-import type { JudgeReceipt } from '../src/judge/receipt.js';
-import type { JudgeRequest } from '../src/judge/request.js';
-import { jevDescriptor } from '../src/judge/jev-descriptor.js';
+import { createJevAdapter } from '../src/decision/adapter.js';
+import type { DecisionServiceOptions } from '../src/decision/host-options.js';
+import type { DecisionReceipt } from '../src/decision/receipt.js';
+import type { DecisionRequest } from '../src/decision/request.js';
+import { jevDescriptor } from '../src/decision/descriptor.js';
 
 /** Synthetic qualification only: these IDs/evidence do not activate the built-in descriptor. */
 export const qualifiedDescriptor = () => structuredClone({ ...jevDescriptor,
@@ -13,7 +13,7 @@ export const qualifiedDescriptor = () => structuredClone({ ...jevDescriptor,
   qualification: { servedIdentity: 'qualified' as const, billingBound: 'qualified' as const,
     evidenceRefs: ['fixture:synthetic-qualification'] },
 });
-export const judgeRequest = (overrides: Partial<JudgeRequest> = {}): JudgeRequest => ({
+export const decisionRequest = (overrides: Partial<DecisionRequest> = {}): DecisionRequest => ({
   schemaVersion: 1, evaluator: qualifiedDescriptor().evaluator,
   inputs: { output: 'synthetic candidate' }, criterion: { kind: 'binary', instructions: 'Check evidence.' },
   ...overrides,
@@ -21,13 +21,13 @@ export const judgeRequest = (overrides: Partial<JudgeRequest> = {}): JudgeReques
 export const jevResponse = (answer: unknown = { noul: 0.25 }) => ({
   model: 'synthetic-served-model', answers: { verdict: answer }, usage: { input_tokens: 1000, output_tokens: 0 },
 });
-export const judgePrice = () => ({ providerId: 'typesafe' as const, modelId: 'jev-1.13.0', priceRevision: 'fixture-price-v1',
+export const decisionPrice = () => ({ providerId: 'typesafe' as const, modelId: 'jev-1.13.0', priceRevision: 'fixture-price-v1',
   inputMicroUsdPerMtok: '42000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const });
 
 /** Test-only linearized durable-port model; never a production financial authority. */
-export function judgeServiceFixture() {
+export function decisionServiceFixture() {
   const descriptor = qualifiedDescriptor();
-  const state = { now: 0, disabled: new Set<string>(), ledger: [] as JudgeReceipt[], receipts: [] as JudgeReceipt[] };
+  const state = { now: 0, disabled: new Set<string>(), ledger: [] as DecisionReceipt[], receipts: [] as DecisionReceipt[] };
   const key = (ref: { providerId: string; evaluatorId: string; revision: string }) => JSON.stringify(ref);
   const transport = { send: vi.fn().mockResolvedValue({ ok: true, body: jevResponse() }) };
   const adapter = createJevAdapter({ descriptor, transport });
@@ -42,8 +42,8 @@ export function judgeServiceFixture() {
       if (input.boundViolated) state.disabled.add(key(input.receipt.evaluator));
     }),
   };
-  const options: JudgeServiceOptions = { registry: createProviderRegistry([adapter]), resolveEvaluator: () => descriptor,
-    resolvePrice: vi.fn(() => judgePrice()), authorize: vi.fn(async () => true), budget,
+  const options: DecisionServiceOptions = { registry: createProviderRegistry([adapter]), resolveEvaluator: () => descriptor,
+    resolvePrice: vi.fn(() => decisionPrice()), authorize: vi.fn(async () => true), budget,
     resolveAuth: vi.fn(async () => ({ material: { type: 'environment-token', envVar: 'JEV_API_KEY', token: 'synthetic-secret-canary' },
       descriptor: { sourceType: 'environment-token' } })),
     receipts: { persist: vi.fn(async (receipt) => { state.receipts.push(receipt); }) },
