@@ -111,8 +111,9 @@ const consumerDigest = computeCompatibilityDigest(manifest);
 // Frozen reference digests for the synthetic fixture above (M5/M6): any
 // algorithm or fixture change fails these before it can drift silently.
 const GOLDEN_MANIFEST_DIGEST = '1b3514cd8e7d0991f9dadc4061da7950a04f2bcf655c4be0f04b4bee28a8ea4d';
-const GOLDEN_PAYLOAD_DIGEST = '0dd89602f9f14e540c22cc6c7943ffe09706ba778e83e6c44b391968a408c9c4';
-const GOLDEN_COMPILED_DIGEST = '17d9cefaced79b948cc2ed391884fdc441b658b3a4d1a57620592dc125b3f469';
+// Version-bound synthetic configuration receipt; Immo wire fixtures remain unchanged.
+const GOLDEN_PAYLOAD_DIGEST = 'dd09ba467afd79f37873ab5b4f9c781a60f1625e09051971ceb8fa51747a2747';
+const GOLDEN_COMPILED_DIGEST = '9ffd4becce9209c137e9777804243b64e2768eb3adefb6d4c2888f7d2c11bf0d';
 
 function buildSnapshot(): ApprovedToolSnapshot {
   const revision = 'rev-1';
