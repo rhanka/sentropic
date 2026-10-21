@@ -27,6 +27,7 @@ import {
   type SessionContentContext,
 } from '../../src/services/cluster-mesh/session-content';
 import { SessionWorkspaceService } from '../../src/services/cluster-mesh/session-workspace';
+import { startSessionContentPurgeConsumer } from '../../src/services/cluster-mesh/session-content-purge';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
 import {
   createSessionContentFixture,
@@ -151,6 +152,32 @@ describe('session consent durable lifecycle', () => {
     d1Incarnation: 1, d1StartSeq: 0, workspaceId, sessionCreatedAt: now + 1,
     sourceGeneration: 'src-1', sourceTrustVersion: 'tv-1', nativeStartSeq: 0,
   }, ctx);
+
+  it.each(['user', 'tenant', 'workspace', 'failed-upload'] as const)(
+    'should automatically consume N5 R2 %s purge jobs after restart without owner authentication', async (event) => {
+      await acceptProject();
+      await deriveSession('n5-consumer');
+      const bytes = { raw: 1, encoded: 1 };
+      const seed = await service.reserveBeforeUpload('n5-consumer', 'terminal.cache', bytes, 'seed', ctx);
+      await service.publishAfterUpload(seed.reservationId, new Uint8Array([1]), ctx);
+      if (event === 'user') await db.delete(users).where(eq(users.id, owner.id));
+      if (event === 'tenant') await db.delete(tenants).where(eq(tenants.id, TENANT_A));
+      if (event === 'workspace') await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+      if (event === 'failed-upload') {
+        const next = await service.reserveBeforeUpload('n5-consumer', 'terminal.cache', bytes, 'failed', ctx);
+        const failing = makeService({ publishHooks: { afterUpload: async () => { throw new Error('publish interrupted'); } } });
+        await expectContentError(() => failing.publishAfterUpload(next.reservationId, new Uint8Array([2]), ctx), 'unknown_outcome');
+      }
+      expect(await db.select().from(sessionContentPurgeJobs)).not.toHaveLength(0);
+      await db.update(sessionContentPurgeJobs).set({ state: 'in_progress' });
+      const consumer = startSessionContentPurgeConsumer(makeService(), { intervalMs: 5 });
+      try {
+        await expect.poll(() => fixture.listPhysical('')).toHaveLength(event === 'failed-upload' ? 1 : 0);
+        await expect.poll(async () => (await db.select().from(sessionContentPurgeJobs))
+          .every((job) => job.state === 'complete')).toBe(true);
+        if (event === 'failed-upload') expect(await service.readCommitted('n5-consumer', 'terminal.cache', ctx)).toEqual(new Uint8Array([1]));
+      } finally { await consumer.stop(); }
+    });
 
   it('should keep N5 R1 purge pending across restart until a delayed admitted PUT settles', async () => {
     await acceptProject();

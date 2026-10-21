@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R2 red: physical objects remain after user/tenant/workspace deletion and interrupted upload (four failures, n5_r2_api_red.log). Production boot now starts the bounded non-overlapping pending/in-progress consumer; storage failures retry without completion. Automatic restart regressions use its lifecycle, never runPurge or deleted-owner credentials (n5_r2_api_green.log).
+
 - [x] N5 R1: atomically recheck/fence admission before staging; one writer per locked reservation. Persist admitted/settled/unknown state through SDK completion, and never purge an unsettled writer. Delete settled keys then verify physical absence; jobs/quota remain pending until the final inventory is empty. Restart/delayed-PUT regression now passes (n5_r1_api_green.log).
 
 - [x] N5 R3 API: grant/project read_denied is independent of capture state; history issuance and reads inspect both. Exclusion/close cannot replace revocation; accept-at-revision cannot reopen a revoked project. Four durable transition cases pass (n5_r3_api_green.log).

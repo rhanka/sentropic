@@ -2146,6 +2146,23 @@ export class SessionContentService {
   /** Writer-settled physical purge: revoke first, settle or definitively
    * cancel every tracked writer, delete objects, then verify the final
    * inventory and record evidence. */
+  async consumePurgeJobs(limit = 25): Promise<void> {
+    const jobs = await db.select({ purgeJobId: sessionContentPurgeJobs.purgeJobId })
+      .from(sessionContentPurgeJobs)
+      .where(inArray(sessionContentPurgeJobs.state, ['pending', 'in_progress']))
+      .orderBy(sessionContentPurgeJobs.updatedAt, sessionContentPurgeJobs.purgeJobId)
+      .limit(Math.max(1, Math.min(limit, 25)));
+    for (const job of jobs) {
+      try { await this.runPurge(job.purgeJobId); }
+      catch (error) {
+        await db.update(sessionContentPurgeJobs).set({ state: 'pending', updatedAt: new Date(this.nowMs()),
+          evidence: { retryable: true, error: error instanceof SessionContentError ? error.code : 'storage_unavailable' },
+        }).where(and(eq(sessionContentPurgeJobs.purgeJobId, job.purgeJobId),
+          inArray(sessionContentPurgeJobs.state, ['pending', 'in_progress'])));
+      }
+    }
+  }
+
   async runPurge(purgeJobId: string) {
     const { client, config } = this.storage();
     const job = await db.transaction(async (tx) => {
