@@ -27,8 +27,10 @@ function syntheticLock() {
       'node_modules/undici-types': node('6.21.0', 'u'),
       'node_modules/zod': node('3.25.0', 'zod'),
       'node_modules/vitest': node('4.1.0', 'vitest'),
-      'node_modules/@microsoft/api-extractor': node('7.58.9', 'ae', { dependencies: { jju: '^1.0.0' } }),
+      'node_modules/@microsoft/api-extractor': node('7.58.9', 'ae', { dependencies: { jju: '^1.0.0', '@rushstack/node-core-library': '5.23.1' } }),
       'node_modules/jju': node('1.4.0', 'jju'),
+      'node_modules/@rushstack/node-core-library': node('5.23.1', 'ncl', { dependencies: { 'fs-extra': '~11.3.0' } }),
+      'node_modules/fs-extra': node('11.3.6', 'fse'),
     },
   };
 }
@@ -66,6 +68,10 @@ describe('lock-closure — per-consumer resolved dependency closure', () => {
       l.packages['packages/mcp-broker/node_modules/typescript'] = { ...l.packages['node_modules/typescript'], integrity: 'sha512-changed==' };
     }, false],
     ['build-tool transitive drift changes the closure', (l) => { l.packages['node_modules/undici-types'].integrity = 'sha512-changed=='; }, false],
+    ['second-level toolchain integrity drift changes the closure', (l) => { l.packages['node_modules/fs-extra'].integrity = 'sha512-changed=='; }, false],
+    ['second-level toolchain edge deletion changes the closure', (l) => { delete l.packages['node_modules/@rushstack/node-core-library'].dependencies['fs-extra']; }, false],
+    ['identical second-level nested copy passes', (l) => { l.packages['node_modules/@microsoft/api-extractor/node_modules/@rushstack/node-core-library'] = { ...l.packages['node_modules/@rushstack/node-core-library'] }; }, true],
+    ['drifted second-level nested copy changes the closure', (l) => { l.packages['node_modules/@microsoft/api-extractor/node_modules/@rushstack/node-core-library'] = { ...l.packages['node_modules/@rushstack/node-core-library'], integrity: 'sha512-changed==' }; }, false],
     ['non-tool transitive drift is out of scope', (l) => { l.packages['node_modules/zod'].integrity = 'sha512-changed=='; }, true],
     ['test-runner drift is out of scope', (l) => { l.packages['node_modules/vitest'].version = '4.2.0'; }, true],
     ['removed record resolves to null', (l) => { delete l.packages['node_modules/typescript']; }, false],
@@ -82,6 +88,13 @@ describe('lock-closure — per-consumer resolved dependency closure', () => {
     for (const mut of [
       (lock) => { lock.packages['node_modules/some-unrelated-pkg'] = { version: '9.9.9', resolved: 'https://r/u.tgz', integrity: 'sha512-u==' }; },
       (lock) => { lock.packages['packages/mcp-platform/node_modules/typescript'] = { ...lock.packages['node_modules/typescript'] }; },
+      (lock) => {
+        const nested = 'node_modules/@microsoft/api-extractor/node_modules/@rushstack/node-core-library';
+        lock.packages[nested] = { ...lock.packages['node_modules/@rushstack/node-core-library'] };
+        for (const leaf of ['ajv', 'ajv-draft-04', 'json-schema-traverse']) {
+          lock.packages[`${nested}/node_modules/${leaf}`] = { ...lock.packages[`node_modules/@rushstack/node-core-library/node_modules/${leaf}`] };
+        }
+      },
     ]) {
       expect(gated(mut).status).toBe(0);
     }
@@ -94,6 +107,8 @@ describe('lock-closure — per-consumer resolved dependency closure', () => {
       lock.packages['packages/mcp-broker/node_modules/typescript'] = { ...lock.packages['node_modules/typescript'], integrity: 'sha512-changed==' };
     }],
     ['undici-types integrity drift', (lock) => { lock.packages['node_modules/undici-types'] = { ...lock.packages['node_modules/undici-types'], integrity: 'sha512-changed==' }; }],
+    ['second-level toolchain integrity drift', (lock) => { lock.packages['node_modules/fs-extra'] = { ...lock.packages['node_modules/fs-extra'], integrity: 'sha512-review' }; }],
+    ['second-level toolchain edge deletion', (lock) => { delete lock.packages['node_modules/@rushstack/node-core-library'].dependencies['fs-extra']; }],
   ])('refuses the packed gate on %s', (_, mut) => {
     const r = gated(mut);
     expect(r.status).not.toBe(0);
