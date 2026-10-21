@@ -4,6 +4,59 @@ Generic, host-independent artifact domain state for the Sentropic artifacts
 provider (`sentropic.artifacts`, spec-v8 §9), covering L-5a–5e. Version
 `0.1.2` adds UTF-8 text publication, exposes storage adapters and ships SQL migrations.
 Version `0.1.1` fixed activation ticket release and channel binding (FL-ACT).
+Version `0.1.4` hardens host authority, replay isolation, publication and content
+responses, and adds the platform-free `@sentropic/artifacts/mcp-core` entry.
+
+## Migrating to 0.1.4
+
+HTTP hosts must supply a trusted `HttpRequest.storageScopeId` for `/ensure`.
+MCP hosts configure `defaultStorageScopeId` or supply the trusted invocation's
+`ArtifactsInvokeInput.storageScopeId`; tool arguments cannot choose storage.
+Legacy body/tool `storageScopeId` and client `paramsHash` fields remain accepted
+but are ignored. Missing host scope now returns 400. Ensure hashes cover the
+validated parameters, binding, owner and scope; publication hashes cover release
+metadata, server-derived file digests and validated source provenance (including
+its absence and recipe step order). Source writes occur within the idempotent
+publication operation, so unchanged replays do not write provenance again.
+Direct service callers publishing a `source` pass their host `SourceStore` as
+the second argument to `publish`; the HTTP/MCP app supplies its configured store.
+Keys are isolated by operation and
+principal. A changed payload under the same key returns an explicit conflict.
+Persisted unscoped replay keys are no longer consulted after upgrading.
+
+Publication defaults to 128 files, 16 MiB per file and 64 MiB total. Hosts can
+override these positive integer limits through `createPublicationService({
+limits: { maxFiles, maxFileBytes, maxTotalBytes } })`; the HTTP decoder uses the
+same byte budgets before allocating bytes. Paths must be unique canonical
+relative paths, at most 1024 UTF-8 bytes: empty/dot segments, backslashes,
+percent escapes, URL delimiters, colons and control characters are rejected.
+Existing integrations using larger bundles or noncanonical paths must adjust
+their limits or filenames. Invalid publications fail before object-store effects.
+Upload sessions cap client `maxSize` by the host `maxUploadBytes` and publication
+file/total limits. Every append checks remaining cumulative capacity before
+decoding bytes or writing staging. Upload publication metadata is validated
+before the session is consumed; a rejected path or MIME type can be corrected
+and committed using the same staged bytes. Finalization validates, hashes and
+publishes one copied snapshot. Overlapping append/commit operations return 409;
+failed verification or metadata validation leaves the session retryable.
+
+Content `HEAD` responses have the corresponding GET headers and no body,
+including errors and activation. Errors and activation responses include the
+same security and no-store headers as content responses, with a restrictive CSP.
+
+Import `createArtifactsManifest`, `createArtifactsToolExecutor` or
+`createArtifactsAdapter` from `@sentropic/artifacts/mcp-core` when the platform
+is absent. This entry has no runtime platform import. Existing `/mcp` exports,
+including `createArtifactsRegistryDefinition`, retain their platform integration.
+The existing root barrel re-exports `/mcp` and also requires the platform.
+Platform types remain referenced in TypeScript declarations for adapter typing.
+`make probe-artifacts-packed-consumer ENV=test-artifacts-hardening` installs the
+tarball alone in a separate consumer, proves the platform is absent and runs the
+15-tool manifest and ensure/publish/get/list flow before the platform proof.
+
+Release coordination: #707 reserves 0.1.3 for optional platform peer widening;
+0.1.4 retains `>=0.3.0 <0.5.0` and fits cluster-mesh's current
+`>=0.1.0 <0.2.0` and #707's `>=0.1.3 <0.2.0` artifacts ranges.
 
 ## What's here (L-5a)
 
@@ -137,11 +190,11 @@ a registrable domain. Assets within the same artifact origin remain loadable.
   method/route/binding checks plus Origin/CSRF evidence for writes.
 - `src/server/templates.ts` — generic template kit + versioned API guide
   catalog port (hosts inject approved local assets).
-- `src/mcp.ts` — the `sentropic.artifacts` MCP provider: 15 exact
+- `src/mcp-core.ts` — the platform-free `sentropic.artifacts` MCP provider: 15 exact
   `artifacts_*` tools with closed schemas, a host-bindable invocation
-  scope, an executor over the same HTTP app, a platform adapter, and the
-  `@sentropic/mcp-platform` kernel registry definition (the platform is
-  an optional peer, required only by the `./mcp` subpath).
+  scope, an executor over the same HTTP app and a platform adapter.
+- `src/mcp.ts` — the compatible `@sentropic/mcp-platform` kernel registry
+  definition wrapper (the optional peer is required here and by the root barrel).
 
 Ticket issuance and redemption both require `subjectId`, `artifactId`,
 `releaseId` and `channel`. The handler checks the release resolved from the
