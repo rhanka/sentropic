@@ -101,3 +101,147 @@ export interface CommonManifestBody {
   readonly objects: readonly CommonObjectCommitment[];
   readonly terminal: { readonly count: string; readonly complete: boolean };
 }
+
+// The unknown-version refusal runs before any list is interpreted, so an
+// unknown version never reaches an order interpreter or a version-specific
+// canonicalization.
+export const validateCommonManifestBody = (value: unknown): ValidationResult => {
+  if (typeof value !== 'object' || value === null) return errResult('manifest body must be an object');
+  const candidate = value as Record<string, unknown>;
+  if (!isKnownCommonContractVersion(candidate['commonContract'])) {
+    return errResult('unknown common-contract version: refused before interpreting lists');
+  }
+  if (typeof candidate['manifestVersion'] !== 'string' || candidate['manifestVersion'].length === 0) {
+    return errResult('manifest version must be non-empty');
+  }
+  if (!isStorageModuleId(candidate['module'])) return errResult('module must be a known storage module');
+  const scopeResult = validateStorageScope(candidate['scope']);
+  if (!scopeResult.ok) return scopeResult;
+  if (!isCommonSurface(candidate['surface'])) return errResult('surface must be a known common surface');
+  if (typeof candidate['incarnation'] !== 'string' || candidate['incarnation'].length === 0) {
+    return errResult('incarnation must be non-empty');
+  }
+  if (typeof candidate['publicationId'] !== 'string' || candidate['publicationId'].length === 0) {
+    return errResult('publication id must be non-empty');
+  }
+  if (candidate['predecessorRoot'] !== null && typeof candidate['predecessorRoot'] !== 'string') {
+    return errResult('predecessor root must be null or a string');
+  }
+  const boundaryResult = validateCommonSourceBoundary(candidate['sourceBoundary']);
+  if (!boundaryResult.ok) return boundaryResult;
+  for (const field of ['schemaVersion', 'descriptorVersion', 'encodingVersion'] as const) {
+    if (typeof candidate[field] !== 'string' || candidate[field].length === 0) {
+      return errResult(`${field} must be non-empty`);
+    }
+  }
+  if (!Array.isArray(candidate['units'])) return errResult('units must be an array');
+  for (const unit of candidate['units']) {
+    const unitResult = validateCommonUnitCommitment(unit);
+    if (!unitResult.ok) return unitResult;
+  }
+  if (!Array.isArray(candidate['objects'])) return errResult('objects must be an array');
+  for (const object of candidate['objects']) {
+    const objectResult = validateCommonObjectCommitment(object);
+    if (!objectResult.ok) return objectResult;
+  }
+  // The manifest digest is computed over the canonical body without its own
+  // digest field, so the body carries no digest here: only the terminal
+  // count/completeness commitment closes the inventory.
+  if (typeof candidate['terminal'] !== 'object' || candidate['terminal'] === null) {
+    return errResult('terminal must be an object');
+  }
+  const terminal = candidate['terminal'] as Record<string, unknown>;
+  if (terminal['complete'] !== true) return errResult('terminal must be complete');
+  if (!isDecimalCounter(terminal['count'])) return errResult('terminal count must be a decimal counter');
+  const objects = candidate['objects'] as readonly unknown[];
+  if (terminal['count'] !== String(objects.length)) return errResult('terminal count must equal the object count');
+  return okResult();
+};
+
+export interface CommonPublicationCondition {
+  readonly publicationId: string;
+  readonly expectedPredecessor: string | null;
+  readonly scope: StorageScope;
+  readonly incarnation: string;
+  readonly fence: WriterFence;
+  readonly operationId: string;
+}
+
+export const validateCommonPublicationCondition = (value: unknown): ValidationResult => {
+  if (typeof value !== 'object' || value === null) return errResult('publication condition must be an object');
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate['publicationId'] !== 'string' || candidate['publicationId'].length === 0) {
+    return errResult('publication id must be non-empty');
+  }
+  if (candidate['expectedPredecessor'] !== null && typeof candidate['expectedPredecessor'] !== 'string') {
+    return errResult('expected predecessor must be null or a string');
+  }
+  const scopeResult = validateStorageScope(candidate['scope']);
+  if (!scopeResult.ok) return scopeResult;
+  if (typeof candidate['incarnation'] !== 'string' || candidate['incarnation'].length === 0) {
+    return errResult('incarnation must be non-empty');
+  }
+  const fenceResult = validateWriterFence(candidate['fence']);
+  if (!fenceResult.ok) return fenceResult;
+  if (typeof candidate['operationId'] !== 'string' || candidate['operationId'].length === 0) {
+    return errResult('operation id must be non-empty');
+  }
+  return okResult();
+};
+
+export interface CommonBoundedPage {
+  readonly maxItems: number;
+  readonly maxEncodedBytes: number;
+  readonly continuation?: string;
+}
+
+export const validateCommonBoundedPage = (value: unknown): ValidationResult => {
+  if (typeof value !== 'object' || value === null) return errResult('bounded page must be an object');
+  const candidate = value as Record<string, unknown>;
+  if (!isPositiveSafeInteger(candidate['maxItems'])) return errResult('maxItems must be positive');
+  if (!isPositiveSafeInteger(candidate['maxEncodedBytes'])) return errResult('maxEncodedBytes must be positive');
+  if (candidate['continuation'] !== undefined && typeof candidate['continuation'] !== 'string') {
+    return errResult('continuation must be an opaque string when present');
+  }
+  return okResult();
+};
+
+export const COMMON_RIGHTS = ['read', 'prepare', 'publish', 'maintain'] as const;
+export type CommonRight = (typeof COMMON_RIGHTS)[number];
+
+export interface CommonCapability {
+  readonly principal: string;
+  readonly rights: readonly CommonRight[];
+  readonly scope: StorageScope;
+  readonly policyRevision: string;
+}
+
+// Rights are explicit and never conferred: only listed rights are granted,
+// and the empty set grants nothing.
+export const validateCommonCapability = (value: unknown): ValidationResult => {
+  if (typeof value !== 'object' || value === null) return errResult('capability must be an object');
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate['principal'] !== 'string' || candidate['principal'].length === 0) {
+    return errResult('principal must be non-empty');
+  }
+  if (!Array.isArray(candidate['rights']) || candidate['rights'].length === 0) {
+    return errResult('rights must be a non-empty array');
+  }
+  const seen = new Set<string>();
+  for (const right of candidate['rights']) {
+    if (typeof right !== 'string' || !(COMMON_RIGHTS as readonly string[]).includes(right)) {
+      return errResult('rights must only contain read, prepare, publish or maintain');
+    }
+    if (seen.has(right)) return errResult('rights must not repeat a right');
+    seen.add(right);
+  }
+  const scopeResult = validateStorageScope(candidate['scope']);
+  if (!scopeResult.ok) return scopeResult;
+  if (typeof candidate['policyRevision'] !== 'string' || candidate['policyRevision'].length === 0) {
+    return errResult('policy revision must be non-empty');
+  }
+  return okResult();
+};
+
+export const hasCommonRight = (capability: CommonCapability, right: CommonRight): boolean =>
+  capability.rights.includes(right);
