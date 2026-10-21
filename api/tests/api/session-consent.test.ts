@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import { GetObjectLockConfigurationCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { createSessionContentRouter } from '../../src/routes/namespaces/session-content';
@@ -120,6 +121,7 @@ describe('session consent durable lifecycle', () => {
         secretAccessKey: fixture.config.secretAccessKey,
       },
       epochs: fakeEpoch,
+      readStorageAuthorization: fixture.readStorageAuthorization,
       quotas: options.quotas,
       publishHooks: options.publishHooks,
     });
@@ -155,7 +157,8 @@ describe('session consent durable lifecycle', () => {
   }, ctx);
 
   const storageService = () => new SessionContentService({ issuer: 'test-issuer', epochs: fakeEpoch,
-    nowMs: () => now, storage: fixture.config, storageClient: fixture.client });
+    nowMs: () => now, storage: fixture.config, storageClient: fixture.client,
+    readStorageAuthorization: fixture.readStorageAuthorization });
 
   it.each(['grant', 'project'] as const)(
     'should enforce N5 R3 monotonic denial in PostgreSQL against a stale concurrent %s writer', async (scope) => {
@@ -214,6 +217,64 @@ describe('session consent durable lifecycle', () => {
       } finally { client.destroy(); }
     });
 
+  it.each(['endpoint', 'region', 'bucket', 'purpose', 'ownerApprovalId', 'validUntil', 'enabled',
+    'forbidden', 'revoked-before-put', 'object-lock', 'unknown-lock', 'ambiguous-lock'] as const)(
+    'should refuse N5 R7 %s authorization with zero PUT', async (mode) => {
+      await acceptProject();
+      await deriveSession('n5-storage-approval');
+      const hold = await service.reserveBeforeUpload('n5-storage-approval', 'terminal.cache',
+        { raw: 1, encoded: 1 }, 'approval', ctx);
+      const config = { ...fixture.config,
+        ...(mode === 'forbidden' ? { bucket: 'review-forbidden-compliance-p10y' } : {}) };
+      const record: Record<string, unknown> = {
+        ...await fixture.readStorageAuthorization() as Record<string, unknown>, bucket: config.bucket };
+      if (['endpoint', 'region', 'bucket', 'purpose'].includes(mode)) record[mode] = 'mismatched';
+      if (mode === 'ownerApprovalId') record.ownerApprovalId = '';
+      if (mode === 'validUntil') record.validUntil = now;
+      if (mode === 'enabled') record.enabled = false;
+      const client = createSessionContentS3Client(config);
+      const commands: unknown[] = [];
+      vi.spyOn(client, 'send').mockImplementation(async (command) => {
+        commands.push(command);
+        if (command instanceof GetObjectLockConfigurationCommand) {
+          if (mode === 'object-lock') return { $metadata: {}, ObjectLockConfiguration: { ObjectLockEnabled: 'Enabled',
+            Rule: { DefaultRetention: { Mode: 'COMPLIANCE', Years: 10 } } } } as const;
+          if (mode === 'ambiguous-lock') return { $metadata: {} };
+        }
+        throw new Error('intercepted before network I/O');
+      });
+      const writer = new SessionContentService({ issuer: 'test-issuer', epochs: fakeEpoch,
+        nowMs: () => now, storage: config, storageClient: client, readStorageAuthorization: async () => record,
+        publishHooks: { beforePut: async () => { if (mode === 'revoked-before-put') record.enabled = false; } } });
+      try {
+        await expect(writer.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx)).rejects.toBeInstanceOf(SessionContentError);
+        expect(commands.filter((command) => command instanceof PutObjectCommand)).toHaveLength(0);
+        expect(commands).toHaveLength(['object-lock', 'unknown-lock', 'ambiguous-lock'].includes(mode) ? 1 : 0);
+      } finally { client.destroy(); }
+    });
+
+  it('should require N5 R7 a readable owner record on the default file-backed PUT path', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const directory = await mkdtemp('/tmp/n5-storage-approval-');
+    const path = `${directory}/approval.json`;
+    vi.stubEnv('SESSION_CONTENT_STORAGE_AUTHORIZATION_PATH', path);
+    try {
+      await acceptProject();
+      await deriveSession('n5-file-approval');
+      const hold = await service.reserveBeforeUpload('n5-file-approval', 'terminal.cache',
+        { raw: 1, encoded: 1 }, 'file-approval', ctx);
+      const writer = new SessionContentService({ issuer: 'test-issuer', epochs: fakeEpoch,
+        nowMs: () => now, storage: fixture.config });
+      await expectContentError(() => writer.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx), 'storage_unavailable');
+      await writeFile(path, '{malformed');
+      await expectContentError(() => writer.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx), 'storage_unavailable');
+      expect(await fixture.listPhysical('')).toHaveLength(0);
+      await writeFile(path, JSON.stringify(await fixture.readStorageAuthorization()));
+      await writer.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx);
+      expect(await fixture.listPhysical('')).toHaveLength(1);
+    } finally { vi.unstubAllEnvs(); await rm(directory, { recursive: true, force: true }); }
+  });
+
   it('should retry N5 R2 storage failures without reporting completion', async () => {
     await acceptProject();
     await deriveSession('n5-retry');
@@ -256,7 +317,7 @@ describe('session consent durable lifecycle', () => {
     }, { step: 'deserialize', name: 'losePutAcknowledgement' });
     try {
       const writer = new SessionContentService({ issuer: 'test-issuer', epochs: fakeEpoch, nowMs: () => now,
-        storage: fixture.config, storageClient });
+        storage: fixture.config, storageClient, readStorageAuthorization: fixture.readStorageAuthorization });
       await expectContentError(() => writer.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx), 'unknown_outcome');
     } finally { storageClient.destroy(); }
     expect(puts).toBe(1);

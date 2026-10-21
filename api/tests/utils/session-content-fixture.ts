@@ -83,6 +83,7 @@ const anonymousRestStatus = async (
 
 export interface SessionContentFixture {
   readonly config: SessionContentFixtureConfig;
+  readonly readStorageAuthorization: () => Promise<unknown>;
   readonly client: S3Client;
   setup(): Promise<void>;
   put(key: string, body: Uint8Array): Promise<void>;
@@ -100,6 +101,10 @@ export const createSessionContentFixture = (): SessionContentFixture => {
   const client = createFixtureS3Client(config);
   return {
     config,
+    // Synthetic owner approval is scoped to this randomized, local test bucket.
+    readStorageAuthorization: async () => ({ enabled: true, purpose: 'deletable-session-content',
+      endpoint: config.endpoint, region: config.region, bucket: config.bucket,
+      ownerApprovalId: 'disposable-fixture-only', validUntil: Number.MAX_SAFE_INTEGER }),
     client,
     async setup(): Promise<void> {
       try {

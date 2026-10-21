@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  GetObjectLockConfigurationCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -327,6 +328,9 @@ export interface SessionContentOptions {
   readonly storage?: Partial<SessionContentStorageConfig>;
   /** Test transport injection; production always uses the single-attempt client. */
   readonly storageClient?: S3Client;
+  /** Operations-owned approval, outside DB backups and application writes.
+   * Tests inject a synthetic record bound to their disposable destination. */
+  readonly readStorageAuthorization?: () => Promise<unknown>;
   readonly epochs?: ContentAuthorityEpochPort;
   /** Explicit authority issuer configuration (R10): no hidden default. */
   readonly issuer: string;
@@ -425,6 +429,7 @@ export class SessionContentService {
   private readonly publishHooks?: SessionContentPublishHooks;
   private s3: S3Client | null = null;
   private storageConfig: SessionContentStorageConfig | null = null;
+  private readonly readStorageAuthorization: () => Promise<unknown>;
 
   constructor(options: SessionContentOptions) {
     if (!options.issuer || !options.issuer.trim()) {
@@ -435,6 +440,8 @@ export class SessionContentService {
     this.quotas = { ...DEFAULT_SESSION_CONTENT_QUOTAS, ...options.quotas };
     this.explicitStorage = options.storage;
     this.s3 = options.storageClient ?? null;
+    this.readStorageAuthorization = options.readStorageAuthorization ?? (() =>
+      readAuthorityRecordFile(readEnv('SESSION_CONTENT_STORAGE_AUTHORIZATION_PATH') ?? ''));
     this.epochs = options.epochs ?? createFileContentAuthorityEpochPort(
       readEnv('SESSION_CONTENT_AUTHORITY_RECORD_PATH') ?? '',
       () => Date.now(),
@@ -463,6 +470,35 @@ export class SessionContentService {
 
   private async checkEpoch(): Promise<ContentAuthorityEpoch> {
     return this.epochs.readCurrent(this.issuer);
+  }
+
+  private async requireStorageAuthorization(config: SessionContentStorageConfig): Promise<void> {
+    let record: Record<string, unknown> | null = null;
+    try {
+      const value = await this.readStorageAuthorization();
+      if (value && typeof value === 'object') record = value as Record<string, unknown>;
+    } catch { /* Missing/unreadable approval fails closed below. */ }
+    if (!record || record.enabled !== true || record.purpose !== 'deletable-session-content'
+      || typeof record.ownerApprovalId !== 'string' || !record.ownerApprovalId.trim()
+      || record.endpoint !== config.endpoint || record.region !== config.region || record.bucket !== config.bucket
+      || typeof record.validUntil !== 'number' || !Number.isSafeInteger(record.validUntil)
+      || record.validUntil <= this.nowMs() || /compliance|p10y|epoch|worm/i.test(config.bucket)) {
+      throw new SessionContentError('storage_unavailable', 'deletable content destination lacks owner authorization');
+    }
+  }
+
+  /** No application writer can target WORM, even with a misbound approval.
+   * Inspect bucket capability; neither retention settings nor writes are used. */
+  private async requireDeletableBucket(client: S3Client, config: SessionContentStorageConfig): Promise<void> {
+    await this.requireStorageAuthorization(config);
+    try {
+      await client.send(new GetObjectLockConfigurationCommand({ Bucket: config.bucket }));
+    } catch (error) {
+      const failure = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (failure.name === 'ObjectLockConfigurationNotFoundError' && failure.$metadata?.httpStatusCode === 404) return;
+      throw new SessionContentError('storage_unavailable', 'deletable content destination could not be verified');
+    }
+    throw new SessionContentError('storage_unavailable', 'object-locked or unverified content destination is forbidden');
   }
 
   /** M1: every reserve, publish and read segment requires current epoch =
@@ -1641,6 +1677,7 @@ export class SessionContentService {
   ) {
     requireContext(ctx);
     const { client, config } = this.storage();
+    await this.requireStorageAuthorization(config);
     const admitted = await db.transaction(async (tx) => {
       const [existing] = await tx
         .select()
@@ -1776,6 +1813,7 @@ export class SessionContentService {
       if (this.publishHooks?.beforePut) {
         await this.publishHooks.beforePut(key);
       }
+      await this.requireDeletableBucket(client, config);
       putStarted = true;
       await client.send(
         new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body }),
