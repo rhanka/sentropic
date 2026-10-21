@@ -54,7 +54,7 @@ export class JevAdapter implements ProviderAdapter {
   async generate(_request: GenerateRequest): Promise<GenerateResponse> { throw new Error('JEV does not support chat.'); }
   async stream(_request: StreamRequest): Promise<StreamResult> { throw new Error('JEV does not support chat.'); }
   normalizeError(_error: unknown) { return { providerId: 'typesafe' as const, message: 'JEV operation failed.', retryable: false }; }
-  async decide(request: DecisionRequest, context?: ProviderRuntimeContext & { signal?: AbortSignal }): Promise<DecisionAdapterResult> {
+  async decision(request: DecisionRequest, context?: ProviderRuntimeContext & { signal?: AbortSignal }): Promise<DecisionAdapterResult> {
     const empty = { usage: unreportedDecisionUsage('not-dispatched'), servedEvaluator: null, servedModelId: null };
     const encoded = encodeJevRequest(request, this.descriptor);
     if (!encoded.ok) return { ok: false, error: createDecisionError(encoded.code, 'preflight'), ...empty };

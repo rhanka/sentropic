@@ -31,7 +31,7 @@ describe('explicit decision-only JEV composition', () => {
     expect(adapter.listModels()).toEqual([]);
     expect(adapter.listEvaluators()).toHaveLength(1);
     expect(createDefaultProviderAdapters()).toHaveLength(8);
-    expect(await adapter.decide(decisionRequest({ evaluator: adapter.listEvaluators()[0] }), { auth }))
+    expect(await adapter.decision(decisionRequest({ evaluator: adapter.listEvaluators()[0] }), { auth }))
       .toMatchObject({ error: { code: 'PROVIDER_UNAVAILABLE' } });
     await expect(adapter.generate({} as never)).rejects.toThrow('does not support chat');
     await expect(adapter.stream({} as never)).rejects.toThrow('does not support chat');
@@ -41,23 +41,23 @@ describe('explicit decision-only JEV composition', () => {
     { type: 'direct-token', token: 'synthetic-key' }, { ...auth, token: ' ' }])('refuses unresolved or unsupported auth', async (material) => {
     const send = vi.fn();
     const adapter = createJevAdapter({ transport: { send }, descriptor: qualifiedDescriptor() });
-    expect(await adapter.decide(decisionRequest(), { auth: material as never })).toMatchObject({ error: { code: 'CREDENTIAL_MISSING' } });
+    expect(await adapter.decision(decisionRequest(), { auth: material as never })).toMatchObject({ error: { code: 'CREDENTIAL_MISSING' } });
     expect(send).not.toHaveBeenCalled();
   });
   it('returns a validated negative verdict and strips credentials from observed IDs', async () => {
     const send = vi.fn().mockResolvedValue({ ok: true, body: jevResponse(), providerRequestId: 'fixture:1' });
     const adapter = createJevAdapter({ transport: { send }, descriptor: qualifiedDescriptor() });
-    const result = await adapter.decide(decisionRequest({ decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 } }), { auth });
+    const result = await adapter.decision(decisionRequest({ decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 } }), { auth });
     expect(result).toMatchObject({ ok: true, verdict: { decision: { pass: false }, confidence: null } });
     send.mockResolvedValue({ ok: true, body: { ...jevResponse(), model: 'synthetic-key' }, providerRequestId: 'synthetic-key' });
-    const refusal = await adapter.decide(decisionRequest(), { auth });
+    const refusal = await adapter.decision(decisionRequest(), { auth });
     expect(refusal).toMatchObject({ error: { code: 'SERVED_IDENTITY_MISMATCH' }, servedModelId: null });
     expect(JSON.stringify(refusal)).not.toContain(auth.token);
   });
   it('sanitizes an injected transport rejection and retains uncertain execution usage', async () => {
     const adapter = createJevAdapter({ descriptor: qualifiedDescriptor(), transport: {
       send: vi.fn().mockRejectedValue(new Error('synthetic-key content-canary')) } });
-    const result = await adapter.decide(decisionRequest(), { auth });
+    const result = await adapter.decision(decisionRequest(), { auth });
     expect(result).toMatchObject({ error: { code: 'TRANSPORT_FAILED' }, usage: { evaluatorCalls: null } });
     expect(JSON.stringify(result)).not.toMatch(/synthetic-key|content-canary/);
   });
