@@ -220,3 +220,7 @@ Actions with the following status should be included around tasks only if really
   - [x] Merge (no rebase); BRANCH.md kept as this branch's live plan; locks auto-merged (identical security triples + main's `artifacts 0.1.4`); manifest conflict resolved to branch side then regenerated.
   - [x] Regen `9c9bc3d0` (v4, declaredLock = merged lock, 44 contracts; only deltas vs `f5254a27`: schema v3→v4 hash + new sourceHead, tuple bytes identical); verify + gate + tooling green.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green on the exact head, then report head SHA + CI URL.
+- [x] **Lot 21 — Merge origin/main (50e612a0e, PR #716), verify, push, CI green**
+  - [x] Merge (no rebase); BRANCH.md kept as this branch's live plan; main's net delta is cluster-mesh common-rule + spec + fixtures and a `cluster-mesh 0.21.0→0.21.1` version-metadata lock hunk (auto-merged); manifest conflict (main's old-format regen) resolved to branch side then regenerated.
+  - [x] Regen `0f366625` (v4, fingerprint identical — main touched no P1 inputs; declaredLock = merged lock, 44 contracts byte-identical, tuple bytes identical); verify + gate + tooling green.
+  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green on the exact head, then report head SHA + CI URL.
