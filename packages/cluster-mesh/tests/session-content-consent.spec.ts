@@ -87,6 +87,87 @@ const sharedChildInput = (overrides: Partial<DeriveChildInput> = {}): DeriveChil
 });
 
 describe('content consent retention validation', () => {
+  it.each(['project', 'grant'] as const)('should preserve N5 R8 capture denial in the concurrent %s repro', async (scope) => {
+    const { service } = setupConsent();
+    const prepared = service.prepareProject(sharedBaseInput({ channels: {
+      'terminal.live': true, 'terminal.cache': true, 'native.mirror': true, 'keyboard.control': false,
+    } }));
+    await service.acceptProject(prepared, { challengeId: prepared.challengeId });
+    await service.deriveChild(sharedChildInput());
+    if (scope === 'project') {
+      await service.closeGrant('session-1');
+      await Promise.all([service.revokeProject('project-1'), service.excludeSession('project-1', 'unrelated')]);
+      await expect(service.deriveChild(sharedChildInput({ sessionId: 'next', bindingId: 'next' }))).rejects.toBeInstanceOf(ContentConsentError);
+    } else {
+      await Promise.all([service.revokeGrant('session-1'), service.acknowledgeFreshness('session-1')]);
+      await expect(service.deriveChild(sharedChildInput())).rejects.toBeInstanceOf(ContentConsentError);
+    }
+    const grant = (await service.readGrant('session-1'))!;
+    const project = (await service.readProject('project-1'))!;
+    expect(partitionExportableNativeRecords(grant, project, [
+      { seq: 41, lineage: 'l', conversationId: 'c', ordered: true },
+    ]).exportable).toEqual([]);
+  });
+
+  it.each(['exclude', 'clear', 'amend'] as const)('should fence N5 R8 stale project %s after revocation', async (operation) => {
+    const { service, store } = await readyConsent();
+    let entered!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => { entered = resolve; });
+    const resume = new Promise<void>((resolve) => { release = resolve; });
+    const concurrent = createContentConsentService({ ...store, async writeProject(revision, next) {
+      entered(); await resume;
+      return store.writeProject(revision, next);
+    } });
+    const amendment = concurrent.prepareProject(sharedBaseInput({ expectedProjectRevision: 1 }));
+    const stale = operation === 'exclude' ? concurrent.excludeSession('project-1', 'other')
+      : operation === 'clear' ? concurrent.clearExclusion('project-1', 'other')
+        : concurrent.acceptProject(amendment, { challengeId: amendment.challengeId });
+    await paused;
+    try { await service.revokeProject('project-1'); } finally { release(); }
+    await stale.catch((error: unknown) => { expect(error).toBeInstanceOf(ContentConsentError); });
+    expect((await service.readProject('project-1'))?.state).toBe('revoked');
+    await expect(service.deriveChild(sharedChildInput())).rejects.toBeInstanceOf(ContentConsentError);
+  });
+
+  it.each(['freshness', 'close', 'refresh', 'local'] as const)(
+    'should fence N5 R8 stale %s against every capture denial', async (operation) => {
+      for (const denial of ['revoke', 'exclude', 'close', 'pending', 'reconcile'] as const) {
+        const { service, store } = await readyConsent();
+        await service.deriveChild(sharedChildInput());
+        const amendment = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1 }));
+        await service.acceptProject(amendment, { challengeId: amendment.challengeId });
+        let entered!: () => void;
+        let release!: () => void;
+        const paused = new Promise<void>((resolve) => { entered = resolve; });
+        const resume = new Promise<void>((resolve) => { release = resolve; });
+        const concurrent = createContentConsentService({ ...store, async writeGrant(version, next) {
+          entered(); await resume;
+          return store.writeGrant(version, next);
+        } });
+        const stale = operation === 'freshness' ? concurrent.acknowledgeFreshness('session-1')
+          : operation === 'close' ? concurrent.closeGrant('session-1')
+            : operation === 'local' ? concurrent.recordLocalDeny('session-1')
+              : concurrent.refreshChild({ ...sharedChildInput(), expectedProjectRevision: 2,
+                policyDigest: amendment.digest, nativeBoundarySeq: 41 });
+        await paused;
+        try {
+          if (denial === 'revoke') await service.revokeGrant('session-1');
+          if (denial === 'exclude') await service.excludeSession('project-1', 'session-1');
+          if (denial === 'close') await service.closeGrant('session-1');
+          if (denial === 'pending' || denial === 'reconcile') await service.recordLocalDeny('session-1');
+          if (denial === 'reconcile') await service.reconcileLocalDeny('session-1');
+        } finally { release(); }
+        await stale.catch((error: unknown) => { expect(error).toBeInstanceOf(ContentConsentError); });
+        const grant = (await service.readGrant('session-1'))!;
+        expect(grant.state !== 'active' || grant.localDenyPending, `${operation}/${denial}`).toBe(true);
+        const project = (await service.readProject('project-1'))!;
+        expect(partitionExportableNativeRecords(grant, project, [
+          { seq: 42, lineage: 'l', conversationId: 'c', ordered: true },
+        ]).exportable, `${operation}/${denial}`).toEqual([]);
+      }
+    });
+
   it.each(['grant-close', 'project-exclude'] as const)(
     'should preserve N5 R3 denial across deterministic concurrent %s writes', async (race) => {
       const { service, store } = await readyConsent();
