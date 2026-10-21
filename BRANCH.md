@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R3 domain red: four revoke-after-close/revoke-exclude/revoke-close cases returned readable. Independent read denial now dominates every retained-history authorization/check; scoped green recorded in n5_r3_domain_green.log.
+
 - [x] N5 R4 domain regression reproduces cross-project/tenant/owner exclusion; validate immutable grant scope before either project or grant mutation. Owner remediation uses ENV=test-pr677-n5fix and isolated ports 9385/5585/1485; migrations 0012–0016 stay unchanged.
 
 - [x] Main convergence 2026-10-21: merge main 6ec93105b (#708), preserve artifacts 0.1.4 hardening and its packaging changes plus the already-qualified Vite 8.2.4 security patch. Retain this D2 plan; main plan is preserved verbatim at .h2a/build/main_merge_pr708_branch.md and in its ancestor commit. Consumed Memory L5 archives/inventory are unchanged; root-lock provenance is regenerated against the merged source and verified without changing consumed archives/inventory. Control migrations 0012–0016 are unchanged.

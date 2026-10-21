@@ -87,6 +87,25 @@ const sharedChildInput = (overrides: Partial<DeriveChildInput> = {}): DeriveChil
 });
 
 describe('content consent retention validation', () => {
+  it.each(['grant', 'project', 'exclude', 'close'] as const)(
+    'should preserve N5 R3 closed-history denial after %s transitions', async (transition) => {
+      const { service } = await readyConsent();
+      await service.deriveChild(sharedChildInput());
+      await service.closeGrant('session-1');
+      const history = await service.authorizeHistoryRead('session-1', {
+        'terminal.cache': null, 'native.mirror': null,
+      });
+      expect(await service.canReadClosed('session-1', history.authorizationId)).toBe(true);
+      if (transition === 'project') await service.revokeProject('project-1');
+      else await service.revokeGrant('session-1');
+      if (transition === 'exclude') await service.excludeSession('project-1', 'session-1');
+      if (transition === 'close') await expectConsentCodeAsync(() => service.closeGrant('session-1'), 'grant_closed');
+      expect(await service.canReadClosed('session-1', history.authorizationId)).toBe(false);
+      await expect(service.authorizeHistoryRead('session-1', {
+        'terminal.cache': null, 'native.mirror': null,
+      })).rejects.toBeInstanceOf(ContentConsentError);
+    });
+
   it('should refuse N5 R4 exclusion of another project tenant and owner without mutations', async () => {
     const { service, store } = await readyConsent();
     const prepared = service.prepareProject(sharedBaseInput({
