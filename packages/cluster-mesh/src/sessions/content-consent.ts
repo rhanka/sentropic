@@ -894,6 +894,11 @@ export const createContentConsentService = (
   const excludeSession = async (projectId: string, sessionId: string): Promise<ProjectContentConsent> => {
     const project = await readActiveProject(requireId(projectId, 'projectId'));
     const target = requireId(sessionId, 'sessionId');
+    const grant = await store.readGrant(target);
+    if (grant && (grant.projectId !== projectId || grant.tenantId !== project.tenantId
+      || grant.ownerId !== project.ownerId || grant.workspaceId !== project.workspaceId)) {
+      throw new ContentConsentError('cross_owner_refused', 'session belongs to another project scope');
+    }
     const excludedSessionIds = project.excludedSessionIds.includes(target)
       ? [...project.excludedSessionIds]
       : [...project.excludedSessionIds, target];
@@ -906,7 +911,6 @@ export const createContentConsentService = (
     if (!await store.writeProject(project.projectRevision, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent project change; retry exclusion');
     }
-    const grant = await store.readGrant(target);
     if (grant && grant.state === 'active') {
       await store.writeGrant(grant.version, { ...grant, state: 'excluded', updatedAt: nowMs() });
     }
