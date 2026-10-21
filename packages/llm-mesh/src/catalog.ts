@@ -21,7 +21,7 @@ export interface ProviderDescriptor {
   family: ProviderFamily;
   label: string;
   status: ProviderStatus;
-  judgeOnly?: true;
+  decisionOnly?: true;
   capabilities: ProviderCapabilities;
 }
 
@@ -241,9 +241,9 @@ export const providerProfiles = {
     }),
   },
   typesafe: {
-    providerId: 'typesafe', family: 'typesafe', label: 'TypeSafe', status: 'planned', judgeOnly: true,
+    providerId: 'typesafe', family: 'typesafe', label: 'TypeSafe', status: 'planned', decisionOnly: true,
     capabilities: {
-      judge: { support: 'supported' },
+      decision: { support: 'supported' },
       tools: { support: 'unsupported', parallelCalls: 'unsupported', streamedArgumentDeltas: 'unsupported',
         resultContinuation: 'unsupported', toolChoice: [] },
       streaming: { support: 'unsupported', nativeProviderChunks: 'unsupported' },

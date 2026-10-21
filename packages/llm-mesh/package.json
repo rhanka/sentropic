@@ -28,13 +28,13 @@
       "types": "./dist/node/index.d.ts",
       "import": "./dist/node/index.js"
     },
-    "./judge": {
-      "types": "./dist/judge/index.d.ts",
-      "import": "./dist/judge/index.js"
+    "./decision": {
+      "types": "./dist/decision/index.d.ts",
+      "import": "./dist/decision/index.js"
     },
-    "./judge/host": {
-      "types": "./dist/judge/host.d.ts",
-      "import": "./dist/judge/host.js"
+    "./decision/host": {
+      "types": "./dist/decision/host.d.ts",
+      "import": "./dist/decision/host.js"
     },
     "./transport/jev": {
       "types": "./dist/transport/jev.d.ts",

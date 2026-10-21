@@ -64,7 +64,7 @@ export interface AuthCapabilities {
 }
 
 export interface ProviderCapabilities {
-  judge?: { support: CapabilitySupport };
+  decision?: { support: CapabilitySupport };
   tools: ToolUseCapabilities;
   streaming: StreamingCapabilities;
   structuredOutput: StructuredOutputCapabilities;
