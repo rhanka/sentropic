@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R4 domain regression reproduces cross-project/tenant/owner exclusion; validate immutable grant scope before either project or grant mutation. Owner remediation uses ENV=test-pr677-n5fix and isolated ports 9385/5585/1485; migrations 0012–0016 stay unchanged.
+
 - [x] Main convergence 2026-10-21: merge main 6ec93105b (#708), preserve artifacts 0.1.4 hardening and its packaging changes plus the already-qualified Vite 8.2.4 security patch. Retain this D2 plan; main plan is preserved verbatim at .h2a/build/main_merge_pr708_branch.md and in its ancestor commit. Consumed Memory L5 archives/inventory are unchanged; root-lock provenance is regenerated against the merged source and verified without changing consumed archives/inventory. Control migrations 0012–0016 are unchanged.
 
 - [x] Follow-up main merge 2026-10-20: main advanced to feb741083 while validation ran. Resolve BRANCH.md by retaining this active D2 plan; preserve main PR #712 plan verbatim in .h2a/build/main_merge_pr712_branch.md and its ancestor commit. Keep verified Memory L5 manifest 7fce9279… and retain incoming main manifest 781aa206… by content hash. Root lock and all D2 application/test source are unchanged; control migrations 0012–0016 still match original digests.

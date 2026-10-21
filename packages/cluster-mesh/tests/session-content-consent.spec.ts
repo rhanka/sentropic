@@ -87,6 +87,21 @@ const sharedChildInput = (overrides: Partial<DeriveChildInput> = {}): DeriveChil
 });
 
 describe('content consent retention validation', () => {
+  it('should refuse N5 R4 exclusion of another project tenant and owner without mutations', async () => {
+    const { service, store } = await readyConsent();
+    const prepared = service.prepareProject(sharedBaseInput({
+      projectId: 'victim-project', tenantId: 'tenant-b', workspaceId: 'workspace-b', ownerId: 'user-b',
+    }));
+    await service.acceptProject(prepared, { challengeId: prepared.challengeId });
+    const victim = await service.deriveChild(sharedChildInput({
+      projectId: 'victim-project', tenantId: 'tenant-b', workspaceId: 'workspace-b', ownerId: 'user-b',
+    }));
+    const project = await service.readProject('project-1');
+    await expectConsentCodeAsync(() => service.excludeSession('project-1', victim.sessionId), 'cross_owner_refused');
+    expect(await store.readGrant(victim.sessionId)).toEqual(victim);
+    expect(await service.readProject('project-1')).toEqual(project);
+  });
+
   it('should accept explicit no-expiry defaults for both retained channels', () => {
     const map = validateRetentionByChannel({
       'terminal.cache': { mode: 'none' },
