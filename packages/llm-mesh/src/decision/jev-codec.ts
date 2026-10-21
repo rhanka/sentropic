@@ -1,33 +1,33 @@
-import { parseJudgeRequest } from './request.js';
-import type { JudgeRequest } from './request.js';
-import type { EvaluatorDescriptor, ResolvedJudgeCriterion } from './jev-descriptor.js';
-import { isJudgeCriterion } from './criterion.js';
+import { parseDecisionRequest } from './request.js';
+import type { DecisionRequest } from './request.js';
+import type { DecisionEvaluatorDescriptor, ResolvedDecisionCriterion } from './descriptor.js';
+import { isDecisionCriterion } from './criterion.js';
 import { snapshotBoundedJson } from './validation.js';
-import type { JudgeErrorCode } from './errors.js';
+import type { DecisionErrorCode } from './errors.js';
 
 export interface JevRequestBody {
   model: string;
-  state: JudgeRequest['inputs'];
+  state: DecisionRequest['inputs'];
   questions: { verdict: { type: 'noul' | 'score' | 'choice'; instructions: string;
     criteria?: { true: string; false: string } | readonly string[] | Record<string, string> } };
 }
-export type JevEncoding = { ok: true; body: JevRequestBody; bodyJson: string; request: JudgeRequest; criterion: ResolvedJudgeCriterion }
-  | { ok: false; code: JudgeErrorCode };
+export type JevEncoding = { ok: true; body: JevRequestBody; bodyJson: string; request: DecisionRequest; criterion: ResolvedDecisionCriterion }
+  | { ok: false; code: DecisionErrorCode };
 
 /** One question, no instruction/content concatenation, coercion or omitted significant fields. */
-export function encodeJevRequest(candidate: unknown, descriptor: EvaluatorDescriptor): JevEncoding {
-  const parsed = parseJudgeRequest(candidate);
+export function encodeJevRequest(candidate: unknown, descriptor: DecisionEvaluatorDescriptor): JevEncoding {
+  const parsed = parseDecisionRequest(candidate);
   if (!parsed.ok) return parsed;
   const request = parsed.request;
   if (request.evaluator.providerId !== descriptor.evaluator.providerId
     || request.evaluator.evaluatorId !== descriptor.evaluator.evaluatorId) return { ok: false, code: 'EVALUATOR_UNKNOWN' };
   if (request.evaluator.revision !== descriptor.evaluator.revision) return { ok: false, code: 'REVISION_MISMATCH' };
-  let criterion: ResolvedJudgeCriterion;
+  let criterion: ResolvedDecisionCriterion;
   if (request.criterion.kind === 'registered') {
     const ref = request.criterion;
     const found = descriptor.registeredCriteria.find((entry) => entry.criteriaId === ref.criteriaId && entry.revision === ref.revision);
     const snapshot = snapshotBoundedJson(found?.criterion);
-    if (!snapshot.ok || !isJudgeCriterion(snapshot.value) || snapshot.value.kind === 'registered') {
+    if (!snapshot.ok || !isDecisionCriterion(snapshot.value) || snapshot.value.kind === 'registered') {
       return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
     }
     criterion = snapshot.value;
