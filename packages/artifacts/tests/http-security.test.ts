@@ -4,8 +4,9 @@
  * cannot distinguish an existing artifact from an unknown one (no 404/403
  * existence oracle); source payloads are parsed without unchecked casts.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHttpArtifactApp, type HttpRequest } from '../src/http.js';
+import { createArtifactsToolExecutor } from '../src/mcp-core.js';
 import { createArtifactService } from '../src/server/service.js';
 import {
   createPublicationService,
@@ -28,13 +29,14 @@ const MISSING = '00000000-0000-4000-8000-000000000000';
 const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true }]);
 const FILES = [{ path: 'index.html', mimeType: 'text/html', bytes: [1, 2, 3] }];
 
-function makeApp() {
+function makeApp(limits = {}, sources = createMemorySourceStore()) {
   const state = createMemoryStateStore();
   const blobs = createMemoryBlobStore();
   return createHttpArtifactApp({
     parameterSchema: SCHEMA,
     artifacts: createArtifactService({ kv: createMemoryKv(), uuid: createCryptoUuid() }),
     publication: createPublicationService({
+      limits,
       state,
       blobs,
       intents: createMemoryIntentStore(),
@@ -43,13 +45,13 @@ function makeApp() {
     lifecycle: createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z', state),
     forks: createForkService(createMemoryForkStore()),
     acls: createMemoryAclStore(),
-    sources: createMemorySourceStore(),
+    sources,
     blobs,
   });
 }
 
 function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
-  return { method, path, body, actorId };
+  return { method, path, body, actorId, storageScopeId: "scope-1" };
 }
 
 async function seeded() {
@@ -73,6 +75,69 @@ async function seeded() {
 }
 
 describe('http security (m5)', () => {
+  it.each(['HTTP', 'MCP'])('should bind source presence and content to %s publication replays', async (transport) => {
+    const sources = createMemorySourceStore();
+    const putSource = vi.spyOn(sources, 'putSource');
+    const app = makeApp({}, sources);
+    const executor = createArtifactsToolExecutor({ app, defaultStorageScopeId: 'scope-1' });
+    const ensured = await app.handle(req('POST', '/ensure', { bindingName: 'sources',
+      idempotencyKey: 'ensure', parameters: { title: 'Sources' } }, OWNER));
+    const artifactId = (ensured.body as { artifactId: string }).artifactId;
+    const publish = (args: Record<string, unknown>) => transport === 'HTTP'
+      ? app.handle(req('POST', '/publish', args, OWNER))
+      : executor.invoke({ tool: 'artifacts_publish', actorId: OWNER, args });
+    const source = { kind: 'base-commit', commit: 'A' };
+    const input = { artifactId, files: FILES, idempotencyKey: 'publish', source };
+    const first = await publish(input);
+    expect(first.status).toBe(201);
+    expect(await publish(input)).toEqual(first);
+    expect(putSource).toHaveBeenCalledTimes(1);
+    for (const changed of [undefined, { ...source, commit: 'B' }]) {
+      expect((await publish({ ...input, source: changed })).status).toBe(409);
+      expect(await sources.getSource(artifactId)).toEqual(source);
+    }
+    expect(putSource).toHaveBeenCalledTimes(1);
+    const absent = { ...input, idempotencyKey: 'absent', source: undefined };
+    expect((await publish(absent)).status).toBe(201);
+    expect((await publish({ ...absent, source })).status).toBe(409);
+    const recipe = { ...input, idempotencyKey: 'recipe', source: { kind: 'recipe', steps: ['build', 'pack'] } };
+    expect((await publish(recipe)).status).toBe(201);
+    expect((await publish({ ...recipe, source: { kind: 'recipe', steps: ['pack', 'build'] } })).status).toBe(409);
+  });
+
+  it('should bound inline byte arrays, UTF-8 text, aggregate bytes and file counts', async () => {
+    const app = makeApp({ maxFiles: 2, maxFileBytes: 3, maxTotalBytes: 3 });
+    const ensured = await app.handle(req('POST', '/ensure', { bindingName: 'bounded',
+      idempotencyKey: 'ensure', parameters: { title: 'Bounded' } }, OWNER));
+    const artifactId = (ensured.body as { artifactId: string }).artifactId;
+    const file = { path: 'index.html', mimeType: 'text/html', bytes: [1, 2] };
+    for (const files of [
+      [{ ...file, bytes: [1, 2, 3, 4] }],
+      [{ path: file.path, mimeType: file.mimeType, text: 'éé' }],
+      [file, { ...file, path: 'second' }], [file, file, file],
+    ]) expect((await app.handle(req('POST', '/publish', { artifactId, files }, OWNER))).status).toBe(400);
+    expect((await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER))).status).toBe(404);
+    expect((await app.handle(req('POST', '/publish', { artifactId,
+      files: [{ ...file, bytes: [1, 2, 3] }] }, OWNER))).status).toBe(201);
+  });
+
+  it('should trust host scope and validated parameters instead of body scope or hash', async () => {
+    const app = makeApp();
+    const body = { bindingName: 'scope-test', storageScopeId: 'forged',
+      idempotencyKey: 'same', paramsHash: 'forged', parameters: { title: 'One' } };
+    const request = req('POST', '/ensure', body, OWNER);
+    expect((await app.handle({ ...request, storageScopeId: undefined })).status).toBe(400);
+    const first = await app.handle(request);
+    expect(first.status).toBe(201);
+    expect((await app.handle({ ...request, body: { ...body, storageScopeId: 'other', paramsHash: 'other' } })).body)
+      .toMatchObject({ ...(first.body as object), replayed: true });
+    expect((await app.handle({ ...request, storageScopeId: 'other' })).status).toBe(409);
+    expect((await app.handle({ ...request, body: { ...body, parameters: { title: 'Two' } } })).status).toBe(409);
+    const bob = await app.handle({ ...request, actorId: 'bob' });
+    expect(bob.status).toBe(201);
+    expect(bob.body).not.toMatchObject({ artifactId: (first.body as { artifactId: string }).artifactId });
+  });
+
   it('gives strangers identical 404 answers for existing and unknown artifacts', async () => {
     const { app, id, digest } = await seeded();
     const attempts: Array<[string, string, unknown]> = [

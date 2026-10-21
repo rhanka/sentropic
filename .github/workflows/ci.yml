@@ -200,6 +200,8 @@ jobs:
               - 'scripts/test-api-tooling.sh'
               - 'scripts/publish-api-image.sh'
               - 'scripts/test-api-tag-guard.sh'
+              - 'scripts/resolve-api-image.sh'
+              - 'scripts/test-api-image-canonical.sh'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
             # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs
@@ -209,16 +211,33 @@ jobs:
             api:
               - 'api/**'
               - 'apps/auth-idp/**'
+              - 'apps/llm-gateway/**'
               - 'package.json'
               - 'package-lock.json'
-              - 'packages/cluster-mesh/**'
-              - 'packages/llm-mesh/**'
-              - 'packages/flow/**'
-              - 'packages/chat-server/**'
+              - 'ui/package.json'
+              - '.dockerignore'
+              - '.security/audit-gate.mjs'
+              - '.security/audit-allowlist.json'
+              - 'packages/artifacts/**'
+              - 'packages/auth-client/**'
+              - 'packages/auth-hono/**'
+              - 'packages/auth-ui/**'
               - 'packages/chat-core/**'
-              - 'packages/events/**'
-              - 'packages/contracts/**'
+              - 'packages/chat-server/**'
+              - 'packages/cluster-mesh/**'
               - 'packages/comments/**'
+              - 'packages/connector-host/**'
+              - 'packages/contracts/**'
+              - 'packages/events/**'
+              - 'packages/flow/**'
+              - 'packages/llm-gateway/**'
+              - 'packages/llm-mesh/**'
+              - 'packages/mcp-auth/**'
+              - 'packages/mcp-connector-google/**'
+              - 'packages/mcp-platform/**'
+              - 'packages/oauth-verify/**'
+              - 'packages/skills/**'
+              - 'packages/ubo-contracts/**'
             ui:
               - 'ui/**'
               - 'packages/chat-ui/**'
@@ -1114,12 +1133,18 @@ jobs:
   build-api-image:
     runs-on: ubuntu-latest
     needs: [changes]
+    env:
+      DOCKER_USERNAME: nologin
+      DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v6
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
+      - name: Login to registry (canonical tag resolution)
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make docker-login
       - name: Build API image
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make build-api
@@ -1129,6 +1154,9 @@ jobs:
       - name: Test publish-api-image tag-collision guard
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-tag-guard ENV=test-ci-api
+      - name: Test canonical API image artifact
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make test-ci-api-image-canonical ENV=test-ci-api
       - name: Save API image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api
