@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R5: accept-at-revision checks the locked row's immutable tenant/owner/workspace/incarnation and repeats them in its CAS predicate. Cross-tenant, same-tenant-other-owner and mismatched-principal regressions preserve the original row (n5_r5_api_green.log).
+
 - [x] N5 R4 API: require authenticated owner identity, verify the existing grant/project scope before exclusion, and bind local-deny/unknown-attempt writes through the grant/namespace. Seven exact adversarial cases now pass with victim rows unchanged (n5_r4_api_green.log).
 
 - [x] N5 R3–R6 durable test-first reproduction: 16 failures and 3 passing controls in n5_r3_r6_api_red.log, including seven isolated R4 mutations and all three R5 identities. Tests retain victim-row snapshots and committed deadlines/cleanup checks.

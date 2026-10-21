@@ -691,6 +691,11 @@ export class SessionContentService {
           .for('update')
           .limit(1);
         if (locked) {
+          if (locked.tenantId !== ctx.tenantId || locked.ownerId !== ctx.ownerId
+            || locked.workspaceId !== policy.workspaceId
+            || locked.workspaceIncarnation !== Number(policy['workspaceIncarnation'] ?? 1)) {
+            throw new SessionContentError('cross_owner_refused', 'existing project has a different immutable scope');
+          }
           if (locked.projectRevision !== expectedRevision) {
             throw new SessionContentError('revision_conflict', 'project revision mismatch');
           }
@@ -738,6 +743,10 @@ export class SessionContentService {
             and(
               eq(sessionContentProjects.projectId, row.projectId),
               eq(sessionContentProjects.projectRevision, expectedRevision),
+              eq(sessionContentProjects.tenantId, ctx.tenantId),
+              eq(sessionContentProjects.ownerId, ctx.ownerId),
+              eq(sessionContentProjects.workspaceId, row.workspaceId),
+              eq(sessionContentProjects.workspaceIncarnation, row.workspaceIncarnation),
             ),
           )
           .returning({ projectId: sessionContentProjects.projectId });
