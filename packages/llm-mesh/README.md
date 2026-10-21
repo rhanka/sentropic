@@ -410,3 +410,24 @@ const service = createDecisionService({
 - **Phase-aware errors**: `preflight`, `admission`, `dispatch`, `settlement`. Settlement and post-result timeouts have `retryable: false`.
 - **Advisory retry hints**: Bounded strictly to a 60-second ceiling.
 - **Normalization & security**: Unsafe JSON keys (`__proto__`, `constructor`, `prototype`) are rejected. MicroUsd prices use integer strings. Null candidate output/state is accepted; absent/undefined is refused.
+
+### Migration from judge names
+
+V4-L2 renames the capability to Sentropic Decision with no legacy alias. Update imports and call sites together; the wire contract (`schemaVersion: 1`) is unchanged.
+
+| Before | After |
+|---|---|
+| `@sentropic/llm-mesh/judge` | `@sentropic/llm-mesh/decision` |
+| `@sentropic/llm-mesh/judge/host` | `@sentropic/llm-mesh/decision/host` |
+| `createRemoteJudgeClient` | `createRemoteDecisionClient` |
+| `client.judge(request)` | `client.decide(request)` |
+| `adapter.judge(request, context)` | `adapter.decision(request, context)` |
+| `judgeRequest`, `JudgeResult`, `JudgeClient` | `decisionRequest`, `DecisionResult`, `DecisionClient` |
+| `isJudgeOnlyProvider` (api) | `isDecisionOnlyProvider` |
+
+```ts
+import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
+import type { DecisionRequest, DecisionResult } from '@sentropic/llm-mesh/decision';
+```
+
+Callers relying on the implicit JEV profile should adopt the explicit trusted context: pass `validationContext` to `createRemoteDecisionClient` so revision-specific validation facts bind the transmitted snapshot. Registered criteria require a trusted resolution; without one they fail closed.
