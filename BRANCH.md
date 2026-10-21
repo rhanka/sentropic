@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 R6: reserve/admission/final publication require current tenant and origin-workspace membership. Shared row locks fence withdrawal against final commit; no lock spans PUT. Four exact withdrawal regressions retain committed deadlines and membership-free owner purge (n5_r6_api_green.log).
+
 - [x] N5 R5: accept-at-revision checks the locked row's immutable tenant/owner/workspace/incarnation and repeats them in its CAS predicate. Cross-tenant, same-tenant-other-owner and mismatched-principal regressions preserve the original row (n5_r5_api_green.log).
 
 - [x] N5 R4 API: require authenticated owner identity, verify the existing grant/project scope before exclusion, and bind local-deny/unknown-attempt writes through the grant/namespace. Seven exact adversarial cases now pass with victim rows unchanged (n5_r4_api_green.log).
