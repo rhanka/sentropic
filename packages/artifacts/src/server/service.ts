@@ -11,6 +11,7 @@ import { assertArtifactAccess } from './authorization.js';
 import { createBindingService } from './bindings.js';
 import { createIdempotencyStore } from './idempotency.js';
 import type { ServerPorts } from './ports.js';
+import { manifestDigest } from '../codecs.js';
 
 export interface EnsurePrivateViewInput {
   actorUserId: string;
@@ -18,7 +19,10 @@ export interface EnsurePrivateViewInput {
   storageScopeId: string;
   bindingName: string;
   idempotencyKey: string;
-  paramsHash: string;
+  /** @deprecated Ignored; the service computes its own hash. */
+  paramsHash?: string;
+  /** Validated provider parameters supplied by the application layer. */
+  parameters?: Record<string, string | number | boolean | null>;
 }
 
 export interface EnsurePrivateViewResult {
@@ -43,8 +47,12 @@ export function createArtifactService(ports: ServerPorts): ArtifactService {
         action: 'mutate',
       });
       const { result, replayed } = await idempotent.execute(
-        input.idempotencyKey,
-        input.paramsHash,
+        JSON.stringify(['ensure', input.actorUserId, input.idempotencyKey]),
+        manifestDigest({
+          schemaVersion: 'artifacts/v1', ownerId: input.ownerId,
+          storageScopeId: input.storageScopeId, bindingName: input.bindingName,
+          parameters: input.parameters ?? {},
+        }),
         () =>
           bindings.ensure({
             ownerId: input.ownerId,
