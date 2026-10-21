@@ -8,6 +8,9 @@ import type { DecisionCost } from './receipt.js';
 import { parseDecisionConfidence, parseDecisionScore } from './verdict.js';
 import type { DecisionVerdict } from './verdict.js';
 import { DECISION_MAX_JSON_BYTES, has, hasOnlyKeys, isMicroUsd, isRecord, snapshotBoundedJson } from './validation.js';
+import { freezeDecisionData } from './descriptor-validation.js';
+import { parseDecisionValidationContext, type DecisionValidationContext,
+  type DecisionValidationContextResolver } from './validation-context.js';
 
 export interface RemoteDecisionClientOptions {
   baseUrl: string;
@@ -17,6 +20,11 @@ export interface RemoteDecisionClientOptions {
   maxResponseBytes?: number;
   timeoutMs?: number;
   generateId?: () => string;
+  /** Trusted context resolver (§3.3): receives the frozen transmitted snapshot
+   * and returns the revision-specific validation facts. A nullish or
+   * unparseable result refuses client-local before any egress. Absent, the
+   * implicit JEV profile applies (V4-L1 migration path). */
+  validationContext?: DecisionValidationContextResolver;
 }
 
 const resolveEndpoint = (base: string) => {
@@ -113,7 +121,8 @@ const RECEIPT_KEYS = ['schemaVersion', 'callId', 'correlationId', 'evaluator', '
   'servedModelId', 'providerRequestId', 'startedAt', 'finishedAt', 'latencyMs', 'providerLatencyMs',
   'dispatch', 'attempts', 'usage', 'cost', 'retention', 'budget', 'outcome', 'errorCode'] as const;
 
-function isValidDecisionReceipt(r: unknown, request: DecisionRequest, expectedCorrelationId: string): r is DecisionReceipt {
+function isValidDecisionReceipt(r: unknown, request: DecisionRequest, expectedCorrelationId: string,
+  validation: DecisionValidationContext | null): r is DecisionReceipt {
   if (!isRecord(r)) return false;
   if (!hasOnlyKeys(r, RECEIPT_KEYS)) return false;
   if (r.schemaVersion !== 1 || typeof r.callId !== 'string' || !r.callId) return false;
@@ -149,6 +158,9 @@ function isValidDecisionReceipt(r: unknown, request: DecisionRequest, expectedCo
   if (r.outcome === 'verdict') {
     if (r.evaluator === null || r.servedEvaluator === null || r.servedModelId === null) return false;
     if (!bindsEvaluator(r.servedEvaluator, request)) return false;
+    // P16: the served model must sit in the trusted accepted set, including
+    // JEV through the canonical context-bound API.
+    if (validation && !validation.acceptedServedModelIds.includes(r.servedModelId as string)) return false;
     if (r.attempts !== 1 || r.dispatch !== 'completed') return false;
     if (usage.tokens.input.source !== 'provider' || usage.tokens.output.source !== 'provider'
       || usage.evaluatorCalls !== 1 || usage.explanations !== 0) return false;
@@ -282,44 +294,49 @@ function isValidWireProviderRaw(raw: unknown, request: DecisionRequest, verdict:
 const VERDICT_KEYS = ['criterionKind', 'resolvedCriterionKind', 'score', 'decision', 'label',
   'rationale', 'confidence', 'distribution', 'providerRaw'] as const;
 
-function isValidDecisionVerdict(v: unknown, request: DecisionRequest): v is DecisionVerdict {
+function isValidDecisionVerdict(v: unknown, request: DecisionRequest,
+  validation: DecisionValidationContext | null): v is DecisionVerdict {
   if (!isRecord(v)) return false;
   if (!hasOnlyKeys(v, VERDICT_KEYS)) return false;
   if (v.criterionKind !== request.criterion.kind) return false;
-  // V-D3: direct criteria bind resolved kind to the transmitted kind. Registered has no
-  // trusted resolution in L1 and fails closed; the explicit context arrives in L2.
-  if (request.criterion.kind === 'registered') return false;
-  if (v.resolvedCriterionKind !== request.criterion.kind) return false;
+  // V-D3/L2: direct criteria bind resolved kind to the transmitted kind.
+  // Registered criteria resolve only through a trusted context resolution and
+  // fail closed otherwise; each concurrent call binds its own resolution.
+  const resolution = request.criterion.kind === 'registered' ? validation?.registeredResolution ?? null : null;
+  if (request.criterion.kind === 'registered' && resolution === null) return false;
+  if (request.criterion.kind === 'registered' && v.resolvedCriterionKind !== resolution?.resolvedKind) return false;
+  if (request.criterion.kind !== 'registered' && v.resolvedCriterionKind !== request.criterion.kind) return false;
+  const effective = resolution ? { ...request, criterion: resolution.criterion } : request;
   // V-D1/V-D4: JEV declares no native boolean; any provider-origin decision is forged.
   if (isRecord(v.decision) && v.decision.origin === 'provider') return false;
   // V-D4: the implicit native profile declares no rationale capability and JEV
   // always emits rationale null, so any rationale is invented evidence.
   if (v.rationale !== null) return false;
   if (!hasServiceVerdictShape(v.score, v.label, v.confidence, v.distribution)) return false;
-  if (request.criterion.kind === 'binary') {
+  if (effective.criterion.kind === 'binary') {
     if (v.score === null || v.label !== null || v.distribution !== null || v.confidence !== null) return false;
     const score = parseDecisionScore(v.score);
     if (!score || score.meaning !== 'probability-true' || score.scale.kind !== 'bounded'
       || score.scale.min !== 0 || score.scale.max !== 1 || score.scale.direction !== 'unordered') return false;
     if (!isValidWireDecision(v.decision, request, { score, label: null })) return false;
-  } else if (request.criterion.kind === 'choice') {
+  } else if (effective.criterion.kind === 'choice') {
     if (v.score !== null || v.label === null || v.distribution === null || v.confidence === null) return false;
     const confidence = parseDecisionConfidence(v.confidence);
     if (!confidence || confidence.meaning !== 'provider-confidence' || confidence.min !== 0 || confidence.max !== 1) return false;
-    if (!isValidChoiceEvidence(v.distribution, v.label, request)) return false;
+    if (!isValidChoiceEvidence(v.distribution, v.label, effective)) return false;
     const label = isRecord(v.label) && typeof v.label.value === 'string'
       ? { value: v.label.value, origin: 'provider' as const } : null;
     if (!isValidWireDecision(v.decision, request, { score: null, label: label as DecisionVerdict['label'] })) return false;
-  } else if (request.criterion.kind === 'graded') {
+  } else if (effective.criterion.kind === 'graded') {
     if (v.score === null || v.label !== null || v.distribution === null || v.confidence === null) return false;
     const score = parseDecisionScore(v.score);
     const confidence = parseDecisionConfidence(v.confidence);
     if (!score || !confidence) return false;
     if (score.meaning !== 'rubric-grade' || score.scale.kind !== 'bounded'
-      || score.scale.min !== 0 || score.scale.max !== request.criterion.levels.length - 1
-      || score.scale.direction !== request.criterion.direction) return false;
+      || score.scale.min !== 0 || score.scale.max !== effective.criterion.levels.length - 1
+      || score.scale.direction !== effective.criterion.direction) return false;
     if (confidence.meaning !== 'provider-confidence' || confidence.min !== 0 || confidence.max !== 1) return false;
-    if (!isValidGradedEvidence(v.distribution, score, request)) return false;
+    if (!isValidGradedEvidence(v.distribution, score, effective)) return false;
     if (!isValidWireDecision(v.decision, request, { score, label: null })) return false;
   } else {
     return false;
@@ -393,6 +410,7 @@ export function createRemoteDecisionClient(options: RemoteDecisionClientOptions)
       // mutation, NaN/undefined smuggling, depth and size abuse never egress.
       const outgoing = parseDecisionRequest({ ...request, correlationId });
       if (!outgoing.ok) return preflightFail('MESH_UNAVAILABLE');
+      freezeDecisionData(outgoing.request);
 
       const racePreflight = async <T>(promiseOrValue: T | Promise<T>): Promise<T> => {
         if (controller.signal.aborted) throw new Error('preflight-interrupted');
@@ -410,6 +428,22 @@ export function createRemoteDecisionClient(options: RemoteDecisionClientOptions)
           cleanup?.();
         }
       };
+
+      // Trusted context (§3.3): resolve revision-specific facts on the frozen
+      // transmitted snapshot, bounded by the call deadline. Any fault refuses
+      // client-local with zero fetches; without a resolver the implicit JEV
+      // profile applies.
+      let validation: DecisionValidationContext | null = null;
+      if (options.validationContext) {
+        try {
+          const resolved = await racePreflight(options.validationContext(outgoing.request));
+          validation = parseDecisionValidationContext(resolved, outgoing.request, Date.now());
+        } catch {
+          return preflightFail(timedOut ? 'TIMEOUT'
+            : controller.signal.aborted || callOptions?.signal?.aborted ? 'CANCELLED' : 'MESH_UNAVAILABLE');
+        }
+        if (!validation) return preflightFail('MESH_UNAVAILABLE');
+      }
 
       const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
       try {
@@ -566,13 +600,13 @@ export function createRemoteDecisionClient(options: RemoteDecisionClientOptions)
       // request may have mutated during auth resolution or transport.
       if (isRecord(val) && hasOnlyKeys(val, ['kind', 'ok', 'verdict', 'receipt'])
         && val.kind === 'verdict' && val.ok === true
-        && isValidDecisionReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'verdict'
-        && isValidDecisionVerdict(val.verdict, outgoing.request)) {
+        && isValidDecisionReceipt(val.receipt, outgoing.request, correlationId, validation) && val.receipt.outcome === 'verdict'
+        && isValidDecisionVerdict(val.verdict, outgoing.request, validation)) {
         return { kind: 'verdict', ok: true, verdict: rebuildVerdict(val.verdict), receipt: rebuildReceipt(val.receipt) };
       }
       if (isRecord(val) && hasOnlyKeys(val, ['kind', 'ok', 'error', 'receipt'])
         && val.kind === 'error' && val.ok === false
-        && isValidDecisionReceipt(val.receipt, outgoing.request, correlationId) && val.receipt.outcome === 'error') {
+        && isValidDecisionReceipt(val.receipt, outgoing.request, correlationId, validation) && val.receipt.outcome === 'error') {
         const error = rebuildWireError(val.error, val.receipt);
         if (error && val.receipt.errorCode === error.code) {
           return { kind: 'error', ok: false, error, receipt: rebuildReceipt(val.receipt) };

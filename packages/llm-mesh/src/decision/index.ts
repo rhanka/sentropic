@@ -7,3 +7,6 @@ export type { DecisionClient, DecisionResult, DecisionReceipt, DecisionUsage, De
   TokenCounter, TotalTokenCounter, DecisionConnectionFailure, RemoteDecisionClient } from './receipt.js';
 export { createRemoteDecisionClient } from './client.js';
 export type { RemoteDecisionClientOptions } from './client.js';
+export type { DecisionValidationContext, DecisionValidationProfile, DecisionValidationSemantics,
+  DecisionValidationScoreSemantics, DecisionValidationConfidenceSemantics, DecisionRegisteredResolution,
+  DirectDecisionCriterion, DecisionValidationContextResolver } from './validation-context.js';
