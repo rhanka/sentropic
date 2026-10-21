@@ -808,3 +808,45 @@ tap, FR stress folds 57 and 96; a dedicated traversal also expired at fold
 Isolated routing at fold 96 took 553ms FR / 372ms EN. The host reported load
 averages above 30 on 32 CPUs; this observation does not waive the failed gate.
 No timeout, router or production interaction code was changed to bypass it.
+
+## Expanded zone gaps — PR #711, 2026-10-21
+
+Every expanded frame now uses **72 px in diagram coordinates**, the existing
+vertical gap between stacked cards. The separator and first child row share
+this spacing at every depth, in French and English.
+
+| Zones | Before FR | Before EN | After FR/EN |
+| --- | ---: | ---: | ---: |
+| h2a, Access surfaces, Design System, MCP, Security and study frames | 136 | 136 | 72 |
+| Sentropic | 200 | 200 | 72 |
+| Catalogues, Storage and Integration | 182 | 182 | 72 |
+| Engram | 171 | 136 | 72 |
+
+Frames shrink with their content: h2a/Access are 532 → 468 px; Sentropic is
+1701 → 1445 px, including its nested reductions; the four aligned Sentropic
+sub-zones are 1270 → 1142 px. All card content and footprints, header wording,
+icons and 24 fully collapsed geometry/route snapshots match the starting head.
+
+No label occupies the header-to-child gap. The three h2a links to AI, Cowork
+and CLI carry “Harnais et collaboration” / “Harness and collaboration” in
+card gutters or exterior lanes. Across expanded projections, 154 FR/EN edge
+instances (46 distinct relations) change their route or label placement;
+another 24 only translate with the layout. The complete IDs, points and label
+boxes are recorded in root `.tmp/governance-unification/gap30-shots/report.json`.
+Open frames permit gutter transit; headers, cards, other edges and labels remain
+obstacles. Labels retain the validated incremental routing order: the isolated
+FR stress state 114 drops from 2616 ms to 92 ms without changing the UI budget.
+
+The final portable passes source, 102-scene/732-edge geometry, 16 browser
+captures, 600 interactions and 32-slide/52-need content checks. Rows deviate
+by 0 px; all collision counters, clipped fields, ellipses and console errors
+are zero. Worst browser interaction: 784 ms against the unchanged 1800 ms
+budget. Worst load: 218 ms; expand-all: 98 ms; ten-second idle task work:
+1.33 ms, with no idle script/animation/resize work. Maximum heap: 10,021,896
+bytes against the existing 32 MiB limit.
+
+Chromium opens the delivered `file://` portable offline with its title loaded
+and diagram visible in all six requested 1920px FR/EN captures. Screenshots,
+SVG gap measurements, unchanged-collapse comparisons and the regression that
+rejects the starting head are under root `.tmp/governance-unification/gap30-shots/`.
+Portable SHA-256: `de07c0cefe32624afafa1c08f0a57203a71b6726a52e46d7be2cf36deb379966`.

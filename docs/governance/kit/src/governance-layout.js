@@ -1,4 +1,4 @@
-import { groupContent, nodeContent, frameHeaderContent, CARD_WIDTH } from './architecture-layout.js';
+import { groupContent, nodeContent, frameHeaderContent, CARD_WIDTH, CARD_STACK_GAP } from './architecture-layout.js';
 
 // The owner-selected dossier card has one width in every frame and language.
 export { CARD_WIDTH };
@@ -46,10 +46,8 @@ export function packGovernanceScene(scene, collapsedIds = []) {
         const header = frameHeaderContent(entry, entry.width);
         if (entry.collapsed || header.kicker) {
           Object.assign(entry, header);
-          entry.headerHeight = entry.collapsed ? header.headerTextHeight : Math.max(entry.headerHeight, header.headerTextHeight + 128);
+          entry.headerHeight = header.headerTextHeight + (entry.collapsed ? 0 : CARD_STACK_GAP - 8);
         }
-        // Clear the shared-services header before crossing between its frames.
-        if (entry.id === 'cluster-mesh' && !entry.collapsed) entry.headerHeight += 64;
         entry.height = entry.collapsed ? COLLAPSED_CARD_HEIGHT : entry.headerHeight + content.height + PAD;
       }
       return {
@@ -74,9 +72,10 @@ export function packGovernanceScene(scene, collapsedIds = []) {
       for (const item of headers) {
         item.height += headerHeight - item.entry.headerHeight;
         item.entry.headerHeight = headerHeight;
+        item.entry.headerTextHeight = headerHeight - CARD_STACK_GAP + 8;
       }
     }
-    const gaps = items.slice(1).map((item, i) => horizontal ? GAP : item.entry?.data && items[i].entry?.data ? 72 : GAP);
+    const gaps = items.slice(1).map((item, i) => horizontal ? GAP : item.entry?.data && items[i].entry?.data ? CARD_STACK_GAP : GAP);
     const width = horizontal ? items.reduce((sum, item) => sum + item.width, 0) + GAP * (items.length - 1) : Math.max(...items.map(item => item.width));
     const height = horizontal ? Math.max(...items.map(item => item.height)) : items.reduce((sum, item) => sum + item.height, 0) + gaps.reduce((sum, gap) => sum + gap, 0);
     const result = {
