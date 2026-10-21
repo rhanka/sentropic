@@ -30,6 +30,7 @@ Replace the live root-lockfile equality in the P1 packed gate with a versioned f
   - `tools/memory-mcp-l5/artifacts/history/**`
   - `tools/memory-mcp-l5/artifacts/archives/**`
   - `tools/memory-mcp-l5/artifacts/lock-snapshots/**`
+  - `tools/memory-mcp-l5/artifacts/toolchain/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -63,6 +64,10 @@ Actions with the following status should be included around tasks only if really
   - Reason: the P1 build toolchain installs an unpinned `@types/node` (floating `latest`); the fingerprint must bind the actual resolved toolchain deterministically (Astra R1 finding 2). Pin matches `packages/mcp-*/devDependencies ^22.10.10` and the lock nested resolution `22.20.1`. The `--head-lock-sha` provenance arg enforces generation from the committed lock (Astra R1 finding 3); host-shell evaluation matches the existing `--l5-head`/`--base` args since the pack container cannot read the worktree gitdir.
   - Impact: build `@types/node` becomes `22.20.1` instead of floating latest; `pack.mjs` refuses a dirty lockfile; `typecheck-*`/`test-*` targets untouched.
   - Rollback: revert the 3 tokens to bare `@types/node` and drop the `--head-lock-sha` arg.
+- `attention`: BR710-EX3 — install the P1 build toolchain via `npm ci` from a committed union toolchain snapshot and add the explicit `memory-l5-toolchain-snapshot` regen target (3 recipe install tokens + 1 additive target).
+  - Reason: Astra R2 finding 2 — the recipes fresh-install transitive ranges, so root-lock records describe a different installation (api-extractor 7.58.12 vs actual 7.58.9). One resolved toolchain record must be consumed by the producing build and checked by the verifier.
+  - Impact: builds install the byte-identical locked tree (same direct pins `typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9`); snapshot regen is explicit and reviewable; fingerprint v3 binds snapshot content plus spec satisfaction; all other targets untouched.
+  - Rollback: revert the 3 install tokens to `npm install <specs>` and drop the snapshot target; keep or revert the `v3` modules with the snapshot files retained.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -138,3 +143,23 @@ Actions with the following status should be included around tasks only if really
   - [x] Pinned sed bump in `package-lock.json` (14.3.0) and `ui/package-lock.json` (14.1.1) via `lock-markdown-it-direct` (BR710-EX2, mirrors `lock-api-direct` precedent).
   - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock); no P1 regen expected.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
+
+## Round R2 (Astra review, CHANGES)
+- [ ] **Lot 10 — Full transitive toolchain traversal (finding 1)**
+  - [ ] `lock-closure.mjs`: carry traversal through all descendants once inside the build-toolchain subtree, preserving consumer resolution and edges.
+  - [ ] Red-first regressions: second-level integrity change and edge deletion fail (unit + packed gate); unchanged-content hoisting passes.
+  - [ ] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2`.
+- [ ] **Lot 11 — Effective emitting commands and image (finding 3)**
+  - [ ] `build-inputs.mjs`: record per-target recipe lines, docker image tokens, and `LLM_MESH_NODE_IMAGE` export/default bindings; fail closed on unclassified lines.
+  - [ ] Red-first regressions: single-line `tsc` flag and image token recipe changes fail (unit + packed gate).
+  - [ ] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2`.
+- [ ] **Lot 12 — Actual resolved toolchain record (finding 2, BR710-EX3)**
+  - [ ] Committed union toolchain snapshot (`artifacts/toolchain/`); the 3 producing recipes consume it via `npm ci`; fingerprint v3 binds snapshot content plus spec satisfaction.
+  - [ ] Explicit regen via `pack.mjs --snapshot-toolchain` and the `memory-l5-toolchain-snapshot` target; pack and verify refuse a stale snapshot.
+  - [ ] Red-first regressions: snapshot transitive change and edge deletion fail (unit + packed gate); spec/snapshot mismatch throws.
+  - [ ] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2`.
+- [ ] **Lot 13 — Regenerate P1, full gate, push, CI green**
+  - [ ] Retain superseded manifest in `artifacts/history/`; rebuild dist and repack P1 via make targets; inventory stays exact 44 contracts.
+  - [ ] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-pr710-fix-r2`.
+  - [ ] `make scope-check` before each commit; atomic commits via `make commit MSG="..."`.
+  - [ ] Push branch; PR stays DRAFT, do not merge, do not mark ready; CI green on the exact head.
