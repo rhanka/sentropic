@@ -23,15 +23,19 @@
 - [x] **Allowed Paths (implementation scope)**:
   - [x] `BRANCH.md`, `.h2a/build/**`
   - [x] `packages/llm-mesh/src/judge/**`, `packages/llm-mesh/src/transport/jev.ts`
+  - [x] `packages/llm-mesh/src/decision/**` (V4-L2 rename target; judge/** removed in the same lot, no dual tree)
   - [x] `packages/llm-mesh/src/providers.ts`, `packages/llm-mesh/src/capabilities.ts`, `packages/llm-mesh/src/catalog.ts`, `packages/llm-mesh/src/registry.ts`
   - [x] `packages/llm-mesh/tests/judge-*.test.ts`, `packages/llm-mesh/tests/transport/jev*.test.ts`, `packages/llm-mesh/tests/muse.test.ts`, `packages/llm-mesh/tests/gcp.test.ts`
   - [x] `packages/llm-mesh/tests/judge-fixtures.ts` (shared synthetic descriptors/requests; no live qualification or credentials)
+  - [x] `packages/llm-mesh/tests/decision-*.test.ts`, `packages/llm-mesh/tests/decision-fixtures.ts` (V4-L2 renamed suites; judge-* removed in the same lot)
   - [x] `packages/llm-mesh/package.json` (judge export-map additions plus the 0.27.0 feature version; BR96-EX8 cascade)
   - [x] `packages/cluster-mesh/src/modules/contracts.ts`, `packages/cluster-mesh/src/modules/catalog.ts`, `packages/cluster-mesh/src/compose/llm-mesh.ts`
   - [x] `packages/cluster-mesh/src/integrations/llm-mesh/judge.ts`, `packages/cluster-mesh/src/integrations/llm-mesh/judge/**`, `packages/cluster-mesh/src/integrations/llm-mesh/transport/jev.ts`
   - [x] `packages/cluster-mesh/src/loaders/llm-mesh/judge.ts`, `packages/cluster-mesh/src/loaders/llm-mesh/judge/**`, `packages/cluster-mesh/src/loaders/llm-mesh/transport/jev.ts`
+  - [x] `packages/cluster-mesh/src/integrations/llm-mesh/decision.ts`, `packages/cluster-mesh/src/integrations/llm-mesh/decision/**`, `packages/cluster-mesh/src/loaders/llm-mesh/decision.ts`, `packages/cluster-mesh/src/loaders/llm-mesh/decision/**` (V4-L2 rename targets; judge surfaces removed in the same lot)
   - [x] `packages/cluster-mesh/package.json` (judge export-map additions plus the 0.20.0 feature version and `<0.28.0`/`<0.22.0` peer ranges; BR96-EX8/EX9)
   - [x] `packages/cluster-mesh/tests/judge-*.spec.ts`, `packages/cluster-mesh/tests/modules/judge-loading.spec.ts`, `packages/cluster-mesh/tests/modules/capabilities.spec.ts`
+  - [x] `packages/cluster-mesh/tests/decision-*.spec.ts`, `packages/cluster-mesh/tests/modules/decision-loading.spec.ts` (V4-L2 renamed suites; judge-* removed in the same lot)
   - [x] `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`, `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`, `packages/cluster-mesh/tests/fixtures/train.ts`, `packages/cluster-mesh/tests/fixtures/package-tree.ts`
   - [x] `packages/cluster-mesh/tests/modules/registry.spec.ts`, `packages/cluster-mesh/tests/modules/topology.spec.ts`, `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
   - [x] `api/src/services/provider-runtime.ts`, `api/src/services/provider-registry.ts`, `api/src/services/model-catalog.ts`, `api/src/services/llm-runtime/index.ts`, `api/src/services/llm-runtime/gateway-wire-adapter.ts`
@@ -313,6 +317,10 @@
 - [x] **Lot MERGE-MAIN-3 — integrate origin/main after #717 (3f3f3fd78)**
   - [x] No rebase, no force-push. Single conflict: BRANCH.md keeps ours (main carries the merged Go-CVE branch plan); api/Dockerfile Go 1.26.9 to 1.26.10 digest pin auto-merges from main.
   - [x] Judge code, versions, locks and memory pin untouched by this merge; R1 fixes and EX10/EX11 intact. Gates: R1 10/10 PASS, V4-L1 14/14 PASS, memory-l5-verify ok.
+- [ ] **Lot V4-L2 — Decision migration and generic core (spec v4 §2/§12, probes P15–P23, P27/P28-L2, P32/P33, keep V4-L1)**
+  - [ ] Rename per §12.1 map (module `@sentropic/llm-mesh/decision`, `src/decision/`, factories/methods/types, `decision`/`decisionOnly`, cluster IDs/loaders, tests, env names); no legacy alias (unpublished API, §12.2 preferred path); branch label stays `feat/llm-judge`.
+  - [ ] Generic core: `DecisionEvaluatorDescriptor` + canonical equality, explicit `DecisionValidationContext` resolver (required on canonical client), `validateDecisionResult` pure validator, native + scalar-label-v1 profiles, protocol-specific pricing with output liability, per-descriptor credentials, explicit evaluator allowlist, bounded structured backend on injected transports.
+  - [ ] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
