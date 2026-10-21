@@ -137,6 +137,9 @@ export const createSessionContentS3Client = (config: SessionContentStorageConfig
     region: config.region,
     endpoint: config.endpoint,
     forcePathStyle: true,
+    // A timed-out PUT may still execute remotely. Retrying it could leave
+    // an earlier request alive after a later acknowledged attempt settles.
+    maxAttempts: 1,
     credentials: {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
@@ -322,6 +325,7 @@ export interface SessionContentOptions {
   readonly newId?: () => string;
   readonly quotas?: Partial<SessionContentQuotas>;
   readonly storage?: Partial<SessionContentStorageConfig>;
+  /** Test transport injection; production always uses the single-attempt client. */
   readonly storageClient?: S3Client;
   readonly epochs?: ContentAuthorityEpochPort;
   /** Explicit authority issuer configuration (R10): no hidden default. */
