@@ -1,4 +1,4 @@
-import { has, hasOnlyKeys, isMicroUsd, isRecord, JUDGE_MAX_RAW_BYTES } from './validation.js';
+import { has, hasOnlyKeys, isMicroUsd, isRecord, DECISION_MAX_RAW_BYTES } from './validation.js';
 
 export function isRequestPolicy(value: unknown): boolean {
   if (!isRecord(value) || !hasOnlyKeys(value, ['budget', 'timeoutMs', 'explanation'])) return false;
@@ -13,5 +13,5 @@ export function isRawPolicy(value: unknown): boolean {
   return isRecord(value) && hasOnlyKeys(value, ['mode', 'maxBytes'])
     && (value.mode === 'none' || value.mode === 'allowlisted')
     && (!has(value, 'maxBytes') || (typeof value.maxBytes === 'number'
-      && Number.isSafeInteger(value.maxBytes) && value.maxBytes >= 0 && value.maxBytes <= JUDGE_MAX_RAW_BYTES));
+      && Number.isSafeInteger(value.maxBytes) && value.maxBytes >= 0 && value.maxBytes <= DECISION_MAX_RAW_BYTES));
 }

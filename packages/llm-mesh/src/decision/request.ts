@@ -1,6 +1,6 @@
 import type { ProviderId } from '../providers.js';
 import { isProviderId } from '../providers.js';
-import { isJudgeCriterion, isJudgeDecisionRule } from './criterion.js';
+import { isDecisionCriterion, isDecisionRule } from './criterion.js';
 import { isRawPolicy, isRequestPolicy } from './request-policy.js';
 import { has, hasOnlyKeys, isCorrelationId, isRecord, isText, snapshotBoundedJson } from './validation.js';
 
@@ -15,7 +15,7 @@ export interface EvaluatorRef {
   revision: string;
 }
 
-export interface JudgeInputs {
+export interface DecisionInputs {
   input?: Json;
   output?: Json;
   context?: readonly Json[];
@@ -23,7 +23,7 @@ export interface JudgeInputs {
   state?: Json;
 }
 
-export type JudgeCriterion =
+export type DecisionCriterion =
   | { kind: 'binary'; instructions: string; criteria?: { true: string; false: string } }
   | { kind: 'graded'; instructions: string;
       direction: 'higher-is-better' | 'lower-is-better' | 'unordered';
@@ -37,11 +37,11 @@ export type DecisionRule =
   | { kind: 'threshold'; field: 'score'; op: 'gte' | 'lte'; value: number }
   | { kind: 'labels'; passing: readonly string[] };
 
-export interface JudgeRequest {
+export interface DecisionRequest {
   schemaVersion: 1;
   evaluator: EvaluatorRef;
-  inputs: JudgeInputs;
-  criterion: JudgeCriterion;
+  inputs: DecisionInputs;
+  criterion: DecisionCriterion;
   decision?: DecisionRule;
   policy?: {
     budget?: { maxCostMicroUsd: MicroUsd };
@@ -52,12 +52,12 @@ export interface JudgeRequest {
   correlationId?: string;
 }
 
-export type JudgeRequestParseResult =
-  | { ok: true; request: JudgeRequest }
+export type DecisionRequestParseResult =
+  | { ok: true; request: DecisionRequest }
   | { ok: false; code: 'REQUEST_INVALID' | 'CAPABILITY_UNSUPPORTED' | 'PROVIDER_UNKNOWN' };
 
 /** Pure preflight parsing: capabilities and descriptor revisions remain service-owned. */
-export function parseJudgeRequest(value: unknown): JudgeRequestParseResult {
+export function parseDecisionRequest(value: unknown): DecisionRequestParseResult {
   const invalid = { ok: false, code: 'REQUEST_INVALID' } as const;
   const snapshot = snapshotBoundedJson(value);
   if (!snapshot.ok) return invalid;
@@ -76,10 +76,10 @@ export function parseJudgeRequest(value: unknown): JudgeRequestParseResult {
     || (!has(value.inputs, 'output') && !has(value.inputs, 'state'))
     || (has(value.inputs, 'context') && !Array.isArray(value.inputs.context))) return invalid;
   const criterion = value.criterion;
-  if (!isJudgeCriterion(criterion)) return invalid;
+  if (!isDecisionCriterion(criterion)) return invalid;
   if (has(value, 'decision')) {
     const decision = value.decision;
-    if (!isJudgeDecisionRule(decision)) return invalid;
+    if (!isDecisionRule(decision)) return invalid;
     if (decision.kind === 'labels' && criterion.kind !== 'registered') {
       const labels = criterion.kind === 'choice' ? criterion.options.map((v) => v.id)
         : criterion.kind === 'graded' ? criterion.levels.map((v) => v.label) : [];
@@ -90,5 +90,5 @@ export function parseJudgeRequest(value: unknown): JudgeRequestParseResult {
     || (has(value, 'raw') && !isRawPolicy(value.raw))
     || (has(value, 'correlationId') && !isCorrelationId(value.correlationId))) return invalid;
   if (!isProviderId(value.evaluator.providerId)) return { ok: false, code: 'PROVIDER_UNKNOWN' };
-  return { ok: true, request: value as unknown as JudgeRequest };
+  return { ok: true, request: value as unknown as DecisionRequest };
 }

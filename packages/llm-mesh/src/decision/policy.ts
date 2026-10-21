@@ -1,12 +1,12 @@
-import type { JudgeRequest } from './request.js';
-import type { EvaluatorDescriptor } from './jev-descriptor.js';
-import type { JudgeErrorCode } from './errors.js';
+import type { DecisionRequest } from './request.js';
+import type { DecisionEvaluatorDescriptor } from './descriptor.js';
+import type { DecisionErrorCode } from './errors.js';
 import { encodeJevRequest } from './jev-codec.js';
 
-export interface JudgeHostPolicy { timeoutMs?: number; maxCostMicroUsd?: string; allowRaw?: boolean }
+export interface DecisionHostPolicy { timeoutMs?: number; maxCostMicroUsd?: string; allowRaw?: boolean }
 /** Capability/decision refusal precedes credential acquisition and financial admission. */
-export function validateJevPolicy(request: JudgeRequest, descriptor: EvaluatorDescriptor,
-  host: JudgeHostPolicy = {}): JudgeErrorCode | null {
+export function validateDecisionPolicy(request: DecisionRequest, descriptor: DecisionEvaluatorDescriptor,
+  host: DecisionHostPolicy = {}): DecisionErrorCode | null {
   const encoded = encodeJevRequest(request, descriptor);
   if (!encoded.ok) return encoded.code;
   const criterion = encoded.criterion;
