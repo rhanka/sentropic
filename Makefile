@@ -36,7 +36,7 @@ export WEBAUTHN_ORIGIN ?= http://localhost:$(UI_PORT)
 export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
-export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/cluster-mesh/src packages/cluster-mesh/package.json packages/cluster-mesh/tsconfig.json packages/llm-mesh/src packages/llm-mesh/package.json packages/llm-mesh/tsconfig.json packages/chat-server/src packages/chat-server/package.json packages/chat-server/tsconfig.json packages/comments/src packages/comments/package.json packages/comments/tsconfig.json api/src api/drizzle apps/auth-idp api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/artifacts packages/auth-client packages/auth-hono packages/auth-ui packages/chat-core packages/chat-server packages/cluster-mesh packages/comments packages/connector-host packages/contracts packages/events packages/flow packages/llm-gateway packages/llm-mesh packages/mcp-auth packages/mcp-connector-google packages/mcp-platform packages/oauth-verify packages/skills packages/ubo-contracts api apps/auth-idp apps/llm-gateway e2e/package.json e2e/package-lock.json e2e/tests/fixtures ui/package.json .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' ! -name 'data.db' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
@@ -540,8 +540,10 @@ load-ui:
 	@echo "📥 Loading UI image from artifact..."
 	@docker load -i ui-image.tar
 
-.PHONY: build-api-image
-build-api-image: ## Build the API Docker image for production
+.PHONY: build-api-image build-api-image-fresh
+build-api-image: ## Reuse the canonical production image when its tag exists; build only on established absence
+	@REGISTRY="$(REGISTRY)" API_IMAGE_NAME="$(API_IMAGE_NAME)" API_VERSION="$(API_VERSION)" API_IMAGE_RECEIPT="$(API_IMAGE_RECEIPT)" DOCKER_COMPOSE="$(DOCKER_COMPOSE)" bash scripts/resolve-api-image.sh
+build-api-image-fresh: ## Force a no-cache production build and record its identity (bypasses canonical-tag reuse)
 	API_IMAGE_REF= TARGET=production $(DOCKER_COMPOSE) build --no-cache api
 	@$(MAKE) record-api-image ENV=$(ENV)
 
@@ -577,6 +579,10 @@ test-ci-api-runtime: verify-api-image ## Prove the production artifact has no np
 .PHONY: test-ci-api-tag-guard
 test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision guard (absent, exists-same, exists-different)
 	@bash scripts/test-api-tag-guard.sh $(or $(CI_TAG_GUARD_CASE),all)
+
+.PHONY: test-ci-api-image-canonical
+test-ci-api-image-canonical: ci-test-env ## Regress canonical artifact resolution (reuse/absent/fail-closed) and tag inputs
+	@bash scripts/test-api-image-canonical.sh $(or $(CI_CANONICAL_CASE),all)
 
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 api-tool-version: ## Print the content-addressed CI toolbox tag
