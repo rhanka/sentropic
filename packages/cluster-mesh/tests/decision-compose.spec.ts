@@ -47,31 +47,31 @@ beforeAll(() => {
   ensureDistFresh();
 });
 
-describe('judge compose llm-mesh namespace module', () => {
+describe('decision compose llm-mesh namespace module', () => {
   const dummyContext: VerifiedInvocationContextPort = {
     async verify(input) { return input as never; },
   };
   const dummyReceipts: InvocationReceiptPort = { append: vi.fn(async () => undefined) };
 
-  it('acquires nothing when disabled even if judge is requested', async () => {
+  it('acquires nothing when disabled even if decision is requested', async () => {
     const modules = createClusterMeshModules();
     const createRouter = vi.fn((_input: LlmMeshRouterInput) => new Hono());
     const module = await createLlmMeshNamespaceModule(modules, {
       enabled: false,
-      judge: true,
+      decision: true,
       createRouter,
     });
 
     expect(module.namespace).toBe('/llm-mesh');
     expect(module.enabled).toBe(false);
     expect(modules.snapshot()['llm-mesh'].state).toBe('unprobed');
-    expect(modules.snapshot()['llm-mesh/judge/host'].state).toBe('unprobed');
+    expect(modules.snapshot()['llm-mesh/decision/host'].state).toBe('unprobed');
 
     expect(() => module.createRouter({ context: dummyContext, receipts: dummyReceipts })).toThrow(/disabled/);
     expect(createRouter).not.toHaveBeenCalled();
   });
 
-  it('acquires only llm-mesh when judge is omitted or false', async () => {
+  it('acquires only llm-mesh when decision is omitted or false', async () => {
     const modules = createClusterMeshModules();
     let captured: LlmMeshRouterInput | undefined;
     const createRouter = vi.fn((input: LlmMeshRouterInput) => {
@@ -80,52 +80,52 @@ describe('judge compose llm-mesh namespace module', () => {
     });
     const module = await createLlmMeshNamespaceModule(modules, {
       enabled: true,
-      judge: false,
+      decision: false,
       createRouter,
     });
 
     expect(module.namespace).toBe('/llm-mesh');
     expect(module.enabled).toBe(true);
     expect(modules.snapshot()['llm-mesh'].state).toBe('loaded');
-    expect(modules.snapshot()['llm-mesh/judge/host'].state).toBe('unprobed');
+    expect(modules.snapshot()['llm-mesh/decision/host'].state).toBe('unprobed');
 
     module.createRouter({ context: dummyContext, receipts: dummyReceipts });
     expect(createRouter).toHaveBeenCalledOnce();
-    expect(captured?.judgeHost).toBeUndefined();
+    expect(captured?.decisionHost).toBeUndefined();
     expect(typeof captured?.llmMesh.createLlmMesh).toBe('function');
   });
 
-  it('acquires both llm-mesh and judgeHost when judge is true', async () => {
+  it('acquires both llm-mesh and decisionHost when decision is true', async () => {
     const modules = createClusterMeshModules();
     let captured: LlmMeshRouterInput | undefined;
     const createRouter = vi.fn((input: LlmMeshRouterInput) => {
       captured = input;
-      return new Hono().get('/judge', (c) => c.text('ok'));
+      return new Hono().get('/decision', (c) => c.text('ok'));
     });
     const module = await createLlmMeshNamespaceModule(modules, {
       enabled: true,
-      judge: true,
+      decision: true,
       createRouter,
     });
 
     expect(module.namespace).toBe('/llm-mesh');
     expect(module.enabled).toBe(true);
     expect(modules.snapshot()['llm-mesh'].state).toBe('loaded');
-    expect(modules.snapshot()['llm-mesh/judge/host'].state).toBe('loaded');
+    expect(modules.snapshot()['llm-mesh/decision/host'].state).toBe('loaded');
 
     module.createRouter({ context: dummyContext, receipts: dummyReceipts });
     expect(createRouter).toHaveBeenCalledOnce();
     expect(typeof captured?.llmMesh.createLlmMesh).toBe('function');
-    expect(typeof captured?.judgeHost?.createJudgeService).toBe('function');
-    expect(typeof captured?.judgeHost?.createJevAdapter).toBe('function');
+    expect(typeof captured?.decisionHost?.createDecisionService).toBe('function');
+    expect(typeof captured?.decisionHost?.createJevAdapter).toBe('function');
   });
 
-  it('fails at composition when judge module is disabled or unavailable', async () => {
-    const disabledModules = createClusterMeshModules({ disabled: ['llm-mesh/judge/host'] });
+  it('fails at composition when decision module is disabled or unavailable', async () => {
+    const disabledModules = createClusterMeshModules({ disabled: ['llm-mesh/decision/host'] });
     const createRouter = vi.fn(() => new Hono());
     const errDisabled = await createLlmMeshNamespaceModule(disabledModules, {
       enabled: true,
-      judge: true,
+      decision: true,
       createRouter,
     }).catch((e: unknown) => e);
 
@@ -133,7 +133,7 @@ describe('judge compose llm-mesh namespace module', () => {
     expect(errDisabled).toMatchObject({
       code: 'cluster_mesh_module_unavailable',
       reason: 'disabled',
-      moduleId: 'llm-mesh/judge/host',
+      moduleId: 'llm-mesh/decision/host',
     });
 
     const tree = new PackageTree();
@@ -143,7 +143,7 @@ describe('judge compose llm-mesh namespace module', () => {
       const treeModules = createModuleRegistry({}, { anchorDir });
       const errExport = await createLlmMeshNamespaceModule(treeModules, {
         enabled: true,
-        judge: true,
+        decision: true,
         createRouter,
       }).catch((e: unknown) => e);
 
@@ -151,7 +151,7 @@ describe('judge compose llm-mesh namespace module', () => {
       expect(errExport).toMatchObject({
         code: 'cluster_mesh_module_unavailable',
         reason: 'export_unavailable',
-        moduleId: 'llm-mesh/judge/host',
+        moduleId: 'llm-mesh/decision/host',
       });
     } finally {
       tree.cleanup();
@@ -164,7 +164,7 @@ describe('judge compose llm-mesh namespace module', () => {
     const example = blocks.find((b) => b.includes('createLlmMeshNamespaceModule'));
     expect(example).toBeDefined();
     expect(example).toContain('@sentropic/cluster-mesh/compose/llm-mesh');
-    expect(example).toContain('judge: true');
+    expect(example).toContain('decision: true');
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
     expect(pkg.exports['./compose/llm-mesh']).toEqual({
       types: './dist/compose/llm-mesh.d.ts',
@@ -174,14 +174,14 @@ describe('judge compose llm-mesh namespace module', () => {
     // step; assert on the committed source so this test runs before the build.
     const composeSource = readFileSync(resolve('src/compose/llm-mesh.ts'), 'utf8');
     expect(composeSource).toContain('createLlmMeshNamespaceModule');
-    expect(composeSource).toContain('judgeHost');
+    expect(composeSource).toContain('decisionHost');
     const module = await createLlmMeshNamespaceModule(createClusterMeshModules(), {
       enabled: true,
-      judge: true,
-      createRouter: ({ llmMesh, judgeHost, context, receipts }) => {
+      decision: true,
+      createRouter: ({ llmMesh, decisionHost, context, receipts }) => {
         const router = new Hono();
         expect(typeof llmMesh.createLlmMesh).toBe('function');
-        expect(typeof judgeHost?.createJudgeService).toBe('function');
+        expect(typeof decisionHost?.createDecisionService).toBe('function');
         expect(typeof context.verify).toBe('function');
         expect(typeof receipts.append).toBe('function');
         return router;

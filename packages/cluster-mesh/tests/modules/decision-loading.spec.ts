@@ -3,49 +3,49 @@ import { createClusterMeshModules } from '../../src/index.js';
 import { createModuleRegistry } from '../../src/modules/registry.js';
 import { isClusterMeshModuleUnavailableError } from '../../src/modules/errors.js';
 import { fakeMesh, PackageTree } from '../fixtures/package-tree.js';
-import * as meshJudgeProvider from '@sentropic/llm-mesh/judge';
-import * as meshJudgeHostProvider from '@sentropic/llm-mesh/judge/host';
+import * as meshDecisionProvider from '@sentropic/llm-mesh/decision';
+import * as meshDecisionHostProvider from '@sentropic/llm-mesh/decision/host';
 import * as meshJevTransportProvider from '@sentropic/llm-mesh/transport/jev';
-import { loadLlmMeshJudge } from '../../src/loaders/llm-mesh/judge.js';
-import { loadLlmMeshJudgeHost } from '../../src/loaders/llm-mesh/judge/host.js';
+import { loadLlmMeshDecision } from '../../src/loaders/llm-mesh/decision.js';
+import { loadLlmMeshDecisionHost } from '../../src/loaders/llm-mesh/decision/host.js';
 import { loadLlmMeshJevTransport } from '../../src/loaders/llm-mesh/transport/jev.js';
 
-describe('judge module loading', () => {
-  it('probes and loads llm-mesh/judge from installed provider', async () => {
+describe('decision module loading', () => {
+  it('probes and loads llm-mesh/decision from installed provider', async () => {
     const modules = createClusterMeshModules();
-    expect(modules.snapshot()['llm-mesh/judge']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(modules.snapshot()['llm-mesh/decision']).toEqual({ availability: 'gated', state: 'unprobed' });
     await modules.probe();
-    expect(modules.snapshot()['llm-mesh/judge']).toMatchObject({
+    expect(modules.snapshot()['llm-mesh/decision']).toMatchObject({
       availability: 'available',
       state: 'installed',
       packageName: '@sentropic/llm-mesh',
     });
-    const loaded = (await modules.load('llm-mesh/judge')) as typeof meshJudgeProvider;
-    expect(typeof loaded.createRemoteJudgeClient).toBe('function');
-    expect(loaded.createRemoteJudgeClient).toBe(meshJudgeProvider.createRemoteJudgeClient);
-    const loadedByLoader = await loadLlmMeshJudge(modules);
-    expect(loadedByLoader.createRemoteJudgeClient).toBe(meshJudgeProvider.createRemoteJudgeClient);
-    expect(modules.snapshot()['llm-mesh/judge']).toMatchObject({ state: 'loaded' });
+    const loaded = (await modules.load('llm-mesh/decision')) as typeof meshDecisionProvider;
+    expect(typeof loaded.createRemoteDecisionClient).toBe('function');
+    expect(loaded.createRemoteDecisionClient).toBe(meshDecisionProvider.createRemoteDecisionClient);
+    const loadedByLoader = await loadLlmMeshDecision(modules);
+    expect(loadedByLoader.createRemoteDecisionClient).toBe(meshDecisionProvider.createRemoteDecisionClient);
+    expect(modules.snapshot()['llm-mesh/decision']).toMatchObject({ state: 'loaded' });
   });
 
-  it('probes and loads llm-mesh/judge/host from installed provider', async () => {
+  it('probes and loads llm-mesh/decision/host from installed provider', async () => {
     const modules = createClusterMeshModules();
-    expect(modules.snapshot()['llm-mesh/judge/host']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(modules.snapshot()['llm-mesh/decision/host']).toEqual({ availability: 'gated', state: 'unprobed' });
     await modules.probe();
-    expect(modules.snapshot()['llm-mesh/judge/host']).toMatchObject({
+    expect(modules.snapshot()['llm-mesh/decision/host']).toMatchObject({
       availability: 'available',
       state: 'installed',
       packageName: '@sentropic/llm-mesh',
     });
-    const loaded = (await modules.load('llm-mesh/judge/host')) as typeof meshJudgeHostProvider;
-    expect(typeof loaded.createJudgeService).toBe('function');
+    const loaded = (await modules.load('llm-mesh/decision/host')) as typeof meshDecisionHostProvider;
+    expect(typeof loaded.createDecisionService).toBe('function');
     expect(typeof loaded.createJevAdapter).toBe('function');
     expect(typeof loaded.jevDescriptor).toBe('object');
-    expect(loaded.createJudgeService).toBe(meshJudgeHostProvider.createJudgeService);
-    expect(loaded.jevDescriptor).toBe(meshJudgeHostProvider.jevDescriptor);
-    const loadedByLoader = await loadLlmMeshJudgeHost(modules);
-    expect(loadedByLoader.createJudgeService).toBe(meshJudgeHostProvider.createJudgeService);
-    expect(modules.snapshot()['llm-mesh/judge/host']).toMatchObject({ state: 'loaded' });
+    expect(loaded.createDecisionService).toBe(meshDecisionHostProvider.createDecisionService);
+    expect(loaded.jevDescriptor).toBe(meshDecisionHostProvider.jevDescriptor);
+    const loadedByLoader = await loadLlmMeshDecisionHost(modules);
+    expect(loadedByLoader.createDecisionService).toBe(meshDecisionHostProvider.createDecisionService);
+    expect(modules.snapshot()['llm-mesh/decision/host']).toMatchObject({ state: 'loaded' });
   });
 
   it('probes and loads llm-mesh/transport/jev from installed provider', async () => {
@@ -66,13 +66,13 @@ describe('judge module loading', () => {
   });
 
   it('fails with unavailable when disabled', async () => {
-    const modules = createClusterMeshModules({ disabled: ['llm-mesh/judge', 'llm-mesh/judge/host', 'llm-mesh/transport/jev'] });
-    expect(modules.isEnabled('llm-mesh/judge')).toBe(false);
-    expect(modules.isEnabled('llm-mesh/judge/host')).toBe(false);
+    const modules = createClusterMeshModules({ disabled: ['llm-mesh/decision', 'llm-mesh/decision/host', 'llm-mesh/transport/jev'] });
+    expect(modules.isEnabled('llm-mesh/decision')).toBe(false);
+    expect(modules.isEnabled('llm-mesh/decision/host')).toBe(false);
     expect(modules.isEnabled('llm-mesh/transport/jev')).toBe(false);
     for (const [id, loader] of [
-      ['llm-mesh/judge', loadLlmMeshJudge],
-      ['llm-mesh/judge/host', loadLlmMeshJudgeHost],
+      ['llm-mesh/decision', loadLlmMeshDecision],
+      ['llm-mesh/decision/host', loadLlmMeshDecisionHost],
       ['llm-mesh/transport/jev', loadLlmMeshJevTransport],
     ] as const) {
       const err1 = await modules.load(id).catch((e: unknown) => e);
@@ -85,15 +85,15 @@ describe('judge module loading', () => {
     }
   });
 
-  it('refuses with export_unavailable when llm-mesh lacks judge exports', async () => {
+  it('refuses with export_unavailable when llm-mesh lacks decision exports', async () => {
     const tree = new PackageTree();
     try {
       const anchorDir = tree.dir('app/node_modules/@sentropic/cluster-mesh/dist/modules');
       tree.install('app', fakeMesh('mesh', '0.22.0'));
       const modules = createModuleRegistry({}, { anchorDir });
       for (const [id, loader] of [
-        ['llm-mesh/judge', loadLlmMeshJudge],
-        ['llm-mesh/judge/host', loadLlmMeshJudgeHost],
+        ['llm-mesh/decision', loadLlmMeshDecision],
+        ['llm-mesh/decision/host', loadLlmMeshDecisionHost],
         ['llm-mesh/transport/jev', loadLlmMeshJevTransport],
       ] as const) {
         const err1 = await modules.load(id).catch((e: unknown) => e);
