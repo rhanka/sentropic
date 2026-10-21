@@ -244,7 +244,8 @@ export interface HistoryReadAuthorization {
   readonly createdAt: number;
 }
 
-/** Narrow CAS store; the service never reads without rechecking revisions. */
+/** CAS writes must atomically preserve read denial, independently of policy
+ * revisions. Durable adapters must enforce the same floor in the database. */
 export interface ContentConsentStore {
   readProject(projectId: string): Promise<ProjectContentConsent | null>;
   writeProject(expectedRevision: number | null, next: ProjectContentConsent): Promise<boolean>;
@@ -267,7 +268,10 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
       if (expectedRevision === null) {
         if (existing) return false;
       } else if (!existing || existing.projectRevision !== expectedRevision) return false;
-      projects.set(next.projectId, next);
+      projects.set(next.projectId, { ...next,
+        readDenied: existing?.readDenied === true || existing?.state === 'revoked'
+          || next.readDenied === true || next.state === 'revoked',
+      });
       return true;
     },
     async readGrant(sessionId: string) { return grants.get(sessionId) ?? null; },
@@ -276,7 +280,10 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
       if (expectedVersion === null) {
         if (existing) return false;
       } else if (!existing || existing.version !== expectedVersion) return false;
-      grants.set(next.sessionId, next);
+      grants.set(next.sessionId, { ...next,
+        readDenied: existing?.readDenied === true || existing?.state === 'revoked'
+          || next.readDenied === true || next.state === 'revoked',
+      });
       return true;
     },
     async listGrants(projectId: string) {

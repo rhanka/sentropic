@@ -2397,7 +2397,11 @@ Source of truth: `api/src/db/control-schema.ts` (control stream) + migration
 Tables (`control` schema, soft references only, no cross-namespace FK):
 - Additive control migration `0017_session_content_safety` preserves `0012`–`0016`.
   Projects/grants carry monotonic `read_denied` independently of capture lifecycle;
-  existing revoked rows are backfilled. Objects carry durable `writer_state`
+  additive `0018_session_content_denial_floor` enforces it with row-level INSERT/UPDATE
+  triggers under PostgreSQL's write lock, preserving denial against stale concurrent
+  snapshots even outside the service. Rollback requires capture fenced and writers
+  drained before dropping both denial-floor triggers and their shared function.
+  Existing revoked rows are backfilled. Objects carry durable `writer_state`
   (`admitted`, `settled`, `unknown`). Only settled writers permit verified deletion.
   Preexisting uncommitted rows default to unknown and remain charged/pending:
   a restart or missing object is never evidence that a remote PUT has settled.
