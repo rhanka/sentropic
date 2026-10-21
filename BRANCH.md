@@ -9,6 +9,7 @@
 
 ## Scope / Guardrails
 
+- [x] N5 safety schema: owner permits new additive migration 0017 when unavoidable; persist writer settlement and independent read denial, conservatively backfill unknown writers, index pending jobs. Preserve every byte of migrations 0012–0016; no external migration or COMPLIANCE operation.
 - [x] N5 R6: reserve/admission/final publication require current tenant and origin-workspace membership. Shared row locks fence withdrawal against final commit; no lock spans PUT. Four exact withdrawal regressions retain committed deadlines and membership-free owner purge (n5_r6_api_green.log).
 
 - [x] N5 R5: accept-at-revision checks the locked row's immutable tenant/owner/workspace/incarnation and repeats them in its CAS predicate. Cross-tenant, same-tenant-other-owner and mismatched-principal regressions preserve the original row (n5_r5_api_green.log).
@@ -203,6 +204,7 @@
   - [ ] Cowork implementation, `packages/comments/**`, M2 storage, Graphify/Engram/L3a implementation, and L6a source/migrations.
   - [ ] All h2a repository paths for the Sentropic implementer; h-cond owns its separate implementation and qualification.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] BR76-EX12: owner-requested N5 R1–R6 remediation permits `api/drizzle/control/0017_session_content_safety.sql`, `api/src/services/cluster-mesh/session-content-purge.ts`, and `api/src/index.ts` for additive durable writer/read-denial state and production purge scheduling only. Existing schema/journal/data-model exceptions apply. Impact: unknown writers block completion after restart; rollback disables new capture/consumer, settles/purges writers, then removes additive fields. Migrations 0012–0016 and COMPLIANCE P10Y remain untouched.
   - [x] BR76-EX11: `tools/memory-mcp-l5/artifacts/history/9466d77741102d88cd8df6d57536b434769499eb26d6c236ef2c89ed05b1bd9d.json`, `tools/memory-mcp-l5/artifacts/history/9466d77741102d88cd8df6d57536b434769499eb26d6c236ef2c89ed05b1bd9d.json.sha256` preserve main incoming provenance before binding the regenerated merged lock.
   - [x] BR76-EX11: `tools/memory-mcp-l5/artifacts/history/2bff16f81fbb2f02587f1040480704315d6316af0fd95c8e0eea6b2c683b4176.json`, `tools/memory-mcp-l5/artifacts/history/2bff16f81fbb2f02587f1040480704315d6316af0fd95c8e0eea6b2c683b4176.json.sha256` retain the exact predecessor before the artifacts-0.1.4 root-lock provenance refresh.
   - [x] BR76-EX9: `tools/memory-mcp-l5/artifacts/history/7fce9279e1e8804c89b538905ea0628d5d7e7dc8bb74baf186a06267ebb0a83d.json`, `tools/memory-mcp-l5/artifacts/history/7fce9279e1e8804c89b538905ea0628d5d7e7dc8bb74baf186a06267ebb0a83d.json.sha256` preserve the exact manifest before binding provenance to the audited nested-tool Vite patch.
