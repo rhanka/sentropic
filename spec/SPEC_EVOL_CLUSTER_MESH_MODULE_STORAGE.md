@@ -139,3 +139,117 @@ scope/resource/availability checks, without a time-based cursor TTL. Only a
 verified terminal chain/count constitutes a complete export. Installed and
 long-history qualification is recorded in the linked installed evidence; final
 CI and co-owner review retain their distinct gates in BRANCH.md.
+
+## Common rule of the neutral storage interface (binding 2026-10-20)
+
+The owner decision of 2026-10-20 ("Règle commune") makes the five low-frequency
+S3 storage guarantees a common rule of the neutral interface: immutable objects,
+a checksum manifest, one atomic publication, bounded listings and separated
+rights. It supersedes the 2026-10-18 study proposal for an additive
+low-frequency profile. There is no fourth surface, separate box, S3-only
+contract or optional switch.
+
+Cluster-mesh keeps backend-neutral serialization and optimizes the
+transactional, analytical and live-graph surfaces. Consumers select a surface and
+its requirements, never a driver. SQLite and Postgres are first; Spanner,
+Iceberg and Neo4j stay optional implementations. S3/object storage is a
+possible placement for data of any surface, not their common control plane.
+
+`MUST` and `MUST NOT` below bind all three surfaces and every backend or
+backend composition: SQLite, Postgres, S3/object, and optional Spanner, Iceberg
+and Neo4j. A backend may decline a surface it cannot implement; it MUST refuse
+that binding rather than advertise partial semantics. Passing the common rule
+does not by itself qualify a backend for every surface.
+
+The qualification unit is one exact adapter/version/configuration, its payload
+and publication-control stores, and each offered surface. "S3 qualified" means a
+tested composition including its authoritative publication mechanism; bucket
+connectivity alone is insufficient.
+
+This rule preserves frozen M1/L6a identities and existing L3a payload encodings,
+adds an explicitly versioned common contract and envelope, and never silently
+reinterprets old hashes, grants, profile claims or persisted bytes. Existing
+installations are not retroactively conformant. New-common-contract admission
+stays disabled without a matching recorded qualification pass. Activation is a
+one-way durable transition for the entire store incarnation across all scopes;
+after activation, old-contract write, publish and maintain operations are
+refused, including through previously issued bindings.
+
+### Shared meaning across surfaces
+
+| Surface | Immutable publication material | Manifest boundary and one visibility decision |
+| --- | --- | --- |
+| Transactional | Canonical records, journal segments, immutable record versions, checkpoint chunks | Exact committed transaction/unit or bounded group, predecessor root, ordered journal boundary, receipt |
+| Analytical | Immutable file batches, columnar chunks, versioned table metadata | One complete selected batch/table snapshot: schema, partitions, source boundary |
+| Live graph | Immutable fact/event versions, projection-generation deltas or snapshots | One coherent fact/projection generation and its source watermark |
+
+"Object" is an addressable immutable logical payload/version, including a SQL
+row version or graph fact version. Mutable indexes, coordination rows and
+current-root pointers MUST NOT change the meaning or bytes of an already
+published object identity. Corrections create successors; erasure follows the
+authorized lifecycle path only.
+
+One publication unit has one authority domain and scope. Surfaces exposing that
+unit MUST derive visibility from its committed root. Independently published
+derived views MUST state their own source boundary and MUST NOT claim an atomic
+cross-surface update.
+
+### CR-1 — Immutable objects
+
+- Payload and manifest objects under an immutable identity are create-only. The
+  adapter MUST enforce this at the concurrency boundary (conditional create,
+  uniqueness plus transactional comparison, or an equivalent qualified
+  primitive). Checking absence then writing unconditionally is insufficient.
+- An identical-byte retry under the same identity MUST be idempotent. A
+  different-byte retry MUST fail without modifying the first object. The adapter
+  MUST verify the SHA-256 and byte length; an existing key, identifier, ETag or
+  success status alone is not proof of equality.
+- Accepted input bytes MUST be owned or otherwise protected against caller
+  mutation until verification completes. Dedupe MUST NOT let a caller discover
+  or access another scope's object.
+- Retained roots, active readers, pending intents and holds MUST protect their
+  objects from concurrent collection. Collection MUST serialize its deletion
+  claim with reference/pin creation and coordinate the external delete with that
+  claim. Reference, pin and deletion identities bind store incarnation, module,
+  scope and object version/digest; one scope's release MUST NOT remove another
+  scope's protection.
+- Immutability is not indefinite retention and does not require a purge service,
+  verified physical erasure or restore replay unless the binding claims the
+  `purge-jobs-v1` / `restore-witness-v1` profiles. An unclaimed lifecycle
+  operation MUST be explicitly refused.
+
+### CR-2 — A versioned checksum manifest
+
+- Every visible publication unit MUST be bound to an immutable, versioned
+  manifest and its SHA-256 commitment. The transitive commitment MUST cover the
+  complete declared publication inventory; an unbound external list is
+  insufficient. Manifests may reference immutable pages and previously verified
+  roots for incremental commits.
+- The envelope MUST bind at least: common-contract and manifest versions;
+  module and tenant/workspace scope; surface; store incarnation; publication
+  identity and expected predecessor/root version; source boundary;
+  schema/descriptor and encoding versions; ordered unit/root commitments where
+  order matters; object identifiers/locators, byte lengths and SHA-256 digests;
+  and an explicit terminal count/completeness commitment. The manifest digest is
+  computed over the canonical body without its own digest field. An unknown
+  version MUST be refused before interpreting ordering or applying any
+  version-specific canonicalization.
+- Source-boundary values have surface-specific meaning: journal/head positions
+  (transactional), batch/table snapshot and partition selection (analytical),
+  fact/projection generation plus source watermark (live graph). A checksum
+  receipt proves the supplied inventory, not the completeness of an undisclosed
+  upstream source.
+- Canonicalization MUST preserve existing L3a record bytes and the ordered
+  `unitRoots` commitment. The new envelope wraps the existing export manifest or
+  commits its canonical bytes and digest; it MUST NOT feed order-sensitive
+  structures through an array-sorting codec. No existing digest is migrated by
+  silently recomputing it with another codec.
+- Before publication, every newly referenced payload MUST complete bounded
+  verification of its exact encoded bytes, length and digest. Readers MUST
+  validate manifest and payload commitments before exposing a payload as
+  verified; a missing, truncated, corrupt, wrong-scope or unsupported-version
+  object MUST fail closed.
+- A partial export or missing terminal marker MUST NOT qualify as a complete
+  manifest or successful publication. Manifests and their pages obey the CR-4
+  bounds. SQL atomicity and provider checksums do not replace this
+  interface-level inventory commitment.
