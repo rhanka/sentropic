@@ -22,14 +22,20 @@ const hasUnpairedSurrogate = (value: string): boolean => {
   for (let index = 0; index < value.length; index += 1) {
     const unit = value.charCodeAt(index);
     if (unit >= 0xd800 && unit <= 0xdbff) {
+      // charCodeAt past the end yields NaN: a terminal high surrogate is unpaired.
       const next = value.charCodeAt(index + 1);
-      if (next < 0xdc00 || next > 0xdfff) return true;
+      if (Number.isNaN(next) || next < 0xdc00 || next > 0xdfff) return true;
       index += 1;
     } else if (unit >= 0xdc00 && unit <= 0xdfff) {
       return true;
     }
   }
   return false;
+};
+
+/** Own-property assignment that preserves the `__proto__` key instead of invoking the inherited setter. */
+const defineOwnValue = (target: Record<string, MemoryCanonicalJsonValue>, key: string, value: MemoryCanonicalJsonValue): void => {
+  Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
 };
 
 const isPlainObject = (value: object): value is Record<string, unknown> => {
@@ -63,6 +69,9 @@ export const normalizeMemoryCanonicalJson = (
   if (Array.isArray(value)) {
     const extraKeys = Object.keys(value).filter((key) => !/^(0|[1-9][0-9]*)$/.test(key));
     if (extraKeys.length > 0) throw new MemoryCanonicalJsonError('array has non-index properties');
+    for (let index = 0; index < value.length; index += 1) {
+      if (!(index in value)) throw new MemoryCanonicalJsonError('array has a hole and is not canonical JSON');
+    }
     const normalized = value.map((item) => normalizeMemoryCanonicalJson(item, seen));
     seen.delete(value);
     return normalized;
@@ -75,7 +84,7 @@ export const normalizeMemoryCanonicalJson = (
     if (hasUnpairedSurrogate(rawKey)) throw new MemoryCanonicalJsonError('object key contains an unpaired surrogate');
     const key = rawKey.normalize('NFC');
     if (Object.hasOwn(normalized, key)) throw new MemoryCanonicalJsonError('duplicate key after NFC normalization');
-    normalized[key] = normalizeMemoryCanonicalJson((value as Record<string, unknown>)[rawKey], seen);
+    defineOwnValue(normalized, key, normalizeMemoryCanonicalJson((value as Record<string, unknown>)[rawKey], seen));
   }
   seen.delete(value);
   return normalized;

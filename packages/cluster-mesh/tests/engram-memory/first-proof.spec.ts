@@ -66,4 +66,11 @@ describe('memory K8 admission first proof', () => {
     expect(validateAdmissionTransition(outcome(), outcome({ proof: { decision: 'other' } })).ok).toBe(false);
     expect(validateAdmissionTransition(outcome(), outcome({ candidateId: 'candidate-2' })).ok).toBe(false);
   });
+
+  it('should refuse a proof replacement smuggled through __proto__', () => {
+    const tampered = JSON.parse(
+      '{"candidateId":"candidate-1","outcome":"accepted","proof":{"__proto__":{"changed":true}}}',
+    ) as Record<string, unknown>;
+    expect(validateAdmissionTransition(outcome(), tampered).ok).toBe(false);
+  });
 });

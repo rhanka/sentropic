@@ -100,11 +100,25 @@ describe('memory canonical JSON vectors', () => {
     expect(() => canonicalizeMemoryJcs(-0)).toThrow(MemoryCanonicalJsonError);
     expect(() => canonicalizeMemoryJcs(String.fromCharCode(0xd800) + 'x')).toThrow(MemoryCanonicalJsonError);
     expect(() => canonicalizeMemoryJcs(String.fromCharCode(0xdc00))).toThrow(MemoryCanonicalJsonError);
+    expect(() => canonicalizeMemoryJcs(String.fromCharCode(0xd800))).toThrow(MemoryCanonicalJsonError);
+    expect(() => canonicalizeMemoryJcs({ [String.fromCharCode(0xd800)]: 1 })).toThrow(MemoryCanonicalJsonError);
     expect(() => canonicalizeMemoryJcs(Number.POSITIVE_INFINITY)).toThrow(MemoryCanonicalJsonError);
     expect(() => canonicalizeMemoryJcs(9007199254740993)).toThrow(MemoryCanonicalJsonError);
     const tagged: unknown[] = [1];
     (tagged as Record<string, unknown>)['extra'] = true;
     expect(() => canonicalizeMemoryJcs(tagged)).toThrow(MemoryCanonicalJsonError);
+  });
+
+  it('should preserve the __proto__ key as an own property without collision', () => {
+    const parsed: unknown = JSON.parse('{"__proto__":{"x":1}}');
+    expect(canonicalizeMemoryJcs(parsed)).toBe('{"__proto__":{"x":1}}');
+    expect(canonicalizeMemoryJcs(parsed)).not.toBe(canonicalizeMemoryJcs({}));
+  });
+
+  it('should reject sparse arrays instead of emitting invalid JSON', () => {
+    expect(() => canonicalizeMemoryJcs(new Array(1))).toThrow(MemoryCanonicalJsonError);
+    expect(() => canonicalizeMemoryJcs(new Array(2))).toThrow(MemoryCanonicalJsonError);
+    expect(() => canonicalizeMemoryJcs([,])).toThrow(MemoryCanonicalJsonError);
   });
 
   it('should pin tombstone and zero-hash encodings', () => {
