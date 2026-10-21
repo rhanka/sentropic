@@ -270,6 +270,11 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
       } else if (!existing || existing.projectRevision !== expectedRevision) return false;
       projects.set(next.projectId, { ...next,
         state: existing && existing.state !== 'active' && next.state !== 'revoked' ? existing.state : next.state,
+        excludedSessionIds: existing && !(next.requiresFreshAmendment && next.exclusionRevision > existing.exclusionRevision)
+          ? [...new Set([...existing.excludedSessionIds, ...next.excludedSessionIds])] : next.excludedSessionIds,
+        exclusionRevision: Math.max(existing?.exclusionRevision ?? 0, next.exclusionRevision),
+        requiresFreshAmendment: next.requiresFreshAmendment || (existing?.requiresFreshAmendment === true
+          && next.projectRevision <= existing.projectRevision),
         readDenied: existing?.readDenied === true || existing?.state === 'revoked'
           || next.readDenied === true || next.state === 'revoked',
       });
@@ -278,6 +283,8 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
     async readGrant(sessionId: string) { return grants.get(sessionId) ?? null; },
     async writeGrant(expectedVersion: number | null, next: SessionContentGrant) {
       const existing = grants.get(next.sessionId) ?? null;
+      const project = projects.get(next.projectId);
+      if (next.state === 'active' && (!project || project.state !== 'active')) return false;
       if (expectedVersion === null) {
         if (existing) return false;
       } else if (!existing || existing.version !== expectedVersion) return false;
@@ -527,7 +534,11 @@ export const partitionExportableNativeRecords = (
   const exportable: NativeRecordRef[] = [];
   const withheld: WithheldNativeRecord[] = [];
   for (const record of records) {
-    if (grant.state !== 'active') {
+    if (grant.state !== 'active' || grant.localDenyPending || project.state !== 'active'
+      || project.projectId !== grant.projectId || project.ownerId !== grant.ownerId || project.tenantId !== grant.tenantId
+      || project.projectRevision !== grant.projectRevision || project.requiresFreshAmendment
+      || project.excludedSessionIds.includes(grant.sessionId)
+      || !grant.channels['native.mirror'] || !project.channels['native.mirror']) {
       withheld.push({ ...record, reason: 'grant_inactive' });
       continue;
     }
@@ -648,7 +659,7 @@ export const createContentConsentService = (
       if (!await store.writeProject(null, next)) {
         throw new ContentConsentError('revision_conflict', 'project already exists');
       }
-      return next;
+      return (await store.readProject(next.projectId))!;
     }
     const existing = await store.readProject(prepared.policy.projectId);
     if (!existing) throw new ContentConsentError('project_not_found', 'no project to amend');
@@ -676,7 +687,7 @@ export const createContentConsentService = (
     if (!await store.writeProject(existing.projectRevision, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent amendment; re-prepare the amendment');
     }
-    return next;
+    return (await store.readProject(next.projectId))!;
   };
 
   const readProject = (projectId: string): Promise<ProjectContentConsent | null> =>
@@ -732,6 +743,7 @@ export const createContentConsentService = (
       if (existing.state === 'excluded') throw new ContentConsentError('session_excluded', 'child grant excluded');
       if (existing.state === 'closed') throw new ContentConsentError('grant_closed', 'child grant is closed');
       if (existing.state === 'expired') throw new ContentConsentError('live_expired', 'child grant expired');
+      if (existing.localDenyPending) throw new ContentConsentError('grant_revoked', 'local denial pending');
       // N3: a confirmed amendment fences old live capture authority at the
       // parent revision; returning the stale grant is invalid — the caller
       // must acknowledge the refresh explicitly.
@@ -797,7 +809,7 @@ export const createContentConsentService = (
     if (!await store.writeGrant(existing ? existing.version : null, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent child derivation; retry derivation');
     }
-    return next;
+    return (await store.readGrant(sessionId))!;
   };
 
   /**
@@ -897,7 +909,7 @@ export const createContentConsentService = (
     if (!await store.writeGrant(existing.version, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent refresh; re-acknowledge');
     }
-    return next;
+    return (await store.readGrant(sessionId))!;
   };
 
   const readGrant = (sessionId: string): Promise<SessionContentGrant | null> =>
@@ -915,7 +927,7 @@ export const createContentConsentService = (
         await store.writeGrant(grant.version, { ...grant, state: 'revoked', updatedAt: nowMs() });
       }
     }
-    return next;
+    return (await store.readProject(projectId))!;
   };
 
   const excludeSession = async (projectId: string, sessionId: string): Promise<ProjectContentConsent> => {
@@ -941,7 +953,7 @@ export const createContentConsentService = (
     if (grant && grant.state === 'active') {
       await store.writeGrant(grant.version, { ...grant, state: 'excluded', updatedAt: nowMs() });
     }
-    return next;
+    return (await store.readProject(projectId))!;
   };
 
   /**
@@ -961,7 +973,7 @@ export const createContentConsentService = (
     if (!await store.writeProject(project.projectRevision, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent project change; retry clearing');
     }
-    return next;
+    return (await store.readProject(projectId))!;
   };
 
   const revokeGrant = async (sessionId: string): Promise<SessionContentGrant> => {
@@ -971,7 +983,7 @@ export const createContentConsentService = (
     if (!await store.writeGrant(grant.version, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry revocation');
     }
-    return next;
+    return (await store.readGrant(sessionId))!;
   };
 
   /** End/detach transition: live/controller fenced, committed copies retained. */
@@ -983,7 +995,7 @@ export const createContentConsentService = (
     if (!await store.writeGrant(grant.version, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry closing');
     }
-    return next;
+    return (await store.readGrant(sessionId))!;
   };
 
   /** Record a locally observed denial; applied as revocation on reconnect. */
@@ -994,7 +1006,7 @@ export const createContentConsentService = (
     if (!await store.writeGrant(grant.version, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry local denial');
     }
-    return next;
+    return (await store.readGrant(sessionId))!;
   };
 
   /** Reconnect reconciliation: settle the pending local denial without purging copies. */
@@ -1006,7 +1018,7 @@ export const createContentConsentService = (
     if (!await store.writeGrant(grant.version, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry reconciliation');
     }
-    return next;
+    return (await store.readGrant(sessionId))!;
   };
 
   const acknowledgeFreshness = async (sessionId: string): Promise<SessionContentGrant> => {
@@ -1016,7 +1028,7 @@ export const createContentConsentService = (
     if (!await store.writeGrant(grant.version, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry acknowledgement');
     }
-    return next;
+    return (await store.readGrant(sessionId))!;
   };
 
   /**

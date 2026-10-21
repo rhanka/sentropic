@@ -953,6 +953,7 @@ export class SessionContentService {
         .select()
         .from(sessionContentProjects)
         .where(eq(sessionContentProjects.projectId, projectId))
+        .for('update')
         .limit(1);
       if (!existing) throw new SessionContentError('project_not_found', 'unknown project');
       if (existing.tenantId !== ctx.tenantId || existing.ownerId !== ctx.ownerId) {
@@ -1698,7 +1699,7 @@ export class SessionContentService {
       }
       await this.checkMembership(tx, ctx.tenantId, ctx.principalId, true);
       await this.checkWorkspaceMembership(tx, grant.workspaceId, ctx.principalId, true);
-      if (grant.state !== 'active') {
+      if (grant.state !== 'active' || grant.localDenyPending) {
         throw new SessionContentError('grant_revoked', 'grant is not active; late upload refused');
       }
       await this.requireEpochScope(tx, grant.authorityEpoch, existing.namespaceId);
@@ -1712,6 +1713,7 @@ export class SessionContentService {
         .limit(1);
       const fenceWon = !admitParent
         || admitParent.state !== 'active'
+        || admitParent.requiresFreshAmendment || (admitParent.excludedSessionIds as string[]).includes(grant.sessionId)
         || admitParent.projectRevision !== existing.projectRevision
         || admitParent.projectRevision !== grant.projectRevision
         || existing.grantVersion !== grant.version;
@@ -1775,8 +1777,9 @@ export class SessionContentService {
         .where(eq(sessionContentGrants.sessionId, reservation.grant.sessionId)).for('update').limit(1);
       const [hold] = await tx.select().from(sessionContentReservations)
         .where(eq(sessionContentReservations.reservationId, reservationId)).for('update').limit(1);
-      if (!grant || grant.state !== 'active') throw new SessionContentError('grant_revoked', 'writer was fenced');
-      if (!parent || parent.state !== 'active' || parent.projectRevision !== hold?.projectRevision
+      if (!grant || grant.state !== 'active' || grant.localDenyPending) throw new SessionContentError('grant_revoked', 'writer was fenced');
+      if (!parent || parent.state !== 'active' || parent.requiresFreshAmendment
+        || (parent.excludedSessionIds as string[]).includes(grant.sessionId) || parent.projectRevision !== hold?.projectRevision
         || grant.version !== hold?.grantVersion || grant.projectRevision !== parent.projectRevision) {
         throw new SessionContentError('project_revision_changed', 'writer authorization changed');
       }
@@ -1852,7 +1855,7 @@ export class SessionContentService {
           .where(eq(sessionContentGrants.sessionId, reservation.reservation.sessionId))
           .for('update')
           .limit(1);
-        if (!freshGrant || freshGrant.state !== 'active') {
+        if (!freshGrant || freshGrant.state !== 'active' || freshGrant.localDenyPending) {
           throw new SessionContentError('grant_revoked', 'grant is not active; late publish refused');
         }
         const [lockedReservation] = await tx
@@ -1869,7 +1872,8 @@ export class SessionContentService {
         // wins and publication refuses. The locked project row shares one
         // order with the amendment CAS; authority is never reconstructed
         // from the latest grant but rechecked against the frozen tuple T.
-        if (!project || project.state !== 'active') {
+        if (!project || project.state !== 'active' || project.requiresFreshAmendment
+          || (project.excludedSessionIds as string[]).includes(freshGrant.sessionId)) {
           throw new SessionContentError('project_not_active', 'project changed during upload');
         }
         if (project.projectRevision !== reservation.reservation.projectRevision
@@ -2790,6 +2794,7 @@ export class SessionContentService {
         .select()
         .from(sessionContentProjects)
         .where(eq(sessionContentProjects.projectId, projectId))
+        .for('update')
         .limit(1);
       if (!existing) throw new SessionContentError('project_not_found', 'unknown project');
       if (existing.tenantId !== ctx.tenantId || existing.ownerId !== ctx.ownerId) {
@@ -2801,6 +2806,7 @@ export class SessionContentService {
         .update(sessionContentProjects)
         .set({
           excludedSessionIds: [...excluded],
+          exclusionRevision: existing.exclusionRevision + 1,
           requiresFreshAmendment: true,
           updatedAt: new Date(this.nowMs()),
         })
