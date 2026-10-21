@@ -145,14 +145,14 @@ Actions with the following status should be included around tasks only if really
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
 
 ## Round R2 (Astra review, CHANGES)
-- [ ] **Lot 10 — Full transitive toolchain traversal (finding 1)**
-  - [ ] `lock-closure.mjs`: carry traversal through all descendants once inside the build-toolchain subtree, preserving consumer resolution and edges.
-  - [ ] Red-first regressions: second-level integrity change and edge deletion fail (unit + packed gate); unchanged-content hoisting passes.
-  - [ ] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2`.
-- [ ] **Lot 11 — Effective emitting commands and image (finding 3)**
-  - [ ] `build-inputs.mjs`: record per-target recipe lines, docker image tokens, and `LLM_MESH_NODE_IMAGE` export/default bindings; fail closed on unclassified lines.
-  - [ ] Red-first regressions: single-line `tsc` flag and image token recipe changes fail (unit + packed gate).
-  - [ ] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2`.
+- [x] **Lot 10 — Full transitive toolchain traversal (finding 1)**
+  - [x] `lock-closure.mjs`: carry traversal through all descendants once inside the build-toolchain subtree, preserving consumer resolution and edges.
+  - [x] Red-first regressions: second-level integrity change and edge deletion fail (unit + packed gate); unchanged-content hoisting passes.
+  - [x] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2` (11 files / 75 tests).
+- [x] **Lot 11 — Effective emitting commands and image (finding 3)**
+  - [x] `build-inputs.mjs`: record per-target recipe lines, docker image tokens, and `LLM_MESH_NODE_IMAGE` export/default bindings; fail closed on unknown image tokens and missing bindings.
+  - [x] Red-first regressions: single-line `tsc` flag change fails via fingerprint mismatch and image token swap fails closed (unit + packed gate).
+  - [x] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2` (11 files / 83 tests).
 - [ ] **Lot 12 — Actual resolved toolchain record (finding 2, BR710-EX3)**
   - [ ] Committed union toolchain snapshot (`artifacts/toolchain/`); the 3 producing recipes consume it via `npm ci`; fingerprint v3 binds snapshot content plus spec satisfaction.
   - [ ] Explicit regen via `pack.mjs --snapshot-toolchain` and the `memory-l5-toolchain-snapshot` target; pack and verify refuse a stale snapshot.
