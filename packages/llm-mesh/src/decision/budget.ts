@@ -1,16 +1,16 @@
 import type { EvaluatorRef } from './request.js';
-import type { JudgeQuote } from './pricing.js';
-import type { JudgeReceipt } from './receipt.js';
+import type { DecisionQuote } from './pricing.js';
+import type { DecisionReceipt } from './receipt.js';
 
-export interface JudgeAdmission {
-  callId: string; correlationId: string; evaluator: EvaluatorRef; quote: JudgeQuote; deadlineAt: number;
+export interface DecisionAdmission {
+  callId: string; correlationId: string; evaluator: EvaluatorRef; quote: DecisionQuote; deadlineAt: number;
 }
-export type JudgeAdmissionResult = { ok: true; holdId: string }
+export type DecisionAdmissionResult = { ok: true; holdId: string }
   | { ok: false; code: 'BUDGET_EXHAUSTED' | 'BUDGET_UNAVAILABLE' | 'PROVIDER_UNAVAILABLE' };
-export type JudgeDispatchResult = { ok: true }
+export type DecisionDispatchResult = { ok: true }
   | { ok: false; code: 'BUDGET_UNAVAILABLE' | 'PROVIDER_UNAVAILABLE'; provenUnsent: boolean };
-export interface JudgeSettlement {
-  holdId: string; receipt: JudgeReceipt; boundViolated: boolean;
+export interface DecisionSettlement {
+  holdId: string; receipt: DecisionReceipt; boundViolated: boolean;
 }
 
 /** Required host authority, closed over the verified owner and all existing budget buckets.
@@ -22,15 +22,15 @@ export interface JudgeSettlement {
  * and this redacted receipt, and retains boundViolated disable evidence across restart.
  * Pending reconciliation retains liability; retries reconcile accounting, never evaluate.
  */
-export interface JudgeBudgetPort {
-  admit(input: JudgeAdmission): Promise<JudgeAdmissionResult>;
-  markDispatched(input: { holdId: string; callId: string; evaluator: EvaluatorRef; deadlineAt: number }): Promise<JudgeDispatchResult>;
+export interface DecisionBudgetPort {
+  admit(input: DecisionAdmission): Promise<DecisionAdmissionResult>;
+  markDispatched(input: { holdId: string; callId: string; evaluator: EvaluatorRef; deadlineAt: number }): Promise<DecisionDispatchResult>;
   release(input: { holdId: string; callId: string }): Promise<void>;
-  settle(input: JudgeSettlement): Promise<void>;
+  settle(input: DecisionSettlement): Promise<void>;
 }
 
 /** Acknowledges durable metadata persistence. No verdict or request content crosses this port.
  * For admitted calls, financial settlement owns the atomic ledger receipt projection;
  * this sink acknowledges its durable publication (or uses the same durable authority).
  */
-export interface JudgeReceiptSink { persist(receipt: JudgeReceipt): Promise<void> }
+export interface DecisionReceiptSink { persist(receipt: DecisionReceipt): Promise<void> }
