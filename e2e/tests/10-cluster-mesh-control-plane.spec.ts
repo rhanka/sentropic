@@ -1,4 +1,5 @@
 import { expect, request, test } from '@playwright/test';
+import { waitForVerificationCode } from '../helpers/maildev';
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
 const USER_A_STATE = './.auth/user-a.json';
@@ -21,6 +22,123 @@ const qualificationAvailable = [
 ].every(Boolean);
 
 test.describe.configure({ mode: 'serial' });
+
+test.describe('D2 Sessions navigation and no-source UI', () => {
+  test.use({ storageState: USER_A_STATE });
+  test('reaches the actual Sessions page through desktop and mobile navigation', async ({ page }) => {
+    await page.goto('/sessions');
+    await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sessions', exact: true })).toBeVisible();
+    await expect(page.getByText('Poste hors ligne : direct et clavier indisponibles', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Confirmer et envoyer une seule fois' })).toBeDisabled();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('link', { name: 'Sessions', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Copies conservées : demander la purge', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Copies conservées : demander la purge', exact: true })).toBeVisible();
+  });
+
+  test('keeps a UI-only project offer off and cancellation sends no activation or input', async ({ page }) => {
+    const current = await page.request.get(`${API_BASE_URL}/api/v1/auth/session`);
+    expect(current.ok()).toBeTruthy();
+    const { userId } = await current.json();
+    const effects: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('/auth/session/content/') && ['POST', 'PUT', 'DELETE'].includes(req.method())) effects.push(req.url());
+    });
+    // Only metadata is intercepted. The real layout/auth/workspace guards still run.
+    await page.route('**/api/v1/auth/session/content/workspaces/*/sessions', async (route) => {
+      const workspaceId = new URL(route.request().url()).pathname.split('/').at(-2);
+      const row = (name: string, overrides: Record<string, unknown> = {}) => ({ ownerId: userId,
+        workspaceId, projectId: workspaceId, sourceId: '', bindingId: `ui-${name}`, sessionId: `ui-${name}`,
+        status: 'attached', sourceAvailable: false, liveAuthorized: false, storedAuthorized: true,
+        historyAuthorized: false, retained: true, excluded: false, expiresAt: null,
+        projectRevision: 1, grantProjectRevision: 1, ...overrides });
+      await route.fulfill({ json: { ownerId: userId, workspaceId, projectId: workspaceId, sourceId: '',
+        sourceVerified: false, reason: 'unsupported_source', authenticationState: 'step_up_required',
+        confirmationAvailable: false, namedHistories: [], eligibleSources: [],
+        items: [row('closed', { status: 'ended', gaps: [{ from: 7, to: 8, reason: 'partition' }, { from: 1, to: 2, reason: 'partition' }] }),
+          row('paused', { projectRevision: 2 }), row('excluded', { excluded: true }), row('quota', { pauseReason: 'quota_exceeded' })] } });
+    });
+    await page.goto('/sessions');
+    const offer = page.getByRole('region', { name: 'Partager ce projet et les historiques affichés', exact: true });
+    await expect(offer.getByRole('checkbox')).toHaveCount(9);
+    await expect(offer.getByText('Chaque action à distance exige une nouvelle confirmation auprès du fournisseur d’identité.', { exact: false })).toBeVisible();
+    for (const checkbox of await offer.getByRole('checkbox').all()) await expect(checkbox).not.toBeChecked();
+    await offer.getByRole('checkbox', { name: 'Conserver les copies du terminal', exact: true }).check();
+    await expect(offer.getByRole('combobox', { name: 'Conservation choisie avant confirmation' })).toHaveValue('none');
+    await offer.getByRole('combobox', { name: 'Conservation choisie avant confirmation' }).selectOption('duration');
+    await offer.getByRole('spinbutton', { name: 'Durée', exact: true }).fill('2');
+    await offer.getByRole('combobox', { name: 'Durée', exact: true }).selectOption('hours');
+    await expect(offer.getByRole('spinbutton', { name: 'Durée', exact: true })).toHaveValue('2');
+    await expect(offer.getByRole('button', { name: "Préparer l'accord", exact: true })).toBeDisabled();
+    await offer.getByRole('button', { name: 'Annuler', exact: true }).click();
+    await expect(page.getByText('Copies conservées mais illisibles sans autorisation de lecture historique', { exact: true })).toBeVisible();
+    await expect(page.getByText("Capture suspendue pendant l'application de l'accord mis à jour", { exact: true })).toBeVisible();
+    await expect(page.getByText('Stockage plein : nouvelles captures suspendues ; copies existantes conservées', { exact: true })).toBeVisible();
+    await expect(page.getByText('Session exclue', { exact: true })).toBeVisible();
+    const gaps = page.getByRole('region', { name: 'Sortie de session', exact: true }).filter({ hasText: 'ui-closed' }).locator('p').filter({ hasText: 'Intervalle manquant' });
+    await expect(gaps.nth(0)).toContainText('1–2'); await expect(gaps.nth(1)).toContainText('7–8');
+    expect(effects).toEqual([]);
+  });
+});
+
+test.describe('D2 anonymous Sessions guard', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+  test('redirects a real anonymous Sessions visit to login with its return URL', async ({ page }) => {
+    await page.goto('/sessions');
+    await expect(page).toHaveURL(/\/auth\/login\?returnUrl=%2Fsessions/);
+    await expect(page.getByRole('heading', { name: 'Connexion', exact: true })).toBeVisible();
+  });
+
+  test('returns to Sessions after actual website passkey login without granting remote control', async ({ page }) => {
+    // Website login never supplies a native IdP action proof or D2 authority.
+    const effects: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('/auth/session/content/') && ['POST', 'PUT', 'DELETE'].includes(req.method())) effects.push(req.url());
+    });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('WebAuthn.enable');
+    await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal',
+      hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
+    await page.goto('/auth/register');
+    await page.getByLabel('Email', { exact: true }).fill('e2e-user-a@example.com');
+    await page.getByRole('button', { name: 'Obtenir un code', exact: true }).click();
+    const code = await waitForVerificationCode('e2e-user-a@example.com', 60000);
+    for (let index = 0; index < 6; index++) await page.locator(`#auth-ui-code-${index}`).fill(code[index]);
+    const enrolled = page.waitForResponse((response) => response.url().endsWith('/auth/register/verify') && response.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Enregistrer mon appareil WebAuthn', exact: true }).click();
+    expect((await enrolled).ok()).toBeTruthy();
+    await expect(page).not.toHaveURL(/\/auth\/register/);
+    await page.context().clearCookies();
+    await page.evaluate(() => sessionStorage.clear());
+    await page.goto('/sessions');
+    await expect(page).toHaveURL(/\/auth\/login\?returnUrl=%2Fsessions/);
+    await page.getByRole('button', { name: 'Se connecter avec WebAuthn', exact: true }).click();
+    await expect(page).toHaveURL(/\/sessions$/);
+    await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
+    const keyboard = page.getByRole('region', { name: 'Clavier à distance', exact: true });
+    await expect(keyboard.getByText('Chaque action à distance exige une nouvelle confirmation auprès du fournisseur d’identité.', { exact: false })).toBeVisible();
+    await expect(keyboard.getByRole('button', { name: 'Confirmer et envoyer une seule fois' })).toBeDisabled();
+    expect(effects).toEqual([]);
+    await cdp.detach();
+  });
+});
+
+test.describe('D2 workspace lock UI fixture', () => {
+  test.use({ storageState: USER_A_STATE });
+  test('keeps the real zero-workspace layout lock and exposes cleanup on settings', async ({ page }) => {
+    // Bootstrap boundary only: the real authenticated layout and Settings page remain mounted.
+    await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: { items: [] } }));
+    await page.goto('/sessions');
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.getByRole('heading', { name: 'Paramètres', exact: true }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Copies conservées : demander la purge', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Copies conservées : demander la purge', exact: true })).toBeVisible();
+    await expect(page.getByText('Aucune copie conservée à purger.', { exact: true })).toBeVisible();
+  });
+});
 
 test.describe('Cluster Mesh central control plane A1 qualification', () => {
   test('executes real A1 or proves the production source-gap fence', async () => {

@@ -8,6 +8,7 @@ import {
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { sessionDeviceHandlers } from './session-device';
 import { sessionLifecycleHandlers } from './session-lifecycle';
+import { createSessionContentRouter } from './session-content';
 
 const AUTHOR = 'cluster-mesh-session-module';
 
@@ -23,6 +24,32 @@ export const SESSION_PATHS = [
   '/session/control/drive',
   '/session/control/wake',
   '/session/control/relaunch',
+  '/session/content',
+  '/session/content/*',
+  '/session/content/retained-content',
+  '/session/content/workspaces/:workspaceId/sessions',
+  '/session/content/workspaces/:workspaceId/attachments',
+  '/session/content/workspaces/:workspaceId/consent',
+  '/session/content/workspaces/:workspaceId/consent/prepare',
+  '/session/content/workspaces/:workspaceId/exclusion',
+  '/session/content/:bindingId/consent',
+  '/session/content/:bindingId/consent/prepare',
+  '/session/content/:bindingId/exclusion',
+  '/session/content/:bindingId/frames',
+  '/session/content/:bindingId/history',
+  '/session/content/:bindingId/status',
+  '/session/content/:bindingId/snapshots/:snapshotId',
+  '/session/content/:bindingId/history-authorizations',
+  '/session/content/:bindingId/history-authorizations/prepare',
+  '/session/content/:bindingId/history-authorizations/:authorizationId',
+  '/session/content/:bindingId/keyboard/lease',
+  '/session/content/:bindingId/keyboard/prepare',
+  '/session/content/:bindingId/keyboard/submissions',
+  '/session/content/:bindingId/keyboard/submissions/:idempotencyKey',
+  '/session/content/:bindingId/source/segments',
+  '/session/content/:bindingId/source/snapshots',
+  '/session/content/:bindingId/source/acks',
+  '/session/content/:bindingId/source/control',
 ] as const;
 
 const createAuthorPort = (key: NamespaceCutoverKey) => {
@@ -68,7 +95,7 @@ const createModule = (
 ): ClusterMeshHonoNamespaceModule => {
   const control = clusterMeshAdapter.sessionControl;
   if (!control) throw new Error('cluster mesh session control is not configured');
-  return createSessionNamespaceModule({
+  const module = createSessionNamespaceModule({
     handlers: sessionLifecycleHandlers,
     devices: sessionDeviceHandlers,
     projection,
@@ -83,6 +110,24 @@ const createModule = (
       author: createAuthorPort({ compositionRoot, namespace: '/session' }),
     },
   });
+  if (compositionRoot !== 'product') return { ...module, createRouter(ports) {
+    const router = module.createRouter(ports);
+    // Refuse before the IdP screen fallback; no content handler or capability is installed.
+    for (const path of ['/session/content', '/session/content/*']) {
+      router.all(path, (c) => c.json({ error: 'not_found' }, 404));
+    }
+    return router;
+  } };
+  return { ...module, createRouter(ports) {
+    const router = module.createRouter(ports);
+    const author = createAuthorPort({ compositionRoot, namespace: '/session' });
+    for (const path of ['/session/content', '/session/content/*']) router.use(path, async (c, next) => {
+      const result = await author.ensureAuthor();
+      if (!result.ok) return c.json({ error: result.reason }, 503);
+      return next();
+    });
+    return router.route('/session/content', createSessionContentRouter());
+  } };
 };
 
 export const productSessionModule = createModule('product', {

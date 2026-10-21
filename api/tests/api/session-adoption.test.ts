@@ -12,6 +12,20 @@ import {
   createDrizzleBindingStore,
   SessionWorkspaceService,
 } from '../../src/services/cluster-mesh/session-workspace';
+import {
+  createFakeContentAuthorityEpochPort,
+  SessionContentError,
+  SessionContentService,
+} from '../../src/services/cluster-mesh/session-content';
+import {
+  sessionContentGrants,
+  sessionContentNamespaces,
+  sessionContentObjects,
+  sessionContentOfflineReceipts,
+  sessionContentProjects,
+  sessionContentPurgeJobs,
+  sessionContentTombstones,
+} from '../../src/db/control-schema';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
 
 const TENANT_A = 'sess-adopt-tenant-a';
@@ -826,5 +840,154 @@ describe('session adoption workspace binding', () => {
       tenantId: TENANT_A, userId: member.id, status: 'approved', role: 'member',
     });
     await expect(service.get('sess-adopt-3', TENANT_A, member.id)).resolves.toBeNull();
+  });
+
+  it('should close D2 live on detach/end with copies retained and D1 preserved', async () => {
+    await db.delete(sessionContentObjects)
+      .where(eq(sessionContentObjects.sessionId, 'sess-adopt-30'));
+    await db.delete(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-adopt-30'));
+    await db.delete(sessionContentOfflineReceipts)
+      .where(eq(sessionContentOfflineReceipts.projectId, 'sess-adopt-project-d2'));
+    await db.delete(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, 'sess-adopt-project-d2'));
+    await db.delete(sessionContentNamespaces)
+      .where(eq(sessionContentNamespaces.ownerId, user.id));
+    await db.delete(sessionContentTombstones)
+      .where(eq(sessionContentTombstones.tenantId, TENANT_A));
+    const now = 1_700_000_000_000;
+    const fakeEpoch = createFakeContentAuthorityEpochPort();
+    const content = new SessionContentService({ nowMs: () => now, issuer: 'test-issuer', epochs: fakeEpoch });
+    const service = new SessionWorkspaceService(undefined, {
+      fenceSessionOnDetachEnd: (sessionId, tenantId) =>
+        content.fenceSessionOnDetachEnd(sessionId, tenantId),
+    });
+    const ctx = { tenantId: TENANT_A, principalId: user.id, ownerId: user.id };
+    const policy = {
+      projectId: 'sess-adopt-project-d2',
+      projectRevision: 0,
+      tenantId: TENANT_A,
+      workspaceId,
+      workspaceIncarnation: 1,
+      ownerId: user.id,
+      readers: [user.id],
+      sourceIdentities: ['src-1'],
+      sourceTrustVersions: ['tv-1'],
+      channels: {
+        'terminal.live': true,
+        'terminal.cache': true,
+        'native.mirror': false,
+        'keyboard.control': false,
+      },
+      futureSessions: true,
+      selectedSessionIds: [],
+      namedHistories: [],
+      retentionByChannel: {
+        'terminal.cache': { mode: 'duration', durationSeconds: 3600 },
+        'native.mirror': { mode: 'none' },
+      },
+      authorityEpoch: 'epoch-test-1',
+      offlineReadAccepted: true,
+    };
+    const prepared = content.prepareProject(policy);
+    await content.acceptProject({ ...prepared, offlineReadAccepted: true }, ctx);
+    const binding = await service.adopt({
+      sessionId: 'sess-adopt-30', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    await content.deriveGrant({
+      projectId: 'sess-adopt-project-d2',
+      sessionId: 'sess-adopt-30',
+      bindingId: binding.bindingId,
+      bindingVersion: binding.version,
+      d1Version: binding.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const namespaceId = `scc:${TENANT_A}:${user.id}:epoch-test-1`;
+    await db.insert(sessionContentObjects).values({
+      objectId: 'sess-adopt-object-1',
+      namespaceId,
+      authorityEpoch: 'epoch-test-1',
+      bindingId: binding.bindingId,
+      sessionId: 'sess-adopt-30',
+      channel: 'terminal.cache',
+      bucket: 'scc-test-adopt',
+      objectKey: `${namespaceId}/adopt-key-1`,
+      bytesRaw: 12,
+      bytesEncoded: 12,
+      capturedAt: now,
+      expiresAt: now + 3_600_000,
+      state: 'committed',
+      version: 1,
+    });
+    await service.detach('sess-adopt-30', TENANT_A, user.id);
+    const grants = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-adopt-30'));
+    expect(grants[0]!.state).toBe('closed');
+    expect(grants[0]!.retainedCopies).toBe(true);
+    const objects = await db
+      .select()
+      .from(sessionContentObjects)
+      .where(eq(sessionContentObjects.sessionId, 'sess-adopt-30'));
+    expect(objects[0]!.state).toBe('committed');
+    expect(objects[0]!.expiresAt).toBe(now + 3_600_000);
+    expect(
+      await db
+        .select()
+        .from(sessionContentPurgeJobs)
+        .where(eq(sessionContentPurgeJobs.namespaceId, namespaceId)),
+    ).toHaveLength(0);
+    const detached = await service.get('sess-adopt-30', TENANT_A, user.id);
+    expect(detached!.status).toBe('detached');
+    expect(detached!.workspaceId).toBe(workspaceId);
+    await service.end('sess-adopt-30', TENANT_A, user.id);
+    const ended = await service.get('sess-adopt-30', TENANT_A, user.id);
+    expect(ended!.status).toBe('ended');
+    expect(ended!.workspaceId).toBe(workspaceId);
+    const reattached = await service.adopt({
+      sessionId: 'sess-adopt-31', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    expect(reattached.sessionId).toBe('sess-adopt-31');
+    try {
+      await content.deriveGrant({
+        projectId: 'sess-adopt-project-d2',
+        sessionId: 'sess-adopt-30',
+        bindingId: binding.bindingId,
+        bindingVersion: binding.version,
+        d1Version: binding.version,
+        d1Incarnation: 1,
+        d1StartSeq: 0,
+        workspaceId,
+        sessionCreatedAt: now,
+        sourceGeneration: 'gen-1',
+        sourceTrustVersion: 'tv-1',
+        nativeStartSeq: 0,
+      }, ctx);
+      throw new Error('expected derivation refusal');
+    } catch (err) {
+      expect(err).toBeInstanceOf(SessionContentError);
+      expect((err as SessionContentError).code).toBe('ineligible_session');
+    }
+    await db.delete(sessionContentObjects)
+      .where(eq(sessionContentObjects.sessionId, 'sess-adopt-30'));
+    await db.delete(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-adopt-30'));
+    await db.delete(sessionContentOfflineReceipts)
+      .where(eq(sessionContentOfflineReceipts.projectId, 'sess-adopt-project-d2'));
+    await db.delete(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, 'sess-adopt-project-d2'));
+    await db.delete(sessionContentNamespaces)
+      .where(eq(sessionContentNamespaces.ownerId, user.id));
+    await db.delete(sessionContentPurgeJobs)
+      .where(eq(sessionContentPurgeJobs.namespaceId, namespaceId));
+    await db.delete(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-31'));
   });
 });

@@ -8,11 +8,13 @@
   import { currentFolderId } from '../stores/folders';
   import { hiddenWorkspaceLock, selectedWorkspace, selectedWorkspaceType } from '$lib/stores/workspaceScope';
   import type { WorkspaceType } from '$lib/stores/workspaceScope';
-  import { ChevronDown, Menu, X, Lightbulb, Target, Code2, Home } from '@lucide/svelte';
+  import { ChevronDown, Menu, X, Lightbulb, Target, Code2, Home, Trash2 } from '@lucide/svelte';
+  import ConsentPanel from '$lib/components/session-content/ConsentPanel.svelte';
   import { chatWidgetLayout } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import { fly, fade } from 'svelte/transition';
 
   let showUserMenu = false;
+  let showContentCleanup = false;
   let showBurgerMenu = false;
   let isBelowLg = false;
   let currentLocale = 'fr';
@@ -58,6 +60,7 @@
     { href: '/initiative', label: 'nav.useCases' },
     { href: '/matrix', label: 'nav.matrix' },
     { href: '/dashboard', label: 'nav.dashboard' },
+    { href: '/sessions', label: 'nav.sessions' },
   ];
 
   const currentPath = derived(page, ($page) => $page.url.pathname);
@@ -195,6 +198,11 @@
       </button>
     </div>
 
+    {#if $isAuthenticated}
+      <button type="button" class="min-h-9 min-w-9 rounded p-2 text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={$_('sessionContent.cleanup')} title={$_('sessionContent.cleanup')} aria-expanded={showContentCleanup} on:click={() => showContentCleanup = !showContentCleanup}>
+        <Trash2 class="h-5 w-5" aria-hidden="true" />
+      </button>
+    {/if}
     <!-- Workspace type badge (desktop) -->
     {#if $isAuthenticated && $selectedWorkspace && wsTypeConfig}
       <div class:hidden={showCompactHeader} class="flex items-center gap-2 mr-2">
@@ -435,6 +443,10 @@
       </div>
     </div>
   </aside>
+{/if}
+
+{#if showContentCleanup && $isAuthenticated}
+  <div class="mx-auto max-w-5xl p-4"><ConsentPanel cleanup /></div>
 {/if}
 
 <!-- Click outside to close user menu (desktop dropdown only) -->

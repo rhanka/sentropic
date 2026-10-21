@@ -2474,6 +2474,18 @@ up-api: prepare-node-workspace ## Start the api stack in detached mode
 up-api-test: prepare-node-workspace ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
+.PHONY: up-session-content-test-storage
+up-session-content-test-storage: ci-test-env ## Start only isolated MinIO for D2 content tests (dev or CI compose by API_TEST_CI)
+	@if [ "$(API_TEST_CI)" = "1" ]; then \
+	  $(CI_COMPOSE) up -d --wait minio; \
+	else \
+	  $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d --wait minio; \
+	fi
+
+# BRCM2-EX5 (Lot 2): physical D2 assertions need MinIO in both modes.
+# Prerequisite only: the test-api-% pattern recipe still runs the tests.
+test-api-endpoints: up-session-content-test-storage
+
 .PHONY: up-api-test-ci
 .NOTPARALLEL: up-api-test-ci
 up-api-test-ci: ci-test-env ## Start source API from the cached toolbox; no install, workspace build or mount

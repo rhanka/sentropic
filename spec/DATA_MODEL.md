@@ -2384,3 +2384,102 @@ Notes :
 - `chat_stream_events.message_id` est nullable : les appels structurés utilisent `stream_id` déterministe (`folder_<id>`, `usecase_<id>`, etc.).
 - `context_documents.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases`.
 - `chat_message_feedback` stocke le feedback par utilisateur sur les messages assistant (unique par `message_id` + `user_id`).
+
+## Session content consent (D2, BRCM2-EX2, Lot 2)
+
+Content PUT additionally requires an external, operations-owned JSON owner approval
+at `SESSION_CONTENT_STORAGE_AUTHORIZATION_PATH`; absent/unreadable/invalid means off.
+The record must contain `enabled:true`, `purpose:"deletable-session-content"`, a
+nonempty `ownerApprovalId`, a future integer `validUntil`, and the exact configured
+`endpoint`, `region`, `bucket`. The application never creates this approval or an
+epoch/WORM bucket. Approval is rechecked after the pre-PUT barrier; a read-only
+Object Lock probe must establish absence of configuration before writing. Named
+COMPLIANCE/P10Y/epoch/WORM buckets, locked buckets and uncertain probes are refused.
+Application IAM must exclude epoch-write authority; this change neither activates
+storage nor authorizes any COMPLIANCE write.
+
+Source of truth: `api/src/db/control-schema.ts` (control stream) + migration
+`api/drizzle/control/0012_session_content_consent.sql` (hand-written triggers;
+`db-generate-control` cannot emit or track them) + Lot 2b `0013` (epoch pins)
++ Lot 3a `0014` (object purge scope) / `0015` (reservation tuple) / `0016`
+  (object writer link). Child refresh binds generation, D1 version, policy
+  digest and a forward boundary; unreconciled local denials pause capture.
+
+Tables (`control` schema, soft references only, no cross-namespace FK):
+- Additive control migration `0017_session_content_safety` preserves `0012`–`0016`.
+  Projects/grants carry monotonic `read_denied` independently of capture lifecycle;
+  additive `0018_session_content_denial_floor` enforces it with row-level INSERT/UPDATE
+  triggers under PostgreSQL's write lock, preserving denial against stale concurrent
+  snapshots even outside the service. Rollback requires capture fenced and writers
+  drained before dropping both denial-floor triggers and their shared function.
+  Additive `0019_session_content_capture_floor` preserves revoked lifecycle state,
+  nonactive capture state and pending local denial under the row write lock;
+  revoked history authorizations cannot reactivate. Capture-only exclusions and
+  clear-exclusion suppression survive stale writes; only an advancing explicit
+  clear removes an exclusion; clearing suppression requires a later policy revision
+  based on the current exclusion revision, so a stale amendment cannot bypass denial.
+  A child INSERT takes a shared parent-row lock and refuses a denied, excluded,
+  suppressed or stale parent tuple, including children absent from a revoke scan.
+  Capture-only exclusion and closure retain independent read semantics. The durable service never
+  reuses an existing grant row for a new binding. Rollback first fences capture
+  and drains writers, then removes the three new triggers and their function.
+  Existing revoked rows are backfilled. Objects carry durable `writer_state`
+  (`admitted`, `settled`, `unknown`). Only settled writers permit verified deletion.
+  Preexisting uncommitted rows default to unknown and remain charged/pending:
+  a restart or missing object is never evidence that a remote PUT has settled.
+  Purge scheduling uses the `(state, updated_at, purge_job_id)` index.
+- `session_content_projects` (PK `project_id`): durable owner-confirmed
+  consent, CAS revision, owner-only `retention_by_channel` + source-verified
+  `retention_digest`, exclusion/suppression floors.
+- `session_content_grants` (UNIQUE `session_id`): derived session grants
+  bound to D1 `binding_id`/`binding_version`, CAS version, retained-closed
+  state, immutable retention snapshot.
+- `session_content_history_authorizations`: distinct closed-read authority
+  with ceiling-only deadlines (never creates a duration).
+- `session_content_namespaces` (PK `scc:<tenant>:<owner>:<epoch>`): R2-3
+  empty-state probe target; ordinary login admission never allocates one.
+- `session_content_objects`: committed/staged index (accounting + immutable
+  `expires_at`, `null` = no expiry). No payload bodies.
+- `session_content_reservations` / `session_content_attempts`: pre-upload
+  quota holds + durable idempotent writer journal (duplicates query,
+  changed bytes conflict, unknown outcomes stay charged). Lot 3a (`0015`):
+  each reservation freezes its capture tuple T (`project_revision`,
+  `grant_version`, `retention_snapshot`); commit rechecks T, never the
+  latest grant. Grants/objects carry `authority_epoch` (`0013`).
+- `session_content_purge_jobs`: writer-settled purge work + verified
+  inventory evidence. Scope `object` (with `object_id`, `0014`) deletes one
+  staged/`purge_pending` row only and never committed copies;
+  `binding`/`namespace`/`history` remain the real purge-event scopes.
+  Objects carry the writer link (`reservation_id`, `0016`, nullable) so an
+  object purge settles exactly its attempt and releases its stale
+  reservation; `session_content_objects_reservation_idx` indexes that link
+  for stale-reservation accounting. A completed job re-run settles nothing.
+  Zero-PUT admission
+  refusals release to `cancelled` (known outcome). Stale reservations stay
+  charged only while no object row carries their bytes.
+  `session_content_tombstones`: surviving offboarding markers blocking
+  grant reuse by recreated textual IDs.
+- `session_content_admissions` (Lot 3a writers) / `session_content_offline_receipts` (O2=B).
+
+Public-to-control coupling (hard exception, no-op without D2 state):
+- `BEFORE DELETE ON public.tenants` -> `session_content_fence_tenant_delete`
+- `BEFORE DELETE ON public.users` -> `session_content_fence_user_delete`
+- `BEFORE DELETE ON public.workspaces` -> `session_content_fence_workspace_delete`
+- `BEFORE UPDATE ON public.tenants WHEN (NEW.status = 'offboarded')` ->
+  `session_content_fence_tenant_offboard`
+Each fences live grants, marks namespaces `purge_pending`, enqueues purge
+jobs and persists tombstones; populated-D2 fencing errors abort the
+statement. Review drift in `pg_trigger`/`pg_proc`, never in Drizzle text.
+
+Rollback (after D2 disabled, writers fenced/drained and purge verified):
+```sql
+DROP TRIGGER IF EXISTS "session_content_fence_tenant_delete_trigger" ON "public"."tenants";
+DROP TRIGGER IF EXISTS "session_content_fence_user_delete_trigger" ON "public"."users";
+DROP TRIGGER IF EXISTS "session_content_fence_workspace_delete_trigger" ON "public"."workspaces";
+DROP TRIGGER IF EXISTS "session_content_fence_tenant_offboard_trigger" ON "public"."tenants";
+DROP FUNCTION IF EXISTS "control"."session_content_fence_tenant_delete"();
+DROP FUNCTION IF EXISTS "control"."session_content_fence_user_delete"();
+DROP FUNCTION IF EXISTS "control"."session_content_fence_workspace_delete"();
+DROP FUNCTION IF EXISTS "control"."session_content_fence_tenant_offboard"();
+```
+Retain required purge evidence; never infer content purge from hiding a surface.

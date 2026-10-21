@@ -78,6 +78,62 @@
       "when": 1791860000000,
       "tag": "0010_live_git_declarations",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792100000000,
+      "tag": "0012_session_content_consent",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792150000000,
+      "tag": "0013_session_content_epoch_pins",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792160000000,
+      "tag": "0014_session_content_object_purge",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792165000000,
+      "tag": "0015_session_content_reservation_tuple",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792170000000,
+      "tag": "0016_session_content_object_reservation",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792180000000,
+      "tag": "0017_session_content_safety",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792190000000,
+      "tag": "0018_session_content_denial_floor",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792200000000,
+      "tag": "0019_session_content_capture_floor",
+      "breakpoints": true
     }
   ]
 }
