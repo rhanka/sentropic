@@ -181,6 +181,7 @@ export interface ResumedConversation {
 /** One owner-confirmed project grant covering future sessions and named histories. */
 export interface ProjectContentConsent extends CanonicalProjectPolicy {
   readonly state: ProjectConsentState;
+  readonly readDenied?: boolean;
   readonly exclusionRevision: number;
   /** Sessions fenced by denial suppression; clearing one needs a fresh amendment. */
   readonly excludedSessionIds: readonly string[];
@@ -196,6 +197,7 @@ export type SessionGrantState = 'active' | 'closed' | 'revoked' | 'excluded' | '
 
 /** A future child derived from the accepted project proof without a new prompt. */
 export interface SessionContentGrant {
+  readonly readDenied?: boolean;
   readonly grantId: string;
   readonly projectId: string;
   readonly projectRevision: number;
@@ -879,7 +881,7 @@ export const createContentConsentService = (
   const revokeProject = async (projectId: string): Promise<ProjectContentConsent> => {
     const project = await store.readProject(requireId(projectId, 'projectId'));
     if (!project) throw new ContentConsentError('project_not_found', 'no project to revoke');
-    const next: ProjectContentConsent = { ...project, state: 'revoked', updatedAt: nowMs() };
+    const next: ProjectContentConsent = { ...project, state: 'revoked', readDenied: true, updatedAt: nowMs() };
     if (!await store.writeProject(project.projectRevision, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent project change; retry revocation');
     }
@@ -940,7 +942,7 @@ export const createContentConsentService = (
   const revokeGrant = async (sessionId: string): Promise<SessionContentGrant> => {
     const grant = await store.readGrant(requireId(sessionId, 'sessionId'));
     if (!grant) throw new ContentConsentError('invalid_request', 'no child grant to revoke');
-    const next: SessionContentGrant = { ...grant, state: 'revoked', updatedAt: nowMs() };
+    const next: SessionContentGrant = { ...grant, state: 'revoked', readDenied: true, updatedAt: nowMs() };
     if (!await store.writeGrant(grant.version, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry revocation');
     }
@@ -975,7 +977,7 @@ export const createContentConsentService = (
     const grant = await store.readGrant(requireId(sessionId, 'sessionId'));
     if (!grant) throw new ContentConsentError('invalid_request', 'no child grant to reconcile');
     if (!grant.localDenyPending) return grant;
-    const next: SessionContentGrant = { ...grant, state: 'revoked', localDenyPending: false, updatedAt: nowMs() };
+    const next: SessionContentGrant = { ...grant, state: 'revoked', readDenied: true, localDenyPending: false, updatedAt: nowMs() };
     if (!await store.writeGrant(grant.version, next)) {
       throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry reconciliation');
     }
@@ -1007,7 +1009,11 @@ export const createContentConsentService = (
     if (!grant || !grant.retainedCopies) {
       throw new ContentConsentError('invalid_request', 'no retained closed copies for this session');
     }
+    if (grant.readDenied || !['active', 'closed', 'excluded'].includes(grant.state)) {
+      throw new ContentConsentError('grant_revoked', 'retained reading is denied');
+    }
     const project = await readActiveProject(grant.projectId);
+    if (project.readDenied) throw new ContentConsentError('project_revoked', 'retained reading is denied');
     for (const channel of RETAINED_CHANNELS) {
       const deadline = coveredDeadlines[channel];
       if (deadline !== null && !(typeof deadline === 'number' && Number.isSafeInteger(deadline) && deadline > 0)) {
@@ -1047,7 +1053,10 @@ export const createContentConsentService = (
   /** Closed copies are readable only through a distinct active history authority. */
   const canReadClosed = async (sessionId: string, authorizationId: string): Promise<boolean> => {
     const grant = await store.readGrant(sessionId);
-    if (!grant || !grant.retainedCopies) return false;
+    if (!grant || !grant.retainedCopies || grant.readDenied
+      || !['active', 'closed', 'excluded'].includes(grant.state)) return false;
+    const project = await store.readProject(grant.projectId);
+    if (!project || project.state !== 'active' || project.readDenied) return false;
     const authorization = await store.readHistoryAuthorization(authorizationId);
     return authorization !== null
       && authorization.state === 'active'
