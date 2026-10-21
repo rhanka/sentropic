@@ -9,7 +9,7 @@
 
 ## Scope / Guardrails
 
-- [x] Main integration 2026-10-20: owner requires merge, no rebase or force-push; use ENV=test-pr677-main only, API 9384 / UI 5584 / Maildev 1484 (verified free). Six metadata conflicts resolved by retaining main additions and selecting cluster-mesh 0.21.1 above published 0.21.0. Locks regenerate through Make; Memory L5 provenance follows in a separate atomic commit. Control migrations 0012–0016 stay byte-for-byte unchanged. No COMPLIANCE P10Y write, publication, PR merge or readiness change is authorized.
+- [x] Main integration 2026-10-20: owner requires merge, no rebase or force-push; use ENV=test-pr677-main only, API 9384 / UI 5584 / Maildev 1484 (verified free). Six metadata conflicts resolved by retaining main additions and selecting cluster-mesh 0.21.1 above published 0.21.0. Locks regenerate through Make; Memory L5 provenance regenerated against merge 75cceadf9 and verified: 30 files, 54 edges, manifest 27de5fa8…; both exact predecessor manifests retained under their content hashes. Control migrations 0012–0016 stay byte-for-byte unchanged. No COMPLIANCE P10Y write, publication, PR merge or readiness change is authorized.
 
 - [ ] Implement D2 and the reachable Sessions/control UI: explicit project/named-history sharing, live/offline/closed reading, per-action IdP confirmation, capture exclusion, read denial and explicit purge.
 - [x] N5 rebase completed onto `origin/main 5202dd87c6f16d37b8bcdc188acd92c32f5e0492` on 2026-10-17; 151 commits replayed without merge/squash or conflicts. Main still ends at control migration 0011; ratified 0012–0016 stay unchanged. Post-Rebase package-version gate is recorded below.
