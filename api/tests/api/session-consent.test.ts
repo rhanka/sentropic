@@ -562,7 +562,7 @@ describe('session consent durable lifecycle', () => {
     }), 'cross_owner_refused');
     await expectContentError(() => service.revokeProject('sess-content-project-1', {
       tenantId: TENANT_A, principalId: 'ghost-principal', ownerId: owner.id,
-    }), 'membership_required');
+    }), 'cross_owner_refused');
   });
 
   it('should refuse invalid, unsigned and altered retention maps', async () => {
