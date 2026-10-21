@@ -292,6 +292,12 @@
   - [x] Root cause: memory pre-candidate manifest pins declaredLockSha256; our 0.27.1/0.21.1 bumps changed root lock sha so memory-l5-verify failed; job runs because memory_l5 filter includes package-lock.json.
   - [x] Fix per main pattern (b477879c8): retained superseded manifest in history/<sha>.json, re-pinned declaredLockSha256 to 56e03e4f, rewrote sidecar; archives/inventory untouched (platform/broker sources unchanged).
   - [x] Gates: memory-l5-verify packed ok (30 files, 54 edges), full memory-l5-gate LOT=1 (CI ports/ENV) PASS 66/8, then re-verify scope-check.
+- [x] **Lot V4-L1-R1 — Sol R1 boundary defects F1-F3 (.h2a/reviews/pr693_sol_v4l1_r1.md, VERDICT: CHANGES)**
+  - [x] Spec anchor for the next reviewer: spec v4 at .tmp/judge-spec-v3/spec-v4.md, SHA-256 85d33fd8e742d2c8676175e9e2f9149a8b3012178ee3e896e18ea7cc198bcce3, §§3-4 and V4-L1 exit in §9.
+  - [x] F1: closed receipt.evaluator key set in bindsEvaluator and explicit 3-field reconstruction in rebuildReceipt; separately reported R1 probes on verdict/error branches, raw-off/raw-on, with valid controls.
+  - [x] F2: threshold validated against the trusted native bounded scale before verdict acceptance, mirroring the host REQUEST_INVALID bound; binary/graded boundary and outside-bound controls incl. gte/lte.
+  - [x] F3: null rationale enforced for the implicit native profile on binary/choice/graded results; fabricated rationale rejected with a single fetch and no leak.
+  - [x] Durable probes in packages/llm-mesh/tests/judge-client-v4l1-r1.test.ts: 10 tests fail on the pre-fix client and pass on the fixed client; existing V4-L1 suite stays 14/14.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
