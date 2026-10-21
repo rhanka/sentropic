@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { createSessionContentRouter } from '../../src/routes/namespaces/session-content';
 import { db } from '../../src/db/client';
@@ -156,6 +156,63 @@ describe('session consent durable lifecycle', () => {
 
   const storageService = () => new SessionContentService({ issuer: 'test-issuer', epochs: fakeEpoch,
     nowMs: () => now, storage: fixture.config, storageClient: fixture.client });
+
+  it.each(['grant', 'project'] as const)(
+    'should enforce N5 R3 monotonic denial in PostgreSQL against a stale concurrent %s writer', async (scope) => {
+      await acceptProject();
+      await deriveSession('n5-db-fence');
+      const hold = await service.reserveBeforeUpload('n5-db-fence', 'terminal.cache',
+        { raw: 1, encoded: 1 }, 'db-fence', ctx);
+      await service.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx);
+      await service.closeGrant('n5-db-fence', ctx);
+      const history = await service.grantHistoryAuthorization('n5-db-fence', ctx);
+      let entered!: () => void;
+      let release!: () => void;
+      const paused = new Promise<void>((resolve) => { entered = resolve; });
+      const resume = new Promise<void>((resolve) => { release = resolve; });
+      const table = scope === 'grant' ? sql`control.session_content_grants` : sql`control.session_content_projects`;
+      const stale = db.transaction(async (tx) => {
+        const snapshot = await tx.execute(sql`SELECT state, read_denied FROM ${table}`);
+        entered();
+        await resume;
+        // Bypass service checks: replay the pre-revocation row in another transaction.
+        await tx.execute(sql`UPDATE ${table} SET state = ${snapshot.rows[0]!.state},
+          read_denied = ${snapshot.rows[0]!.read_denied}`);
+      });
+      await paused;
+      try {
+        if (scope === 'grant') await service.revokeGrant('n5-db-fence', ctx);
+        else await service.revokeProject('sess-content-project-1', ctx);
+      } finally { release(); }
+      await stale;
+      const persisted = await db.execute(sql`SELECT read_denied FROM ${table}`);
+      expect(persisted.rows[0]!.read_denied).toBe(true);
+      await expectContentError(() => service.grantHistoryAuthorization('n5-db-fence', ctx), 'grant_revoked');
+      await expectContentError(() => service.readCommitted('n5-db-fence', 'terminal.cache', ctx,
+        history.authorizationId), 'grant_revoked');
+    });
+
+  it.each(['unapproved', 'review-forbidden-compliance-p10y'])(
+    'should issue zero commands for N5 R7 %s content storage', async (destination) => {
+      await acceptProject();
+      await deriveSession('n5-storage-gate');
+      const hold = await service.reserveBeforeUpload('n5-storage-gate', 'terminal.cache',
+        { raw: 1, encoded: 1 }, 'storage-gate', ctx);
+      const config = { ...fixture.config,
+        bucket: destination === 'unapproved' ? fixture.config.bucket : destination };
+      const client = createSessionContentS3Client(config);
+      const commands: unknown[] = [];
+      vi.spyOn(client, 'send').mockImplementation(async (command) => {
+        commands.push(command);
+        throw new Error('intercepted before network I/O');
+      });
+      const writer = new SessionContentService({ issuer: 'test-issuer', epochs: fakeEpoch,
+        nowMs: () => now, storage: config, storageClient: client });
+      try {
+        await writer.publishAfterUpload(hold.reservationId, new Uint8Array([1]), ctx).catch(() => undefined);
+        expect(commands).toHaveLength(0);
+      } finally { client.destroy(); }
+    });
 
   it('should retry N5 R2 storage failures without reporting completion', async () => {
     await acceptProject();

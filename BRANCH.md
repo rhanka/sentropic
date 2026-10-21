@@ -9,6 +9,8 @@
 
 ## Scope / Guardrails
 
+- [x] N5 round 2: branch mechanically verified at c2c36f248 and pulled; four domain regressions reproduce both exact concurrent denial-overwrite cases, including deterministic stale-write barriers. API regression coverage adds database stale-writer and intercepted forbidden/unapproved destination probes. Use only ENV=test-pr677-n5fix2; no COMPLIANCE writes.
+
 - [x] N5 R1 test typing: explicitly require the purge result's durable job variant before using purgeJobId; the regression now narrows the service's purge/denial return union and fails explicitly if no job is created.
 
 - [x] N5 author verification: 27 added durable cases pass within 143/143 API consent/adoption/auth-roots/namespace tests; domain 58/58 and full package 1046 passed/129 opt-in skips. Package/API typechecks pass; API lint has 0 errors/220 warnings. The initial SQLite timeout passes scoped 8/8 and in the complete rerun without timeout changes. All 14 implementation/test commits are under 150 changed lines. Updated lot2_n5_report.md records R1–R6, additive control 0017, exact commands, isolated tmpfs MinIO and CI handoff; preserved 0012–0016 and no COMPLIANCE write.
@@ -222,6 +224,7 @@
   - [ ] Cowork implementation, `packages/comments/**`, M2 storage, Graphify/Engram/L3a implementation, and L6a source/migrations.
   - [ ] All h2a repository paths for the Sentropic implementer; h-cond owns its separate implementation and qualification.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] BR76-EX13: owner-authorized N5 round-2 remediation permits new additive `api/drizzle/control/0018_session_content_denial_floor.sql` plus existing journal/data-model paths for a database-enforced monotonic denial floor. Impact: stale writes cannot reset denial; rollback fences capture, drains writers and removes only the new triggers/function. Migrations 0012–0017 remain byte-identical; no COMPLIANCE operation is authorized.
   - [x] BR76-EX12: owner-requested N5 R1–R6 remediation permits `api/drizzle/control/0017_session_content_safety.sql`, `api/src/services/cluster-mesh/session-content-purge.ts`, and `api/src/index.ts` for additive durable writer/read-denial state and production purge scheduling only. Existing schema/journal/data-model exceptions apply. Impact: unknown writers block completion after restart; rollback disables new capture/consumer, settles/purges writers, then removes additive fields. Migrations 0012–0016 and COMPLIANCE P10Y remain untouched.
   - [x] BR76-EX11: `tools/memory-mcp-l5/artifacts/history/9466d77741102d88cd8df6d57536b434769499eb26d6c236ef2c89ed05b1bd9d.json`, `tools/memory-mcp-l5/artifacts/history/9466d77741102d88cd8df6d57536b434769499eb26d6c236ef2c89ed05b1bd9d.json.sha256` preserve main incoming provenance before binding the regenerated merged lock.
   - [x] BR76-EX11: `tools/memory-mcp-l5/artifacts/history/2bff16f81fbb2f02587f1040480704315d6316af0fd95c8e0eea6b2c683b4176.json`, `tools/memory-mcp-l5/artifacts/history/2bff16f81fbb2f02587f1040480704315d6316af0fd95c8e0eea6b2c683b4176.json.sha256` retain the exact predecessor before the artifacts-0.1.4 root-lock provenance refresh.

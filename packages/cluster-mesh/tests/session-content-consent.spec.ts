@@ -87,6 +87,60 @@ const sharedChildInput = (overrides: Partial<DeriveChildInput> = {}): DeriveChil
 });
 
 describe('content consent retention validation', () => {
+  it.each(['grant-close', 'project-exclude'] as const)(
+    'should preserve N5 R3 denial across deterministic concurrent %s writes', async (race) => {
+      const { service, store } = await readyConsent();
+      await service.deriveChild(sharedChildInput());
+      await service.closeGrant('session-1');
+      if (race === 'grant-close') {
+        await service.deriveChild(sharedChildInput({ bindingId: 'replacement', bindingVersion: 2 }));
+      }
+      const ceilings = { 'terminal.cache': null, 'native.mirror': null } as const;
+      const history = await service.authorizeHistoryRead('session-1', ceilings);
+      expect(await service.canReadClosed('session-1', history.authorizationId)).toBe(true);
+      let entered!: () => void;
+      let release!: () => void;
+      const paused = new Promise<void>((resolve) => { entered = resolve; });
+      const resume = new Promise<void>((resolve) => { release = resolve; });
+      const concurrent = createContentConsentService({ ...store,
+        async writeGrant(version, next) {
+          if (race === 'grant-close') { entered(); await resume; }
+          return store.writeGrant(version, next);
+        },
+        async writeProject(revision, next) {
+          if (race === 'project-exclude') { entered(); await resume; }
+          return store.writeProject(revision, next);
+        },
+      });
+      const stale = race === 'grant-close' ? concurrent.closeGrant('session-1')
+        : concurrent.excludeSession('project-1', 'unrelated-session');
+      await paused; // The mutation already read the pre-revocation snapshot.
+      try {
+        if (race === 'grant-close') await service.revokeGrant('session-1');
+        else await service.revokeProject('project-1');
+      } finally { release(); }
+      await stale;
+      expect(await service.canReadClosed('session-1', history.authorizationId)).toBe(false);
+      await expect(service.authorizeHistoryRead('session-1', ceilings)).rejects.toBeInstanceOf(ContentConsentError);
+    });
+
+  it.each(['grant-close', 'project-exclude'] as const)(
+    'should preserve N5 R3 denial in the reviewer Promise.all %s repro', async (race) => {
+      const { service } = await readyConsent();
+      await service.deriveChild(sharedChildInput());
+      if (race === 'grant-close') {
+        await Promise.all([service.revokeGrant('session-1'), service.closeGrant('session-1')]);
+      } else {
+        await service.closeGrant('session-1');
+        const history = await service.authorizeHistoryRead('session-1', { 'terminal.cache': null, 'native.mirror': null });
+        await Promise.all([service.revokeProject('project-1'), service.excludeSession('project-1', 'unrelated-session')]);
+        expect(await service.canReadClosed('session-1', history.authorizationId)).toBe(false);
+      }
+      await expect(service.authorizeHistoryRead('session-1', {
+        'terminal.cache': null, 'native.mirror': null,
+      })).rejects.toBeInstanceOf(ContentConsentError);
+    });
+
   it('should preserve N5 R3 read denial when a confirmed amendment derives a replacement binding', async () => {
     const { service } = await readyConsent();
     await service.deriveChild(sharedChildInput());
