@@ -30,6 +30,9 @@
     "source-map-js": "1.2.2",
     "@sentropic/engram@0.21.0": {
       "officeparser": "8.2.0"
+    },
+    "officeparser@8.2.0": {
+      "file-type": "22.1.0"
     }
   }
 }
