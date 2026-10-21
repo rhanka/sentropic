@@ -75,8 +75,8 @@ Actions with the following status should be included around tasks only if really
   - [ ] Lot gate: `make scope-check` before every commit; each commit under 150 lines.
 - [ ] **Lot L01a — Data contract and fixed vectors (2–3 atomic commits, no backend change)**
   - [x] Add `packages/cluster-mesh/src/storage/common-contract.ts` data-only types/validators.
-  - [ ] Add `packages/cluster-mesh/tests/storage/common-rule/vectors.ts` fixed expected vectors.
-  - [ ] Add `packages/cluster-mesh/tests/storage/common-rule/contract.spec.ts` structural tests.
+  - [x] Add `packages/cluster-mesh/tests/storage/common-rule/vectors.ts` fixed expected vectors.
+  - [x] Add `packages/cluster-mesh/tests/storage/common-rule/contract.spec.ts` structural tests.
   - [ ] No encoder, adapter, SQL asset, publication path, claim, connection or credential change.
   - [ ] Lot gate: `make typecheck-cluster-mesh`, `make lint-cluster-mesh`, scoped spec run with `ENV=test-cm-s3-l01a` last.
 - [ ] **Lot N — Final validation**
