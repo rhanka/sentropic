@@ -72,13 +72,13 @@
       "types": "./dist/integrations/llm-mesh/transport/jev.d.ts",
       "import": "./dist/integrations/llm-mesh/transport/jev.js"
     },
-    "./llm-mesh/judge": {
-      "types": "./dist/integrations/llm-mesh/judge.d.ts",
-      "import": "./dist/integrations/llm-mesh/judge.js"
+    "./llm-mesh/decision": {
+      "types": "./dist/integrations/llm-mesh/decision.d.ts",
+      "import": "./dist/integrations/llm-mesh/decision.js"
     },
-    "./llm-mesh/judge/host": {
-      "types": "./dist/integrations/llm-mesh/judge/host.d.ts",
-      "import": "./dist/integrations/llm-mesh/judge/host.js"
+    "./llm-mesh/decision/host": {
+      "types": "./dist/integrations/llm-mesh/decision/host.d.ts",
+      "import": "./dist/integrations/llm-mesh/decision/host.js"
     },
     "./gateway": {
       "types": "./dist/integrations/gateway/index.d.ts",
@@ -116,13 +116,13 @@
       "types": "./dist/loaders/llm-mesh/transport/jev.d.ts",
       "import": "./dist/loaders/llm-mesh/transport/jev.js"
     },
-    "./loaders/llm-mesh/judge": {
-      "types": "./dist/loaders/llm-mesh/judge.d.ts",
-      "import": "./dist/loaders/llm-mesh/judge.js"
+    "./loaders/llm-mesh/decision": {
+      "types": "./dist/loaders/llm-mesh/decision.d.ts",
+      "import": "./dist/loaders/llm-mesh/decision.js"
     },
-    "./loaders/llm-mesh/judge/host": {
-      "types": "./dist/loaders/llm-mesh/judge/host.d.ts",
-      "import": "./dist/loaders/llm-mesh/judge/host.js"
+    "./loaders/llm-mesh/decision/host": {
+      "types": "./dist/loaders/llm-mesh/decision/host.d.ts",
+      "import": "./dist/loaders/llm-mesh/decision/host.js"
     },
     "./loaders/gateway": {
       "types": "./dist/loaders/gateway/index.d.ts",
