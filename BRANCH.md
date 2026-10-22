@@ -44,8 +44,8 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 1 — Fixture types and independent manifest encoder**
   - [x] Add `kit.ts` and `objects-reference.ts` encoder; frozen vector equivalence is gated in Lot 3/4.
-- [ ] **Lot 2 — Owned objects and bounded manifest verification**
-  - [ ] Add independent contenders, reopen/fault controls, scoped immutable create/retry and fail-closed reads.
+- [x] **Lot 2 — Owned objects and bounded manifest verification**
+  - [x] Add independent contenders, reopen/fault controls, scoped immutable create/retry and fail-closed reads.
 - [ ] **Lot 3 — Reusable CT-01–03 assertions**
   - [ ] Add `objects-assertions.ts`: races, buffer ownership, scope isolation, envelope commitments and corruption probes.
 - [ ] **Lot 4 — Mutants and final validation**
