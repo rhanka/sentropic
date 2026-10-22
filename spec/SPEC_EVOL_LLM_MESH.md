@@ -835,9 +835,9 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
   (`gemini-4-argon-low|medium|high` resolve per effort through the generic Cloud Code
   wire suffix, no transport change).
 
-## Generic Judge Capability (BR96 Evolution)
+## Generic Decision Capability (BR96 Evolution)
 
-Generic evaluation contracts, portable client execution, and trusted JEV hosting are established under `@sentropic/llm-mesh/judge`, `@sentropic/llm-mesh/judge/host`, and `@sentropic/llm-mesh/transport/jev`.
+Generic evaluation contracts, portable client execution, and trusted JEV hosting are established under `@sentropic/llm-mesh/decision`, `@sentropic/llm-mesh/decision/host`, and `@sentropic/llm-mesh/transport/jev` (pre-V4-L2 `judge` imports, §12 migration history).
 
 ### 1. Phase-Aware Retryability & Advisory Hints
 - **Literal lifecycle phases**: Errors record the exact lifecycle phase: `preflight`, `admission`, `dispatch`, or `settlement`.
