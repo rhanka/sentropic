@@ -9,15 +9,16 @@ responses, and adds the platform-free `@sentropic/artifacts/mcp-core` entry.
 
 ## 0.2.0 contract line (L0 frozen)
 
-The `0.2.0-rc.1` line freezes the immo #861 declaration shapes only:
+The `0.2.0` line freezes the immo #861 declaration shapes only:
 explicit capability selection and the effective publication profile
-(`src/profile-contract.ts`), the effective command identity
-(`src/server/command-identity-contract.ts`), the commit finalization unit
-(`src/server/commit-contract.ts`) and the typed failure outcome
-(`src/server/failure-contract.ts`). The common-contract reuse map lives in
+(`l0-freeze/profile-contract.ts`), the effective command identity
+(`l0-freeze/command-identity-contract.ts`), the commit finalization unit
+(`l0-freeze/commit-contract.ts`) and the typed failure outcome
+(`l0-freeze/failure-contract.ts`). L1 promotes them into `src/` with the
+first `0.2.0-rc` bump. The common-contract reuse map lives in
 `docs/common-contract-map.md`; the migration inventory lives in
 `docs/migration-inventory-l0.md`. Public host API names stay unfrozen until
-spec r2. No behavior changes in this reservation.
+spec r2. L0 changes no behavior, no `src/` file and no package version.
 
 ## Migrating to 0.1.4
 
