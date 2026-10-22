@@ -21,6 +21,28 @@ export const decisionRequest = (overrides: Partial<DecisionRequest> = {}): Decis
 export const jevResponse = (answer: unknown = { noul: 0.25 }) => ({
   model: 'synthetic-served-model', answers: { verdict: answer }, usage: { input_tokens: 1000, output_tokens: 0 },
 });
+export const trustedNativeContext = (request: DecisionRequest) => {
+  const kind = request.criterion.kind;
+  const levels = kind === 'graded' ? request.criterion.levels.length : 0;
+  const direction = kind === 'graded' ? request.criterion.direction : 'unordered';
+  void direction;
+  return {
+    evaluator: { ...request.evaluator },
+    validationProfile: { profile: 'native-distribution-v1' as const, version: 'v1' },
+    acceptedServedModelIds: ['synthetic-served-model'],
+    semantics: { nativeDecision: false,
+      score: kind === 'graded'
+        ? { meaning: 'rubric-grade', min: 0, max: Math.max(0, levels - 1) }
+        : kind === 'choice'
+          ? null
+          : { meaning: 'probability-true', min: 0, max: 1 },
+      confidence: kind === 'binary'
+        ? null
+        : { meaning: 'provider-confidence', meaningRef: 'https://docs.typesafe.ai/confidence.md', min: 0, max: 1 },
+      rationale: 'forbidden' as const },
+    definitionDigest: 'a'.repeat(64),
+  };
+};
 export const decisionPrice = () => ({ providerId: 'typesafe' as const, modelId: 'jev-1.13.0', priceRevision: 'fixture-price-v1',
   inputMicroUsdPerMtok: '42000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const });
 
