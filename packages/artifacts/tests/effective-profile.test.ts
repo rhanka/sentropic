@@ -4,7 +4,14 @@
  * Frozen selection and bounds vectors for the 0.2.0 profile declaration.
  * Pure unit vectors: no DB, no S3, no app.handle, no mocked provider.
  */
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import {
+  AMBIGUOUS_DERIVATION_CASE,
+  DERIVATION_VECTORS,
+  buildDerivationPreimage,
+  detectAmbiguousSplit,
+} from '../l0-freeze/command-identity-contract.js';
 import {
   COMPOSITION_DIGEST_INPUTS,
   KNOWN_ARTIFACT_TOOL_NAMES,
@@ -127,6 +134,25 @@ describe('effective-profile contract', () => {
     expect([...COMPOSITION_DIGEST_INPUTS]).toEqual([
       'selection', 'profile', 'providerContractRevisions',
     ]);
+  });
+
+  it('should derive the documented internal key preimages and digests', () => {
+    for (const vector of DERIVATION_VECTORS) {
+      expect(buildDerivationPreimage(vector.binding)).toBe(vector.preimage);
+      expect(createHash('sha256').update(vector.preimage, 'utf8').digest('hex'))
+        .toBe(vector.sha256);
+    }
+  });
+
+  it('should refuse ambiguous separator-bearing scope and actor splits', () => {
+    const { first, second, expected } = AMBIGUOUS_DERIVATION_CASE;
+    expect(buildDerivationPreimage(first)).toBe(buildDerivationPreimage(second));
+    expect(detectAmbiguousSplit(first, second)).toBe(true);
+    expect(expected).toBe('refuse');
+    expect(detectAmbiguousSplit(
+      { ...first, scope: 's', actor: 'alice' },
+      { ...first, scope: 's', actor: 'issuer|alice' },
+    )).toBe(false);
   });
 
   it('should freeze the four C2 capability routes', () => {
