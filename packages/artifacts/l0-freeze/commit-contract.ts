@@ -9,6 +9,8 @@
  */
 
 import type { CommandIdentity } from './command-identity-contract.js';
+import type { ArtifactOutcome } from './failure-contract.js';
+import type { CompiledArtifactsProfile } from './profile-contract.js';
 
 /** Version of the frozen commit-coordinator protocol. */
 export const COMMIT_PROTOCOL_VERSION = 'artifacts-commit/v1' as const;
@@ -202,3 +204,55 @@ export interface CoordinatorRequirement {
   readonly requiresCoordinator: true;
   readonly guardedOperations: readonly string[];
 }
+
+/** Transport-free HTTP request shape consumed by the frozen app. */
+export interface HttpRequest {
+  readonly method: string;
+  readonly path: string;
+  readonly headers: Record<string, string>;
+  readonly body: unknown;
+}
+
+/** Transport-free HTTP response shape produced by the frozen app. */
+export interface HttpResponse {
+  readonly status: number;
+  readonly headers: Record<string, string>;
+  readonly body: unknown;
+}
+
+/** Required app dependencies: no automatic legacy fallback exists. */
+export const HTTP_APP_REQUIRED_DEPS = ['profile', 'coordinator'] as const;
+
+/**
+ * App dependencies. Omitted profile, coordinator or write guard fails
+ * closed; the old split finalizer is removed, never selected implicitly.
+ */
+export interface HttpAppDeps {
+  readonly profile: CompiledArtifactsProfile;
+  readonly coordinator: ArtifactCommitCoordinator;
+}
+
+/**
+ * Frozen app surface. `execute` is the sole execution path returning the
+ * shared outcome with invocation, commit-state and replay correlation;
+ * `handle` calls it once, then sanitizes with the outcome projector.
+ * Hosts needing accounting call `execute` and the projector themselves,
+ * never both methods. Reads/entry rejection use `not_committed`; write
+ * success uses `committed`.
+ */
+export interface ArtifactApp {
+  readonly selectedCapabilities: readonly string[];
+  execute(
+    request: HttpRequest,
+    invocation: ArtifactInvocationContext,
+  ): Promise<ArtifactOutcome<HttpResponse>>;
+  handle(
+    request: HttpRequest,
+    invocation: ArtifactInvocationContext,
+  ): Promise<HttpResponse>;
+}
+
+/** Sanitized projection from outcome to HTTP response. */
+export type ProjectArtifactHttpOutcome = (
+  outcome: ArtifactOutcome<HttpResponse>,
+) => HttpResponse;

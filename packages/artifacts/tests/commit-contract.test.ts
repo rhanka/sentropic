@@ -10,6 +10,7 @@ import {
   COMMIT_PROTOCOL_VERSION,
   COMMIT_STATES,
   FINALIZATION_PHASES,
+  HTTP_APP_REQUIRED_DEPS,
   PARTICIPANT_LOCK_ORDER,
   REFUSAL_RESIDUE_FORBIDDEN,
 } from '../l0-freeze/commit-contract.js';
@@ -110,5 +111,9 @@ describe('commit contract', () => {
       'quota',
       'blob-reference-deletion-claim',
     ]);
+  });
+
+  it('should require profile and coordinator with no legacy fallback', () => {
+    expect([...HTTP_APP_REQUIRED_DEPS]).toEqual(['profile', 'coordinator']);
   });
 });
