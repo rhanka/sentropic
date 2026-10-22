@@ -18,6 +18,7 @@ Replace the live root-lockfile equality in the P1 packed gate with a versioned f
   - `package.json`
   - `package-lock.json`
   - `ui/package-lock.json`
+  - `api/Dockerfile` (BR710-EX9; preserve the main Go 1.26.10 pin during integration)
   - `tools/memory-mcp-l5/lock-fingerprint.mjs`
   - `tools/memory-mcp-l5/lock-closure.mjs`
   - `tools/memory-mcp-l5/build-inputs.mjs`
@@ -231,3 +232,11 @@ Actions with the following status should be included around tasks only if really
   - [x] Merge (no rebase); BRANCH.md kept as this branch's live plan; main's net delta is cluster-mesh common-rule + spec + fixtures and a `cluster-mesh 0.21.0→0.21.1` version-metadata lock hunk (auto-merged); manifest conflict (main's old-format regen) resolved to branch side then regenerated.
   - [x] Regen `0f366625` (v4, fingerprint identical — main touched no P1 inputs; declaredLock = merged lock, 44 contracts byte-identical, tuple bytes identical); verify + gate + tooling green.
   - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green on the exact head, then report head SHA + CI URL.
+
+## Round M2 (approved-head integration)
+- [x] **Lot 22 — Merge origin/main (3f3f3fd78, PR #717)**
+  - [x] Verify branch with harness, fetch and pull the remote branch; merge main without rebase. PR #716 is already included in the approved head.
+  - [x] Keep this branch plan; take the main Go 1.26.10 image digest, preserving the CVE remediation on both sides.
+  - [x] Root lock, P1 inputs, retained artifacts and Track log unchanged; no P1 regeneration required.
+  - [ ] Verify retained P1 and tooling, scope-check, commit via make, push and require green CI on the exact head; keep the PR draft and unmerged.
+  - [x] Retained P1 verification passes (30 files, 54 edges); all 101 tooling tests pass; all 342 Track events from each parent survive.
