@@ -7,7 +7,7 @@
 - [x] Owner GO: 2026-10-18 launch packet, AGENT_SIG:7f3a9c2e1b; W0 only, no PR merge or deployment; 19 October follow-up authorizes main integration under BR142-EX2.
 - [x] Approved plan: `/home/antoinefa/src/sentropic/.tmp/app-switch-week/plan.md`, SHA-256 `166e9bbf2c580ee61b3decc9c3a4c758db579a38783eb212cf80f0a3a43c816a`, section 3.
 - [x] Isolated worktree: `tmp/worktrees/app-cm-w0`; branch `feat/app-cm-w0-baseline`; initial HEAD/origin/main `9ed96eb83cd77da710f1adeb83a19e425d6c4910`.
-- [x] Production access is read-only; no Secret values, privileged credentials, pod exec, migrations, service starts or live data changes.
+- [x] Production access is read-only; 22 October owner authorization permits tenant-admin exec into existing PostgreSQL pods for migration-bookkeeping SELECTs only, plus backup catalogue/status/receipt reads; no Secret values in records, migration execution, service starts or live data changes.
 - [x] Make-only commands, `ENV` last; atomic W0-authored commits at most 150 changed lines, selective staging, `make scope-check` then `make commit`; owner-requested upstream merge carries inherited changes under BR142-EX2.
 - [x] English records with owner quotations retained verbatim; no W0-authored product/API/UI/package/lock/deployment changes; no migration file on W0; inherited main changes only under BR142-EX2.
 - [x] Root dev 8787/5173/1080 and D2 9381/5581/1481, 9382/5582/1482 remain reserved to their owners.
@@ -38,7 +38,7 @@
   - [x] `BR142-EX2`: owner follow-up explicitly requested merging origin/main `cf0ad8ee44f9bb7cf4ad1222a468172f0f77fc2d` into W0. Integrated unchanged upstream bytes at fe26214df; temporary allowances removed. Impact: main history and its existing package/lock/CI/spec/plan changes entered this branch; rollback: owner-authorized merge revert. No PR merge or deployment is authorized.
 
 ## Feedback Loop
-- [ ] `attention`: 21 October tenant-readings-2026-10-21.md supplies owner-authorized Kubernetes image/controller/config metadata with no RBAC refusal; endpoint/config-hash remainder, DB/object access and current recovery/ACL/disposition evidence remain missing.
+- [ ] `attention`: 21 October tenant metadata and 22 October product/control migration frontiers plus latest backup receipts are recorded without refusal; endpoint/config hashes, package/runtime state, private object/restore/ACL/disposition evidence remain open.
 - [x] `acknowledge`: F3/F4 owner answers Q1–Q4 copied verbatim into owner-decisions.md; owner holds all human roles, agents execute, no staffed windows or temporal slot bookings are required because there are no users; owner signs with a later-enrolled dedicated identity/key.
 - [ ] `blocked`: W0 acceptance remains gated by F1/B01–B03, F2/B04, B06 nonlocal migration-0017 reconciliation and exact-head independent review B08 in `docs/baselines/app-cm-w0/authorization.md`; later enrollment/infra/promotion receipts retain their downstream gates.
 - [x] `clarification`: D2 owns control 0012–0016 and O1 owns 9495/5695/1595; W1 reserves 0017, with app test ports 9710–9717 and e2e 9720–9727 (full triples in reservations.md).
@@ -65,6 +65,7 @@
   - [x] F1/F2 follow-up: preserve dated offline journal/content counts and existing CI SQL backup/restore metadata in recovery-readings.md; current tenant recovery/object/ACL proof remains open.
   - [x] F1 follow-up: record inactive-cluster deployment/config identities and hashes, zero pod lists, actual OVH RBAC denials and exact missing current-tenant access in cluster-readings.md.
   - [x] 21 October B01 follow-up: verify branch/pull; tenant-admin GETs only; record prod/preprod/remote running digests, pod UID/start, controller chains, content-role absence and config names/resourceVersions; delete temporary mode-600 kubeconfig; B02/B03 remain pending, no DB access.
+  - [x] 22 October B02/B03 follow-up: verify branch/pull; owner-authorized read-only migration discovery/count/max/frontiers in prod/preprod and latest backup status/upload receipts recorded in migration-backup-readings-2026-10-22.md; temporary mode-600 kubeconfigs deleted, no refusal; runtime/package state, private object checkpoint and restore proof remain pending.
 - [ ] **Lot 1 — Frozen implementation handoffs**
   - [x] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
   - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
