@@ -121,7 +121,7 @@ const RECEIPT_KEYS = ['schemaVersion', 'callId', 'correlationId', 'evaluator', '
   'servedModelId', 'providerRequestId', 'startedAt', 'finishedAt', 'latencyMs', 'providerLatencyMs',
   'dispatch', 'attempts', 'usage', 'cost', 'retention', 'budget', 'outcome', 'errorCode'] as const;
 
-function isValidDecisionReceipt(r: unknown, request: DecisionRequest, expectedCorrelationId: string,
+export function isValidDecisionReceipt(r: unknown, request: DecisionRequest, expectedCorrelationId: string,
   validation: DecisionValidationContext | null): r is DecisionReceipt {
   if (!isRecord(r)) return false;
   if (!hasOnlyKeys(r, RECEIPT_KEYS)) return false;
@@ -373,7 +373,7 @@ function isValidScalarVerdict(v: unknown, request: DecisionRequest,
   return false;
 }
 
-function isValidDecisionVerdict(v: unknown, request: DecisionRequest,
+export function isValidDecisionVerdict(v: unknown, request: DecisionRequest,
   validation: DecisionValidationContext | null): v is DecisionVerdict {
   if (!isRecord(v)) return false;
   if (!hasOnlyKeys(v, VERDICT_KEYS)) return false;
