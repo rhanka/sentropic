@@ -8,9 +8,11 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   AMBIGUOUS_DERIVATION_CASE,
+  COMMAND_IDENTITY_RELATIONS,
   DERIVATION_VECTORS,
   buildDerivationPreimage,
   detectAmbiguousSplit,
+  resolvePlatformEnvelope,
 } from '../l0-freeze/command-identity-contract.js';
 import {
   COMPOSITION_DIGEST_INPUTS,
@@ -153,6 +155,19 @@ describe('effective-profile contract', () => {
       { ...first, scope: 's', actor: 'alice' },
       { ...first, scope: 's', actor: 'issuer|alice' },
     )).toBe(false);
+  });
+
+  it('should bind the platform envelope to the tool argument', () => {
+    expect(resolvePlatformEnvelope('key-1', undefined)).toBe('accept');
+    expect(resolvePlatformEnvelope('key-1', 'key-1')).toBe('accept');
+    expect(resolvePlatformEnvelope('key-1', 'key-2')).toBe('conflict');
+    expect(resolvePlatformEnvelope(undefined, 'key-1')).toBe('envelope-only');
+  });
+
+  it('should declare the command-identity relations L1 must enforce', () => {
+    expect(COMMAND_IDENTITY_RELATIONS.map((entry) => entry.expectation)).toEqual([
+      'converge', 'conflict', 'computed-only',
+    ]);
   });
 
   it('should freeze the four C2 capability routes', () => {
