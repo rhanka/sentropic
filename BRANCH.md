@@ -28,6 +28,7 @@
 - [ ] L2-VERSION: r2 §6 reserves shared manifests to the integrator after the wave; mandatory PR bump remains that owner's gate. package.json unchanged; workflow dispatch on this stacked PR does not exercise the PR-only bump job.
 - [ ] L2-INTEGRATION: real-provider execute/adapter wiring is exclusively L6; stage-2 acceptance qualifies classifier and both projectors.
 - [ ] L2-RADAR: pinned 3fc55b4f4 helper still probes retired takeTypedCause/setFinalizeAuthorization and old selection names; Radar/L6/L8 must rebind r2, never emulate those slots.
+- [ ] L2-CI (blocked; integration owner): run 39835817986 validates artifacts including integration/pack/probe, but four global builds fail the audit gate on locked DOMPurify 3.4.14 (critical GHSA-cg2g-xh64-v4q7, high GHSA-mrv2-3pqr-j5jr). A three-line lock-only 3.4.17 patch is prepared in tmp/l2-evidence/dompurify-3.4.17.patch; the unchanged audit gate passes on that isolated proposal. Shared lock remains outside L2 scope; no suppression. Acceptance: apply through the owning security/base lane and obtain a green full workflow on the rebased L2 head.
 ## AI Flaky tests
 - [x] No AI tests or nondeterministic external services required.
 ## Orchestration Mode (AI-selected)
@@ -46,4 +47,6 @@
   - [x] make typecheck-artifacts test-artifacts ENV=test-artifacts-861-L2: 28 files, 292 tests passed, including all 76 L2 vectors.
   - [x] make lint-artifacts ENV=test-artifacts-861-L2 passed after the guard correction; no services or AI tests required.
 - [ ] Lot 4: push; draft PR based on L0 with this body; green CI; report SHA/run/ambiguities; do not merge.
+  - [x] Draft PR #723 targets feat/artifacts-861-contracts; exact L2 scope only, no merge.
+  - [ ] Full CI green: waiting for the integration-owned DOMPurify correction; final-head artifacts qualification is being refreshed.
 
