@@ -42,7 +42,7 @@
 - [x] **Lot 0 — Baseline and scope**
   - [x] Read owner order, rules, harness, template, hrpolnav provenance/hacks and readable DS specification; create worktree and pass mechanical branch check.
 - [ ] **Lot 1 — Shared card anatomy**
-  - [ ] Update `src/hrpolnav-card.js`, `src/architecture-svg.js`, `src/governance-layout.js`: atomic renderer, reserved toggle slot, centred body, shared 460 × 200 geometry.
+  - [x] Update `src/hrpolnav-card.js`, `src/architecture-svg.js`, `src/governance-layout.js`: atomic renderer, reserved toggle slot, centred body, shared 460 × 200 geometry.
   - [ ] Preserve leaf values, typography, icons and expanded headers; remove clipping and validate overflow.
 - [ ] **Lot 2 — Every scene and wrapping legend**
   - [ ] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
