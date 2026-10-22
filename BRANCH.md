@@ -321,11 +321,11 @@
 - [x] **Lot MERGE-MAIN-3 — integrate origin/main after #717 (3f3f3fd78)**
   - [x] No rebase, no force-push. Single conflict: BRANCH.md keeps ours (main carries the merged Go-CVE branch plan); api/Dockerfile Go 1.26.9 to 1.26.10 digest pin auto-merges from main.
   - [x] Judge code, versions, locks and memory pin untouched by this merge; R1 fixes and EX10/EX11 intact. Gates: R1 10/10 PASS, V4-L1 14/14 PASS, memory-l5-verify ok.
-- [ ] **Lot V4-L2 — Decision migration and generic core (spec v4 §2/§12, probes P15–P23, P27/P28-L2, P32/P33, keep V4-L1)**
+- [x] **Lot V4-L2 — Decision migration and generic core (spec v4 §2/§12, probes P15–P23, P27/P28-L2, P32/P33, keep V4-L1)**
   - [x] Rename per §12.1 map (module `@sentropic/llm-mesh/decision`, `src/decision/`, factories/methods/types, `decision`/`decisionOnly`, cluster IDs/loaders/tests/README examples, `adapter.decision`/`client.decide` per §2); no legacy alias (unpublished API, §12.2 preferred path); branch label stays `feat/llm-judge`.
-  - [ ] Generic core (reopened per Sol V4-L2 R1 VERDICT: CHANGES): complete canonical definition equality, required trusted context for all evaluators, generic descriptor/backend with structured injected transport, closed versioned scalar profile with evidence binding, public pure validator, detached context freeze, required explicit allowlist.
-  - [ ] Probes P15–P23, P27-P28 L2, P32–P33 with discriminating regression tests; V4-L1 14/14 + R1 10/10 keep passing migrated.
-- [ ] **Lot V4-L2-R1 — Sol V4-L2 R1 findings F1–F11 (review pr693_sol_v4l2_r1.md, VERDICT: CHANGES)**
+  - [x] Generic core (Sol V4-L2 R1 VERDICT: CHANGES addressed): complete canonical definition equality, required trusted context for all evaluators, generic descriptor/backend with structured injected transport, closed versioned scalar profile with evidence binding, public pure validator, detached context freeze, required explicit allowlist.
+  - [x] Probes P15–P23, P27-P28 L2, P32–P33 with discriminating regression tests; V4-L1 14/14 + R1 10/10 keep passing migrated.
+- [x] **Lot V4-L2-R1 — Sol V4-L2 R1 findings F1–F11 (review pr693_sol_v4l2_r1.md, VERDICT: CHANGES)**
   - [ ] F1 scalar raw boundary; F2 required validationContext; F3 generic host/structured backend; F4 complete definition/tariff binding; F5 closed scalar profile; F6 public pure validator.
   - [ ] F8 required allowlist; F9 tracked docs migration; F10 scope/exception regularization (done in scope commit); F11 atomic commits with per-commit plan updates.
   - [x] F7 context freeze detachment (bounded snapshot first, shared criterion parser, detached frozen copy only).
