@@ -34,7 +34,18 @@ export async function inspect(svg, name) {
           const centre = line.getStartPositionOfChar(0).x + line.getComputedTextLength() / 2;
           if (getComputedStyle(line).textAnchor !== 'middle' || Math.abs(centre - rect.x - rect.width / 2) > .02) failures.push(`Collapsed subtitle line centre ${group.dataset.group}`);
         }
-      } else if (Math.abs(gap - cardGap) > .02) failures.push(`Header gap ${group.dataset.group}: ${gap}, card ${cardGap}`);
+      } else {
+        if (Math.abs(gap - cardGap) > .02) failures.push(`Header gap ${group.dataset.group}: ${gap}, card ${cardGap}`);
+        const rule = +group.querySelector('.diagram-card-rule').getAttribute('y1');
+        const sub = subtitle.getBBox(), rect = group.querySelector('rect').getBBox();
+        const children = boxes.filter(box => box.dataset.parent === group.dataset.group).map(box => box.querySelector('rect').getBBox());
+        if (Math.abs(rule - sub.y - sub.height - 4) > .02) failures.push(`Subtitle rule gap ${group.dataset.group}`);
+        if (children.length) {
+          const top = Math.min(...children.map(b => b.y)) - rule;
+          const bottom = rect.y + rect.height - Math.max(...children.map(b => b.y + b.height));
+          if (Math.abs(top - 16) > .02 || Math.abs(top - bottom) > 2) failures.push(`Unbalanced zone inset ${group.dataset.group}: ${top}/${bottom}`);
+        }
+      }
       const top = +group.querySelector('.diagram-product-kicker').getAttribute('y') - 22;
       const bottom = title.getBBox().y + title.getBBox().height + 1.59375;
       const iconY = group.querySelector('.diagram-icon').transform.baseVal.consolidate().matrix.f;
@@ -54,8 +65,7 @@ export async function inspect(svg, name) {
           const style = getComputedStyle(text);
           if (text.matches('.service-name, .card-name, .card-detail') && (style.whiteSpace !== 'normal' || !(Number(style.webkitLineClamp) > 0))) failures.push(`Missing multiline text budget ${id}: ${text.textContent}`);
           if (text.scrollHeight > text.clientHeight + 1 || text.scrollWidth > text.clientWidth + 1) {
-            const ellipsis = style.textOverflow === 'ellipsis' && (style.whiteSpace === 'nowrap' || style.webkitBoxOrient === 'vertical' && Number(style.webkitLineClamp) > 0);
-            if (style.overflow !== 'hidden' || !ellipsis) failures.push(`Uncontained text ${id}: ${text.textContent}`);
+            failures.push(`Clipped or ellipsized text ${id}: ${text.textContent}`);
           }
         }
       }
