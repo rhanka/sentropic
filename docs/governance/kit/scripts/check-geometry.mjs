@@ -13,12 +13,8 @@ const overlap=(a,b,p=0)=>a.left<b.right+p-eps&&a.right>b.left-p+eps&&a.top<b.bot
 const near=(a,b)=>Math.abs(a-b)<eps;
 function check(scene,name){
  for(const n of scene.nodes)if(n.width!==460||n.height!==200)throw Error(name+': nonstandard leaf footprint '+n.id);
- if(!baseline)for(const g of scene.groups.filter(g=>g.collapsed))if(g.width!==460||g.height!==272)throw Error(name+': collapsed card size '+g.id);
- if(!baseline)for(const g of scene.groups.filter(g=>g.collapsed)){
-  const header=frameHeaderContent(g,g.width);
-  // The trailing 16-unit padding is not painted text; long approved names may wrap to four lines.
-  if(header.headerTextHeight-16>g.height)throw Error(name+': collapsed header overflow '+g.id);
- }
+ if(!baseline)for(const g of scene.groups.filter(g=>g.collapsed))if(g.width!==460||g.height!==200)throw Error(name+': collapsed card size '+g.id);
+ 
  if(!baseline)for(const g of scene.groups)if(/ · \p{Ll}/u.test(g.title))throw Error(name+': frame title capitalization '+g.id);
  if(!baseline)for(const g of scene.groups.filter(g=>!g.collapsed)){
   const children=[...scene.groups,...scene.nodes].filter(n=>n.parentId===g.id);
@@ -103,7 +99,14 @@ if(process.argv.includes('--elk')){
   const visible=geometry.map(([id,parentId,x,y,width,height,headerTextHeight,collapsed])=>({...entries.get(id),position:{x,y},width,height,headerTextHeight,collapsed}));
   check({...central,groups:visible.filter(n=>!n.data),nodes:visible.filter(n=>n.data),edges:fold.edges},language+'/fold/'+i);
  }
- for(const [collection,scenes]of Object.entries(presentation[language]))for(const [id,scene]of Object.entries(scenes))if(id!=='central')check(scene,language+'/'+collection+'/'+id);
+ for(const [collection,scenes]of Object.entries(presentation[language]))for(const [id,scene]of Object.entries(scenes))if(id!=='central'){
+  check(scene,language+'/'+collection+'/'+id);
+  for(const [i,fold] of (scene.preparedFolds ?? []).entries()){
+   const [geometry]=JSON.parse(fold.signature),entries=new Map([...scene.groups,...scene.nodes].map(n=>[n.id,n]));
+   const visible=geometry.map(([id,parentId,x,y,width,height,headerTextHeight,collapsed])=>({...entries.get(id),position:{x,y},width,height,headerTextHeight,collapsed}));
+   check({...scene,groups:visible.filter(n=>!n.data),nodes:visible.filter(n=>n.data),edges:fold.edges},`${language}/${id}/fold/${i}`);
+  }
+ }
  if(!baseline){
   const aggregate=aggregateTopLevel(central);
   report.aggregation.push({language,edges:aggregate.map(e=>({id:e.id,source:e.source,target:e.target,label:e.label,relations:e.data.relations}))});

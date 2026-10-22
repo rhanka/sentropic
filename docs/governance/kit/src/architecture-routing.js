@@ -329,7 +329,6 @@ function allocatePorts(edges, nodes, sides) {
 function sideChoices(edge, nodes) {
   const a = nodeRect(nodes.find(n=>n.id===edge.source)), b = nodeRect(nodes.find(n=>n.id===edge.target));
   const preferred = chooseSides(a,b,edge.data?.summary);
-  if (edge.data?.summary) return [preferred];
   const horizontal = center(a).x <= center(b).x ? {sourceSide:'right',targetSide:'left'} : {sourceSide:'left',targetSide:'right'};
   const vertical = center(a).y <= center(b).y ? {sourceSide:'bottom',targetSide:'top'} : {sourceSide:'top',targetSide:'bottom'};
   return [
