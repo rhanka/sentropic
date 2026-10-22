@@ -338,6 +338,7 @@
   - [x] F2 test migration (trusted native context helper, kind-aware semantics, migrated client/V4-L1 suites; enforcement next).
   - [x] F2 required validationContext (absent resolvers refuse before headers/fetch; implicit JEV fallback removed; examples migrated).
   - [x] F3 generic descriptor (protocol-closed JEV/structured validation; scalar keys, native boolean and custom confidence for structured).
+  - [x] F3 generic credentials and pricing (descriptor-selected env auth, protocol-aware output liability and reserves).
   - [x] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated. Mesh 1302/1302, cluster 1014 passed, lazy-package 78/78 with re-pinned selected lock (sibling llm-mesh 0.27.1). api unit/integration covered by CI (compose stack not run locally).
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.

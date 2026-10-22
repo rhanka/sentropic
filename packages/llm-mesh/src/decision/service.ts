@@ -94,9 +94,12 @@ export async function resolveDecisionAuth(descriptor: DecisionEvaluatorDescripto
       return { ok: false, code: 'CREDENTIAL_MISSING' };
     }
     const { material, descriptor: authDescriptor } = snapshot.value;
-    if (material.type !== 'environment-token' || material.envVar !== 'JEV_API_KEY'
-      || authDescriptor.sourceType !== 'environment-token' || typeof material.token !== 'string'
-      || !material.token.trim() || material.token !== material.token.trim() || /[\r\n]/.test(material.token)) {
+    const isJev = (descriptor.protocol ?? 'jev-native') === 'jev-native';
+    if (material.type !== 'environment-token' || authDescriptor.sourceType !== 'environment-token'
+      || typeof material.token !== 'string'
+      || !material.token.trim() || material.token !== material.token.trim() || /[\r\n]/.test(material.token)
+      || typeof material.envVar !== 'string' || !material.envVar.trim()
+      || (isJev && material.envVar !== 'JEV_API_KEY')) {
       return { ok: false, code: 'CREDENTIAL_MISSING' };
     }
     return { ok: true, auth: freezeDecisionData(snapshot.value as unknown as AuthResolution) };

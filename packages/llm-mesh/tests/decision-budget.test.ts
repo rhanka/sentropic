@@ -20,6 +20,17 @@ describe('qualified integer decision liability', () => {
       { ...price(), priceRevision: 'foreign-protocol-price' }).ok).toBe(false);
     expect(quoteDecision(decisionRequest(), descriptor, price()).ok).toBe(true);
   });
+  it('reserves protocol-aware output liability for structured backends (F3)', () => {
+    const base = qualifiedDescriptor();
+    const structured = { ...base, protocol: 'structured-llm' as const,
+      evaluator: { ...base.evaluator, evaluatorId: 'structured-judge-v1' }, wireModel: 'structured-judge-v1' };
+    const outputPrice = { ...price(), modelId: 'structured-judge-v1', outputMicroUsdPerMtok: '50000' };
+    const quoted = quoteDecision(decisionRequest(), structured, outputPrice);
+    expect(quoted.ok).toBe(true);
+    if (!quoted.ok) throw new Error('structured quote failed');
+    expect(BigInt(quoted.quote.reservedMicroUsd)).toBeGreaterThan(2753n);
+    expect(quoteDecision(decisionRequest(), base, { ...price(), outputMicroUsdPerMtok: '1' }).ok).toBe(false);
+  });
   it('refuses absent/wrong prices and unqualified/nonzero-output liability', () => {
     const d = qualifiedDescriptor();
     expect(quoteDecision(decisionRequest(), d, null)).toEqual({ ok: false, code: 'PRICING_UNAVAILABLE' });

@@ -6,7 +6,7 @@ import { hasOnlyKeys, isCorrelationId, isRecord, snapshotBoundedJson } from './v
 
 /** Projection of the host's existing immutable provider/model price row. */
 export interface DecisionPrice {
-  providerId: 'typesafe'; modelId: string; priceRevision: string;
+  providerId: string; modelId: string; priceRevision: string;
   inputMicroUsdPerMtok: MicroUsd; outputMicroUsdPerMtok: MicroUsd; minimumMicroUsd: MicroUsd;
   identityMismatchPricing: 'requested-model' | 'requires-reconciliation';
 }
@@ -26,9 +26,13 @@ export function quoteDecision(request: DecisionRequest, descriptor: DecisionEval
     || !isMicroUsd(value.inputMicroUsdPerMtok) || !isMicroUsd(value.outputMicroUsdPerMtok) || !isMicroUsd(value.minimumMicroUsd)
     || !['requested-model', 'requires-reconciliation'].some((v) => v === value.identityMismatchPricing)) return { ok: false, code: 'PRICING_UNAVAILABLE' };
   const price = freezeDecisionData(value as unknown as DecisionPrice);
+  if (descriptor.qualification.billingBound !== 'qualified') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
+  const isJev = (descriptor.protocol ?? 'jev-native') === 'jev-native';
   // JEV has no qualified output liability bound. A nonzero output rate cannot be reserved.
-  if (descriptor.qualification.billingBound !== 'qualified' || price.outputMicroUsdPerMtok !== '0') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
-  const reserve = minimum(ceilRate(descriptor.maxBillableInputTokens, price.inputMicroUsdPerMtok), price);
+  if (isJev && price.outputMicroUsdPerMtok !== '0') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
+  const inputReserve = ceilRate(descriptor.maxBillableInputTokens, price.inputMicroUsdPerMtok);
+  const outputReserve = isJev ? 0n : ceilRate(descriptor.maxBillableInputTokens, price.outputMicroUsdPerMtok);
+  const reserve = minimum(inputReserve + outputReserve, price);
   const caps = [hostCap, request.policy?.budget?.maxCostMicroUsd].filter((v): v is string => v !== undefined);
   if (caps.some((cap) => !isMicroUsd(cap))) return { ok: false, code: 'PRICING_UNAVAILABLE' };
   if (caps.some((cap) => reserve > BigInt(cap))) return { ok: false, code: 'BUDGET_EXHAUSTED' };
@@ -39,9 +43,13 @@ export function quoteDecision(request: DecisionRequest, descriptor: DecisionEval
 export function priceDecisionUsage(usage: DecisionUsage, quote: DecisionQuote, identityMismatch = false):
   { cost: DecisionCost; pending: boolean; overrun: boolean } {
   const input = usage.tokens.input;
+  const output = usage.tokens.output;
   const applicable = !identityMismatch || quote.price.identityMismatchPricing === 'requested-model';
   const known = input.source === 'provider' && applicable;
-  const amount = known ? minimum(ceilRate(input.value, quote.price.inputMicroUsdPerMtok), quote.price) : BigInt(quote.reservedMicroUsd);
+  const outputKnown = known && output.source === 'provider';
+  const inputAmount = known ? ceilRate(input.value, quote.price.inputMicroUsdPerMtok) : 0n;
+  const outputAmount = outputKnown ? ceilRate(output.value, quote.price.outputMicroUsdPerMtok) : 0n;
+  const amount = known ? minimum(inputAmount + outputAmount, quote.price) : BigInt(quote.reservedMicroUsd);
   return { cost: { status: 'estimated', amountMicroUsd: amount.toString(),
     source: known ? 'reported-usage-times-rate' : 'reserved-liability', priceRevision: quote.price.priceRevision, rounding: 'ceil-micro-usd' },
   pending: !known, overrun: amount > BigInt(quote.reservedMicroUsd) };
