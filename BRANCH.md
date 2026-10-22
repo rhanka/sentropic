@@ -1,7 +1,7 @@
-# Feature: #861 L0 shared contract and vectors
+# Feature: #861 L1 — compile selection and effective profile
 
 ## Objective
-Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator declarations, common-contract map, migration inventory, executable vectors).
+- [ ] Implement spec r2 section 6 L1: immutable selection, effective profile and ordered command identity.
 
 ## Scope / Guardrails
 - Scope limited to packages/artifacts/** declaration shapes, docs, and unit vectors.
@@ -17,16 +17,11 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/l0-freeze/profile-contract.ts`
-  - `packages/artifacts/l0-freeze/commit-contract.ts`
-  - `packages/artifacts/l0-freeze/failure-contract.ts`
-  - `packages/artifacts/l0-freeze/command-identity-contract.ts`
-  - `packages/artifacts/tests/effective-profile.test.ts`
-  - `packages/artifacts/tests/commit-contract.test.ts`
-  - `packages/artifacts/docs/common-contract-map.md`
-  - `packages/artifacts/docs/migration-inventory-l0.md`
-  - `packages/artifacts/README.md`
-  - `packages/artifacts/package.json`
+  - `packages/artifacts/src/profile/**`
+  - `packages/artifacts/src/server/command-identity.ts`
+  - `packages/artifacts/tests/capability-profile.test.ts`
+  - `packages/artifacts/tests/command-identity.test.ts`
+  - `packages/artifacts/tests/parameters.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -69,37 +64,3 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
 - No UI changes in L0; no UAT checkpoints apply.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read rules/MASTER.md, rules/workflow.md, spec-plan.md L0 row plus sections 1-5, REQUEST-i-cond.md.
-  - [x] Worktree tmp/worktrees/artifacts-861 on branch feat/artifacts-861-contracts from origin/main verified.
-  - [x] ENV mapping: unit/typecheck/lint on ENV=test-artifacts-861 last argument; no services started in L0.
-  - [x] Ports: no ports needed (no services in L0; declaration docs plus unit vectors only).
-  - [x] Confirm scope and guardrails; public host API names excluded until spec r2.
-  - [x] Validate scope boundaries with make scope-check before each commit.
-- [x] **Lot 1 — Declaration shapes (stable only, no host API names)**
-  - [x] packages/artifacts/l0-freeze/profile-contract.ts: selection plus effective-profile shapes, Radar four-tool subset, C4 bounds as frozen data plus validators.
-  - [x] packages/artifacts/l0-freeze/command-identity-contract.ts: effective-command plus command-identity shapes, codec version, derivation-binding shape (algorithm reference only, no new API name).
-  - [x] packages/artifacts/l0-freeze/commit-contract.ts: invocation-context, authorization-decision, coordinator-requirement shapes plus finalization protocol order as frozen types.
-  - [x] packages/artifacts/l0-freeze/failure-contract.ts: outcome plus failure shapes, category-to-public mapping table, commit states.
-  - [x] Lot gate:
-    - [x] make typecheck-artifacts ENV=test-artifacts-861 last
-    - [x] make lint-artifacts ENV=test-artifacts-861 last
-- [x] **Lot 2 — Common-contract map without runtime cycle**
-  - [x] packages/artifacts/docs/common-contract-map.md: capability, publication-condition, commitment, manifest, page reuse table plus boundaries (no registered module, scope mapping needs trusted host mapping, mesh export lives in L7, no mesh runtime dep from artifacts).
-  - [x] No import of @sentropic/cluster-mesh from packages/artifacts/src or tests.
-  - [x] Lot gate:
-    - [x] grep verifies no cluster-mesh import in packages/artifacts/src and new tests
-- [x] **Lot 3 — Migration inventory and vectors**
-  - [x] packages/artifacts/docs/migration-inventory-l0.md: declaration changes per ask, migration guide stubs, legacy-record quarantine rule, Radar pilot-state inputs awaited (Q0).
-  - [x] packages/artifacts/tests/effective-profile.test.ts: frozen selection plus bounds vectors (pure, no DB/S3, no app.handle).
-  - [x] packages/artifacts/tests/commit-contract.test.ts: frozen failure-mapping plus finalization-order vectors (pure, no DB/S3, no app.handle).
-  - [x] No integration tests; no mocked provider success.
-  - [x] Lot gate:
-    - [x] make test-artifacts ENV=test-artifacts-861 last (unit only: 27 files, 216 tests passed)
-    - [x] make scope-check before each commit
-- [ ] **Lot 4 — Release reservation and PR**
-  - [x] Document the 0.2.0-rc reservation without a package.json bump (frozen mesh range until L7; bump deferred to first src-changing lot).
-  - [x] Update packages/artifacts/README.md with L0 contract line pointer.
-  - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
-  - [x] Push branch and open DRAFT PR feat(artifacts): #861 L0 shared contract and vectors.
-  - [x] CI green; do not merge.
