@@ -17,7 +17,12 @@ prepare:
 	@mkdir -p .cache
 	@$(NODE) node scripts/prepare-summary.mjs > .cache/summary.log
 	@$(NODE) node scripts/prepare-scenes.mjs > .cache/prepare.log
+	@$(subst --cpus=2,--cpus=4,$(NODE)) node scripts/prepare-fold-plans.mjs > .cache/fold-plans.log
 	@$(NODE) node scripts/check-source.mjs --sync-hash
+.PHONY: prepare-fold-plans
+prepare-fold-plans:
+	@mkdir -p .cache
+	@$(subst --cpus=2,--cpus=4,$(NODE)) node scripts/prepare-fold-plans.mjs > .cache/fold-plans.log
 
 build:
 	@mkdir -p .cache

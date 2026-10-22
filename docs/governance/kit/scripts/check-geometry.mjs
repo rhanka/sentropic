@@ -2,6 +2,7 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {nodeRect,segmentCrossesRect,edgeSegments,routeScene} from '../src/architecture-routing.js';
 import {sceneFrame,frameHeaderContent} from '../src/architecture-layout.js';
 import {aggregateTopLevel} from '../src/governance-summary.js';
+import {collapseGovernanceScene} from '../src/governance-collapse.js';
 const baseline=process.argv.includes('--baseline');
 const root=baseline?process.cwd()+'/.cache/baseline':process.cwd();
 const presentation=JSON.parse(readFileSync(root+'/src/presentation-scenes.json','utf8'));
@@ -93,11 +94,21 @@ if(process.argv.includes('--elk')){
  for(const [lang,scene]of Object.entries(layouts))check(scene,'elk/'+lang);
 }else for(const language of ['fr','en']){
  const central=presentation[language].architectureScenes.central;
- for(const [key,edges]of Object.entries(routes[language]))if(key!=='folded')check({...central,edges},language+'/expanded/'+key);
+ for(const [key,edges]of Object.entries(routes[language]))if(Array.isArray(edges)&&key!=='folded')check({...central,edges},language+'/expanded/'+key);
  for(const [i,fold]of routes[language].folded.entries()){
   const [geometry]=JSON.parse(fold.signature),entries=new Map([...central.groups,...central.nodes].map(n=>[n.id,n]));
   const visible=geometry.map(([id,parentId,x,y,width,height,headerTextHeight,collapsed])=>({...entries.get(id),position:{x,y},width,height,headerTextHeight,collapsed}));
   check({...central,groups:visible.filter(n=>!n.data),nodes:visible.filter(n=>n.data),edges:fold.edges},language+'/fold/'+i);
+ }
+ for(const [mask] of Object.entries(routes[language].plans ?? {})){
+  const ids=central.groups.filter((g,i)=>Number(mask)&(1<<i)).map(g=>g.id);
+  const start=performance.now();
+  const folded=collapseGovernanceScene({...central,projectionKey:'overview',edges:routes[language].overview},ids);
+  const ms=performance.now()-start;
+  if(!folded.routingPlanUsed)throw Error(`${language}/${mask}: stale or missing routing plan`);
+  if(ms>=1800)throw Error(`${language}/${mask}: planned route exceeds 1800 ms (${ms})`);
+  report.planRoutingMaxMs=Math.max(report.planRoutingMaxMs ?? 0,ms);
+  check(folded,`${language}/planned/${mask}`);
  }
  for(const [collection,scenes]of Object.entries(presentation[language]))for(const [id,scene]of Object.entries(scenes))if(id!=='central'){
   check(scene,language+'/'+collection+'/'+id);
