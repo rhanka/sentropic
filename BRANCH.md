@@ -48,6 +48,7 @@
   - [x] Add independent contenders with separate reader/preparer ports, reopen/fault controls, scoped immutable create/retry and fail-closed reads.
 - [x] **Lot 3 — Reusable CT-01–03 assertions**
   - [x] Add `objects-assertions.ts`: races, buffer ownership, scope isolation, envelope commitments and corruption probes.
+  - [x] Race payload and manifest identities; a foreign-only equal-digest object never satisfies an absent local binding.
 - [ ] **Lot 4 — Mutants and final validation**
   - [x] Add `objects-mutants.ts` and `objects-kit.spec.ts`; positive pass precedes designated M01/M02/M03 kills.
   - [x] Run `make test-cluster-mesh ENV=test-common-rule`; 1005 passed; kit 8/8, no skips; missing fixture/instrumentation refuses setup.
