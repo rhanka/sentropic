@@ -8,7 +8,8 @@ import { manifestDigest } from '../src/codecs.js';
 
 const artifactId = '123e4567-e89b-12d3-a456-426614174000';
 const host = { storageScopeId: 'scope-1', actorId: 'user-sub-1' };
-const binding = () => createRadarKeyDerivation({ storageScopeId: host.storageScopeId });
+const binding = () => createRadarKeyDerivation({ storageScopeId: host.storageScopeId,
+  actorIds: [host.actorId, 'alice', 'issuer|alice'] });
 const publish = (overrides = {}) => ({ artifactId, idempotencyKey: 'client-key-1',
   files: [{ path: 'index.html', mimeType: 'text/html', text: 'hello' }], ...overrides });
 const command = (args = publish(), authority = host) => createArtifactCommand(
@@ -66,7 +67,9 @@ describe('effective command identity', () => {
   });
 
   it('should refuse ambiguous scope configuration and mismatching trusted bindings', () => {
-    expect(() => createRadarKeyDerivation({ storageScopeId: 'scope|issuer' })).toThrow();
+    expect(() => createRadarKeyDerivation({ storageScopeId: 'scope|issuer', actorIds: ['alice'] })).toThrow();
+    expect(() => createRadarKeyDerivation({ storageScopeId: 'scope-1', actorIds: ['alice', `alice|publish|${artifactId}`] })).toThrow();
+    expect(() => createRadarKeyDerivation({ storageScopeId: 'scope-1', actorIds: ['alice', 'alice|ensure|'] })).toThrow();
     expect(() => command(publish(), { ...host, storageScopeId: 'other' })).toThrow();
     expect(() => command(publish(), { ...host, actorId: '\ud800' })).toThrow();
   });
