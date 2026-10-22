@@ -331,6 +331,7 @@
   - [x] F7 context freeze detachment (bounded snapshot first, shared criterion parser, detached frozen copy only).
   - [x] F1 scalar raw boundary (closed scalar raw permission/shape/bytes/consistency before reconstruction).
   - [x] F5 closed scalar profile (version v1 only, confidence meaningRef binding, required evidence, graded direction).
+  - [x] F4 complete definition and tariff binding (canonical whole-definition equality, required adapter descriptor, protocol revision binding).
   - [x] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated. Mesh 1302/1302, cluster 1014 passed, lazy-package 78/78 with re-pinned selected lock (sibling llm-mesh 0.27.1). api unit/integration covered by CI (compose stack not run locally).
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.

@@ -43,34 +43,11 @@ const allowlistsEvaluator = (allowlist: readonly unknown[] | undefined, ref: Eva
   allowlist !== undefined && allowlist.some((entry) => isRecord(entry)
     && entry.providerId === ref.providerId && entry.evaluatorId === ref.evaluatorId && entry.revision === ref.revision);
 
-/** Preflight binds one authoritative descriptor: any request-affecting disagreement refuses before credentials or spend. */
+/** Preflight binds one authoritative descriptor: the complete validated canonical
+ * definition must match exactly. Any execution-affecting disagreement refuses
+ * before credentials or spend; adding a field never removes it from equality. */
 function sameDecisionDescriptor(left: DecisionEvaluatorDescriptor, right: DecisionEvaluatorDescriptor): boolean {
-  const text = (values: readonly string[]) => canonicalDecisionJson([...values].sort());
-  if (left.evaluator.providerId !== right.evaluator.providerId || left.evaluator.evaluatorId !== right.evaluator.evaluatorId
-    || left.evaluator.revision !== right.evaluator.revision || left.wireModel !== right.wireModel
-    || text(left.acceptedServedModelIds) !== text(right.acceptedServedModelIds)
-    || left.qualification.servedIdentity !== right.qualification.servedIdentity
-    || left.qualification.billingBound !== right.qualification.billingBound
-    || text(left.qualification.evidenceRefs) !== text(right.qualification.evidenceRefs)
-    || left.maxBillableInputTokens !== right.maxBillableInputTokens || left.maxRequestBytes !== right.maxRequestBytes
-    || left.maxStateQuestionBytes !== right.maxStateQuestionBytes || left.probabilityTolerance !== right.probabilityTolerance
-    || left.scoreNativeKeys !== right.scoreNativeKeys || left.nativeDecision !== right.nativeDecision
-    || left.confidence.meaning !== right.confidence.meaning || left.confidence.meaningRef !== right.confidence.meaningRef
-    || left.confidence.min !== right.confidence.min || left.confidence.max !== right.confidence.max
-    || left.compilation.templateDigest !== right.compilation.templateDigest
-    || left.compilation.schemaDigest !== right.compilation.schemaDigest
-    || left.compilation.readout !== right.compilation.readout
-    || left.priceProtocol.authority !== right.priceProtocol.authority
-    || left.priceProtocol.revision !== right.priceProtocol.revision
-    || left.registeredCriteria.length !== right.registeredCriteria.length
-    || left.retention.status !== right.retention.status || left.retention.basis !== right.retention.basis
-    || left.retention.retentionDays !== right.retention.retentionDays || left.retention.gap !== right.retention.gap
-    || text(left.retention.evidenceRefs) !== text(right.retention.evidenceRefs)) return false;
-  const rightByKey = new Map(right.registeredCriteria.map((entry) => [JSON.stringify([entry.criteriaId, entry.revision]), entry]));
-  return left.registeredCriteria.every((entry) => {
-    const other = rightByKey.get(JSON.stringify([entry.criteriaId, entry.revision]));
-    return other !== undefined && canonicalDecisionJson(entry.criterion) === canonicalDecisionJson(other.criterion);
-  });
+  return canonicalDecisionJson(left) === canonicalDecisionJson(right);
 }
 
 /** The significant-input snapshot stays service-owned through every asynchronous phase. */
@@ -98,11 +75,10 @@ export async function preflightDecisionRequest(candidate: unknown, options: Deci
     if (!descriptor || descriptor.evaluator.providerId !== request.evaluator.providerId
       || descriptor.evaluator.evaluatorId !== request.evaluator.evaluatorId
       || descriptor.evaluator.revision !== request.evaluator.revision) return { ok: false, code: 'PROVIDER_UNAVAILABLE' };
-    if ('descriptor' in adapter && adapter.descriptor !== undefined) {
-      const adapterDescriptor = parseDecisionEvaluatorDescriptor(adapter.descriptor);
-      if (!adapterDescriptor || !sameDecisionDescriptor(adapterDescriptor, descriptor)) {
-        return { ok: false, code: 'PROVIDER_UNAVAILABLE' };
-      }
+    const adapterDescriptor = parseDecisionEvaluatorDescriptor(
+      (adapter as { descriptor?: unknown }).descriptor);
+    if (!adapterDescriptor || !sameDecisionDescriptor(adapterDescriptor, descriptor)) {
+      return { ok: false, code: 'PROVIDER_UNAVAILABLE' };
     }
     const code = validateDecisionPolicy(request, descriptor, options.policy);
     return code ? { ok: false, code } : { ok: true, request, descriptor, adapter };
