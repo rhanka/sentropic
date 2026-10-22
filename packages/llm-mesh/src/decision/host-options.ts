@@ -6,7 +6,7 @@ import type { EvaluatorRef } from './request.js';
 
 export interface DecisionServiceOptions extends DecisionSelectionOptions {
   resolveAuth: AuthResolver;
-  resolvePrice(key: { providerId: 'typesafe'; modelId: string }): unknown | Promise<unknown>;
+  resolvePrice(key: { providerId: string; modelId: string }): unknown | Promise<unknown>;
   /** Closed over verified caller identity; request JSON never selects financial ownership. */
   authorize(evaluator: EvaluatorRef): boolean | Promise<boolean>;
   budget: DecisionBudgetPort;
