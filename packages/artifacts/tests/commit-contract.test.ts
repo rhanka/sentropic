@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  COMMIT_PROTOCOL_VERSION,
   COMMIT_STATES,
   FINALIZATION_PHASES,
   REFUSAL_RESIDUE_FORBIDDEN,
@@ -77,5 +78,9 @@ describe('commit contract', () => {
 
   it('should distinguish the three commit states', () => {
     expect([...COMMIT_STATES]).toEqual(['not_committed', 'committed', 'unknown']);
+  });
+
+  it('should version the commit coordinator protocol', () => {
+    expect(COMMIT_PROTOCOL_VERSION).toBe('artifacts-commit/v1');
   });
 });
