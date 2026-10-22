@@ -37,7 +37,7 @@ export const structuredCardStyle = `
 .scene-canvas .card-gap { display: block; height: 6px; flex: 0 0 6px; }
 .scene-canvas .card-name, .scene-canvas .card-detail { font-size: 24px; line-height: 1.3; }
 .scene-canvas .card-detail { color: var(--st-semantic-text-secondary); }
-.scene-canvas .card-rule { display: block; height: 1px; flex: 0 0 1px; margin: 4px 0; background: var(--st-semantic-border-subtle, #bdcad0); }
+.scene-canvas .card-rule { display: block; height: 1px; flex: 0 0 1px; margin: auto 0 4px; }
 .scene-canvas .service-node .repo-label { font-size: 24px; line-height: 1.3; flex: 0 0 auto; }
 .scene-canvas { --diagram-card-secondary:#52656b; }
 .scene-canvas .service-node { --st-semantic-text-secondary:var(--diagram-card-secondary); }
@@ -51,7 +51,8 @@ export const structuredCardStyle = `
 .scene-canvas .diagram-card-box { fill:#fff; stroke:none; }
 .scene-canvas .card-body { flex: 0 0 auto; min-width: 0; min-height: 0; padding-left: 4px; }
 .scene-canvas .service-node header > svg { flex: 0 0 70px; }
-.scene-canvas .service-node .repo-label { font-weight: 700; }
+/* Padding contributes 8px of the frozen 9.25px footer inset. */
+.scene-canvas .service-node .repo-label { font-weight: 700; margin-bottom:calc(9.25px - 8px); }
 .scene-canvas .card-folded .card-body { flex: 1 1 auto; display:flex; align-items:center; justify-content:center; padding:0; margin:0 22px 0 16px; }
 .scene-canvas .card-summary { font-size:24px; line-height:1.3; text-align:center; white-space:normal; }
 `;
