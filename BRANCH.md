@@ -41,14 +41,14 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and scope**
   - [x] Read owner order, rules, harness, template, hrpolnav provenance/hacks and readable DS specification; create worktree and pass mechanical branch check.
-- [ ] **Lot 1 — Shared card anatomy**
+- [x] **Lot 1 — Shared card anatomy**
   - [x] Update `src/hrpolnav-card.js`, `src/architecture-svg.js`, `src/governance-layout.js`: atomic renderer, reserved toggle slot, centred body, shared 460 × 200 geometry.
-  - [ ] Preserve leaf values, typography, icons and expanded headers; remove clipping and validate overflow.
-- [ ] **Lot 2 — Every scene and wrapping legend**
+  - [x] Preserve all 144 leaf values, typography, icons and expanded headers; remove clamping/clipping and surface overflow. Reference card parity passes within 0.02 px.
+- [x] **Lot 2 — Every scene and wrapping legend**
   - [x] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
   - [x] Wrapping legend with semantic swatches, using the same zone/fold path.
 - [ ] **Lot 3 — Qualification**
-  - [x] Extend geometry to every scene/depth: 212 states, 1,492 edges, no collision. Browser fit remains pending the recorded wording conflict.
+  - [x] Extend geometry to every scene/depth: 402 states, 3,254 edges, no collision; precompute mixed roots with open/closed descendants. Browser fit remains pending the recorded wording conflict.
   - [ ] Source, geometry, browser (600 interactions + 240 stress toggles), content and unchanged idle/1800 ms performance gates.
   - [ ] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
 - [ ] **Lot 4 — Delivery**
