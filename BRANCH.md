@@ -48,7 +48,7 @@
   - [x] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
   - [x] Wrapping legend with semantic swatches, using the same zone/fold path.
 - [ ] **Lot 3 — Qualification**
-  - [ ] Run new `scripts/check-{convergence,card-parity,routing-budget}.mjs` through kit Makefile targets; retain the existing browser, geometry, content and idle gates.
+  - [x] Run new `scripts/check-{convergence,card-parity,routing-budget}.mjs`; card parity, pinned footer at 0/1/2 lines and routing budgets pass. Strict fit stays blocking on unchanged long zone text.
   - [x] Geometry: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 121 ms. Browser fit remains pending the recorded wording conflict.
   - [ ] Source, geometry, browser (600 interactions + 240 stress toggles), content and unchanged idle/1800 ms performance gates.
   - [x] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.

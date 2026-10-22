@@ -35,12 +35,21 @@ check-source:
 check-geometry:
 	@mkdir -p .cache
 	@$(NODE) node scripts/check-geometry.mjs
+.PHONY: check-routing-budget
+check-routing-budget:
+	@mkdir -p .cache
+	@$(NODE) node scripts/check-routing-budget.mjs
 check-browser:
 	@mkdir -p .cache
 	@$(PROBE) node scripts/check-browser.mjs
 check-convergence:
 	@mkdir -p .cache
 	@$(PROBE) node scripts/check-convergence.mjs
+.PHONY: check-card-parity
+check-card-parity:
+	@mkdir -p .cache
+	@git show 6bb351559:docs/governance/governance-r11-portable.html > .cache/reference.html
+	@$(PROBE) node scripts/check-card-parity.mjs
 check-performance:
 	@mkdir -p .cache
 	@$(PROBE) node scripts/check-performance.mjs
@@ -52,7 +61,7 @@ export-static:
 	@$(PROBE) node scripts/export-static.mjs
 check-static:
 	@$(PROBE) node scripts/check-static.mjs
-validate: check-source check-geometry check-convergence check-browser check-performance check-content check-static
+validate: check-source check-geometry check-routing-budget check-card-parity check-convergence check-browser check-performance check-content check-static
 deliver:
 	@$(NODE) node --input-type=module -e 'import {copyFileSync} from "node:fs"; import {portableName} from "./scripts/portable-path.mjs"; copyFileSync("dist/"+portableName, "../"+portableName);'
 checksums:

@@ -75,7 +75,7 @@ export async function inspect(svg, name) {
         const separator = box.querySelector('.diagram-card-rule');
         if (separator?.getAttribute('vector-effect') !== 'non-scaling-stroke') failures.push(`Scaling separator ${id}`);
         const ruleStyle = getComputedStyle(card.querySelector('.card-rule'));
-        if (ruleStyle.backgroundColor !== 'rgb(189, 202, 208)' || ruleStyle.marginTop !== '4px' || ruleStyle.marginBottom !== '4px') failures.push(`Reference separator ${id}`);
+        if (ruleStyle.backgroundColor !== 'rgba(0, 0, 0, 0)' || ruleStyle.marginTop !== '4px' || ruleStyle.marginBottom !== '4px') failures.push(`Reference separator allocation ${id}`);
         const footer = card.querySelector('.repo-label').getBoundingClientRect();
         const rule = card.querySelector('.card-rule').getBoundingClientRect();
         const scale = rect.height / card.offsetHeight;
