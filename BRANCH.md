@@ -15,6 +15,8 @@ Replace the live root-lockfile equality in the P1 packed gate with a versioned f
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `README.md` (BR710-EX10; merge-only, exact origin/main content)
+  - `docs/governance/**` (BR710-EX10; merge-only, exact origin/main content)
   - `package.json`
   - `package-lock.json`
   - `ui/package-lock.json`
@@ -54,6 +56,7 @@ Replace the live root-lockfile equality in the P1 packed gate with a versioned f
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- `attention`: BR710-EX10 — allow README.md and docs/governance/** imported by the owner-authorized merge of main (4138a0ecb, PR #711). Reason: preserve both branches while scope-checking the merge index. Impact: upstream content only, byte-identical to origin/main, no local edits. Rollback: revert the merge as a unit.
 Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
 - subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
 - conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
@@ -240,3 +243,11 @@ Actions with the following status should be included around tasks only if really
   - [x] Root lock, P1 inputs, retained artifacts and Track log unchanged; no P1 regeneration required.
   - [ ] Verify retained P1 and tooling, scope-check, commit via make, push and require green CI on the exact head; keep the PR draft and unmerged.
   - [x] Retained P1 verification passes (30 files, 54 edges); all 101 tooling tests pass; all 342 Track events from each parent survive.
+
+## Round M3 (owner-authorized final integration)
+- [x] **Lot 23 — Merge origin/main (4138a0ecb, PR #711)**
+  - [x] Harness branch check and remote fast-forward pull passed; merge main without rebase.
+  - [x] Resolve BRANCH.md to this branch plan; main governance work remains intact in the merged tree and its plan remains in main history.
+  - [x] Root lock, P1 build inputs, retained artifacts and Track log unchanged; no P1 regeneration required.
+  - [x] Retained P1 verifies (30 files, 54 edges); all 342 Track events from each parent survive; scope-check passes C2. All 101 tooling tests pass (11 files).
+  - [ ] Require green CI on the exact head, then merge PR #710 with the owner GO of 2026-10-22.
