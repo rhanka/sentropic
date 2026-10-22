@@ -458,7 +458,6 @@
       {#each overflowDiagnostics as diagnostic}<li>{diagnostic}</li>{/each}
     </ul>
   {/if}
-  <p class="architecture-palette">{t("Ambre : ajout ou choix proposé · Bleu : identité et confiance", $language)}</p>
   <div class="diagram-controls" role="group" aria-label={t("Zoom du diagramme", $language)}>
     <Button size="sm" variant="secondary" aria-label={`${t("Dézoomer : ", $language)}${title}`} onclick={() => setInlineScale(inlineScale / ZOOM_STEP)} disabled={inlineScale <= ZOOM_MIN}><Minus size="var(--st-component-button-anatomy-density-sm-fontSize)" aria-hidden="true" /></Button>
     <output aria-label={t("Niveau de zoom", $language)}><Typography variant="body-sm" as="span">{Math.round(inlineScale * 100)} %</Typography></output>

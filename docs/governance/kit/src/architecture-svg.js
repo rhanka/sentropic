@@ -1,4 +1,4 @@
-import { EDGE_LABEL_SIZE, sceneFrame, frameHeaderContent, wrapText } from './architecture-layout.js';
+import { EDGE_LABEL_SIZE, sceneFrame, frameHeaderContent } from './architecture-layout.js';
 import { projectGovernanceScene } from './governance-projection.js';
 import { diagramIcon, groupIcons } from './architecture-icons.js';
 import { renderStructuredCard, structuredCardStyle } from './hrpolnav-card.js';
@@ -32,7 +32,7 @@ export function renderSceneSvg(sceneName, scene, highlight = null, interactive =
     const routeState = activeGroups ? (activeGroups.has(group.id) ? ' data-route-state="active"' : ' data-route-state="dimmed"') : '';
     const toggle = interactive ? `<foreignObject data-group-toggle="${escapeXml(group.id)}" x="${x + group.width - 42}" y="${y + 10}" width="32" height="32"><div xmlns="http://www.w3.org/1999/xhtml" data-frame-mount="${escapeXml(group.id)}"></div></foreignObject>` : '';
     if (group.collapsed) {
-      const card = { ...group, data: { cardIcon: groupIcons[group.id] ?? 'window', kicker:content.kicker,
+      const card = { ...group, data: { cardIcon: groupIcons[group.id], kicker:content.kicker,
         title:content.titleLines.join(' '), subtitle:group.subtitle } };
       const cardToggle = interactive ? `<div class="card-toggle" data-group-toggle="${escapeXml(group.id)}"><div data-frame-mount="${escapeXml(group.id)}"></div></div>` : '';
       return `<g data-group="${escapeXml(group.id)}" data-tone="${group.tone}" data-parent="${escapeXml(group.parentId ?? '')}" data-collapsed="true"${routeState}><rect class="diagram-card-box" x="${x}" y="${y}" width="${group.width}" height="${group.height}"/>${renderStructuredCard(card, escapeXml, { folded:true, toggle:cardToggle })}</g>`;
@@ -87,7 +87,7 @@ export function renderSceneSvg(sceneName, scene, highlight = null, interactive =
     .architecture-svg [data-tone="critical"] { --diagram-tone:var(--st-semantic-feedback-error); }
     .architecture-svg [data-tone="positive"] { --diagram-tone:var(--st-semantic-feedback-success); }
     .architecture-svg .diagram-group-box { fill:color-mix(in srgb,var(--diagram-tone) 6%,var(--diagram-surface)); stroke:var(--diagram-border); }
-    .architecture-svg [data-group] > text { line-height:1.3; fill:#172033; }
+    .architecture-svg [data-group] > text, .architecture-svg [data-legend-key] text { line-height:1.3; fill:#172033; }
     .architecture-svg [data-group] > .diagram-detail { fill:#172033; }
     .architecture-svg [data-group] > text:not(.diagram-detail):not(.diagram-product-kicker) { font-family:'Dossier Inter',var(--st-font-sans,sans-serif); font-weight:700; }
     .architecture-svg .diagram-card-box { fill:var(--diagram-fill); stroke:var(--diagram-border); }

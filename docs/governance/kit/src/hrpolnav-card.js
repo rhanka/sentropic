@@ -3,8 +3,9 @@ import { dossierBoldFont } from './hrpolnav-card-font.js';
 
 export function renderStructuredCard(node, escapeXml, { folded = false, toggle = '' } = {}) {
   // One card anatomy; a folded zone uses its free body for the subtitle.
+  const footer = node.data.cardFooter ?? (folded ? undefined : node.data.kicker);
   const ruleY = node.position.y + 10 + (22 + 32 + 24 * 2) * 1.3 + 6 + 4 + .5;
-  return `<foreignObject x="${node.position.x}" y="${node.position.y}" width="${node.width}" height="${node.height}">
+  return `<foreignObject overflow="visible" x="${node.position.x}" y="${node.position.y}" width="${node.width}" height="${node.height}">
     <div xmlns="http://www.w3.org/1999/xhtml" class="service-node card-tier-${node.data.cardTier ?? 'service'}${folded ? ' card-folded' : ''}" data-card-tier="${node.data.cardTier ?? 'service'}">
       <header><svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" viewBox="0 0 70 70" aria-hidden="true">${diagramIcon(node.data.cardIcon, 0, 0, 70)}</svg>
         <div class="card-head"><span class="card-code">${escapeXml(node.data.kicker)}</span><strong class="service-name">${escapeXml(node.data.title)}</strong></div>${toggle}
@@ -14,10 +15,10 @@ export function renderStructuredCard(node, escapeXml, { folded = false, toggle =
         <span class="card-name" data-text="function">${escapeXml(node.data.function)}</span>
         <span class="card-detail" data-text="detail">${escapeXml(node.data.detail)}</span>`}
       </div>
-      ${folded ? '' : `<span class="card-rule" aria-hidden="true"></span>
-      <strong class="repo-label">${escapeXml(node.data.cardFooter ?? node.data.kicker)}</strong>`}
+      ${footer == null ? '' : `<span class="card-rule" aria-hidden="true"></span>
+      <strong class="repo-label">${escapeXml(footer)}</strong>`}
     </div>
-  </foreignObject>${folded ? '' : `<line class="diagram-card-rule" x1="${node.position.x + 16}" x2="${node.position.x + node.width - 10}" y1="${ruleY}" y2="${ruleY}" vector-effect="non-scaling-stroke"/>`}`;
+  </foreignObject>${footer == null ? '' : `<line class="diagram-card-rule" x1="${node.position.x + 16}" x2="${node.position.x + node.width - 10}" y1="${ruleY}" y2="${ruleY}" vector-effect="non-scaling-stroke"/>`}`;
 }
 
 // radar-immobilier fa8133c2:docs/architecture/focus/ServiceNode.svelte:44-54.

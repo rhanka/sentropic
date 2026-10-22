@@ -37,6 +37,14 @@ for(const language of ['fr','en']) {
    projections.folded=[];
    const all=packed.groups.map(g=>g.id);
    const states=[all,...all.map(id=>[id]),...all.map(id=>all.filter(x=>x!==id))];
+   // Root-only mixed views are common navigation states, not runtime route jobs.
+   const roots=packed.groups.filter(g=>!g.parentId).map(g=>g.id);
+   const nested=packed.groups.filter(g=>g.parentId).map(g=>g.id);
+   for(let mask=1;mask<2**roots.length;mask++) {
+    const ids=roots.filter((_,i)=>mask&(1<<i));
+    states.push(ids,[...ids,...nested]);
+   }
+   for(let mask=1;mask<2**nested.length;mask++)states.push(nested.filter((_,i)=>mask&(1<<i)));
    // Default-first traversal, plus parent-only and fully expanded toggling.
    for(let i=1;i<all.length;i++)states.push(all.slice(i));
    for(const [key,edges]of Object.entries(projections).filter(([key])=>key!=='folded')) {
