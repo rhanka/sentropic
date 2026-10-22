@@ -366,6 +366,15 @@ import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
 const client = createRemoteDecisionClient({
   baseUrl: 'https://llm.sent-tech.ca',
   authToken: 'secret-bearer-token',
+  validationContext: (snapshot) => ({
+    evaluator: { ...snapshot.evaluator },
+    validationProfile: { profile: 'native-distribution-v1', version: 'v1' },
+    acceptedServedModelIds: ['synthetic-served-model'],
+    semantics: { nativeDecision: false,
+      score: { meaning: 'probability-true', min: 0, max: 1 },
+      confidence: null, rationale: 'forbidden' },
+    definitionDigest: 'a'.repeat(64),
+  }),
   // Client timeout defaults to server deadline + 1 000 ms margin (11 000 ms default).
   // Optional: timeoutMs can be provided to bound client wait below server deadline + margin.
 });
@@ -395,6 +404,7 @@ const adapter = createJevAdapter({
 const service = createDecisionService({
   registry: createProviderRegistry([adapter]),
   resolveEvaluator,
+  evaluatorAllowlist: [{ providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'syn-v1' }],
   resolvePrice,
   authorize,
   budget,
@@ -430,4 +440,4 @@ import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
 import type { DecisionRequest, DecisionResult } from '@sentropic/llm-mesh/decision';
 ```
 
-Callers relying on the implicit JEV profile should adopt the explicit trusted context: pass `validationContext` to `createRemoteDecisionClient` so revision-specific validation facts bind the transmitted snapshot. Registered criteria require a trusted resolution; without one they fail closed.
+Callers must pass the explicit trusted context: `validationContext` is required on `createRemoteDecisionClient` so revision-specific validation facts bind the transmitted snapshot; omitted resolvers refuse client-local with zero header/credential resolution. Registered criteria require a trusted resolution; without one they fail closed. The host requires an explicit `evaluatorAllowlist`; absent or unlisted evaluators refuse before credentials or dispatch.
