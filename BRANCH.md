@@ -52,7 +52,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Baseline: read rules, template, r2, request and Q0; verify hashes and mechanical branch check.
-- [ ] Profile: immutable selection, schemas, semantic rules, defaults, limits and revision-aware digest.
+- [x] Profile: immutable selection, schemas, semantic rules, defaults, limits and revision-aware digest.
 - [x] Validation: closed arguments/files, Unicode, path/MIME/byte budgets, keys and envelopes.
 - [ ] Identity: trusted derivation, ordered codec, deep command snapshot and forced provenance.
 - [x] Added command-identity.test.ts regressions for Radar vectors, ordered files, authority domains and snapshots.

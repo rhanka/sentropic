@@ -2,7 +2,7 @@ import type { ArtifactProviderProfile } from './contracts.js';
 import { freezeDeep } from './json.js';
 
 /** Explicit host input, never an implicit fallback for a missing selection. */
-export const RADAR_ARTIFACTS_PROFILE: ArtifactProviderProfile = freezeDeep({
+export const RADAR_ARTIFACTS_PROFILE: ArtifactProviderProfile = freezeDeep<ArtifactProviderProfile>({
   version: 'artifacts-profile/v1',
   selection: { tools: ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'] },
   operations: [
