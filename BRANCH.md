@@ -31,7 +31,7 @@
 
 ## Feedback Loop
 - [x] Astra P2-1: CT-01 checks bytes, commitment and receipt after each invalid retry on a separately populated identity, before/after reopen; M01-invalid-retry survived the old kit and is now killed.
-- [ ] Astra P2-2: populate CT-02 verification probes and kill a verifier that ignores the supplied nonempty manifest digest.
+- [x] Astra P2-2: CT-02 verifies populated payload/page inventories, then requires commitment errors for a wrong nonempty digest and field/page substitutions; M02-ignore-digest survived the old kit and is now killed.
 
 ## AI Flaky tests
 - [x] No provider/model nondeterminism or accepted skips in this kit.
@@ -52,7 +52,7 @@
   - [x] Race payload and manifest identities; a foreign-only equal-digest object never satisfies an absent local binding.
 - [ ] **Lot 4 — Mutants and final validation**
   - [x] Add `objects-mutants.ts` and `objects-kit.spec.ts`; positive pass precedes designated M01/M02/M03 kills.
-  - [x] Run `make test-cluster-mesh ENV=test-common-rule`; 1005 passed; kit 8/8, no skips; missing fixture/instrumentation refuses setup.
+  - [x] Run `make test-cluster-mesh ENV=test-common-rule`; 1007 passed, 129 separate-lane skips; common-rule 19/19 and kit 10/10, zero skips; missing fixture/instrumentation refuses setup.
   - [x] Run lint and TypeScript checks; preserve the frozen L3a bytes and all L01a vectors.
   - [x] Run scope checks before each commit; review final diff against the six allowed paths.
   - [x] Push and open draft PR #722 with this file as body.
