@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRemoteDecisionClient } from '../src/decision/client.js';
+import { createRemoteDecisionClient as createClient } from '../src/decision/client.js';
 import { createDecisionService } from '../src/decision/service.js';
-import { decisionRequest, decisionServiceFixture, qualifiedDescriptor } from './decision-fixtures.js';
+import { decisionRequest, decisionServiceFixture, qualifiedDescriptor, trustedNativeContext } from './decision-fixtures.js';
+const createRemoteDecisionClient: typeof createClient = (options) =>
+  createClient({ validationContext: ((snapshot) => trustedNativeContext(snapshot)) as never, ...options });
 import type { DecisionReceipt, DecisionResult } from '../src/decision/receipt.js';
 import type { DecisionRequest } from '../src/decision/request.js';
 
@@ -33,7 +35,8 @@ const mockVerdictResult = (correlationId = 'test-corr-1'): DecisionResult => ({
 const choiceVerdict = () => ({
   criterionKind: 'choice', resolvedCriterionKind: 'choice', score: null, decision: null,
   label: { value: 'a', origin: 'provider' }, rationale: null,
-  confidence: { value: 0.7, min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'r', origin: 'provider' },
+  confidence: { value: 0.7, min: 0, max: 1, meaning: 'provider-confidence',
+    meaningRef: 'https://docs.typesafe.ai/confidence.md', origin: 'provider' },
   distribution: [
     { outcome: 'a', nativeOutcome: 'a', probability: 0.7 },
     { outcome: 'b', nativeOutcome: 'b', probability: 0.3 },
@@ -622,12 +625,11 @@ describe('remote decision client', () => {
   });
 
   it('cancels a hanging fetch on caller abort without retrying', async () => {
-    const fetch = vi.fn(() => new Promise<Response>(() => {}));
+    const caller = new AbortController();
+    const fetch = vi.fn(() => { caller.abort(); return new Promise<Response>(() => {}); });
     const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
       fetch: fetch as unknown as typeof globalThis.fetch, timeoutMs: 10_000 });
-    const caller = new AbortController();
     const pending = client.decide(decisionRequest({ correlationId: 'abort-corr' }), { signal: caller.signal });
-    caller.abort();
     const result = await failAfterHang(pending);
     expect(result).toMatchObject({ kind: 'connection-failure', ok: false, receipt: null, callStatus: 'unknown',
       error: { code: 'CANCELLED' }, correlationId: 'abort-corr' });

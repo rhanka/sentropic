@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRemoteDecisionClient } from '../src/decision/client.js';
+import { createRemoteDecisionClient as createClient } from '../src/decision/client.js';
 import { createDecisionService } from '../src/decision/service.js';
-import { decisionRequest, decisionServiceFixture, jevResponse } from './decision-fixtures.js';
+import { decisionRequest, decisionServiceFixture, jevResponse, trustedNativeContext } from './decision-fixtures.js';
+const createRemoteDecisionClient: typeof createClient = (options) =>
+  createClient({ validationContext: ((snapshot) => trustedNativeContext(snapshot)) as never, ...options });
 import type { DecisionRequest } from '../src/decision/request.js';
 import type { DecisionResult } from '../src/decision/receipt.js';
 
