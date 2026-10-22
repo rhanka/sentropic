@@ -1,7 +1,7 @@
 # Feature: common rule L01b1 kit objects and manifests
 
 ## Objective
-- [ ] Implement the test-only CT-01–03 reference, injected assertions and M01–M03 controls.
+- [x] Implement the test-only CT-01–03 reference, injected assertions and M01–M03 controls.
 - [x] Follow approved amendment SHA-256 `3302ba9e3ee91a52850b89cb9646e2747d0412b5a9fcf3e17f3cdd72a6573fba`, §3/§5/L01b1; Track `01M5E7MTN3EG3S91WZTRR9YNYT`.
 
 ## Scope / Guardrails
@@ -45,7 +45,7 @@
 - [x] **Lot 1 — Fixture types and independent manifest encoder**
   - [x] Add `kit.ts` and `objects-reference.ts` encoder; frozen vector equivalence is gated in Lot 3/4.
 - [x] **Lot 2 — Owned objects and bounded manifest verification**
-  - [x] Add independent contenders, reopen/fault controls, scoped immutable create/retry and fail-closed reads.
+  - [x] Add independent contenders with separate reader/preparer ports, reopen/fault controls, scoped immutable create/retry and fail-closed reads.
 - [x] **Lot 3 — Reusable CT-01–03 assertions**
   - [x] Add `objects-assertions.ts`: races, buffer ownership, scope isolation, envelope commitments and corruption probes.
 - [ ] **Lot 4 — Mutants and final validation**
@@ -53,5 +53,6 @@
   - [x] Run `make test-cluster-mesh ENV=test-common-rule`; 1005 passed; kit 8/8, no skips; missing fixture/instrumentation refuses setup.
   - [x] Run lint and TypeScript checks; preserve the frozen L3a bytes and all L01a vectors.
   - [x] Run scope checks before each commit; review final diff against the six allowed paths.
-  - [ ] Push; open draft PR with this file as body; verify green CI and report PR/head/run URL.
+  - [x] Push and open draft PR #722 with this file as body.
+  - [ ] Verify green CI on the final head and report PR/head/run URL.
   - [x] Retain BRANCH.md and leave the PR unmerged, per owner instruction.

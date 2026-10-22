@@ -32,7 +32,7 @@ export const createObjectReference = (store = new Map<string, Stored>()): Object
       if (ref.version !== '1') throw new Error('unsupported version');
     };
     return {
-      async create(ref, input) {
+      preparer: { async create(ref, input) {
         entry(ref);
         const bytes = Uint8Array.from(input);
         const owned = { ...ref };
@@ -45,8 +45,8 @@ export const createObjectReference = (store = new Map<string, Stored>()): Object
           !Buffer.from(previous.bytes).equals(bytes))) throw new Error('conflict');
         if (!previous) store.set(key(owned), { ref: owned, bytes });
         return { ...(previous?.ref ?? owned) };
-      },
-      async read(ref, budget) {
+      } },
+      reader: { async read(ref, budget) {
         entry(ref);
         if (!Number.isSafeInteger(budget.maxBytes) || budget.maxBytes < ref.byteLength ||
           !Number.isSafeInteger(budget.maxObjects) || budget.maxObjects < 1) throw new Error('limit');
@@ -58,7 +58,7 @@ export const createObjectReference = (store = new Map<string, Stored>()): Object
           sha256(stored.bytes) !== ref.sha256) throw new Error('corrupt');
         counters.verifiedBytes += stored.bytes.byteLength;
         return Uint8Array.from(stored.bytes);
-      },
+      } },
     };
   };
   const fixture: ObjectFixture = {
@@ -84,7 +84,7 @@ export const createObjectReference = (store = new Map<string, Stored>()): Object
         for (const object of page.objects) {
           if (--objectsLeft < 0) throw new Error('limit');
           const ref = { ...object, scope: page.scope.workspaceId, version: '1' };
-          const bytes = await fixture.client(page.scope.workspaceId).read(ref, { maxBytes: bytesLeft, maxObjects: 1 });
+          const bytes = await fixture.client(page.scope.workspaceId).reader.read(ref, { maxBytes: bytesLeft, maxObjects: 1 });
           bytesLeft -= bytes.byteLength;
           // This fixture reserves manifest/ locators for transitively committed pages.
           if (object.locator.startsWith('manifest/')) await walk(JSON.parse(Buffer.from(bytes).toString('utf8')), object.sha256);
