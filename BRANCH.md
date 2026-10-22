@@ -49,4 +49,3 @@
 - [ ] Lot 4: push; draft PR based on L0 with this body; green CI; report SHA/run/ambiguities; do not merge.
   - [x] Draft PR #723 targets feat/artifacts-861-contracts; exact L2 scope only, no merge.
   - [ ] Full CI green: waiting for the integration-owned DOMPurify correction; final-head artifacts qualification is being refreshed.
-
