@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createJevAdapter } from '../src/decision/adapter.js';
+import { createProviderRegistry } from '../src/registry.js';
 import { createDecisionService, preflightDecisionRequest } from '../src/decision/service.js';
 import type { DecisionSelectionOptions } from '../src/decision/service.js';
 import type { EvaluatorRef } from '../src/decision/request.js';
@@ -58,5 +59,17 @@ describe('explicit evaluator allowlist (P28)', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'EVALUATOR_UNKNOWN' } });
     expect(fixture.transport.send).not.toHaveBeenCalled();
     expect(fixture.budget.admit).not.toHaveBeenCalled();
+  });
+  it('refuses a missing explicit allowlist before credentials and dispatch (F8)', async () => {
+    const fixture = decisionServiceFixture();
+    const { evaluatorAllowlist: _omitted, ...withoutAllowlist } = fixture.options as Record<string, unknown>;
+    expect(() => createDecisionService(withoutAllowlist as never)).toThrow('Invalid decision host configuration.');
+    const descriptor = qualifiedDescriptor();
+    const send = vi.fn();
+    const adapter = createJevAdapter({ descriptor, transport: { send } });
+    const result = await preflightDecisionRequest(decisionRequest(),
+      { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => descriptor) } as never);
+    expect(result).toEqual({ ok: false, code: 'EVALUATOR_UNKNOWN' });
+    expect(send).not.toHaveBeenCalled();
   });
 });
