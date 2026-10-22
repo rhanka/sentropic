@@ -30,10 +30,15 @@ export const assertCT01 = async (makeFixture: ObjectFixtureFactory): Promise<voi
   assert.deepEqual(await f.clients[0].preparer.create(ref, bytes), receipts[0]);
   assert.deepEqual(await f.reopen().clients[0].reader.read(ref, BUDGET), Uint8Array.from(bytes));
   await assert.rejects(f.reopen().clients[0].preparer.create(unequal, other), /conflict/);
-  const race = makeFixture(), contenders = [bytes, other];
-  const outcomes = await Promise.allSettled(contenders.map((b, i) => race.clients[i].preparer.create(objectRef(b), b)));
-  assert.equal(outcomes.filter((o) => o.status === 'fulfilled').length, 1);
-  assert.equal(outcomes.filter((o) => o.status === 'rejected').length, 1);
+  for (const locator of ['common/race', 'manifest/race']) {
+    const race = makeFixture(), contenders = [bytes, other];
+    const refs = contenders.map((b) => ({ ...objectRef(b), locator }));
+    const outcomes = await Promise.allSettled(contenders.map((b, i) => race.clients[i].preparer.create(refs[i], b)));
+    assert.equal(outcomes.filter((o) => o.status === 'fulfilled').length, 1);
+    assert.equal(outcomes.filter((o) => o.status === 'rejected').length, 1);
+    const winner = outcomes.findIndex((o) => o.status === 'fulfilled');
+    assert.deepEqual(await race.clients[0].reader.read(refs[winner], BUDGET), Uint8Array.from(contenders[winner]));
+  }
   const owned = Buffer.from(bytes), original = Uint8Array.from(owned), ownedRef = objectRef(owned, 'owned');
   const pending = f.clients[0].preparer.create(ownedRef, owned);
   owned.fill(0);
@@ -46,13 +51,16 @@ export const assertCT01 = async (makeFixture: ObjectFixtureFactory): Promise<voi
     await assert.rejects(f.clients[0].preparer.create(bad, bytes), /corrupt/);
   }
   for (const exists of [false, true]) {
+    const isolated = makeFixture();
     const foreign = { ...ref, scope: 'workspace-b', locator: 'foreign/private' };
-    if (exists) await f.client('workspace-b').preparer.create(foreign, bytes);
-    const before = f.counters.io;
-    await assert.rejects(f.clients[0].reader.read(foreign, BUDGET), /denied/);
-    await assert.rejects(f.clients[0].preparer.create(foreign, bytes), /denied/);
-    assert.equal(f.counters.io, before, 'foreign denial must make zero backend calls');
-    assert.deepEqual(await f.clients[0].preparer.create(ref, bytes), ref);
+    if (exists) await isolated.client('workspace-b').preparer.create(foreign, bytes);
+    const before = isolated.counters.io;
+    await assert.rejects(isolated.clients[0].reader.read(foreign, BUDGET), /denied/);
+    await assert.rejects(isolated.clients[0].preparer.create(foreign, bytes), /denied/);
+    assert.equal(isolated.counters.io, before, 'foreign denial must make zero backend calls');
+    await assert.rejects(isolated.clients[0].reader.read(ref, BUDGET), /unavailable/);
+    assert.deepEqual(await isolated.clients[0].preparer.create(ref, bytes), ref);
+    assert.deepEqual(await isolated.clients[0].reader.read(ref, BUDGET), Uint8Array.from(bytes));
   }
   const pageBytes = Buffer.from('{}'), page = { ...objectRef(pageBytes, 'manifest'), locator: 'manifest/page' };
   await f.clients[0].preparer.create(page, pageBytes);
