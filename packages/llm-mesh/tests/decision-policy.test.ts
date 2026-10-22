@@ -30,7 +30,8 @@ describe('concrete host auth and descriptive retention', () => {
     const descriptor = qualifiedDescriptor();
     const resolver = vi.fn().mockResolvedValue(auth());
     const adapter = createJevAdapter({ descriptor, transport: { send: vi.fn() } });
-    const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: () => descriptor };
+    const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: () => descriptor,
+      evaluatorAllowlist: [{ ...descriptor.evaluator }] };
     const allowed = await preflightDecisionRequest(decisionRequest(), options);
     expect(allowed.ok && allowed.descriptor.retention.status).toBe('unknown');
     expect((await resolveDecisionAuth(descriptor, resolver)).ok).toBe(true);
