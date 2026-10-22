@@ -1,0 +1,2681 @@
+{
+  "status": "passed",
+  "scenes": 102,
+  "edgeInstances": 732,
+  "counts": {
+    "crossings": 0,
+    "sharedCorridors": 0,
+    "headerIntrusions": 0,
+    "borderOverlaps": 0,
+    "labelCollisions": 0,
+    "labelCardCollisions": 0,
+    "edgeLabelCollisions": 0,
+    "cardIntrusions": 0,
+    "cardOverlaps": 0,
+    "offCentreEndpoints": 0,
+    "detachedEndpoints": 0,
+    "detachedLabels": 0,
+    "diagonals": 0,
+    "selfEdges": 0,
+    "missingArrows": 0
+  },
+  "checks": [
+    {
+      "name": "fr/expanded/overview",
+      "edges": 12,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/annotate-vs-annotation",
+      "edges": 6,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/catalog",
+      "edges": 10,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/ontology",
+      "edges": 3,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/memory",
+      "edges": 6,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/diagram-meta",
+      "edges": 5,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/ci-timing",
+      "edges": 5,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/security-2fa",
+      "edges": 6,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/custody-judge",
+      "edges": 3,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/canvas-ui",
+      "edges": 9,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/artifacts",
+      "edges": 7,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/trace-e2e",
+      "edges": 8,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/expanded/cowork-cloud",
+      "edges": 9,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/0",
+      "edges": 10,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/1",
+      "edges": 12,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/2",
+      "edges": 9,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/3",
+      "edges": 8,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/4",
+      "edges": 12,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/5",
+      "edges": 12,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/6",
+      "edges": 12,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/7",
+      "edges": 12,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/8",
+      "edges": 11,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/9",
+      "edges": 12,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/10",
+      "edges": 12,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/11",
+      "edges": 5,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/12",
+      "edges": 8,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/13",
+      "edges": 8,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/14",
+      "edges": 5,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/15",
+      "edges": 5,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/16",
+      "edges": 8,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/17",
+      "edges": 11,
+      "straight": 4,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/18",
+      "edges": 11,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/19",
+      "edges": 11,
+      "straight": 4,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/20",
+      "edges": 11,
+      "straight": 4,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/21",
+      "edges": 11,
+      "straight": 4,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/22",
+      "edges": 12,
+      "straight": 4,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/23",
+      "edges": 2,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/24",
+      "edges": 2,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/25",
+      "edges": 2,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/26",
+      "edges": 2,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/27",
+      "edges": 3,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/28",
+      "edges": 2,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/29",
+      "edges": 2,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/30",
+      "edges": 1,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/31",
+      "edges": 2,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/32",
+      "edges": 2,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/fold/33",
+      "edges": 2,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/architectureScenes/annotate",
+      "edges": 9,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/architectureScenes/ontologies",
+      "edges": 6,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/architectureScenes/memory",
+      "edges": 6,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "fr/architectureScenes/traceability",
+      "edges": 6,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/overview",
+      "edges": 12,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/annotate-vs-annotation",
+      "edges": 6,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/catalog",
+      "edges": 10,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/ontology",
+      "edges": 3,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/memory",
+      "edges": 6,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/diagram-meta",
+      "edges": 5,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/ci-timing",
+      "edges": 5,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/security-2fa",
+      "edges": 6,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/custody-judge",
+      "edges": 3,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/canvas-ui",
+      "edges": 9,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/artifacts",
+      "edges": 7,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/trace-e2e",
+      "edges": 8,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/expanded/cowork-cloud",
+      "edges": 9,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/0",
+      "edges": 10,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/1",
+      "edges": 12,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/2",
+      "edges": 9,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/3",
+      "edges": 8,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/4",
+      "edges": 12,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/5",
+      "edges": 12,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/6",
+      "edges": 12,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/7",
+      "edges": 12,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/8",
+      "edges": 11,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/9",
+      "edges": 12,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/10",
+      "edges": 12,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/11",
+      "edges": 5,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/12",
+      "edges": 8,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/13",
+      "edges": 8,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/14",
+      "edges": 5,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/15",
+      "edges": 5,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/16",
+      "edges": 8,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/17",
+      "edges": 11,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/18",
+      "edges": 11,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/19",
+      "edges": 11,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/20",
+      "edges": 11,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/21",
+      "edges": 11,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/22",
+      "edges": 12,
+      "straight": 3,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/23",
+      "edges": 2,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/24",
+      "edges": 2,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/25",
+      "edges": 2,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/26",
+      "edges": 2,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/27",
+      "edges": 3,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/28",
+      "edges": 2,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/29",
+      "edges": 2,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/30",
+      "edges": 1,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/31",
+      "edges": 2,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/32",
+      "edges": 2,
+      "straight": 2,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/fold/33",
+      "edges": 2,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/architectureScenes/annotate",
+      "edges": 9,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/architectureScenes/ontologies",
+      "edges": 6,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/architectureScenes/memory",
+      "edges": 6,
+      "straight": 1,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    },
+    {
+      "name": "en/architectureScenes/traceability",
+      "edges": 6,
+      "straight": 0,
+      "counts": {
+        "crossings": 0,
+        "sharedCorridors": 0,
+        "headerIntrusions": 0,
+        "borderOverlaps": 0,
+        "labelCollisions": 0,
+        "labelCardCollisions": 0,
+        "edgeLabelCollisions": 0,
+        "cardIntrusions": 0,
+        "cardOverlaps": 0,
+        "offCentreEndpoints": 0,
+        "detachedEndpoints": 0,
+        "detachedLabels": 0,
+        "diagonals": 0,
+        "selfEdges": 0,
+        "missingArrows": 0
+      }
+    }
+  ],
+  "failures": [],
+  "aggregation": [
+    {
+      "language": "fr",
+      "edges": [
+        {
+          "id": "summary:h2a:surfaces",
+          "source": "h2a",
+          "target": "surfaces",
+          "label": "Harnais et collaboration",
+          "relations": [
+            {
+              "id": "e-h2a-cli",
+              "source": "h2a-agent",
+              "target": "surf-cli",
+              "label": "Harnais et collaboration"
+            },
+            {
+              "id": "e-h2a-chat",
+              "source": "h2a-agent",
+              "target": "surf-ai",
+              "label": "Harnais et collaboration"
+            },
+            {
+              "id": "e-h2a-cowork",
+              "source": "h2a-agent",
+              "target": "surf-cowork",
+              "label": "Harnais et collaboration"
+            }
+          ]
+        },
+        {
+          "id": "summary:surfaces:cluster-mesh",
+          "source": "surfaces",
+          "target": "cluster-mesh",
+          "label": "Sessions et outils",
+          "relations": [
+            {
+              "id": "e-cli-api",
+              "source": "surf-cli",
+              "target": "cm-apis",
+              "label": "accès CLI"
+            },
+            {
+              "id": "e-cowork-api",
+              "source": "surf-cowork",
+              "target": "cm-apis",
+              "label": "accès Cowork"
+            },
+            {
+              "id": "e-cloud-api",
+              "source": "surf-cloud",
+              "target": "cm-apis",
+              "label": "accès Cloud"
+            },
+            {
+              "id": "e-ai-api",
+              "source": "surf-ai",
+              "target": "cm-apis",
+              "label": "MCP via façade"
+            },
+            {
+              "id": "e-cloud-catalog",
+              "source": "surf-cloud",
+              "target": "cat-resources",
+              "label": "synchronise le catalogue"
+            }
+          ]
+        },
+        {
+          "id": "summary:h2a:cluster-mesh",
+          "source": "h2a",
+          "target": "cluster-mesh",
+          "label": "outils h2a",
+          "relations": [
+            {
+              "id": "e-h2a-tools",
+              "source": "h2a-agent",
+              "target": "mcp-comments",
+              "label": "publie ses outils"
+            }
+          ]
+        },
+        {
+          "id": "summary:cluster-mesh:h2a",
+          "source": "cluster-mesh",
+          "target": "h2a",
+          "label": "inbox et reçus",
+          "relations": [
+            {
+              "id": "e-mesh-h2a",
+              "source": "cm-workflow",
+              "target": "h2a-agent",
+              "label": "inbox et reçus"
+            }
+          ]
+        },
+        {
+          "id": "summary:cluster-mesh:surfaces",
+          "source": "cluster-mesh",
+          "target": "surfaces",
+          "label": "hébergement",
+          "relations": [
+            {
+              "id": "e-infra-cloud",
+              "source": "cluster-infra",
+              "target": "surf-cloud",
+              "label": "hébergement"
+            }
+          ]
+        },
+        {
+          "id": "summary:engram:cluster-mesh",
+          "source": "engram",
+          "target": "cluster-mesh",
+          "label": "Mémoire et savoir",
+          "relations": [
+            {
+              "id": "e-eng-mem",
+              "source": "eng-memory",
+              "target": "mcp-tools",
+              "label": "contrats mémoire"
+            },
+            {
+              "id": "e-eng-onto",
+              "source": "eng-ontologies",
+              "target": "mcp-tools",
+              "label": "contrats ontologies"
+            },
+            {
+              "id": "e-eng-store",
+              "source": "eng-memory",
+              "target": "store-models",
+              "label": "déclare la surface"
+            }
+          ]
+        },
+        {
+          "id": "summary:cluster-mesh:engram",
+          "source": "cluster-mesh",
+          "target": "engram",
+          "label": "observations D1=C",
+          "relations": [
+            {
+              "id": "e-eng-observe",
+              "source": "sec-observe",
+              "target": "eng-ontologies",
+              "label": "observations D1=C"
+            }
+          ]
+        },
+        {
+          "id": "summary:engram:design-system",
+          "source": "engram",
+          "target": "design-system",
+          "label": "profils épinglés",
+          "relations": [
+            {
+              "id": "e-eng-ds",
+              "source": "eng-ontologies",
+              "target": "ds-diagram",
+              "label": "profils épinglés"
+            }
+          ]
+        },
+        {
+          "id": "summary:design-system:cluster-mesh",
+          "source": "design-system",
+          "target": "cluster-mesh",
+          "label": "Canvas UI",
+          "relations": [
+            {
+              "id": "e-ds-comments",
+              "source": "ds-annotations",
+              "target": "mcp-comments",
+              "label": "annotate via façade MCP"
+            },
+            {
+              "id": "e-ds-store",
+              "source": "ds-diagram",
+              "target": "store-models",
+              "label": "sérialisation neutre"
+            },
+            {
+              "id": "e-ds-catalog",
+              "source": "ds-components",
+              "target": "cat-ui",
+              "label": "descripteurs canvas / UI"
+            }
+          ]
+        },
+        {
+          "id": "summary:h2a:design-system",
+          "source": "h2a",
+          "target": "design-system",
+          "label": "schéma et skill Focus",
+          "relations": [
+            {
+              "id": "e-focus-dossier",
+              "source": "h2a-focus",
+              "target": "ds-dossier",
+              "label": "schéma et skill"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "language": "en",
+      "edges": [
+        {
+          "id": "summary:h2a:surfaces",
+          "source": "h2a",
+          "target": "surfaces",
+          "label": "Harness and collaboration",
+          "relations": [
+            {
+              "id": "e-h2a-cli",
+              "source": "h2a-agent",
+              "target": "surf-cli",
+              "label": "Harness and collaboration"
+            },
+            {
+              "id": "e-h2a-chat",
+              "source": "h2a-agent",
+              "target": "surf-ai",
+              "label": "Harness and collaboration"
+            },
+            {
+              "id": "e-h2a-cowork",
+              "source": "h2a-agent",
+              "target": "surf-cowork",
+              "label": "Harness and collaboration"
+            }
+          ]
+        },
+        {
+          "id": "summary:surfaces:cluster-mesh",
+          "source": "surfaces",
+          "target": "cluster-mesh",
+          "label": "Sessions and tools",
+          "relations": [
+            {
+              "id": "e-cli-api",
+              "source": "surf-cli",
+              "target": "cm-apis",
+              "label": "CLI access"
+            },
+            {
+              "id": "e-cowork-api",
+              "source": "surf-cowork",
+              "target": "cm-apis",
+              "label": "Cowork access"
+            },
+            {
+              "id": "e-cloud-api",
+              "source": "surf-cloud",
+              "target": "cm-apis",
+              "label": "Cloud access"
+            },
+            {
+              "id": "e-ai-api",
+              "source": "surf-ai",
+              "target": "cm-apis",
+              "label": "MCP via façade"
+            },
+            {
+              "id": "e-cloud-catalog",
+              "source": "surf-cloud",
+              "target": "cat-resources",
+              "label": "syncs catalogue"
+            }
+          ]
+        },
+        {
+          "id": "summary:h2a:cluster-mesh",
+          "source": "h2a",
+          "target": "cluster-mesh",
+          "label": "h2a tools",
+          "relations": [
+            {
+              "id": "e-h2a-tools",
+              "source": "h2a-agent",
+              "target": "mcp-comments",
+              "label": "publishes its tools"
+            }
+          ]
+        },
+        {
+          "id": "summary:cluster-mesh:h2a",
+          "source": "cluster-mesh",
+          "target": "h2a",
+          "label": "inbox and receipts",
+          "relations": [
+            {
+              "id": "e-mesh-h2a",
+              "source": "cm-workflow",
+              "target": "h2a-agent",
+              "label": "inbox and receipts"
+            }
+          ]
+        },
+        {
+          "id": "summary:cluster-mesh:surfaces",
+          "source": "cluster-mesh",
+          "target": "surfaces",
+          "label": "hosting",
+          "relations": [
+            {
+              "id": "e-infra-cloud",
+              "source": "cluster-infra",
+              "target": "surf-cloud",
+              "label": "hosting"
+            }
+          ]
+        },
+        {
+          "id": "summary:engram:cluster-mesh",
+          "source": "engram",
+          "target": "cluster-mesh",
+          "label": "Memory and knowledge",
+          "relations": [
+            {
+              "id": "e-eng-mem",
+              "source": "eng-memory",
+              "target": "mcp-tools",
+              "label": "memory contracts"
+            },
+            {
+              "id": "e-eng-onto",
+              "source": "eng-ontologies",
+              "target": "mcp-tools",
+              "label": "ontology contracts"
+            },
+            {
+              "id": "e-eng-store",
+              "source": "eng-memory",
+              "target": "store-models",
+              "label": "declares surface"
+            }
+          ]
+        },
+        {
+          "id": "summary:cluster-mesh:engram",
+          "source": "cluster-mesh",
+          "target": "engram",
+          "label": "D1=C observations",
+          "relations": [
+            {
+              "id": "e-eng-observe",
+              "source": "sec-observe",
+              "target": "eng-ontologies",
+              "label": "D1=C observations"
+            }
+          ]
+        },
+        {
+          "id": "summary:engram:design-system",
+          "source": "engram",
+          "target": "design-system",
+          "label": "pinned profiles",
+          "relations": [
+            {
+              "id": "e-eng-ds",
+              "source": "eng-ontologies",
+              "target": "ds-diagram",
+              "label": "pinned profiles"
+            }
+          ]
+        },
+        {
+          "id": "summary:design-system:cluster-mesh",
+          "source": "design-system",
+          "target": "cluster-mesh",
+          "label": "Canvas UI",
+          "relations": [
+            {
+              "id": "e-ds-comments",
+              "source": "ds-annotations",
+              "target": "mcp-comments",
+              "label": "annotate via MCP façade"
+            },
+            {
+              "id": "e-ds-store",
+              "source": "ds-diagram",
+              "target": "store-models",
+              "label": "neutral serialization"
+            },
+            {
+              "id": "e-ds-catalog",
+              "source": "ds-components",
+              "target": "cat-ui",
+              "label": "canvas / UI descriptors"
+            }
+          ]
+        },
+        {
+          "id": "summary:h2a:design-system",
+          "source": "h2a",
+          "target": "design-system",
+          "label": "Focus schema and skill",
+          "relations": [
+            {
+              "id": "e-focus-dossier",
+              "source": "h2a-focus",
+              "target": "ds-dossier",
+              "label": "schema and skill"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
