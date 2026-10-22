@@ -46,8 +46,8 @@
   - [x] Add `kit.ts` and `objects-reference.ts` encoder; frozen vector equivalence is gated in Lot 3/4.
 - [x] **Lot 2 — Owned objects and bounded manifest verification**
   - [x] Add independent contenders, reopen/fault controls, scoped immutable create/retry and fail-closed reads.
-- [ ] **Lot 3 — Reusable CT-01–03 assertions**
-  - [ ] Add `objects-assertions.ts`: races, buffer ownership, scope isolation, envelope commitments and corruption probes.
+- [x] **Lot 3 — Reusable CT-01–03 assertions**
+  - [x] Add `objects-assertions.ts`: races, buffer ownership, scope isolation, envelope commitments and corruption probes.
 - [ ] **Lot 4 — Mutants and final validation**
   - [ ] Add `objects-mutants.ts` and `objects-kit.spec.ts`; positive pass precedes designated M01/M02/M03 kills.
   - [ ] Run `make test-cluster-mesh ENV=test-common-rule`; missing fixture or instrumentation fails.
