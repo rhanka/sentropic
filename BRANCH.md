@@ -55,14 +55,14 @@
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [x] `api/vitest.config.ts` (judge-subpath aliases only; declare a numeric branch exception before editing)
   - [x] `api/src/routes/namespaces/llm-mesh.ts` (only aiSettingsSchema/updateUserSettings if the existing typesafe refusal needs a source edit)
-  - [x] `package-lock.json` (root lock mirrors for the 0.27.0/0.21.0/0.20.0 cascade only; BR96-EX4)
+  - [x] `package-lock.json` (root lock mirrors for the 0.27.0/0.21.0/0.20.0 cascade only, BR96-EX4; dompurify 3.4.17 security pin only, BR96-EX13)
   - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (B3 0.20.0 candidate and sibling archive lock pins only; BR96-EX7)
   - [x] `packages/llm-gateway/package.json` (mesh range ^0.27.0 and the required 0.21.0 bump only; BR96-EX8)
   - [x] `api/package.json` (gateway range ^0.21.0 only, keeps the workspace link; BR96-EX8)
   - [x] `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.ts`, `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (coupled `<0.28.0`/`<0.22.0` peer range and 13 `.d.ts` integration leaf assertions only; BR96-EX9)
   - [x] `.github/workflows/ci.yml`, `scripts/ci/publishable-ci-wiring.test.mjs` (cluster-mesh qualification `PEERS` tuple `@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0` only; BR96-EX9)
   - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; BR96-EX12)
-- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12.
+- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13.
 
 ## Feedback Loop
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
@@ -314,6 +314,8 @@
   - [x] No rebase, no force-push. Conflicts (3): BRANCH.md keeps ours (main carries another merged branch plan); memory manifest/sidecar take main provenance (br3Commit 6ec93105b, l5Head 4dd9dcc4b) and re-pin declaredLockSha256 to the merged root lock (unchanged d009ebd7); main history pruning of superseded manifests accepted.
   - [x] Verified both intents present: cm-s3 contract/spec/tests, artifacts 0.1.4 + llm-mesh 0.27.1/gateway 0.21.0 fixture pins, selected mesh integrity wD4K, EX10 bumps intact on all copies, R1 fixes intact.
   - [x] Regenerated via repo procedures: sibling receipts re-packed on the merged tree, lazy-package 78/15 PASS, R1 10/10 PASS, V4-L1 14/14 PASS, full test-llm-mesh 1241 PASS, typecheck+lint PASS, memory-l5-verify 30 files/54 edges PASS.
+- [x] **BR96-EX13 — dompurify 3.4.14 to 3.4.17 security floor (audit/SCA gate)**
+  - [x] Rationale: CI audit-gate/SCA fail on 5 newly-published dompurify critical GHSAs against the unchanged ui tree; 3.4.17 is the patched release (same floor Dependabot chose for docs kit). Pinned bump per lock-api-direct precedent; full npm regen avoided. Impact: floor range in ui/package.json plus resolved/integrity pins in ui and root locks; no version bump, no other dependency. Rollback: revert the range and pins (gate goes red again).
 - [x] **BR96-EX12 — memory L5 manifest re-pin for root-lock bumps (conditional path)**
   - [x] Rationale: memory pre-candidate manifest pins declaredLockSha256; 0.27.1/0.21.1 bumps changed root lock sha so memory-l5-verify failed; job runs because memory_l5 filter includes package-lock.json. Impact: retained superseded manifest in history, re-pinned declaredLockSha256, rewrote sidecar; archives/inventory untouched. Rollback: restore prior manifest/sidecar with the prior lock sha.
 - [x] **BR96-EX11 — cluster-mesh 0.21.1 to 0.21.2 patch bump (CI enforce-package-bump)**
@@ -349,6 +351,8 @@
   - [x] F8 cluster follow-through (explicit allowlist in decision-receipts integration flow).
   - [x] F3 lock re-pin (selected fixture lock integrity matches PR-source sibling llm-mesh 0.27.1 after R1 source changes).
   - [x] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated. Mesh 1302/1302, cluster 1014 passed, lazy-package 78/78 with re-pinned selected lock (sibling llm-mesh 0.27.1). api unit/integration covered by CI (compose stack not run locally).
+- [x] **Lot SEC-DOMPURIFY — dompurify 3.4.14 to 3.4.17 security floor (BR96-EX13)**
+  - [x] Pinned bump (ui/package.json floor + ui/root lock pins, integrity from registry dist); local audit-gate OK with empty unallowlisted set. V4-L2 fixes, main merge and selected lock untouched.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
