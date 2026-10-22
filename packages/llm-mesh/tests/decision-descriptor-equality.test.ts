@@ -11,7 +11,8 @@ const preflightWithAdapterDescriptor = async (mutate: (descriptor: DecisionEvalu
   mutate(adapterDescriptor);
   const send = vi.fn();
   const adapter = createJevAdapter({ descriptor: adapterDescriptor, transport: { send } });
-  const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => serviceDescriptor) };
+  const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => serviceDescriptor),
+    evaluatorAllowlist: [{ ...serviceDescriptor.evaluator }] };
   const result = await preflightDecisionRequest(decisionRequest(), options);
   return { result, send, resolveEvaluator: options.resolveEvaluator };
 };
@@ -46,7 +47,7 @@ describe('canonical definition equality (P17/P27-L2)', () => {
     const adapter = { provider: createJevAdapter({ descriptor, transport: { send } }).provider,
       listEvaluators: () => [{ ...descriptor.evaluator }], decision: vi.fn() };
     const options = { registry: createProviderRegistry([adapter as never]),
-      resolveEvaluator: vi.fn(() => descriptor) };
+      resolveEvaluator: vi.fn(() => descriptor), evaluatorAllowlist: [{ ...descriptor.evaluator }] };
     const result = await preflightDecisionRequest(decisionRequest(), options as never);
     expect(result).toEqual({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
     expect(send).not.toHaveBeenCalled();
