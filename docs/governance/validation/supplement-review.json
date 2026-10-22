@@ -1,0 +1,462 @@
+{
+  "sha256": "80a46eadca1b5b82250f4a599b7233c6feda68e10faa04f836856708b1f6556c",
+  "slides": [
+    {
+      "mobile": false,
+      "language": "fr",
+      "slide": 0,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "slide": 1,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "slide": 2,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "slide": 3,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "slide": 4,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "slide": 5,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "slide": 6,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "slide": 7,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "slide": 0,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "slide": 1,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "slide": 2,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "slide": 3,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "slide": 4,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "slide": 5,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "slide": 6,
+      "passed": true
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "slide": 7,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "slide": 0,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "slide": 1,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "slide": 2,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "slide": 3,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "slide": 4,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "slide": 5,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "slide": 6,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "slide": 7,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "slide": 0,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "slide": 1,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "slide": 2,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "slide": 3,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "slide": 4,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "slide": 5,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "slide": 6,
+      "passed": true
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "slide": 7,
+      "passed": true
+    }
+  ],
+  "needs": [
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "all"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "annotate-vs-annotation"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "catalog"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "ontology"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "memory"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "diagram-meta"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "ci-timing"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "security-2fa"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "custody-judge"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "canvas-ui"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "artifacts"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "trace-e2e"
+    },
+    {
+      "mobile": false,
+      "language": "fr",
+      "need": "cowork-cloud"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "all"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "annotate-vs-annotation"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "catalog"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "ontology"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "memory"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "diagram-meta"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "ci-timing"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "security-2fa"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "custody-judge"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "canvas-ui"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "artifacts"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "trace-e2e"
+    },
+    {
+      "mobile": false,
+      "language": "en",
+      "need": "cowork-cloud"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "all"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "annotate-vs-annotation"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "catalog"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "ontology"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "memory"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "diagram-meta"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "ci-timing"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "security-2fa"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "custody-judge"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "canvas-ui"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "artifacts"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "trace-e2e"
+    },
+    {
+      "mobile": true,
+      "language": "fr",
+      "need": "cowork-cloud"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "all"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "annotate-vs-annotation"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "catalog"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "ontology"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "memory"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "diagram-meta"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "ci-timing"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "security-2fa"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "custody-judge"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "canvas-ui"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "artifacts"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "trace-e2e"
+    },
+    {
+      "mobile": true,
+      "language": "en",
+      "need": "cowork-cloud"
+    }
+  ],
+  "errors": [],
+  "storageDenied": "passed",
+  "status": "passed"
+}
