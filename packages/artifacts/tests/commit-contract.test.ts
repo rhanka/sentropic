@@ -17,6 +17,7 @@ import {
 import {
   FAILURE_CATEGORIES,
   FAILURE_PROJECTIONS,
+  OUTCOME_SUCCESS_FIELDS,
 } from '../l0-freeze/failure-contract.js';
 import { COMMAND_CODEC_VERSION } from '../l0-freeze/command-identity-contract.js';
 
@@ -101,6 +102,12 @@ describe('commit contract', () => {
     expect(projection?.httpStatus).toBe(500);
     expect(projection?.publicCode).toBe('internal_error');
     expect(projection?.retriable).toBe(false);
+  });
+
+  it('should carry invocation, commit-state and replay on success', () => {
+    expect([...OUTCOME_SUCCESS_FIELDS]).toEqual([
+      'ok', 'result', 'invocationId', 'commitState', 'replayed',
+    ]);
   });
 
   it('should distinguish the three commit states', () => {

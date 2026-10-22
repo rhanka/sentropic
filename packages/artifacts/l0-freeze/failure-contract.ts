@@ -94,7 +94,22 @@ export interface ArtifactFailure {
   readonly cause: unknown;
 }
 
+/**
+ * Required success correlation fields: invocation identity, commit state
+ * and replay flag travel on every success alongside the result. Both HTTP
+ * and MCP consume this same result type.
+ */
+export const OUTCOME_SUCCESS_FIELDS = [
+  'ok', 'result', 'invocationId', 'commitState', 'replayed',
+] as const;
+
 /** Internal discriminated outcome shared by HTTP and MCP projections. */
 export type ArtifactOutcome<T> =
-  | { readonly ok: true; readonly result: T }
+  | {
+    readonly ok: true;
+    readonly result: T;
+    readonly invocationId: string;
+    readonly commitState: CommitState;
+    readonly replayed: boolean;
+  }
   | { readonly ok: false; readonly failure: ArtifactFailure };
