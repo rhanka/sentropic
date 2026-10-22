@@ -79,8 +79,8 @@ describe('decision receipt correlation and generation-policy refusal via public 
       : { ok: true as const, body: { model: 'syn-model', answers: { verdict: { noul: opts.pass === false ? 0.05 : 0.95 } }, usage: { input_tokens: 10, output_tokens: 0 } } });
     const service = rInput.decisionHost!.createDecisionService({
       registry: rInput.llmMesh.createProviderRegistry([rInput.decisionHost!.createJevAdapter({ descriptor: desc, transport: { send: transportSend } })]),
-      resolveEvaluator: () => desc,
-      resolvePrice: () => ({ providerId: 'typesafe' as const, modelId: 'jev-1.13.0', priceRevision: 'p1', inputMicroUsdPerMtok: '1000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const }),
+      resolveEvaluator: () => desc, evaluatorAllowlist: [{ ...desc.evaluator }],
+      resolvePrice: () => ({ providerId: 'typesafe' as const, modelId: 'jev-1.13.0', priceRevision: 'fixture-price-v1', inputMicroUsdPerMtok: '1000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const }),
       authorize: async () => true,
       budget: { admit: async (i) => ({ ok: true, holdId: i.callId }), markDispatched: async () => ({ ok: true }), release: async () => {}, settle: async () => {} },
       receipts: { persist: async () => {} },
