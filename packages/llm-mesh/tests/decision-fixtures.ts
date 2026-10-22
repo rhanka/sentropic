@@ -43,6 +43,7 @@ export function decisionServiceFixture() {
     }),
   };
   const options: DecisionServiceOptions = { registry: createProviderRegistry([adapter]), resolveEvaluator: () => descriptor,
+    evaluatorAllowlist: [{ ...descriptor.evaluator }],
     resolvePrice: vi.fn(() => decisionPrice()), authorize: vi.fn(async () => true), budget,
     resolveAuth: vi.fn(async () => ({ material: { type: 'environment-token', envVar: 'JEV_API_KEY', token: 'synthetic-secret-canary' },
       descriptor: { sourceType: 'environment-token' } })),

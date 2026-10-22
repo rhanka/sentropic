@@ -8,12 +8,13 @@ import { jevDescriptor } from '../src/decision/descriptor.js';
 const setup = (descriptor = qualifiedDescriptor()) => {
   const send = vi.fn();
   const adapter = createJevAdapter({ descriptor, transport: { send } });
-  return { send, options: { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => descriptor) } };
+  return { send, options: { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => descriptor),
+    evaluatorAllowlist: [{ ...descriptor.evaluator }] } };
 };
 describe('exact decision preflight selection', () => {
   it.each([['unknown-provider', 'jev-1.13.0', 'synthetic-v1', 'PROVIDER_UNKNOWN'],
     ['typesafe', 'other', 'synthetic-v1', 'EVALUATOR_UNKNOWN'],
-    ['typesafe', 'jev-1.13.0', 'other', 'REVISION_MISMATCH']])('refuses %s/%s/%s without egress', async (providerId, evaluatorId, revision, code) => {
+    ['typesafe', 'jev-1.13.0', 'other', 'EVALUATOR_UNKNOWN']])('refuses %s/%s/%s without egress', async (providerId, evaluatorId, revision, code) => {
     const { send, options } = setup();
     const result = await preflightDecisionRequest(decisionRequest({ evaluator: { providerId, evaluatorId, revision } as never }), options);
     expect(result).toEqual({ ok: false, code });
@@ -66,7 +67,8 @@ describe('exact decision preflight selection', () => {
     adapterDescriptor.registeredCriteria = [{ criteriaId: 'rubric', revision: 'r1',
       criterion: { kind: 'binary', instructions: 'Decision according to rule A.' } }];
     const adapter = createJevAdapter({ descriptor: adapterDescriptor, transport: { send } });
-    const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => serviceDescriptor) };
+    const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => serviceDescriptor),
+      evaluatorAllowlist: [{ ...serviceDescriptor.evaluator }] };
     const result = await preflightDecisionRequest(decisionRequest({ criterion: { kind: 'registered',
       criteriaId: 'rubric', revision: 'r1' } }), options);
     expect(result).toEqual({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
@@ -77,7 +79,8 @@ describe('exact decision preflight selection', () => {
     const serviceDescriptor = qualifiedDescriptor();
     const unqualifiedDesc = { ...jevDescriptor, evaluator: { ...jevDescriptor.evaluator, revision: 'synthetic-v1' } };
     const adapter = createJevAdapter({ descriptor: unqualifiedDesc, transport: { send } });
-    const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => serviceDescriptor) };
+    const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => serviceDescriptor),
+      evaluatorAllowlist: [{ ...serviceDescriptor.evaluator }] };
     const result = await preflightDecisionRequest(decisionRequest(), options);
     expect(result).toEqual({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
     expect(send).not.toHaveBeenCalled();
