@@ -21,6 +21,17 @@ describe('descriptor-owned immutable JEV semantics', () => {
     'refuses unpinned or undocumented semantics: %j', (override) => {
       expect(parseDecisionEvaluatorDescriptor({ ...qualifiedDescriptor(), ...override })).toBeNull();
     });
+  it('accepts a generic structured-llm descriptor and refuses an unknown protocol (F3)', () => {
+    const base = qualifiedDescriptor();
+    const structured = { ...base, protocol: 'structured-llm' as const,
+      evaluator: { ...base.evaluator, providerId: 'typesafe', evaluatorId: 'structured-judge-v1' },
+      wireModel: 'structured-judge-v1', scoreNativeKeys: 'scalar' as const, nativeDecision: true,
+      confidence: { meaning: 'support', meaningRef: 'fixture:structured-support', min: 0, max: 1 } };
+    expect(parseDecisionEvaluatorDescriptor(structured)).not.toBeNull();
+    expect(parseDecisionEvaluatorDescriptor({ ...structured, protocol: 'unknown-protocol' })).toBeNull();
+    expect(parseDecisionEvaluatorDescriptor({ ...base, protocol: 'structured-llm',
+      confidence: { meaning: '', meaningRef: '', min: 1, max: 0 } })).toBeNull();
+  });
 });
 
 describe('explicit decision-only JEV composition', () => {

@@ -2,8 +2,10 @@ import type { EvaluatorRef, DecisionCriterion } from './request.js';
 import type { RetentionReceipt } from './receipt.js';
 
 export type ResolvedDecisionCriterion = Exclude<DecisionCriterion, { kind: 'registered' }>;
+export type DecisionBackendProtocol = 'jev-native' | 'openai-decisions' | 'systemone-local' | 'structured-llm';
 export interface DecisionEvaluatorDescriptor {
   evaluator: EvaluatorRef;
+  protocol?: DecisionBackendProtocol;
   wireModel: string;
   acceptedServedModelIds: readonly string[];
   qualification: { servedIdentity: 'qualified' | 'unqualified';
@@ -12,9 +14,9 @@ export interface DecisionEvaluatorDescriptor {
   maxRequestBytes: number;
   maxStateQuestionBytes: number;
   probabilityTolerance: number;
-  scoreNativeKeys: 'index-string';
-  nativeDecision: false;
-  confidence: { meaning: 'provider-confidence'; meaningRef: string; min: 0; max: 1 };
+  scoreNativeKeys: 'index-string' | 'scalar';
+  nativeDecision: boolean;
+  confidence: { meaning: string; meaningRef: string; min: number; max: number };
   /** Compilation (§3.2): revisioned instruction template and closed output
    * schema digests plus the sampling/readout identity. */
   compilation: { templateDigest: string; schemaDigest: string; readout: string };
