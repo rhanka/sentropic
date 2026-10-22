@@ -35,7 +35,7 @@
 - [x] No UI; real-provider Radar acceptance remains L6/L8, pinned Radar 3fc55b4f4.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: rules, r2 §6/E1–E5, Q0 and L0 inspected; harness branch check passed.
-- [ ] Lot 1: preserve baseline failure evidence; add provider-failures.test.ts regressions.
+- [ ] Lot 1: 39 classifier/projection vectors fail individually on unchanged L0 (missing L2 modules); real-provider baseline capture running.
 - [ ] Lot 2: implement failures.ts and outcome-projection.ts; E2/E3 matrix, trusted seam, cause retention and redaction.
 - [ ] Lot 3: scoped/full artifacts tests, typecheck/lint, mechanical scope before each atomic commit (<150 lines).
 - [ ] Lot 4: push; draft PR based on L0 with this body; green CI; report SHA/run/ambiguities; do not merge.
