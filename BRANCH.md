@@ -1,7 +1,7 @@
 # Feature: feat(artifacts): #861 L1 — compile selection and effective profile
 
 ## Objective
-- [ ] Implement spec r2 C1–C7 profile compilation and ordered command identity within L1's exclusive scope.
+- [x] Implement spec r2 C1–C7 profile compilation and ordered command identity within L1's exclusive scope.
 
 ## Scope / Guardrails
 - [x] Binding spec: `.tmp/immo-861-artifacts/spec-plan.md`, SHA-256 `e0bffcf079bddaf5fcef8b4232100b821f5efd225a7ffb92a239ea4b540ea9a4`.
@@ -41,6 +41,8 @@
 - [x] acknowledge L1-API: L0 freezes shapes only; r2 supplies public names. L6 exports and wires L1 modules.
 - [x] acknowledge L1-MIGRATION: path reconciliation notes live in the allowed profile directory; L6 consolidates migration docs.
 - [ ] attention L1-DOMAIN: Q0 has no qualified complete actor domain. L6 must bind actual verified subjects; ambiguous delimited domains fail construction without changing historical keys.
+- [ ] blocked L1-CI: run 39836233948 passes validate-artifacts (typecheck/build/238 unit/30 integration-E2E/lint/pack/probe) but global ci-gate fails on dompurify critical advisories in API/UI image audit. Owner: integration/security maintainer; remediate dependency in base/lock, then rerun the four failed jobs and ci-gate without relaxing audit.
+- [x] acknowledge L1-CI-WIRING: automatic PR CI targets main only; dispatched ci.yml on the L1 ref with bootstrap_publish_target=none. enforce-package-bump is skipped by that workflow event, so its required pre-integration reservation remains open.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky allowance in L1.
@@ -62,6 +64,8 @@
 - [x] Implemented platform-free profile contracts and JSON snapshot/ordered codec primitives.
 - [x] Generated schemas from explicit Radar defaults/limits and documented path reconciliation/domain qualification.
 - [x] Hardened composition against inconsistent bounds and derivation limits; verified 32 files and full decoded byte-array boundary.
-- [ ] Tests: capability-profile.test.ts, command-identity.test.ts, parameters.test.ts; baseline red/candidate green.
-- [ ] Gates: make typecheck-artifacts, lint-artifacts, test-artifacts; make scope-check before every commit.
-- [ ] Delivery: push, draft PR against feat/artifacts-861-contracts, green CI, report URL/SHA/run; no merge.
+- [x] Tests: all final 22 new cases fail against archived L0 source; all 26 focused and 238 package unit cases pass on L1. Receipts: tmp/l1-evidence/baseline-final.json, unit.log, test-sha256.txt.
+- [x] Gates: CI make typecheck-artifacts, lint-artifacts, test-artifacts and integration/pack/probe pass; mechanical scope-check before every commit.
+- [x] Local gates: lint-artifacts and final cached-toolchain typecheck/238 unit tests pass; local test-artifacts temporary npm install stalled and was stopped after the exact CI gate passed.
+- [x] Delivery: pushed feat/artifacts-861-L1; DRAFT PR #724 against feat/artifacts-861-contracts; no merge.
+- [ ] Global CI green: requires integration/security remediation of the evidenced dompurify audit failures and the reserved version/bump gate.
