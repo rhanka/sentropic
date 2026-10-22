@@ -5,6 +5,9 @@
  * vectors: no DB, no S3, no app.handle, no mocked provider.
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   COMMIT_BARRIER_POINTS,
   COMMIT_PROTOCOL_VERSION,
@@ -146,5 +149,15 @@ describe('commit contract', () => {
 
   it('should require profile and coordinator with no legacy fallback', () => {
     expect([...HTTP_APP_REQUIRED_DEPS]).toEqual(['profile', 'coordinator']);
+  });
+
+  it('should map the normative CR-1 to CR-5 rules with declared deviations', () => {
+    const docDir = dirname(fileURLToPath(import.meta.url));
+    const doc = readFileSync(join(docDir, '..', 'docs', 'common-contract-map.md'), 'utf8');
+    for (const rule of ['CR-1', 'CR-2', 'CR-3', 'CR-4', 'CR-5']) {
+      expect(doc).toContain(rule);
+    }
+    expect(doc).toContain('refuse any common-rule admission or conformance claim');
+    expect(doc).toContain('registers no common storage module');
   });
 });
