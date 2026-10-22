@@ -90,3 +90,68 @@ function chain(cause: unknown): unknown[] {
   }
   return values;
 }
+
+type Projection = Pick<ArtifactFailure, 'category' | 'httpStatus' | 'publicCode' | 'retriable'>;
+const unavailable = (category: 'provider_unavailable' | 'admission_unavailable' = 'provider_unavailable'): Projection => ({
+  category, httpStatus: 503, publicCode: 'capability_unavailable', retriable: true,
+});
+const conflict = (): Projection => ({ category: 'conflict', httpStatus: 409, publicCode: 'conflict', retriable: false });
+const internal = (): Projection => ({ category: 'provider_error', httpStatus: 500, publicCode: 'internal_error', retriable: false });
+
+function operationProjection(error: ArtifactOperationError): Projection {
+  const { kind } = error;
+  switch (kind) {
+    case 'provider_unavailable': case 'admission_unavailable': return unavailable(kind);
+    case 'command_conflict': case 'pointer_conflict': return conflict();
+    case 'capability_unselected': return { ...unavailable(), category: kind, retriable: false };
+    case 'unauthorized_at_commit': {
+      const refusal = error.details.refusal ?? { status: 403, publicCode: 'access_denied', retriable: false };
+      // Stable host-approved codes only; a malformed mapping never exposes its text.
+      if (!Number.isInteger(refusal.status) || refusal.status < 400 || refusal.status > 599
+        || !/^[a-z][a-z0-9_]{0,63}$/.test(refusal.publicCode)) return internal();
+      return {
+        category: kind, httpStatus: refusal.status, publicCode: refusal.publicCode,
+        retriable: refusal.status === 403 ? false : refusal.retriable,
+      };
+    }
+    default: return { category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
+  }
+}
+
+function classify(cause: unknown, context: ArtifactFailureContext, mapHostError?: ArtifactHostFailureMapper): Projection {
+  for (const current of chain(cause)) {
+    if (current instanceof ArtifactOperationError) return operationProjection(current);
+    if (current instanceof ArtifactKeyLockConflict
+      && context.phase === 'key_lock'
+      && context.storageScopeId === current.storageScopeId
+      && context.operationKey === current.operationKey) return conflict();
+    if (mapHostError !== undefined) {
+      try {
+        const mapped = mapHostError(current);
+        if (mapped instanceof ArtifactOperationError) return operationProjection(mapped);
+      } catch { return internal(); }
+    }
+    const code = field(current, 'code');
+    if (typeof code === 'string' && (UNAVAILABLE_CODES.has(code) || /^08[A-Z0-9]{3}$/.test(code))) return unavailable();
+    const name = field(current, 'name');
+    if (current instanceof Error && typeof name === 'string' && TIMEOUT_NAMES.has(name)) return unavailable();
+  }
+  return internal();
+}
+
+/** Pure per-invocation classification. Cleanup errors must not replace the primary cause. */
+export function classifyArtifactFailure(
+  cause: unknown,
+  context: ArtifactFailureContext,
+  mapHostError?: ArtifactHostFailureMapper,
+): ArtifactFailure {
+  let projection = classify(cause, context, mapHostError);
+  // Monitoring after a proven commit cannot become a prevented finalization.
+  if (context.commitState === 'committed' && projection.category === 'unauthorized_at_commit') projection = unavailable();
+  const failure: ArtifactFailure = {
+    ...projection, invocationId: context.invocationId, operation: context.operation,
+    phase: context.phase, commitState: context.commitState, cause,
+  };
+  Object.defineProperty(failure, 'cause', { value: cause, enumerable: false });
+  return Object.freeze(failure);
+}
