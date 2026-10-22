@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { BUDGET, type CommonManifestBody, type ObjectFixtureFactory, type ObjectRef } from './kit.js';
 import { sha256 } from './objects-reference.js';
 import { COMMON_RULE_VECTORS } from './vectors.js';
@@ -9,9 +10,16 @@ export const objectRef = (bytes: Uint8Array, id = 'object'): ObjectRef => ({
 const manifest = (refs: readonly ObjectRef[]): CommonManifestBody => ({
   ...JSON.parse(COMMON_RULE_VECTORS[0].canonicalBytes), objects: refs, terminal: { count: String(refs.length), complete: true },
 });
+const fixture = (factory: ObjectFixtureFactory, ct: string) => {
+  const f = factory();
+  assert.ok(f?.clients?.length === 2 && f.encode && f.counters, `missing ${ct} fixture environment`);
+  for (const name of ['io', 'encodes', 'verifiedBytes'] as const) {
+    assert.ok(Number.isSafeInteger(f.counters[name]), `missing ${ct} instrumentation: ${name}`);
+  }
+  return f;
+};
 export const assertCT01 = async (makeFixture: ObjectFixtureFactory): Promise<void> => {
-  const f = makeFixture();
-  assert.ok(f?.clients?.length === 2 && f.counters, 'missing CT-01 fixture/instrumentation');
+  const f = fixture(makeFixture, 'CT-01');
   const bytes = Buffer.from('é immutable bytes'), ref = objectRef(bytes);
   const receipts = await Promise.all(f.clients.map((c) => c.create(ref, bytes)));
   assert.deepEqual(receipts, [ref, ref]);
@@ -53,8 +61,7 @@ export const assertCT01 = async (makeFixture: ObjectFixtureFactory): Promise<voi
 };
 
 export const assertCT02 = async (makeFixture: ObjectFixtureFactory): Promise<void> => {
-  const f = makeFixture();
-  assert.ok(f?.encode && f.counters, 'missing CT-02 fixture/instrumentation');
+  const f = fixture(makeFixture, 'CT-02');
   const bodies = COMMON_RULE_VECTORS.map((v) => JSON.parse(v.canonicalBytes) as CommonManifestBody);
   assert.notEqual(f.encode(bodies[1]).sha256, f.encode(bodies[2]).sha256, 'CT-02: ordered-unit permutation changes digest');
   for (const [i, body] of bodies.entries()) {
@@ -94,12 +101,17 @@ export const assertCT02 = async (makeFixture: ObjectFixtureFactory): Promise<voi
     assert.throws(() => f.encode({ ...body, terminal } as CommonManifestBody), /incomplete manifest/);
   }
   await assert.rejects(f.verify(body, '', BUDGET), /manifest commitment/);
+  const legacy = readFileSync(new URL('../../../assets/storage/comments/transport-v1.json', import.meta.url));
+  const ref = objectRef(legacy, 'legacy-l3a'), wrapped = manifest([ref]);
+  assert.equal(ref.sha256, 'c65c06f69c7806dd86326b64fd5712e17ab9c91de59074dd9a466de58d2573f7');
+  await f.clients[0].create(ref, legacy);
+  await f.verify(wrapped, f.encode(wrapped).sha256, BUDGET);
+  assert.deepEqual(await f.clients[0].read(ref, BUDGET), Uint8Array.from(legacy));
 };
 
 export const assertCT03 = async (makeFixture: ObjectFixtureFactory): Promise<void> => {
   const bytes = Buffer.from('é🙂 exact encoded bytes'), ref = objectRef(bytes), body = manifest([ref]);
-  const corrupt = makeFixture();
-  assert.ok(corrupt?.clients && corrupt.counters, 'missing CT-03 fixture/instrumentation');
+  const corrupt = fixture(makeFixture, 'CT-03');
   await corrupt.clients[0].create(ref, bytes);
   corrupt.fault(ref, 'corrupt');
   await assert.rejects(corrupt.verify(body, corrupt.encode(body).sha256, BUDGET),
@@ -115,9 +127,14 @@ export const assertCT03 = async (makeFixture: ObjectFixtureFactory): Promise<voi
   }
   const f = makeFixture();
   await f.clients[0].create(ref, bytes);
+  const mutableRefs = [ref, { ...ref, id: 'missing' }], mutableBody = manifest(mutableRefs);
+  const pending = f.verify(mutableBody, f.encode(mutableBody).sha256, BUDGET);
+  mutableRefs.pop();
+  await assert.rejects(pending, /unavailable/, 'verification must own the committed inventory across waits');
   const encoded = f.encode(body);
+  const before = f.counters.verifiedBytes;
   await f.verify(body, encoded.sha256, BUDGET);
-  assert.equal(f.counters.verifiedBytes, bytes.byteLength, 'missing verification instrumentation');
+  assert.equal(f.counters.verifiedBytes - before, bytes.byteLength, 'missing verification instrumentation');
   await assert.rejects(f.clients[0].read(ref, { ...BUDGET, maxBytes: bytes.byteLength - 1 }), /limit/);
   await assert.rejects(f.verify(body, encoded.sha256, { ...BUDGET, maxBytes: encoded.bytes.byteLength }), /limit/);
   await assert.rejects(f.verify(body, encoded.sha256, { ...BUDGET, maxObjects: Infinity }), /limit/);
