@@ -36,7 +36,8 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: rules, r2 §6/E1–E5, Q0 and L0 inspected; harness branch check passed.
 - [x] Lot 1: all 73 vectors fail individually on L0; real-app baseline capture confirms S3 500/internal_error and typed lost connection 409/conflict (ports injected below app, no probe).
-- [ ] Lot 2: implement failures.ts and outcome-projection.ts; E2/E3 matrix, trusted seam, cause retention and redaction.
+- [x] Lot 2: implement failures.ts and outcome-projection.ts; E2/E3 matrix, trusted seam, cause retention and redaction.
+  - [x] Project sanitized HTTP/platform AppToolResult; expose a pure ledger descriptor (host owns durable invocation deduplication).
   - [x] Define r2 outcomes, typed operation errors and full-scope/key contention marker in failures.ts; coordinator supplies commit state.
   - [x] Implement code/typed-cause classification, trusted host mapper and non-enumerable original cause; never classify from driver messages.
 - [ ] Lot 3: scoped/full artifacts tests, typecheck/lint, mechanical scope before each atomic commit (<150 lines).
