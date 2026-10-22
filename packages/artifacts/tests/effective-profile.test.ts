@@ -13,6 +13,7 @@ import {
   PROFILE_RESERVED_FIRST_SEGMENTS,
   PROFILE_TEXT_MIME_TYPES,
   RADAR_INVOCATION_SCOPE,
+  RADAR_OPERATION_ROUTES,
   RADAR_SELECTED_TOOL_NAMES,
   validateBindingName,
   validateCallerIdempotencyKey,
@@ -103,6 +104,15 @@ describe('effective-profile contract', () => {
   it('should include selection and profile in composition evidence', () => {
     expect([...COMPOSITION_DIGEST_INPUTS]).toEqual([
       'selection', 'profile', 'providerContractRevisions',
+    ]);
+  });
+
+  it('should freeze the four C2 capability routes', () => {
+    expect([...RADAR_OPERATION_ROUTES]).toEqual([
+      { capability: 'artifacts_ensure', method: 'POST', path: '/ensure', command: 'ensure' },
+      { capability: 'artifacts_publish', method: 'POST', path: '/publish', command: 'publish' },
+      { capability: 'artifacts_list', method: 'POST', path: '/list', command: 'list' },
+      { capability: 'artifacts_get', method: 'GET', path: '/meta/{artifactId}', command: 'meta' },
     ]);
   });
 });
