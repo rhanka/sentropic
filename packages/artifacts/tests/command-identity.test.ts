@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
-import { createArtifactCommand, createRadarKeyDerivation, commandDigest } from '../src/server/command-identity.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+let compileArtifactsProfile: typeof import('../src/profile/index.js').compileArtifactsProfile;
+let RADAR_ARTIFACTS_PROFILE: typeof import('../src/profile/index.js').RADAR_ARTIFACTS_PROFILE;
+let createArtifactCommand: typeof import('../src/server/command-identity.js').createArtifactCommand;
+let createRadarKeyDerivation: typeof import('../src/server/command-identity.js').createRadarKeyDerivation;
+let commandDigest: typeof import('../src/server/command-identity.js').commandDigest;
 import { manifestDigest } from '../src/codecs.js';
 
 const artifactId = '123e4567-e89b-12d3-a456-426614174000';
@@ -13,6 +16,10 @@ const command = (args = publish(), authority = host) => createArtifactCommand(
 );
 
 describe('effective command identity', () => {
+  beforeEach(async () => {
+    ({ compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } = await import('../src/profile/index.js'));
+    ({ createArtifactCommand, createRadarKeyDerivation, commandDigest } = await import('../src/server/command-identity.js'));
+  });
   it('should retain the existing Radar key vector and separate all identity values', () => {
     const value = command();
     expect(value.identity.internalKey).toBe('9a159e31bdd2a0415be1bf65c70e37c29d5076365616af5acc356ee8210c8ff1');
