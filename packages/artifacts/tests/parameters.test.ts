@@ -8,12 +8,13 @@
  * store. Schemas are independent; values validated under one schema never
  * leak into another.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   defineParameters,
   validateParameters,
 } from '../src/parameters.js';
-import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
+let compileArtifactsProfile: typeof import('../src/profile/index.js').compileArtifactsProfile;
+let RADAR_ARTIFACTS_PROFILE: typeof import('../src/profile/index.js').RADAR_ARTIFACTS_PROFILE;
 
 const SCHEMA = defineParameters([
   { key: 'title', type: 'string', required: true },
@@ -63,6 +64,9 @@ describe('provider parameters', () => {
 });
 
 describe('effective Radar arguments', () => {
+  beforeEach(async () => {
+    ({ compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } = await import('../src/profile/index.js'));
+  });
   const id = '123e4567-e89b-12d3-a456-426614174000';
   const ensure = (key: unknown = 'key', extra = {}) => ({ bindingName: 'view', idempotencyKey: key, ...extra });
   const publish = (extra = {}) => ({ artifactId: id, idempotencyKey: 'key',
