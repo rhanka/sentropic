@@ -19,7 +19,7 @@ import {
   validateListBounds,
   validatePublishFileCount,
   validateToolSelection,
-} from '../src/profile-contract.js';
+} from '../l0-freeze/profile-contract.js';
 
 describe('effective-profile contract', () => {
   it('should freeze the profile shape version', () => {
