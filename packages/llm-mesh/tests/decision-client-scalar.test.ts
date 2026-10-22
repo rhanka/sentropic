@@ -75,7 +75,7 @@ describe('scalar-label-v1 profile probes (P18/P19/P20)', () => {
     const bad = await decideWith(decisionRequest({ correlationId: 'p20-bad' }), withConfidence, scalarSemantics());
     expect(bad.result).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE' } });
     const good = await decideWith(decisionRequest({ correlationId: 'p20-ok' }), withConfidence,
-      scalarSemantics({ confidence: { meaning: 'provider-confidence', min: 0, max: 1 } }));
+      scalarSemantics({ confidence: { meaning: 'provider-confidence', meaningRef: 'r', min: 0, max: 1 } }));
     expect(good.result).toMatchObject({ kind: 'verdict', ok: true });
   });
   it('accepts a label-only choice in declared options and rejects distribution (P23/P20)', async () => {
@@ -88,6 +88,42 @@ describe('scalar-label-v1 profile probes (P18/P19/P20)', () => {
     const withDistribution = { ...verdict, distribution: [{ outcome: 'a', nativeOutcome: 'a', probability: 1 }] };
     const bad = await decideWith(request, withDistribution, scalarSemantics({ score: null }));
     expect(bad.result).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE' } });
+  });
+  it('rejects an evidence-free scalar verdict and graded direction mismatch (F5)', async () => {
+    const empty = scalarBinary(null);
+    const noEvidence = await decideWith(decisionRequest({ correlationId: 'f5-no-evidence' }),
+      empty, scalarSemantics({ score: null }));
+    expect(noEvidence.result).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE' } });
+    const gradedRequest = decisionRequest({ correlationId: 'f5-direction',
+      criterion: { kind: 'graded', instructions: 'Grade.', direction: 'higher-is-better',
+        levels: [{ label: 'Low', description: 'Low.' }, { label: 'High', description: 'High.' }] } });
+    const gradedVerdict = { criterionKind: 'graded', resolvedCriterionKind: 'graded',
+      score: { value: 0.7, meaning: 'support', scale: { kind: 'bounded', min: 0, max: 1, direction: 'lower-is-better' } },
+      decision: null, label: null, rationale: null, confidence: null, distribution: null };
+    const badDirection = await decideWith(gradedRequest, gradedVerdict, scalarSemantics());
+    expect(badDirection.result).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE' } });
+  });
+  it('rejects unknown profile version before dispatch and mismatched confidence reference (F5)', async () => {
+    const request = decisionRequest({ correlationId: 'f5-version' });
+    const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const corr = JSON.parse(String(init?.body)).correlationId;
+      return new Response(JSON.stringify({ kind: 'verdict', ok: true,
+        verdict: scalarBinary(scalarScore(0.7, 0, 1)), receipt: receiptFor(corr, request) }),
+        { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const badClient = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      validationContext: ((snapshot: DecisionRequest) => ({ ...scalarContext(snapshot, scalarSemantics()),
+        validationProfile: { profile: 'scalar-label-v1', version: 'unsupported-v999' } })) as never });
+    const bad = await badClient.decide(request);
+    expect(bad).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE' }, receipt: null });
+    expect(fetch).not.toHaveBeenCalled();
+    const trusted = scalarSemantics({ confidence: { meaning: 'provider-confidence', meaningRef: 'trusted-ref', min: 0, max: 1 } });
+    const foreign = { ...scalarBinary(scalarScore(0.7, 0, 1)),
+      confidence: { value: 0.4, min: 0, max: 1, meaning: 'provider-confidence',
+        meaningRef: 'untrusted:foreign-definition', origin: 'provider' } };
+    const badRef = await decideWith(decisionRequest({ correlationId: 'f5-confidence-ref' }), foreign, trusted);
+    expect(badRef.result).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE' } });
   });
   it('rejects raw-off and malformed raw canaries under scalar profile (F1)', async () => {
     const base = scalarBinary(scalarScore(0.7, 0, 1));
