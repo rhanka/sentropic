@@ -342,24 +342,32 @@ function isValidScalarVerdict(v: unknown, request: DecisionRequest,
   if (v.distribution !== null) return false;
   if (!confidenceMatchesSemantics(v.confidence, sem)) return false;
   const criterion = effective.criterion;
+  const isProviderBool = isRecord((v as Record<string, unknown>).decision)
+    && ((v as Record<string, unknown>).decision as Record<string, unknown>).origin === 'provider';
   if (criterion.kind === 'binary') {
     if (v.label !== null || !scoreMatchesSemantics(v.score, sem)) return false;
+    if (!isProviderBool && v.score === null) return false;
     const score = v.score === null ? null : parseDecisionScore(v.score);
-    if (v.score !== null && score === null) return false;
+    if (v.score !== null && (score === null || score.scale.kind !== 'bounded' || score.scale.direction !== 'unordered')) return false;
     return isValidWireDecision(v.decision, request, { score, label: null }, sem);
   }
   if (criterion.kind === 'choice') {
     if (v.score !== null) return false;
-    if (!isRecord(v.label) || !hasOnlyKeys(v.label, ['value', 'origin']) || v.label.origin !== 'provider') return false;
-    const labelValue = v.label.value;
-    if (typeof labelValue !== 'string' || !criterion.options.some((option) => option.id === labelValue)) return false;
-    const label = { value: labelValue, origin: 'provider' as const };
-    return isValidWireDecision(v.decision, request, { score: null, label }, sem);
+    if (!isProviderBool && v.label === null) return false;
+    if (v.label !== null) {
+      if (!isRecord(v.label) || !hasOnlyKeys(v.label, ['value', 'origin']) || v.label.origin !== 'provider') return false;
+      const labelValue = v.label.value;
+      if (typeof labelValue !== 'string' || !criterion.options.some((option) => option.id === labelValue)) return false;
+      const label = { value: labelValue, origin: 'provider' as const };
+      return isValidWireDecision(v.decision, request, { score: null, label }, sem);
+    }
+    return isValidWireDecision(v.decision, request, { score: null, label: null }, sem);
   }
   if (criterion.kind === 'graded') {
     if (v.label !== null || !scoreMatchesSemantics(v.score, sem)) return false;
+    if (!isProviderBool && v.score === null) return false;
     const score = v.score === null ? null : parseDecisionScore(v.score);
-    if (v.score !== null && score === null) return false;
+    if (v.score !== null && (score === null || score.scale.kind !== 'bounded' || score.scale.direction !== criterion.direction)) return false;
     return isValidWireDecision(v.decision, request, { score, label: null }, sem);
   }
   return false;
@@ -447,7 +455,7 @@ function rebuildWireError(error: unknown, receipt: DecisionReceipt): DecisionErr
 /** Implicit JEV evidence semantics (V4-L1 migration path when no trusted context resolves). */
 const IMPLICIT_JEV_SEMANTICS: DecisionValidationSemantics = { nativeDecision: false,
   score: { meaning: 'probability-true', min: 0, max: 1 },
-  confidence: { meaning: 'provider-confidence', min: 0, max: 1 },
+  confidence: { meaning: 'provider-confidence', meaningRef: 'https://docs.typesafe.ai/confidence.md', min: 0, max: 1 },
   rationale: 'forbidden' };
 
 const scoreMatchesSemantics = (score: unknown, sem: DecisionValidationSemantics): boolean => {
@@ -464,6 +472,7 @@ const confidenceMatchesSemantics = (confidence: unknown, sem: DecisionValidation
   if (sem.confidence === null) return false;
   const parsed = parseDecisionConfidence(confidence);
   return !!parsed && parsed.meaning === sem.confidence.meaning
+    && parsed.meaningRef === sem.confidence.meaningRef
     && parsed.min === sem.confidence.min && parsed.max === sem.confidence.max;
 };
 
