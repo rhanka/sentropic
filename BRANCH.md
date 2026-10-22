@@ -1,7 +1,7 @@
-# Feature: Generic judge capability — JEV first (BR96)
+# Feature: Generic Decision capability — JEV first (BR96)
 
 ## Objective
-- [ ] Deliver the strict judge contract, deterministic JEV adapter/service and lazy cluster surfaces in specification v2.2 §10.2; support the h2a native-plugin objective without consumer key custody.
+- [ ] Deliver the strict decision contract, deterministic JEV adapter/service and lazy cluster surfaces in specification v2.2 §10.2; support the h2a native-plugin objective without consumer key custody.
 
 ## Scope / Guardrails
 - [x] Execute `.h2a/inputs/build_brief.md`; specification `.h2a/specs/judge_spec_v2_2.md` and its Opus review are the design inputs.
@@ -28,6 +28,7 @@
   - [x] `packages/llm-mesh/tests/judge-*.test.ts`, `packages/llm-mesh/tests/transport/jev*.test.ts`, `packages/llm-mesh/tests/muse.test.ts`, `packages/llm-mesh/tests/gcp.test.ts`
   - [x] `packages/llm-mesh/tests/judge-fixtures.ts` (shared synthetic descriptors/requests; no live qualification or credentials)
   - [x] `packages/llm-mesh/tests/decision-*.test.ts`, `packages/llm-mesh/tests/decision-fixtures.ts` (V4-L2 renamed suites; judge-* removed in the same lot)
+  - [x] `packages/llm-mesh/tests/execution-features.test.ts` (V4-L2-R1 scope completion; decision surface regression)
   - [x] `packages/llm-mesh/package.json` (judge export-map additions plus the 0.27.0 feature version; BR96-EX8 cascade)
   - [x] `packages/cluster-mesh/src/modules/contracts.ts`, `packages/cluster-mesh/src/modules/catalog.ts`, `packages/cluster-mesh/src/compose/llm-mesh.ts`
   - [x] `packages/cluster-mesh/src/integrations/llm-mesh/judge.ts`, `packages/cluster-mesh/src/integrations/llm-mesh/judge/**`, `packages/cluster-mesh/src/integrations/llm-mesh/transport/jev.ts`
@@ -42,6 +43,7 @@
   - [x] `api/src/services/settings.ts` (getAISettings marker preservation only: legacy model normalization otherwise erases a stored judge-only provider before 1.04b/c can refuse it)
   - [x] `api/src/routes/namespaces/config-product-ai.ts`
   - [x] `api/tests/unit/judge-*-selection.test.ts`, `api/tests/unit/provider-registry-expansion.test.ts`, `api/tests/api/judge-chat-settings.test.ts`
+  - [x] `api/tests/api/decision-chat-settings.test.ts`, `api/tests/unit/decision-chat-selection.test.ts`, `api/tests/unit/decision-runtime-selection.test.ts`, `api/tests/unit/decision-wire-selection.test.ts` (V4-L2-R1 scope completion; renamed decision suites)
   - [x] `api/tests/unit/gateway-package-version.test.ts` (version literal follows the gateway bump only; BR96-EX8)
   - [x] `packages/llm-mesh/README.md`, `packages/cluster-mesh/README.md`, `spec/SPEC_EVOL_LLM_MESH.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` (judge semantics only)
 - [x] **Forbidden Paths (must not change in this branch)**:
@@ -59,8 +61,8 @@
   - [x] `api/package.json` (gateway range ^0.21.0 only, keeps the workspace link; BR96-EX8)
   - [x] `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.ts`, `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (coupled `<0.28.0`/`<0.22.0` peer range and 13 `.d.ts` integration leaf assertions only; BR96-EX9)
   - [x] `.github/workflows/ci.yml`, `scripts/ci/publishable-ci-wiring.test.mjs` (cluster-mesh qualification `PEERS` tuple `@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0` only; BR96-EX9)
-  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; V4-L1-MEM)
-- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, V4-L1-MEM.
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; BR96-EX12)
+- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12.
 
 ## Feedback Loop
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
@@ -292,7 +294,7 @@
   - [x] Root cause: candidate has judge leaves but PEERS mesh@0.27.0 is published WITHOUT judge, so installed imports hard-fail; pre-publication design is pending-sibling-publish (exit 0 in candidate mode), which requires PEERS to name the unpublished version.
   - [x] Fix: PEERS mesh 0.27.0 to 0.27.1 (ci.yml x3 + wiring test); gateway stays 0.21.0 (published, no judge surface); wiring test 22 PASS, ranges admit 0.27.1.
   - [x] Gates: local qualify-published-install with candidate tarball + receipts + new PEERS reports status pass (mesh 0.27.1 installed from sibling-receipt, all entry points PASS incl. judge leaves); then scope-check, commit, push.
-- [x] **Lot V4-L1-MEM — memory L5 freeze mismatch from root-lock bumps (run 39384337780)**
+- [x] **Lot V4-L1-MEM — memory L5 freeze mismatch from root-lock bumps (run 39384337780) (BR96-EX12)**
   - [x] Root cause: memory pre-candidate manifest pins declaredLockSha256; our 0.27.1/0.21.1 bumps changed root lock sha so memory-l5-verify failed; job runs because memory_l5 filter includes package-lock.json.
   - [x] Fix per main pattern (b477879c8): retained superseded manifest in history/<sha>.json, re-pinned declaredLockSha256 to 56e03e4f, rewrote sidecar; archives/inventory untouched (platform/broker sources unchanged).
   - [x] Gates: memory-l5-verify packed ok (30 files, 54 edges), full memory-l5-gate LOT=1 (CI ports/ENV) PASS 66/8, then re-verify scope-check.
@@ -312,14 +314,20 @@
   - [x] No rebase, no force-push. Conflicts (3): BRANCH.md keeps ours (main carries another merged branch plan); memory manifest/sidecar take main provenance (br3Commit 6ec93105b, l5Head 4dd9dcc4b) and re-pin declaredLockSha256 to the merged root lock (unchanged d009ebd7); main history pruning of superseded manifests accepted.
   - [x] Verified both intents present: cm-s3 contract/spec/tests, artifacts 0.1.4 + llm-mesh 0.27.1/gateway 0.21.0 fixture pins, selected mesh integrity wD4K, EX10 bumps intact on all copies, R1 fixes intact.
   - [x] Regenerated via repo procedures: sibling receipts re-packed on the merged tree, lazy-package 78/15 PASS, R1 10/10 PASS, V4-L1 14/14 PASS, full test-llm-mesh 1241 PASS, typecheck+lint PASS, memory-l5-verify 30 files/54 edges PASS.
+- [x] **BR96-EX12 — memory L5 manifest re-pin for root-lock bumps (conditional path)**
+  - [x] Rationale: memory pre-candidate manifest pins declaredLockSha256; 0.27.1/0.21.1 bumps changed root lock sha so memory-l5-verify failed; job runs because memory_l5 filter includes package-lock.json. Impact: retained superseded manifest in history, re-pinned declaredLockSha256, rewrote sidecar; archives/inventory untouched. Rollback: restore prior manifest/sidecar with the prior lock sha.
 - [x] **BR96-EX11 — cluster-mesh 0.21.1 to 0.21.2 patch bump (CI enforce-package-bump)**
   - [x] Rationale: merging main #716 moved the bump gate baseline to 0.21.1, equal to the branch version, while the branch still carries cluster-mesh src changes (judge surfaces); the gate requires a strictly newer version. Impact: version line only in packages/cluster-mesh/package.json, TRAIN_CLUSTER_MESH_VERSION, selected fixture tarball name and root-lock workspace entry; no range, source or allowlist change; no unpublished-version skew (0.21.2 absent from registry). Rollback: revert the four version lines.
 - [x] **Lot MERGE-MAIN-3 — integrate origin/main after #717 (3f3f3fd78)**
   - [x] No rebase, no force-push. Single conflict: BRANCH.md keeps ours (main carries the merged Go-CVE branch plan); api/Dockerfile Go 1.26.9 to 1.26.10 digest pin auto-merges from main.
   - [x] Judge code, versions, locks and memory pin untouched by this merge; R1 fixes and EX10/EX11 intact. Gates: R1 10/10 PASS, V4-L1 14/14 PASS, memory-l5-verify ok.
-- [x] **Lot V4-L2 — Decision migration and generic core (spec v4 §2/§12, probes P15–P23, P27/P28-L2, P32/P33, keep V4-L1)**
+- [ ] **Lot V4-L2 — Decision migration and generic core (spec v4 §2/§12, probes P15–P23, P27/P28-L2, P32/P33, keep V4-L1)**
   - [x] Rename per §12.1 map (module `@sentropic/llm-mesh/decision`, `src/decision/`, factories/methods/types, `decision`/`decisionOnly`, cluster IDs/loaders/tests/README examples, `adapter.decision`/`client.decide` per §2); no legacy alias (unpublished API, §12.2 preferred path); branch label stays `feat/llm-judge`.
-  - [x] Generic core: `DecisionEvaluatorDescriptor` + canonical equality extended with compilation digests/readout and price protocol; explicit `DecisionValidationContext` resolver on the remote client (implicit JEV profile retained as migration path); native + scalar-label-v1 profiles with declared semantics (native boolean, scale, confidence, rationale); per-descriptor credentials and protocol-specific pricing with output liability retained; explicit evaluator allowlist gate; bounded structured backend on injected transports retained.
+  - [ ] Generic core (reopened per Sol V4-L2 R1 VERDICT: CHANGES): complete canonical definition equality, required trusted context for all evaluators, generic descriptor/backend with structured injected transport, closed versioned scalar profile with evidence binding, public pure validator, detached context freeze, required explicit allowlist.
+  - [ ] Probes P15–P23, P27-P28 L2, P32–P33 with discriminating regression tests; V4-L1 14/14 + R1 10/10 keep passing migrated.
+- [ ] **Lot V4-L2-R1 — Sol V4-L2 R1 findings F1–F11 (review pr693_sol_v4l2_r1.md, VERDICT: CHANGES)**
+  - [ ] F1 scalar raw boundary; F2 required validationContext; F3 generic host/structured backend; F4 complete definition/tariff binding; F5 closed scalar profile; F6 public pure validator.
+  - [ ] F7 context freeze detachment; F8 required allowlist; F9 tracked docs migration; F10 scope/exception regularization; F11 atomic commits with per-commit plan updates.
   - [x] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated. Mesh 1302/1302, cluster 1014 passed, lazy-package 78/78 with re-pinned selected lock (sibling llm-mesh 0.27.1). api unit/integration covered by CI (compose stack not run locally).
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
