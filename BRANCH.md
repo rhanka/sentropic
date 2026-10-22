@@ -5,7 +5,8 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
 
 ## Scope / Guardrails
 - Scope limited to packages/artifacts/** declaration shapes, docs, and unit vectors.
-- Public host API names are explicitly excluded until spec r2 is forwarded.
+- Spec r2 is forwarded (SHA-256 `e0bffcf0…a9a4`); the section 3.2 host API
+  names are frozen in the PR #721 fix wave, superseding L0-EXCLUDE-1.
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development happens in isolated worktree `tmp/worktrees/artifacts-861`.
@@ -46,9 +47,9 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] L0-EXCLUDE-1 (acknowledge): public host API names (coordinator/outcome method names, host binding names) stay unfrozen until spec r2 is forwarded; L0 freezes shapes and vectors only
+- [x] L0-EXCLUDE-1 (superseded): spec r2 forwarded; section 3.2 host API names frozen in the PR #721 fix wave
 - [ ] L0-Q0 (attention): i-cond Q0 inventory (due 22 Oct 12:00 Toronto) not yet forwarded; integrate on arrival as amendment without changing frozen shapes unless r2 requires it
-- [ ] L0-R2 (attention): Opus review requires spec r2 (host API naming vs radar suite, consumer baselines 0.1.2, race/isolation, error-code mapping, CR-1..CR-5); do not freeze contested names in L0
+- [x] L0-R2 (addressed): PR #721 Sol r1 findings fixed in this wave — P1-1 host/transaction freeze, P1-2 outcome variants, P1-3 surrogate rejection, P1-4 key/scope vectors, P1-5 integration train, P2-1 CR-1..CR-5 map
 - [x] L0-CI (acknowledge): CI run 39720063546 failed on the 0.2.0-rc.1 package.json bump (probe version equality, mesh eresolve against frozen range); L0 restructured to docs plus vectors plus l0-freeze with no src or version change, bump deferred to L1
 
 ## AI Flaky tests
@@ -60,9 +61,9 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
   - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [x] **Mono-branch + rebase** (single declaration-freeze lot; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: L0 is a single declaration-freeze lot with no parallel implementation workstreams.
+- Rationale: L0 is a single declaration-freeze lot with no parallel implementation workstreams. No cherry-picks onward: topics target `feat/artifacts-861-integration` and the integrator rebases/merges; L1/L2/L3 merge the updated L0 into their branches.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
@@ -98,7 +99,7 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
     - [x] make test-artifacts ENV=test-artifacts-861 last (unit only: 27 files, 216 tests passed)
     - [x] make scope-check before each commit
 - [ ] **Lot 4 — Release reservation and PR**
-  - [x] Document the 0.2.0-rc reservation without a package.json bump (frozen mesh range until L7; bump deferred to first src-changing lot).
+  - [x] Reserve pack-only 0.2.0-dev.N versions on feat/artifacts-861-integration (integration owner, serial; frozen mesh range until L7; no package.json bump, no rc, no registry publication).
   - [x] Update packages/artifacts/README.md with L0 contract line pointer.
   - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
   - [x] Push branch and open DRAFT PR feat(artifacts): #861 L0 shared contract and vectors.
