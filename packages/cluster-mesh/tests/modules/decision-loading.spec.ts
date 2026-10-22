@@ -22,9 +22,12 @@ describe('decision module loading', () => {
     });
     const loaded = (await modules.load('llm-mesh/decision')) as typeof meshDecisionProvider;
     expect(typeof loaded.createRemoteDecisionClient).toBe('function');
+    expect(typeof loaded.validateDecisionResult).toBe('function');
     expect(loaded.createRemoteDecisionClient).toBe(meshDecisionProvider.createRemoteDecisionClient);
+    expect(loaded.validateDecisionResult).toBe(meshDecisionProvider.validateDecisionResult);
     const loadedByLoader = await loadLlmMeshDecision(modules);
     expect(loadedByLoader.createRemoteDecisionClient).toBe(meshDecisionProvider.createRemoteDecisionClient);
+    expect(loadedByLoader.validateDecisionResult).toBe(meshDecisionProvider.validateDecisionResult);
     expect(modules.snapshot()['llm-mesh/decision']).toMatchObject({ state: 'loaded' });
   });
 
