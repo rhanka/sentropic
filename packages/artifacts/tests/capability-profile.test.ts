@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+let compileArtifactsProfile: typeof import('../src/profile/index.js').compileArtifactsProfile;
+let RADAR_ARTIFACTS_PROFILE: typeof import('../src/profile/index.js').RADAR_ARTIFACTS_PROFILE;
 
 const compile = (tools = [...RADAR_ARTIFACTS_PROFILE.selection.tools]) =>
   compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selection: { tools } });
 
 describe('compiled capability profile', () => {
+  beforeEach(async () => {
+    ({ compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } = await import('../src/profile/index.js'));
+  });
   it('should expose exactly the deterministic selected set when input order varies', () => {
     const a = compile();
     const b = compile([...RADAR_ARTIFACTS_PROFILE.selection.tools].reverse());
