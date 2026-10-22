@@ -17,9 +17,15 @@ export interface DecisionValidationScoreSemantics {
 
 export interface DecisionValidationConfidenceSemantics {
   meaning: string;
+  meaningRef: string;
   min: number;
   max: number;
 }
+
+const KNOWN_PROFILE_VERSIONS: Readonly<Record<string, readonly string[]>> = {
+  'native-distribution-v1': ['v1'],
+  'scalar-label-v1': ['v1'],
+};
 
 /** Evidence the selected profile admits for one resolved kind. Null score or
  * confidence forbids that carrier; rationale stays forbidden unless optional. */
@@ -74,6 +80,11 @@ const isBoundedMeaning = (value: unknown): value is DecisionValidationScoreSeman
   && isText(value.meaning) && typeof value.min === 'number' && Number.isFinite(value.min)
   && typeof value.max === 'number' && Number.isFinite(value.max) && value.min < value.max;
 
+const isBoundedConfidence = (value: unknown): value is DecisionValidationConfidenceSemantics =>
+  isRecord(value) && hasOnlyKeys(value, ['meaning', 'meaningRef', 'min', 'max'])
+  && isText(value.meaning) && isText(value.meaningRef) && typeof value.min === 'number' && Number.isFinite(value.min)
+  && typeof value.max === 'number' && Number.isFinite(value.max) && value.min <= value.max;
+
 const isDirectCriterionOfKind = (value: unknown, kind: 'binary' | 'graded' | 'choice'): value is DirectDecisionCriterion => {
   if (!isDecisionCriterion(value) || value.kind !== kind) return false;
   return true;
@@ -114,6 +125,8 @@ export function parseDecisionValidationContext(candidate: unknown, request: Deci
   const profile = source.validationProfile;
   if (!isRecord(profile) || !hasOnlyKeys(profile, ['profile', 'version'])
     || !KNOWN_PROFILES.has(profile.profile as string) || !isText(profile.version)) return null;
+  const allowedVersions = KNOWN_PROFILE_VERSIONS[profile.profile as string];
+  if (!allowedVersions || !allowedVersions.includes(profile.version as string)) return null;
   const models = source.acceptedServedModelIds;
   if (!Array.isArray(models) || models.length === 0 || !models.every(isText)
     || new Set(models).size !== models.length) return null;
@@ -121,7 +134,7 @@ export function parseDecisionValidationContext(candidate: unknown, request: Deci
   if (!isRecord(semantics) || !hasOnlyKeys(semantics, ['nativeDecision', 'score', 'confidence', 'rationale'])) return null;
   if (typeof semantics.nativeDecision !== 'boolean') return null;
   if (semantics.score !== null && !isBoundedMeaning(semantics.score)) return null;
-  if (semantics.confidence !== null && !isBoundedMeaning(semantics.confidence)) return null;
+  if (semantics.confidence !== null && !isBoundedConfidence(semantics.confidence)) return null;
   if (semantics.rationale !== 'forbidden' && semantics.rationale !== 'optional') return null;
   if (!isText(source.definitionDigest) || !DIGEST_RE.test(source.definitionDigest as string)) return null;
   const registered = request.criterion.kind === 'registered';

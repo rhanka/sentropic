@@ -11,7 +11,7 @@ const context = (overrides: Record<string, unknown> = {}) => ({
   acceptedServedModelIds: ['synthetic-served-model'],
   semantics: { nativeDecision: false,
     score: { meaning: 'probability-true', min: 0, max: 1 },
-    confidence: { meaning: 'provider-confidence', min: 0, max: 1 },
+    confidence: { meaning: 'provider-confidence', meaningRef: 'https://docs.typesafe.ai/confidence.md', min: 0, max: 1 },
     rationale: 'forbidden' },
   definitionDigest: DIGEST,
   ...overrides,
