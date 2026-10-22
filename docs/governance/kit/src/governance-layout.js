@@ -1,9 +1,9 @@
-import { groupContent, nodeContent, frameHeaderContent, CARD_WIDTH, CARD_STACK_GAP } from './architecture-layout.js';
+import { groupContent, nodeContent, frameHeaderContent, CARD_WIDTH, CARD_HEIGHT, CARD_STACK_GAP } from './architecture-layout.js';
 
 // The owner-selected dossier card has one width in every frame and language.
 export { CARD_WIDTH };
-// Collapsed frames retain their approved footprint independently of leaf height.
-export const COLLAPSED_CARD_HEIGHT = 272;
+// A collapsed zone IS an atomic card, at every depth.
+export const COLLAPSED_CARD_HEIGHT = CARD_HEIGHT;
 // Unrelated frames reserve 54 px on either side for routing and label pills.
 const GAP = 160;
 const PAD = 16;
@@ -41,7 +41,8 @@ export function packGovernanceScene(scene, collapsedIds = []) {
       if (!entry.data) {
         entry.collapsed = collapsed.has(entry.id);
         entry.headerOffset = 0;
-        content = entry.collapsed ? null : measure(layouts[layout]);
+        content = entry.collapsed ? null : entry.legendEntries
+          ? {width:CARD_WIDTH, height:entry.legendEntries.length*64, place(){}} : measure(layouts[layout]);
         entry.width = content ? content.width + PAD * 2 : CARD_WIDTH;
         Object.assign(entry, groupContent(entry, entry.width, entry.collapsed));
         const header = frameHeaderContent(entry, entry.width);
@@ -86,8 +87,8 @@ export function packGovernanceScene(scene, collapsedIds = []) {
     };
     return result;
   };
-  measure(column(row('h2a', 'surfaces'), 'cluster-mesh', row('engram', 'design-system'))).place(0, 0);
-  if (scene.groups.filter(group => !group.parentId).every(group => collapsed.has(group.id))) {
+  measure(column(row('h2a', 'surfaces'), 'cluster-mesh', row('engram', 'design-system'), ...(entries.has('legend') ? ['legend'] : []))).place(0, 0);
+  if (scene.groups.filter(group => !group.parentId && !group.legendEntries).every(group => collapsed.has(group.id))) {
     const place = (id, x, y, w) => {
       const entry = entries.get(id);
       entry.width = w; entry.position = { x, y };
