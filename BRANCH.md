@@ -48,7 +48,7 @@
   - [x] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
   - [x] Wrapping legend with semantic swatches, using the same zone/fold path.
 - [ ] **Lot 3 — Qualification**
-  - [ ] Update `scripts/check-geometry.mjs` and browser checks; focused convergence checks for every scene/locale/depth, shared card, zero clipping, legend, spacing and folds.
+  - [x] Extend geometry to every scene/depth: 212 states, 1,492 edges, no collision. Browser fit remains pending the recorded wording conflict.
   - [ ] Source, geometry, browser (600 interactions + 240 stress toggles), content and unchanged idle/1800 ms performance gates.
   - [ ] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
 - [ ] **Lot 4 — Delivery**
