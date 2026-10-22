@@ -6,9 +6,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  COMMIT_BARRIER_POINTS,
   COMMIT_PROTOCOL_VERSION,
   COMMIT_STATES,
   FINALIZATION_PHASES,
+  PARTICIPANT_LOCK_ORDER,
   REFUSAL_RESIDUE_FORBIDDEN,
 } from '../l0-freeze/commit-contract.js';
 import {
@@ -82,5 +84,31 @@ describe('commit contract', () => {
 
   it('should version the commit coordinator protocol', () => {
     expect(COMMIT_PROTOCOL_VERSION).toBe('artifacts-commit/v1');
+  });
+
+  it('should freeze the nine section 3.2 barrier points', () => {
+    expect([...COMMIT_BARRIER_POINTS]).toEqual([
+      'before_connection_acquire',
+      'before_key_lock',
+      'before_blob_put',
+      'after_blob_put_before_verify',
+      'before_blob_readback',
+      'before_finalization_row_lock',
+      'after_finalization_locks_before_guard',
+      'after_replay_lookup_before_guard',
+      'before_commit',
+    ]);
+  });
+
+  it('should freeze the A4 participant lock order', () => {
+    expect([...PARTICIPANT_LOCK_ORDER]).toEqual([
+      'binding-identity',
+      'artifact-lifecycle',
+      'acl',
+      'current-pointer',
+      'authority-revision',
+      'quota',
+      'blob-reference-deletion-claim',
+    ]);
   });
 });
