@@ -10,10 +10,10 @@ export const OBJECT_MUTANTS: readonly {
       const f = createObjectReference(), client = f.client;
       f.client = (scope) => {
         const original = client(scope);
-        return { ...original, async create(ref, bytes) {
+        return { ...original, preparer: { async create(ref, bytes) {
           if (f.inspect(ref).length) f.fault(ref, 'delete');
-          return original.create(ref, bytes);
-        } };
+          return original.preparer.create(ref, bytes);
+        } } };
       };
       f.clients = [f.client('workspace-a'), f.client('workspace-a')];
       return f;
@@ -27,7 +27,7 @@ export const OBJECT_MUTANTS: readonly {
   { id: 'M03', revision: 'l01b1-m03-v1', target: 'CT-03', kill: /CT-03: corrupt payload cannot be verified/,
     factory: () => {
       const f = createObjectReference(), client = f.client;
-      f.client = (scope): ObjectClient => ({ ...client(scope), read: async (ref) => f.inspect(ref) });
+      f.client = (scope): ObjectClient => ({ ...client(scope), reader: { read: async (ref) => f.inspect(ref) } });
       f.clients = [f.client('workspace-a'), f.client('workspace-a')];
       return f;
     } },

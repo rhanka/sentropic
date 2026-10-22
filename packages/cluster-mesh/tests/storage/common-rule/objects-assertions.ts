@@ -21,42 +21,42 @@ const fixture = (factory: ObjectFixtureFactory, ct: string) => {
 export const assertCT01 = async (makeFixture: ObjectFixtureFactory): Promise<void> => {
   const f = fixture(makeFixture, 'CT-01');
   const bytes = Buffer.from('é immutable bytes'), ref = objectRef(bytes);
-  const receipts = await Promise.all(f.clients.map((c) => c.create(ref, bytes)));
+  const receipts = await Promise.all(f.clients.map((c) => c.preparer.create(ref, bytes)));
   assert.deepEqual(receipts, [ref, ref]);
   const other = Buffer.from('different verified bytes'), unequal = objectRef(other);
-  const retry = await Promise.allSettled([f.clients[1].create(unequal, other)]);
+  const retry = await Promise.allSettled([f.clients[1].preparer.create(unequal, other)]);
   assert.deepEqual(f.inspect(ref), Uint8Array.from(bytes), 'CT-01: first accepted bytes remain unchanged');
   assert.equal(retry[0].status, 'rejected');
-  assert.deepEqual(await f.clients[0].create(ref, bytes), receipts[0]);
-  assert.deepEqual(await f.reopen().clients[0].read(ref, BUDGET), Uint8Array.from(bytes));
-  await assert.rejects(f.reopen().clients[0].create(unequal, other), /conflict/);
+  assert.deepEqual(await f.clients[0].preparer.create(ref, bytes), receipts[0]);
+  assert.deepEqual(await f.reopen().clients[0].reader.read(ref, BUDGET), Uint8Array.from(bytes));
+  await assert.rejects(f.reopen().clients[0].preparer.create(unequal, other), /conflict/);
   const race = makeFixture(), contenders = [bytes, other];
-  const outcomes = await Promise.allSettled(contenders.map((b, i) => race.clients[i].create(objectRef(b), b)));
+  const outcomes = await Promise.allSettled(contenders.map((b, i) => race.clients[i].preparer.create(objectRef(b), b)));
   assert.equal(outcomes.filter((o) => o.status === 'fulfilled').length, 1);
   assert.equal(outcomes.filter((o) => o.status === 'rejected').length, 1);
   const owned = Buffer.from(bytes), original = Uint8Array.from(owned), ownedRef = objectRef(owned, 'owned');
-  const pending = f.clients[0].create(ownedRef, owned);
+  const pending = f.clients[0].preparer.create(ownedRef, owned);
   owned.fill(0);
   await pending;
-  assert.deepEqual(await f.clients[0].read(ownedRef, BUDGET), original);
-  const returned = await f.clients[0].read(ownedRef, BUDGET);
+  assert.deepEqual(await f.clients[0].reader.read(ownedRef, BUDGET), original);
+  const returned = await f.clients[0].reader.read(ownedRef, BUDGET);
   returned.fill(0);
-  assert.deepEqual(await f.clients[0].read(ownedRef, BUDGET), original);
+  assert.deepEqual(await f.clients[0].reader.read(ownedRef, BUDGET), original);
   for (const bad of [{ ...ref, sha256: '0'.repeat(64) }, { ...ref, byteLength: 1 }, { ...ref, id: 'sha256:wrong' }]) {
-    await assert.rejects(f.clients[0].create(bad, bytes), /corrupt/);
+    await assert.rejects(f.clients[0].preparer.create(bad, bytes), /corrupt/);
   }
   for (const exists of [false, true]) {
     const foreign = { ...ref, scope: 'workspace-b', locator: 'foreign/private' };
-    if (exists) await f.client('workspace-b').create(foreign, bytes);
+    if (exists) await f.client('workspace-b').preparer.create(foreign, bytes);
     const before = f.counters.io;
-    await assert.rejects(f.clients[0].read(foreign, BUDGET), /denied/);
-    await assert.rejects(f.clients[0].create(foreign, bytes), /denied/);
+    await assert.rejects(f.clients[0].reader.read(foreign, BUDGET), /denied/);
+    await assert.rejects(f.clients[0].preparer.create(foreign, bytes), /denied/);
     assert.equal(f.counters.io, before, 'foreign denial must make zero backend calls');
-    assert.deepEqual(await f.clients[0].create(ref, bytes), ref);
+    assert.deepEqual(await f.clients[0].preparer.create(ref, bytes), ref);
   }
   const pageBytes = Buffer.from('{}'), page = { ...objectRef(pageBytes, 'manifest'), locator: 'manifest/page' };
-  await f.clients[0].create(page, pageBytes);
-  await assert.rejects(f.clients[1].create({ ...page, ...objectRef(other, 'manifest'), locator: page.locator }, other));
+  await f.clients[0].preparer.create(page, pageBytes);
+  await assert.rejects(f.clients[1].preparer.create({ ...page, ...objectRef(other, 'manifest'), locator: page.locator }, other));
   assert.deepEqual(f.inspect(page), Uint8Array.from(pageBytes));
 };
 
@@ -104,29 +104,29 @@ export const assertCT02 = async (makeFixture: ObjectFixtureFactory): Promise<voi
   const legacy = readFileSync(new URL('../../../assets/storage/comments/transport-v1.json', import.meta.url));
   const ref = objectRef(legacy, 'legacy-l3a'), wrapped = manifest([ref]);
   assert.equal(ref.sha256, 'c65c06f69c7806dd86326b64fd5712e17ab9c91de59074dd9a466de58d2573f7');
-  await f.clients[0].create(ref, legacy);
+  await f.clients[0].preparer.create(ref, legacy);
   await f.verify(wrapped, f.encode(wrapped).sha256, BUDGET);
-  assert.deepEqual(await f.clients[0].read(ref, BUDGET), Uint8Array.from(legacy));
+  assert.deepEqual(await f.clients[0].reader.read(ref, BUDGET), Uint8Array.from(legacy));
 };
 
 export const assertCT03 = async (makeFixture: ObjectFixtureFactory): Promise<void> => {
   const bytes = Buffer.from('é🙂 exact encoded bytes'), ref = objectRef(bytes), body = manifest([ref]);
   const corrupt = fixture(makeFixture, 'CT-03');
-  await corrupt.clients[0].create(ref, bytes);
+  await corrupt.clients[0].preparer.create(ref, bytes);
   corrupt.fault(ref, 'corrupt');
   await assert.rejects(corrupt.verify(body, corrupt.encode(body).sha256, BUDGET),
     undefined, 'CT-03: corrupt payload cannot be verified');
   for (const fault of ['delete', 'truncate', 'scope', 'version'] as const) {
     const f = makeFixture();
-    await f.clients[0].create(ref, bytes);
+    await f.clients[0].preparer.create(ref, bytes);
     f.fault(ref, fault);
-    await assert.rejects(f.clients[0].read(ref, BUDGET));
+    await assert.rejects(f.clients[0].reader.read(ref, BUDGET));
     await assert.rejects(f.verify(body, f.encode(body).sha256, BUDGET));
-    await f.clients[0].create(objectRef(bytes, 'unrelated'), bytes);
+    await f.clients[0].preparer.create(objectRef(bytes, 'unrelated'), bytes);
     await assert.rejects(f.verify(body, f.encode(body).sha256, BUDGET));
   }
   const f = makeFixture();
-  await f.clients[0].create(ref, bytes);
+  await f.clients[0].preparer.create(ref, bytes);
   const mutableRefs = [ref, { ...ref, id: 'missing' }], mutableBody = manifest(mutableRefs);
   const pending = f.verify(mutableBody, f.encode(mutableBody).sha256, BUDGET);
   mutableRefs.pop();
@@ -135,14 +135,14 @@ export const assertCT03 = async (makeFixture: ObjectFixtureFactory): Promise<voi
   const before = f.counters.verifiedBytes;
   await f.verify(body, encoded.sha256, BUDGET);
   assert.equal(f.counters.verifiedBytes - before, bytes.byteLength, 'missing verification instrumentation');
-  await assert.rejects(f.clients[0].read(ref, { ...BUDGET, maxBytes: bytes.byteLength - 1 }), /limit/);
+  await assert.rejects(f.clients[0].reader.read(ref, { ...BUDGET, maxBytes: bytes.byteLength - 1 }), /limit/);
   await assert.rejects(f.verify(body, encoded.sha256, { ...BUDGET, maxBytes: encoded.bytes.byteLength }), /limit/);
   await assert.rejects(f.verify(body, encoded.sha256, { ...BUDGET, maxObjects: Infinity }), /limit/);
   for (const fault of ['delete', 'truncate', 'corrupt', 'scope', 'version'] as const) {
     const pages = makeFixture();
-    await pages.clients[0].create(ref, bytes);
+    await pages.clients[0].preparer.create(ref, bytes);
     const page = pages.encode(body), pageRef = { ...objectRef(page.bytes, 'page'), locator: 'manifest/page' };
-    await pages.clients[0].create(pageRef, page.bytes);
+    await pages.clients[0].preparer.create(pageRef, page.bytes);
     const root = manifest([pageRef]), digest = pages.encode(root).sha256;
     await pages.verify(root, digest, BUDGET);
     await assert.rejects(pages.verify(root, digest, { ...BUDGET, maxObjects: 1 }), /limit/);

@@ -4,10 +4,13 @@ export type { CommonManifestBody, CommonObjectCommitment };
 export type ObjectRef = CommonObjectCommitment & { readonly scope: string; readonly version: string };
 export interface EncodedManifest { bytes: Uint8Array; sha256: string }
 export interface VerificationBudget { maxBytes: number; maxObjects: number }
-export interface ObjectClient {
+export interface ObjectPreparer {
   create(ref: ObjectRef, bytes: Uint8Array): Promise<ObjectRef>;
+}
+export interface ObjectReader {
   read(ref: ObjectRef, budget: VerificationBudget): Promise<Uint8Array>;
 }
+export interface ObjectClient { preparer: ObjectPreparer; reader: ObjectReader }
 export interface ObjectFixture {
   clients: readonly [ObjectClient, ObjectClient];
   client(scope: string): ObjectClient;
