@@ -56,6 +56,7 @@
 - [ ] Validation: closed arguments/files, Unicode, path/MIME/byte budgets, keys and envelopes.
 - [ ] Identity: trusted derivation, ordered codec, deep command snapshot and forced provenance.
 - [x] Added command-identity.test.ts regressions for Radar vectors, ordered files, authority domains and snapshots.
+- [x] Added parameters.test.ts regressions for closed inputs, decoded budgets, paths, Unicode keys and envelopes.
 - [ ] Tests: capability-profile.test.ts, command-identity.test.ts, parameters.test.ts; baseline red/candidate green.
 - [ ] Gates: make typecheck-artifacts, lint-artifacts, test-artifacts; make scope-check before every commit.
 - [ ] Delivery: push, draft PR against feat/artifacts-861-contracts, green CI, report URL/SHA/run; no merge.
