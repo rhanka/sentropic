@@ -21,7 +21,8 @@ export function quoteDecision(request: DecisionRequest, descriptor: DecisionEval
   const value = snapshot.ok ? snapshot.value : null;
   if (!isRecord(value) || !hasOnlyKeys(value, ['providerId', 'modelId', 'priceRevision', 'inputMicroUsdPerMtok',
     'outputMicroUsdPerMtok', 'minimumMicroUsd', 'identityMismatchPricing']) || value.providerId !== descriptor.evaluator.providerId
-    || value.modelId !== descriptor.wireModel || !isCorrelationId(value.priceRevision)
+    || value.modelId !== descriptor.wireModel || value.priceRevision !== descriptor.priceProtocol.revision
+    || !isCorrelationId(value.priceRevision)
     || !isMicroUsd(value.inputMicroUsdPerMtok) || !isMicroUsd(value.outputMicroUsdPerMtok) || !isMicroUsd(value.minimumMicroUsd)
     || !['requested-model', 'requires-reconciliation'].some((v) => v === value.identityMismatchPricing)) return { ok: false, code: 'PRICING_UNAVAILABLE' };
   const price = freezeDecisionData(value as unknown as DecisionPrice);

@@ -40,4 +40,15 @@ describe('canonical definition equality (P17/P27-L2)', () => {
     expect(result).toEqual({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
     expect(send).not.toHaveBeenCalled();
   });
+  it('refuses a provider adapter with no complete descriptor (F4)', async () => {
+    const descriptor = qualifiedDescriptor();
+    const send = vi.fn();
+    const adapter = { provider: createJevAdapter({ descriptor, transport: { send } }).provider,
+      listEvaluators: () => [{ ...descriptor.evaluator }], decision: vi.fn() };
+    const options = { registry: createProviderRegistry([adapter as never]),
+      resolveEvaluator: vi.fn(() => descriptor) };
+    const result = await preflightDecisionRequest(decisionRequest(), options as never);
+    expect(result).toEqual({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
+    expect(send).not.toHaveBeenCalled();
+  });
 });
