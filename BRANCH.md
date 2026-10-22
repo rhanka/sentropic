@@ -45,8 +45,8 @@
   - [x] Update `src/hrpolnav-card.js`, `src/architecture-svg.js`, `src/governance-layout.js`: atomic renderer, reserved toggle slot, centred body, shared 460 × 200 geometry.
   - [ ] Preserve leaf values, typography, icons and expanded headers; remove clipping and validate overflow.
 - [ ] **Lot 2 — Every scene and wrapping legend**
-  - [ ] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
-  - [ ] Wrapping legend with semantic swatches, using the same zone/fold path.
+  - [x] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
+  - [x] Wrapping legend with semantic swatches, using the same zone/fold path.
 - [ ] **Lot 3 — Qualification**
   - [ ] Update `scripts/check-geometry.mjs` and browser checks; focused convergence checks for every scene/locale/depth, shared card, zero clipping, legend, spacing and folds.
   - [ ] Source, geometry, browser (600 interactions + 240 stress toggles), content and unchanged idle/1800 ms performance gates.
