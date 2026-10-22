@@ -38,10 +38,34 @@ describe('commit contract', () => {
     ]);
   });
 
-  it('should know the four internal failure categories', () => {
+  it('should know the five internal failure categories', () => {
     expect([...FAILURE_CATEGORIES]).toEqual([
-      'provider_unavailable', 'conflict', 'unauthorized_at_commit', 'provider_error',
+      'capability_unselected', 'provider_unavailable', 'conflict',
+      'unauthorized_at_commit', 'provider_error',
     ]);
+  });
+
+  it('should reject unselected operations before dispatch with no ledger entry', () => {
+    const projection = FAILURE_PROJECTIONS.find(
+      (entry) => entry.category === 'capability_unselected',
+    );
+    expect(projection?.httpStatus).toBe(503);
+    expect(projection?.publicCode).toBe('capability_unavailable');
+    expect(projection?.retriable).toBe(false);
+    expect(projection?.radarLedgerReason).toBeUndefined();
+    expect(projection?.phase).toBe('selection');
+    expect(projection?.commitState).toBe('not_committed');
+  });
+
+  it('should retry a guard authority outage with the same key', () => {
+    const projection = FAILURE_PROJECTIONS.find(
+      (entry) => entry.category === 'unauthorized_at_commit'
+        && entry.variant === 'authority_unavailable',
+    );
+    expect(projection?.httpStatus).toBe(503);
+    expect(projection?.publicCode).toBe('capability_unavailable');
+    expect(projection?.radarLedgerReason).toBe('unauthorized_at_commit');
+    expect(projection?.retriable).toBe(true);
   });
 
   it('should project S3 timeout and connection loss as unavailable', () => {
