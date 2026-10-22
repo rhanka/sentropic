@@ -11,15 +11,15 @@ export function freezeDecisionData<T>(value: T): T {
   }
   return value;
 }
+const PROTOCOLS = new Set(['jev-native', 'openai-decisions', 'systemone-local', 'structured-llm']);
 export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEvaluatorDescriptor | null {
   const snapshot = snapshotBoundedJson(candidate);
   if (!snapshot.ok || !isRecord(snapshot.value)) return null;
   const value = snapshot.value;
-  if (!hasOnlyKeys(value, ['evaluator', 'wireModel', 'acceptedServedModelIds', 'qualification', 'maxBillableInputTokens',
+  if (!hasOnlyKeys(value, ['evaluator', 'protocol', 'wireModel', 'acceptedServedModelIds', 'qualification', 'maxBillableInputTokens',
     'maxRequestBytes', 'maxStateQuestionBytes', 'probabilityTolerance', 'scoreNativeKeys', 'nativeDecision', 'confidence', 'compilation', 'priceProtocol', 'registeredCriteria', 'retention'])
     || !isRecord(value.evaluator) || !hasOnlyKeys(value.evaluator, ['providerId', 'evaluatorId', 'revision'])
-    || value.evaluator.providerId !== 'typesafe' || typeof value.wireModel !== 'string'
-    || !/^jev-\d+\.\d+\.\d+$/.test(value.wireModel) || value.evaluator.evaluatorId !== value.wireModel
+    || (value.protocol !== undefined && (!isRecord(value) || !PROTOCOLS.has(value.protocol as string)))
     || !isCorrelationId(value.evaluator.revision) || !isRecord(value.qualification)
     || !hasOnlyKeys(value.qualification, ['servedIdentity', 'billingBound', 'evidenceRefs'])
     || (value.qualification.servedIdentity !== 'qualified' && value.qualification.servedIdentity !== 'unqualified')
@@ -33,9 +33,23 @@ export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEv
     || typeof value.maxRequestBytes !== 'number' || !Number.isSafeInteger(value.maxRequestBytes) || value.maxRequestBytes < 1 || value.maxRequestBytes > 256 * 1024
     || typeof value.maxStateQuestionBytes !== 'number' || !Number.isSafeInteger(value.maxStateQuestionBytes) || value.maxStateQuestionBytes < 1 || value.maxStateQuestionBytes > value.maxRequestBytes
     || typeof value.probabilityTolerance !== 'number' || !Number.isFinite(value.probabilityTolerance) || value.probabilityTolerance < 0 || value.probabilityTolerance > 1e-4
-    || value.scoreNativeKeys !== 'index-string' || value.nativeDecision !== false
-    || !isRecord(value.confidence) || !hasOnlyKeys(value.confidence, ['meaning', 'meaningRef', 'min', 'max'])
-    || value.confidence.meaning !== 'provider-confidence' || !isText(value.confidence.meaningRef) || value.confidence.min !== 0 || value.confidence.max !== 1
+    || (value.protocol === undefined || value.protocol === 'jev-native'
+      ? (value.evaluator.providerId !== 'typesafe' || typeof value.wireModel !== 'string'
+        || !/^jev-\d+\.\d+\.\d+$/.test(value.wireModel) || value.evaluator.evaluatorId !== value.wireModel
+        || value.scoreNativeKeys !== 'index-string' || value.nativeDecision !== false
+        || !isRecord(value.confidence) || !hasOnlyKeys(value.confidence, ['meaning', 'meaningRef', 'min', 'max'])
+        || value.confidence.meaning !== 'provider-confidence' || !isText(value.confidence.meaningRef)
+        || value.confidence.min !== 0 || value.confidence.max !== 1)
+      : (typeof value.evaluator.providerId !== 'string' || !isText(value.evaluator.providerId)
+        || typeof value.evaluator.evaluatorId !== 'string' || !isText(value.evaluator.evaluatorId)
+        || typeof value.wireModel !== 'string' || sanitizeJevId(value.wireModel) === null
+        || (value.scoreNativeKeys !== 'index-string' && value.scoreNativeKeys !== 'scalar')
+        || typeof value.nativeDecision !== 'boolean'
+        || !isRecord(value.confidence) || !hasOnlyKeys(value.confidence, ['meaning', 'meaningRef', 'min', 'max'])
+        || !isText(value.confidence.meaning) || !isText(value.confidence.meaningRef)
+        || typeof value.confidence.min !== 'number' || typeof value.confidence.max !== 'number'
+        || !Number.isFinite(value.confidence.min) || !Number.isFinite(value.confidence.max)
+        || value.confidence.max < value.confidence.min))
     || !isRecord(value.compilation) || !hasOnlyKeys(value.compilation, ['templateDigest', 'schemaDigest', 'readout'])
     || typeof value.compilation.templateDigest !== 'string' || !/^[0-9a-f]{64}$/.test(value.compilation.templateDigest)
     || typeof value.compilation.schemaDigest !== 'string' || !/^[0-9a-f]{64}$/.test(value.compilation.schemaDigest)
