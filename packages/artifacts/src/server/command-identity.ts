@@ -75,6 +75,7 @@ export function createArtifactCommand(profile: CompiledArtifactsProfile, name: s
   const operation = name === 'artifacts_ensure' ? 'ensure' : 'publish';
   const { idempotencyKey, ...payload } = normalized;
   const scopeBinding = authority.storageScopeId;
+  if (typeof scopeBinding !== 'string' || typeof authority.actorId !== 'string') throw new ArtifactProfileInputError();
   assertWellFormed(scopeBinding);
   assertWellFormed(authority.actorId);
   if (!scopeBinding || !authority.actorId) throw new ArtifactProfileInputError();

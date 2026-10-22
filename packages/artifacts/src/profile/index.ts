@@ -2,7 +2,7 @@ import { isArtifactId } from '../contracts.js';
 import { ARTIFACT_CAPABILITY_NAMES, ArtifactProfileInputError, PROFILE_CONTRACT_VERSION,
   type ArtifactCapabilityName, type ArtifactProviderProfile, type ArtifactSchema,
   type CompiledArtifactsProfile } from './contracts.js';
-import { copyJson, freezeDeep, orderedDigest } from './json.js';
+import { copyJson, freezeDeep, isRecord, orderedDigest } from './json.js';
 import { capabilitySchema } from './schemas.js';
 import { matchesSchema, normalizeArguments } from './validation.js';
 export * from './contracts.js';
@@ -32,12 +32,21 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
   const operations = new Set<string>();
   for (const op of profile.operations) {
     if (!op || typeof op.operation !== 'string' || operations.has(op.operation) ||
-      !op.limits || !op.defaults || Object.keys(op).some((key) => !['operation', 'limits', 'defaults'].includes(key)) ||
+      !isRecord(op.limits) || !isRecord(op.defaults) ||
+      !(ARTIFACT_CAPABILITY_NAMES as readonly string[]).includes(`artifacts_${op.operation}`) ||
+      Object.keys(op).some((key) => !['operation', 'limits', 'defaults'].includes(key)) ||
       Object.values(op.limits).some((n) => typeof n !== 'number' || !Number.isSafeInteger(n) || n <= 0)) throw new Error('invalid operation profile');
+    for (const [minimum, maximum] of [['bindingNameMinUnits', 'bindingNameMaxUnits'],
+      ['publishFilesMin', 'publishFilesMax'], ['listLimitMin', 'listLimitMax']]) {
+      if (op.limits[minimum] > op.limits[maximum]) throw new Error('inconsistent profile bounds');
+    }
     operations.add(op.operation);
   }
   const rules = profile.rules;
+  const ruleKeys = ['lengthUnit', 'textEncoding', 'callerKeyNormalization', 'rejectLoneSurrogates',
+    'provenance', 'keyDerivationAlgorithm', 'pathMaxBytes', 'forbiddenPathPattern', 'reservedFirstSegments', 'mimeTypes'];
   if (!rules || rules.lengthUnit !== 'utf16' || rules.textEncoding !== 'utf8' || rules.callerKeyNormalization !== 'none' ||
+    Object.keys(rules).some((key) => !ruleKeys.includes(key)) ||
     rules.rejectLoneSurrogates !== true || rules.provenance !== 'inline-original' ||
     typeof rules.keyDerivationAlgorithm !== 'string' || !rules.keyDerivationAlgorithm ||
     !Number.isSafeInteger(rules.pathMaxBytes) || rules.pathMaxBytes < 1 || rules.pathMaxBytes > 1024 ||
@@ -55,6 +64,9 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
   for (const name of selectedCapabilities) {
     schemas[name] = capabilitySchema(name, profile);
     const op = profile.operations.find((entry) => entry.operation === name.slice(10))!;
+    if (rules.keyDerivationAlgorithm === 'radar-derive-idempotency-v1' && op.limits.idempotencyKeyMaxUnits > 256) {
+      throw new Error('profile/derivation key length mismatch');
+    }
     const defaults = op.defaults;
     const schema = schemas[name]!;
     const props = schema.properties as Record<string, ArtifactSchema>;
