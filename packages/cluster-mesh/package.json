@@ -201,7 +201,7 @@
     "jose": { "optional": true }
   },
   "devDependencies": {
-    "@sentropic/engram": "0.21.0",
+    "@sentropic/engram": "0.21.1",
     "@types/node": "^22.10.10",
     "typescript": "5.4.5"
   }
