@@ -101,5 +101,5 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
   - [x] Document the 0.2.0-rc reservation without a package.json bump (frozen mesh range until L7; bump deferred to first src-changing lot).
   - [x] Update packages/artifacts/README.md with L0 contract line pointer.
   - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
-  - [ ] Push branch and open DRAFT PR feat(artifacts): #861 L0 shared contract and vectors.
-  - [ ] CI green; do not merge.
+  - [x] Push branch and open DRAFT PR feat(artifacts): #861 L0 shared contract and vectors.
+  - [x] CI green; do not merge.
