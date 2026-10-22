@@ -1,0 +1,62 @@
+{
+  "portableSha256": "aee620383bb25eb66cc45fda20f41b875a61d86674e3b36cc00d4ea50fae1ec6",
+  "geometry": "kit/src/presentation-scenes.json + governance-routes.json + governance-summary-layouts.json",
+  "frames": [
+    "h2a",
+    "surfaces",
+    "cluster-mesh",
+    "cm-catalog",
+    "cat-mcp",
+    "cm-storage",
+    "cm-security",
+    "cm-cluster",
+    "engram",
+    "design-system"
+  ],
+  "images": [
+    {
+      "file": "overview-en.svg",
+      "sha256": "03d648e1a38c978cc52d86e87e03b1a7c8082441830acb738b21eae25433e4cd"
+    },
+    {
+      "file": "frame-h2a-en.svg",
+      "sha256": "5df036f72cf6d60e71c77a9f5dc5d7d213833d571ec7e10130753b315421db4c"
+    },
+    {
+      "file": "frame-surfaces-en.svg",
+      "sha256": "ddc4c6eed4b5c88e87761054484fb0e40bd7437869c7ba2f36ac51546fba507c"
+    },
+    {
+      "file": "frame-cluster-mesh-en.svg",
+      "sha256": "b3e8cb44b6b02a00432bd3a56498b64e294265dd9d134b526e8e60f9fb29a74c"
+    },
+    {
+      "file": "frame-cm-catalog-en.svg",
+      "sha256": "9d9c528ebf17b9f5890c437db19b915bb73a3b8808748bc75f33401aa98a885f"
+    },
+    {
+      "file": "frame-cat-mcp-en.svg",
+      "sha256": "42e42fad34e5529aedcfe3bea130ab0ddae538dee35eb2caab54189c87d2a287"
+    },
+    {
+      "file": "frame-cm-storage-en.svg",
+      "sha256": "ae7bda5d9d38e2bd8e0af9f675e7f2481aded62bb840424faa586e440000c836"
+    },
+    {
+      "file": "frame-cm-security-en.svg",
+      "sha256": "78f800241cd493542ccb9df670715b6247db0e8d0d6c22b17594093a7239cf95"
+    },
+    {
+      "file": "frame-cm-cluster-en.svg",
+      "sha256": "8e2ac1a3667bde25e12e95a864f4f7776faf55c491cd35c2d1b67a1e4a3d4610"
+    },
+    {
+      "file": "frame-engram-en.svg",
+      "sha256": "4257eb7553f2a60d7be9109352781481bcc97ba1d475443122c5c0590ea4aa7e"
+    },
+    {
+      "file": "frame-design-system-en.svg",
+      "sha256": "151e00633d4507939b301206d0f60d1bf85a755c5047fbf09f2a93adbd58c930"
+    }
+  ]
+}
