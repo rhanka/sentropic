@@ -1,5 +1,5 @@
 /**
- * L0 — effective-profile contract vectors (immo #861, ask 1 shape only).
+ * L0 — effective-profile contract vectors (immo #861, ask 1 shape).
  *
  * Frozen selection and bounds vectors for the 0.2.0 profile declaration.
  * Pure unit vectors: no DB, no S3, no app.handle, no mocked provider.
@@ -66,6 +66,28 @@ describe('effective-profile contract', () => {
     expect(validateCallerIdempotencyKey('x'.repeat(256))).toBe(true);
     expect(validateCallerIdempotencyKey('x'.repeat(257))).toBe(false);
     expect(validateCallerIdempotencyKey('  key-1  ')).toBe(true);
+  });
+
+  it('should reject lone surrogates before UTF-8 conversion', () => {
+    const high = String.fromCharCode(0xd800);
+    const low = String.fromCharCode(0xdc00);
+    expect(validateCallerIdempotencyKey(high)).toBe(false);
+    expect(validateCallerIdempotencyKey(low)).toBe(false);
+    expect(validateCallerIdempotencyKey(`a${high}b`)).toBe(false);
+    expect(validateCallerIdempotencyKey(`x${high}`)).toBe(false);
+    expect(validateCallerIdempotencyKey(`${low}y`)).toBe(false);
+  });
+
+  it('should accept valid pairs, U+FFFD and astral boundaries unchanged', () => {
+    const pair = String.fromCodePoint(0x10000);
+    const replacement = String.fromCharCode(0xfffd);
+    expect(validateCallerIdempotencyKey(pair)).toBe(true);
+    expect(validateCallerIdempotencyKey(replacement)).toBe(true);
+    expect(validateCallerIdempotencyKey(pair.repeat(128))).toBe(true);
+    expect(validateCallerIdempotencyKey(pair.repeat(129))).toBe(false);
+    expect(validateCallerIdempotencyKey(
+      `${String.fromCharCode(0xe9, 0xe0, 0xfc)}-${String.fromCodePoint(0x1f3e0)}`,
+    )).toBe(true);
   });
 
   it('should bound publish files to 1-32 entries', () => {
