@@ -84,7 +84,7 @@ describe('effective Radar arguments', () => {
 
   it('should refuse missing, blank, malformed UTF-16 and overlong keys on both writes', () => {
     for (const key of [undefined, null, 2, '', ' \t\n', 'k'.repeat(257), '🏠'.repeat(129), '\ud800', '\udfff']) {
-      for (const [name, args] of [['artifacts_ensure', ensure(key)], ['artifacts_publish', publish({ idempotencyKey: key })]]) {
+      for (const [name, args] of [['artifacts_ensure', ensure('key', { idempotencyKey: key })], ['artifacts_publish', publish({ idempotencyKey: key })]]) {
         expect(() => validate(name as string, args)).toThrowError(
           expect.objectContaining({ status: 400, publicCode: 'invalid_request', retriable: false }),
         );
