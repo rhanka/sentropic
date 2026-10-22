@@ -51,7 +51,7 @@
   - [ ] Run new `scripts/check-{convergence,card-parity,routing-budget}.mjs` through kit Makefile targets; retain the existing browser, geometry, content and idle gates.
   - [x] Geometry: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 121 ms. Browser fit remains pending the recorded wording conflict.
   - [ ] Source, geometry, browser (600 interactions + 240 stress toggles), content and unchanged idle/1800 ms performance gates.
-  - [ ] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
+  - [x] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
 - [ ] **Lot 4 — Delivery**
   - [ ] Record H1–H9 file:line replacements, divergences and validation in `validation/converge32.md`.
   - [ ] Rebuild/deliver portable, refresh SHA256SUMS; scope check before each selective make commit.
