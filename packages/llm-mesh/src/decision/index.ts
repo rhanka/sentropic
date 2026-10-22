@@ -6,7 +6,9 @@ export type { DecisionError, DecisionErrorCode } from './errors.js';
 export type { DecisionClient, DecisionResult, DecisionReceipt, DecisionUsage, DecisionCost, RetentionReceipt,
   TokenCounter, TotalTokenCounter, DecisionConnectionFailure, RemoteDecisionClient } from './receipt.js';
 export { createRemoteDecisionClient } from './client.js';
+export { validateDecisionResult } from './validate-result.js';
 export type { RemoteDecisionClientOptions } from './client.js';
+export type { ResolvedDecisionCriterion } from './descriptor.js';
 export type { DecisionValidationContext, DecisionValidationProfile, DecisionValidationSemantics,
   DecisionValidationScoreSemantics, DecisionValidationConfidenceSemantics, DecisionRegisteredResolution,
   DirectDecisionCriterion, DecisionValidationContextResolver } from './validation-context.js';
