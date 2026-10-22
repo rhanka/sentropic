@@ -1,4 +1,4 @@
-// Test-only broken fixtures, one independently recorded semantic defect per CT.
+// Test-only broken fixtures, each with a designated semantic assertion.
 import type { ObjectClient, ObjectFixtureFactory } from './kit.js';
 import { createObjectReference } from './objects-reference.js';
 
@@ -28,6 +28,23 @@ export const OBJECT_MUTANTS: readonly {
     factory: () => {
       const f = createObjectReference(), client = f.client;
       f.client = (scope): ObjectClient => ({ ...client(scope), reader: { read: async (ref) => f.inspect(ref) } });
+      f.clients = [f.client('workspace-a'), f.client('workspace-a')];
+      return f;
+    } },
+  { id: 'M01-invalid-retry', revision: 'l01b1-m01-invalid-retry-v1', target: 'CT-01',
+    kill: /CT-01: invalid digest retry preserves accepted bytes/,
+    factory: () => {
+      const f = createObjectReference(), client = f.client;
+      f.client = (scope) => {
+        const original = client(scope);
+        return { ...original, preparer: { async create(ref, bytes) {
+          try { return await original.preparer.create(ref, bytes); }
+          catch (error) {
+            if (error instanceof Error && error.message === 'corrupt' && f.inspect(ref).length) f.fault(ref, 'delete');
+            throw error;
+          }
+        } } };
+      };
       f.clients = [f.client('workspace-a'), f.client('workspace-a')];
       return f;
     } },
