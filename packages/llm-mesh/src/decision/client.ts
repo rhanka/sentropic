@@ -297,6 +297,38 @@ function isValidWireProviderRaw(raw: unknown, request: DecisionRequest, verdict:
   return wireRawAgreesWithTyped(raw.data, verdict, raw.truncated);
 }
 
+const SCALAR_RAW_KEYS = ['score', 'choice', 'confidence'] as const;
+
+const scalarRawAgreesWithTyped = (data: Record<string, unknown>, verdict: {
+  score: unknown; label: unknown; confidence: unknown }, truncated: boolean): boolean => {
+  if (!Object.keys(data).every((key) => (SCALAR_RAW_KEYS as readonly string[]).includes(key))) return false;
+  const score = isRecord(verdict.score) && typeof verdict.score.value === 'number' ? verdict.score.value : null;
+  const label = isRecord(verdict.label) && typeof verdict.label.value === 'string' ? verdict.label.value : null;
+  const confidence = isRecord(verdict.confidence) && typeof verdict.confidence.value === 'number'
+    ? verdict.confidence.value : null;
+  if (has(data, 'score') && data.score !== score) return false;
+  if (has(data, 'choice') && data.choice !== label) return false;
+  if (has(data, 'confidence') && data.confidence !== confidence) return false;
+  const expected: string[] = [];
+  if (score !== null) expected.push('score');
+  if (label !== null) expected.push('choice');
+  if (confidence !== null) expected.push('confidence');
+  if (!Object.keys(data).every((key) => expected.includes(key))) return false;
+  return truncated === expected.some((key) => !has(data, key));
+};
+
+const isValidScalarProviderRaw = (raw: unknown, request: DecisionRequest, verdict: {
+  score: unknown; label: unknown; confidence: unknown }): boolean => {
+  if (raw === undefined) return true;
+  if (!isRecord(raw) || request.raw?.mode !== 'allowlisted') return false;
+  if (!hasOnlyKeys(raw, ['data', 'bytes', 'truncated']) || !isRecord(raw.data)) return false;
+  if (typeof raw.bytes !== 'number' || !Number.isSafeInteger(raw.bytes) || raw.bytes < 0) return false;
+  if (typeof raw.truncated !== 'boolean') return false;
+  const actual = new TextEncoder().encode(JSON.stringify(raw.data)).byteLength;
+  if (raw.bytes !== actual || raw.bytes > Math.min(16384, request.raw.maxBytes ?? 16384)) return false;
+  return scalarRawAgreesWithTyped(raw.data, verdict, raw.truncated);
+};
+
 const VERDICT_KEYS = ['criterionKind', 'resolvedCriterionKind', 'score', 'decision', 'label',
   'rationale', 'confidence', 'distribution', 'providerRaw'] as const;
 
@@ -357,7 +389,8 @@ function isValidDecisionVerdict(v: unknown, request: DecisionRequest,
       || !hasOnlyKeys(v.decision, ['pass', 'origin']) || typeof v.decision.pass !== 'boolean') return false;
   }
   if (!isValidRationale(v.rationale, sem)) return false;
-  if (scalar) return isValidScalarVerdict(v, request, effective, sem);
+  if (scalar) return isValidScalarVerdict(v, request, effective, sem)
+    && isValidScalarProviderRaw(v.providerRaw, request, { score: v.score, label: v.label, confidence: v.confidence });
   if (!hasServiceVerdictShape(v.score, v.label, v.confidence, v.distribution)) return false;
   if (effective.criterion.kind === 'binary') {
     if (v.score === null || v.label !== null || v.distribution !== null || v.confidence !== null) return false;
