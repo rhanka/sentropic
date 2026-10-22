@@ -110,8 +110,9 @@ function operationProjection(error: ArtifactOperationError): Projection {
       if (!Number.isInteger(refusal.status) || refusal.status < 400 || refusal.status > 599
         || !/^[a-z][a-z0-9_]{0,63}$/.test(refusal.publicCode)) return internal();
       return {
-        category: kind, httpStatus: refusal.status, publicCode: refusal.publicCode,
-        retriable: refusal.status === 403 ? false : refusal.retriable,
+        category: kind, httpStatus: refusal.status,
+        publicCode: refusal.status === 503 ? 'capability_unavailable' : refusal.publicCode,
+        retriable: refusal.status === 503 ? true : refusal.status === 403 ? false : refusal.retriable,
       };
     }
     default: return { category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
