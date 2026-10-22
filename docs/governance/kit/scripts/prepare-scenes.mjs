@@ -6,6 +6,7 @@ import { packGovernanceScene } from '../src/governance-layout.js';
 import { packStudyScene } from '../src/study-layout.js';
 import { routeScene } from '../src/architecture-routing.js';
 import { collapseGovernanceScene } from '../src/governance-collapse.js';
+import { withLegend } from '../src/governance-legend.js';
 const routes={},presentation={navigation:{needs:ROUTED_NEEDS,views:GIGOGNE_VIEWS}};
 const hash=value=>createHash('sha256').update(value).digest('hex');
 // Diagnostic metadata does not change route geometry or invalidate the cache.
@@ -22,7 +23,7 @@ const progress=message=>{console.log(message);writeFileSync(process.cwd()+'/.cac
 for(const language of ['fr','en']) {
  presentation[language]={architectureScenes:{},decisionScenes:{}};
  for(const [collection,source]of Object.entries({architectureScenes,decisionScenes}))for(const [id,original]of Object.entries(source)){
-  const translated={...localize(original,language),language};
+  const translated=withLegend({...localize(original,language),language});
   const packed=id==='central'?packGovernanceScene(translated):packStudyScene(translated);
   if(id==='central'){
    presentation[language][collection][id]=packed;
@@ -49,7 +50,14 @@ for(const language of ['fr','en']) {
    }
   }else {
    progress(`${language} ${collection}/${id}`);
-   presentation[language][collection][id]=cached(packed,()=>routeScene(packed));
+   const routed=cached(packed,()=>routeScene(packed));
+   const all=packed.groups.map(g=>g.id),preparedFolds=[];
+   for(const ids of [all,...all.map(id=>[id]),...all.map(id=>all.filter(x=>x!==id))]){
+    progress(`${language} ${id}/fold ${ids.join(',')}`);
+    const folded=cached({input:packed,ids},()=>collapseGovernanceScene(packed,ids,false));
+    preparedFolds.push({signature:folded.routingSignature,edges:folded.edges});
+   }
+   presentation[language][collection][id]={...routed,preparedFolds};
   }
   writeFileSync(process.cwd()+'/.cache/presentation-partial.json',JSON.stringify(presentation));
   writeFileSync(process.cwd()+'/.cache/routes-partial.json',JSON.stringify(routes));
