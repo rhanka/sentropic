@@ -45,6 +45,18 @@ const failAfterHang = <T>(decided: Promise<T>): Promise<T> => Promise.race([deci
   new Promise<never>((_, reject) => setTimeout(() => reject(new Error('decide() hung')), 2000))]);
 
 describe('canonical decision client trusted context (P15/P16/P21)', () => {
+  it('refuses an omitted resolver before headers and fetch with zero resolution (F2)', async () => {
+    const fetch = vi.fn();
+    const headers = vi.fn(() => ({}));
+    const { createRemoteDecisionClient: direct } = await import('../src/decision/client.js');
+    const client = direct({ baseUrl: 'https://mesh.internal', fetch: fetch as never,
+      headers: headers as never } as never);
+    const result = await failAfterHang(client.decide(decisionRequest({ correlationId: 'f2-omitted' })));
+    expect(result).toMatchObject({ kind: 'connection-failure', ok: false,
+      error: { code: 'MESH_UNAVAILABLE' }, receipt: null, callStatus: 'not-sent' });
+    expect(headers).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it('refuses client-local on missing context with zero fetches', async () => {
     const fetch = vi.fn();
     const client = clientWith(fetch, () => null);
