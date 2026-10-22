@@ -24,7 +24,7 @@
 - **Conditional Paths (explicit owner clarification required)**:
   - `packages/artifacts/package.json`
 ## Feedback Loop
-- [ ] L2-CONTRACT: L0 declarations live outside src and omit r2 categories/success metadata; owner clarification pending.
+- [ ] L2-CONTRACT: L0 predates r2 and lives outside src/rootDir; define r2 types inside allowed failures.ts, with L6 to export the frozen public subpath. No L0 edits.
 - [ ] L2-VERSION: mandatory CI bump conflicts with exclusive scope and frozen workspace/probe; owner clarification pending.
 - [ ] L2-INTEGRATION: real-provider execute/adapter wiring is exclusively L6; stage-2 acceptance qualifies classifier and both projectors.
 ## AI Flaky tests
@@ -35,7 +35,7 @@
 - [x] No UI; real-provider Radar acceptance remains L6/L8, pinned Radar 3fc55b4f4.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: rules, r2 §6/E1–E5, Q0 and L0 inspected; harness branch check passed.
-- [ ] Lot 1: 39 classifier/projection vectors fail individually on unchanged L0 (missing L2 modules); real-provider baseline capture running.
+- [ ] Lot 1: first 39 vectors fail individually on L0; real-app baseline capture confirms S3 500/internal_error and typed lost connection 409/conflict (ports injected below app, no probe).
 - [ ] Lot 2: implement failures.ts and outcome-projection.ts; E2/E3 matrix, trusted seam, cause retention and redaction.
 - [ ] Lot 3: scoped/full artifacts tests, typecheck/lint, mechanical scope before each atomic commit (<150 lines).
 - [ ] Lot 4: push; draft PR based on L0 with this body; green CI; report SHA/run/ambiguities; do not merge.

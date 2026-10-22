@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 // Import inside each test so the unchanged L0 baseline fails every vector.
 const failures = () => import('../src/server/failures.js');
 const projections = () => import('../src/server/outcome-projection.js');
-const context = {
+const context: import('../src/server/failures.js').ArtifactFailureContext = {
   invocationId: 'inv-1', operation: 'publish', phase: 'prepare',
   commitState: 'not_committed' as const, storageScopeId: 'scope-1', operationKey: 'full-key-1',
 };
@@ -68,3 +68,73 @@ describe('typed provider failures, r2 E2/E3', () => {
     await expectProjection(cause, { category: 'provider_error', retriable: false });
   });
 });
+
+describe('trusted domain and adapter mappings', () => {
+  it.each(['TimeoutError', 'RequestTimeout', 'RequestTimeoutError'])
+    ('should classify an S3 request/body-stream %s without inspecting its message', async (name) => {
+      await expectProjection(Object.assign(new Error('private'), { name }), unavailable);
+    });
+
+  it('should qualify 55P03 only for the same full key, scope and key-lock phase', async () => {
+    const { ArtifactKeyLockConflict } = await failures();
+    const original = driver('55P03');
+    const cause = new ArtifactKeyLockConflict('scope-1', 'full-key-1', original);
+    const failure = await expectProjection(cause, {
+      category: 'conflict', httpStatus: 409, publicCode: 'conflict', retriable: false,
+    }, { ...context, phase: 'key_lock' });
+    expect((failure.cause as Error).cause).toBe(original);
+  });
+
+  it.each([
+    ['scope-2', 'full-key-1', 'key_lock'], ['scope-1', 'other-key', 'key_lock'],
+    ['scope-1', 'full-key', 'key_lock'], ['scope-1', 'full-key-1', 'policy'],
+  ])('should reject conflict qualification for scope %s key %s phase %s', async (scope, key, phase) => {
+    const { ArtifactKeyLockConflict } = await failures();
+    await expectProjection(new ArtifactKeyLockConflict(scope, key, driver('55P03')), unavailable, { ...context, phase });
+  });
+
+  it.each(['command_conflict', 'pointer_conflict'] as const)
+    ('should retain a verified %s as non-retriable conflict', async (kind) => {
+      const { ArtifactOperationError } = await failures();
+      await expectProjection(new ArtifactOperationError(kind, { cause: driver('private') }), {
+        category: 'conflict', httpStatus: 409, publicCode: 'conflict', retriable: false,
+      });
+    });
+
+  it.each([
+    ['invalid_request', 400], ['anonymous', 401], ['access_denied', 403],
+    ['not_found', 404], ['gone', 410], ['verification_failed', 422],
+  ] as const)('should preserve the ordinary typed %s mapping', async (kind, status) => {
+    const { ArtifactOperationError } = await failures();
+    await expectProjection(new ArtifactOperationError(kind), {
+      httpStatus: status, publicCode: kind, retriable: false,
+    });
+  });
+
+  it.each([
+    [403, 'activation_closed', false], [503, 'capability_unavailable', true],
+  ] as const)('should preserve sanitized finalization refusal %s with explicit retry semantics', async (status, publicCode, retriable) => {
+    const { ArtifactOperationError } = await failures();
+    await expectProjection(new ArtifactOperationError('unauthorized_at_commit', {
+      cause: driver('private'), refusal: { status, publicCode, retriable },
+    }), { category: 'unauthorized_at_commit', httpStatus: status, publicCode, retriable }, { ...context, phase: 'guard' });
+  });
+
+  it('should make an unselected capability unavailable without retry', async () => {
+    const { ArtifactOperationError } = await failures();
+    await expectProjection(new ArtifactOperationError('capability_unselected'), {
+      category: 'capability_unselected', httpStatus: 503, publicCode: 'capability_unavailable', retriable: false,
+    }, { ...context, phase: 'selection' });
+  });
+
+  it('should map external typed wrappers through a trusted host seam and retain the wrapper', async () => {
+    const { ArtifactOperationError, classifyArtifactFailure } = await failures();
+    class HostPoolTimeout extends Error {}
+    const cause = new HostPoolTimeout('private host connection');
+    const mapHostError = (error: unknown) => error instanceof HostPoolTimeout
+      ? new ArtifactOperationError('provider_unavailable') : undefined;
+    expect(classifyArtifactFailure(cause, context, mapHostError)).toMatchObject({ ...unavailable, cause });
+    expect(classifyArtifactFailure(new Error('private host connection'), context, mapHostError).category).toBe('provider_error');
+  });
+});
+
