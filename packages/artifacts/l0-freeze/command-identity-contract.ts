@@ -117,6 +117,46 @@ export const AMBIGUOUS_DERIVATION_CASE = {
   expected: 'refuse',
 } as const;
 
+/**
+ * Platform envelope rule (C7): the optional envelope key is never an
+ * alternative source. `accept` proceeds, `conflict` is a 400 on a
+ * mismatching envelope, `envelope-only` is a 400 on an envelope without
+ * a tool argument. It adds no second platform idempotency store.
+ */
+export function resolvePlatformEnvelope(
+  argumentKey: string | undefined,
+  envelopeKey: string | undefined,
+): 'accept' | 'conflict' | 'envelope-only' {
+  if (argumentKey === undefined) return 'envelope-only';
+  if (envelopeKey === undefined || envelopeKey === argumentKey) return 'accept';
+  return 'conflict';
+}
+
+/**
+ * Command-identity relations the L1/L6 codec MUST enforce: equivalent
+ * text/byte inputs and object-property order converge, while changed
+ * bytes, path, MIME, profile, provenance or file-array order conflict
+ * under the same internal key. A hash supplied in a public request never
+ * overrides the computed hash.
+ */
+export const COMMAND_IDENTITY_RELATIONS = [
+  {
+    name: 'text-bytes-equivalence',
+    description: 'Equivalent text and byte file inputs converge to one command hash.',
+    expectation: 'converge',
+  },
+  {
+    name: 'file-array-order',
+    description: 'Changed file-array order conflicts under the same internal key.',
+    expectation: 'conflict',
+  },
+  {
+    name: 'request-hash-ignored',
+    description: 'A hash supplied in a public request never overrides the computed hash.',
+    expectation: 'computed-only',
+  },
+] as const;
+
 /** Server-created identity for one durable command. */
 export interface CommandIdentity {
   readonly internalKey: InternalIdempotencyKey;
