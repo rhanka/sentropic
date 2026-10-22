@@ -6,8 +6,9 @@ import { parseDecisionUsage, unreportedDecisionUsage } from './receipt.js';
 import { encodeJevRequest } from './jev-codec.js';
 import { decodeJevVerdict } from './jev-verdict.js';
 import { sanitizeJevId } from './jev-response.js';
-import { isRecord, snapshotBoundedJson } from './validation.js';
+import { hasOnlyKeys, isRecord, isText, snapshotBoundedJson } from './validation.js';
 import { parseJevProviderRaw } from './raw.js';
+import { deriveDecision } from './verdict.js';
 
 /** Rebuild the JEV verdict from native evidence, never return a live plugin envelope. */
 export function parseDecisionAdapterResult(candidate: unknown, request: DecisionRequest,
@@ -33,6 +34,35 @@ export function parseDecisionAdapterResult(candidate: unknown, request: Decision
   if (!matched) return failed('SERVED_IDENTITY_MISMATCH');
   if (usage.tokens.input.source !== 'provider' || usage.tokens.output.source !== 'provider'
     || usage.evaluatorCalls !== 1 || usage.explanations !== 0) return failed('USAGE_INVALID');
+  if ((descriptor.protocol ?? 'jev-native') !== 'jev-native') {
+    const verdict = value.verdict;
+    if (!isRecord(verdict) || request.criterion.kind === 'registered') return failed('VERDICT_INVALID');
+    if (verdict.criterionKind !== request.criterion.kind
+      || verdict.resolvedCriterionKind !== request.criterion.kind) return failed('VERDICT_INVALID');
+    if (verdict.distribution !== null || verdict.rationale !== null || verdict.confidence !== null) return failed('VERDICT_INVALID');
+    if (Object.hasOwn(verdict, 'providerRaw')) return failed('VERDICT_INVALID');
+    if (request.criterion.kind === 'choice') {
+      const labelValue = isRecord(verdict.label) && hasOnlyKeys(verdict.label, ['value', 'origin'])
+        && verdict.label.origin === 'provider' && isText(verdict.label.value) ? verdict.label.value : null;
+      if (verdict.score !== null || labelValue === null
+        || !request.criterion.options.some((option) => option.id === labelValue)) return failed('VERDICT_INVALID');
+      const derived = deriveDecision({ rule: request.decision, score: null, label: labelValue,
+        providerDecision: null, declaredLabels: request.criterion.options.map((option) => option.id) });
+      if (!derived.ok || JSON.stringify(derived.decision) !== JSON.stringify(verdict.decision)) return failed('VERDICT_INVALID');
+    } else {
+      if (!isRecord(verdict.score) || verdict.label !== null) return failed('VERDICT_INVALID');
+      const max = request.criterion.kind === 'graded' ? request.criterion.levels.length - 1 : 1;
+      const direction = request.criterion.kind === 'graded' ? request.criterion.direction : 'unordered';
+      const score = verdict.score as Record<string, unknown>;
+      if (typeof score.value !== 'number' || !Number.isFinite(score.value) || score.value < 0 || score.value > max) {
+        return failed('VERDICT_INVALID');
+      }
+      const derived = deriveDecision({ rule: request.decision, score: verdict.score as never, label: null, providerDecision: null });
+      if (!derived.ok || JSON.stringify(derived.decision) !== JSON.stringify(verdict.decision)) return failed('VERDICT_INVALID');
+      void direction;
+    }
+    return { ok: true, verdict: verdict as never, ...evidence };
+  }
   const encoded = encodeJevRequest(request, descriptor);
   const verdict = value.verdict;
   if (!encoded.ok || !isRecord(verdict)) return failed('VERDICT_INVALID');
