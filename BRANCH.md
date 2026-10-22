@@ -40,6 +40,7 @@
 - [ ] attention L1-VERSION: r2 assigns manifests/locks to integrator; L0 defers bump to L1. Integrator must apply the pack-only version before final CI.
 - [x] acknowledge L1-API: L0 freezes shapes only; r2 supplies public names. L6 exports and wires L1 modules.
 - [x] acknowledge L1-MIGRATION: path reconciliation notes live in the allowed profile directory; L6 consolidates migration docs.
+- [ ] attention L1-DOMAIN: Q0 has no qualified complete actor domain. L6 must bind actual verified subjects; ambiguous delimited domains fail construction without changing historical keys.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky allowance in L1.
@@ -54,7 +55,7 @@
 - [x] Baseline: read rules, template, r2, request and Q0; verify hashes and mechanical branch check.
 - [x] Profile: immutable selection, schemas, semantic rules, defaults, limits and revision-aware digest.
 - [x] Validation: closed arguments/files, Unicode, path/MIME/byte budgets, keys and envelopes.
-- [ ] Identity: trusted derivation, ordered codec, deep command snapshot and forced provenance.
+- [x] Identity: trusted derivation, ordered codec, deep command snapshot and forced provenance.
 - [x] Added command-identity.test.ts regressions for Radar vectors, ordered files, authority domains and snapshots.
 - [x] Added parameters.test.ts regressions for closed inputs, decoded budgets, paths, Unicode keys and envelopes.
 - [x] Baseline receipt: all 22 new cases fail on missing L1 contracts; four existing parameter cases pass (tmp/l1-evidence/baseline.log).
