@@ -49,8 +49,9 @@
 - [x] **Lot 3 — Reusable CT-01–03 assertions**
   - [x] Add `objects-assertions.ts`: races, buffer ownership, scope isolation, envelope commitments and corruption probes.
 - [ ] **Lot 4 — Mutants and final validation**
-  - [ ] Add `objects-mutants.ts` and `objects-kit.spec.ts`; positive pass precedes designated M01/M02/M03 kills.
-  - [ ] Run `make test-cluster-mesh ENV=test-common-rule`; missing fixture or instrumentation fails.
-  - [ ] Run scope checks before each commit; review final diff against the six allowed paths.
+  - [x] Add `objects-mutants.ts` and `objects-kit.spec.ts`; positive pass precedes designated M01/M02/M03 kills.
+  - [x] Run `make test-cluster-mesh ENV=test-common-rule`; 1005 passed; kit 8/8, no skips; missing fixture/instrumentation refuses setup.
+  - [x] Run lint and TypeScript checks; preserve the frozen L3a bytes and all L01a vectors.
+  - [x] Run scope checks before each commit; review final diff against the six allowed paths.
   - [ ] Push; open draft PR with this file as body; verify green CI and report PR/head/run URL.
   - [x] Retain BRANCH.md and leave the PR unmerged, per owner instruction.

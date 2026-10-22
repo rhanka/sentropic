@@ -80,6 +80,7 @@ export const createObjectReference = (store = new Map<string, Stored>()): Object
           page.scope.tenantId !== 'tenant-a' || page.scope.workspaceId !== 'workspace-a') throw new Error('denied');
         bytesLeft -= encoded.bytes.byteLength;
         if (bytesLeft < 0) throw new Error('limit');
+        page = JSON.parse(Buffer.from(encoded.bytes).toString('utf8')) as CommonManifestBody;
         for (const object of page.objects) {
           if (--objectsLeft < 0) throw new Error('limit');
           const ref = { ...object, scope: page.scope.workspaceId, version: '1' };
