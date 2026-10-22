@@ -9,12 +9,12 @@ import {
   COMMIT_STATES,
   FINALIZATION_PHASES,
   REFUSAL_RESIDUE_FORBIDDEN,
-} from '../src/server/commit-contract.js';
+} from '../l0-freeze/commit-contract.js';
 import {
   FAILURE_CATEGORIES,
   FAILURE_PROJECTIONS,
-} from '../src/server/failure-contract.js';
-import { COMMAND_CODEC_VERSION } from '../src/server/command-identity-contract.js';
+} from '../l0-freeze/failure-contract.js';
+import { COMMAND_CODEC_VERSION } from '../l0-freeze/command-identity-contract.js';
 
 describe('commit contract', () => {
   it('should freeze the command-codec shape version', () => {

@@ -49,7 +49,11 @@ freezes shapes, rules and quarantine behavior only.
 
 ## Ask 4 — publication and receipts
 
-- L0 reserves `0.2.0-rc.1` for the artifacts source line after registry
-  verification (published `0.1.4` is the predecessor). No publish happens
-  in L0. Final compatible peer ranges and the logical provider version
-  match the exact released archives in L9.
+- L0 documents the `0.2.0-rc` reservation but changes no package version:
+  the mesh peer range (`>=0.1.3 <0.2.0`) stays frozen until L7, so a
+  range-breaking bump inside L0 would break workspace resolution and the
+  packed-consumer probe. The first `src/`-changing lot (L1) takes the
+  `0.2.0-rc.1` bump with the provider-version alignment. Published
+  `0.1.4` is the predecessor. No publish happens in L0. Final compatible
+  peer ranges and the logical provider version match the exact released
+  archives in L9.

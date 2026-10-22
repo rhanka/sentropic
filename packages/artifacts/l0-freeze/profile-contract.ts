@@ -7,7 +7,7 @@
  * Public host API names stay unfrozen until spec r2.
  */
 
-import type { JsonValue } from './contracts.js';
+import type { JsonValue } from '../src/contracts.js';
 
 /** Version of the frozen effective-profile shape. */
 export const PROFILE_CONTRACT_VERSION = 'artifacts-profile/v1' as const;
