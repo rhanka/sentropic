@@ -20,7 +20,7 @@ export function packStudyScene(scene) {
     const children = layout([...entries.values()].filter(child=>child.parentId===item.id));
     item.width = Math.max(CARD_WIDTH, children.width + pad*2);
     Object.assign(item,groupContent(item,item.width));
-    item.height=item.headerHeight+children.height+pad;
+    item.height=item.headerHeight+children.height+16;
     return {item,width:item.width,height:item.height,setHeight(h){this.height=item.height=h;},place(x,y){item.position={x,y};children.place(x+pad,y+item.headerHeight);}};
   }
   function layout(items) {
@@ -34,7 +34,6 @@ export function packStudyScene(scene) {
       row.items=row.items.sort((a,b)=>a.position.x-b.position.x).map(measure);
       row.width=row.items.reduce((n,item)=>n+item.width,0)+Math.max(0,row.items.length-1)*rowGap;
       row.height=Math.max(0,...row.items.map(item=>item.height));
-      row.items.forEach(item=>item.setHeight(row.height));
     }
     const width=Math.max(0,...rows.map(row=>row.width)),height=rows.reduce((n,row)=>n+row.height,0)+Math.max(0,rows.length-1)*rowGap;
     return {width,height,rows,place(x,y){for(const row of rows){row.placedY=y;let next=x+(width-row.width)/2;for(const item of row.items){item.place(next,y);next+=item.width+rowGap;}y+=row.height+rowGap;}}};

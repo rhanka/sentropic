@@ -22,11 +22,17 @@ function check(scene,name){
  if(!baseline)for(const g of scene.groups)if(/ · \p{Ll}/u.test(g.title))throw Error(name+': frame title capitalization '+g.id);
  if(!baseline)for(const g of scene.groups.filter(g=>!g.collapsed)){
   const children=[...scene.groups,...scene.nodes].filter(n=>n.parentId===g.id);
-  if(children.length&&Math.min(...children.map(n=>n.position.y))-g.position.y-g.headerTextHeight+8!==72)throw Error(name+': noncompact header gap '+g.id);
+  if(children.length){
+   const top=Math.min(...children.map(n=>n.position.y))-g.position.y-g.headerTextHeight+8;
+   const bottom=g.position.y+g.height-Math.max(...children.map(n=>n.position.y+n.height));
+   if(Math.abs(top-16)>eps||Math.abs(top-bottom)>2)throw Error(name+': unbalanced zone inset '+g.id+' '+top+'/'+bottom);
+  }
  }
  if(!baseline&&scene.id==='central')for(const ids of [['h2a','surfaces'],['engram','design-system'],['cm-catalog','cm-storage','cm-security','cm-cluster']]){
   const row=scene.groups.filter(g=>ids.includes(g.id));
   if(row.length===ids.length&&new Set(row.map(g=>g.position.y)).size!==1)throw Error(name+': row alignment '+ids.join('/'));
+  const expanded=row.filter(g=>!g.collapsed);
+  if(expanded.length>1&&Math.max(...expanded.map(g=>g.position.y+g.headerTextHeight))-Math.min(...expanded.map(g=>g.position.y+g.headerTextHeight))>eps)throw Error(name+': child row alignment '+ids.join('/'));
  }
  const frame=sceneFrame(scene);
  const allCollapsed=scene.id==='central'&&!scene.nodes.length&&scene.groups.length&&scene.groups.every(g=>g.collapsed);
@@ -61,13 +67,15 @@ function check(scene,name){
    for(const box of boxes)if(segmentCrossesRect(a,b,box))fail('cardIntrusions',edge.id+'/'+box.id);
    for(const g of [...scene.groups,...scene.nodes]){
     const r=nodeRect(g),h={...r,bottom:r.top+g.headerTextHeight};
+    const borderClearance=!g.data&&!g.collapsed?3.99:11.99;
     if(!g.data&&!g.collapsed&&segmentCrossesRect(a,b,h))fail('headerIntrusions',edge.id+'/'+g.id);
-    if(near(a.x,b.x)&&Math.max(a.y,b.y)>r.top+eps&&Math.min(a.y,b.y)<r.bottom-eps&&[r.left,r.right].some(x=>Math.abs(a.x-x)<11.99))fail('borderOverlaps',edge.id+'/'+g.id);
-    if(near(a.y,b.y)&&Math.max(a.x,b.x)>r.left+eps&&Math.min(a.x,b.x)<r.right-eps&&[r.top,r.bottom].some(y=>Math.abs(a.y-y)<11.99))fail('borderOverlaps',edge.id+'/'+g.id);
+    if(near(a.x,b.x)&&Math.max(a.y,b.y)>r.top+eps&&Math.min(a.y,b.y)<r.bottom-eps&&[r.left,r.right].some(x=>Math.abs(a.x-x)<borderClearance))fail('borderOverlaps',edge.id+'/'+g.id);
+    const compactTop=scene.groups.some(p=>!p.collapsed&&g.parentId===p.id&&Math.abs(g.position.y-p.position.y-p.headerTextHeight-8)<eps);
+    if(near(a.y,b.y)&&Math.max(a.x,b.x)>r.left+eps&&Math.min(a.x,b.x)<r.right-eps&&[r.top,r.bottom].some((y,i)=>Math.abs(a.y-y)<(i===0&&compactTop?3.99:borderClearance)))fail('borderOverlaps',edge.id+'/'+g.id);
    }
   }
   for(const b of boxes)if(overlap(label,b,4))fail('labelCardCollisions',edge.id+'/'+b.id);
-  for(const g of scene.groups.filter(g=>!g.collapsed))if(overlap(label,{...nodeRect(g),bottom:g.position.y+g.headerTextHeight+(baseline?0:64)},4))fail('headerIntrusions','label '+edge.id+'/'+g.id);
+  for(const g of scene.groups.filter(g=>!g.collapsed))if(overlap(label,{...nodeRect(g),bottom:g.position.y+g.headerTextHeight+(baseline?0:8)},4))fail('headerIntrusions','label '+edge.id+'/'+g.id);
   for(const s of segments)if(s.id!==edge.id&&segmentCrossesRect(s.from,s.to,{left:label.left-4,right:label.right+4,top:label.top-4,bottom:label.bottom+4}))fail('edgeLabelCollisions',s.id+'/'+edge.id);
  }
  for(const bank of banks.values()){

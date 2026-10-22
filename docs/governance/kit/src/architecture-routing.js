@@ -1,4 +1,4 @@
-import { labelSize, PORT_SLOT_COUNT, textWidth, CARD_STACK_GAP } from './architecture-layout.js';
+import { labelSize, PORT_SLOT_COUNT, textWidth } from './architecture-layout.js';
 
 // A 21px, one-line edge pill is 38px tall and needs 6px to the next card.
 export const ROUTE_CLEARANCE = 28;
@@ -348,6 +348,11 @@ function frameObstacles(edge, nodes, groups) {
   ));
 }
 
+function compactTop(node, groups) {
+  return groups.some(g => !g.collapsed && node.parentId === g.id
+    && Math.abs(node.position.y - g.position.y - g.headerTextHeight - 8) < .01);
+}
+
 export function routeEdge(edge, nodes, previousEdges = [], sceneEdges = [edge], groups = [], ports) {
   ports ??= allocatePorts(sceneEdges, nodes, new Map(sceneEdges.map(e => [e.id, sideChoices(e, nodes)[0]]))).get(edge.id);
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -357,17 +362,23 @@ export function routeEdge(edge, nodes, previousEdges = [], sceneEdges = [edge], 
 
   const sourceRect = nodeRect(sourceNode);
   const targetRect = nodeRect(targetNode);
+  const insetTop = node => compactTop(node, groups);
   const previousLabels = edge.data?.pillLabel ? placeLabels(previousEdges, nodes, groups) : [];
   const obstacles = [
-    ...nodes.map((node) => nodeRect(
-    node,
-    node.id === sourceNode.id || node.id === targetNode.id ? 0 : ROUTE_CLEARANCE,
-    )),
+    ...nodes.map(node => {
+      const endpoint = node.id === sourceNode.id || node.id === targetNode.id;
+      const rect = nodeRect(node, endpoint ? 0 : ROUTE_CLEARANCE);
+      if (!endpoint && insetTop(node)) rect.top = node.position.y - 4;
+      return rect;
+    }),
     // A route may meet its endpoint normally, but may not skim any of its
     // four borders. Keep the same directional clearance as expanded frames.
-    ...[sourceRect, targetRect].flatMap(r => [
+    ...[sourceRect, targetRect].flatMap((r,i) => [
       ...[r.left,r.right].map(x => ({left:x-12,right:x+12,top:r.top,bottom:r.bottom,parallelOnly:'vertical'})),
-      ...[r.top,r.bottom].map(y => ({left:r.left,right:r.right,top:y-12,bottom:y+12,parallelOnly:'horizontal'})),
+      ...[r.top,r.bottom].map((y,side) => {
+        const gap = side === 0 && insetTop(i ? targetNode : sourceNode) ? 4 : 12;
+        return {left:r.left,right:r.right,top:y-gap,bottom:y+gap,parallelOnly:'horizontal'};
+      }),
     ]),
     ...edgeObstacleRects(previousEdges),
     // Route around the occupied pill, not just around its carrier line.
@@ -375,14 +386,11 @@ export function routeEdge(edge, nodes, previousEdges = [], sceneEdges = [edge], 
       ...rect, left: rect.left - 6, right: rect.right + 6,
       top: rect.top - 6, bottom: rect.bottom + 6,
     })),
-    ...frameObstacles(edge, nodes, groups).map(rect => edge.data?.pillLabel ? {
-      ...rect, left: rect.left - 26, right: rect.right + 26,
-      top: rect.top - 26, bottom: rect.bottom + 26,
-    } : rect),
+    ...frameObstacles(edge, nodes, groups),
     // A relation may cross a frame boundary perpendicularly, but must never
-    // travel along it. Directional obstacles leave those crossings open.
+    // overlap its stroke. A 4px frame clearance leaves the compact inset usable.
     ...groups.filter(group => !group.collapsed && frameObstacles(edge, nodes, groups).some(rect => rect.id === `header:${group.id}`)).flatMap(group => {
-      const r = nodeRect(group), gap = 12;
+      const r = nodeRect(group), gap = 4;
       return [
         ...[r.left, r.right].map(x => ({ left:x-gap, right:x+gap, top:r.top, bottom:r.bottom, parallelOnly:'vertical' })),
         ...[r.top, r.bottom].map(y => ({ left:r.left, right:r.right, top:y-gap, bottom:y+gap, parallelOnly:'horizontal' })),
@@ -431,8 +439,8 @@ export function routeEdge(edge, nodes, previousEdges = [], sceneEdges = [edge], 
   };
   for (const strategy of ['corridor', 'grid']) {
     if (selected) break;
-    const start = offsetPoint(sourceHandle, sourceSide);
-    const end = offsetPoint(targetHandle, targetSide);
+    const start = offsetPoint(sourceHandle, sourceSide, sourceSide === 'top' && insetTop(sourceNode) ? 4 : PORT_OFFSET);
+    const end = offsetPoint(targetHandle, targetSide, targetSide === 'top' && insetTop(targetNode) ? 4 : PORT_OFFSET);
     if (obstacles.some((rect) => pointInsideRect(start, rect) || pointInsideRect(end, rect))) continue;
     const paths = strategy === 'corridor' ? cheapPaths(start, end) : [shortestOrthogonalPath(start, end, obstacles)];
     for (const routed of paths) {
@@ -616,9 +624,9 @@ export function placeLabels(edges, nodes, groups = []) {
       };
       if (nodeBoxes.some((nodeBox) => rectsOverlap(box, nodeBox))) return false;
       if (frames.some(frame => rectsOverlap(box, frame, 4))) return false;
-      // The standard stacked-card gap is spacing, never a label lane.
+      // Keep labels out of the compact header-to-child inset.
       if (groups.some(g=>!g.collapsed && rectsOverlap(box, {
-        ...nodeRect(g), bottom:g.position.y+g.headerTextHeight+CARD_STACK_GAP-8,
+        ...nodeRect(g), bottom:g.position.y+g.headerTextHeight+8,
       },4))) return false;
       if (placed.some(({ box: placedBox }) => rectsOverlap(box, placedBox, 6))) return false;
       return allSegments.every((segment) => (
@@ -738,7 +746,14 @@ export function routeScene(scene) {
   let lastError = null;
   let promoted = 0;
 
-  const choices = new Map(scene.edges.map(e=>[e.id,sideChoices(e,scene.nodes).sort((a,b)=>{
+  const choices = new Map(scene.edges.map(e=>[e.id,sideChoices(e,scene.nodes).filter(plan => {
+    const headers = frameObstacles(e, scene.nodes, scene.groups ?? []);
+    return ['source','target'].every(end => {
+      const handle = handlePoint(nodeRect(nodeById.get(e[end])), plan[end+'Side']);
+      const node = nodeById.get(e[end]), side = plan[end+'Side'];
+      return segmentIsClear(handle, offsetPoint(handle, side, side === 'top' && compactTop(node, scene.groups ?? []) ? 4 : PORT_OFFSET), headers);
+    });
+  }).sort((a,b)=>{
     const penalty = p => ['source','target'].reduce((sum,end)=>{
       const owner=reserved.get(`${e[end]}:${p[end+'Side']}`);
       return sum + (owner && owner!==e.id ? 1 : 0);
@@ -753,7 +768,7 @@ export function routeScene(scene) {
     let blocked;
     // A failed corridor changes the side plan, then reallocates EVERY affected
     // port. A route with a shifted or asymmetric bank is never returned.
-    for (let attempt=0; attempt<scene.edges.length*5+1; attempt++) {
+    for (let attempt=0; attempt<scene.edges.length*16+1; attempt++) {
       const sides = new Map(scene.edges.map(e=>[e.id,choices.get(e.id)[choice.get(e.id)]]));
       const ports = allocatePorts(scene.edges,scene.nodes,sides);
       const routedEdges = [];

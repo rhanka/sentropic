@@ -52,3 +52,82 @@ make build deliver ENV=test-governance-contract
 make check-source check-geometry ENV=test-governance-contract
 make check-r11-final R11_FINAL_SHOTS_DIR=/home/antoinefa/src/sentropic/.tmp/governance-unification/diagram-restore-shots 'PROBE_MOUNTS=-v /home/antoinefa/src/sentropic/.tmp/governance-unification:/evidence -v /home/antoinefa/src/sentropic/.tmp/governance-unification/diagram-restore-shots:/r11-final-shots' ENV=test-governance-contract
 ```
+
+## Expanded zone spacing — spacing31
+
+Chromium SVG measurements in scene pixels. The reconstructed baseline uses the starting head geometry and unchanged header rendering; all central-zone measurements match the live before/after portable within 0.01px.
+
+| Locale | Scene / zone | Above rule before → after | Below rule top/bottom before → after | Height before → after |
+|---|---|---:|---:|---:|
+| FR | central / h2a | 26.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 468.00 → 389.39 |
+| FR | central / surfaces | 26.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 468.00 → 389.39 |
+| FR | central / cluster-mesh | 61.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 1445.00 → 1169.76 |
+| FR | central / cm-catalog | 72.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 1142.00 → 980.37 |
+| FR | central / cat-mcp | 26.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 468.00 → 389.39 |
+| FR | central / cm-storage | 72.61 → 4.00 | 72.00/372.00 → 16.00/16.00 | 1142.00 → 702.98 |
+| FR | central / cm-security | 31.02 → 4.00 | 72.00/372.00 → 16.00/16.00 | 1142.00 → 702.98 |
+| FR | central / cm-cluster | 72.61 → 4.00 | 72.00/372.00 → 16.00/16.00 | 1142.00 → 702.98 |
+| FR | central / engram | 61.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 503.00 → 389.39 |
+| FR | central / design-system | 61.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 503.00 → 389.39 |
+| FR | annotate / ann-ui | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | annotate / ann-auth | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | annotate / ann-comments | 81.21 → 4.00 | 72.00/40.00 → 16.00/16.00 | 609.00 → 451.79 |
+| FR | annotate / ann-h2a | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | annotate / ann-engram | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | ontologies / onto-graph | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | ontologies / onto-skills | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | ontologies / onto-layout | 30.41 → 4.00 | 72.00/40.00 → 16.00/16.00 | 527.00 → 420.59 |
+| FR | ontologies / onto-bpmn | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | ontologies / onto-boundary | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | memory / mem-core | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | memory / mem-time | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | memory / mem-pipeline | 65.41 → 4.00 | 72.00/40.00 → 16.00/16.00 | 562.00 → 420.59 |
+| FR | memory / mem-live | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | memory / mem-h2a | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | traceability / trace-1-2 | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | traceability / trace-3-4 | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | traceability / trace-5-6 | 30.41 → 4.00 | 72.00/40.00 → 16.00/16.00 | 527.00 → 420.59 |
+| FR | traceability / trace-7 | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| FR | traceability / trace-loop | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | central / h2a | 26.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 468.00 → 389.39 |
+| EN | central / surfaces | 26.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 468.00 → 389.39 |
+| EN | central / cluster-mesh | 61.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 1445.00 → 1169.76 |
+| EN | central / cm-catalog | 72.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 1142.00 → 980.37 |
+| EN | central / cat-mcp | 26.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 468.00 → 389.39 |
+| EN | central / cm-storage | 72.61 → 4.00 | 72.00/372.00 → 16.00/16.00 | 1142.00 → 702.98 |
+| EN | central / cm-security | 31.02 → 4.00 | 72.00/372.00 → 16.00/16.00 | 1142.00 → 702.98 |
+| EN | central / cm-cluster | 72.61 → 4.00 | 72.00/372.00 → 16.00/16.00 | 1142.00 → 702.98 |
+| EN | central / engram | 26.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 468.00 → 389.39 |
+| EN | central / design-system | 26.61 → 4.00 | 72.00/16.00 → 16.00/16.00 | 468.00 → 389.39 |
+| EN | annotate / ann-ui | 61.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 527.00 → 389.39 |
+| EN | annotate / ann-auth | 26.61 → 4.00 | 72.00/75.00 → 16.00/16.00 | 527.00 → 389.39 |
+| EN | annotate / ann-comments | 112.41 → 4.00 | 72.00/40.00 → 16.00/16.00 | 609.00 → 420.59 |
+| EN | annotate / ann-h2a | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | annotate / ann-engram | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | ontologies / onto-graph | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | ontologies / onto-skills | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | ontologies / onto-layout | 30.41 → 4.00 | 72.00/40.00 → 16.00/16.00 | 527.00 → 420.59 |
+| EN | ontologies / onto-bpmn | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | ontologies / onto-boundary | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | memory / mem-core | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | memory / mem-time | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | memory / mem-pipeline | 30.41 → 4.00 | 72.00/40.00 → 16.00/16.00 | 527.00 → 420.59 |
+| EN | memory / mem-live | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | memory / mem-h2a | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | traceability / trace-1-2 | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | traceability / trace-3-4 | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | traceability / trace-5-6 | 30.41 → 4.00 | 72.00/40.00 → 16.00/16.00 | 527.00 → 420.59 |
+| EN | traceability / trace-7 | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+| EN | traceability / trace-loop | 26.61 → 4.00 | 72.00/40.00 → 16.00/16.00 | 492.00 → 389.39 |
+
+Baseline: `dd7c35b227fcaf6f9605acac6062346bdcfc8329`. Measurements cover all 60 expanded FR/EN zone occurrences, including subtitles of two, three and four lines. Every zone shrinks. Shorter headers move as a block to keep child rows aligned without adding space after their subtitles.
+
+Routing uses a 4px clearance along expanded frames and above first-row cards; labels stay in wider gutters or outside frames. No extra frame height is reserved for edges.
+
+Preservation: 144 cards / 720 fields and all header wording/wrapping remain unchanged; 24 fully collapsed states retain identical geometry and routes. Six central row checks have exactly 0px deviation. Chromium file URLs load the title and visible diagram without console errors. Zero clipped or ellipsized fields.
+
+Validation: source; 102 scenes / 732 edges with zero geometry violations; 16 browser captures / 600 interactions (worst 1475.0ms, unchanged 1800ms budget); 32 content slides / 52 need routes. Performance: load ≤ 146.3ms, expand-all ≤ 59.2ms, idle script 0ms per ten seconds.
+
+EN screenshots at 1920px: `cluster-mesh-expanded-en.png`, `surfaces-expanded-en.png`, `h2a-expanded-en.png` under `/home/antoinefa/src/sentropic/.tmp/governance-unification/spacing31-shots/`. The same directory contains raw measurements, row/preservation checks and compact browser/performance evidence. Temporary traces and intermediate outputs are removed after verification.
+
+Portable SHA-256: `831cbdee9bb5820e7e19ed55c942522a5848c402db9be0c89d87d02559bf6f35`.
