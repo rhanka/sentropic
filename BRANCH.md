@@ -35,7 +35,7 @@
 - [x] No UI; real-provider Radar acceptance remains L6/L8, pinned Radar 3fc55b4f4.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: rules, r2 §6/E1–E5, Q0 and L0 inspected; harness branch check passed.
-- [ ] Lot 1: first 39 vectors fail individually on L0; real-app baseline capture confirms S3 500/internal_error and typed lost connection 409/conflict (ports injected below app, no probe).
+- [x] Lot 1: all 73 vectors fail individually on L0; real-app baseline capture confirms S3 500/internal_error and typed lost connection 409/conflict (ports injected below app, no probe).
 - [ ] Lot 2: implement failures.ts and outcome-projection.ts; E2/E3 matrix, trusted seam, cause retention and redaction.
 - [ ] Lot 3: scoped/full artifacts tests, typecheck/lint, mechanical scope before each atomic commit (<150 lines).
 - [ ] Lot 4: push; draft PR based on L0 with this body; green CI; report SHA/run/ambiguities; do not merge.
