@@ -121,6 +121,7 @@ describe('effective Radar arguments', () => {
       expect(() => validate('artifacts_ensure', ensure('key', { bindingName }))).toThrow();
     }
     expect(validate('artifacts_ensure', ensure('key', { bindingName: ' ' })).bindingName).toBe(' ');
+    expect(validate('artifacts_ensure', ensure('key', { bindingName: '🏠'.repeat(64) })).bindingName).toHaveLength(128);
     for (const args of [{ limit: 0 }, { limit: 101 }, { limit: 1.5 }, { offset: -1 }, { offset: 0.5 }]) {
       expect(() => validate('artifacts_list', args)).toThrow();
     }
@@ -137,6 +138,7 @@ describe('effective Radar arguments', () => {
 
   it('should enforce file count, uniqueness, closed entries, MIME and exclusive encoding', () => {
     const file = publish().files[0];
+    expect(validate('artifacts_publish', publish({ files: Array.from({ length: 32 }, (_, n) => ({ ...file, path: String(n) })) })).files).toHaveLength(32);
     for (const files of [[], Array.from({ length: 33 }, (_, n) => ({ ...file, path: String(n) })),
       [file, file], [{ ...file, mimeType: 'image/png' }], [{ ...file, bytes: [] }],
       [{ path: 'a', mimeType: 'text/html' }], [{ ...file, source: 'forged' }],
@@ -148,6 +150,9 @@ describe('effective Radar arguments', () => {
   it('should count decoded UTF-8 bytes per file and across the entire publication', () => {
     const file = { path: 'a', mimeType: 'text/html', text: 'é'.repeat(131072) };
     expect(validate('artifacts_publish', publish({ files: [file] })).files).toHaveLength(1);
+    const bytes = { path: 'bytes', mimeType: 'application/json', bytes: Array(262144).fill(255) };
+    expect(validate('artifacts_publish', publish({ files: [bytes] })).files).toHaveLength(1);
+    expect(() => validate('artifacts_publish', publish({ files: [{ ...bytes, bytes: [...bytes.bytes, 0] }] }))).toThrow();
     expect(() => validate('artifacts_publish', publish({ files: [{ ...file, text: file.text + 'a' }] }))).toThrow();
     expect(() => validate('artifacts_publish', publish({ files: [file, { ...file, path: 'b', text: 'b' }] }))).toThrow();
     expect(() => validate('artifacts_publish', publish({ files: [{ path: 'a', mimeType: 'text/html', bytes: [1.5] }] }))).toThrow();

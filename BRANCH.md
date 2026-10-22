@@ -61,6 +61,7 @@
 - [x] Baseline receipt: all 22 new cases fail on missing L1 contracts; four existing parameter cases pass (tmp/l1-evidence/baseline.log).
 - [x] Implemented platform-free profile contracts and JSON snapshot/ordered codec primitives.
 - [x] Generated schemas from explicit Radar defaults/limits and documented path reconciliation/domain qualification.
+- [x] Hardened composition against inconsistent bounds and derivation limits; verified 32 files and full decoded byte-array boundary.
 - [ ] Tests: capability-profile.test.ts, command-identity.test.ts, parameters.test.ts; baseline red/candidate green.
 - [ ] Gates: make typecheck-artifacts, lint-artifacts, test-artifacts; make scope-check before every commit.
 - [ ] Delivery: push, draft PR against feat/artifacts-861-contracts, green CI, report URL/SHA/run; no merge.

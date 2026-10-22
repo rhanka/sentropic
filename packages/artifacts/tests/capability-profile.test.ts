@@ -56,6 +56,12 @@ describe('compiled capability profile', () => {
     const source = structuredClone(RADAR_ARTIFACTS_PROFILE);
     source.operations.find((op) => op.operation === 'list')!.defaults.limit = 101;
     expect(() => compileArtifactsProfile(source)).toThrow();
+    const inconsistent = structuredClone(RADAR_ARTIFACTS_PROFILE);
+    inconsistent.operations.find((op) => op.operation === 'ensure')!.limits.bindingNameMinUnits = 129;
+    expect(() => compileArtifactsProfile(inconsistent)).toThrow();
+    const keyMismatch = structuredClone(RADAR_ARTIFACTS_PROFILE);
+    keyMismatch.operations.find((op) => op.operation === 'publish')!.limits.idempotencyKeyMaxUnits = 257;
+    expect(() => compileArtifactsProfile(keyMismatch)).toThrow();
   });
 
   it('should generate closed schemas with required keys, explicit path restrictions and principal metadata', () => {
