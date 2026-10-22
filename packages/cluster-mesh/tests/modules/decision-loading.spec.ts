@@ -43,8 +43,10 @@ describe('decision module loading', () => {
     const loaded = (await modules.load('llm-mesh/decision/host')) as typeof meshDecisionHostProvider;
     expect(typeof loaded.createDecisionService).toBe('function');
     expect(typeof loaded.createJevAdapter).toBe('function');
+    expect(typeof loaded.createStructuredDecisionAdapter).toBe('function');
     expect(typeof loaded.jevDescriptor).toBe('object');
     expect(loaded.createDecisionService).toBe(meshDecisionHostProvider.createDecisionService);
+    expect(loaded.createStructuredDecisionAdapter).toBe(meshDecisionHostProvider.createStructuredDecisionAdapter);
     expect(loaded.jevDescriptor).toBe(meshDecisionHostProvider.jevDescriptor);
     const loadedByLoader = await loadLlmMeshDecisionHost(modules);
     expect(loadedByLoader.createDecisionService).toBe(meshDecisionHostProvider.createDecisionService);
