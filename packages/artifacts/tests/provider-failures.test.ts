@@ -113,11 +113,18 @@ describe('trusted domain and adapter mappings', () => {
 
   it.each([
     [403, 'activation_closed', false], [503, 'capability_unavailable', true],
-  ] as const)('should preserve sanitized finalization refusal %s with explicit retry semantics', async (status, publicCode, retriable) => {
+    [503, 'capability_unavailable', false],
+    [503, 'host_outage', false],
+    [403, 'not_in_cohort', true],
+  ] as const)('should preserve refusal %s/%s with host retry %s and normative outage semantics', async (status, publicCode, retriable) => {
     const { ArtifactOperationError } = await failures();
     await expectProjection(new ArtifactOperationError('unauthorized_at_commit', {
       cause: driver('private'), refusal: { status, publicCode, retriable },
-    }), { category: 'unauthorized_at_commit', httpStatus: status, publicCode, retriable }, { ...context, phase: 'guard' });
+    }), {
+      category: 'unauthorized_at_commit', httpStatus: status,
+      publicCode: status === 503 ? 'capability_unavailable' : publicCode,
+      retriable: status === 503 ? true : status === 403 ? false : retriable,
+    }, { ...context, phase: 'guard' });
   });
 
   it('should make an unselected capability unavailable without retry', async () => {
