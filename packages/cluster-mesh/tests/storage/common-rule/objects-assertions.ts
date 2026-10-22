@@ -109,12 +109,36 @@ export const assertCT02 = async (makeFixture: ObjectFixtureFactory): Promise<voi
   const units = body.units.map((u) => ({ ...u, roots: [...u.roots].reverse() }));
   assert.notEqual(f.encode({ ...body, units }).sha256, encoded.sha256);
   assert.equal(f.encode({ ...body, sha256: 'not part of the body' } as CommonManifestBody).sha256, encoded.sha256);
-  for (const field of Object.keys(body)) {
-    await assert.rejects(f.verify({ ...body, [field]: null }, encoded.sha256, BUDGET), undefined, `unbound ${field}`);
+  const payload = Buffer.from('populated CT-02 payload'), payloadRef = objectRef(payload, 'ct02-payload');
+  await f.clients[0].preparer.create(payloadRef, payload);
+  const pages: ObjectRef[] = [];
+  for (const id of ['page-a', 'page-b']) {
+    const page = f.encode({ ...manifest([payloadRef]), publicationId: id });
+    const ref = { ...objectRef(page.bytes, id), locator: `manifest/${id}` };
+    await f.clients[0].preparer.create(ref, page.bytes);
+    pages.push(ref);
   }
-  for (const object of [{ ...body.objects[0], byteLength: 1 }, { ...body.objects[0], sha256: '0'.repeat(64) },
-    { ...body.objects[0], locator: 'manifest/substituted' }]) {
-    await assert.rejects(f.verify({ ...body, objects: [object, body.objects[1]] }, encoded.sha256, BUDGET));
+  const populated = { ...body, objects: [payloadRef, pages[0]] }, commitment = f.encode(populated).sha256;
+  await f.verify(populated, commitment, BUDGET);
+  assert.notEqual(commitment, '0'.repeat(64));
+  await assert.rejects(f.verify(populated, '0'.repeat(64), BUDGET), /manifest commitment/,
+    'CT-02: supplied manifest digest must match');
+  for (const change of [...substitutions.filter((s) => !('objects' in s)), { units: [...populated.units].reverse() }]) {
+    await assert.rejects(f.verify({ ...populated, ...change }, commitment, BUDGET), /manifest commitment/);
+  }
+  const replacedPage = { ...populated, objects: [payloadRef, pages[1]] };
+  const extended = { ...populated, objects: [payloadRef, ...pages], terminal: { count: '3', complete: true } };
+  for (const changed of [replacedPage, extended]) {
+    await f.verify(changed, f.encode(changed).sha256, BUDGET);
+    await assert.rejects(f.verify(changed, commitment, BUDGET), /manifest commitment/);
+  }
+  await f.verify({ ...populated, objects: [...populated.objects].reverse() }, commitment, BUDGET);
+  for (const field of Object.keys(body)) {
+    await assert.rejects(f.verify({ ...populated, [field]: null }, commitment, BUDGET), undefined, `unbound ${field}`);
+  }
+  for (const object of [{ ...pages[0], id: 'other' }, { ...pages[0], byteLength: 1 },
+    { ...pages[0], sha256: '0'.repeat(64) }, { ...pages[0], locator: 'manifest/substituted' }]) {
+    await assert.rejects(f.verify({ ...populated, objects: [payloadRef, object] }, commitment, BUDGET), /manifest commitment/);
   }
   for (const field of ['commonContract', 'manifestVersion']) {
     const before = f.counters.encodes;
@@ -125,7 +149,7 @@ export const assertCT02 = async (makeFixture: ObjectFixtureFactory): Promise<voi
   for (const terminal of [undefined, { count: '1', complete: true }, { count: '2', complete: false }]) {
     assert.throws(() => f.encode({ ...body, terminal } as CommonManifestBody), /incomplete manifest/);
   }
-  await assert.rejects(f.verify(body, '', BUDGET), /manifest commitment/);
+  await assert.rejects(f.verify(populated, '', BUDGET), /manifest commitment/);
   const legacy = readFileSync(new URL('../../../assets/storage/comments/transport-v1.json', import.meta.url));
   const ref = objectRef(legacy, 'legacy-l3a'), wrapped = manifest([ref]);
   assert.equal(ref.sha256, 'c65c06f69c7806dd86326b64fd5712e17ab9c91de59074dd9a466de58d2573f7');

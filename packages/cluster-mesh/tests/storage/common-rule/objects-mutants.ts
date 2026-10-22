@@ -48,4 +48,11 @@ export const OBJECT_MUTANTS: readonly {
       f.clients = [f.client('workspace-a'), f.client('workspace-a')];
       return f;
     } },
+  { id: 'M02-ignore-digest', revision: 'l01b1-m02-ignore-digest-v1', target: 'CT-02',
+    kill: /CT-02: supplied manifest digest must match/,
+    factory: () => {
+      const f = createObjectReference(), verify = f.verify;
+      f.verify = async (body, digest, budget) => verify(body, digest === '' ? '' : f.encode(body).sha256, budget);
+      return f;
+    } },
 ];
