@@ -160,4 +160,13 @@ describe('commit contract', () => {
     expect(doc).toContain('refuse any common-rule admission or conformance claim');
     expect(doc).toContain('registers no common storage module');
   });
+
+  it('should direct the release train at the integration branch', () => {
+    const docDir = dirname(fileURLToPath(import.meta.url));
+    const doc = readFileSync(join(docDir, '..', 'docs', 'migration-inventory-l0.md'), 'utf8');
+    expect(doc).toContain('feat/artifacts-861-integration');
+    expect(doc).toContain('no cherry-picks');
+    expect(doc).toContain('0.2.0-dev');
+    expect(doc).not.toContain('0.2.0-rc.1');
+  });
 });
