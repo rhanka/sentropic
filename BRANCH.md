@@ -343,6 +343,7 @@
   - [x] F3 structured regression (malformed/refusal/extra/missing/prose/clamp/default rejected; scalar and label pass).
   - [x] F3 host integration (structured scalar/label served through the service with single-call transport and no retry).
   - [x] F3 host catalog (structured adapter exported and required in cluster members).
+  - [x] F9 tracked docs migration (active heading/objective and spec imports use Decision; judge retained only in migration history).
   - [x] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated. Mesh 1302/1302, cluster 1014 passed, lazy-package 78/78 with re-pinned selected lock (sibling llm-mesh 0.27.1). api unit/integration covered by CI (compose stack not run locally).
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
