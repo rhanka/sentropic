@@ -89,4 +89,16 @@ describe('scalar-label-v1 profile probes (P18/P19/P20)', () => {
     const bad = await decideWith(request, withDistribution, scalarSemantics({ score: null }));
     expect(bad.result).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE' } });
   });
+  it('rejects raw-off and malformed raw canaries under scalar profile (F1)', async () => {
+    const base = scalarBinary(scalarScore(0.7, 0, 1));
+    const rawOff = { ...base, providerRaw: { data: { secretCanary: 'SOL_RAW_OFF_CANARY' }, bytes: 0, truncated: false } };
+    const malformed = { ...base, providerRaw: { extraCanary: 'SOL_UNDECLARED_RAW_CANARY' } };
+    const badOff = await decideWith(decisionRequest({ correlationId: 'f1-raw-off' }), rawOff, scalarSemantics());
+    expect(badOff.result).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE' }, receipt: null });
+    expect(badOff.fetch).toHaveBeenCalledTimes(1);
+    const badMalformed = await decideWith(decisionRequest({ correlationId: 'f1-raw-malformed' }), malformed, scalarSemantics());
+    expect(badMalformed.result).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE' }, receipt: null });
+    const good = await decideWith(decisionRequest({ correlationId: 'f1-raw-ok' }), base, scalarSemantics());
+    expect(good.result).toMatchObject({ kind: 'verdict', ok: true });
+  });
 });
