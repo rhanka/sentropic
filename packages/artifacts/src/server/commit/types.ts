@@ -1,0 +1,320 @@
+/**
+ * L3 (immo #861) — finalization protocol types (spec r2 §§3.1–3.2).
+ *
+ * r2-exact server-side shapes: invocation context, commit context with
+ * finalize/replay purpose, opaque transaction, fenced authorization
+ * decision, transaction-bound policy/quota participant, lock order and
+ * coordinator request/receipt types. Outcome shapes are reused from the
+ * frozen L0 contracts without modification; the export-map promotion of
+ * these modules is integration-owner work qualified in L6/L8.
+ */
+import type { CommitBarrierObserver, CommitBarrierPoint } from '../../testing.js';
+
+/** Version of the frozen command-codec shape (r2 C6). */
+export const COMMAND_CODEC_VERSION = 'artifacts-command/v1' as const;
+
+/** Server-derived internal key: distinct from any caller key. */
+export type InternalIdempotencyKey = string & { readonly __brand: 'internal-key' };
+
+/** Server-created identity for one durable command. */
+export interface CommandIdentity {
+  readonly internalKey: InternalIdempotencyKey;
+  readonly commandHash: string;
+  readonly codecVersion: typeof COMMAND_CODEC_VERSION;
+}
+
+/** Internal failure categories (r2 E2). */
+export const FAILURE_CATEGORIES = [
+  'provider_unavailable',
+  'capability_unselected',
+  'conflict',
+  'unauthorized_at_commit',
+  'provider_error',
+] as const;
+
+export type FailureCategory = (typeof FAILURE_CATEGORIES)[number];
+
+/** Frozen category-to-public projection (r2 E2). */
+export interface FailureProjection {
+  readonly category: FailureCategory;
+  readonly httpStatus: number;
+  readonly publicCode: string;
+  /** Null when the failure creates no write-commit ledger entry. */
+  readonly ledgerReason: string | null;
+  readonly retriable: boolean;
+}
+
+export const FAILURE_PROJECTIONS: readonly FailureProjection[] = [
+  {
+    category: 'provider_unavailable', httpStatus: 503,
+    publicCode: 'capability_unavailable', ledgerReason: 'provider_unavailable',
+    retriable: true,
+  },
+  {
+    category: 'capability_unselected', httpStatus: 503,
+    publicCode: 'capability_unavailable', ledgerReason: null,
+    retriable: false,
+  },
+  {
+    category: 'conflict', httpStatus: 409,
+    publicCode: 'conflict', ledgerReason: 'provider_conflict',
+    retriable: false,
+  },
+  {
+    category: 'unauthorized_at_commit', httpStatus: 403,
+    publicCode: 'access_denied', ledgerReason: 'unauthorized_at_commit',
+    retriable: false,
+  },
+  {
+    category: 'provider_error', httpStatus: 500,
+    publicCode: 'internal_error', ledgerReason: 'provider_error',
+    retriable: false,
+  },
+] as const;
+
+/** Classified internal failure with private cause and commit state. */
+export interface ArtifactFailure {
+  readonly category: FailureCategory;
+  readonly httpStatus: number;
+  readonly publicCode: string;
+  readonly retriable: boolean;
+  readonly invocationId: string;
+  readonly operation: string;
+  readonly phase: string;
+  readonly commitState: 'not_committed' | 'committed' | 'unknown';
+  readonly cause: unknown;
+}
+
+/** Internal discriminated outcome shared by guard, replay and projection. */
+export type ArtifactOutcome<T> =
+  | { readonly ok: true; readonly result: T }
+  | { readonly ok: false; readonly failure: ArtifactFailure };
+
+/** Lock classes in A4 acquisition order. */
+export const COMMIT_LOCK_ORDER = [
+  'binding',
+  'artifact',
+  'acl',
+  'pointer',
+  'authority',
+  'quota',
+  'blob-ref',
+] as const;
+
+export type CommitLockClass = (typeof COMMIT_LOCK_ORDER)[number];
+
+/** Finalize or guarded replay. */
+export type CommitPurpose = 'finalize' | 'replay';
+
+/** Request-bound immutable invocation context (r2 §3.2). */
+export interface ArtifactInvocationContext {
+  readonly invocationId: string;
+  readonly actorId: string;
+  readonly storageScopeId: string;
+  readonly authorizeCommit: AuthorizeCommitFn;
+}
+
+/** Commit context: invocation plus operation, identities, revision, purpose. */
+export interface ArtifactCommitContext extends ArtifactInvocationContext {
+  readonly operation: string;
+  readonly artifactId: string | null;
+  readonly bindingName: string | null;
+  readonly internalKey: InternalIdempotencyKey;
+  readonly commandHash: string;
+  readonly codecVersion: string;
+  readonly policyRevision: string;
+  readonly purpose: CommitPurpose;
+}
+
+/**
+ * Opaque fence minted by the transaction-bound policy participant. It is
+ * bound to one transaction, invocation and revision and is verified by
+ * the coordinator; it cannot be synthesized from a revision string.
+ */
+export interface ArtifactAuthorizationFence {
+  readonly transactionToken: string;
+  readonly revision: string;
+  readonly issuedAtMs: number;
+}
+
+export type AuthorizationDenialReason =
+  | 'denied'
+  | 'revoked'
+  | 'expired'
+  | 'invalid_object'
+  | 'unavailable';
+
+/** Typed authorization decision: never an unqualified boolean. */
+export type ArtifactAuthorizationDecision =
+  | { readonly allowed: true; readonly fence: ArtifactAuthorizationFence }
+  | {
+      readonly allowed: false;
+      readonly reason: AuthorizationDenialReason;
+      readonly publicCode: string;
+      readonly status: number;
+      readonly retriable: boolean;
+    };
+
+/** Host guard: current account/cohort/activation/object/quota policy. */
+export type AuthorizeCommitFn = (
+  context: ArtifactCommitContext,
+  transaction: ArtifactCommitTransaction,
+) => Promise<ArtifactAuthorizationDecision>;
+
+/**
+ * Opaque transaction identity plus the host's registered
+ * transaction-bound policy/quota participant. No commit, rollback,
+ * release, SQL or connection capability for the guard.
+ */
+export interface ArtifactCommitTransaction {
+  readonly id: string;
+  readonly invocationId: string;
+  readonly participant: CommitPolicyParticipant;
+}
+
+/** Current policy reads and provisional quota reservation on this transaction. */
+export interface CommitPolicyParticipant {
+  /** Read the current policy revision row (shared lock) on this transaction. */
+  readRevision(): Promise<string>;
+  /** Check account/cohort/activation approval under the current revision. */
+  checkApproval(input: {
+    actorId: string;
+    operation: string;
+  }): Promise<{ approved: boolean; reason?: AuthorizationDenialReason }>;
+  /**
+   * Provisionally reserve quota on this transaction. Rolls back with the
+   * unit when the guard denies or the unit conflicts.
+   */
+  reserveQuota(input: {
+    actorId: string;
+    operation: string;
+  }): Promise<{ reserved: boolean }>;
+  /** Mint the opaque fence for an allowed decision. */
+  mintFence(revision: string): ArtifactAuthorizationFence;
+}
+
+/** Factory binding a participant to one finalization connection. */
+export interface CommitPolicyParticipantFactory {
+  createParticipant(client: FinalizeTxClient, transactionToken: string): CommitPolicyParticipant;
+}
+
+/** Constrained transaction handle for provider-internal provisional work. */
+export interface FinalizeTxClient {
+  query<T>(text: string, params: readonly unknown[]): Promise<{ rows: T[]; rowCount: number }>;
+}
+
+/** Finalization connection: coordinator-owned lifecycle plus receipt SQL. */
+export interface FinalizeConnection extends FinalizeTxClient {
+  beginReadCommitted(): Promise<void>;
+  lockOperationKey(scopeId: string, internalKey: string): Promise<void>;
+  readReceipt(scopeId: string, internalKey: string): Promise<StoredCommitReceipt | undefined>;
+  insertReceipt(receipt: StoredCommitReceipt): Promise<void>;
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
+  release(): void;
+}
+
+/** Executor seam: coordination row and raw finalization connections. */
+export interface CommitExecutor {
+  ensureCoordinationRow(scopeId: string, internalKey: string): Promise<void>;
+  beginFinalization(): Promise<FinalizeConnection>;
+}
+
+/** One caller lock callback, run inside the coordinator transaction. */
+export type CommitLockFn = (client: FinalizeTxClient) => Promise<void>;
+
+/** Durable success receipt stored once per (scope, internal key). */
+export interface StoredCommitReceipt {
+  readonly scopeId: string;
+  readonly internalKey: string;
+  readonly commandHash: string;
+  readonly codecVersion: string;
+  readonly receipt: unknown;
+  readonly createdAt: string;
+}
+
+/** Coordinator-owned test observation points. */
+export type CoordinatorTestPoint =
+  | 'before_connection_acquire'
+  | 'before_key_lock'
+  | 'before_finalization_row_lock'
+  | 'after_finalization_locks_before_guard'
+  | 'after_replay_lookup_before_guard'
+  | 'before_commit';
+
+export const COORDINATOR_TEST_POINTS: readonly CommitBarrierPoint[] = [
+  'before_connection_acquire',
+  'before_key_lock',
+  'before_finalization_row_lock',
+  'after_finalization_locks_before_guard',
+  'after_replay_lookup_before_guard',
+  'before_commit',
+];
+
+/** One atomic finalization request. */
+export interface FinalizeRequest {
+  readonly scopeId: string;
+  readonly internalKey: InternalIdempotencyKey;
+  readonly commandHash: string;
+  readonly codecVersion: string;
+  readonly invocationId: string;
+  readonly actorId: string;
+  readonly operation: string;
+  readonly artifactId?: string | null;
+  readonly bindingName?: string | null;
+  readonly policyRevision: string;
+  /** Fixed class order; stable bytewise order within each class is the caller's obligation. */
+  readonly locks?: Partial<Record<CommitLockClass, CommitLockFn[]>>;
+  /** Provisional writes before the guard decision. */
+  readonly provisional?: (client: FinalizeTxClient) => Promise<void>;
+  /** Intent completion inside the unit, after the success insert. */
+  readonly finishIntents?: (client: FinalizeTxClient) => Promise<void>;
+  /** Preparation-abandonment hook, invoked on loser/denial paths. */
+  readonly noteAbandonedAttempt?: (attemptId: string) => Promise<void>;
+  readonly attemptId?: string;
+  readonly guard: AuthorizeCommitFn;
+  readonly receiptData: unknown;
+}
+
+/** Coordinator result: success with replay flag, or classified failure. */
+export type FinalizeResult = ArtifactOutcome<{
+  receipt: StoredCommitReceipt;
+  replayed: boolean;
+  invocationId: string;
+  commitState: 'committed';
+}>;
+
+/** Failure categories the coordinator may produce (frozen table subset). */
+export type CoordinatorFailureCategory = Extract<
+  FailureCategory,
+  'provider_unavailable' | 'conflict' | 'unauthorized_at_commit' | 'provider_error'
+>;
+
+/** Coordinator construction options. */
+export interface CommitCoordinatorOptions {
+  readonly executor: CommitExecutor;
+  readonly policy: CommitPolicyParticipantFactory;
+  /** Defined clock for activation-expiry evaluation; defaults to Date.now. */
+  readonly nowMs?: () => number;
+  readonly testObserver?: CommitBarrierObserver;
+}
+
+/** The atomic finalization coordinator. */
+export interface ArtifactCommitCoordinator {
+  finalize(request: FinalizeRequest): Promise<FinalizeResult>;
+  replayGuarded(request: FinalizeRequest): Promise<FinalizeResult>;
+}
+
+/** Unknown legacy codec on a found success row: L6 projects the migration condition. */
+export class CommitQuarantineError extends Error {
+  readonly scopeId: string;
+  readonly internalKey: string;
+  readonly codecVersion: string;
+  constructor(scopeId: string, internalKey: string, codecVersion: string) {
+    super(`commit quarantine: codec ${codecVersion} for ${scopeId}/${internalKey}`);
+    this.name = 'CommitQuarantineError';
+    this.scopeId = scopeId;
+    this.internalKey = internalKey;
+    this.codecVersion = codecVersion;
+  }
+}
