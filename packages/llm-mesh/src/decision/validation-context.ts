@@ -1,5 +1,6 @@
-import { hasOnlyKeys, isRecord, isText } from './validation.js';
+import { hasOnlyKeys, isRecord, isText, snapshotBoundedJson } from './validation.js';
 import { freezeDecisionData } from './descriptor-validation.js';
+import { isDecisionCriterion } from './criterion.js';
 import type { DecisionCriterion, DecisionRequest, EvaluatorRef } from './request.js';
 
 /** Closed validation relation and version, published with the selected definition. */
@@ -74,22 +75,8 @@ const isBoundedMeaning = (value: unknown): value is DecisionValidationScoreSeman
   && typeof value.max === 'number' && Number.isFinite(value.max) && value.min < value.max;
 
 const isDirectCriterionOfKind = (value: unknown, kind: 'binary' | 'graded' | 'choice'): value is DirectDecisionCriterion => {
-  if (!isRecord(value) || value.kind !== kind || !isText(value.instructions)) return false;
-  if (kind === 'graded') {
-    return (value.direction === 'higher-is-better' || value.direction === 'lower-is-better' || value.direction === 'unordered')
-      && Array.isArray(value.levels) && value.levels.length > 0
-      && hasOnlyKeys(value, ['kind', 'instructions', 'direction', 'levels'])
-      && value.levels.every((level) => isRecord(level) && hasOnlyKeys(level, ['label', 'description'])
-        && isText(level.label) && isText(level.description));
-  }
-  if (kind === 'choice') {
-    return Array.isArray(value.options) && value.options.length > 0
-      && hasOnlyKeys(value, ['kind', 'instructions', 'options'])
-      && value.options.every((option) => isRecord(option) && hasOnlyKeys(option, ['id', 'description'])
-        && isText(option.id) && isText(option.description));
-  }
-  return hasOnlyKeys(value, ['kind', 'instructions', 'criteria'])
-    || hasOnlyKeys(value, ['kind', 'instructions']);
+  if (!isDecisionCriterion(value) || value.kind !== kind) return false;
+  return true;
 };
 
 const MAX_CONTEXT_AGE_MS = 86_400_000;
@@ -115,43 +102,55 @@ const isRegisteredResolution = (value: unknown, request: DecisionRequest, nowMs:
  * request snapshot and never consult a resolution. */
 export function parseDecisionValidationContext(candidate: unknown, request: DecisionRequest,
   nowMs: number): DecisionValidationContext | null {
-  if (!isRecord(candidate)) return null;
-  if (!hasOnlyKeys(candidate, ['evaluator', 'validationProfile', 'acceptedServedModelIds',
+  const snapshot = snapshotBoundedJson(candidate);
+  if (!snapshot.ok || !isRecord(snapshot.value)) return null;
+  const source = snapshot.value as Record<string, unknown>;
+  if (!hasOnlyKeys(source, ['evaluator', 'validationProfile', 'acceptedServedModelIds',
     'semantics', 'definitionDigest', 'registeredResolution'])
-    && !hasOnlyKeys(candidate, ['evaluator', 'validationProfile', 'acceptedServedModelIds', 'semantics', 'definitionDigest'])) {
+    && !hasOnlyKeys(source, ['evaluator', 'validationProfile', 'acceptedServedModelIds', 'semantics', 'definitionDigest'])) {
     return null;
   }
-  if (!isEvaluatorRef(candidate.evaluator) || !sameEvaluatorRef(candidate.evaluator, request.evaluator)) return null;
-  const profile = candidate.validationProfile;
+  if (!isEvaluatorRef(source.evaluator) || !sameEvaluatorRef(source.evaluator, request.evaluator)) return null;
+  const profile = source.validationProfile;
   if (!isRecord(profile) || !hasOnlyKeys(profile, ['profile', 'version'])
     || !KNOWN_PROFILES.has(profile.profile as string) || !isText(profile.version)) return null;
-  const models = candidate.acceptedServedModelIds;
+  const models = source.acceptedServedModelIds;
   if (!Array.isArray(models) || models.length === 0 || !models.every(isText)
     || new Set(models).size !== models.length) return null;
-  const semantics = candidate.semantics;
+  const semantics = source.semantics;
   if (!isRecord(semantics) || !hasOnlyKeys(semantics, ['nativeDecision', 'score', 'confidence', 'rationale'])) return null;
   if (typeof semantics.nativeDecision !== 'boolean') return null;
   if (semantics.score !== null && !isBoundedMeaning(semantics.score)) return null;
   if (semantics.confidence !== null && !isBoundedMeaning(semantics.confidence)) return null;
   if (semantics.rationale !== 'forbidden' && semantics.rationale !== 'optional') return null;
-  if (!isText(candidate.definitionDigest) || !DIGEST_RE.test(candidate.definitionDigest)) return null;
+  if (!isText(source.definitionDigest) || !DIGEST_RE.test(source.definitionDigest as string)) return null;
   const registered = request.criterion.kind === 'registered';
-  if (registered && !isRegisteredResolution(candidate.registeredResolution, request, nowMs)) return null;
-  if (!registered && candidate.registeredResolution !== undefined) return null;
-  const ref = candidate.evaluator as EvaluatorRef;
+  if (registered && !isRegisteredResolution(source.registeredResolution, request, nowMs)) return null;
+  if (!registered && source.registeredResolution !== undefined) return null;
+  const ref = source.evaluator as EvaluatorRef;
+  const scoreSource = (semantics as { score: DecisionValidationSemantics['score'] }).score;
+  const confidenceSource = (semantics as { confidence: DecisionValidationSemantics['confidence'] }).confidence;
   const context: DecisionValidationContext = {
     evaluator: { providerId: ref.providerId, evaluatorId: ref.evaluatorId, revision: ref.revision },
     validationProfile: { profile: (profile as { profile: DecisionValidationProfile['profile'] }).profile,
       version: (profile as { version: string }).version },
     acceptedServedModelIds: [...(models as string[])],
     semantics: { nativeDecision: (semantics as { nativeDecision: boolean }).nativeDecision,
-      score: (semantics as { score: DecisionValidationSemantics['score'] }).score,
-      confidence: (semantics as { confidence: DecisionValidationSemantics['confidence'] }).confidence,
+      score: scoreSource === null ? null : { ...(scoreSource as DecisionValidationScoreSemantics) },
+      confidence: confidenceSource === null ? null : { ...(confidenceSource as DecisionValidationConfidenceSemantics) },
       rationale: (semantics as { rationale: 'forbidden' | 'optional' }).rationale },
-    definitionDigest: candidate.definitionDigest as string,
+    definitionDigest: source.definitionDigest as string,
   };
   if (registered) {
-    context.registeredResolution = candidate.registeredResolution as DecisionRegisteredResolution;
+    const resolution = source.registeredResolution as DecisionRegisteredResolution;
+    context.registeredResolution = {
+      criteriaId: resolution.criteriaId,
+      revision: resolution.revision,
+      resolvedKind: resolution.resolvedKind,
+      criterion: structuredClone(resolution.criterion) as DirectDecisionCriterion,
+      resolvedAt: resolution.resolvedAt,
+      maxAgeMs: resolution.maxAgeMs,
+    };
   }
   return freezeDecisionData(context);
 }

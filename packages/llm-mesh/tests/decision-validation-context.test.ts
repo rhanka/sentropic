@@ -67,4 +67,13 @@ describe('decision validation context parsing', () => {
   ])('rejects wrong identity, kind mismatch, future, stale or unbounded resolution', (bad) => {
     expect(parseDecisionValidationContext(context({ registeredResolution: bad }), registeredRequest(), NOW)).toBeNull();
   });
+  it('leaves resolver-owned nested values mutable and detaches the parsed copy (F7)', () => {
+    const owned = context();
+    const parsed = parseDecisionValidationContext(owned, decisionRequest(), NOW);
+    expect(parsed).not.toBeNull();
+    expect(Object.isFrozen(parsed?.semantics.score)).toBe(true);
+    expect(Object.isFrozen(owned.semantics.score)).toBe(false);
+    (owned.semantics.score as { meaning: string }).meaning = 'mutated-after-parse';
+    expect((parsed?.semantics.score as { meaning: string }).meaning).toBe('probability-true');
+  });
 });

@@ -327,7 +327,8 @@
   - [ ] Probes P15–P23, P27-P28 L2, P32–P33 with discriminating regression tests; V4-L1 14/14 + R1 10/10 keep passing migrated.
 - [ ] **Lot V4-L2-R1 — Sol V4-L2 R1 findings F1–F11 (review pr693_sol_v4l2_r1.md, VERDICT: CHANGES)**
   - [ ] F1 scalar raw boundary; F2 required validationContext; F3 generic host/structured backend; F4 complete definition/tariff binding; F5 closed scalar profile; F6 public pure validator.
-  - [ ] F7 context freeze detachment; F8 required allowlist; F9 tracked docs migration; F10 scope/exception regularization; F11 atomic commits with per-commit plan updates.
+  - [ ] F8 required allowlist; F9 tracked docs migration; F10 scope/exception regularization (done in scope commit); F11 atomic commits with per-commit plan updates.
+  - [x] F7 context freeze detachment (bounded snapshot first, shared criterion parser, detached frozen copy only).
   - [x] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated. Mesh 1302/1302, cluster 1014 passed, lazy-package 78/78 with re-pinned selected lock (sibling llm-mesh 0.27.1). api unit/integration covered by CI (compose stack not run locally).
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
