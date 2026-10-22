@@ -22,9 +22,9 @@ export interface RemoteDecisionClientOptions {
   generateId?: () => string;
   /** Trusted context resolver (§3.3): receives the frozen transmitted snapshot
    * and returns the revision-specific validation facts. A nullish or
-   * unparseable result refuses client-local before any egress. Absent, the
-   * implicit JEV profile applies (V4-L1 migration path). */
-  validationContext?: DecisionValidationContextResolver;
+   * unparseable result refuses client-local before any egress. Absent
+   * resolvers refuse client-local with zero header/credential resolution. */
+  validationContext: DecisionValidationContextResolver;
 }
 
 const resolveEndpoint = (base: string) => {
@@ -156,11 +156,12 @@ export function isValidDecisionReceipt(r: unknown, request: DecisionRequest, exp
   // provider counters reported, liability estimated under a held budget.
   // V-I1: a successful receipt names exactly the transmitted evaluator.
   if (r.outcome === 'verdict') {
+    if (!validation) return false;
     if (r.evaluator === null || r.servedEvaluator === null || r.servedModelId === null) return false;
     if (!bindsEvaluator(r.servedEvaluator, request)) return false;
     // P16: the served model must sit in the trusted accepted set, including
     // JEV through the canonical context-bound API.
-    if (validation && !validation.acceptedServedModelIds.includes(r.servedModelId as string)) return false;
+    if (!validation.acceptedServedModelIds.includes(r.servedModelId as string)) return false;
     if (r.attempts !== 1 || r.dispatch !== 'completed') return false;
     if (usage.tokens.input.source !== 'provider' || usage.tokens.output.source !== 'provider'
       || usage.evaluatorCalls !== 1 || usage.explanations !== 0) return false;
@@ -377,19 +378,20 @@ export function isValidDecisionVerdict(v: unknown, request: DecisionRequest,
   validation: DecisionValidationContext | null): v is DecisionVerdict {
   if (!isRecord(v)) return false;
   if (!hasOnlyKeys(v, VERDICT_KEYS)) return false;
+  if (!validation) return false;
   if (v.criterionKind !== request.criterion.kind) return false;
   // V-D3/L2: direct criteria bind resolved kind to the transmitted kind.
   // Registered criteria resolve only through a trusted context resolution and
   // fail closed otherwise; each concurrent call binds its own resolution.
-  const resolution = request.criterion.kind === 'registered' ? validation?.registeredResolution ?? null : null;
+  const resolution = request.criterion.kind === 'registered' ? validation.registeredResolution ?? null : null;
   if (request.criterion.kind === 'registered' && resolution === null) return false;
   if (request.criterion.kind === 'registered' && v.resolvedCriterionKind !== resolution?.resolvedKind) return false;
   if (request.criterion.kind !== 'registered' && v.resolvedCriterionKind !== request.criterion.kind) return false;
   const effective = resolution ? { ...request, criterion: resolution.criterion } : request;
-  // Evidence semantics come from the trusted context when bound, else the
-  // implicit JEV profile. A response never selects its own profile.
-  const sem = validation?.semantics ?? IMPLICIT_JEV_SEMANTICS;
-  const scalar = validation?.validationProfile.profile === 'scalar-label-v1';
+  // Evidence semantics come only from the trusted context. A response never
+  // selects its own profile; missing context never causes profile inference.
+  const sem = validation.semantics;
+  const scalar = validation.validationProfile.profile === 'scalar-label-v1';
   // P18/V-D1: a provider-origin boolean is forged unless the selected profile
   // declares native-boolean support; then exactly {pass, origin} with no rule.
   if (isRecord(v.decision) && v.decision.origin === 'provider') {
@@ -451,12 +453,6 @@ function rebuildWireError(error: unknown, receipt: DecisionReceipt): DecisionErr
   }
   return rebuilt;
 }
-
-/** Implicit JEV evidence semantics (V4-L1 migration path when no trusted context resolves). */
-const IMPLICIT_JEV_SEMANTICS: DecisionValidationSemantics = { nativeDecision: false,
-  score: { meaning: 'probability-true', min: 0, max: 1 },
-  confidence: { meaning: 'provider-confidence', meaningRef: 'https://docs.typesafe.ai/confidence.md', min: 0, max: 1 },
-  rationale: 'forbidden' };
 
 const scoreMatchesSemantics = (score: unknown, sem: DecisionValidationSemantics): boolean => {
   const parsed = score === null ? null : parseDecisionScore(score);
@@ -552,19 +548,17 @@ export function createRemoteDecisionClient(options: RemoteDecisionClientOptions)
 
       // Trusted context (§3.3): resolve revision-specific facts on the frozen
       // transmitted snapshot, bounded by the call deadline. Any fault refuses
-      // client-local with zero fetches; without a resolver the implicit JEV
-      // profile applies.
+      // client-local with zero fetches and zero header/credential resolution.
+      if (typeof options.validationContext !== 'function') return preflightFail('MESH_UNAVAILABLE');
       let validation: DecisionValidationContext | null = null;
-      if (options.validationContext) {
-        try {
-          const resolved = await racePreflight(options.validationContext(outgoing.request));
-          validation = parseDecisionValidationContext(resolved, outgoing.request, Date.now());
-        } catch {
-          return preflightFail(timedOut ? 'TIMEOUT'
-            : controller.signal.aborted || callOptions?.signal?.aborted ? 'CANCELLED' : 'MESH_UNAVAILABLE');
-        }
-        if (!validation) return preflightFail('MESH_UNAVAILABLE');
+      try {
+        const resolved = await racePreflight(options.validationContext(outgoing.request));
+        validation = parseDecisionValidationContext(resolved, outgoing.request, Date.now());
+      } catch {
+        return preflightFail(timedOut ? 'TIMEOUT'
+          : controller.signal.aborted || callOptions?.signal?.aborted ? 'CANCELLED' : 'MESH_UNAVAILABLE');
       }
+      if (!validation) return preflightFail('MESH_UNAVAILABLE');
 
       const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
       try {
