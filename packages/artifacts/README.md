@@ -7,6 +7,18 @@ Version `0.1.1` fixed activation ticket release and channel binding (FL-ACT).
 Version `0.1.4` hardens host authority, replay isolation, publication and content
 responses, and adds the platform-free `@sentropic/artifacts/mcp-core` entry.
 
+## 0.2.0 contract line (L0 frozen)
+
+The `0.2.0-rc.1` line freezes the immo #861 declaration shapes only:
+explicit capability selection and the effective publication profile
+(`src/profile-contract.ts`), the effective command identity
+(`src/server/command-identity-contract.ts`), the commit finalization unit
+(`src/server/commit-contract.ts`) and the typed failure outcome
+(`src/server/failure-contract.ts`). The common-contract reuse map lives in
+`docs/common-contract-map.md`; the migration inventory lives in
+`docs/migration-inventory-l0.md`. Public host API names stay unfrozen until
+spec r2. No behavior changes in this reservation.
+
 ## Migrating to 0.1.4
 
 HTTP hosts must supply a trusted `HttpRequest.storageScopeId` for `/ensure`.

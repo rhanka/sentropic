@@ -75,30 +75,30 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
   - [x] Ports: no ports needed (no services in L0; declaration docs plus unit vectors only).
   - [x] Confirm scope and guardrails; public host API names excluded until spec r2.
   - [x] Validate scope boundaries with make scope-check before each commit.
-- [ ] **Lot 1 — Declaration shapes (stable only, no host API names)**
-  - [ ] packages/artifacts/src/profile-contract.ts: selection plus effective-profile shapes, Radar four-tool subset, C4 bounds as frozen data plus validators.
-  - [ ] packages/artifacts/src/server/command-identity-contract.ts: effective-command plus command-identity shapes, codec version, derivation-binding shape (algorithm reference only, no new API name).
-  - [ ] packages/artifacts/src/server/commit-contract.ts: invocation-context, authorization-decision, coordinator-requirement shapes plus finalization protocol order as frozen types.
-  - [ ] packages/artifacts/src/server/failure-contract.ts: outcome plus failure shapes, category-to-public mapping table, commit states.
-  - [ ] Lot gate:
-    - [ ] make typecheck-artifacts ENV=test-artifacts-861 last
-    - [ ] make lint-artifacts ENV=test-artifacts-861 last
-- [ ] **Lot 2 — Common-contract map without runtime cycle**
-  - [ ] packages/artifacts/docs/common-contract-map.md: capability, publication-condition, commitment, manifest, page reuse table plus boundaries (no registered module, scope mapping needs trusted host mapping, mesh export lives in L7, no mesh runtime dep from artifacts).
-  - [ ] No import of @sentropic/cluster-mesh from packages/artifacts/src or tests.
-  - [ ] Lot gate:
-    - [ ] grep verifies no cluster-mesh import in packages/artifacts/src and new tests
-- [ ] **Lot 3 — Migration inventory and vectors**
-  - [ ] packages/artifacts/docs/migration-inventory-l0.md: declaration changes per ask, migration guide stubs, legacy-record quarantine rule, Radar pilot-state inputs awaited (Q0).
-  - [ ] packages/artifacts/tests/effective-profile.test.ts: frozen selection plus bounds vectors (pure, no DB/S3, no app.handle).
-  - [ ] packages/artifacts/tests/commit-contract.test.ts: frozen failure-mapping plus finalization-order vectors (pure, no DB/S3, no app.handle).
-  - [ ] No integration tests; no mocked provider success.
-  - [ ] Lot gate:
-    - [ ] make test-artifacts ENV=test-artifacts-861 last (unit only)
-    - [ ] make scope-check before each commit
+- [x] **Lot 1 — Declaration shapes (stable only, no host API names)**
+  - [x] packages/artifacts/src/profile-contract.ts: selection plus effective-profile shapes, Radar four-tool subset, C4 bounds as frozen data plus validators.
+  - [x] packages/artifacts/src/server/command-identity-contract.ts: effective-command plus command-identity shapes, codec version, derivation-binding shape (algorithm reference only, no new API name).
+  - [x] packages/artifacts/src/server/commit-contract.ts: invocation-context, authorization-decision, coordinator-requirement shapes plus finalization protocol order as frozen types.
+  - [x] packages/artifacts/src/server/failure-contract.ts: outcome plus failure shapes, category-to-public mapping table, commit states.
+  - [x] Lot gate:
+    - [x] make typecheck-artifacts ENV=test-artifacts-861 last
+    - [x] make lint-artifacts ENV=test-artifacts-861 last
+- [x] **Lot 2 — Common-contract map without runtime cycle**
+  - [x] packages/artifacts/docs/common-contract-map.md: capability, publication-condition, commitment, manifest, page reuse table plus boundaries (no registered module, scope mapping needs trusted host mapping, mesh export lives in L7, no mesh runtime dep from artifacts).
+  - [x] No import of @sentropic/cluster-mesh from packages/artifacts/src or tests.
+  - [x] Lot gate:
+    - [x] grep verifies no cluster-mesh import in packages/artifacts/src and new tests
+- [x] **Lot 3 — Migration inventory and vectors**
+  - [x] packages/artifacts/docs/migration-inventory-l0.md: declaration changes per ask, migration guide stubs, legacy-record quarantine rule, Radar pilot-state inputs awaited (Q0).
+  - [x] packages/artifacts/tests/effective-profile.test.ts: frozen selection plus bounds vectors (pure, no DB/S3, no app.handle).
+  - [x] packages/artifacts/tests/commit-contract.test.ts: frozen failure-mapping plus finalization-order vectors (pure, no DB/S3, no app.handle).
+  - [x] No integration tests; no mocked provider success.
+  - [x] Lot gate:
+    - [x] make test-artifacts ENV=test-artifacts-861 last (unit only: 27 files, 216 tests passed)
+    - [x] make scope-check before each commit
 - [ ] **Lot 4 — Release reservation and PR**
-  - [ ] Reserve 0.2.0-rc.1 in packages/artifacts/package.json after registry check.
-  - [ ] Update packages/artifacts/README.md with L0 contract line pointer.
-  - [ ] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
+  - [x] Reserve 0.2.0-rc.1 in packages/artifacts/package.json after registry check.
+  - [x] Update packages/artifacts/README.md with L0 contract line pointer.
+  - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
   - [ ] Push branch and open DRAFT PR feat(artifacts): #861 L0 shared contract and vectors.
   - [ ] CI green; do not merge.
