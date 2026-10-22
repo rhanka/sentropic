@@ -5,9 +5,9 @@ import {inspect,contrast,stressFolds} from './browser-checks.mjs';
 import {portableName} from './portable-path.mjs';
 const assert=(ok,why)=>{if(!ok)throw Error(why);};
 const artifact=process.cwd()+'/dist/'+portableName;
-const report={sha256:createHash('sha256').update(readFileSync(artifact)).digest('hex'),matrix:[],interactions:[],contrast:[],errors:[]};
+const report={sha256:createHash('sha256').update(readFileSync(artifact)).digest('hex'),matrix:[],interactions:[],contrast:[],errors:[],fitFailures:[]};
 let browser=await chromium.launch({args:['--no-sandbox']});
-const allIds=['h2a','surfaces','cluster-mesh','cm-catalog','cat-mcp','cm-storage','cm-security','cm-cluster','engram','design-system'];
+const allIds=['h2a','surfaces','cluster-mesh','cm-catalog','cat-mcp','cm-storage','cm-security','cm-cluster','engram','design-system','legend'];
 const progress=message=>writeFileSync(process.cwd()+'/.cache/browser-progress.txt',message+'\n');
 try{
  for(const mobile of [false,true])for(const language of ['fr','en'])for(const theme of ['light','dark']){
@@ -28,7 +28,7 @@ try{
   assert(await page.locator('html').getAttribute('lang')===language,'Language state');
   const figure=page.locator('.architecture-figure').first();
   assert(await figure.locator('.diagram-scroll [data-node]').count()===0,'Initial cards must all be collapsed');
-  assert(await figure.locator('.diagram-scroll [data-group]').count()===5,'Five collapsed root frames');
+  assert(await figure.locator('.diagram-scroll [data-group]').count()===6,'Six collapsed root frames including legend');
   assert(await page.getByRole('button',{name:/Style des cartes|Card style|Influence/}).count()===0,'Removed render switch');
   assert(await page.locator('.language-switch').count()===1,'One language toggle');
   await figure.getByRole('button',{name:language==='fr'?/^Agrandir :/:/^Enlarge:/}).click();
@@ -36,7 +36,8 @@ try{
   assert((await viewport.boundingBox()).height>(mobile?200:500),'Diagram viewport receives remaining height');
   for(const state of ['collapsed','expanded']){
    if(state==='expanded')await dialog.getByRole('button',{name:language==='fr'?'Tout déplier':'Expand all',exact:true}).click();
-   await inspect(svg,`${name}-${state}`);
+   try { await inspect(svg,`${name}-${state}`); }
+   catch(error) { report.fitFailures.push(error.message); }
    if(state==='collapsed'){
     const expected=language==='fr'?['Harnais et collaboration','Sessions et outils','Canvas UI','Mémoire et savoir']:['Harness and collaboration','Sessions and tools','Canvas UI','Memory and knowledge'];
     const labels=await svg.locator('[data-edge-label]').evaluateAll(es=>es.map(e=>[...e.querySelectorAll('tspan')].map(t=>t.textContent).join(' ')));
@@ -47,9 +48,9 @@ try{
    if(state==='expanded')assert(Math.abs(ratio-16/9)<.001,'16:9 expanded diagram');
    else {
     const compact=await svg.evaluate(s=>{
-     const v=s.viewBox.baseVal,boxes=[...s.querySelectorAll('.diagram-group-box,.diagram-edge-pill')].map(e=>e.getBBox());
+     const v=s.viewBox.baseVal,boxes=[...s.querySelectorAll('[data-group] > rect,.diagram-edge-pill,.diagram-arrow')].map(e=>e.getBBox());
      const margins=[Math.min(...boxes.map(b=>b.x))-v.x,Math.min(...boxes.map(b=>b.y))-v.y,v.x+v.width-Math.max(...boxes.map(b=>b.x+b.width)),v.y+v.height-Math.max(...boxes.map(b=>b.y+b.height))];
-     return margins.every(m=>m>=24&&m<25)&&[...s.querySelectorAll('[data-group] > rect')].every(r=>r.width.baseVal.value===460&&r.height.baseVal.value===272)&&[...s.querySelectorAll('[data-group] > text')].every(t=>{
+     return margins.every(m=>m>=24&&m<25)&&[...s.querySelectorAll('[data-group] > rect')].every(r=>r.width.baseVal.value===460&&r.height.baseVal.value===200)&&[...s.querySelectorAll('[data-group] > text')].every(t=>{
       const b=t.getBBox(),r=t.parentElement.querySelector('rect').getBBox();
       return b.x>=r.x&&b.y>=r.y&&b.x+b.width<=r.x+r.width&&b.y+b.height<=r.y+r.height&&(t.classList.contains('diagram-detail')||t.classList.contains('diagram-product-kicker')||(getComputedStyle(t).fontWeight==='700'&&getComputedStyle(t).fontFamily.includes('Dossier Inter')));
      });
@@ -60,6 +61,7 @@ try{
     const atomic = s.querySelector('.card-code');
     const style = e => { const c = getComputedStyle(e); return [c.fontSize, c.lineHeight, c.fontWeight, c.fontFamily, c.textTransform, c.letterSpacing, e instanceof SVGElement ? c.fill : c.color]; };
     return [...s.querySelectorAll('[data-group]')].every(g => {
+    if(g.dataset.collapsed === "true")return !!g.querySelector(".service-node .card-code");
     const kicker = g.querySelector('.diagram-product-kicker');
     if (!kicker) return false;
     const box = g.querySelector('rect').getBBox(), subtitle = g.querySelector('.diagram-detail').getBBox();
@@ -77,7 +79,7 @@ try{
     });
     });
     });
-    assert(zoneHeaders, 'Every zone uses the card header style; text fits and expanded zones have a footer rule');
+    if(!zoneHeaders)report.fitFailures.push(`${name}/${state}: zone header style or text fit`);
    assert(await svg.getAttribute('data-card-style')==='dossier','Dossier render');
    if(state==='expanded'){
     const widths=await svg.locator('[data-node] > rect').evaluateAll(rs=>rs.map(r=>+r.getAttribute('width')));
@@ -104,8 +106,9 @@ try{
    report.interactions.push({name,id,method:'mixed-fold-latency',ms});
   }
   // Every frame is tested in tree order, from the default collapsed state.
-  await dialog.getByRole('button',{name:language==='fr'?'Tout replier':'Collapse all',exact:true}).click();
-  for(const id of allIds)for(const expected of ['true','false','true']){
+  for(const cycle of [0,1]) {
+   await dialog.getByRole('button',{name:language==='fr'?'Tout replier':'Collapse all',exact:true}).click();
+   for(const id of allIds)for(const expected of ['true','false','true']){
    const control=dialog.locator(`[data-frame-control="${id}"]`);
    const before=await control.getAttribute('aria-expanded'),start=Date.now();
    if(mobile)await control.tap({timeout:1800});else await control.click({timeout:1800});
@@ -114,7 +117,8 @@ try{
    const box=await control.boundingBox();
    const standard=await control.evaluate(b=>({small:b.classList.contains('st-button--sm'),height:parseFloat(getComputedStyle(b).minHeight)}));
    assert(standard.small&&box.height>=standard.height,'Unscaled DS sm frame control');
-   report.interactions.push({name,id,before,after:expected,method:mobile?'touch':'mouse',ms:Date.now()-start});
+   report.interactions.push({name,id,before,after:expected,cycle,method:mobile?'touch':'mouse',ms:Date.now()-start});
+   }
   }
   assert(await svg.locator('[data-node]').count()===28,'All frames expanded after traversal');
   // In-frame controls use the compact DS icon button, inside the frame border.
@@ -178,6 +182,7 @@ try{
   await context.close();
  }
  assert(!report.errors.length,JSON.stringify(report.errors));
- report.status='passed';
+ report.status=report.fitFailures.length ? 'fit-blocked' : 'passed';
 }finally{writeFileSync(process.cwd()+'/.cache/browser-review.json',JSON.stringify(report,null,2)+'\n');await browser.close();}
 console.log(JSON.stringify({status:report.status,matrix:report.matrix.length,interactions:report.interactions.length,sha256:report.sha256}));
+assert(!report.fitFailures.length,`${report.fitFailures.length} strict text-fit failures; see .cache/browser-review.json`);

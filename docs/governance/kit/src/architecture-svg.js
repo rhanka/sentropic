@@ -107,7 +107,6 @@ export function renderSceneSvg(sceneName, scene, highlight = null, interactive =
     .architecture-svg .diagram-status path { fill:none; stroke:var(--diagram-warning); stroke-width:2; stroke-linecap:round; }
     .architecture-svg .diagram-edge-pill rect { fill:var(--st-semantic-surface-subtle); stroke:var(--st-semantic-text-secondary); stroke-width:1; }
     .architecture-svg .diagram-edge-pill text { fill:var(--st-semantic-text-primary); }
-    .architecture-svg[data-card-style="dossier"] .diagram-group-box { rx:0; }
     ${structuredCardStyle}
   </style>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" class="architecture-svg scene-canvas" data-card-style="${cardStyle}" width="${frame.width}" height="${frame.height}" viewBox="${frame.left} ${frame.top} ${frame.width} ${frame.height}" role="${interactive ? 'group' : 'img'}" aria-labelledby="${marker}-title ${marker}-desc"${activeNeedAttr} style="font-family:var(--st-font-sans,system-ui,sans-serif);color:var(--st-semantic-text-primary);fill:var(--st-semantic-text-primary)"><title id="${marker}-title">${escapeXml(sceneName)}</title><desc id="${marker}-desc">${escapeXml(scene.shortCaption)}</desc>${defs}${style}${groups}${bands}${edges}${junctions}${nodes}${labels}</svg>`;
