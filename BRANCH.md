@@ -233,3 +233,8 @@
   - [x] Preserve card content, dimensions, icons, header wording and fully collapsed geometry/routes; reject the starting head with the strengthened geometry gate.
   - [x] Rebuild the portable and pass source, all-scene geometry, offline Chromium, 16-capture/600-interaction browser, content and unchanged performance budgets; capture the three requested expanded zones at 1920px in FR/EN under root `.tmp/governance-unification/gap30-shots/`.
   - [x] Refresh checksums and prepare one selective `make commit` plus normal push; require green CI on the exact head before handoff and leave PR #711 draft/unmerged for owner review.
+- [x] **Lot 31 — Balance every expanded zone around its children**
+  - [x] Mechanically verify and pull clean `dd7c35b22`; measure each expanded FR/EN zone in offline Chromium before editing.
+  - [x] Match the atomic 4px body-to-rule gap; use balanced compact child insets and natural frame heights, preserving cards, header content, collapsed zones, wording and icons.
+  - [x] Rebuild the portable and checksums; pass all-scene geometry, zero row deviation, browser/content and unchanged performance budgets; capture 1920px EN Sentropic, Access surfaces and h2a under root `.tmp/governance-unification/spacing31-shots/`.
+  - [x] Prepare one selective make commit and normal push; delivery requires exact-head green CI with PR #711 remaining draft and unmerged.

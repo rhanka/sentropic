@@ -26,7 +26,8 @@ export function renderSceneSvg(sceneName, scene, highlight = null, interactive =
     const { x, y } = group.position;
     const palette = svgPalette[group.tone];
     const content = frameHeaderContent(group, group.width);
-    let subtitle = `<text class="diagram-detail" x="${x + 16}" y="${y + 16 + content.contentHeadHeight + 6 + 22}" font-size="24">${content.subtitleLines.map((line, i) => `<tspan x="${x + 16}" dy="${i ? 24 * 1.3 : 0}">${escapeXml(line)}</tspan>`).join('')}</text>`;
+    const headerY = y + (group.collapsed ? 0 : group.headerOffset ?? 0);
+    let subtitle = `<text class="diagram-detail" x="${x + 16}" y="${headerY + 16 + content.contentHeadHeight + 6 + 22}" font-size="24">${content.subtitleLines.map((line, i) => `<tspan x="${x + 16}" dy="${i ? 24 * 1.3 : 0}">${escapeXml(line)}</tspan>`).join('')}</text>`;
     if (group.collapsed) {
       // SVG/card pixels: 16px inner inset plus 16px subtitle margin per side.
       const inset = 16, margin = 16, subtitleWidth = group.width - 2 * (inset + margin);
@@ -36,7 +37,7 @@ export function renderSceneSvg(sceneName, scene, highlight = null, interactive =
       const baseline = (top + bottom) / 2 - (lines.length - 1) * 24 * 1.3 / 2 + 7;
       subtitle = `<text class="diagram-detail" x="${x + group.width / 2}" y="${baseline}" font-size="24" text-anchor="middle">${lines.map((line, i) => `<tspan x="${x + group.width / 2}" dy="${i ? 24 * 1.3 : 0}">${escapeXml(line)}</tspan>`).join('')}</text>`;
     }
-    const header = `${diagramIcon(groupIcons[group.id], x + 16, y + 16 + (content.contentHeadHeight - 70) / 2, 70)}<text class="diagram-kicker diagram-product-kicker" x="${x + 92}" y="${y + 16 + 22}" font-size="22">${content.kickerLines.map((line, i) => `<tspan x="${x + 92}" dy="${i ? content.kickerLineHeight : 0}">${escapeXml(line)}</tspan>`).join('')}</text><text x="${x + 92}" y="${y + 16 + content.kickerLineHeight * content.kickerLines.length + 32}" font-size="32" font-weight="700">${content.titleLines.map((line, i) => `<tspan x="${x + 92}" dy="${i ? content.titleLineHeight : 0}">${escapeXml(line)}</tspan>`).join('')}</text>${subtitle}`;
+    const header = `${diagramIcon(groupIcons[group.id], x + 16, headerY + 16 + (content.contentHeadHeight - 70) / 2, 70)}<text class="diagram-kicker diagram-product-kicker" x="${x + 92}" y="${headerY + 16 + 22}" font-size="22">${content.kickerLines.map((line, i) => `<tspan x="${x + 92}" dy="${i ? content.kickerLineHeight : 0}">${escapeXml(line)}</tspan>`).join('')}</text><text x="${x + 92}" y="${headerY + 16 + content.kickerLineHeight * content.kickerLines.length + 32}" font-size="32" font-weight="700">${content.titleLines.map((line, i) => `<tspan x="${x + 92}" dy="${i ? content.titleLineHeight : 0}">${escapeXml(line)}</tspan>`).join('')}</text>${subtitle}`;
     const routeState = activeGroups ? (activeGroups.has(group.id) ? ' data-route-state="active"' : ' data-route-state="dimmed"') : '';
     const toggle = interactive ? `<foreignObject data-group-toggle="${escapeXml(group.id)}" data-right="${x + group.width}" x="${x + group.width - 76}" y="${y + 10}" width="76" height="76"><div xmlns="http://www.w3.org/1999/xhtml" data-frame-mount="${escapeXml(group.id)}" style="display:flex; margin:4px"></div></foreignObject>` : '';
     const rule = !group.collapsed ? `<line class="diagram-card-rule" x1="${x + 16}" x2="${x + group.width - 10}" y1="${y + Math.max(group.headerTextHeight, content.headerTextHeight) - 8}" y2="${y + Math.max(group.headerTextHeight, content.headerTextHeight) - 8}" vector-effect="non-scaling-stroke"/>` : '';

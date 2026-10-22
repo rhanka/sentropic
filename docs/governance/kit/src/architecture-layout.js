@@ -79,14 +79,18 @@ export function frameHeaderContent(group, width) {
   const headHeight = Math.max(70, (22 * slotKickerLines.length + 32 * slotTitleLines.length) * 1.125 * 1.3);
   const subtitleLines = wrapText(group.subtitle, Math.min(width, CARD_WIDTH) - 26, 24, 'body');
   const slotSubtitleLines = wrapText(group.subtitle, Math.min(width, CARD_WIDTH) - 26, 24 * 1.125, 'body');
+  // Chromium's embedded body font ends 8px below the subtitle baseline.
+  const subtitleBottom = 16 + contentHeadHeight + 6 + 22 + (subtitleLines.length - 1) * 24 * 1.3 + 8;
   return { kicker, kickerLines, kickerLineHeight, titleLines, titleLineHeight, headHeight, contentHeadHeight, subtitleLines,
-    headerTextHeight: Math.ceil(16 + headHeight + 6 + slotSubtitleLines.length * 24 * 1.125 * 1.3 + 16) };
+    headerTextHeight: group.collapsed
+      ? Math.ceil(16 + headHeight + 6 + slotSubtitleLines.length * 24 * 1.125 * 1.3 + 16)
+      : subtitleBottom + 4 + 8 };
 }
 
 export function groupContent(group, width, collapsed = false) {
   const title = group.title.replace(/ · (\p{Ll})/gu, (_, c) => ' · ' + c.toUpperCase());
-  const header = frameHeaderContent({ ...group, title }, width);
-  return { title, ...header, headerHeight: header.headerTextHeight + (collapsed ? 0 : CARD_STACK_GAP - 8) };
+  const header = frameHeaderContent({ ...group, title, collapsed }, width);
+  return { title, ...header, headerHeight: header.headerTextHeight + (collapsed ? 0 : 8) };
 }
 
 export function nodeTextStyles(data) {

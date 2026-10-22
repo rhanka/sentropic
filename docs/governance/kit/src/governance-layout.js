@@ -40,25 +40,19 @@ export function packGovernanceScene(scene, collapsedIds = []) {
       let content;
       if (!entry.data) {
         entry.collapsed = collapsed.has(entry.id);
+        entry.headerOffset = 0;
         content = entry.collapsed ? null : measure(layouts[layout]);
         entry.width = content ? content.width + PAD * 2 : CARD_WIDTH;
         Object.assign(entry, groupContent(entry, entry.width, entry.collapsed));
         const header = frameHeaderContent(entry, entry.width);
         if (entry.collapsed || header.kicker) {
           Object.assign(entry, header);
-          entry.headerHeight = header.headerTextHeight + (entry.collapsed ? 0 : CARD_STACK_GAP - 8);
+          entry.headerHeight = header.headerTextHeight + (entry.collapsed ? 0 : 8);
         }
         entry.height = entry.collapsed ? COLLAPSED_CARD_HEIGHT : entry.headerHeight + content.height + PAD;
       }
       return {
         entry, content, width: entry.width, height: entry.height,
-        setHeight(height) {
-          if (entry.data || entry.collapsed) return;
-          this.height = entry.height = height;
-          // A horizontal card row fills its band's height. Columns retain
-          // their natural gaps and start at the common header baseline.
-          if (content?.axis === 'x') content.setHeight(height - entry.headerHeight - PAD);
-        },
         place(x, y) {
           entry.position = { x, y };
           content?.place(x + PAD, y + entry.headerHeight);
@@ -68,11 +62,13 @@ export function packGovernanceScene(scene, collapsedIds = []) {
     const items = layout.items.map(measure), horizontal = layout.axis === 'x';
     if (horizontal) {
       const headers = items.filter(item => item.entry && !item.entry.data && !item.entry.collapsed);
-      const headerHeight = Math.max(0, ...headers.map(item => item.entry.headerHeight));
+      const height = Math.max(0, ...headers.map(item => item.entry.headerHeight));
       for (const item of headers) {
-        item.height += headerHeight - item.entry.headerHeight;
-        item.entry.headerHeight = headerHeight;
-        item.entry.headerTextHeight = headerHeight - CARD_STACK_GAP + 8;
+        const offset = height - item.entry.headerHeight;
+        item.height = item.entry.height += offset;
+        item.entry.headerOffset = offset;
+        item.entry.headerHeight = height;
+        item.entry.headerTextHeight += offset;
       }
     }
     const gaps = items.slice(1).map((item, i) => horizontal ? GAP : item.entry?.data && items[i].entry?.data ? CARD_STACK_GAP : GAP);
@@ -80,7 +76,6 @@ export function packGovernanceScene(scene, collapsedIds = []) {
     const height = horizontal ? Math.max(...items.map(item => item.height)) : items.reduce((sum, item) => sum + item.height, 0) + gaps.reduce((sum, gap) => sum + gap, 0);
     const result = {
       axis: layout.axis, width, height,
-      setHeight(next) { this.height = next; if (horizontal) items.forEach(item => item.setHeight(next)); },
       place(x, y) {
         for (const [index, item] of items.entries()) {
           item.place(horizontal ? x : x + (width - item.width) / 2, y);
@@ -89,7 +84,6 @@ export function packGovernanceScene(scene, collapsedIds = []) {
         }
       },
     };
-    if (horizontal) result.setHeight(height);
     return result;
   };
   measure(column(row('h2a', 'surfaces'), 'cluster-mesh', row('engram', 'design-system'))).place(0, 0);
