@@ -18,6 +18,8 @@
   - `docs/governance/kit/package.json`
   - `docs/governance/kit/package-lock.json`
   - `BRANCH.md`
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -28,7 +30,7 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql`
 - **Exception process**:
-  - [x] No exception authorized or needed.
+  - [x] BR725-EX1 (conductor authorized): allow only the two manifest paths above to re-pin `source.declaredLockSha256` and its SHA-256 sidecar after the DOMPurify root lock update; resolves CI `manifest freeze/lock mismatch` using the documented mechanism. Impact: manifest metadata only; packed artifacts and contract inventory stay unchanged. Rollback: revert both manifest lines together with rollback of the corresponding root lock change.
 
 ## Feedback Loop
 - [x] CI run `39833406661`, UI job `120015499754`, fails in the Docker npm audit gate on DOMPurify.
