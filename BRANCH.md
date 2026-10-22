@@ -1,37 +1,49 @@
-# Feature: #861 L0 shared contract and vectors
+# Feature: #861 L3 transaction-bound coordinator and migration
 
 ## Objective
-Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator declarations, common-contract map, migration inventory, executable vectors).
+Deliver the L3 atomic finalization coordinator with one additive migration and real-PostgreSQL regression tests.
 
 ## Scope / Guardrails
-- Scope limited to packages/artifacts/** declaration shapes, docs, and unit vectors.
-- Public host API names are explicitly excluded until spec r2 is forwarded.
+- Scope limited to the L3 exclusive write set below; never edit files owned by L1, L2, L4-L9 or mesh lots.
+- r2 spec is binding; L0 shapes are read-only. L3 follows r2 names, reconciles with the L0 fix on merge.
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/artifacts-861`.
-- Automated test campaigns run on dedicated environments (`ENV=test-artifacts-861`), never on root `dev`.
+- Branch development happens in isolated worktree `tmp/worktrees/artifacts-861-L3`, based on feat/artifacts-861-contracts.
+- Automated test campaigns run on dedicated environments (`ENV=test-artifacts-861-L3`), never on root `dev`.
 - UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
+- No package manifest or lock edits in L3 (single-writer integration owner rule); no version bump.
+- No export-map or barrel edits in L3 (qualified in L6/L8).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/l0-freeze/profile-contract.ts`
-  - `packages/artifacts/l0-freeze/commit-contract.ts`
-  - `packages/artifacts/l0-freeze/failure-contract.ts`
-  - `packages/artifacts/l0-freeze/command-identity-contract.ts`
-  - `packages/artifacts/tests/effective-profile.test.ts`
-  - `packages/artifacts/tests/commit-contract.test.ts`
-  - `packages/artifacts/docs/common-contract-map.md`
-  - `packages/artifacts/docs/migration-inventory-l0.md`
-  - `packages/artifacts/README.md`
-  - `packages/artifacts/package.json`
+  - `packages/artifacts/src/server/commit/types.ts`
+  - `packages/artifacts/src/server/commit/coordinator.ts`
+  - `packages/artifacts/src/adapters/postgres-commit.ts`
+  - `packages/artifacts/src/testing.ts`
+  - `packages/artifacts/migrations/0003_coordinator.sql`
+  - `packages/artifacts/tests/commit-coordinator.integration.test.ts`
+  - `packages/artifacts/tests/migration.integration.test.ts`
+  - `packages/artifacts/tests/postgres.integration.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/artifacts/package.json`
+  - `packages/artifacts/src/index.ts`
+  - `packages/artifacts/src/mcp-core.ts`
+  - `packages/artifacts/src/mcp.ts`
+  - `packages/artifacts/src/http.ts`
+  - `packages/artifacts/src/server/publication.ts`
+  - `packages/artifacts/src/server/service.ts`
+  - `packages/artifacts/src/server/idempotency.ts`
+  - `packages/artifacts/src/server/object-intents.ts`
+  - `packages/artifacts/src/adapters/postgres.ts`
+  - `packages/artifacts/src/adapters/s3.ts`
+  - `packages/artifacts/l0-freeze/**`
   - `packages/cluster-mesh/**`
   - `packages/mcp-platform/**`
   - `packages/mcp-auth/**`
@@ -46,10 +58,10 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] L0-EXCLUDE-1 (acknowledge): public host API names (coordinator/outcome method names, host binding names) stay unfrozen until spec r2 is forwarded; L0 freezes shapes and vectors only
-- [ ] L0-Q0 (attention): i-cond Q0 inventory (due 22 Oct 12:00 Toronto) not yet forwarded; integrate on arrival as amendment without changing frozen shapes unless r2 requires it
-- [ ] L0-R2 (attention): Opus review requires spec r2 (host API naming vs radar suite, consumer baselines 0.1.2, race/isolation, error-code mapping, CR-1..CR-5); do not freeze contested names in L0
-- [x] L0-CI (acknowledge): CI run 39720063546 failed on the 0.2.0-rc.1 package.json bump (probe version equality, mesh eresolve against frozen range); L0 restructured to docs plus vectors plus l0-freeze with no src or version change, bump deferred to L1
+- [ ] L3-L0MERGE (attention): Sol review found 5 P1 in L0 shapes; another session is fixing L0 on feat/artifacts-861-contracts. Merge it into this branch before finalizing and reconcile shared names toward the fixed declarations.
+- [ ] L3-NOBUMP (acknowledge): no manifest or lock edits in L3 per the r2 single-writer rule, so the enforce-package-bump gate is expected to fail on this PR until the integration owner adds the serial version commit; every other gate must be green.
+- [ ] L3-QUOTA (acknowledge): quota-exhausted finalization maps to conflict 409 non-retriable as a genuine conflict; r2 names no explicit quota-exhausted outcome.
+- [ ] L3-QUARANTINE (acknowledge): unknown legacy codec on a found success row raises a typed quarantine error for L6 projection; L3 invents no migration-condition taxonomy.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -62,44 +74,45 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: L0 is a single declaration-freeze lot with no parallel implementation workstreams.
+- Rationale: L3 is one lot in the S1 parallel wave; integration happens on the integration branch after the wave.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in L0; no UAT checkpoints apply.
+- No UI changes in L3; no UAT checkpoints apply.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read rules/MASTER.md, rules/workflow.md, spec-plan.md L0 row plus sections 1-5, REQUEST-i-cond.md.
-  - [x] Worktree tmp/worktrees/artifacts-861 on branch feat/artifacts-861-contracts from origin/main verified.
-  - [x] ENV mapping: unit/typecheck/lint on ENV=test-artifacts-861 last argument; no services started in L0.
-  - [x] Ports: no ports needed (no services in L0; declaration docs plus unit vectors only).
-  - [x] Confirm scope and guardrails; public host API names excluded until spec r2.
+- [ ] **Lot 0 — Baseline and constraints**
+  - [x] Read rules/MASTER.md, rules/workflow.md, r2 spec L3 row plus sections 1-5, Q0 inventory, Sol L0 review.
+  - [x] Worktree tmp/worktrees/artifacts-861-L3 on branch feat/artifacts-861-L3 from feat/artifacts-861-contracts verified.
+  - [x] ENV mapping: unit/typecheck/lint/integration on ENV=test-artifacts-861-L3 last argument; no services kept running.
+  - [x] Confirm scope and guardrails; r2 names over L0 shapes; no manifest edits.
   - [x] Validate scope boundaries with make scope-check before each commit.
-- [x] **Lot 1 — Declaration shapes (stable only, no host API names)**
-  - [x] packages/artifacts/l0-freeze/profile-contract.ts: selection plus effective-profile shapes, Radar four-tool subset, C4 bounds as frozen data plus validators.
-  - [x] packages/artifacts/l0-freeze/command-identity-contract.ts: effective-command plus command-identity shapes, codec version, derivation-binding shape (algorithm reference only, no new API name).
-  - [x] packages/artifacts/l0-freeze/commit-contract.ts: invocation-context, authorization-decision, coordinator-requirement shapes plus finalization protocol order as frozen types.
-  - [x] packages/artifacts/l0-freeze/failure-contract.ts: outcome plus failure shapes, category-to-public mapping table, commit states.
-  - [x] Lot gate:
-    - [x] make typecheck-artifacts ENV=test-artifacts-861 last
-    - [x] make lint-artifacts ENV=test-artifacts-861 last
-- [x] **Lot 2 — Common-contract map without runtime cycle**
-  - [x] packages/artifacts/docs/common-contract-map.md: capability, publication-condition, commitment, manifest, page reuse table plus boundaries (no registered module, scope mapping needs trusted host mapping, mesh export lives in L7, no mesh runtime dep from artifacts).
-  - [x] No import of @sentropic/cluster-mesh from packages/artifacts/src or tests.
-  - [x] Lot gate:
-    - [x] grep verifies no cluster-mesh import in packages/artifacts/src and new tests
-- [x] **Lot 3 — Migration inventory and vectors**
-  - [x] packages/artifacts/docs/migration-inventory-l0.md: declaration changes per ask, migration guide stubs, legacy-record quarantine rule, Radar pilot-state inputs awaited (Q0).
-  - [x] packages/artifacts/tests/effective-profile.test.ts: frozen selection plus bounds vectors (pure, no DB/S3, no app.handle).
-  - [x] packages/artifacts/tests/commit-contract.test.ts: frozen failure-mapping plus finalization-order vectors (pure, no DB/S3, no app.handle).
-  - [x] No integration tests; no mocked provider success.
-  - [x] Lot gate:
-    - [x] make test-artifacts ENV=test-artifacts-861 last (unit only: 27 files, 216 tests passed)
-    - [x] make scope-check before each commit
-- [ ] **Lot 4 — Release reservation and PR**
-  - [x] Document the 0.2.0-rc reservation without a package.json bump (frozen mesh range until L7; bump deferred to first src-changing lot).
-  - [x] Update packages/artifacts/README.md with L0 contract line pointer.
-  - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
-  - [x] Push branch and open DRAFT PR feat(artifacts): #861 L0 shared contract and vectors.
-  - [x] CI green; do not merge.
+- [ ] **Lot 1 — Coordinator migration and postgreSQL executor**
+  - [ ] packages/artifacts/migrations/0003_coordinator.sql: operation_keys plus operation_receipts, additive only.
+  - [ ] packages/artifacts/src/adapters/postgres-commit.ts: coordination row, READ COMMITTED finalization connections, key lock, receipt read and insert.
+  - [ ] Extend packages/artifacts/tests/migration.integration.test.ts with the 0003 describe block.
+  - [ ] Extend packages/artifacts/tests/postgres.integration.test.ts with coordination-row convergence.
+  - [ ] Lot gate:
+    - [ ] make typecheck-artifacts ENV=test-artifacts-861-L3 last
+    - [ ] make lint-artifacts ENV=test-artifacts-861-L3 last
+- [ ] **Lot 2 — Commit protocol types and coordinator**
+  - [ ] packages/artifacts/src/server/commit/types.ts: r2-exact invocation, context, fence, decision, transaction, participant, lock order, request and receipt types.
+  - [ ] packages/artifacts/src/server/commit/coordinator.ts: A4 steps 1-6, guarded replay, 23505 resolution, COMMIT-ack unknown, fence verification, exactly-once release.
+  - [ ] packages/artifacts/src/testing.ts: createArtifactCommitBarrier with the nine r2 points.
+  - [ ] Lot gate:
+    - [ ] make typecheck-artifacts ENV=test-artifacts-861-L3 last
+    - [ ] make lint-artifacts ENV=test-artifacts-861-L3 last
+- [ ] **Lot 3 — Coordinator regression tests and baseline proof**
+  - [ ] packages/artifacts/tests/commit-coordinator.integration.test.ts: key recheck, same-key replay, different-hash conflict, denial rollback, guard-after-waits, revision race, last-unit quota race, two-process S3-barrier race, COMMIT unknown, exactly-once release.
+  - [ ] Baseline proof: new and extended cases fail on the L0 head and pass on this branch.
+  - [ ] Lot gate:
+    - [ ] make test-artifacts-integration SCOPE=tests/commit-coordinator.integration.test.ts ENV=test-artifacts-861-L3 last
+    - [ ] make test-artifacts-integration SCOPE=tests/migration.integration.test.ts ENV=test-artifacts-861-L3 last
+    - [ ] make test-artifacts-integration SCOPE=tests/postgres.integration.test.ts ENV=test-artifacts-861-L3 last
+    - [ ] make test-artifacts ENV=test-artifacts-861-L3 last (unit, no collateral)
+    - [ ] make scope-check before each commit
+- [ ] **Lot 4 — Merge L0 fix, PR and CI**
+  - [ ] Merge feat/artifacts-861-contracts after the L0 fix lands; reconcile shared names toward the fixed declarations.
+  - [ ] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
+  - [ ] Push branch and open DRAFT PR feat(artifacts): #861 L3 with base feat/artifacts-861-contracts.
+  - [ ] CI green except the documented single-writer version gate; do not merge.
