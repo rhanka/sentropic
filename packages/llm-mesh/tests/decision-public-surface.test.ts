@@ -83,9 +83,12 @@ import { quoteDecision } from '@sentropic/llm-mesh/decision/pricing';
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(() => { throw new Error('Unexpected consumer fetch'); });
     try {
       const consumer = await import('../dist/decision/index.js');
-      expect(Object.keys(consumer)).toEqual(['createRemoteDecisionClient']);
+      expect(Object.keys(consumer)).toEqual(['createRemoteDecisionClient', 'validateDecisionResult']);
       expect(typeof consumer.createRemoteDecisionClient).toBe('function');
+      expect(typeof consumer.validateDecisionResult).toBe('function');
       expect(readFileSync(resolve('dist/decision/index.js'), 'utf8')).not.toMatch(/(?:import|export).*from.*(?:host|pricing|transport)/);
+      expect(readFileSync(resolve('dist/decision/validate-result.js'), 'utf8')).not.toMatch(/(?:import|export).*from.*(?:host|pricing|transport)/);
+      expect(readFileSync(resolve('dist/decision/validate-result.js'), 'utf8')).not.toMatch(/process\.env|globalThis\.fetch/);
       const host = await import('../dist/decision/host.js');
       expect(typeof host.createDecisionService).toBe('function');
       expect(fetch).not.toHaveBeenCalled();
