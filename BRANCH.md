@@ -5,7 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Work in an isolated repo-local worktree for feat/cluster-mesh-engram-memory-g1.
-- [x] Use Make-only container build/test commands; ENV=test-cm-engram-g1 is last.
+- [x] Use Make-only container build/test commands; ENV=test-pr709-0211 is last.
 - [ ] Preserve frozen memory DTOs/digests, Comments and engram-live behavior, and published migrations.
 - [ ] Keep generic u64, result recovery, SQLite provider/SPI prerequisites and PG ownership in their named dependency branches.
 - [ ] No runtime/type cluster-mesh dependency in Engram; the host explicitly injects its qualified SQLite provider.
@@ -34,6 +34,8 @@
   - [ ] `packages/cluster-mesh/tests/storage/postgres-module-policy.spec.ts`
   - [ ] `packages/cluster-mesh/package.json`
   - [ ] `package-lock.json`
+  - [ ] `package.json` (BR709-EX8 only: Engram override scope)
+  - [ ] `Makefile` (BR709-EX8 only: exact Engram peer-tools pin)
   - [ ] `packages/cluster-mesh/tests/packaging/fixtures/**` (via BR709-EX6 only: selected-tuple tarball rename + lock refresh through the sanctioned make flow)
   - [ ] `packages/cluster-mesh/README.md`
   - [ ] `spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md`
@@ -60,6 +62,8 @@
   - [ ] Engram checkouts remain read-only; published SQL bytes and L5 lock-coupling follow-up remain outside this implementation.
 
 ## Feedback Loop
+- [x] BR709-EX8 validation: registry version/gitHead/integrity match the conductor artifact; recursive Engram lock closure has no pg, pgvector, neo4j-driver or Spanner edge; host api pg dependency retained. All 70 Engram tests (11 files) pass with 0.21.1; officeparser 8.2.0 and file-type 22.1.0 remain pinned. P1 predecessor 3bb9f6983b523cec260b930b866a3be2bbe92c5f1319750037890e111788fdc7 retained byte-for-byte; refreshed manifest 1257687ea451e2993f3765b3a0440e7692b32de7130e75f391107d0dcba4cc4c passes the packer. Generated lock pruning is one indivisible dependency update.
+- [x] `BR709-EX8` (dependency update: `Makefile` peer-tools pin, root `package.json` override, `packages/cluster-mesh/package.json`, `package-lock.json`; conditional `tools/memory-mcp-l5/**` for lock-coupled P1 refresh): install exactly Engram 0.21.1, gitHead b97c959644d94e6181e8313b573014786df5d45a, integrity sha512-gPusyy3JyLyajkUEYMUwBOx/Uf5Yia9XWKmOPmF8MYWdopChIbd3YT8fa0a+zcBu+qX9FP2I396F8jKWYDLtew==. Reason: conductor E2 binds this artifact; database drivers are host-owned. Impact: remove Engram driver edges, retain explicit host injection, officeparser 8.2.0, file-type 22.1.0 and all approved fixes; preserve P1 history and refresh its lock-coupled candidate. No new G1/S0 acceptance or provenance claim. Rollback: restore previous pins, override, lock and retained candidate. Authorization: owner PR #709 instruction and REQUEST-gr-conductor.md follow-up.
 - [x] BR709-EX7 (fourth origin/main merge at 4138a0ecb, no rebase): retain this branch's Engram plan and all approved dispositions when resolving the sole BRANCH.md conflict with the completed governance plan from PR #711; inherit upstream governance artifacts and Go security hardening unchanged. No generated files or dependency locks changed; Engram 0.21.0 integrity remains sha512-CrHVxemS. Inherited upstream paths are outside the authored resolution diff. Rollback: revert this merge. Authorization: owner PR #709 integration instruction.
 - [x] Received the final-review-approved C2/C6 exact bytes/full manifest/digest mapping and C7 scope mapping; recorded producer identities and receipt locators.
 - [x] `BR709-EX1` (conditional `tools/memory-mcp-l5/**`): regenerate the P1 pre-candidate manifest after the CI-required cluster-mesh 0.22.0 lock sync, following #704 (superseded by BR709-EX6: 0.22.0 abandoned, now the 0.21.2 patch line). Reason: `package-lock.json` SHA change breaks the `manifest freeze/lock mismatch` gate. Impact: new immutable history identity plus refreshed pre-candidate manifest/sidecar, old bytes retained. Rollback: restore the retained history bytes to the pre-candidate path. Authorization: CI-red packet 709 + plan P1 disposition rule.
