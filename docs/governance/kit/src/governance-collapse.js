@@ -9,7 +9,7 @@ const runtimeRoutes = new Map();
 
 // Fold the responsibility tree, measuring visible content on both axes.
 // Relations internal to a folded box disappear; external relations reach its border.
-export function collapseGovernanceScene(scene, collapsedIds = [], usePrepared = true) {
+export function collapseGovernanceScene(scene, collapsedIds = [], usePrepared = true, planHint) {
   if (!collapsedIds.length) return scene;
   const collapsed = new Set(collapsedIds);
   const originals = new Map([...scene.groups, ...scene.nodes].map(entry => [entry.id, entry]));
@@ -49,8 +49,11 @@ export function collapseGovernanceScene(scene, collapsedIds = [], usePrepared = 
   ]);
   const prepared = usePrepared && ((scene.preparedFolds ?? (preparedRoutes[scene.language ?? 'fr'] ?? preparedRoutes).folded)?.find(entry => entry.signature === routingSignature)
     ?? runtimeRoutes.get(routingSignature));
+  const mask = scene.groups.reduce((value,g,i)=>value | (visibleGroups.some(v=>v.id===g.id&&v.collapsed) ? 1<<i : 0),0);
+  const plan = planHint ?? (usePrepared && scene.id === 'central' && scene.projectionKey === 'overview'
+    ? preparedRoutes[scene.language ?? 'fr'].plans?.[mask] : undefined);
   const routed = summary ? {...routeInput, edges:packed.edges}
-    : prepared ? { ...routeInput, edges: prepared.edges } : routeScene(routeInput);
+    : prepared ? { ...routeInput, edges: prepared.edges } : routeScene(routeInput,plan);
   if (usePrepared && !summary && !prepared) {
     if (runtimeRoutes.size === 32) runtimeRoutes.delete(runtimeRoutes.keys().next().value);
     runtimeRoutes.set(routingSignature, { edges: routed.edges });
