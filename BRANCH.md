@@ -340,6 +340,7 @@
   - [x] F3 generic descriptor (protocol-closed JEV/structured validation; scalar keys, native boolean and custom confidence for structured).
   - [x] F3 generic credentials and pricing (descriptor-selected env auth, protocol-aware output liability and reserves).
   - [x] F3 structured backend (injected transport, revisioned prompt, closed scalar/label schema, single-call refusal).
+  - [x] F3 structured regression (malformed/refusal/extra/missing/prose/clamp/default rejected; scalar and label pass).
   - [x] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated. Mesh 1302/1302, cluster 1014 passed, lazy-package 78/78 with re-pinned selected lock (sibling llm-mesh 0.27.1). api unit/integration covered by CI (compose stack not run locally).
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
