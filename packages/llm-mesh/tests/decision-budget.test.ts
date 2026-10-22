@@ -14,6 +14,12 @@ describe('qualified integer decision liability', () => {
     expect(priceDecisionUsage(usage, result.quote, true)).toMatchObject({ cost: { amountMicroUsd: '42', source: 'reported-usage-times-rate' }, pending: false });
     expect(priceDecisionUsage(unreportedDecisionUsage('unknown'), result.quote)).toMatchObject({ cost: { amountMicroUsd: '2753' }, pending: true });
   });
+  it('binds the admitted tariff to the descriptor price protocol (F4)', () => {
+    const descriptor = qualifiedDescriptor();
+    expect(quoteDecision(decisionRequest(), descriptor,
+      { ...price(), priceRevision: 'foreign-protocol-price' }).ok).toBe(false);
+    expect(quoteDecision(decisionRequest(), descriptor, price()).ok).toBe(true);
+  });
   it('refuses absent/wrong prices and unqualified/nonzero-output liability', () => {
     const d = qualifiedDescriptor();
     expect(quoteDecision(decisionRequest(), d, null)).toEqual({ ok: false, code: 'PRICING_UNAVAILABLE' });
