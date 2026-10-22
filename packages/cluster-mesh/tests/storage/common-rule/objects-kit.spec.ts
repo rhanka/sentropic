@@ -10,11 +10,12 @@ describe('L01b1 objects and manifests kit (reference only; no backend qualificat
     it(`should pass CT-0${i + 1} on the independent positive reference`, async () => {
       await check(createObjectReference);
     });
-    const mutant = OBJECT_MUTANTS[i];
-    it(`should kill ${mutant.id}@${mutant.revision} at its ${mutant.target} assertion`, async () => {
-      await check(createObjectReference); // Positive pass is mandatory before accepting this kill.
-      await assert.rejects(check(mutant.factory), mutant.kill);
-    });
+    for (const mutant of OBJECT_MUTANTS.filter((m) => m.target === `CT-0${i + 1}`)) {
+      it(`should kill ${mutant.id}@${mutant.revision} at its ${mutant.target} assertion`, async () => {
+        await check(createObjectReference); // Positive pass is mandatory before accepting this kill.
+        await assert.rejects(check(mutant.factory), mutant.kill);
+      });
+    }
   }
   it('should fail closed when the requested fixture environment is missing', async () => {
     for (const check of cases) await assert.rejects(check(() => undefined as never), /missing CT-0[123] fixture/);

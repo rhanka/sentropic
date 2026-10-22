@@ -47,8 +47,25 @@ export const assertCT01 = async (makeFixture: ObjectFixtureFactory): Promise<voi
   const returned = await f.clients[0].reader.read(ownedRef, BUDGET);
   returned.fill(0);
   assert.deepEqual(await f.clients[0].reader.read(ownedRef, BUDGET), original);
-  for (const bad of [{ ...ref, sha256: '0'.repeat(64) }, { ...ref, byteLength: 1 }, { ...ref, id: 'sha256:wrong' }]) {
-    await assert.rejects(f.clients[0].preparer.create(bad, bytes), /corrupt/);
+  const committed = objectRef(bytes, `sha256:${sha256(bytes)}`);
+  const invalidRetries = [
+    { name: 'digest', ref: { ...committed, sha256: '0'.repeat(64) }, bytes },
+    { name: 'length', ref: { ...committed, byteLength: 1 }, bytes },
+    { name: 'digest/key', ref: { ...committed, sha256: sha256(other), byteLength: other.byteLength }, bytes: other },
+  ];
+  for (const bad of invalidRetries) for (const reopened of [false, true]) {
+    const isolated = makeFixture();
+    const receipt = await isolated.clients[0].preparer.create(committed, bytes);
+    const retry = reopened ? isolated.reopen() : isolated;
+    await assert.rejects(retry.clients[0].preparer.create(bad.ref, bad.bytes), /corrupt/);
+    const message = `CT-01: invalid ${bad.name} retry preserves accepted bytes`;
+    assert.deepEqual(isolated.inspect(committed), Uint8Array.from(bytes), message);
+    for (const current of [retry, isolated.reopen()]) {
+      await assert.doesNotReject(async () => {
+        assert.deepEqual(await current.clients[0].reader.read(committed, BUDGET), Uint8Array.from(bytes));
+      }, `${message} and commitment after reopen=${reopened}`);
+      assert.deepEqual(await current.clients[0].preparer.create(committed, bytes), receipt);
+    }
   }
   for (const exists of [false, true]) {
     const isolated = makeFixture();

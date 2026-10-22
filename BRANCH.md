@@ -30,7 +30,8 @@
 - [x] Exceptions require ID, reason, impact and rollback in Feedback Loop before edits.
 
 ## Feedback Loop
-- [x] None.
+- [x] Astra P2-1: CT-01 checks bytes, commitment and receipt after each invalid retry on a separately populated identity, before/after reopen; M01-invalid-retry survived the old kit and is now killed.
+- [ ] Astra P2-2: populate CT-02 verification probes and kill a verifier that ignores the supplied nonempty manifest digest.
 
 ## AI Flaky tests
 - [x] No provider/model nondeterminism or accepted skips in this kit.
