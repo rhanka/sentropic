@@ -58,6 +58,7 @@
 - [x] Added command-identity.test.ts regressions for Radar vectors, ordered files, authority domains and snapshots.
 - [x] Added parameters.test.ts regressions for closed inputs, decoded budgets, paths, Unicode keys and envelopes.
 - [x] Baseline receipt: all 22 new cases fail on missing L1 contracts; four existing parameter cases pass (tmp/l1-evidence/baseline.log).
+- [x] Implemented platform-free profile contracts and JSON snapshot/ordered codec primitives.
 - [ ] Tests: capability-profile.test.ts, command-identity.test.ts, parameters.test.ts; baseline red/candidate green.
 - [ ] Gates: make typecheck-artifacts, lint-artifacts, test-artifacts; make scope-check before every commit.
 - [ ] Delivery: push, draft PR against feat/artifacts-861-contracts, green CI, report URL/SHA/run; no merge.
