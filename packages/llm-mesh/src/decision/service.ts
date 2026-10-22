@@ -22,9 +22,9 @@ export interface DecisionSelectionOptions {
   registry: ProviderRegistry;
   resolveEvaluator(ref: EvaluatorRef): DecisionEvaluatorDescriptor | null | Promise<DecisionEvaluatorDescriptor | null>;
   policy?: DecisionHostPolicy;
-  /** Explicit evaluator allowlist (P28): when present, only exactly listed
-   * evaluator references are admitted. Absent, the registry inventory decides. */
-  evaluatorAllowlist?: readonly EvaluatorRef[];
+  /** Explicit evaluator allowlist (P28): only exactly listed evaluator
+   * references are admitted. Absent or unlisted refuses before provider egress. */
+  evaluatorAllowlist: readonly EvaluatorRef[];
 }
 export type DecisionSelection = { ok: true; request: DecisionRequest; descriptor: DecisionEvaluatorDescriptor; adapter: ProviderAdapter }
   | { ok: false; code: DecisionErrorCode };
@@ -57,8 +57,7 @@ export async function preflightDecisionRequest(candidate: unknown, options: Deci
   const request = freezeDecisionData(parsed.request);
   // P28: an explicit allowlist refuses before provider lookup; a general
   // catalogue entry never implies admission and no provider route is touched.
-  if (options.evaluatorAllowlist !== undefined
-    && !allowlistsEvaluator(options.evaluatorAllowlist, request.evaluator)) {
+  if (!allowlistsEvaluator(options.evaluatorAllowlist, request.evaluator)) {
     return { ok: false, code: 'EVALUATOR_UNKNOWN' };
   }
   try {
@@ -118,7 +117,7 @@ export function createDecisionService(supplied: DecisionServiceOptions): Decisio
   if (!supplied.registry || ![supplied.resolveEvaluator, supplied.resolveAuth, supplied.resolvePrice, supplied.authorize,
     supplied.budget?.admit, supplied.budget?.markDispatched, supplied.budget?.release, supplied.budget?.settle,
     supplied.receipts?.persist].every((port) => typeof port === 'function')
-    || (supplied.evaluatorAllowlist !== undefined && !isEvaluatorAllowlist(supplied.evaluatorAllowlist))
+    || !isEvaluatorAllowlist(supplied.evaluatorAllowlist)
     || !policy.ok || !isRecord(policy.value)
     || !hasOnlyKeys(policy.value, ['timeoutMs', 'maxCostMicroUsd', 'allowRaw'])
     || (policy.value.timeoutMs !== undefined && (!Number.isSafeInteger(policy.value.timeoutMs)
@@ -126,8 +125,7 @@ export function createDecisionService(supplied: DecisionServiceOptions): Decisio
     || (policy.value.maxCostMicroUsd !== undefined && !isMicroUsd(policy.value.maxCostMicroUsd))
     || (policy.value.allowRaw !== undefined && typeof policy.value.allowRaw !== 'boolean')) throw new Error('Invalid decision host configuration.');
   const options = { ...supplied, policy: freezeDecisionData(policy.value as DecisionHostPolicy),
-    ...(supplied.evaluatorAllowlist === undefined ? {}
-      : { evaluatorAllowlist: freezeDecisionData(supplied.evaluatorAllowlist.map((entry) => ({ ...entry }))) }) };
+    evaluatorAllowlist: freezeDecisionData(supplied.evaluatorAllowlist.map((entry) => ({ ...entry }))) };
   return { async decide(candidate, callOptions) {
     const execution = beginDecisionExecution(candidate, { clock: options.clock, generateId: options.generateId,
       timeoutMs: options.policy.timeoutMs, signal: callOptions?.signal });
