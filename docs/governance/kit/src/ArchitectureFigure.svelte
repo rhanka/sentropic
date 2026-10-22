@@ -14,8 +14,14 @@
   let detailRevision = 0;
   let heldInlineSvg = '';
   let overflowDiagnostics = $state([]);
+  let activeSceneId = scene.id;
   const foldable = $derived(scene.groups.length > 0);
-  $effect(() => { collapsedIds = scene.groups.map(group => group.id); });
+  $effect(() => {
+    if (scene.id !== activeSceneId) {
+      activeSceneId = scene.id;
+      collapsedIds = scene.groups.map(group => group.id);
+    }
+  });
   const routed = $derived(collapseGovernanceScene(projectGovernanceScene(scene, highlight), collapsedIds));
   // Only local structured scene text reaches this renderer; it XML-escapes it.
   const svg = $derived(viewerOpen ? heldInlineSvg : renderSceneSvg(scene.id, routed, highlight, foldable));
