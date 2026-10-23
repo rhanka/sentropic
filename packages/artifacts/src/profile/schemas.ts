@@ -1,4 +1,4 @@
-import type { ArtifactCapabilityName, ArtifactProviderProfile, ArtifactSchema, OperationProfile } from './contracts.js';
+import type { ArtifactCapabilityName, ArtifactProviderProfile, EffectiveArtifactProfile, ArtifactSchema, OperationProfile } from './contracts.js';
 
 const str = { type: 'string', minLength: 1 };
 const integer = (minimum: number, maximum?: number) => ({ type: 'integer', minimum,
@@ -33,7 +33,7 @@ export function operationProfile(profile: ArtifactProviderProfile, operation: st
 }
 
 /** Schemas are generated from the same limits/defaults read by normalization. */
-export function capabilitySchema(name: ArtifactCapabilityName, profile: ArtifactProviderProfile): ArtifactSchema {
+export function capabilitySchema(name: ArtifactCapabilityName, profile: EffectiveArtifactProfile): ArtifactSchema {
   const operation = name.slice('artifacts_'.length);
   const config = operationProfile(profile, operation);
   const limits = config.limits;
