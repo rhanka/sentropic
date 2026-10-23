@@ -11,6 +11,7 @@ export type ArtifactFailureCategory =
 
 export interface ArtifactFailure {
   readonly category: ArtifactFailureCategory;
+  readonly variant?: string;
   readonly httpStatus: number;
   readonly publicCode: string;
   readonly retriable: boolean;
@@ -39,6 +40,8 @@ export interface ArtifactFailureContext {
 
 /** Trusted guard's public refusal; private driver data must never populate these fields. */
 export interface ArtifactPublicRefusal {
+  readonly allowed: false;
+  readonly reason: 'denied' | 'revoked' | 'expired' | 'invalid_object' | 'unavailable';
   readonly status: number;
   readonly publicCode: string;
   readonly retriable: boolean;
@@ -93,28 +96,31 @@ function chain(cause: unknown): unknown[] {
   return values;
 }
 
-type Projection = Pick<ArtifactFailure, 'category' | 'httpStatus' | 'publicCode' | 'retriable'>;
+type Projection = Pick<ArtifactFailure, 'category' | 'variant' | 'httpStatus' | 'publicCode' | 'retriable'>;
 const unavailable = (category: 'provider_unavailable' | 'admission_unavailable' = 'provider_unavailable'): Projection => ({
-  category, httpStatus: 503, publicCode: 'capability_unavailable', retriable: true,
+  category, variant: category === 'admission_unavailable' ? 'entry_outage' : 'dispatch_failure',
+  httpStatus: 503, publicCode: 'capability_unavailable', retriable: true,
 });
-const conflict = (): Projection => ({ category: 'conflict', httpStatus: 409, publicCode: 'conflict', retriable: false });
-const internal = (): Projection => ({ category: 'provider_error', httpStatus: 500, publicCode: 'internal_error', retriable: false });
+const conflict = (variant = 'key_contention'): Projection => ({ category: 'conflict', variant, httpStatus: 409, publicCode: 'conflict', retriable: false });
+const internal = (): Projection => ({ category: 'provider_error', variant: 'unclassified', httpStatus: 500, publicCode: 'internal_error', retriable: false });
 
 function operationProjection(error: ArtifactOperationError): Projection {
   const { kind } = error;
   switch (kind) {
     case 'provider_unavailable': case 'admission_unavailable': return unavailable(kind);
-    case 'command_conflict': case 'pointer_conflict': return conflict();
-    case 'capability_unselected': return { ...unavailable(), category: kind, retriable: false };
+    case 'command_conflict': case 'pointer_conflict': return conflict(kind);
+    case 'capability_unselected': return { ...unavailable(), category: kind, variant: 'unselected_operation', retriable: false };
     case 'unauthorized_at_commit': {
-      const refusal = error.details.refusal ?? { status: 403, publicCode: 'access_denied', retriable: false };
+      const refusal = error.details.refusal ?? { allowed: false, reason: 'denied', status: 403, publicCode: 'access_denied', retriable: false };
       // Stable host-approved codes only; a malformed mapping never exposes its text.
       if (!Number.isInteger(refusal.status) || refusal.status < 400 || refusal.status > 599
         || !/^[a-z][a-z0-9_]{0,63}$/.test(refusal.publicCode)) return internal();
+      const authorityUnavailable = refusal.reason === 'unavailable' && refusal.status === 503;
       return {
         category: kind, httpStatus: refusal.status,
+        variant: authorityUnavailable ? 'authority_unavailable' : 'policy_denial',
         publicCode: refusal.status === 503 ? 'capability_unavailable' : refusal.publicCode,
-        retriable: refusal.status === 503,
+        retriable: authorityUnavailable,
       };
     }
     default: return { category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
