@@ -256,4 +256,5 @@ Actions with the following status should be included around tasks only if really
 ## Round M4 (owner-authorized DOMPurify integration)
 - [x] Merge origin/main at 25af28bbc without rebase; preserve main DOMPurify 3.4.17 and all lock records.
 - [x] Resolve plan and P1 manifest conflicts with the branch format; regenerate derived artifacts after committing the merged lock.
-- [ ] Regenerate P1 provenance, verify deterministic output and fixtures, require green CI on the exact head, then merge with the owner GO.
+- [x] Regenerate P1 provenance: two identical generations (483c48be), 44 unchanged contracts and archives, merged-lock snapshot exact; all 101 tooling tests pass.
+- [ ] Require green CI on the exact pushed head, then merge with the owner GO.
