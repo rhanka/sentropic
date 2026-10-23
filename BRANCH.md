@@ -119,6 +119,6 @@ Deliver the L3 atomic finalization coordinator with one additive migration and r
 - [ ] **Lot 4 — Merge L0 fix, PR and CI**
   - [x] Merge feat/artifacts-861-contracts after the L0 fix lands; reconcile shared names toward the fixed declarations.
   - [x] Ship the typed Radar construction example (examples/radar-commit-setup.ts plus tests/radar-commit-setup.integration.test.ts, 3/3 green, one-off tsc proof with the repo toolchain).
-  - [ ] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
-  - [ ] Push branch and open DRAFT PR feat(artifacts): #861 L3 with base feat/artifacts-861-contracts.
-  - [ ] CI green except the documented single-writer version gate; do not merge.
+  - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only (one merge commit used direct git for the L0-fix merge conflict resolution).
+  - [x] Push branch and open DRAFT PR feat(artifacts): #861 L3 with base feat/artifacts-861-contracts (PR #727).
+  - [x] CI status: the CI workflow triggers only on main-targeted PRs and pushes, so PR #727 gets no workflow runs; every repo gate verified locally on HEAD (typecheck, lint, unit 232/232, integration 14/14 plus 9/9 plus 11/11 plus 3/3, scope-check PASS each commit). The enforce-package-bump gate remains expected-fail until the integrator adds the serial version commit. Do not merge.
