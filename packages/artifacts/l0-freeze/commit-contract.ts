@@ -14,8 +14,8 @@ import type {
   EffectiveArtifactCommand,
   InternalIdempotencyKey,
 } from './command-identity-contract.js';
-import type { ArtifactOutcome } from './failure-contract.js';
-import type { CompiledArtifactsProfile } from './profile-contract.js';
+import type { ArtifactFailure, ArtifactOutcome, OrdinaryFailure } from './failure-contract.js';
+import type { CompiledArtifactsProfile, CompiledValidators } from './profile-contract.js';
 
 /** Version of the frozen commit-coordinator protocol. */
 export const COMMIT_PROTOCOL_VERSION = 'artifacts-commit/v1' as const;
@@ -383,3 +383,39 @@ type _ReplayCallable = ArtifactCommitCoordinator['replayOperation'] extends (
   ? true
   : never;
 const _replayCallable: _ReplayCallable = true;
+
+// Compiled profiles carry semantic validators for the lanes to consume.
+type _ValidatorsWired = CompiledArtifactsProfile['validators'] extends CompiledValidators
+  ? true
+  : never;
+const _validatorsWired: _ValidatorsWired = true;
+
+// Ordinary categories do not belong to the operational failure branch.
+const _ordinaryFields = {
+  kind: 'operational',
+  category: 'invalid_request',
+  httpStatus: 400,
+  publicCode: 'invalid_request',
+  retriable: false,
+  invocationId: 'inv-1',
+  operation: 'publish',
+  phase: 'entry',
+  commitState: 'not_committed',
+  cause: undefined,
+} as const;
+// @ts-expect-error — 'invalid_request' is an ordinary category, not operational
+const _ordinaryAsOperational: ArtifactFailure = _ordinaryFields;
+
+const _ordinaryPositive: OrdinaryFailure = {
+  kind: 'ordinary',
+  category: 'invalid_request',
+  httpStatus: 400,
+  publicCode: 'invalid_request',
+  retriable: false,
+  invocationId: 'inv-1',
+  operation: 'publish',
+  phase: 'entry',
+  commitState: 'not_committed',
+  cause: undefined,
+};
+const _ordinaryInOutcome: ArtifactOutcome<string> = { ok: false, failure: _ordinaryPositive };

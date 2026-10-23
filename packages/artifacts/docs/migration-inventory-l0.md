@@ -24,6 +24,12 @@ file freezes shapes, rules and quarantine behavior only.
 - New: immutable invocation context, typed allow/deny decision and the
   atomic finalization unit with the frozen phase order (shapes in
   `l0-freeze/commit-contract.ts`).
+- Type gate: `npm run freeze-types` runs tsc-strict over `l0-freeze/`,
+  including the in-file compile-time assertions (opaque forgery rejection,
+  callable coordinator operations, wired validators, ordinary-failure
+  distinction). Promotion to `src/server/*` in L1/L3/L6 brings the standard
+  make typecheck/lint coverage; the tsconfig `rootDir: src` constraint keeps
+  the L0 freeze outside `src/` until then.
 - Migration: `createHttpArtifactApp`, `createPublicationService`, custom
   ensure implementations and PostgreSQL stores adopt the coordinator role
   in L3-L5. No 0.1.x-compatible callback-only patch can claim this guarantee.
