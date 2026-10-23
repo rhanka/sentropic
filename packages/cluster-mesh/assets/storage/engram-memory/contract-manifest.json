@@ -1,0 +1,155 @@
+{
+  "format": "engram-memory-contract-manifest/v1",
+  "algorithm": "sha256(domain-prefix + NUL + canonicalizeJcs(manifest))",
+  "domain": "graphify-memory/l3a-module-descriptor/v1",
+  "profileDomain": "graphify-memory/l3a-profile/v1",
+  "canonicalization": "JCS RFC 8785 with NFC string normalization",
+  "contractDigest": "sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28",
+  "canonicalManifest": "{\"assets\":{\"additive\":[\"acquireFence/checkFence/releaseFence canonical-instance acquisition (binding §9)\",\"CommitOptions.fence writer-fence identity (binding §§9.3–9.6)\",\"readCommitResult scoped original-result recovery (R-G4-7, binding §8.2)\",\"profileClaims with pinned versions and semantic digests (binding §6.3)\",\"memory-* named queries and scope-chain-index for memory-journal (binding §4.1)\",\"memory key encodings, codec manifest, and index policies in the contract digest (binding §§2.2.3, 3.1, 3.2, 5.3)\"],\"contract\":{\"digest\":\"c7111c9e7293ee270a0b4dde277f1cfc40fa3c863c3915c6f9ccdd6935c46294\",\"name\":\"l3a-generic-module-storage-port\",\"version\":\"v4.1\"}},\"boundaries\":[\"scope-root\",\"exact-cursor\"],\"chainKinds\":[\"memory-journal\"],\"codecs\":[\"jcs-rfc8785+nfc\",\"graphify-memory/payload/v2\",\"graphify-memory/record/v2\",\"graphify-memory/memory-journal-event/v1\",\"graphify-memory/memory-journal-intent/v1\",\"graphify-memory/canonical-transaction/v1\",\"graphify-memory/recovery-checkpoint/v1\",\"graphify-memory/accepted-lexical/v1\",\"graphify-memory/projection-outbox/v1\",\"graphify-memory/projection-batch/v1\",\"graphify-memory/capture-idempotency/v1\",\"graphify-memory/operational-capability/v1\"],\"contractVersion\":\"memory-binding-v1\",\"keyFormats\":[\"[\\\"memory-record-v1\\\",\\\"<record_id>\\\"]\",\"[\\\"memory-pending-control-v1\\\",\\\"<candidate_id>\\\"]\",\"[\\\"memory-sealed-envelope-v1\\\",\\\"<candidate_id>\\\"]\",\"[\\\"memory-state-v1\\\",\\\"candidate|record\\\",\\\"<entity_id>\\\"]\",\"[\\\"memory-outbox-v1\\\",\\\"<through_cursor_inclusive>\\\",\\\"<batch_digest>\\\"]\",\"[\\\"memory-capture-idempotency-v1\\\",\\\"<candidate_id>\\\"]\",\"[\\\"memory-admission-outcome-v1\\\",\\\"<candidate_id>\\\"]\",\"[\\\"memory-store-meta-v1\\\",\\\"binding\\\"]\",\"[\\\"memory-lexical-v1\\\",\\\"<scope_ref>\\\",\\\"<record_id>\\\"]\"],\"keys\":[\"memory-journal\",\"memory-record-v1\",\"memory-pending-control-v1\",\"memory-sealed-envelope-v1\",\"memory-state-v1\",\"memory-outbox-v1\",\"memory-capture-idempotency-v1\",\"memory-admission-outcome-v1\",\"memory-store-meta-v1\",\"memory-lexical-v1\"],\"kinds\":{\"aggregates\":{\"memory-admission-outcomes\":\"memory-admission-outcome\",\"memory-capture-idempotency\":\"memory-capture-idempotency\",\"memory-fold-state\":\"memory-fold-state\",\"memory-pending-controls\":\"memory-pending-control\",\"memory-sealed-envelopes\":\"memory-sealed-envelope\",\"memory-store-meta\":\"memory-store-meta\"},\"chains\":{\"memory-journal\":{\"chain\":\"memory-journal\",\"kind\":\"memory-journal-event\"}},\"records\":{\"memory-projection-outbox\":\"memory-outbox-batch\",\"memory-record-blobs\":\"memory-record-blob\"}},\"optionalProfiles\":[\"leased-snapshots-v1\"],\"pageLimits\":{\"maxEncodedBytes\":1048576,\"maxRecords\":2000},\"policies\":[\"first-proof-immutable:memory-capture-idempotency\",\"first-proof-immutable:memory-admission-outcomes\",\"journal-identity:memory-journal-event\"],\"profileClaims\":[{\"digest\":\"sha256:507fd5a8f5d68a8c2b99c05bee5a23c0ded47d79532ca5edf34ea08c1919958a\",\"name\":\"atomic-units-v1\",\"version\":\"1\"},{\"digest\":\"sha256:927777f8470be49c968a15cb9bbf2560efdd63bd329d763bfeeb1c166759a3bc\",\"name\":\"immutable-chains-v1\",\"version\":\"1\"},{\"digest\":\"sha256:47ee879a5552868ec7cee15f9984cb44f5a72b64aa2b02556232cd0c9037c80f\",\"name\":\"immutable-boundaries-v1\",\"version\":\"1\"},{\"digest\":\"sha256:d4f1e16890c9541fada3e71e4ba7ba2016da5b07e26383979e29e42b7916b1ed\",\"name\":\"scope-outbox-v1\",\"version\":\"1\"},{\"digest\":\"sha256:48cfb030a1a9c614de6170588116d1afe3d7c94acda79b4322b6b6d7d5156900\",\"name\":\"fenced-writers-v1\",\"version\":\"1\"},{\"digest\":\"sha256:66bbb70f8645b21707f5635e9544dd806d67f8b9d19ecb7be7413ac33d995b51\",\"name\":\"leased-snapshots-v1\",\"version\":\"1\"}],\"queryNames\":[\"memory-journal-page\",\"memory-record-by-id\",\"memory-accepted-snapshot\",\"memory-outbox-page\",\"scope-chain-index\"],\"requiredProfiles\":[\"atomic-units-v1\",\"immutable-chains-v1\",\"immutable-boundaries-v1\",\"scope-outbox-v1\",\"fenced-writers-v1\"],\"schemaVersions\":[\"memory-journal-1\",\"memory-record-2\",\"memory-lifecycle-event-2\",\"memory-checkpoint-1\"]}",
+  "manifest": {
+    "contractVersion": "memory-binding-v1",
+    "schemaVersions": [
+      "memory-journal-1",
+      "memory-record-2",
+      "memory-lifecycle-event-2",
+      "memory-checkpoint-1"
+    ],
+    "requiredProfiles": [
+      "atomic-units-v1",
+      "immutable-chains-v1",
+      "immutable-boundaries-v1",
+      "scope-outbox-v1",
+      "fenced-writers-v1"
+    ],
+    "optionalProfiles": [
+      "leased-snapshots-v1"
+    ],
+    "chainKinds": [
+      "memory-journal"
+    ],
+    "queryNames": [
+      "memory-journal-page",
+      "memory-record-by-id",
+      "memory-accepted-snapshot",
+      "memory-outbox-page",
+      "scope-chain-index"
+    ],
+    "boundaries": [
+      "scope-root",
+      "exact-cursor"
+    ],
+    "pageLimits": {
+      "maxRecords": 2000,
+      "maxEncodedBytes": 1048576
+    },
+    "profileClaims": [
+      {
+        "name": "atomic-units-v1",
+        "version": "1",
+        "digest": "sha256:507fd5a8f5d68a8c2b99c05bee5a23c0ded47d79532ca5edf34ea08c1919958a"
+      },
+      {
+        "name": "immutable-chains-v1",
+        "version": "1",
+        "digest": "sha256:927777f8470be49c968a15cb9bbf2560efdd63bd329d763bfeeb1c166759a3bc"
+      },
+      {
+        "name": "immutable-boundaries-v1",
+        "version": "1",
+        "digest": "sha256:47ee879a5552868ec7cee15f9984cb44f5a72b64aa2b02556232cd0c9037c80f"
+      },
+      {
+        "name": "scope-outbox-v1",
+        "version": "1",
+        "digest": "sha256:d4f1e16890c9541fada3e71e4ba7ba2016da5b07e26383979e29e42b7916b1ed"
+      },
+      {
+        "name": "fenced-writers-v1",
+        "version": "1",
+        "digest": "sha256:48cfb030a1a9c614de6170588116d1afe3d7c94acda79b4322b6b6d7d5156900"
+      },
+      {
+        "name": "leased-snapshots-v1",
+        "version": "1",
+        "digest": "sha256:66bbb70f8645b21707f5635e9544dd806d67f8b9d19ecb7be7413ac33d995b51"
+      }
+    ],
+    "codecs": [
+      "jcs-rfc8785+nfc",
+      "graphify-memory/payload/v2",
+      "graphify-memory/record/v2",
+      "graphify-memory/memory-journal-event/v1",
+      "graphify-memory/memory-journal-intent/v1",
+      "graphify-memory/canonical-transaction/v1",
+      "graphify-memory/recovery-checkpoint/v1",
+      "graphify-memory/accepted-lexical/v1",
+      "graphify-memory/projection-outbox/v1",
+      "graphify-memory/projection-batch/v1",
+      "graphify-memory/capture-idempotency/v1",
+      "graphify-memory/operational-capability/v1"
+    ],
+    "keys": [
+      "memory-journal",
+      "memory-record-v1",
+      "memory-pending-control-v1",
+      "memory-sealed-envelope-v1",
+      "memory-state-v1",
+      "memory-outbox-v1",
+      "memory-capture-idempotency-v1",
+      "memory-admission-outcome-v1",
+      "memory-store-meta-v1",
+      "memory-lexical-v1"
+    ],
+    "keyFormats": [
+      "[\"memory-record-v1\",\"<record_id>\"]",
+      "[\"memory-pending-control-v1\",\"<candidate_id>\"]",
+      "[\"memory-sealed-envelope-v1\",\"<candidate_id>\"]",
+      "[\"memory-state-v1\",\"candidate|record\",\"<entity_id>\"]",
+      "[\"memory-outbox-v1\",\"<through_cursor_inclusive>\",\"<batch_digest>\"]",
+      "[\"memory-capture-idempotency-v1\",\"<candidate_id>\"]",
+      "[\"memory-admission-outcome-v1\",\"<candidate_id>\"]",
+      "[\"memory-store-meta-v1\",\"binding\"]",
+      "[\"memory-lexical-v1\",\"<scope_ref>\",\"<record_id>\"]"
+    ],
+    "kinds": {
+      "chains": {
+        "memory-journal": {
+          "kind": "memory-journal-event",
+          "chain": "memory-journal"
+        }
+      },
+      "records": {
+        "memory-record-blobs": "memory-record-blob",
+        "memory-projection-outbox": "memory-outbox-batch"
+      },
+      "aggregates": {
+        "memory-pending-controls": "memory-pending-control",
+        "memory-sealed-envelopes": "memory-sealed-envelope",
+        "memory-fold-state": "memory-fold-state",
+        "memory-capture-idempotency": "memory-capture-idempotency",
+        "memory-admission-outcomes": "memory-admission-outcome",
+        "memory-store-meta": "memory-store-meta"
+      }
+    },
+    "policies": [
+      "first-proof-immutable:memory-capture-idempotency",
+      "first-proof-immutable:memory-admission-outcomes",
+      "journal-identity:memory-journal-event"
+    ],
+    "assets": {
+      "contract": {
+        "name": "l3a-generic-module-storage-port",
+        "version": "v4.1",
+        "digest": "c7111c9e7293ee270a0b4dde277f1cfc40fa3c863c3915c6f9ccdd6935c46294"
+      },
+      "additive": [
+        "acquireFence/checkFence/releaseFence canonical-instance acquisition (binding §9)",
+        "CommitOptions.fence writer-fence identity (binding §§9.3–9.6)",
+        "readCommitResult scoped original-result recovery (R-G4-7, binding §8.2)",
+        "profileClaims with pinned versions and semantic digests (binding §6.3)",
+        "memory-* named queries and scope-chain-index for memory-journal (binding §4.1)",
+        "memory key encodings, codec manifest, and index policies in the contract digest (binding §§2.2.3, 3.1, 3.2, 5.3)"
+      ]
+    }
+  }
+}
