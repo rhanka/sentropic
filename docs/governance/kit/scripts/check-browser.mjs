@@ -5,7 +5,12 @@ import {inspect,contrast,stressFolds} from './browser-checks.mjs';
 import {portableName} from './portable-path.mjs';
 const assert=(ok,why)=>{if(!ok)throw Error(why);};
 const artifact=process.cwd()+'/dist/'+portableName;
-const report={sha256:createHash('sha256').update(readFileSync(artifact)).digest('hex'),matrix:[],interactions:[],contrast:[],errors:[],fitFailures:[]};
+const report={status:'incomplete',sha256:createHash('sha256').update(readFileSync(artifact)).digest('hex'),matrix:[],interactions:[],contrast:[],errors:[],fitFailures:[]};
+const record=(entry,start)=>{
+ const ms=Date.now()-start;
+ report.interactions.push({...entry,ms});
+ assert(ms<1800,`Interaction exceeds UI budget: ${JSON.stringify({...entry,ms})}`);
+};
 let browser=await chromium.launch({args:['--no-sandbox']});
 const allIds=['h2a','surfaces','cluster-mesh','cm-catalog','cat-mcp','cm-storage','cm-security','cm-cluster','engram','design-system','legend'];
 const progress=message=>writeFileSync(process.cwd()+'/.cache/browser-progress.txt',message+'\n');
@@ -101,9 +106,7 @@ try{
    await dialog.locator(`[data-frame-control="${id}"]`).click({timeout:1800});
    await page.waitForFunction(id=>document.querySelector(`dialog[open] [data-group="${id}"]`)?.getAttribute('data-collapsed')==='true',id,{timeout:1800});
    await page.waitForFunction(()=>document.querySelector('.architecture-figure')?.getAttribute('aria-busy')==='false',null,{timeout:1800});
-   const ms = Date.now()-start;
-   assert(ms<1800,'Mixed frame layout exceeds UI budget: '+id+' '+ms+'ms');
-   report.interactions.push({name,id,method:'mixed-fold-latency',ms});
+   record({name,id,method:'mixed-fold-latency'},start);
   }
   // Every frame is tested in tree order, from the default collapsed state.
   for(const cycle of [0,1]) {
@@ -117,7 +120,7 @@ try{
    const box=await control.boundingBox();
    const standard=await control.evaluate(b=>({small:b.classList.contains('st-button--sm'),height:parseFloat(getComputedStyle(b).minHeight)}));
    assert(standard.small&&box.height>=standard.height,'Unscaled DS sm frame control');
-   report.interactions.push({name,id,before,after:expected,cycle,method:mobile?'touch':'mouse',ms:Date.now()-start});
+   record({name,id,before,after:expected,cycle,method:mobile?'touch':'mouse'},start);
    }
   }
   assert(await svg.locator('[data-node]').count()===28,'All frames expanded after traversal');
@@ -125,20 +128,27 @@ try{
   if(!mobile)for(const id of allIds)for(const expected of ['false','true']){
    const button=svg.locator(`[data-group-toggle="${id}"] button`);
    assert(await button.evaluate(b=>b.classList.contains('st-iconButton--sm')),'DS compact icon button '+id);
-   await button.click();
+   const start=Date.now();
+   await button.click({timeout:1800});
    await page.waitForFunction(({id,expected})=>document.querySelector(`dialog[open] [data-group-toggle="${id}"] button`)?.getAttribute('aria-expanded')===expected,{id,expected},{timeout:1800});
    await page.waitForFunction(()=>document.querySelector('.architecture-figure')?.getAttribute('aria-busy')==='false',null,{timeout:1800});
-   report.interactions.push({name,id,after:expected,method:'ds-icon-button'});
+   record({name,id,after:expected,method:'ds-icon-button'},start);
   }
   if(!mobile){
    const button=svg.locator('[data-group-toggle="h2a"] button');
-   await page.keyboard.press('Tab');await button.focus();await button.press('Space');
+   await page.keyboard.press('Tab');await button.focus();
+   let start=Date.now();
+   await button.press('Space',{timeout:1800});
    await page.waitForFunction(()=>document.querySelector('dialog[open] [data-group="h2a"]')?.getAttribute('data-collapsed')==='true',null,{timeout:1800});
    assert(await button.evaluate(b=>b.matches(':focus-visible')&&getComputedStyle(b).boxShadow!=='none'),'Keyboard toggle retains the DS focus ring');
-   await button.click();
+   await page.waitForFunction(()=>document.querySelector('.architecture-figure')?.getAttribute('aria-busy')==='false',null,{timeout:1800});
+   record({name,method:'keyboard-focus'},start);
+   start=Date.now();
+   await button.click({timeout:1800});
    await page.waitForFunction(()=>document.querySelector('dialog[open] [data-group="h2a"]')?.getAttribute('data-collapsed')==='false',null,{timeout:1800});
    assert(await button.evaluate(b=>!b.matches(':focus-visible')&&getComputedStyle(b).boxShadow==='none'),'Mouse toggle after keyboard does not inherit the DS focus ring');
-   report.interactions.push({name,method:'keyboard-then-mouse-focus',passed:true});
+   await page.waitForFunction(()=>document.querySelector('.architecture-figure')?.getAttribute('aria-busy')==='false',null,{timeout:1800});
+   record({name,method:'mouse-after-keyboard-focus'},start);
   }
   await dialog.getByRole('button',{name:language==='fr'?'Tout replier':'Collapse all',exact:true}).click();
   assert(await svg.locator('[data-node]').count()===0,'Collapse all');
@@ -149,11 +159,12 @@ try{
    const cdp=await context.newCDPSession(page),r=await viewport.boundingBox();
    const x=r.x+r.width/2,y=r.y+r.height/2;
    const zoom=()=>dialog.locator('output').textContent();const before=await zoom();
+   const start=Date.now();
    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-35,y,id:1},{x:x+35,y,id:2}]});
    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-65,y,id:1},{x:x+65,y,id:2}]});
    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
    assert(await zoom()!==before,'Pinch zoom');
-   report.interactions.push({name,method:'pinch-zoom',passed:true});
+   record({name,method:'pinch-zoom'},start);
   }
   await dialog.locator('[data-viewer-close]').click();
   if(language==='en'){
@@ -182,7 +193,17 @@ try{
   await context.close();
  }
  assert(!report.errors.length,JSON.stringify(report.errors));
+ const ordinary=report.interactions.filter(i=>i.method!=='stress-fold-latency');
+ const stress=report.interactions.filter(i=>i.method==='stress-fold-latency');
+ assert(ordinary.length>=600&&stress.length>=240,'At least 600 ordinary interactions plus 240 stress toggles');
+ assert(report.interactions.every(i=>Number.isFinite(i.ms)&&i.ms>=0&&i.ms<1800),'Complete measured interaction budget');
  report.status=report.fitFailures.length ? 'fit-blocked' : 'passed';
-}finally{writeFileSync(process.cwd()+'/.cache/browser-review.json',JSON.stringify(report,null,2)+'\n');await browser.close();}
-console.log(JSON.stringify({status:report.status,matrix:report.matrix.length,interactions:report.interactions.length,sha256:report.sha256}));
+}catch(error){report.failure=error.message;throw error;}
+finally{
+ const ordinary=report.interactions.filter(i=>i.method!=='stress-fold-latency');
+ const stress=report.interactions.filter(i=>i.method==='stress-fold-latency');
+ report.budget={complete:report.status!=='incomplete',ordinary:ordinary.length,stress:stress.length,maxMs:Math.max(0,...report.interactions.map(i=>i.ms)),ordinaryMaxMs:Math.max(0,...ordinary.map(i=>i.ms)),stressMaxMs:Math.max(0,...stress.map(i=>i.ms))};
+ writeFileSync(process.cwd()+'/.cache/browser-review.json',JSON.stringify(report,null,2)+'\n');await browser.close();
+}
+console.log(JSON.stringify({status:report.status,matrix:report.matrix.length,interactions:report.interactions.length,budget:report.budget,sha256:report.sha256}));
 assert(!report.fitFailures.length,`${report.fitFailures.length} strict text-fit failures; see .cache/browser-review.json`);
