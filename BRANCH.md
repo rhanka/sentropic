@@ -77,5 +77,5 @@
 - [x] Astra P2-1: reproduce missing semantic budget acceptance; require every operation limit/default before schema generation; retain one-byte success and overflow refusal.
 - [x] Astra P2-2: reproduce invalid_request on primitive prototype-named entries; remove the schema ban; verify own-data snapshots, unchanged prototypes and distinct command hashes.
 - [x] Merge PR #721 L0-fix wave at d4bd43b3; preserve L1 branch plan and all upstream code unchanged; no .track delta on either side.
-- [ ] Reconcile corrected L0 profile/context/outcome shapes with executable L1 regressions.
+- [x] Reconcile L0 selectedCapabilities input/inherited compiled fields and selection httpStatus/variant; both new shape regressions fail before adaptation. Preserve actorId authority, callable trusted derivation, Unicode and envelope semantics.
 - [ ] Global CI green: requires integration/security remediation of the evidenced dompurify audit failures and the reserved version/bump gate.

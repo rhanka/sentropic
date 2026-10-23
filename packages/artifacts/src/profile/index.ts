@@ -1,10 +1,11 @@
 import { isArtifactId } from '../contracts.js';
 import { ARTIFACT_CAPABILITY_NAMES, ArtifactProfileInputError, PROFILE_CONTRACT_VERSION,
   type ArtifactCapabilityName, type ArtifactProviderProfile, type ArtifactSchema,
-  type CompiledArtifactsProfile } from './contracts.js';
+  type CompiledArtifactsProfile, type EffectiveArtifactProfile } from './contracts.js';
 import { copyJson, freezeDeep, isRecord, orderedDigest } from './json.js';
 import { assertCompleteOperation, capabilitySchema } from './schemas.js';
 import { matchesSchema, normalizeArguments } from './validation.js';
+import { RADAR_ARTIFACTS_PROFILE } from './radar.js';
 export * from './contracts.js';
 export { RADAR_ARTIFACTS_PROFILE } from './radar.js';
 
@@ -17,18 +18,21 @@ export function assertCompiledArtifactsProfile(value: unknown): asserts value is
 
 /** Compile once, before any registry, adapter, schema or integrity evidence. */
 export function compileArtifactsProfile(input: ArtifactProviderProfile): CompiledArtifactsProfile {
-  const profile = copyJson(input) as unknown as ArtifactProviderProfile;
-  const allowed = ['version', 'selection', 'operations', 'contractRevisions', 'rules'];
+  const snapshot = copyJson(input) as unknown as ArtifactProviderProfile;
+  const profile: EffectiveArtifactProfile = { ...snapshot,
+    rules: snapshot.rules === undefined ? copyJson(RADAR_ARTIFACTS_PROFILE.rules) as unknown as
+      EffectiveArtifactProfile['rules'] : snapshot.rules };
+  const allowed = ['version', 'selectedCapabilities', 'operations', 'contractRevisions', 'rules'];
   if (Object.keys(profile).some((key) => !allowed.includes(key)) || profile.version !== PROFILE_CONTRACT_VERSION ||
-    !Array.isArray(profile.selection?.tools) || !Array.isArray(profile.operations)) throw new Error('invalid artifacts profile');
-  const requested = profile.selection.tools;
-  if (Object.keys(profile.selection).some((key) => key !== 'tools') || new Set(requested).size !== requested.length ||
+    !Array.isArray(profile.selectedCapabilities) || !Array.isArray(profile.operations)) throw new Error('invalid artifacts profile');
+  const requested = profile.selectedCapabilities;
+  if (new Set(requested).size !== requested.length ||
     requested.some((name) => !(ARTIFACT_CAPABILITY_NAMES as readonly string[]).includes(name))) {
     throw new Error('unknown or duplicate artifacts capability');
   }
   const selectedCapabilities = ARTIFACT_CAPABILITY_NAMES.filter((name) => requested.includes(name));
   // Canonicalize set-like configuration while retaining command array order.
-  (profile.selection as { tools: readonly string[] }).tools = selectedCapabilities;
+  (profile as { selectedCapabilities: readonly string[] }).selectedCapabilities = selectedCapabilities;
   const operations = new Set<string>();
   for (const op of profile.operations) {
     if (!op || typeof op.operation !== 'string' || operations.has(op.operation) ||
@@ -82,7 +86,7 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     if (!(selectedCapabilities as readonly string[]).includes(name)) throw new ArtifactProfileInputError(true);
   };
   const compiled: CompiledArtifactsProfile = {
-    selectedCapabilities, profile, schemas, idempotency,
+    ...profile, selectedCapabilities, profile, schemas, idempotency,
     profileDigest: orderedDigest({ selection: selectedCapabilities, profile, schemas,
       providerContractRevisions: profile.contractRevisions }),
     assertSelected,
