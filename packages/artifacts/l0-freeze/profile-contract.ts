@@ -7,6 +7,7 @@
  * shapes into the factories.
  */
 
+import type { EffectiveArtifactCommand } from './command-identity-contract.js';
 import type { JsonValue } from '../src/contracts.js';
 
 /** Version of the frozen effective-profile shape. */
@@ -126,13 +127,37 @@ export interface ArtifactProviderProfile {
  */
 export interface CompiledArtifactsProfile extends ArtifactProviderProfile {
   readonly schemas: Record<string, Record<string, unknown>>;
+  readonly validators: CompiledValidators;
   readonly profileDigest: string;
+}
+
+/**
+ * Compiled semantic validators and normalizers bound at profile compile
+ * time. L1 implements them against the frozen operation profiles; L2/L6
+ * consume them instead of reimplementing checks.
+ */
+export interface CompiledValidators {
+  readonly validateBindingName: (value: unknown) => boolean;
+  readonly validateCallerKey: (value: unknown) => boolean;
+  readonly validateFileEntry: (entry: unknown) => boolean;
+  readonly normalizeCommand: (command: unknown) => EffectiveArtifactCommand;
 }
 
 /** Compiler signature: L1 implements it against these frozen shapes. */
 export type CompileArtifactsProfile = (
   input: ArtifactProviderProfile,
 ) => CompiledArtifactsProfile;
+
+/**
+ * Semantic-only profile pair: identical expressible JSON Schema text with
+ * different effective semantics. The digest MUST invalidate on such a
+ * change even when schema text is unchanged.
+ */
+export const PROFILE_SEMANTIC_PAIR = {
+  schemaText: '{"type":"object","properties":{"files":{"type":"array"}}}',
+  first: { operation: 'publish', limits: { maxFiles: 32, maxTotalBytes: 262144 }, defaults: {} },
+  second: { operation: 'publish', limits: { maxFiles: 16, maxTotalBytes: 262144 }, defaults: {} },
+} as const;
 
 const isKnownToolName = (value: string): boolean =>
   (KNOWN_ARTIFACT_TOOL_NAMES as readonly string[]).includes(value);

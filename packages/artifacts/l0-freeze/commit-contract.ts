@@ -8,9 +8,14 @@
  * follow in later slices. Runtime implementation lands in L3.
  */
 
-import type { CommandIdentity } from './command-identity-contract.js';
-import type { ArtifactOutcome } from './failure-contract.js';
-import type { CompiledArtifactsProfile } from './profile-contract.js';
+import type {
+  CommandIdentity,
+  COMMAND_CODEC_VERSION,
+  EffectiveArtifactCommand,
+  InternalIdempotencyKey,
+} from './command-identity-contract.js';
+import type { ArtifactFailure, ArtifactOutcome, OrdinaryFailure } from './failure-contract.js';
+import type { CompiledArtifactsProfile, CompiledValidators } from './profile-contract.js';
 
 /** Version of the frozen commit-coordinator protocol. */
 export const COMMIT_PROTOCOL_VERSION = 'artifacts-commit/v1' as const;
@@ -68,11 +73,15 @@ export interface ArtifactCommitContext {
   readonly purpose: CommitPurpose;
 }
 
+declare const commitFenceBrand: unique symbol;
+
 /** Opaque fence minted by the transaction-bound policy participant. */
 export interface ArtifactAuthorizationFence {
+  readonly [commitFenceBrand]: true;
   readonly fenceId: string;
   readonly invocationId: string;
   readonly policyRevision: string;
+  readonly transactionId: string;
 }
 
 /** Denial reasons for a refused finalization. */
@@ -95,6 +104,8 @@ export type ArtifactAuthorizationDecision =
     readonly retriable: boolean;
   };
 
+declare const commitTransactionBrand: unique symbol;
+
 /**
  * Opaque transaction identity plus the host's registered
  * transaction-bound policy/quota participant. It exposes no
@@ -102,20 +113,91 @@ export type ArtifactAuthorizationDecision =
  * SQL table mapping are fixed at coordinator construction.
  */
 export interface ArtifactCommitTransaction {
+  readonly [commitTransactionBrand]: true;
   readonly transactionId: string;
   readonly invocationId: string;
   readonly policyRevision: string;
+  readonly participant: ArtifactCommitParticipant;
+}
+
+/**
+ * Transaction-bound policy/quota participant registered at coordinator
+ * construction. The guard reaches policy and quota reads only through
+ * this participant on its leased transaction; public tool callers never
+ * receive a connection or SQL capability.
+ */
+export interface ArtifactCommitParticipant {
+  readonly policyRevision: string;
+  readAdmission(input: AdmissionReadInput): Promise<AdmissionReadResult>;
+  reserveQuota(input: QuotaReserveInput): Promise<QuotaReserveResult>;
+}
+
+/** Policy read scoped to one guarded finalization attempt. */
+export interface AdmissionReadInput {
+  readonly operation: string;
+  readonly artifactId: string;
+  readonly bindingId: string;
+  readonly actorId: string;
+  readonly policyRevision: string;
+}
+
+/** Policy read result; denial carries the typed refusal reason. */
+export interface AdmissionReadResult {
+  readonly allowed: boolean;
+  readonly reason: AuthorizationDenialReason;
+}
+
+/** Quota reservation scoped to one guarded finalization attempt. */
+export interface QuotaReserveInput {
+  readonly storageScopeId: string;
+  readonly operation: string;
+  readonly bytes: number;
+}
+
+/** Quota reservation result for one guarded finalization attempt. */
+export interface QuotaReserveResult {
+  readonly reserved: boolean;
 }
 
 /**
  * Coordinator role owning the atomic finalization unit. The optional
  * test observer receives barrier arrivals below the app with invocation
  * correlation; it can never mark an operation authorized or successful.
+ * `finalizeOperation` owns the complete unit (key lock, participant
+ * locks, guard, commit/rollback); `replayOperation` re-reads the winner
+ * under the key lock and returns it through a fresh guarded replay.
  */
 export interface ArtifactCommitCoordinator {
   readonly protocolVersion: typeof COMMIT_PROTOCOL_VERSION;
   readonly guardedOperations: readonly string[];
   readonly testObserver?: CommitBarrierObserver;
+  finalizeOperation(
+    input: FinalizationInput,
+  ): Promise<ArtifactOutcome<FinalizationRecord>>;
+  replayOperation(
+    input: ReplayInput,
+  ): Promise<ArtifactOutcome<FinalizationRecord>>;
+}
+
+/** Coordinator completion record for one finalized or replayed operation. */
+export interface FinalizationRecord {
+  readonly internalKey: InternalIdempotencyKey;
+  readonly commandHash: string;
+  readonly codecVersion: typeof COMMAND_CODEC_VERSION;
+  readonly replayed: boolean;
+}
+
+/** Finalization input: request, invocation context and effective command. */
+export interface FinalizationInput {
+  readonly request: HttpRequest;
+  readonly invocation: ArtifactInvocationContext;
+  readonly command: EffectiveArtifactCommand;
+}
+
+/** Guarded replay input: invocation context and the durable internal key. */
+export interface ReplayInput {
+  readonly invocation: ArtifactInvocationContext;
+  readonly internalKey: InternalIdempotencyKey;
 }
 
 /**
@@ -256,3 +338,84 @@ export interface ArtifactApp {
 export type ProjectArtifactHttpOutcome = (
   outcome: ArtifactOutcome<HttpResponse>,
 ) => HttpResponse;
+
+/**
+ * Compile-time freeze assertions (P1-1). Checked by `npm run freeze-types`;
+ * type-only and erased at runtime. Each `@ts-expect-error` below must stay
+ * consumed: if a forged literal ever compiles, the gate fails.
+ */
+
+// Forged fences/transactions never satisfy the opaque contracts.
+const _forgedFence = {
+  fenceId: 'fence-1',
+  invocationId: 'inv-1',
+  policyRevision: 'rev-1',
+  transactionId: 'tx-1',
+};
+// @ts-expect-error — fences are minted by the transaction-bound participant
+const _fenceForgery: ArtifactAuthorizationFence = _forgedFence;
+
+const _forgedTransaction = {
+  transactionId: 'tx-1',
+  invocationId: 'inv-1',
+  policyRevision: 'rev-1',
+};
+// @ts-expect-error — transactions are opened by the coordinator
+const _transactionForgery: ArtifactCommitTransaction = _forgedTransaction;
+
+// The guard reaches policy/quota only through the registered participant.
+type _ParticipantAccess = ArtifactCommitTransaction['participant'] extends ArtifactCommitParticipant
+  ? true
+  : never;
+const _participantAccess: _ParticipantAccess = true;
+
+// The coordinator exposes callable finalization and replay operations.
+type _FinalizeCallable = ArtifactCommitCoordinator['finalizeOperation'] extends (
+  input: FinalizationInput,
+) => Promise<ArtifactOutcome<FinalizationRecord>>
+  ? true
+  : never;
+const _finalizeCallable: _FinalizeCallable = true;
+
+type _ReplayCallable = ArtifactCommitCoordinator['replayOperation'] extends (
+  input: ReplayInput,
+) => Promise<ArtifactOutcome<FinalizationRecord>>
+  ? true
+  : never;
+const _replayCallable: _ReplayCallable = true;
+
+// Compiled profiles carry semantic validators for the lanes to consume.
+type _ValidatorsWired = CompiledArtifactsProfile['validators'] extends CompiledValidators
+  ? true
+  : never;
+const _validatorsWired: _ValidatorsWired = true;
+
+// Ordinary categories do not belong to the operational failure branch.
+const _ordinaryFields = {
+  kind: 'operational',
+  category: 'invalid_request',
+  httpStatus: 400,
+  publicCode: 'invalid_request',
+  retriable: false,
+  invocationId: 'inv-1',
+  operation: 'publish',
+  phase: 'entry',
+  commitState: 'not_committed',
+  cause: undefined,
+} as const;
+// @ts-expect-error — 'invalid_request' is an ordinary category, not operational
+const _ordinaryAsOperational: ArtifactFailure = _ordinaryFields;
+
+const _ordinaryPositive: OrdinaryFailure = {
+  kind: 'ordinary',
+  category: 'invalid_request',
+  httpStatus: 400,
+  publicCode: 'invalid_request',
+  retriable: false,
+  invocationId: 'inv-1',
+  operation: 'publish',
+  phase: 'entry',
+  commitState: 'not_committed',
+  cause: undefined,
+};
+const _ordinaryInOutcome: ArtifactOutcome<string> = { ok: false, failure: _ordinaryPositive };
