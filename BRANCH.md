@@ -1,69 +1,69 @@
-# fix(security): patch critical DOMPurify advisory
+# Feature: common rule L01b1 kit objects and manifests
 
 ## Objective
-- [x] Remove vulnerable DOMPurify resolutions and qualify the first patched version, 3.4.17.
+- [x] Implement the test-only CT-01–03 reference, injected assertions and M01–M03 controls.
+- [x] Follow approved amendment SHA-256 `3302ba9e3ee91a52850b89cb9646e2747d0412b5a9fcf3e17f3cdd72a6573fba`, §3/§5/L01b1; Track `01M5E7MTN3EG3S91WZTRR9YNYT`.
 
 ## Scope / Guardrails
-- [x] Worktree: `tmp/worktrees/fix-dompurify`; branch: `fix/dompurify-critical-advisory`; base: `origin/main` at `4138a0ecb`.
-- [x] Make-only workflow; no Python; `ENV=test-dompurify` last; one Docker build at a time.
-- [x] No audit exceptions, allowlist changes, merge, or changes to the root development environment.
-- [x] Ports reserved after availability check: API 9891, UI 5891, Maildev UI 1891.
+- [x] Isolated `tmp/worktrees/cm-s3-l01b`, branch `feat/cm-s3-common-rule-l01b1`, from `origin/main`; mechanical branch check passed.
+- [x] Test-only kit; no backend, admission claim, dependency or production codec changes.
+- [x] Make-only checks, `ENV=test-common-rule` last; no Python; one Docker build at a time.
+- [x] No service ports required by the disposable workspace lane; no dev environment.
+- [x] Specific-file staging; `make commit MSG="..."`; each commit below 150 changed lines.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `package.json`
-  - `package-lock.json`
-  - `ui/package.json`
-  - `ui/package-lock.json`
-  - `docs/governance/kit/package.json`
-  - `docs/governance/kit/package-lock.json`
   - `BRANCH.md`
+  - `docs/governance/kit/package-lock.json`
+  - `docs/governance/kit/package.json`
+  - `package-lock.json`
+  - `package.json`
   - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
   - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`
+  - `ui/package-lock.json`
+  - `ui/package.json`
+  - `packages/cluster-mesh/tests/storage/common-rule/kit.ts`
+  - `packages/cluster-mesh/tests/storage/common-rule/objects-reference.ts`
+  - `packages/cluster-mesh/tests/storage/common-rule/objects-assertions.ts`
+  - `packages/cluster-mesh/tests/storage/common-rule/objects-mutants.ts`
+  - `packages/cluster-mesh/tests/storage/common-rule/objects-kit.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
-  - `.security/**`
-  - `plan/**`
+  - `packages/cluster-mesh/src/**`
+  - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql`
-- **Exception process**:
-  - [x] BR725-EX1 (conductor authorized): allow only the two manifest paths above to re-pin `source.declaredLockSha256` and its SHA-256 sidecar after the DOMPurify root lock update; resolves CI `manifest freeze/lock mismatch` using the documented mechanism. Impact: manifest metadata only; packed artifacts and contract inventory stay unchanged. Rollback: revert both manifest lines together with rollback of the corresponding root lock change.
+  - `.github/workflows/**`
+- [x] Exceptions require ID, reason, impact and rollback in Feedback Loop before edits.
 
 ## Feedback Loop
-- [x] CI run `39833406661`, UI job `120015499754`, fails in the Docker npm audit gate on DOMPurify.
-- [x] npm advisory `1242880` / `GHSA-cg2g-xh64-v4q7`: CRITICAL, affected `>=3.4.4 <=3.4.16`, first patched `3.4.17`; no CVE assigned in advisory metadata.
-- [x] Same patch also resolves HIGH `GHSA-mrv2-3pqr-j5jr` and the remaining DOMPurify advisories in the failing log.
-- [x] Coverage: root workspace lock feeds API/UI Docker audits and SCA; standalone UI lock and governance kit lock also resolve DOMPurify; other tracked locks contain no DOMPurify.
-- [x] Local Docker Hub pull fails on unreachable IPv6; mirror returns HTML. Used cached `node:24-bookworm-slim` via a temporary Make target; repository Makefile, Dockerfiles and audit policy unchanged. Standard pinned-image gates remain required in CI.
-- [x] Extra governance-kit audit identifies unrelated devalue/lodash advisories outside the CI gate coverage; dependency expansion is outside this DOMPurify patch.
+- [x] BRL01B1-EX1: integrate owner-requested origin/main at 25af28bbc via merge; eight upstream dependency/derived-pin files are allowed solely for #725 integration. Impact: patched DOMPurify and aligned lock commitments; rollback: revert this integration commit. No backend changes.
+- [x] Astra P2-1: CT-01 checks bytes, commitment and receipt after each invalid retry on a separately populated identity, before/after reopen; M01-invalid-retry survived the old kit and is now killed.
+- [x] Astra P2-2: CT-02 verifies populated payload/page inventories, then requires commitment errors for a wrong nonempty digest and field/page substitutions; M02-ignore-digest survived the old kit and is now killed.
 
 ## AI Flaky tests
-- [x] No flaky acceptance or timeout changes authorized.
+- [x] No provider/model nondeterminism or accepted skips in this kit.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; single author; no integration between branches.
+- [x] Mono-branch; one test-only assertion family, no delegated implementation.
 
 ## UAT Management (in orchestration context)
-- [x] Dependency-only change; qualify rendering and sanitization with automated UI tests in the isolated worktree.
+- [x] No web, Chrome or VSCode behavior changes; UAT is executable CT assertions.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read repository rules, branch template, security/debug skills, CI logs and npm advisory database.
-  - [x] Create worktree from origin/main and pass mechanical harness branch check.
-  - [x] Identify all DOMPurify lock entries and Docker audit scopes.
-- [x] **Lot 1 — Patch dependency resolutions**
-  - [x] Set UI dependency and root/governance overrides to 3.4.17; all three locks change only DOMPurify resolution and direct dependency metadata.
-  - [x] Registry confirms 3.4.17 integrity; workspace UI `npm ci --ignore-scripts --no-audit --no-fund --workspace sentropic-ui --include-workspace-root` passes.
-- [x] **Lot 2 — Local validation**
-  - [x] Through Make/Docker: `node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root` and `--omit=dev --workspace sentropic-ui`: PASS.
-  - [x] Through Make/Docker: npm audit for both workspaces plus `security-parser.sh sca` and `security-compliance.sh sca` for API/UI: PASS, no findings.
-  - [x] Through Make/Docker: `npx svelte-kit sync` and `npm test` in UI: 83 files, 489 tests PASS; includes `ui/tests/utils/markdown.test.ts` (12) and `ui/tests/utils/todo-chat-rendering.test.ts` (3).
-  - [x] No vulnerable DOMPurify remains in tracked locks; every implementation diff hunk reviewed.
-  - [x] Mechanical `make scope-check ENV=test-dompurify`: PASS C2; selective staging and `make commit` only.
-- [ ] **Lot 3 — Draft PR and exact-head CI**
-  - [ ] Push branch; open draft PR using this file as its body and post the execution plan.
-  - [ ] Verify CI passes on the final head SHA and retain BRANCH.md for review.
-  - [ ] Clean temporary output and stop only this branch's test services; do not merge.
+- [x] **Lot 1 — Fixture types and independent manifest encoder**
+  - [x] Add `kit.ts` and `objects-reference.ts` encoder; frozen vector equivalence is gated in Lot 3/4.
+- [x] **Lot 2 — Owned objects and bounded manifest verification**
+  - [x] Add independent contenders with separate reader/preparer ports, reopen/fault controls, scoped immutable create/retry and fail-closed reads.
+- [x] **Lot 3 — Reusable CT-01–03 assertions**
+  - [x] Add `objects-assertions.ts`: races, buffer ownership, scope isolation, envelope commitments and corruption probes.
+  - [x] Race payload and manifest identities; a foreign-only equal-digest object never satisfies an absent local binding.
+- [ ] **Lot 4 — Mutants and final validation**
+  - [x] Add `objects-mutants.ts` and `objects-kit.spec.ts`; positive pass precedes designated M01/M02/M03 kills.
+  - [x] Run `make test-cluster-mesh ENV=test-common-rule`; 1007 passed, 129 separate-lane skips; common-rule 19/19 and kit 10/10, zero skips; missing fixture/instrumentation refuses setup.
+  - [x] Run lint and TypeScript checks; preserve the frozen L3a bytes and all L01a vectors.
+  - [x] Run scope checks before each commit; review final diff against the six allowed paths.
+  - [x] Push and open draft PR #722 with this file as body.
+  - [ ] Verify green CI on the final head and report PR/head/run URL.
+  - [x] Retain BRANCH.md and leave the PR unmerged, per owner instruction.
