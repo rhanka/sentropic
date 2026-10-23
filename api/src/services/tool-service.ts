@@ -2503,7 +2503,7 @@ export class ToolService {
   }> {
     // IMPORTANT (temporary): force a dedicated model for document analysis sub-agent.
     // We intentionally ignore the admin default model until prompts/models are versioned per prompt in DB.
-    const model = 'gpt-4.1-nano';
+    const model = 'gpt-5.4-nano';
     const p = (opts.prompt || '').trim();
     if (!p) throw new Error('documents.analyze: prompt is required');
     const maxWords = Math.max(500, Math.min(10_000, Math.floor(opts.maxWords ?? 10_000)));
@@ -2742,7 +2742,7 @@ export class ToolService {
     }
 
     const analyzed = await this.runChunkedPromptAnalysis({
-      model: 'gpt-4.1-nano',
+      model: 'gpt-5.4-nano',
       text: historyText,
       instruction: question,
       maxWords,

@@ -38,7 +38,7 @@ export type ModelCatalogPayload = {
 
 const FALLBACK_DEFAULT: ModelSelectionPair = {
   provider_id: 'openai',
-  model_id: 'gpt-4.1-nano',
+  model_id: 'gpt-5.4-nano',
 };
 
 const toCatalogModel = (entry: ModelCatalogEntry): CatalogModel => {
