@@ -68,11 +68,15 @@ export interface ArtifactCommitContext {
   readonly purpose: CommitPurpose;
 }
 
+declare const commitFenceBrand: unique symbol;
+
 /** Opaque fence minted by the transaction-bound policy participant. */
 export interface ArtifactAuthorizationFence {
+  readonly [commitFenceBrand]: true;
   readonly fenceId: string;
   readonly invocationId: string;
   readonly policyRevision: string;
+  readonly transactionId: string;
 }
 
 /** Denial reasons for a refused finalization. */
@@ -95,6 +99,8 @@ export type ArtifactAuthorizationDecision =
     readonly retriable: boolean;
   };
 
+declare const commitTransactionBrand: unique symbol;
+
 /**
  * Opaque transaction identity plus the host's registered
  * transaction-bound policy/quota participant. It exposes no
@@ -102,9 +108,50 @@ export type ArtifactAuthorizationDecision =
  * SQL table mapping are fixed at coordinator construction.
  */
 export interface ArtifactCommitTransaction {
+  readonly [commitTransactionBrand]: true;
   readonly transactionId: string;
   readonly invocationId: string;
   readonly policyRevision: string;
+  readonly participant: ArtifactCommitParticipant;
+}
+
+/**
+ * Transaction-bound policy/quota participant registered at coordinator
+ * construction. The guard reaches policy and quota reads only through
+ * this participant on its leased transaction; public tool callers never
+ * receive a connection or SQL capability.
+ */
+export interface ArtifactCommitParticipant {
+  readonly policyRevision: string;
+  readAdmission(input: AdmissionReadInput): Promise<AdmissionReadResult>;
+  reserveQuota(input: QuotaReserveInput): Promise<QuotaReserveResult>;
+}
+
+/** Policy read scoped to one guarded finalization attempt. */
+export interface AdmissionReadInput {
+  readonly operation: string;
+  readonly artifactId: string;
+  readonly bindingId: string;
+  readonly actorId: string;
+  readonly policyRevision: string;
+}
+
+/** Policy read result; denial carries the typed refusal reason. */
+export interface AdmissionReadResult {
+  readonly allowed: boolean;
+  readonly reason: AuthorizationDenialReason;
+}
+
+/** Quota reservation scoped to one guarded finalization attempt. */
+export interface QuotaReserveInput {
+  readonly storageScopeId: string;
+  readonly operation: string;
+  readonly bytes: number;
+}
+
+/** Quota reservation result for one guarded finalization attempt. */
+export interface QuotaReserveResult {
+  readonly reserved: boolean;
 }
 
 /**
@@ -256,3 +303,33 @@ export interface ArtifactApp {
 export type ProjectArtifactHttpOutcome = (
   outcome: ArtifactOutcome<HttpResponse>,
 ) => HttpResponse;
+
+/**
+ * Compile-time freeze assertions (P1-1). Checked by `npm run freeze-types`;
+ * type-only and erased at runtime. Each `@ts-expect-error` below must stay
+ * consumed: if a forged literal ever compiles, the gate fails.
+ */
+
+// Forged fences/transactions never satisfy the opaque contracts.
+const _forgedFence = {
+  fenceId: 'fence-1',
+  invocationId: 'inv-1',
+  policyRevision: 'rev-1',
+  transactionId: 'tx-1',
+};
+// @ts-expect-error — fences are minted by the transaction-bound participant
+const _fenceForgery: ArtifactAuthorizationFence = _forgedFence;
+
+const _forgedTransaction = {
+  transactionId: 'tx-1',
+  invocationId: 'inv-1',
+  policyRevision: 'rev-1',
+};
+// @ts-expect-error — transactions are opened by the coordinator
+const _transactionForgery: ArtifactCommitTransaction = _forgedTransaction;
+
+// The guard reaches policy/quota only through the registered participant.
+type _ParticipantAccess = ArtifactCommitTransaction['participant'] extends ArtifactCommitParticipant
+  ? true
+  : never;
+const _participantAccess: _ParticipantAccess = true;
