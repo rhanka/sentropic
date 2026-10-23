@@ -111,9 +111,15 @@ export function createPostgresCommitExecutor(pool: Pool): CommitExecutor {
     },
     async beginFinalization(): Promise<FinalizeConnection> {
       const client = await pool.connect();
-      const connection = new PgFinalizeConnection(client);
-      await connection.beginReadCommitted();
-      return connection;
+      try {
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      } catch (error) {
+        // Never hand out a client whose transaction failed to open: destroy
+        // it instead of leaking a leased connection the coordinator cannot see.
+        client.release(error as Error);
+        throw error;
+      }
+      return new PgFinalizeConnection(client);
     },
   };
 }
