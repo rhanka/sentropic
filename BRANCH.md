@@ -24,14 +24,6 @@
   - `packages/artifacts/l0-freeze/**`
   - `packages/artifacts/tests/commit-contract.test.ts`
   - `packages/artifacts/tests/effective-profile.test.ts`
-  - `Makefile`
-  - `api/package-lock.json`
-  - `docs/governance/kit/package*.json`
-  - `package*.json`
-  - `packages/artifacts/package.json`
-  - `packages/cluster-mesh/**`
-  - `tools/memory-mcp-l5/**`
-  - `ui/package*.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -50,13 +42,13 @@
 - [x] Exception process: record BR861-L1-EXn reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- [x] BR861-EX2: owner requests merging the actual L0 origin head, including inherited main merges (Engram G1, L5 manifests and dependency fixes). The additional allowed paths above authorize inherited merge changes only; L1 authors no edits there. Impact: preserve upstream history and corrected contracts. Rollback: revert this merge as a unit.
+- [x] BR861-EX2: owner requests merging the actual L0 origin head, including inherited main merges (Engram G1, L5 manifests and dependency fixes). Temporary allowed paths authorized inherited merge changes only and were removed after the merge; L1 authored no edits there. Impact: preserve upstream history and corrected contracts. Rollback: revert this merge as a unit.
 - [x] acknowledge L1-VERSION: corrected L0 assigns serial pack-only dev.N versions and lock updates to the integration owner; no L1 manifest change.
 - [x] BR861-L1-EX1: owner explicitly requested merging PR #721 L0-fix commits; added inherited docs/declarations/vector paths above for this merge only. Impact: corrected upstream contract evidence, no L1 edits to those files. Rollback: revert the merge as a unit.
 - [x] acknowledge L1-API: L0 freezes shapes only; r2 supplies public names. L6 exports and wires L1 modules.
 - [x] acknowledge L1-MIGRATION: path reconciliation notes live in the allowed profile directory; L6 consolidates migration docs.
 - [ ] attention L1-DOMAIN: Q0 has no qualified complete actor domain. L6 must bind actual verified subjects; ambiguous delimited domains fail construction without changing historical keys.
-- [ ] blocked L1-CI: run 39836233948 passes validate-artifacts (typecheck/build/238 unit/30 integration-E2E/lint/pack/probe) but global ci-gate fails on dompurify critical advisories in API/UI image audit. Owner: integration/security maintainer; remediate dependency in base/lock, then rerun the four failed jobs and ci-gate without relaxing audit.
+- [x] acknowledge L1-CI: historical run 39836233948 passed validate-artifacts but hit DOMPurify image audits; the actual L0 head now includes main's dependency remediation. Current owner acceptance is validate-artifacts plus typecheck/lint only; external AI/e2e failures from retired OpenAI gpt-4.1-nano are excluded from this update.
 - [x] acknowledge L1-CI-WIRING: automatic PR CI targets main only; dispatched ci.yml on the L1 ref with bootstrap_publish_target=none. enforce-package-bump is skipped by that workflow event, so its required pre-integration reservation remains open.
 
 ## AI Flaky tests
@@ -87,8 +79,10 @@
 - [x] Astra P2-2: reproduce invalid_request on primitive prototype-named entries; remove the schema ban; verify own-data snapshots, unchanged prototypes and distinct command hashes.
 - [x] Merge PR #721 L0-fix wave at d4bd43b3; preserve L1 branch plan and all upstream code unchanged; no .track delta on either side.
 - [x] Reconcile L0 selectedCapabilities input/inherited compiled fields and selection httpStatus/variant; both new shape regressions fail before adaptation. Preserve actorId authority, callable trusted derivation, Unicode and envelope semantics.
-- [ ] Global CI green: requires integration/security remediation of the evidenced dompurify audit failures and the reserved version/bump gate.
-- [ ] Merge actual L0 origin d41f470927c1dfd52c239f57ba3f2589723d3285, adapt compiled validators and canonical command fixtures, preserve Astra r1 fixes, and rerun scope gates.
+- [x] Scope gates only per owner: validate-artifacts with typecheck/lint; retain integration-owner version reservations and no PR merge.
+- [x] Merge actual L0 origin d41f470927c1dfd52c239f57ba3f2589723d3285, adapt compiled validators and canonical command fixtures, and preserve Astra r1 fixes.
 - [x] L0 merge: preserve corrected participant/coordinator operations, ordinary/operational outcomes, frozen command fixtures and release handoff unchanged; only BRANCH.md conflicts, resolved to the L1 scope. No .track change against either parent.
 - [x] Align command hash body with corrected L0 golden fixtures (forced payload provenance); encode integer-like object keys in UTF-16 order. Baseline container probe reproduced the numeric-key digest mismatch; retain manifest digests and Astra r1 regressions.
 - [x] Wire L0 compiled semantic validators to immutable profile schemas and the trusted command factory; distinguish ordinary entry failures from operational selection failures.
+- [x] Current-wave checks: mechanical branch/scope PASS; L0 freeze and actual L1-to-L0 type assignments PASS; make typecheck-artifacts test-artifacts lint-artifacts PASS (271 unit tests). Final-head validate-artifacts CI reported in delivery handoff.
+- [x] Track containment condition: merge and both parents share events.jsonl blob e64ba59336cb10ef72bc89d5fab7c0e96b9662a9; no Track delta or loss, no repair.
