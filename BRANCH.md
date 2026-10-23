@@ -19,6 +19,8 @@ Replace the live root-lockfile equality in the P1 packed gate with a versioned f
   - `docs/governance/**` (BR710-EX10; merge-only, exact origin/main content)
   - `package.json`
   - `package-lock.json`
+  - `packages/cluster-mesh/**` (BR710-EX11; merge-only, exact origin/main content)
+  - `Makefile` (BR710-EX1-7 P1 changes; BR710-EX11 main-only CLUSTER_MESH_PEER_TOOLS pin)
   - `ui/package-lock.json`
   - `ui/package.json` (merge-only, exact origin/main DOMPurify pin)
   - `api/Dockerfile` (BR710-EX9; preserve the main Go 1.26.10 pin during integration)
@@ -53,10 +55,13 @@ Replace the live root-lockfile equality in the P1 packed gate with a versioned f
   - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+- `attention`: BR710-EX11 — import PR 709 cluster-mesh files and its Makefile peer pin through the owner-authorized main merge. Reason: main advanced while CI ran. Impact: preserve upstream bytes exactly outside the branch P1 work. Rollback: revert the merge as a unit.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+- `attention`: BR710-EX11 — import PR 709 cluster-mesh files and its Makefile peer pin through the owner-authorized main merge. Reason: main advanced while CI ran. Impact: preserve upstream bytes exactly outside the branch P1 work. Rollback: revert the merge as a unit.
 
 ## Feedback Loop
+- `attention`: BR710-EX11 — import PR 709 cluster-mesh files and its Makefile peer pin through the owner-authorized main merge. Reason: main advanced while CI ran. Impact: preserve upstream bytes exactly outside the branch P1 work. Rollback: revert the merge as a unit.
 - `attention`: BR710-EX10 — allow README.md and docs/governance/** imported by the owner-authorized merge of main (4138a0ecb, PR #711). Reason: preserve both branches while scope-checking the merge index. Impact: upstream content only, byte-identical to origin/main, no local edits. Rollback: revert the merge as a unit.
 Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
 - subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
@@ -258,3 +263,8 @@ Actions with the following status should be included around tasks only if really
 - [x] Resolve plan and P1 manifest conflicts with the branch format; regenerate derived artifacts after committing the merged lock.
 - [x] Regenerate P1 provenance: two identical generations (483c48be), 44 unchanged contracts and archives, merged-lock snapshot exact; all 101 tooling tests pass.
 - [ ] Require green CI on the exact pushed head, then merge with the owner GO.
+
+## Round M5 (main advanced during green CI)
+- [x] Merge origin/main b67e2a49a (PR 709) after the exact-head CI passed; no rebase.
+- [x] BR710-EX11: preserve main-only cluster-mesh, selected fixture and Makefile integration changes exactly; keep branch P1 format and regenerate provenance.
+- [ ] Regenerate and verify P1, then require green CI and merge with the owner GO.
