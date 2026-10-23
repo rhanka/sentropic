@@ -55,6 +55,6 @@
   - [x] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
 - [ ] **Lot 4 — Delivery**
   - [x] Record H1–H9 file:line replacements, divergences and validation in `validation/converge32.md`.
-  - [ ] Rebuild/deliver portable, refresh SHA256SUMS; scope check before each selective make commit.
+  - [x] Rebuild/deliver portable, refresh and verify all 135 SHA256SUMS entries; scope check before each selective make commit.
   - [x] Create draft PR #726 using this plan as body and post the four-step plan; keep it draft and unmerged.
   - [ ] Post-push gate: record exact-head green CI and the final portable digest in the PR delivery comment; no further source commit is needed for that external result.
