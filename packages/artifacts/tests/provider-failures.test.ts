@@ -1,5 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { DERIVATION_VECTORS, type InternalIdempotencyKey } from '../l0-freeze/command-identity-contract.js';
+import { FAILURE_PROJECTIONS, type ArtifactFailure as FrozenFailure,
+  type ArtifactOutcome as FrozenOutcome } from '../l0-freeze/failure-contract.js';
+import type { ArtifactAuthorizationDecision } from '../l0-freeze/commit-contract.js';
+import type { HttpResponse } from '../src/http.js';
+import type { ArtifactFailure, ArtifactOutcome, ArtifactPublicRefusal } from '../src/server/failures.js';
 
 const scopedKey = DERIVATION_VECTORS[0].sha256 as InternalIdempotencyKey;
 const storageScopeId = DERIVATION_VECTORS[0].binding.scope;
@@ -74,6 +79,37 @@ describe('typed provider failures, r2 E2/E3', () => {
 });
 
 describe('trusted domain and adapter mappings', () => {
+  it.each(FAILURE_PROJECTIONS)('should consume frozen outcome variant $variant with matching ledger semantics', async (row) => {
+    const { ArtifactOperationError, ArtifactKeyLockConflict } = await failures();
+    const { projectArtifactWriteFailure } = await projections();
+    const cause = row.category === 'conflict' ? new ArtifactKeyLockConflict(storageScopeId, scopedKey, driver('55P03'))
+      : row.category === 'unauthorized_at_commit' ? new ArtifactOperationError(row.category, {
+        refusal: { allowed: false, reason: row.variant === 'authority_unavailable' ? 'unavailable' : 'denied',
+          status: row.httpStatus, publicCode: row.publicCode, retriable: row.retriable },
+      }) : row.category === 'provider_error' ? new Error('private') : new ArtifactOperationError(row.category);
+    const failure = await expectProjection(cause, {
+      category: row.category, variant: row.variant, httpStatus: row.httpStatus,
+      publicCode: row.publicCode, retriable: row.retriable,
+    }, { ...context, phase: row.phase, commitState: row.commitState });
+    expect(projectArtifactWriteFailure(failure, { dispatched: true, write: true })?.reason).toBe(row.radarLedgerReason);
+  });
+
+  it('should preserve a typed policy denial even when its sanitized status is 503', async () => {
+    const { ArtifactOperationError } = await failures();
+    const refusal: Extract<ArtifactAuthorizationDecision, { allowed: false }> = {
+      allowed: false, reason: 'revoked', status: 503, publicCode: 'access_denied', retriable: true,
+    };
+    await expectProjection(new ArtifactOperationError('unauthorized_at_commit', { refusal }), {
+      category: 'unauthorized_at_commit', retriable: false,
+    }, { ...context, phase: 'guard' });
+  });
+
+  it('should consume frozen guard and outcome declarations without losing fields', () => {
+    expectTypeOf<ArtifactPublicRefusal>().toEqualTypeOf<Extract<ArtifactAuthorizationDecision, { allowed: false }>>();
+    expectTypeOf<Omit<ArtifactFailure, 'category'>>().toEqualTypeOf<Omit<FrozenFailure, 'category'>>();
+    expectTypeOf<FrozenOutcome<HttpResponse>>().toExtend<ArtifactOutcome<HttpResponse>>();
+  });
+
   it('should consume the frozen L0 key-lock phase and full derived identity', async () => {
     const { FINALIZATION_PHASES } = await import('../l0-freeze/commit-contract.js');
     const { ArtifactKeyLockConflict } = await failures();
@@ -157,7 +193,7 @@ describe('trusted domain and adapter mappings', () => {
   ] as const)('should preserve refusal %s/%s with host retry %s and normative outage semantics', async (status, publicCode, retriable) => {
     const { ArtifactOperationError } = await failures();
     const failure = await expectProjection(new ArtifactOperationError('unauthorized_at_commit', {
-      cause: driver('private'), refusal: { status, publicCode, retriable },
+      cause: driver('private'), refusal: { allowed: false, reason: status === 503 ? 'unavailable' : 'denied', status, publicCode, retriable },
     }), {
       category: 'unauthorized_at_commit', httpStatus: status,
       publicCode: status === 503 ? 'capability_unavailable' : publicCode,
