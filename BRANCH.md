@@ -61,8 +61,8 @@
   - [x] `api/package.json` (gateway range ^0.21.0 only, keeps the workspace link; BR96-EX8)
   - [x] `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.ts`, `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (coupled `<0.28.0`/`<0.22.0` peer range and 13 `.d.ts` integration leaf assertions only; BR96-EX9)
   - [x] `.github/workflows/ci.yml`, `scripts/ci/publishable-ci-wiring.test.mjs` (cluster-mesh qualification `PEERS` tuple `@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0` only; BR96-EX9)
-  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; BR96-EX12)
-- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13.
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; BR96-EX12, BR96-EX14)
+- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13, BR96-EX14.
 
 ## Feedback Loop
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
@@ -353,6 +353,8 @@
   - [x] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated. Mesh 1302/1302, cluster 1014 passed, lazy-package 78/78 with re-pinned selected lock (sibling llm-mesh 0.27.1). api unit/integration covered by CI (compose stack not run locally).
 - [x] **Lot SEC-DOMPURIFY — dompurify 3.4.14 to 3.4.17 security floor (BR96-EX13)**
   - [x] Pinned bump (ui/package.json floor + ui/root lock pins, integrity from registry dist); local audit-gate OK with empty unallowlisted set. V4-L2 fixes, main merge and selected lock untouched.
+- [x] **BR96-EX14 — memory L5 manifest re-pin for dompurify root-lock bump (conditional path)**
+  - [x] Rationale: pre-candidate manifest pins declaredLockSha256; the EX13 dompurify floor bump changed the root lock sha (95147556 to f084b8f9) so memory-l5-qualification failed with a freeze/lock mismatch; the job runs because the memory_l5 filter includes package-lock.json. Impact: retained superseded manifest in history/2b089c31.json, re-pinned declaredLockSha256, rewrote both sidecars; archives/inventory/provenance (br3Commit 6ec93105b, l5Head 4dd9dcc4b) untouched. Rollback: restore the prior manifest/sidecars with the prior lock sha.
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.

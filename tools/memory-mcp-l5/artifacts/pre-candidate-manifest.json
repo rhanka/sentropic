@@ -7,7 +7,7 @@
     "br3Commit": "6ec93105b380bc65063994417716dfacfaceb462",
     "l5Head": "4dd9dcc4b46f369965d17e6c1b39bcb81496f28a",
     "sdkRange": "^1.31.0",
-    "declaredLockSha256": "95147556dc03d0a728d61d9a6a582e7ab18179191ac579c640f12198d7b521ed"
+    "declaredLockSha256": "f084b8f9a98c257eb298ae1471694a37023159ea980e8b1bb688a47df40e8174"
   },
   "artifacts": [
     {
