@@ -42,6 +42,17 @@ describe('effective command identity', () => {
     expect(commandDigest(body)).toBe(createHash('sha256')
       .update('{"profile":{"10":"ten","2":"two"}}').digest('hex'));
   });
+  it('should normalize trusted commands through the compiled L0 validators without accepting caller authority', () => {
+    const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+    const input = { capability: 'artifacts_publish', args: publish(), authority: host, derivation: binding() };
+    expect(profile.validators.normalizeCommand(input)).toEqual(command());
+    for (const value of [null, publish(), { ...input, commandHash: 'forged' },
+      { ...input, args: publish({ paramsHash: 'forged' }) }, { ...input, envelopeKey: 'different' }]) {
+      expect(() => profile.validators.normalizeCommand(value)).toThrow();
+    }
+    expect(() => compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selectedCapabilities: [] })
+      .validators.normalizeCommand(input)).toThrowError(expect.objectContaining({ category: 'capability_unselected' }));
+  });
   it('should retain the existing Radar key vector and separate all identity values', () => {
     const value = command();
     expect(value.identity.internalKey).toBe('9a159e31bdd2a0415be1bf65c70e37c29d5076365616af5acc356ee8210c8ff1');
