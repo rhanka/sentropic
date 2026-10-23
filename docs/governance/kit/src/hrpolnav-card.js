@@ -53,6 +53,7 @@ export const structuredCardStyle = `
 .scene-canvas .service-node header > svg { flex: 0 0 70px; }
 /* Padding contributes 8px of the frozen 9.25px footer inset. */
 .scene-canvas .service-node .repo-label { font-weight: 700; margin-bottom:calc(9.25px - 8px); }
-.scene-canvas .card-folded .card-body { flex: 1 1 auto; display:flex; align-items:center; justify-content:center; padding:0; margin:0 22px 0 16px; }
+/* Border and padding already contribute 16px left and 10px right. */
+.scene-canvas .card-folded .card-body { flex: 1 1 auto; display:flex; align-items:center; justify-content:center; padding:0; margin:0 6px 0 0; }
 .scene-canvas .card-summary { font-size:24px; line-height:1.3; text-align:center; white-space:normal; }
 `;

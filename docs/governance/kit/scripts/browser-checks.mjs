@@ -47,6 +47,7 @@ export async function inspect(svg, name) {
         if (size.width !== 460 || size.height !== 200) failures.push(`Nonstandard collapsed card ${id}`);
         const body = box.querySelector('.card-body'), summary = box.querySelector('.card-summary');
         const b = body.getBoundingClientRect(), s = summary.getBoundingClientRect();
+        if (Math.abs((b.left-rect.left)/scale-16) > .02 || Math.abs((rect.right-b.right)/scale-16) > .02) failures.push(`Collapsed summary side insets ${id}`);
         if (Math.abs(s.top+s.height/2-b.top-b.height/2)/scale > .02) failures.push(`Collapsed body centre ${id}`);
         if (Math.abs(s.left+s.width/2-rect.left-rect.width/2)/scale > .02) failures.push(`Collapsed line centre ${id}`);
       }
