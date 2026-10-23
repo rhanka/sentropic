@@ -23,8 +23,11 @@ import {
   type ArtifactCommitContext,
   type ArtifactCommitTransaction,
   type ArtifactAuthorizationDecision,
+  type CommitExecutor,
   type CommitPolicyParticipant,
   type CommitPolicyParticipantFactory,
+  type CoordinatorTestPoint,
+  type FinalizeConnection,
   type FinalizeRequest,
   type FinalizeTxClient,
   type InternalIdempotencyKey,
@@ -336,10 +339,10 @@ describe('commit coordinator', () => {
       if (outcome.ok) return;
       expect(outcome.failure.category).toBe('unauthorized_at_commit');
       expect(outcome.failure.commitState).toBe('not_committed');
+    } finally {
       await witness.query(
         "UPDATE commit_test.approvals SET approved = true WHERE actor_id = 'actor-1'",
       );
-    } finally {
       await witness.end();
     }
     expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-guard-wait'])).toBe(0);
@@ -370,9 +373,9 @@ describe('commit coordinator', () => {
       expect(outcome.ok).toBe(false);
       if (outcome.ok) return;
       expect(outcome.failure.category).toBe('unauthorized_at_commit');
+    } finally {
       await writer.query("UPDATE commit_test.policy_revision SET revision = 'rev-1' WHERE id = 1");
       await writer.query("UPDATE commit_test.approvals SET approved = true WHERE actor_id = 'actor-1'");
-    } finally {
       await writer.end();
     }
     expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-rev-race'])).toBe(0);
@@ -413,33 +416,30 @@ describe('commit coordinator', () => {
   });
 
   it('gives the last quota unit to exactly one winner across pools', async () => {
+    // The quota reservation precedes the guard decision, so the contenders
+    // serialize on the quota row itself; no barrier can overlap them past the
+    // reservation without deadlocking the test. The race outcome is still
+    // deterministic: exactly one winner regardless of arrival order.
+    await pool.query("UPDATE commit_test.quotas SET used = 0 WHERE quota_key = 'q-last'");
     const secondPool = new Pool({ connectionString: DATABASE_URL });
     try {
-      const barrier = createArtifactCommitBarrier();
       const calls = { reserveQuota: 0 };
       const coordinatorA = createArtifactCommitCoordinator({
         executor: createPostgresCommitExecutor(pool),
         policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-last', calls),
-        testObserver: barrier.observer,
-        testPoints: ['after_finalization_locks_before_guard'],
       });
       const coordinatorB = createArtifactCommitCoordinator({
         executor: createPostgresCommitExecutor(secondPool),
         policy: makeParticipantFactory(secondPool, { nowMs: Date.now() }, 'q-last', calls),
-        testObserver: barrier.observer,
-        testPoints: ['after_finalization_locks_before_guard'],
       });
-      const pendingA = coordinatorA.finalize(
-        baseRequest({ key: 'key-quota-a', commandHash: 'h-qa', invocationId: 'inv-quota-a' }),
-      );
-      const pendingB = coordinatorB.finalize(
-        baseRequest({ key: 'key-quota-b', commandHash: 'h-qb', invocationId: 'inv-quota-b' }),
-      );
-      await barrier.waitUntilReached('after_finalization_locks_before_guard', 'inv-quota-a');
-      await barrier.waitUntilReached('after_finalization_locks_before_guard', 'inv-quota-b');
-      barrier.release('after_finalization_locks_before_guard', 'inv-quota-a');
-      barrier.release('after_finalization_locks_before_guard', 'inv-quota-b');
-      const [outcomeA, outcomeB] = await Promise.all([pendingA, pendingB]);
+      const [outcomeA, outcomeB] = await Promise.all([
+        coordinatorA.finalize(
+          baseRequest({ key: 'key-quota-a', commandHash: 'h-qa', invocationId: 'inv-quota-a' }),
+        ),
+        coordinatorB.finalize(
+          baseRequest({ key: 'key-quota-b', commandHash: 'h-qb', invocationId: 'inv-quota-b' }),
+        ),
+      ]);
       const winners = [outcomeA, outcomeB].filter((outcome) => outcome.ok);
       const losers = [outcomeA, outcomeB].filter((outcome) => !outcome.ok);
       expect(winners).toHaveLength(1);
@@ -447,11 +447,20 @@ describe('commit coordinator', () => {
       const loser = losers[0];
       if (loser === undefined || loser.ok) throw new Error('expected exactly one loser');
       expect(loser.failure.category).toBe('conflict');
+      expect(loser.failure.variant).toBe('quota_exhausted');
       expect(loser.failure.httpStatus).toBe(409);
+      expect(loser.failure.retriable).toBe(false);
       const { rows } = await pool.query<{ used: number }>(
         "SELECT used FROM commit_test.quotas WHERE quota_key = 'q-last'",
       );
       expect(rows[0]?.used).toBe(1);
+      expect(
+        await countRows(
+          'artifacts.operation_receipts',
+          ' WHERE internal_key IN ($1, $2)',
+          ['key-quota-a', 'key-quota-b'],
+        ),
+      ).toBe(1);
     } finally {
       await secondPool.end();
     }
@@ -654,5 +663,714 @@ describe('commit coordinator', () => {
     await expect(
       coordinator.finalize(baseRequest({ key: '', commandHash: 'h-x' })),
     ).rejects.toThrow('scope and internal key');
+  });
+});
+
+describe('coordinator sol-r1 regressions', () => {
+  const boom = (code?: string): Error & { code?: string } => {
+    const error = new Error(`boom ${code ?? 'none'}`) as Error & { code?: string };
+    if (code !== undefined) error.code = code;
+    return error;
+  };
+
+  /**
+   * Drain a pool with a bounded wait: a leaked checkout rejects with an
+   * explicit message instead of hanging the file behind pool.end().
+   */
+  const endPool = async (pool: Pool): Promise<void> => {
+    await Promise.race([
+      pool.end(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('pool did not drain: leaked client')), 3000);
+      }),
+    ]);
+  };
+
+  /** Pool wrapper counting leased clients to prove exactly-once settlement. */
+  const trackingPool = (): { pool: Pool; active: () => number } => {
+    const inner = new Pool({ connectionString: DATABASE_URL });
+    let active = 0;
+    const realConnect = inner.connect.bind(inner);
+    const wrapped = {
+      query: inner.query.bind(inner),
+      connect: async () => {
+        const client = await realConnect();
+        active += 1;
+        const realRelease = client.release.bind(client);
+        client.release = ((error?: unknown) => {
+          active -= 1;
+          realRelease(error as never);
+        }) as typeof client.release;
+        return client;
+      },
+      end: inner.end.bind(inner),
+    };
+    return { pool: wrapped as unknown as Pool, active: () => active };
+  };
+
+  it('denies when approval expires during the before_commit wait', async () => {
+    const clock = { nowMs: 0 };
+    await pool.query(
+      "UPDATE commit_test.approvals SET expires_at_ms = 10 WHERE actor_id = 'actor-1'",
+    );
+    const barrier = createArtifactCommitBarrier();
+    const coordinator = createArtifactCommitCoordinator({
+      executor: createPostgresCommitExecutor(pool),
+      policy: makeParticipantFactory(pool, clock, 'q-main'),
+      testObserver: barrier.observer,
+      testPoints: ['before_commit'],
+      nowMs: () => clock.nowMs,
+    });
+    try {
+      const pending = coordinator.finalize(
+        baseRequest({
+          key: 'key-exp-wait',
+          commandHash: 'h-exp-wait',
+          invocationId: 'inv-exp-wait',
+        }),
+      );
+      await barrier.waitUntilReached('before_commit', 'inv-exp-wait');
+      clock.nowMs = 11;
+      barrier.release('before_commit', 'inv-exp-wait');
+      const outcome = await pending;
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.failure.category).toBe('unauthorized_at_commit');
+      expect(outcome.failure.commitState).toBe('not_committed');
+      expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-exp-wait'])).toBe(0);
+    } finally {
+      await pool.query(
+        "UPDATE commit_test.approvals SET expires_at_ms = 9999999999999 WHERE actor_id = 'actor-1'",
+      );
+    }
+  });
+
+  it('denies an approval that expires while blocked on the quota row', async () => {
+    const clock = { nowMs: 0 };
+    await pool.query(
+      "INSERT INTO commit_test.approvals (actor_id, approved, expires_at_ms) VALUES ('actor-quota-exp', true, 10) ON CONFLICT (actor_id) DO UPDATE SET approved = true, expires_at_ms = 10",
+    );
+    // A second client holds the quota row so the finalizer blocks inside
+    // the provisional reservation, before the guard decision.
+    const locker = new Pool({ connectionString: DATABASE_URL });
+    const lockerClient = await locker.connect();
+    const guarded = createPostgresCommitExecutor(pool);
+    const coordinator = createArtifactCommitCoordinator({
+      executor: guarded,
+      policy: makeParticipantFactory(pool, clock, 'q-main'),
+      nowMs: () => clock.nowMs,
+    });
+    try {
+      await lockerClient.query('BEGIN');
+      await lockerClient.query("SELECT used FROM commit_test.quotas WHERE quota_key = 'q-main' FOR UPDATE");
+      const { rows: before } = await pool.query<{ used: number }>(
+        "SELECT used FROM commit_test.quotas WHERE quota_key = 'q-main'",
+      );
+      const pending = coordinator.finalize(
+        baseRequest({
+          key: 'key-quota-exp',
+          commandHash: 'h-quota-exp',
+          invocationId: 'inv-quota-exp',
+          actorId: 'actor-quota-exp',
+        }),
+      );
+      const deadline = Date.now() + 10000;
+      for (;;) {
+        const { rows } = await pool.query<{ n: string }>(
+          `SELECT COUNT(*) AS n FROM pg_stat_activity
+           WHERE wait_event_type = 'Lock' AND query ILIKE '%commit_test.quotas%'`,
+        );
+        if (Number(rows[0]?.n ?? 0) > 0) break;
+        if (Date.now() > deadline) throw new Error('finalizer never blocked on the quota row');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      clock.nowMs = 11;
+      await lockerClient.query('ROLLBACK');
+      const outcome = await pending;
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.failure.category).toBe('unauthorized_at_commit');
+      expect(outcome.failure.commitState).toBe('not_committed');
+      expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-quota-exp'])).toBe(0);
+      const { rows: after } = await pool.query<{ used: number }>(
+        "SELECT used FROM commit_test.quotas WHERE quota_key = 'q-main'",
+      );
+      expect(after[0]?.used).toBe(before[0]?.used);
+    } finally {
+      try {
+        await lockerClient.query('ROLLBACK');
+      } catch {
+        /* already settled */
+      }
+      lockerClient.release();
+      await locker.end();
+      await pool.query("DELETE FROM commit_test.approvals WHERE actor_id = 'actor-quota-exp'");
+    }
+  });
+
+  it('rejects a fence not minted by this transaction', async () => {
+    const abandoned: string[] = [];
+    const foreignFenceGuard = async (
+      context: ArtifactCommitContext,
+    ): Promise<ArtifactAuthorizationDecision> => ({
+      allowed: true,
+      fence: {
+        fenceId: 'unrelated-transaction',
+        invocationId: context.invocationId,
+        policyRevision: 'rev-1',
+      },
+    });
+    const coordinator = createArtifactCommitCoordinator({
+      executor: createPostgresCommitExecutor(pool),
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+    });
+    const outcome = await coordinator.finalize(
+      baseRequest({
+        key: 'key-foreign-fence',
+        commandHash: 'h-foreign-fence',
+        invocationId: 'inv-foreign-fence',
+        guard: foreignFenceGuard,
+        attemptId: 'attempt-foreign-fence',
+        noteAbandonedAttempt: async (attemptId: string) => {
+          abandoned.push(attemptId);
+        },
+      }),
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.failure.category).toBe('unauthorized_at_commit');
+    expect(outcome.failure.httpStatus).toBe(403);
+    expect(outcome.failure.commitState).toBe('not_committed');
+    expect(abandoned).toEqual(['attempt-foreign-fence']);
+    expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-foreign-fence'])).toBe(0);
+  });
+
+  it('rejects a replayed fence minted by another transaction', async () => {
+    const coordinator = createArtifactCommitCoordinator({
+      executor: createPostgresCommitExecutor(pool),
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+    });
+    const first = await coordinator.finalize(
+      baseRequest({ key: 'key-replay-foreign', commandHash: 'h-replay-foreign' }),
+    );
+    expect(first.ok).toBe(true);
+    const foreignFenceGuard = async (
+      context: ArtifactCommitContext,
+    ): Promise<ArtifactAuthorizationDecision> => ({
+      allowed: true,
+      fence: {
+        fenceId: 'another-transaction',
+        invocationId: context.invocationId,
+        policyRevision: 'rev-1',
+      },
+    });
+    const replayed = await coordinator.replayGuarded(
+      baseRequest({
+        key: 'key-replay-foreign',
+        commandHash: 'h-replay-foreign',
+        invocationId: 'inv-replay-foreign',
+        guard: foreignFenceGuard,
+      }),
+    );
+    expect(replayed.ok).toBe(false);
+    if (replayed.ok) return;
+    expect(replayed.failure.category).toBe('unauthorized_at_commit');
+    expect(replayed.failure.httpStatus).toBe(403);
+  });
+
+  it('runs caller object locks on guarded replay without re-running provisional work', async () => {
+    await pool.query(
+      'CREATE TABLE IF NOT EXISTS commit_test.lifecycle (obj_id TEXT PRIMARY KEY, active BOOLEAN NOT NULL)',
+    );
+    await pool.query(
+      "INSERT INTO commit_test.lifecycle (obj_id, active) VALUES ('obj-1', true) ON CONFLICT (obj_id) DO NOTHING",
+    );
+    const lockCalls: string[] = [];
+    let provisionalCalls = 0;
+    const quotaCalls = { reserveQuota: 0 };
+    const coordinator = createArtifactCommitCoordinator({
+      executor: createPostgresCommitExecutor(pool),
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main', quotaCalls),
+    });
+    const request = baseRequest({
+      key: 'key-replay-locks',
+      commandHash: 'h-replay-locks',
+      locks: {
+        'artifact-lifecycle': [
+          async (client: FinalizeTxClient) => {
+            lockCalls.push('lifecycle');
+            await client.query('SELECT active FROM commit_test.lifecycle WHERE obj_id = $1 FOR UPDATE', [
+              'obj-1',
+            ]);
+          },
+        ],
+        acl: [
+          async (client: FinalizeTxClient) => {
+            lockCalls.push('acl');
+            await client.query('SELECT 1', []);
+          },
+        ],
+      },
+      provisional: async (client: FinalizeTxClient) => {
+        provisionalCalls += 1;
+        await client.query('INSERT INTO commit_test.effects (scope_id, internal_key) VALUES ($1, $2)', [
+          'scope-l3',
+          'key-replay-locks',
+        ]);
+      },
+    });
+    const first = await coordinator.finalize(request);
+    expect(first.ok).toBe(true);
+    expect(lockCalls).toEqual(['lifecycle', 'acl']);
+    expect(provisionalCalls).toBe(1);
+    expect(quotaCalls.reserveQuota).toBe(1);
+    const second = await coordinator.replayGuarded(request);
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.replayed).toBe(true);
+    expect(lockCalls).toEqual(['lifecycle', 'acl', 'lifecycle', 'acl']);
+    expect(provisionalCalls).toBe(1);
+    expect(quotaCalls.reserveQuota).toBe(1);
+  });
+
+  it('denies a replay racing a receipt deletion after lookup', async () => {
+    const barrier = createArtifactCommitBarrier();
+    const coordinator = createArtifactCommitCoordinator({
+      executor: createPostgresCommitExecutor(pool),
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+      testObserver: barrier.observer,
+      testPoints: ['after_replay_lookup_before_guard'],
+    });
+    const first = await coordinator.finalize(
+      baseRequest({ key: 'key-replay-del', commandHash: 'h-replay-del' }),
+    );
+    expect(first.ok).toBe(true);
+    const pending = coordinator.replayGuarded(
+      baseRequest({
+        key: 'key-replay-del',
+        commandHash: 'h-replay-del',
+        invocationId: 'inv-replay-del',
+      }),
+    );
+    await barrier.waitUntilReached('after_replay_lookup_before_guard', 'inv-replay-del');
+    const writer = new Pool({ connectionString: DATABASE_URL });
+    try {
+      // The receipt was already looked up past this point, so deleting it
+      // must not turn the replay into a missing-row error: the guard denies
+      // on the looked-up row instead.
+      await writer.query("DELETE FROM artifacts.operation_receipts WHERE internal_key = 'key-replay-del'");
+      await writer.query("UPDATE commit_test.approvals SET approved = false WHERE actor_id = 'actor-1'");
+      barrier.release('after_replay_lookup_before_guard', 'inv-replay-del');
+      const outcome = await pending;
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.failure.category).toBe('unauthorized_at_commit');
+    } finally {
+      await writer.query("UPDATE commit_test.approvals SET approved = true WHERE actor_id = 'actor-1'");
+      await writer.end();
+    }
+  });
+
+  it('maps the key-row lock timeout to a non-retriable conflict', async () => {
+    await pool.query(
+      `INSERT INTO artifacts.operation_keys (storage_scope_id, internal_key)
+       VALUES ('scope-l3', 'key-lock-timeout') ON CONFLICT DO NOTHING`,
+    );
+    const locker = new Pool({ connectionString: DATABASE_URL });
+    const lockerClient = await locker.connect();
+    const inner = createPostgresCommitExecutor(pool);
+    const executor: CommitExecutor = {
+      ensureCoordinationRow: inner.ensureCoordinationRow.bind(inner),
+      beginFinalization: async () => {
+        const connection = await inner.beginFinalization();
+        const realLock = connection.lockOperationKey.bind(connection);
+        connection.lockOperationKey = (async (scopeId: string, internalKey: string) => {
+          await connection.query("SET LOCAL lock_timeout = '100ms'", []);
+          return realLock(scopeId, internalKey);
+        }) as FinalizeConnection['lockOperationKey'];
+        return connection;
+      },
+    };
+    try {
+      await lockerClient.query('BEGIN');
+      await lockerClient.query(
+        `SELECT 1 FROM artifacts.operation_keys
+         WHERE storage_scope_id = 'scope-l3' AND internal_key = 'key-lock-timeout' FOR UPDATE`,
+      );
+      const coordinator = createArtifactCommitCoordinator({
+        executor,
+        policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+      });
+      const outcome = await coordinator.finalize(
+        baseRequest({ key: 'key-lock-timeout', commandHash: 'h-lock-timeout' }),
+      );
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.failure.category).toBe('conflict');
+      expect(outcome.failure.variant).toBe('key_contention');
+      expect(outcome.failure.httpStatus).toBe(409);
+      expect(outcome.failure.retriable).toBe(false);
+      expect(outcome.failure.phase).toBe('lock');
+      expect(outcome.failure.commitState).toBe('not_committed');
+      expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-lock-timeout'])).toBe(0);
+    } finally {
+      await lockerClient.query('ROLLBACK');
+      lockerClient.release();
+      await locker.end();
+    }
+  });
+
+  it('maps a quota-row lock timeout to retriable unavailability', async () => {
+    // Characterization: only the scoped key-row lock timeout is a qualified
+    // key conflict; every other lock timeout stays retriable unavailability.
+    const locker = new Pool({ connectionString: DATABASE_URL });
+    const lockerClient = await locker.connect();
+    const factory = makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main');
+    const lockingFactory: CommitPolicyParticipantFactory = {
+      createParticipant: (client, token) => {
+        const participant = factory.createParticipant(client, token);
+        return {
+          ...participant,
+          reserveQuota: async (input: { actorId: string; operation: string }) => {
+            await client.query("SET LOCAL lock_timeout = '100ms'", []);
+            return participant.reserveQuota(input);
+          },
+        };
+      },
+    };
+    try {
+      await lockerClient.query('BEGIN');
+      await lockerClient.query("SELECT used FROM commit_test.quotas WHERE quota_key = 'q-main' FOR UPDATE");
+      const coordinator = createArtifactCommitCoordinator({
+        executor: createPostgresCommitExecutor(pool),
+        policy: lockingFactory,
+      });
+      const outcome = await coordinator.finalize(
+        baseRequest({ key: 'key-quota-timeout', commandHash: 'h-quota-timeout' }),
+      );
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.failure.category).toBe('provider_unavailable');
+      expect(outcome.failure.httpStatus).toBe(503);
+      expect(outcome.failure.retriable).toBe(true);
+      expect(outcome.failure.commitState).toBe('not_committed');
+    } finally {
+      await lockerClient.query('ROLLBACK');
+      lockerClient.release();
+      await locker.end();
+    }
+  });
+
+  it('classifies serialization, deadlock and cancel errors as retriable', async () => {
+    const throwingExecutor = (thrown: unknown): CommitExecutor => ({
+      ensureCoordinationRow: async () => {},
+      beginFinalization: async () => {
+        throw thrown;
+      },
+    });
+    for (const code of ['40001', '40P01', '57014']) {
+      const coordinator = createArtifactCommitCoordinator({
+        executor: throwingExecutor(boom(code)),
+        policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+      });
+      const outcome = await coordinator.finalize(baseRequest({ key: `key-cls-${code}` }));
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) continue;
+      expect(outcome.failure.category).toBe('provider_unavailable');
+      expect(outcome.failure.httpStatus).toBe(503);
+      expect(outcome.failure.retriable).toBe(true);
+      expect(outcome.failure.phase).toBe('acquire');
+      expect(outcome.failure.commitState).toBe('not_committed');
+    }
+    const coordinator = createArtifactCommitCoordinator({
+      executor: throwingExecutor(boom('XX999')),
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+    });
+    const outcome = await coordinator.finalize(baseRequest({ key: 'key-cls-other' }));
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.failure.category).toBe('provider_error');
+    expect(outcome.failure.httpStatus).toBe(500);
+    expect(outcome.failure.retriable).toBe(false);
+  });
+
+  it('returns an outcome instead of rejecting when acquisition fails', async () => {
+    const refused: CommitExecutor = {
+      ensureCoordinationRow: async () => {
+        throw boom('ECONNREFUSED');
+      },
+      beginFinalization: async () => {
+        throw new Error('unreachable');
+      },
+    };
+    const refusedCoordinator = createArtifactCommitCoordinator({
+      executor: refused,
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+    });
+    const refusedOutcome = await refusedCoordinator.finalize(baseRequest({ key: 'key-acq-refused' }));
+    expect(refusedOutcome.ok).toBe(false);
+    if (refusedOutcome.ok) return;
+    expect(refusedOutcome.failure.category).toBe('provider_unavailable');
+    expect(refusedOutcome.failure.httpStatus).toBe(503);
+    expect(refusedOutcome.failure.commitState).toBe('not_committed');
+    const broken: CommitExecutor = {
+      ensureCoordinationRow: async () => {},
+      beginFinalization: async () => {
+        throw boom('XX000');
+      },
+    };
+    const brokenCoordinator = createArtifactCommitCoordinator({
+      executor: broken,
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+    });
+    const brokenOutcome = await brokenCoordinator.finalize(baseRequest({ key: 'key-acq-broken' }));
+    expect(brokenOutcome.ok).toBe(false);
+    if (brokenOutcome.ok) return;
+    expect(brokenOutcome.failure.category).toBe('provider_error');
+    expect(brokenOutcome.failure.httpStatus).toBe(500);
+  });
+
+  it('reports server-side commit with lost acknowledgment as unknown, then replays', async () => {
+    // Characterization: the unknown outcome and same-key replay recovery hold
+    // when COMMIT really landed on the server before the acknowledgment loss.
+    const sabotaged = new Pool({ connectionString: DATABASE_URL });
+    const inner = createPostgresCommitExecutor(sabotaged);
+    let sabotageArmed = true;
+    const sabotagingExecutor: CommitExecutor = {
+      ensureCoordinationRow: inner.ensureCoordinationRow.bind(inner),
+      beginFinalization: async () => {
+        const connection = await inner.beginFinalization();
+        const realCommit = connection.commit.bind(connection);
+        connection.commit = (async () => {
+          // Commit for real on the server, then lose the acknowledgment.
+          await realCommit();
+          if (sabotageArmed) {
+            sabotageArmed = false;
+            throw boom('57P06');
+          }
+        }) as FinalizeConnection['commit'];
+        return connection;
+      },
+    };
+    try {
+      const coordinator = createArtifactCommitCoordinator({
+        executor: sabotagingExecutor,
+        policy: makeParticipantFactory(sabotaged, { nowMs: Date.now() }, 'q-main'),
+      });
+      const first = await coordinator.finalize(
+        baseRequest({ key: 'key-unknown-real', commandHash: 'h-unknown-real' }),
+      );
+      expect(first.ok).toBe(false);
+      if (first.ok) return;
+      expect(first.failure.category).toBe('provider_unavailable');
+      expect(first.failure.commitState).toBe('unknown');
+      const retry = await coordinator.finalize(
+        baseRequest({ key: 'key-unknown-real', commandHash: 'h-unknown-real' }),
+      );
+      expect(retry.ok).toBe(true);
+      if (!retry.ok) return;
+      expect(retry.replayed).toBe(true);
+      expect(retry.commitState).toBe('committed');
+      expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-unknown-real'])).toBe(1);
+    } finally {
+      await sabotaged.end();
+    }
+  });
+
+  it('disposes the client when BEGIN fails and returns an outcome', async () => {
+    const tracked = trackingPool();
+    const realConnect = (tracked.pool as unknown as { connect: Pool['connect'] }).connect.bind(tracked.pool);
+    const breaking = {
+      query: (tracked.pool as unknown as Pool).query.bind(tracked.pool),
+      connect: async () => {
+        const client = await realConnect();
+        const realQuery = client.query.bind(client);
+        client.query = (async (text: unknown, params?: unknown[]) => {
+          if (typeof text === 'string' && text.startsWith('BEGIN')) throw boom('XX000');
+          return realQuery(text as string, params as never[]);
+        }) as typeof client.query;
+        return client;
+      },
+      end: tracked.pool.end.bind(tracked.pool),
+    };
+    try {
+      const coordinator = createArtifactCommitCoordinator({
+        executor: createPostgresCommitExecutor(breaking as unknown as Pool),
+        policy: makeParticipantFactory(breaking as unknown as Pool, { nowMs: Date.now() }, 'q-main'),
+      });
+      const outcome = await coordinator.finalize(baseRequest({ key: 'key-begin-fail' }));
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.failure.category).toBe('provider_error');
+      expect(outcome.failure.commitState).toBe('not_committed');
+      expect(tracked.active()).toBe(0);
+    } finally {
+      await endPool(tracked.pool);
+    }
+  });
+
+  it('settles the resolve transaction once when its lock read fails', async () => {
+    const tracked = trackingPool();
+    const inner = createPostgresCommitExecutor(tracked.pool);
+    let begins = 0;
+    const sabotagingExecutor: CommitExecutor = {
+      ensureCoordinationRow: inner.ensureCoordinationRow.bind(inner),
+      beginFinalization: async () => {
+        begins += 1;
+        const connection = await inner.beginFinalization();
+        if (begins === 1) {
+          connection.insertReceipt = (async () => {
+            throw boom('23505');
+          }) as FinalizeConnection['insertReceipt'];
+        } else {
+          connection.lockOperationKey = (async () => {
+            throw boom('XX001');
+          }) as FinalizeConnection['lockOperationKey'];
+        }
+        return connection;
+      },
+    };
+    try {
+      const coordinator = createArtifactCommitCoordinator({
+        executor: sabotagingExecutor,
+        policy: makeParticipantFactory(tracked.pool, { nowMs: Date.now() }, 'q-main'),
+      });
+      const outcome = await coordinator.finalize(baseRequest({ key: 'key-resolve-settle' }));
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.failure.category).toBe('provider_error');
+      expect(outcome.failure.commitState).toBe('not_committed');
+      expect(tracked.active()).toBe(0);
+    } finally {
+      await endPool(tracked.pool);
+    }
+  });
+
+  it('keeps the denial when the abandonment hook fails', async () => {
+    const tracked = trackingPool();
+    const deniedGuard = async (): Promise<ArtifactAuthorizationDecision> => ({
+      allowed: false,
+      reason: 'denied',
+      publicCode: 'access_denied',
+      status: 403,
+      retriable: false,
+    });
+    try {
+      const coordinator = createArtifactCommitCoordinator({
+        executor: createPostgresCommitExecutor(tracked.pool),
+        policy: makeParticipantFactory(tracked.pool, { nowMs: Date.now() }, 'q-main'),
+      });
+      const outcome = await coordinator.finalize(
+        baseRequest({
+          key: 'key-deny-abandon',
+          commandHash: 'h-deny-abandon',
+          guard: deniedGuard,
+          attemptId: 'attempt-deny-abandon',
+          noteAbandonedAttempt: async () => {
+            throw new Error('cleanup failed');
+          },
+        }),
+      );
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.failure.category).toBe('unauthorized_at_commit');
+      expect(outcome.failure.httpStatus).toBe(403);
+      expect(tracked.active()).toBe(0);
+      expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-deny-abandon'])).toBe(0);
+    } finally {
+      await tracked.pool.end();
+    }
+  });
+
+  it('marks invalid-fence attempts abandoned', async () => {
+    const abandoned: string[] = [];
+    const foreignFenceGuard = async (
+      context: ArtifactCommitContext,
+    ): Promise<ArtifactAuthorizationDecision> => ({
+      allowed: true,
+      fence: {
+        fenceId: 'unrelated-transaction',
+        invocationId: context.invocationId,
+        policyRevision: 'rev-1',
+      },
+    });
+    const coordinator = createArtifactCommitCoordinator({
+      executor: createPostgresCommitExecutor(pool),
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+    });
+    const outcome = await coordinator.finalize(
+      baseRequest({
+        key: 'key-fence-abandon',
+        commandHash: 'h-fence-abandon',
+        invocationId: 'inv-fence-abandon',
+        guard: foreignFenceGuard,
+        attemptId: 'attempt-fence-abandon',
+        noteAbandonedAttempt: async (attemptId: string) => {
+          abandoned.push(attemptId);
+        },
+      }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(abandoned).toEqual(['attempt-fence-abandon']);
+  });
+
+  it('settles once and abandons on quarantine', async () => {
+    const tracked = trackingPool();
+    const abandoned: string[] = [];
+    await pool.query(
+      `INSERT INTO artifacts.operation_receipts (storage_scope_id, internal_key, command_codec, command_hash, receipt)
+       VALUES ('scope-l3', 'key-legacy-settle', 'legacy-0.1', 'h-legacy-settle', '{"releaseId": "r-old"}')`,
+    );
+    await pool.query(
+      `INSERT INTO artifacts.operation_keys (storage_scope_id, internal_key)
+       VALUES ('scope-l3', 'key-legacy-settle') ON CONFLICT DO NOTHING`,
+    );
+    try {
+      const coordinator = createArtifactCommitCoordinator({
+        executor: createPostgresCommitExecutor(tracked.pool),
+        policy: makeParticipantFactory(tracked.pool, { nowMs: Date.now() }, 'q-main'),
+      });
+      await expect(
+        coordinator.finalize(
+          baseRequest({
+            key: 'key-legacy-settle',
+            commandHash: 'h-legacy-settle',
+            attemptId: 'attempt-legacy-settle',
+            noteAbandonedAttempt: async (attemptId: string) => {
+              abandoned.push(attemptId);
+            },
+          }),
+        ),
+      ).rejects.toThrow('commit quarantine');
+      expect(tracked.active()).toBe(0);
+      expect(abandoned).toEqual(['attempt-legacy-settle']);
+    } finally {
+      await tracked.pool.end();
+    }
+  });
+
+  it('rejects unknown request codecs before touching storage', async () => {
+    const coordinator = createArtifactCommitCoordinator({
+      executor: createPostgresCommitExecutor(pool),
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+    });
+    await expect(
+      coordinator.finalize(baseRequest({ key: 'key-bad-codec', codecVersion: 'unknown-codec' })),
+    ).rejects.toThrow('supported command codec');
+    await expect(
+      coordinator.replayGuarded(baseRequest({ key: 'key-bad-codec', codecVersion: 'unknown-codec' })),
+    ).rejects.toThrow('supported command codec');
+    expect(await countRows('artifacts.operation_keys', ' WHERE internal_key = $1', ['key-bad-codec'])).toBe(0);
+    expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-bad-codec'])).toBe(0);
+  });
+
+  it('rejects arming a preparation-only test point', async () => {
+    const coordinatorOf = (): unknown =>
+      createArtifactCommitCoordinator({
+        executor: createPostgresCommitExecutor(pool),
+        policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+        testPoints: ['before_blob_put' as CoordinatorTestPoint],
+      });
+    expect(coordinatorOf).toThrow('unknown coordinator test point');
   });
 });
