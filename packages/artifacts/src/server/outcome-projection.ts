@@ -34,7 +34,7 @@ export function projectArtifactWriteFailure(
   dispatch: { readonly dispatched: boolean; readonly write: boolean },
 ): ArtifactWriteFailure | undefined {
   if (!dispatch.dispatched || !dispatch.write
-    || failure.phase === 'selection' || failure.phase === 'admission'
+    || failure.phase === 'selection' || failure.phase === 'admit'
     || failure.category === 'capability_unselected' || failure.category === 'admission_unavailable') return undefined;
   const reason = failure.category === 'conflict' ? 'provider_conflict'
     : failure.category === 'provider_unavailable' || failure.category === 'unauthorized_at_commit'

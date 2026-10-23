@@ -123,7 +123,7 @@ function classify(cause: unknown, context: ArtifactFailureContext, mapHostError?
   for (const current of chain(cause)) {
     if (current instanceof ArtifactOperationError) return operationProjection(current);
     if (current instanceof ArtifactKeyLockConflict
-      && context.phase === 'key_lock'
+      && context.phase === 'lock'
       && context.storageScopeId === current.storageScopeId
       && context.operationKey === current.operationKey) return conflict();
     if (mapHostError !== undefined) {
