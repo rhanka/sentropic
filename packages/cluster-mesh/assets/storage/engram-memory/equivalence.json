@@ -1,0 +1,46 @@
+{
+  "format": "engram-memory-profile-equivalence/v1",
+  "contractDigest": "sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28",
+  "neutralClaims": [
+    {
+      "name": "atomic-units-v1",
+      "version": "1",
+      "digest": "sha256:507fd5a8f5d68a8c2b99c05bee5a23c0ded47d79532ca5edf34ea08c1919958a"
+    },
+    {
+      "name": "immutable-chains-v1",
+      "version": "1",
+      "digest": "sha256:927777f8470be49c968a15cb9bbf2560efdd63bd329d763bfeeb1c166759a3bc"
+    },
+    {
+      "name": "immutable-boundaries-v1",
+      "version": "1",
+      "digest": "sha256:47ee879a5552868ec7cee15f9984cb44f5a72b64aa2b02556232cd0c9037c80f"
+    },
+    {
+      "name": "scope-outbox-v1",
+      "version": "1",
+      "digest": "sha256:d4f1e16890c9541fada3e71e4ba7ba2016da5b07e26383979e29e42b7916b1ed"
+    },
+    {
+      "name": "fenced-writers-v1",
+      "version": "1",
+      "digest": "sha256:48cfb030a1a9c614de6170588116d1afe3d7c94acda79b4322b6b6d7d5156900"
+    },
+    {
+      "name": "leased-snapshots-v1",
+      "version": "1",
+      "digest": "sha256:66bbb70f8645b21707f5635e9544dd806d67f8b9d19ecb7be7413ac33d995b51"
+    }
+  ],
+  "backendMapping": {
+    "sqlite": {
+      "status": "pending-qualification",
+      "note": "Backend claim identities are recorded at qualification (C8); only the qualified memory bridge exposes mapped claims. Original backend claims are preserved, never overwritten."
+    },
+    "postgres": {
+      "status": "pending-qualification",
+      "note": "Backend claim identities are recorded at qualification (C8); only the qualified memory bridge exposes mapped claims. Original backend claims are preserved, never overwritten."
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@sentropic/mcp-l5-toolchain",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@microsoft/api-extractor": "7.58.9",
+    "@types/node": "22.20.1",
+    "typescript": "5.4.5"
+  }
+}

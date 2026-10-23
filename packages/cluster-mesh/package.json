@@ -32,6 +32,10 @@
       "types": "./dist/storage/sqlite/index.d.ts",
       "import": "./dist/storage/sqlite/index.js"
     },
+    "./engram-memory": {
+      "types": "./dist/engram-memory/contract.d.ts",
+      "import": "./dist/engram-memory/contract.js"
+    },
     "./comments": {
       "types": "./dist/integrations/comments/index.d.ts",
       "import": "./dist/integrations/comments/index.js"
@@ -221,6 +225,7 @@
     "jose": { "optional": true }
   },
   "devDependencies": {
+    "@sentropic/engram": "0.21.1",
     "@types/node": "^22.10.10",
     "typescript": "5.4.5"
   }
