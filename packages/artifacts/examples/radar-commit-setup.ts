@@ -122,7 +122,8 @@ const createParticipantFactory = (
       return { reserved: rowCount > 0 };
     },
     mintFence: (revision: string, invocationId: string) => ({
-      fenceId: transactionToken,
+      fenceId: `fence-${transactionToken}`,
+      transactionId: transactionToken,
       invocationId,
       policyRevision: revision,
     }),

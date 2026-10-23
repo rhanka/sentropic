@@ -74,14 +74,19 @@ export interface ArtifactCommitContext extends ArtifactInvocationContext {
  * Opaque fence minted by the transaction-bound policy participant. It is
  * bound to one transaction, one invocation and one revision, and is
  * verified by the coordinator; it cannot be synthesized from the revision
- * string. `mintFence` MUST return `fenceId` equal to the transaction token
- * the coordinator supplied to `createParticipant` for this transaction. The
- * coordinator rejects any fence whose `fenceId` differs from the current
- * transaction, whose invocation differs from the request, or whose revision
- * differs from the freshly re-read policy revision (`invalid_object`).
+ * string. This mirrors the frozen `ArtifactAuthorizationFence` role
+ * (`l0-freeze/commit-contract.ts`): the `transactionId` carries the binding
+ * to the coordinator-issued transaction, `fenceId` stays an opaque fence
+ * identity. `mintFence` MUST return `transactionId` equal to the transaction
+ * token the coordinator supplied to `createParticipant` for this
+ * transaction. The coordinator rejects any fence whose `transactionId`
+ * differs from the current transaction, whose `fenceId` is empty, whose
+ * invocation differs from the request, or whose revision differs from the
+ * freshly re-read policy revision (`invalid_object`).
  */
 export interface ArtifactAuthorizationFence {
   readonly fenceId: string;
+  readonly transactionId: string;
   readonly invocationId: string;
   readonly policyRevision: string;
 }
@@ -131,7 +136,14 @@ export interface ArtifactCommitTransaction {
   readonly participant: CommitPolicyParticipant;
 }
 
-/** Current policy reads and provisional quota reservation on this transaction. */
+/**
+ * Current policy reads and provisional quota reservation on this
+ * transaction. This is the mechanism-level seam behind the frozen
+ * `ArtifactCommitParticipant` role (`l0-freeze/commit-contract.ts`): the
+ * separate revision/approval reads (instead of one bundled admission read)
+ * exist so the coordinator can order the authority lock before the quota
+ * wait (A4.4) and re-read both after post-guard waits (A4.6).
+ */
 export interface CommitPolicyParticipant {
   /** Read the current policy revision row (shared lock) on this transaction. */
   readRevision(): Promise<string>;
@@ -353,7 +365,16 @@ export interface CommitCoordinatorOptions {
   readonly testPoints?: readonly CoordinatorTestPoint[];
 }
 
-/** The atomic finalization coordinator. */
+/**
+ * The atomic finalization coordinator mechanism. It implements the unit
+ * owned by the frozen `ArtifactCommitCoordinator` role
+ * (`l0-freeze/commit-contract.ts`): `finalize`/`replayGuarded` are the
+ * mechanism behind `finalizeOperation`/`replayOperation`. The frozen role
+ * binds `HttpRequest`/invocation/effective-command at the app layer (L5/L6
+ * composition); this interface operates on internal keys below that
+ * binding. The two layers share the fence/transaction/phase semantics, not
+ * the input types; no wrapper or private-type cast bridges them.
+ */
 export interface FinalizationCoordinator {
   finalize(request: FinalizeRequest): Promise<FinalizeResult>;
   replayGuarded(request: FinalizeRequest): Promise<FinalizeResult>;
