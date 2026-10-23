@@ -16,14 +16,21 @@ file freezes shapes, rules and quarantine behavior only.
   and caller scope fields leave the effective schema. The candidate path
   restrictions (1024-byte ceiling, `:` and DEL prohibition) move into
   schema, shared validation, migration notes and consumer fixtures.
-- Awaited (Q0): scope/subject domain examples, Unicode/whitespace/order
-  vectors, file-order cases, existing host path-policy deltas.
+- Awaited (Q0): scope/subject domain examples, existing host path-policy
+  deltas. Delivered: Unicode/whitespace/order vectors, file-order cases,
+  canonical command fixtures, separate-principal digests.
 
 ## Ask 2 — host authorization inside durable finalization
 
 - New: immutable invocation context, typed allow/deny decision and the
   atomic finalization unit with the frozen phase order (shapes in
   `l0-freeze/commit-contract.ts`).
+- Type gate: `npm run freeze-types` runs tsc-strict over `l0-freeze/`,
+  including the in-file compile-time assertions (opaque forgery rejection,
+  callable coordinator operations, wired validators, ordinary-failure
+  distinction). Promotion to `src/server/*` in L1/L3/L6 brings the standard
+  make typecheck/lint coverage; the tsconfig `rootDir: src` constraint keeps
+  the L0 freeze outside `src/` until then.
 - Migration: `createHttpArtifactApp`, `createPublicationService`, custom
   ensure implementations and PostgreSQL stores adopt the coordinator role
   in L3-L5. No 0.1.x-compatible callback-only patch can claim this guarantee.
@@ -49,18 +56,20 @@ file freezes shapes, rules and quarantine behavior only.
 
 ## Ask 4 — publication and receipts
 
-- Release train: L0–L8 topic PRs target `feat/artifacts-861-integration`,
-  never main; a single integrator rebases/merges reviewed topics into that
-  branch, no cherry-picks, no premature main merge. Main-only OIDC publish
-  predicates stay intact. The integration owner serially reserves and adds
-  the next pack-only `0.2.0-dev.N` / `0.22.0-dev.N` version commit to each
-  source-changing topic; no two lanes edit manifests or locks. These
-  versions exceed the registry baseline and are never published. No
-  candidate registry publication happens in L0. Final stable manifests
-  are packed on the integration branch in L8; only L9 merges to main after
-  the owner's publish GO, triggering stable publication under the default
-  tag. L0 changes no package version: the mesh peer range
-  (`>=0.1.3 <0.2.0`) stays frozen until L7.
+- Release train: L0–L8 topic PRs target `feat/immo-861-integration` (r2
+  §6.1 spelling; a conductor decision supersedes), never main; a single
+  integrator rebases/merges reviewed topics into that branch; no cherry-picks,
+  no premature main merge. PR #721 itself still targets main:
+  the conductor retargets it to the integration branch before merge.
+  Main-only OIDC publish predicates stay intact. The integration owner
+  serially reserves and adds the next pack-only `0.2.0-dev.N` /
+  `0.22.0-dev.N` version commit to each source-changing topic; no two lanes
+  edit manifests or locks. These versions exceed the registry baseline and
+  are never published. No candidate registry publication happens in L0.
+  Final stable manifests are packed on the integration branch in L8; only
+  L9 merges to main after the owner's publish GO, triggering stable
+  publication under the default tag. L0 changes no package version: the
+  mesh peer range (`>=0.1.3 <0.2.0`) stays frozen until L7.
 - Consumer baseline: Radar artifacts **0.1.2** (API and artifacts-host pins
   and lock), upstream source **0.1.4**; immo-mcp mcp-auth **^0.1.0** migrates
   to the exact qualified **0.2.x** (target 0.2.2, lock regenerated under
@@ -82,16 +91,22 @@ file freezes shapes, rules and quarantine behavior only.
 - Acceptance revisions (Radar commit
   `71f41b723219999646b1a16c9c7e1810684b7526` unless noted):
   `api/tests/integration/artifacts-commit-probe.spec.ts`
-  (`9b0f7e0d…f8faf`), `api/tests/integration/artifacts-mcp-adapter.spec.ts`
-  (`e5e3b4d1…f1c8e`), `packages/artifacts-host/src/commit-authorization.test.ts`
-  (`fc5709f1…8d0d88`), `packages/artifacts-host/src/commit-failures.test.ts`
-  (`77fcfe4b…1c38c84`), `packages/artifacts-host/src/mcp-app-adapter.test.ts`
-  (`982e8e63…51b7b8`), draft
-  `api/tests/integration/artifacts-provider-acceptance.spec.ts`
-  (`383192e6…9d68bd`). Pending Q1/Q2 delivery:
-  `artifacts-finalization-authorization` and `artifacts-provider-failures`
-  suites — record commit + SHA-256 on delivery; L8 cannot report their
-  coverage as passed until pinned.
+  (`9b0f7e0d374e47b10fb855c13edd832be480f7faf148f1dd94569265300228a2`),
+  `api/tests/integration/artifacts-mcp-adapter.spec.ts`
+  (`e5e3b4d15382713182d50eaed504ed1a3574c1b577d8684d6856f5c8f1c8e97e`),
+  `packages/artifacts-host/src/commit-authorization.test.ts`
+  (`fc5709f1b335de146a35252a7f5dad3f6c70caff741ec383f56110f0d888b4e6`),
+  `packages/artifacts-host/src/commit-failures.test.ts`
+  (`77fcfe4baf66a5652e2a79bdfb8b12271c38c84d23069ac3c84171be543da5d3`),
+  `packages/artifacts-host/src/mcp-app-adapter.test.ts`
+  (`982e8e435ba954bcc4cec8905b7c98e5d011d636512de1fbe94492d6605158cf`),
+  draft `api/tests/integration/artifacts-provider-acceptance.spec.ts`
+  (`383192e36780f363ed46568d1bab77ee81e91e9a763afd117d6ae53521c08bd7`,
+  exact local draft at
+  `/home/antoinefa/src/radar-immobilier/.worktrees/861c-provider-acceptance/`).
+  Pending Q1/Q2 delivery: `artifacts-finalization-authorization` and
+  `artifacts-provider-failures` suites — record commit + SHA-256 on delivery;
+  L8 cannot report their coverage as passed until pinned.
 - Awaited (Q0/Q3/Q4): trusted `storageScopeId` injection evidence, prior
   key behavior, pilot-state inventory for legacy quarantine, and the Q3
   cross-process/restart/sixteen-tool parity suite. No automatic SQL/S3
