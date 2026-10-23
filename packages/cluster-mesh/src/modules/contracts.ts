@@ -11,6 +11,15 @@ export const CLUSTER_MESH_PROVIDER_MODULE_IDS = [
   'gateway',
   'gateway/auth',
   'gateway/auth-hono',
+  'mcp-platform/registry',
+  'mcp-platform/entry',
+  'mcp-platform/bridge',
+  'mcp-platform/tool-schemas',
+  'mcp-platform/result-codec',
+  'mcp-platform/hono',
+  'mcp-platform/stdio',
+  'mcp/artifacts',
+  'comments',
 ] as const;
 
 /** Catalogued capabilities not delivered by this release; always gated `source_unavailable`. */
@@ -25,7 +34,6 @@ export const CLUSTER_MESH_GATED_MODULE_IDS = [
   'auth-hono',
   'chat-server',
   'flow',
-  'comments',
   'connector-host',
   'harness',
   'memory',

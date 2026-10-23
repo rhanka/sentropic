@@ -47,7 +47,7 @@ describe('module registry', () => {
     const modules = registry();
     const failure = modules.load('llm-mesh/facade');
     await expect(failure).rejects.toThrow(
-      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.27.0" and restart.',
+      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.28.0" and restart.',
     );
     const error = await failure.catch((caught: unknown) => caught);
     expect(isClusterMeshModuleUnavailableError(error)).toBe(true);
@@ -67,7 +67,7 @@ describe('module registry', () => {
   });
 
   it.each([
-    ['0.27.0', '0.27.0'],
+    ['0.28.0', '0.28.0'],
     ['0.21.2', '0.21.2'],
     ['0.22.1-rc.1', '0.22.1-rc.1'],
   ])('should refuse llm-mesh %s as incompatible_version', async (version, installedVersion) => {
@@ -76,6 +76,11 @@ describe('module registry', () => {
       reason: 'incompatible_version', packageName: '@sentropic/llm-mesh', installedVersion,
     });
     expect(evaluations()).toEqual([]);
+  });
+
+  it('should admit llm-mesh 0.26.0 inside the #662 union range', async () => {
+    tree.install('app', fakeMesh('mesh', '0.26.0'));
+    await expect(registry().load('llm-mesh')).resolves.toBeDefined();
   });
 
   it('should refuse unreadable version evidence as incompatible_version', async () => {
@@ -172,7 +177,7 @@ describe('module registry', () => {
   it('should list the catalog with delivered and source-unavailable entries', () => {
     const catalog = registry().catalog();
     expect(catalog.find((entry) => entry.id === 'gateway/auth')).toMatchObject({
-      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.19.0 <0.21.0',
+      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.19.0 <0.22.0',
       peers: [
         { packageName: '@sentropic/mcp-auth', entry: '@sentropic/mcp-auth/hono', requiredRange: '>=0.2.1 <0.3.0' },
         { packageName: 'jose', entry: 'jose', requiredRange: '^5.10.0' },
@@ -191,11 +196,18 @@ describe('release range check', () => {
     ['0.25.0', '>=0.22.0 <0.26.0', true],
     ['0.25.9', '>=0.22.0 <0.26.0', true],
     ['0.26.0', '>=0.22.0 <0.26.0', false],
+    ['0.26.0', '>=0.22.0 <0.27.0', true],
+    ['0.27.0', '>=0.22.0 <0.27.0', false],
+    ['0.20.0', '>=0.19.0 <0.21.0', true],
+    ['0.21.0', '>=0.19.0 <0.21.0', false],
     ['0.21.2', '>=0.22.0 <0.26.0', false],
     ['5.10.3', '^5.10.0', true],
     ['6.0.0', '^5.10.0', false],
     ['0.15.4', '^0.15.0', true],
     ['0.16.0', '^0.15.0', false],
+    ['0.15.2', '>=0.15.0 <0.17.0', true],
+    ['0.16.0', '>=0.15.0 <0.17.0', true],
+    ['0.17.0', '>=0.15.0 <0.17.0', false],
     ['0.19.0-beta.1', '>=0.19.0 <0.20.0', false],
     ['0.19.0+build.7', '>=0.19.0 <0.20.0', true],
     ['0.20.0+build.7', '>=0.19.0 <0.20.0', false],

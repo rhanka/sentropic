@@ -79,6 +79,10 @@ export const createSentropicOAuthOptions = (request?: Request) => ({
   authorizationCodeTtlSeconds: env.OAUTH_AUTHORIZATION_CODE_TTL_SEC,
   consentUrl: `${resolveOAuthUiBaseUrl(request)}/auth/oauth/consent`,
   dpopIatSkewSeconds: env.OAUTH_DPOP_IAT_SKEW_SEC,
+  // 2-IdP: no separate exchange environment gate. The environment binding is carried by the
+  // workload policy's exact subject/target audience entries (per-environment rows and
+  // credentials, no wildcards), so the host passes no environment string here.
+  exchangeEnvironment: null,
   idTokenTtlSeconds: env.OAUTH_ID_TOKEN_TTL_SEC,
   issuer: resolveOAuthIssuer(request),
   loginUrl: `${resolveOAuthUiBaseUrl(request)}/auth/login`,

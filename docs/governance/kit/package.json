@@ -1,0 +1,24 @@
+{
+  "name": "focus-sentropic-cm-adoption-kit",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && node scripts/build-portable.mjs"
+  },
+  "dependencies": {
+    "@sentropic/design-system-svelte": "0.34.69",
+    "@sentropic/design-system-themes": "0.11.0",
+    "@xyflow/svelte": "1.6.5",
+    "mermaid": "11.12.0",
+    "svelte": "5.56.4"
+  },
+  "overrides": {
+    "dompurify": "3.4.17"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "6.2.4",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  }
+}

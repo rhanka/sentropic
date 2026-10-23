@@ -86,6 +86,34 @@ Idempotent upsert on `client_id`; `tenant_id` defaults to `sentropic`. Check the
 `kubectl -n <ns> exec <api-pod> -- ls dist/scripts/`. Older images have neither the compiled script
 nor `tsx` (pruned by `npm prune --omit=dev`), and need the SQL upsert instead.
 
+Governed path (D1): the versioned one-off Job
+`deploy/k8s/base/36-oauth-register-client-job.yaml` via
+`make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`
+(BR45-EX1). The secret travels only via the temporary
+`oauth-client-registration` Secret (`envFrom`), never CLI literals.
+
+Per-client MFA policy (B3/C1): a 2FA-only client sets
+`OAUTH_CLIENT_REQUIRED_ACR=urn:sentropic:loa:passkey-fresh` (bearer sessions
+refused at authorize with `access_denied`) and optionally
+`OAUTH_CLIENT_ALLOWED_USER_IDS=<owner-sub,...>` (non-listed subjects refused
+before consent). Absent both, the client keeps the legacy behavior. Rotation:
+`docs/oauth-client-rotation.md` (90-day cycle, immediate cutover).
+
+Recovery, method-neutral level, freshness, and the KVM onboarding that
+extend this B3/C1 policy are specified in
+[SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md](SPEC_EVOL_IDP_PER_APP_MFA_RECOVERY.md).
+
+Per-client OAuth refresh tokens: clients that require silent offline renewal
+(starting with `immo-mcp` / `immo-mcp-preprod` and other Sentropic MCP clients)
+opt in explicitly via `OAUTH_CLIENT_GRANT_TYPES=authorization_code,refresh_token`
+and `offline_access` in `OAUTH_CLIENT_SCOPES`; issued refresh token families
+(`oauth_refresh_tokens`, 15-day absolute ceiling, single-use rotation, reuse
+detection) are strictly tier-local and never cross between prod and non-prod.
+See [SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md](SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md).
+Offline consent also stays local to the exact issuer, client, tenant, scopes and
+resource/default audience. A synchronized `offline_access` scope string cannot
+replace local approval; policy removal permanently invalidates affected families.
+
 Hashing the secret by hand: `printf '%s' "$SECRET" | sha256sum`, **never** `echo` — a trailing
 newline yields a different hash, and the symptom is an `invalid_client` indistinguishable from a
 wrong client id.

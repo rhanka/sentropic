@@ -16,7 +16,7 @@ export const appendParams = (
 
 export const oauthJsonError = (
   c: Context,
-  status: 400 | 401,
+  status: 400 | 401 | 403,
   code: string,
   message: string
 ): Response =>
@@ -38,19 +38,20 @@ export const redirectWithOAuthError = (
   // RFC 9207: the authorization-server issuer identifier, echoed on the error authorization
   // response so a mix-up-defending client can bind the response to the AS it started with.
   issuer?: string | null
-): Response =>
-  Response.redirect(
-    appendParams(
-      redirectUri,
-      {
-        error: code,
-        iss: issuer,
-        state,
-      },
-      baseUrl
-    ),
-    302
+): Response => {
+  // NOTE: never `Response.redirect()` here: it seals the headers immutable and
+  // crashes header-mutating middleware (e.g. secure-headers) mounted by hosts.
+  const location = appendParams(
+    redirectUri,
+    {
+      error: code,
+      iss: issuer,
+      state,
+    },
+    baseUrl
   );
+  return new Response(null, { headers: { Location: location }, status: 302 });
+};
 
 export const redirectOrJson = (c: Context, redirectTo: string): Response => {
   const accept = c.req.header('accept') ?? '';

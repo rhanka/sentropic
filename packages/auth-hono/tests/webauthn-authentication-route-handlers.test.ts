@@ -30,6 +30,7 @@ const service = (
   verifyAuthentication: async () => ({
     credentialId: 'credential-id',
     userId: 'user-1',
+    userVerified: true,
     verified: true,
   }),
   ...overrides,
@@ -88,6 +89,7 @@ describe('createAuthWebAuthnAuthenticationRouteHandlers', () => {
           return {
             credentialId: 'credential-id',
             userId: 'user-1',
+            userVerified: true,
             verified: true,
           };
         },
@@ -104,6 +106,7 @@ describe('createAuthWebAuthnAuthenticationRouteHandlers', () => {
       credentialId: 'credential-id',
       success: true,
       userId: 'user-1',
+      userVerified: true,
     });
   });
 
@@ -175,13 +178,16 @@ describe('createAuthWebAuthnAuthenticationRouteHandlers', () => {
   });
 
   it('delegates verify success to finalizeAuthentication when provided', async () => {
+    const seen: unknown[] = [];
     const response = await createAuthRouter({
       handlers: createAuthWebAuthnAuthenticationRouteHandlers({
-        finalizeAuthentication: async (input, c) =>
-          c.json(
-            { credentialId: input.credentialId, host: true, userId: input.userId },
+        finalizeAuthentication: async (input, c) => {
+          seen.push(input);
+          return c.json(
+            { credentialId: input.credentialId, host: true, userId: input.userId, userVerified: input.userVerified },
             200
-          ),
+          );
+        },
         resolveAuthenticationOptions: async () => ({ userId: undefined }),
         service: service(),
       }),
@@ -197,6 +203,10 @@ describe('createAuthWebAuthnAuthenticationRouteHandlers', () => {
       credentialId: 'credential-id',
       host: true,
       userId: 'user-1',
+      userVerified: true,
     });
+    expect(seen).toEqual([
+      expect.objectContaining({ credentialId: 'credential-id', userId: 'user-1', userVerified: true }),
+    ]);
   });
 });

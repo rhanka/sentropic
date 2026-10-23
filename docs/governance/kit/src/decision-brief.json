@@ -1,0 +1,51 @@
+{
+  "central": {
+    "title": "Décisions et suites",
+    "paragraphs": [
+      "G1 répartit les responsabilités ; G2 sépare profils et moteur de diagramme ; G3 confie la présentation d’annotate au Design System et les données à Sentropic.",
+      "H1 · Acté le 19 octobre 2026 : « il faut prevoir les 2 ». Chaque application Sentropic doit permettre l’hébergement des artefacts sur un sous-domaine ou sur un domaine distinct.",
+      "Le propriétaire doit fournir sa carte de capacités. Les quatre responsables de projet doivent qualifier les intégrations avant leur adoption."
+    ]
+  },
+  "capabilities": {
+    "title": "Capacités à valider",
+    "paragraphs": ["Proposition à confronter à la carte du propriétaire. Chaque ligne désigne un seul responsable d’intégration ; les autres projets contribuent."],
+    "columns": ["Capacité", "Responsable proposé", "Contributeurs"],
+    "rows": [
+      ["C01 · Organisation humains et agents", "h2a", "Sentropic · Engram"],
+      ["C02 · Livraison gouvernée", "h2a", "Sentropic"],
+      ["C03 · Décisions du propriétaire", "h2a", "Design System · Sentropic · Engram"],
+      ["C04 · Traçabilité jusqu’à la production", "h2a", "Sentropic · Engram · chaque dépôt"],
+      ["C05 · Mémoire des agents", "Engram", "Sentropic · h2a"],
+      ["C06 · Connaissance du code et de Git", "Engram", "Sentropic · h2a"],
+      ["C07 · Architecture et ontologies", "Engram", "h2a · Sentropic · Design System · bpmn-canvas · d2d"],
+      ["C08 · Découverte et distribution", "Sentropic", "h2a · Engram · Design System"],
+      ["C09 · Canvas UI", "Design System", "Sentropic · h2a"],
+      ["C10 · Modèles et artefacts", "Sentropic", "Applications · Engram"],
+      ["C11 · Annotations", "Sentropic", "Design System · h2a · Engram"],
+      ["C12 · Identité et accès", "Sentropic", "h2a"],
+      ["C13 · Exécution IA et appareils", "Sentropic", "h2a"],
+      ["C14 · Apprentissage et références de temps", "Engram", "h2a · Sentropic"]
+    ]
+  },
+  "ontologies": {
+    "title": "Application de G2",
+    "paragraphs": ["Engram gouverne les profils ; les responsables métier en approuvent le sens. Le Design System publie le moteur, la mise en page et le rendu. Les consommateurs doivent qualifier ensemble le moteur et les profils épinglés, sans second modèle."]
+  },
+  "memory": {
+    "title": "La mémoire en premier",
+    "paragraphs": ["Sentropic doit qualifier l’hôte MCP avec les six outils mémoire d’Engram avant l’exposition au catalogue. Les travaux sur les ontologies ne bloquent pas cette étape. Engram reste responsable de la mémoire et des références de temps D1=C ; h2a fournit le contexte de session."]
+  },
+  "migration": {
+    "title": "Qui fait quoi ensuite ?",
+    "paragraphs": ["Les décisions sont prises ; la mise en œuvre reste à qualifier. Conserver la dernière version qualifiée jusqu’à validation de chaque remplacement."],
+    "columns": ["Étape", "Responsable", "Résultat attendu"],
+    "rows": [
+      ["M1 · Mémoire", "Sentropic · Engram", "Qualifier les six outils mémoire avant le catalogue."],
+      ["M2 · Contrats et catalogue", "Les quatre projets", "Appliquer G1–G3 ; publier les canvas au catalogue et via MCP, sur artifacts, avec les deux modes d’hébergement H1."],
+      ["M3 · Annotations", "Sentropic · Design System", "Qualifier la capture, la résolution et la persistance, avec contrôle des accès."],
+      ["M4 · Diagrammes", "Design System · Engram", "Remplacer l’adaptateur provisoire par le moteur publié et les profils épinglés."],
+      ["M5–M6 · Livraison et transferts", "Chaque dépôt et application destinataire", "Prouver séparément publication, installation et acceptation ; faire acquitter les transferts par les destinataires."]
+    ]
+  }
+}

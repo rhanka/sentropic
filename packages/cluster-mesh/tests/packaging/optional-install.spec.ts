@@ -31,10 +31,10 @@ describe.skipIf(!enabled)('packed optional install', () => {
     expect(result.loaders).toHaveLength(LOADERS.length);
     expect(result.refusal).toEqual({
       recognized: true, code: 'cluster_mesh_module_unavailable', reason: 'not_installed',
-      message: 'Cluster Mesh module "llm-mesh" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.27.0" and restart.',
+      message: 'Cluster Mesh module "llm-mesh" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.28.0" and restart.',
     });
     expect(result.probe).toEqual({
-      gateway: { availability: 'gated', state: 'unavailable', reason: 'not_installed', packageName: '@sentropic/llm-gateway', requiredRange: '>=0.19.0 <0.21.0' },
+      gateway: { availability: 'gated', state: 'unavailable', reason: 'not_installed', packageName: '@sentropic/llm-gateway', requiredRange: '>=0.19.0 <0.22.0' },
       mcpTrack: { availability: 'gated', state: 'unavailable', reason: 'source_unavailable' },
     });
   });
@@ -84,13 +84,13 @@ describe.skipIf(!enabled)('packed optional install', () => {
       console.log(JSON.stringify({
         identical: leaf.createLlmMesh === provider.createLlmMesh,
         service: typeof service.ServiceAuthVerifyToken,
-        session: { code: session.code, reason: session.reason, packageName: session.packageName },
+        session: typeof session.AuthHonoVerifyToken,
         health: (await router.request('/healthz')).status,
         sharedMesh: report.gateway.llmMesh.path === report.llmMesh.path,
       }));`);
     expect(result).toEqual({
       identical: true, service: 'function',
-      session: { code: 'cluster_mesh_module_unavailable', reason: 'not_installed', packageName: '@sentropic/auth-hono' },
+      session: 'function',
       health: 200, sharedMesh: true,
     });
     expect(read(join(fixtureDir('selected'), 'tuple.txt'))).toContain(`@sentropic/llm-gateway@${trainVersion('llm-gateway')}`);

@@ -172,6 +172,8 @@ BEGIN
 END $$;
 \i /sql/client-policy.sql
 \i /sql/sync-clients.sql
+\i /sql/service-policy.sql
+\i /sql/sync-services.sql
 
 -- 6. Explicit prod consents converge only for mapped clients and prod users.
 CREATE TEMP TABLE src_consents (LIKE oauth_consents INCLUDING DEFAULTS) ON COMMIT DROP;
@@ -238,6 +240,17 @@ BEGIN
      OR (SELECT row(signing_keys, signing_keys_fp) FROM inv_before) IS DISTINCT FROM
         (SELECT row(count(*), md5(string_agg(t::text, '|' ORDER BY t.kid))) FROM id_token_signing_keys t)
     THEN RAISE EXCEPTION 'post: DV5 invariant changed (oauth_clients / signing keys)'; END IF;
+END $$;
+-- 7a. Service clients: every row except the workload exchange_policy is byte-identical,
+-- so the workload keeps its local id and secret hash (sync-services.sql already proved it).
+DO $$
+BEGIN
+  IF EXISTS ((SELECT to_jsonb(s) - 'exchange_policy' FROM services_before s
+              EXCEPT SELECT to_jsonb(c) - 'exchange_policy' FROM service_clients c)
+             UNION ALL
+             (SELECT to_jsonb(c) - 'exchange_policy' FROM service_clients c
+              EXCEPT SELECT to_jsonb(s) - 'exchange_policy' FROM services_before s))
+    THEN RAISE EXCEPTION 'post: service_clients invariant changed'; END IF;
 END $$;
 
 -- Audit (IDs and counts only).

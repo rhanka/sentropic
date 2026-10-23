@@ -1,4 +1,6 @@
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import type { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 
 export type McpConnectorIntent = {
   connectorId: string;
@@ -35,6 +37,20 @@ export interface McpInvocationPort {
   }): Promise<McpInvocationDecision>;
 }
 
+export interface McpSdkMount {
+  /** SDK server with bridge tools already registered by the host. */
+  server: Server;
+  /** SDK transport factory (the host owns sessions via its options). */
+  createTransport(): WebStandardStreamableHTTPServerTransport;
+  /**
+   * Stateful mount: one transport is created and connected at mount time and
+   * reused across requests (the factory must enable sessions, e.g. with a
+   * `sessionIdGenerator`). Stateless mount (default): one transport per
+   * request, as the SDK requires.
+   */
+  stateful?: boolean;
+}
+
 export interface McpHonoOptions {
   auth: {
     routes: Hono;
@@ -45,6 +61,8 @@ export interface McpHonoOptions {
   connector: McpConnectorPort;
   invocation?: McpInvocationPort;
   enabled?: () => boolean;
+  /** Optional real-SDK Streamable HTTP mount (Lot 5); absent means no `/mcp`. */
+  mcp?: McpSdkMount;
 }
 
 const asIntent = (input: unknown): McpConnectorIntent | null => {
@@ -132,6 +150,29 @@ export const createMcpPlatformHono = (options: McpHonoOptions): Hono => {
   app.use('/resources/read', options.auth.require([options.auth.scopes.read]));
   app.post('/resources/read', handle('read'));
 
+  if (options.mcp) {
+    // Real-SDK Streamable HTTP mount. B1: authentication is enforced at this
+    // mount (invoke scope); per-request identity stays host-owned through its
+    // registered server and mount identity — never client headers.
+    const mount = options.mcp;
+    app.use('/mcp', options.auth.require([options.auth.scopes.invoke]));
+    if (mount.stateful) {
+      const transport = mount.createTransport();
+      const ready = mount.server.connect(transport);
+      app.all('/mcp', async (c) => {
+        await ready;
+        return transport.handleRequest(c.req.raw);
+      });
+    } else {
+      // Stateless: the SDK requires a fresh transport per request.
+      app.all('/mcp', async (c) => {
+        const transport = mount.createTransport();
+        await mount.server.connect(transport);
+        return transport.handleRequest(c.req.raw);
+      });
+    }
+  }
+
   app.use('/', options.auth.require([]));
   app.post('/', async (c) => {
     const body: unknown = await c.req.json().catch(() => undefined);
@@ -147,7 +188,7 @@ export const createMcpPlatformHono = (options: McpHonoOptions): Hono => {
         result: {
           protocolVersion: '2025-06-18',
           capabilities: { resources: {}, tools: {} },
-          serverInfo: { name: '@sentropic/mcp-platform', version: '0.2.0' },
+          serverInfo: { name: '@sentropic/mcp-platform', version: '0.3.0' },
         },
       });
     }

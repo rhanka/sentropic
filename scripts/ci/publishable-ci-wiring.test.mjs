@@ -164,7 +164,7 @@ const TRAIN_VALIDATES = [['validate-llm-mesh', 'llm_mesh'], ['validate-llm-gatew
 const TRAIN_UPSTREAMS = {
   'publish-llm-mesh': [],
   'publish-llm-gateway': [['publish-llm-mesh', 'llm_mesh_publish']],
-  'publish-cluster-mesh': [['publish-llm-mesh', 'llm_mesh_publish'], ['publish-llm-gateway', 'llm_gateway_publish'], ['publish-events', 'events_publish'], ['publish-contracts', 'contracts_publish']],
+  'publish-cluster-mesh': [['publish-llm-mesh', 'llm_mesh_publish'], ['publish-llm-gateway', 'llm_gateway_publish'], ['publish-events', 'events_publish'], ['publish-contracts', 'contracts_publish'], ['publish-mcp-platform', 'mcp_platform_publish'], ['publish-artifacts', 'artifacts_publish']],
 };
 
 test('publisher ordering: gateway waits for mesh; N1 lockstep siblings gate mcp-auth and cluster-mesh', () => {
@@ -217,17 +217,42 @@ test('lint wiring follows baseline evidence, independently per package, before t
 });
 
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
-const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0';
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.1.3,jose@5.10.0,@sentropic/comments@0.3.0';
+
+test('cluster-mesh qualification installs every declared optional Sentropic peer', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages/cluster-mesh/package.json'), 'utf8'));
+  const required = Object.keys(manifest.peerDependencies).filter((name) =>
+    name.startsWith('@sentropic/') && manifest.peerDependenciesMeta?.[name]?.optional);
+  const steps = [
+    jobs['validate-cluster-mesh'].steps.find((s) => s.name === 'Qualify Cluster Mesh candidate install'),
+    jobs['publish-cluster-mesh'].steps.find((s) => s.run?.includes('make qualify-published-install PKG=')),
+    jobs['bootstrap-publish'].steps.find((s) => s.name === 'Qualify bootstrap-published cluster-mesh'),
+  ];
+  for (const step of steps) {
+    const peers = step.run.match(/\bPEERS=(\S+)/)?.[1].split(',') ?? [];
+    assert.equal(` PEERS=${peers.join(',')}`, CLUSTER_MESH_PEERS, `${step.name}: complete release tuple`);
+    assert.ok(!peers.some((spec) => spec.startsWith('@sentropic/mcp-platform@')), 'platform resolves transitively');
+    for (const name of required) {
+      assert.ok(peers.some((spec) => spec.startsWith(`${name}@`)), `${step.name}: missing optional peer ${name}`);
+    }
+  }
+});
 
 test('candidate and post-publication qualification for mcp-auth and cluster-mesh', () => {
   for (const [slug, peers] of [['mcp-auth', ' PEERS=hono@4.10.7'], ['cluster-mesh', CLUSTER_MESH_PEERS]]) {
     const steps = jobs[`validate-${slug}`].steps;
     const pack = steps.find((s) => s.id === 'pack');
     assert.equal(pack.run, `make pack-${slug} PACK_DESTINATION=tmp/ci-manifest-guard/candidate/${slug} PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-${slug}`);
-    const gated = steps.filter((s) => s.if === "steps.pack.outputs.manifest_mode == 'block'");
-    assert.equal(gated[0].run, `make pack-candidate-siblings PACKAGE=${slug} SIBLING_DIR=tmp/ci-manifest-guard/siblings/${slug} ENV=test-ci-${slug}`);
-    assert.equal(gated[1].env.CANDIDATE_TARBALL, '${{ steps.pack.outputs.tarball }}');
-    assert.equal(gated[1].run, `make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/${slug}/receipts.json${peers} REPORT_DIR=tmp/ci-manifest-guard/qualify-${slug} ENV=test-ci-${slug}`);
+    const siblings = steps.find((s) => s.run?.startsWith('make pack-candidate-siblings '));
+    const qualify = steps.find((s) => s.run?.startsWith('make qualify-published-install TARBALL='));
+    assert.equal(siblings.run, `make pack-candidate-siblings PACKAGE=${slug} SIBLING_DIR=tmp/ci-manifest-guard/siblings/${slug} ENV=test-ci-${slug}`);
+    // An unchanged mesh can still consume a BLOCK sibling; classification belongs to the sibling packer.
+    assert.equal(siblings.if, slug === 'cluster-mesh' ? undefined : "steps.pack.outputs.manifest_mode == 'block'");
+    for (const [key, value] of Object.entries(CTX)) assert.equal(siblings.env[key], value);
+    assert.ok(steps.indexOf(pack) < steps.indexOf(siblings) && steps.indexOf(siblings) < steps.indexOf(qualify), `${slug}: pack candidate and siblings before qualification`);
+    assert.equal(qualify.if, "steps.pack.outputs.manifest_mode == 'block'");
+    assert.equal(qualify.env.CANDIDATE_TARBALL, '${{ steps.pack.outputs.tarball }}');
+    assert.equal(qualify.run, `make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/${slug}/receipts.json${peers} REPORT_DIR=tmp/ci-manifest-guard/qualify-${slug} ENV=test-ci-${slug}`);
     const publish = jobs[`publish-${slug}`].steps;
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));
@@ -283,6 +308,11 @@ test('release train: validation barrier, strict chain, serialization, lock-sync 
   const index = (pattern) => steps.findIndex((s) => pattern.test(s.run ?? ''));
   const lazy = index(/packaging\.mk test-lazy-package/);
   assert.ok(index(/make pack-cluster-mesh /) < index(/make pack-candidate-siblings /) && index(/make pack-candidate-siblings /) < lazy, 'candidate and siblings packed before the lazy qualification');
+  for (const target of ['cluster-mesh-comments-installed', 'cluster-mesh-pg-major-upgrade']) {
+    const installed = index(new RegExp(`\\b${target} `));
+    assert.ok(index(/make pack-candidate-siblings /) < installed, `${target}: embedded candidates packed first`);
+    assert.match(steps[installed].run, /SIBLING_ARCHIVES_FILE=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
+  }
   assert.equal(steps[lazy].if, undefined, 'lazy qualification always runs');
   assert.match(steps[lazy].run, /if \[ -f "\$receipts" \]; then\n\s*make -f packages\/cluster-mesh\/packaging\.mk test-lazy-package SIBLING_ARCHIVES_FILE="\$receipts" ENV=test\n\s*else\n\s*make -f packages\/cluster-mesh\/packaging\.mk test-lazy-package ENV=test\n\s*fi/);
   assert.match(steps[lazy].run, /receipts=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
@@ -302,8 +332,10 @@ test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publis
     if (name.endsWith('-token')) assert.match(body, /NPM_TOKEN_FILE/);
     else assert.match(body, /-e ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
   }
-  assert.match(recipe('publish-cluster-mesh-token'), /--access public --no-provenance\)/);
-  assert.match(recipe('publish-auth-hono-token'), /--access public --provenance=false\)/);
+  for (const slug of STEADY_STATE_PUBLISHERS) {
+    assert.match(recipe(`publish-${slug}-token`) ?? '', new RegExp(`\\$\\(call manifest_guard_publish,${slug},--access public --provenance=false\\)`), `publish-${slug}-token disables provenance on the token path`);
+    assert.doesNotMatch(recipe(`publish-${slug}`) ?? '', /provenance/, `publish-${slug} keeps provenance for OIDC publishes`);
+  }
   assert.match(recipe('publish-chat-ui'), /make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/);
 });
 

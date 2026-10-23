@@ -6,7 +6,7 @@ import type { OAuthContinuationCodec, OAuthContinuationState } from './state-cod
 import { appendParams, oauthJsonError, redirectWithOAuthError } from './http-utils.js';
 import { issueAuthorizedCode } from './issue-authorized-code.js';
 import { validateRedirectUri } from './redirect-utils.js';
-import { resolveOAuthAcr, resolveOAuthSession } from './session-resolver.js';
+import { resolveOAuthAcr, resolveOAuthAmr, resolveOAuthSession } from './session-resolver.js';
 
 export interface OAuthAuthorizeHandlerOptions {
   authorizationCodeTtlSeconds?: number;
@@ -73,6 +73,24 @@ export const createOAuthAuthorizeHandler =
       }
     }
 
+    // B3: per-client minimum ACR. A live session below the required level is
+    // treated like `prompt=login`: redirect to login for a forced re-auth. If
+    // the resumed session is still insufficient (magic-link/federation bearer),
+    // the resume path refuses with `access_denied`.
+    if (session && !meetsRequiredAcr(resolveOAuthAcr(session.sessionRecord), validation.client.requiredAcr)) {
+      forceReauth = true;
+    }
+
+    // C1: per-client subject allowlist, enforced before consent. A live session
+    // for a non-listed subject is refused immediately (`access_denied`) — UNLESS
+    // a forced re-auth is already in effect (`prompt=login`/`select_account`,
+    // `login_hint` mismatch, insufficient ACR): then the flow proceeds to login
+    // so a different (allowlisted) account can authenticate. The resume path
+    // refuses with `access_denied` if the post-login subject is still listed out.
+    if (session && !forceReauth && !isSubjectAllowed(session.user.id, validation.client.allowedUserIds)) {
+      return redirectWithOAuthError(validation.redirectUri, 'access_denied', validation.state, c.req.url, options.issuer);
+    }
+
     if (!session || forceReauth) {
       if (prompts.has('none')) {
         // `prompt=none` cannot be satisfied without re-auth: surface the precise OIDC error.
@@ -103,8 +121,9 @@ export const createOAuthAuthorizeHandler =
       return c.redirect(appendParams(options.loginUrl, loginParams, c.req.url), 302);
     }
 
-    const consentState: Pick<OAuthContinuationState, 'acr' | 'authTime' | 'userId'> = {
+    const consentState: Pick<OAuthContinuationState, 'acr' | 'amr' | 'authTime' | 'userId'> = {
       acr: resolveOAuthAcr(session.sessionRecord),
+      amr: resolveOAuthAmr(session.sessionRecord),
       authTime: session.sessionRecord.createdAt.toISOString(),
       userId: session.user.id,
     };
@@ -227,6 +246,17 @@ const resumeLoginContinuation = async (
     return c.redirect(appendParams(options.loginUrl, { continue: continuation }, c.req.url), 302);
   }
 
+  // B3+C1 (resume): the post-login session must satisfy the client policy. A
+  // still-insufficient level (magic-link/federation bearer after a forced
+  // re-auth) or a non-allowlisted subject is refused with `access_denied`
+  // rather than looping back to login.
+  if (!isSubjectAllowed(session.user.id, client.allowedUserIds)) {
+    return redirectWithOAuthError(payload.redirectUri, 'access_denied', payload.state, c.req.url, options.issuer);
+  }
+  if (!meetsRequiredAcr(resolveOAuthAcr(session.sessionRecord), client.requiredAcr)) {
+    return redirectWithOAuthError(payload.redirectUri, 'access_denied', payload.state, c.req.url, options.issuer);
+  }
+
   // ARCH-11 §4.2.4: the continuation was sealed BEFORE login, so `deriveAuthorizeTenantId` ran with
   // no `userId` and necessarily returned null (`if (!userId) return null`). Re-derive it HERE, now
   // that the session identifies the principal, and seal THAT value. Spreading `...payload` alone
@@ -262,6 +292,7 @@ const resumeLoginContinuation = async (
   // added to the state type. The compiler backstops four fields; it will not remind you.
   const {
     acr: _preLoginAcr,
+    amr: _preLoginAmr,
     authTime: _preLoginAuthTime,
     createdAt: _preLoginCreatedAt,
     expiresAt: _preLoginExpiresAt,
@@ -274,6 +305,7 @@ const resumeLoginContinuation = async (
   const sealedState = await options.stateCodec.seal({
     ...restFromRequest,
     acr: resolveOAuthAcr(session.sessionRecord),
+    amr: resolveOAuthAmr(session.sessionRecord),
     authTime: session.sessionRecord.createdAt.toISOString(),
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
@@ -362,6 +394,27 @@ const validateScope = (
 };
 
 /**
+ * B3: minimum-ACR check. No policy (null/undefined/empty) allows any session
+ * (zero change for existing clients). `passkey-fresh` requires exactly that
+ * level; `bearer` allows any session. Unknown required values fail closed.
+ */
+export const meetsRequiredAcr = (sessionAcr: string, requiredAcr?: string | null): boolean => {
+  if (!requiredAcr) return true;
+  if (requiredAcr === 'urn:sentropic:loa:passkey-fresh') return sessionAcr === requiredAcr;
+  if (requiredAcr === 'urn:sentropic:loa:bearer') return true;
+  return false;
+};
+
+/**
+ * C1: subject-allowlist check. An empty/absent list allows every subject (zero
+ * change for existing clients); otherwise the session user id must be listed.
+ */
+export const isSubjectAllowed = (userId: string, allowedUserIds?: string[] | null): boolean => {
+  if (!allowedUserIds || allowedUserIds.length === 0) return true;
+  return allowedUserIds.includes(userId);
+};
+
+/**
  * RFC 8707 resource indicator validation on the `authorization_code` flow (BR-39l Lot 2).
  * - C1 single-aud: more than one `resource` value ⇒ `invalid_target` (no multi-audience tokens).
  * - C2 default-deny allowlist: a requested `resource` must be in `client.resourceIndicators`,
@@ -394,7 +447,7 @@ const sealContinuation = async (
   c: Context,
   options: OAuthAuthorizeHandlerOptions,
   request: ValidatedAuthorizeRequest,
-  session?: Pick<OAuthContinuationState, 'acr' | 'authTime' | 'userId'>,
+  session?: Pick<OAuthContinuationState, 'acr' | 'amr' | 'authTime' | 'userId'>,
   forceReauth?: Pick<OAuthContinuationState, 'forceReauth' | 'forceReauthSessionId'>
 ): Promise<string> => {
   const now = options.ports.clock.now();
@@ -414,6 +467,7 @@ const sealContinuation = async (
 
   return options.stateCodec.seal({
     acr: session?.acr,
+    amr: session?.amr,
     authTime: session?.authTime,
     clientId: request.client.clientId,
     codeChallenge: request.codeChallenge,

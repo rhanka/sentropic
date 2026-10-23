@@ -19,6 +19,8 @@ import {
 } from './admission.js';
 
 export interface RouteAttemptSettlement {
+  readonly reportedUsage?: boolean;
+  readonly observedServedModel?: string;
   readonly candidateRef: string;
   readonly providerId: string;
   readonly modelId: string;
@@ -49,6 +51,11 @@ export interface RouteMeteringSink {
 }
 
 export interface RouteFlowDeps {
+  readonly requestAudit?: {
+    admit(input: { cost: CostContext; requestId: string; model: string }): Promise<{ receiptId: string }>;
+    refuse?(receiptId: string): Promise<void>;
+    beginAttempt?(input: { cost: CostContext; attemptRef: string; diagnostic: RoutePlan['diagnostics'][number] }): Promise<void>;
+  };
   readonly dispatch?: RouteAttemptDispatchPort;
   readonly config: GatewayConfig;
   readonly routePlanner: RoutePlanner;
@@ -73,6 +80,12 @@ export interface PreparedRouteFlow {
   /** Present only when budget admission admitted the request. */
   readonly admission?: AdmittedRoute;
 }
+export class RequestAuditError extends Error {}
+export const markDurableAttempt = async (deps: RouteFlowDeps, cost: CostContext,
+  attemptRef: string, diagnostic: RoutePlan['diagnostics'][number]): Promise<void> => {
+  try { await deps.requestAudit?.beginAttempt?.({ cost, attemptRef, diagnostic }); }
+  catch { throw new RequestAuditError('durable attempt acknowledgement unavailable'); }
+};
 
 /** Retry projection is detached only when upload/commit or terminal SDK cleanup permits it. */
 export const retainRouteBody = (prepared: PreparedRouteFlow, request: GatewayFlowRequest): void => {
@@ -129,14 +142,20 @@ export const prepareRouteFlow = async (
   const nativeFeatures = classifyNativeFeatures(request.wire, request.headers, request.body, canonical, {
     budget: deps.budget, nativeMessagesEnabled: deps.nativeMessagesEnabled,
   });
-  const subject = routingSubjectForCost(auth.cost);
+  let cost = auth.cost;
+  const subject = routingSubjectForCost(cost);
+  if (deps.requestAudit) {
+    const receipt = await deps.requestAudit.admit({ cost: auth.cost, requestId: request.authContext.requestId, model: request.model });
+    request.receiptId = receipt.receiptId;
+    cost = { ...cost, gatewayReceiptId: receipt.receiptId };
+  }
   if (deps.budget) {
     // The reserved output ceiling is the one sent to every attempt (both wires, both flows).
     const bounded = boundRouteOutputCeiling(canonical, deps.budget);
-    return prepareAdmittedRouteFlow(deps, request, auth.cost, subject, bounded, nativeFeatures);
+    return prepareAdmittedRouteFlow(deps, request, cost, subject, bounded, nativeFeatures);
   }
   try {
-    const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
+    const routeInput = deps.routeInput?.({ cost, request, canonical });
     const plan = await deps.routePlanner.plan(subject, {
       ...routeInput,
       requestedModel: request.model,
@@ -147,16 +166,16 @@ export const prepareRouteFlow = async (
       // byte-identical.
       ...(canonical.requiredExecutionFeatures
         ? { requiredExecutionFeatures: canonical.requiredExecutionFeatures } : {}),
-      workspaceId: routeInput?.workspaceId ?? auth.cost.workspaceId,
-      affinityKey: routeInput?.affinityKey ?? auth.cost.correlationId,
+      workspaceId: routeInput?.workspaceId ?? cost.workspaceId,
+      affinityKey: routeInput?.affinityKey ?? cost.correlationId,
       ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
-    return { cost: auth.cost, subject, canonical, plan, nativeFeatures };
+    return { cost, subject, canonical, plan, nativeFeatures };
   } catch (error) {
     if (isRecognizedPlanningRefusal(error)) {
       try {
         await deps.metering.settleRoute({
-          cost: auth.cost,
+          cost,
           wire: request.wire,
           requestedModel: request.model,
           outcome: 'failed',
@@ -167,7 +186,7 @@ export const prepareRouteFlow = async (
       throw error;
     }
     await deps.metering.settleRoute({
-      cost: auth.cost,
+      cost,
       wire: request.wire,
       requestedModel: request.model,
       outcome: 'failed',
@@ -193,6 +212,7 @@ const prepareAdmittedRouteFlow = async (
     requestId: request.authContext.requestId, cost, subject, wire: request.wire,
     requestedModel: request.model, canonical,
     route: {
+      ...(routeInput?.launchRoutingContract ? { launchRoutingContract: routeInput.launchRoutingContract } : {}),
       ...(routeInput?.targetCandidatesOverride ? { targetCandidatesOverride: routeInput.targetCandidatesOverride } : {}),
       ...(routeInput?.intent ? { intent: routeInput.intent } : {}),
       ...(routeInput?.policyProfile ? { policyProfile: routeInput.policyProfile } : {}),
@@ -303,6 +323,7 @@ export const classifyRouteError = (
   const status = typeof record?.statusCode === 'number' ? record.statusCode
     : typeof record?.status === 'number' ? record.status : undefined;
   const code = typeof record?.code === 'string' ? record.code.toLowerCase() : '';
+  if (code === 'model_identity_mismatch') return { reason: 'unsupported-model', retryable: false, healthScope: 'route' };
   const retryAfterMs = typeof record?.retryAfterMs === 'number' ? record.retryAfterMs : undefined;
   if (code === 'native_protocol_error') return { reason: 'provider-5xx', retryable: false, healthScope: 'route' };
   if (status === 413) return { reason: 'invalid-request', retryable: false, healthScope: 'route' };

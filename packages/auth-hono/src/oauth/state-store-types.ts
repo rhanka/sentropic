@@ -17,6 +17,17 @@ export interface OauthClientRecord {
   tenantId: string | null;
   ownerUserId: string | null;
   /**
+   * B3: per-client minimum ACR (null/undefined = no policy, zero change for
+   * existing clients). When `urn:sentropic:loa:passkey-fresh`, authorize forces
+   * re-authentication and refuses bearer sessions with `access_denied`.
+   */
+  requiredAcr?: string | null;
+  /**
+   * C1: per-client subject allowlist (empty/undefined = no restriction).
+   * Enforced at authorize before consent with `access_denied`.
+   */
+  allowedUserIds?: string[] | null;
+  /**
    * RFC 8707 resource-indicator allowlist for the `authorization_code` flow (BR-39l Lot 2).
    * Additive, default-deny: an empty/absent allowlist means the client may NOT request any
    * `resource` (any value ⇒ `invalid_target`). Mirrors `ServiceClientRecord.resourceIndicators`.
@@ -35,6 +46,7 @@ export interface AuthCodePayload {
   codeChallenge: string;
   codeChallengeMethod: 'S256';
   dpopJkt: string | null;
+  amr?: string[] | null;
   nonce: string | null;
   /**
    * RFC 8707 resource sealed at authorize time (BR-39l Lot 2). When present, it becomes the
@@ -57,6 +69,8 @@ export interface TokenMeta {
   scope: string;
   audience: string;
   dpopJkt: string | null;
+  acr?: string | null;
+  amr?: string[] | null;
   expiresAt: Date;
   createdAt: Date;
 }
@@ -79,7 +93,38 @@ export interface ServiceClientRecord {
   secretRotatedAt: Date | null;
   createdAt: Date;
   revokedAt: Date | null;
+  /**
+   * RFC 8693 token-exchange policy (2-IdP). Default-deny: absent/null means the client
+   * cannot perform token exchange. The `immo-mcp-workload` exchange-only client carries
+   * an enabled policy with `allowClientCredentials: false`.
+   */
+  exchangePolicy?: ServiceClientExchangePolicy | null;
 }
+
+/**
+ * Issuer-side default-deny exchange policy for one confidential service client (2-IdP).
+ * Every list is an exact-match allowlist; a request value must select an allowed entry,
+ * never create one. No wildcards.
+ */
+export interface ServiceClientExchangePolicy {
+  enabled: boolean;
+  allowedSubjectClients: string[];
+  allowedSubjectAudiences: string[];
+  allowedTargetAudiences: string[];
+  actorSub: string;
+  allowedScopes: string[];
+  maxTtlSeconds: number;
+  environment?: string | null;
+  allowClientCredentials: boolean;
+}
+
+export const TOKEN_EXCHANGE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:token-exchange';
+
+export const TOKEN_EXCHANGE_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
+
+export const TOKEN_EXCHANGE_REQUESTED_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
+
+export const TOKEN_EXCHANGE_MAX_TTL_SECONDS = 300;
 
 export interface OauthStateStorePort {
   findClient(clientId: string): Promise<OauthClientRecord | null>;

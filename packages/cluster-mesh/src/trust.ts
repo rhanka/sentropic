@@ -3,13 +3,8 @@ import { CapabilityGatedError } from './errors.js';
 export const RFC8693_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:token-exchange' as const;
 export const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token' as const;
 
-export interface TokenExchangeActor {
-  readonly sub: string;
-  readonly iss: string;
-  /** Opaque h2a engagement reference; cluster-mesh never interprets it. */
-  readonly h2aEngagement: string;
-}
-
+/** RFC 8693 exchange request. The caller never supplies an actor: `act` is
+ * minted by the issuer from the configured workload identity (spec-v3 §6). */
 export interface TokenExchangeRequest {
   readonly grantType: typeof RFC8693_GRANT_TYPE;
   readonly subjectToken: string;
@@ -17,7 +12,6 @@ export interface TokenExchangeRequest {
   readonly requestedTokenType?: string;
   readonly audience: string;
   readonly scope: readonly string[];
-  readonly actor?: TokenExchangeActor;
 }
 
 export interface TokenExchangeResponse {

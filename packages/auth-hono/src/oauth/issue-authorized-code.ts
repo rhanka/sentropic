@@ -28,6 +28,7 @@ export const issueAuthorizedCode = async (
     code,
     {
       acr: payload.acr ?? 'urn:sentropic:loa:bearer',
+      amr: payload.amr ?? (payload.acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
       authTime: new Date(payload.authTime ?? now.toISOString()),
       clientId: payload.clientId,
       codeChallenge: payload.codeChallenge,
