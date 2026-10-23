@@ -1,13 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createStructuredDecisionAdapter } from '../src/decision/structured.js';
 import { STRUCTURED_SCORE_MEANING } from '../src/decision/structured.js';
-import { decisionRequest, structuredDecisionDescriptor, structuredEvidenceBody } from './decision-fixtures.js';
+import { createDecisionService } from '../src/decision/service.js';
+import { createProviderRegistry } from '../src/registry.js';
+import { decisionRequest, decisionServiceFixture, structuredDecisionDescriptor, structuredDecisionPrice, structuredEvidenceBody } from './decision-fixtures.js';
 
 const descriptorWith = (overrides: Record<string, unknown> = {}) => ({ ...structuredDecisionDescriptor(), ...overrides });
 const adapterWith = (text: string, descriptor?: Record<string, unknown>) => {
   const send = vi.fn(async () => text);
   const adapter = createStructuredDecisionAdapter({ descriptor: (descriptor ?? descriptorWith()) as never, transport: { send } });
   return { adapter, send };
+};
+const serviceWith = (sendText: string, descriptor?: Record<string, unknown>) => {
+  const base = decisionServiceFixture();
+  const resolved = (descriptor ?? descriptorWith()) as never;
+  const send = vi.fn(async () => sendText);
+  const adapter = createStructuredDecisionAdapter({ descriptor: resolved, transport: { send } });
+  const evaluator = (resolved as { evaluator: { providerId: string; evaluatorId: string; revision: string } }).evaluator;
+  const service = createDecisionService({ ...base.options,
+    registry: createProviderRegistry([adapter as never]),
+    resolveEvaluator: (() => resolved) as never,
+    resolvePrice: (async () => structuredDecisionPrice(
+      (resolved as { wireModel: string }).wireModel)) as never,
+    evaluatorAllowlist: [evaluator] as never });
+  return { service, send, evaluator };
 };
 
 describe('structured backend discrimination (P23)', () => {
@@ -106,5 +122,43 @@ describe('structured backend discrimination (P23)', () => {
     expect(result.ok).toBe(true);
     const payload = send.mock.calls[0][0] as Record<string, unknown>;
     expect(payload.execution).toEqual({ maxOutputTokens: 4096 });
+  });
+  it('registers under the descriptor-selected provider instead of pinning TypeSafe', async () => {
+    const openai = descriptorWith({ evaluator: { providerId: 'openai', evaluatorId: 'structured-judge-v1', revision: 'synthetic-v1' } });
+    const { adapter } = adapterWith(structuredEvidenceBody({ score: 0.5 }), openai);
+    expect(adapter.provider.providerId).toBe('openai');
+    expect(() => adapterWith(structuredEvidenceBody({ score: 0.5 }),
+      descriptorWith({ evaluator: { providerId: 'unknown-provider', evaluatorId: 'structured-judge-v1', revision: 'synthetic-v1' } })))
+      .toThrow('Invalid structured descriptor.');
+  });
+  it('serves scalar and label-only controls through the host with one transport call (F3)', async () => {
+    const { service, send, evaluator } = serviceWith(structuredEvidenceBody({ score: 0.7 }));
+    const scalarResult = await service.decide(decisionRequest({ evaluator }));
+    expect(scalarResult.ok).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+    if (!scalarResult.ok || scalarResult.kind !== 'verdict') throw new Error('valid service scalar unexpectedly refused');
+    expect(scalarResult.receipt.budget).toMatchObject({ state: 'settled' });
+    expect(scalarResult.receipt.cost).toMatchObject({ amountMicroUsd: '6', source: 'reported-usage-times-rate' });
+    expect(scalarResult.receipt.servedModelId).toBe('synthetic-structured-model');
+    const labelService = serviceWith(structuredEvidenceBody({ label: 'a' }));
+    const labelResult = await labelService.service.decide(decisionRequest({ evaluator,
+      criterion: { kind: 'choice', instructions: 'Pick.', options: [{ id: 'a', description: 'A' }] } }));
+    expect(labelResult.ok).toBe(true);
+    expect(labelService.send).toHaveBeenCalledTimes(1);
+    const badService = serviceWith(JSON.stringify({ refusal: 'cannot' }));
+    const badResult = await badService.service.decide(decisionRequest({ evaluator }));
+    expect(badResult.ok).toBe(false);
+    expect(badService.send).toHaveBeenCalledTimes(1);
+  });
+  it('refuses missing transport evidence through the service with conservative settlement (F2)', async () => {
+    const { service, send, evaluator } = serviceWith(JSON.stringify({ score: 0.7 }));
+    const result = await service.decide(decisionRequest({ evaluator }));
+    expect(result.ok).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    if (result.ok || result.kind !== 'error') throw new Error('missing evidence unexpectedly accepted');
+    expect(result.error.code).toBe('SERVED_IDENTITY_MISMATCH');
+    expect(result.receipt.usage.tokens.input).toEqual({ value: null, source: 'not-reported' });
+    expect(result.receipt.budget.state).toBe('pending-reconciliation');
+    expect(BigInt(result.receipt.cost.amountMicroUsd)).toBe(BigInt(result.receipt.budget.reservedMicroUsd));
   });
 });

@@ -67,6 +67,29 @@ describe('decision validation context parsing', () => {
   ])('rejects wrong identity, kind mismatch, future, stale or unbounded resolution', (bad) => {
     expect(parseDecisionValidationContext(context({ registeredResolution: bad }), registeredRequest(), NOW)).toBeNull();
   });
+  it('rejects native-profile rationale permission that contradicts the profile (R2-F6)', () => {
+    const request = decisionRequest();
+    expect(parseDecisionValidationContext(context(), request, NOW)).not.toBeNull();
+    const optional = context({ semantics: { nativeDecision: false,
+      score: { meaning: 'probability-true', min: 0, max: 1 }, confidence: null, rationale: 'optional' } });
+    expect(parseDecisionValidationContext(optional, request, NOW)).toBeNull();
+  });
+  it('rejects a native binary or graded context without required score semantics (R2-F6)', () => {
+    const noScore = context({ semantics: { nativeDecision: false, score: null, confidence: null, rationale: 'forbidden' } });
+    expect(parseDecisionValidationContext(noScore, decisionRequest(), NOW)).toBeNull();
+    const graded = decisionRequest({ criterion: { kind: 'graded', instructions: 'Grade.',
+      direction: 'higher-is-better', levels: [{ label: 'low', description: 'Low' }, { label: 'high', description: 'High' }] } });
+    expect(parseDecisionValidationContext(noScore, graded, NOW)).toBeNull();
+    const choice = decisionRequest({ criterion: { kind: 'choice', instructions: 'Pick.',
+      options: [{ id: 'a', description: 'A' }] } });
+    expect(parseDecisionValidationContext(noScore, choice, NOW)).not.toBeNull();
+  });
+  it('still permits optional rationale under the scalar profile (R2-F6)', () => {
+    const scalar = context({ validationProfile: { profile: 'scalar-label-v1', version: 'v1' },
+      semantics: { nativeDecision: false, score: { meaning: 'support', min: 0, max: 1 },
+        confidence: null, rationale: 'optional' } });
+    expect(parseDecisionValidationContext(scalar, decisionRequest(), NOW)).not.toBeNull();
+  });
   it('leaves resolver-owned nested values mutable and detaches the parsed copy (F7)', () => {
     const owned = context();
     const parsed = parseDecisionValidationContext(owned, decisionRequest(), NOW);
