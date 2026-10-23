@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 let compileArtifactsProfile: typeof import('../src/profile/index.js').compileArtifactsProfile;
 let RADAR_ARTIFACTS_PROFILE: typeof import('../src/profile/index.js').RADAR_ARTIFACTS_PROFILE;
 let createArtifactCommand: typeof import('../src/server/command-identity.js').createArtifactCommand;
 let createRadarKeyDerivation: typeof import('../src/server/command-identity.js').createRadarKeyDerivation;
 let commandDigest: typeof import('../src/server/command-identity.js').commandDigest;
 import { manifestDigest } from '../src/codecs.js';
+import { CANONICAL_COMMAND_FIXTURES, canonicalizeJson } from '../l0-freeze/command-identity-contract.js';
 
 const artifactId = '123e4567-e89b-12d3-a456-426614174000';
 const host = { storageScopeId: 'scope-1', actorId: 'user-sub-1' };
@@ -20,6 +22,25 @@ describe('effective command identity', () => {
   beforeEach(async () => {
     ({ compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } = await import('../src/profile/index.js'));
     ({ createArtifactCommand, createRadarKeyDerivation, commandDigest } = await import('../src/server/command-identity.js'));
+  });
+  it('should match corrected L0 canonical command bytes and digests', () => {
+    for (const fixture of CANONICAL_COMMAND_FIXTURES) {
+      expect(commandDigest(fixture.body)).toBe(fixture.sha256);
+      const { provenance: _provenance, ...payload } = fixture.body.payload;
+      const args = { ...payload, artifactId, idempotencyKey: 'client-key-1' };
+      const value = command(args as never);
+      const body = { ...fixture.body, scopeBinding: host.storageScopeId,
+        payload: { ...fixture.body.payload, artifactId } };
+      expect(value.identity.commandHash).toBe(commandDigest(body));
+      expect(value.identity.commandHash).toBe(commandDigest(JSON.parse(canonicalizeJson(body))));
+    }
+  });
+
+  it('should sort integer-like profile keys by UTF-16 order in the command codec', () => {
+    const body = { profile: { '2': 'two', '10': 'ten' } };
+    expect(canonicalizeJson(body)).toBe('{"profile":{"10":"ten","2":"two"}}');
+    expect(commandDigest(body)).toBe(createHash('sha256')
+      .update('{"profile":{"10":"ten","2":"two"}}').digest('hex'));
   });
   it('should retain the existing Radar key vector and separate all identity values', () => {
     const value = command();
