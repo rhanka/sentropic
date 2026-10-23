@@ -8,7 +8,12 @@
  * follow in later slices. Runtime implementation lands in L3.
  */
 
-import type { CommandIdentity } from './command-identity-contract.js';
+import type {
+  CommandIdentity,
+  COMMAND_CODEC_VERSION,
+  EffectiveArtifactCommand,
+  InternalIdempotencyKey,
+} from './command-identity-contract.js';
 import type { ArtifactOutcome } from './failure-contract.js';
 import type { CompiledArtifactsProfile } from './profile-contract.js';
 
@@ -158,11 +163,41 @@ export interface QuotaReserveResult {
  * Coordinator role owning the atomic finalization unit. The optional
  * test observer receives barrier arrivals below the app with invocation
  * correlation; it can never mark an operation authorized or successful.
+ * `finalizeOperation` owns the complete unit (key lock, participant
+ * locks, guard, commit/rollback); `replayOperation` re-reads the winner
+ * under the key lock and returns it through a fresh guarded replay.
  */
 export interface ArtifactCommitCoordinator {
   readonly protocolVersion: typeof COMMIT_PROTOCOL_VERSION;
   readonly guardedOperations: readonly string[];
   readonly testObserver?: CommitBarrierObserver;
+  finalizeOperation(
+    input: FinalizationInput,
+  ): Promise<ArtifactOutcome<FinalizationRecord>>;
+  replayOperation(
+    input: ReplayInput,
+  ): Promise<ArtifactOutcome<FinalizationRecord>>;
+}
+
+/** Coordinator completion record for one finalized or replayed operation. */
+export interface FinalizationRecord {
+  readonly internalKey: InternalIdempotencyKey;
+  readonly commandHash: string;
+  readonly codecVersion: typeof COMMAND_CODEC_VERSION;
+  readonly replayed: boolean;
+}
+
+/** Finalization input: request, invocation context and effective command. */
+export interface FinalizationInput {
+  readonly request: HttpRequest;
+  readonly invocation: ArtifactInvocationContext;
+  readonly command: EffectiveArtifactCommand;
+}
+
+/** Guarded replay input: invocation context and the durable internal key. */
+export interface ReplayInput {
+  readonly invocation: ArtifactInvocationContext;
+  readonly internalKey: InternalIdempotencyKey;
 }
 
 /**
@@ -333,3 +368,18 @@ type _ParticipantAccess = ArtifactCommitTransaction['participant'] extends Artif
   ? true
   : never;
 const _participantAccess: _ParticipantAccess = true;
+
+// The coordinator exposes callable finalization and replay operations.
+type _FinalizeCallable = ArtifactCommitCoordinator['finalizeOperation'] extends (
+  input: FinalizationInput,
+) => Promise<ArtifactOutcome<FinalizationRecord>>
+  ? true
+  : never;
+const _finalizeCallable: _FinalizeCallable = true;
+
+type _ReplayCallable = ArtifactCommitCoordinator['replayOperation'] extends (
+  input: ReplayInput,
+) => Promise<ArtifactOutcome<FinalizationRecord>>
+  ? true
+  : never;
+const _replayCallable: _ReplayCallable = true;
