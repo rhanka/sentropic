@@ -78,6 +78,24 @@ export const DERIVATION_VECTORS: readonly DerivationVector[] = [
     preimage: 'tenant:t1|alice|ensure||key-2',
     sha256: '437be4b21dce49e880ba3cc697fef667bed4ed0c0ec90e9cbdbad43f1a4a5cbb',
   },
+  {
+    name: 'ensure-alice',
+    binding: {
+      algorithm: 'radar-derive-idempotency-v1', scope: 's', actor: 'alice',
+      operation: 'ensure', objectId: '', callerKey: 'key-2',
+    },
+    preimage: 's|alice|ensure||key-2',
+    sha256: '68934203b875d8ea78a6533b2a971f86b49c1c32416da4af8bd786058a49e1fa',
+  },
+  {
+    name: 'ensure-issuer-alice',
+    binding: {
+      algorithm: 'radar-derive-idempotency-v1', scope: 's', actor: 'issuer|alice',
+      operation: 'ensure', objectId: '', callerKey: 'key-2',
+    },
+    preimage: 's|issuer|alice|ensure||key-2',
+    sha256: '1d9b9a3f67238ad0cc6a7ac257232c2d0a1e5dc709d58d09901a2ca68fb98b28',
+  },
 ];
 
 /**
@@ -156,6 +174,112 @@ export const COMMAND_IDENTITY_RELATIONS = [
     expectation: 'computed-only',
   },
 ] as const;
+
+/**
+ * Deterministic JSON canonicalization for effective command bodies:
+ * object keys sort recursively in UTF-16 code-unit order, array order
+ * stays significant, and the encoder never mutates its input. L1/L6 hash
+ * the canonical bytes (SHA-256) after trusted scope binding, defaults,
+ * UTF-8/byte conversion and forced provenance; text/byte equivalence is
+ * established on the decoded form before this encoding, and the codec
+ * deep-copies before normalization.
+ */
+export function canonicalizeJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => canonicalizeJson(entry)).join(',')}]`;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalizeJson(record[key])}`).join(',')}}`;
+}
+
+/** One golden effective-command fixture with its canonical bytes and digest. */
+export interface CanonicalCommandFixture {
+  readonly name: string;
+  readonly body: {
+    readonly operation: string;
+    readonly scopeBinding: string;
+    readonly payload: Record<string, unknown>;
+  };
+  readonly canonical: string;
+  readonly sha256: string;
+}
+
+export const CANONICAL_COMMAND_FIXTURES: readonly CanonicalCommandFixture[] = [
+  {
+    name: 'publish-baseline',
+    body: {
+      operation: 'publish',
+      scopeBinding: 's',
+      payload: {
+        artifactId: 'obj-1',
+        files: [
+          { bytes: [60, 104, 49, 62, 72, 105, 60, 47, 104, 49, 62], mimeType: 'text/html', path: 'index.html' },
+          { bytes: [98, 111, 100, 121], mimeType: 'text/css', path: 'styles.css' },
+        ],
+        profile: {},
+        provenance: { kind: 'inline-original' },
+      },
+    },
+    canonical: '{"operation":"publish","payload":{"artifactId":"obj-1","files":[{"bytes":[60,104,49,62,72,105,60,47,104,49,62],"mimeType":"text/html","path":"index.html"},{"bytes":[98,111,100,121],"mimeType":"text/css","path":"styles.css"}],"profile":{},"provenance":{"kind":"inline-original"}},"scopeBinding":"s"}',
+    sha256: 'c1c8a186b847635ae4b1d1c27bf1079ae1cf26c1ef4b47ed622cafaa6a273d57',
+  },
+  {
+    name: 'publish-shuffled-keys',
+    body: {
+      payload: {
+        provenance: { kind: 'inline-original' },
+        profile: {},
+        files: [
+          { path: 'index.html', mimeType: 'text/html', bytes: [60, 104, 49, 62, 72, 105, 60, 47, 104, 49, 62] },
+          { path: 'styles.css', mimeType: 'text/css', bytes: [98, 111, 100, 121] },
+        ],
+        artifactId: 'obj-1',
+      },
+      scopeBinding: 's',
+      operation: 'publish',
+    },
+    canonical: '{"operation":"publish","payload":{"artifactId":"obj-1","files":[{"bytes":[60,104,49,62,72,105,60,47,104,49,62],"mimeType":"text/html","path":"index.html"},{"bytes":[98,111,100,121],"mimeType":"text/css","path":"styles.css"}],"profile":{},"provenance":{"kind":"inline-original"}},"scopeBinding":"s"}',
+    sha256: 'c1c8a186b847635ae4b1d1c27bf1079ae1cf26c1ef4b47ed622cafaa6a273d57',
+  },
+  {
+    name: 'publish-swapped-file-order',
+    body: {
+      operation: 'publish',
+      scopeBinding: 's',
+      payload: {
+        artifactId: 'obj-1',
+        files: [
+          { bytes: [98, 111, 100, 121], mimeType: 'text/css', path: 'styles.css' },
+          { bytes: [60, 104, 49, 62, 72, 105, 60, 47, 104, 49, 62], mimeType: 'text/html', path: 'index.html' },
+        ],
+        profile: {},
+        provenance: { kind: 'inline-original' },
+      },
+    },
+    canonical: '{"operation":"publish","payload":{"artifactId":"obj-1","files":[{"bytes":[98,111,100,121],"mimeType":"text/css","path":"styles.css"},{"bytes":[60,104,49,62,72,105,60,47,104,49,62],"mimeType":"text/html","path":"index.html"}],"profile":{},"provenance":{"kind":"inline-original"}},"scopeBinding":"s"}',
+    sha256: 'ebf2c9342f120f4aeea857656cce1ff91a359d16eb493af97878350bc7b0f990',
+  },
+  {
+    name: 'publish-changed-mime',
+    body: {
+      operation: 'publish',
+      scopeBinding: 's',
+      payload: {
+        artifactId: 'obj-1',
+        files: [
+          { bytes: [60, 104, 49, 62, 72, 105, 60, 47, 104, 49, 62], mimeType: 'text/html', path: 'index.html' },
+          { bytes: [98, 111, 100, 121], mimeType: 'text/javascript', path: 'styles.css' },
+        ],
+        profile: {},
+        provenance: { kind: 'inline-original' },
+      },
+    },
+    canonical: '{"operation":"publish","payload":{"artifactId":"obj-1","files":[{"bytes":[60,104,49,62,72,105,60,47,104,49,62],"mimeType":"text/html","path":"index.html"},{"bytes":[98,111,100,121],"mimeType":"text/javascript","path":"styles.css"}],"profile":{},"provenance":{"kind":"inline-original"}},"scopeBinding":"s"}',
+    sha256: '90d3680386f461353f16f2c004271b1298a67895b3249eec1566320a52990528',
+  },
+];
 
 /** Server-created identity for one durable command. */
 export interface CommandIdentity {

@@ -42,6 +42,50 @@ export interface FailureProjection {
   readonly commitState: CommitState;
 }
 
+export const ORDINARY_FAILURE_CATEGORIES = [
+  'invalid_request', 'not_found', 'gone', 'unprocessable', 'verification_failed',
+] as const;
+
+export type OrdinaryFailureCategory = (typeof ORDINARY_FAILURE_CATEGORIES)[number];
+
+/**
+ * Frozen ordinary domain-failure projection. Ordinary validation,
+ * not-found, gone and verification outcomes are entry rejections: they
+ * never enter the write-commit ledger and keep the existing public
+ * mappings.
+ */
+export interface OrdinaryFailureProjection {
+  readonly category: OrdinaryFailureCategory;
+  readonly httpStatus: number;
+  readonly publicCode: string;
+  readonly retriable: false;
+  readonly phase: string;
+  readonly commitState: CommitState;
+}
+
+export const ORDINARY_FAILURE_PROJECTIONS: readonly OrdinaryFailureProjection[] = [
+  {
+    category: 'invalid_request', httpStatus: 400, publicCode: 'invalid_request',
+    retriable: false, phase: 'entry', commitState: 'not_committed',
+  },
+  {
+    category: 'not_found', httpStatus: 404, publicCode: 'not_found',
+    retriable: false, phase: 'entry', commitState: 'not_committed',
+  },
+  {
+    category: 'gone', httpStatus: 410, publicCode: 'gone',
+    retriable: false, phase: 'entry', commitState: 'not_committed',
+  },
+  {
+    category: 'unprocessable', httpStatus: 422, publicCode: 'unprocessable',
+    retriable: false, phase: 'entry', commitState: 'not_committed',
+  },
+  {
+    category: 'verification_failed', httpStatus: 422, publicCode: 'verification_failed',
+    retriable: false, phase: 'entry', commitState: 'not_committed',
+  },
+] as const;
+
 export const FAILURE_PROJECTIONS: readonly FailureProjection[] = [
   {
     category: 'capability_unselected', variant: 'unselected_operation',
@@ -82,11 +126,26 @@ export const FAILURE_PROJECTIONS: readonly FailureProjection[] = [
 
 /** Classified internal failure with private cause and commit state. */
 export interface ArtifactFailure {
+  readonly kind: 'operational';
   readonly category: FailureCategory;
   readonly variant?: string;
   readonly httpStatus: number;
   readonly publicCode: string;
   readonly retriable: boolean;
+  readonly invocationId: string;
+  readonly operation: string;
+  readonly phase: string;
+  readonly commitState: CommitState;
+  readonly cause: unknown;
+}
+
+/** Ordinary typed domain failure with retained private cause. */
+export interface OrdinaryFailure {
+  readonly kind: 'ordinary';
+  readonly category: OrdinaryFailureCategory;
+  readonly httpStatus: number;
+  readonly publicCode: string;
+  readonly retriable: false;
   readonly invocationId: string;
   readonly operation: string;
   readonly phase: string;
@@ -112,4 +171,4 @@ export type ArtifactOutcome<T> =
     readonly commitState: CommitState;
     readonly replayed: boolean;
   }
-  | { readonly ok: false; readonly failure: ArtifactFailure };
+  | { readonly ok: false; readonly failure: ArtifactFailure | OrdinaryFailure };

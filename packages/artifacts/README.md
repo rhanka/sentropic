@@ -15,9 +15,11 @@ explicit capability selection and the effective publication profile
 (`l0-freeze/command-identity-contract.ts`), the commit finalization unit
 (`l0-freeze/commit-contract.ts`) and the typed failure outcome
 (`l0-freeze/failure-contract.ts`). The section 3.2 host API names are frozen
-against spec r2. L1+ promotes the shapes into `src/`; version reservations
-are pack-only dev versions owned by the integration owner, never registry
-candidates. The common-contract reuse map lives in
+against spec r2. Trusted scope/subject domain qualification and
+actor-mapping acceptance remain gated on i-cond Q0; the structural freeze
+is not a completed Q0-dependent qualification. L1+ promotes the shapes
+into `src/`; version reservations are pack-only dev versions owned by the
+integration owner, never registry candidates. The common-contract reuse map lives in
 `docs/common-contract-map.md`; the migration inventory lives in
 `docs/migration-inventory-l0.md`. L0 changes no behavior, no `src/` file
 and no package version.

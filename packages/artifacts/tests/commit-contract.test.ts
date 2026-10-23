@@ -20,8 +20,11 @@ import {
 import {
   FAILURE_CATEGORIES,
   FAILURE_PROJECTIONS,
+  ORDINARY_FAILURE_CATEGORIES,
+  ORDINARY_FAILURE_PROJECTIONS,
   OUTCOME_SUCCESS_FIELDS,
 } from '../l0-freeze/failure-contract.js';
+import type { OrdinaryFailure } from '../l0-freeze/failure-contract.js';
 import { COMMAND_CODEC_VERSION } from '../l0-freeze/command-identity-contract.js';
 
 describe('commit contract', () => {
@@ -107,6 +110,48 @@ describe('commit contract', () => {
     expect(projection?.retriable).toBe(false);
   });
 
+  it('should know the ordinary domain failure categories', () => {
+    expect([...ORDINARY_FAILURE_CATEGORIES]).toEqual([
+      'invalid_request', 'not_found', 'gone', 'unprocessable', 'verification_failed',
+    ]);
+  });
+
+  it('should project ordinary failures without ledger entries', () => {
+    expect(ORDINARY_FAILURE_PROJECTIONS.map((entry) => [
+      entry.category, entry.httpStatus, entry.publicCode,
+    ])).toEqual([
+      ['invalid_request', 400, 'invalid_request'],
+      ['not_found', 404, 'not_found'],
+      ['gone', 410, 'gone'],
+      ['unprocessable', 422, 'unprocessable'],
+      ['verification_failed', 422, 'verification_failed'],
+    ]);
+    for (const entry of ORDINARY_FAILURE_PROJECTIONS) {
+      expect(entry.retriable).toBe(false);
+      expect(entry.phase).toBe('entry');
+      expect(entry.commitState).toBe('not_committed');
+      expect('radarLedgerReason' in entry).toBe(false);
+    }
+  });
+
+  it('should keep a typed ordinary 400 failure with its private cause', () => {
+    const cause = new Error('unknown field: owner');
+    const failure: OrdinaryFailure = {
+      kind: 'ordinary',
+      category: 'invalid_request',
+      httpStatus: 400,
+      publicCode: 'invalid_request',
+      retriable: false,
+      invocationId: 'inv-1',
+      operation: 'publish',
+      phase: 'entry',
+      commitState: 'not_committed',
+      cause,
+    };
+    expect(failure.cause).toBe(cause);
+    expect(failure.commitState).toBe('not_committed');
+  });
+
   it('should carry invocation, commit-state and replay on success', () => {
     expect([...OUTCOME_SUCCESS_FIELDS]).toEqual([
       'ok', 'result', 'invocationId', 'commitState', 'replayed',
@@ -161,12 +206,20 @@ describe('commit contract', () => {
     expect(doc).toContain('registers no common storage module');
   });
 
-  it('should direct the release train at the integration branch', () => {
+  it('should direct the release train at the r2 integration branch', () => {
     const docDir = dirname(fileURLToPath(import.meta.url));
     const doc = readFileSync(join(docDir, '..', 'docs', 'migration-inventory-l0.md'), 'utf8');
-    expect(doc).toContain('feat/artifacts-861-integration');
+    expect(doc).toContain('feat/immo-861-integration');
+    expect(doc).not.toContain('feat/artifacts-861-integration');
+    expect(doc).toContain('never main');
     expect(doc).toContain('no cherry-picks');
     expect(doc).toContain('0.2.0-dev');
     expect(doc).not.toContain('0.2.0-rc.1');
+    expect(doc).toContain('9b0f7e0d374e47b10fb855c13edd832be480f7faf148f1dd94569265300228a2');
+    expect(doc).toContain('e5e3b4d15382713182d50eaed504ed1a3574c1b577d8684d6856f5c8f1c8e97e');
+    expect(doc).toContain('fc5709f1b335de146a35252a7f5dad3f6c70caff741ec383f56110f0d888b4e6');
+    expect(doc).toContain('77fcfe4baf66a5652e2a79bdfb8b12271c38c84d23069ac3c84171be543da5d3');
+    expect(doc).toContain('982e8e435ba954bcc4cec8905b7c98e5d011d636512de1fbe94492d6605158cf');
+    expect(doc).toContain('383192e36780f363ed46568d1bab77ee81e91e9a763afd117d6ae53521c08bd7');
   });
 });

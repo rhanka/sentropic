@@ -18,6 +18,14 @@
   - `packages/artifacts/docs/common-contract-map.md`
   - `packages/artifacts/docs/migration-inventory-l0.md`
   - `packages/artifacts/README.md`
+  - `Makefile`
+  - `api/package-lock.json`
+  - `docs/governance/kit/package*.json`
+  - `package*.json`
+  - `packages/cluster-mesh/**`
+  - `tools/memory-mcp-l5/**`
+  - `ui/package*.json`
+  - `packages/artifacts/package.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -30,6 +38,7 @@
 - **Conditional Paths (explicit owner clarification required)**:
   - `packages/artifacts/package.json`
 ## Feedback Loop
+- [x] BR861-EX2: owner-authorized merge of corrected L0 d41f470927c1dfd52c239f57ba3f2589723d3285, preserving all inherited baseline commits including #725 and memory work. Additional paths are merge-only; no authored edits there. Impact: parent baseline integration; rollback: revert this merge with first parent as mainline. The merge delta exceeds 150 lines because it retains upstream history; authored adaptations remain under 150 lines. Both parents and merged index have identical Track blob e64ba59336cb10ef72bc89d5fab7c0e96b9662a9.
 - [x] BR861-L2-EX1: owner explicitly requested merging the L0 fix wave without rebase. The additional allowed paths are inherited merge-only L0 changes at d4bd43b3c; no direct L2 edits. Impact: updated declaration/test/docs baseline. Rollback: revert the merge with first parent as mainline. Both parents preserve the same .track tree.
 - [ ] L2-CONTRACT (L6 owner): repaired L0 d4bd43b3c still lives outside src/rootDir; promote the shared outcome/commit declarations to their canonical buildable public subpaths during L6. L2 runtime variants, guard-refusal fields, internal-key brand and outcome envelopes are checked against the repaired freeze without importing out-of-root runtime modules. Ordinary domain and admission outcomes remain supported extensions; no L0 edits by L2.
 - [ ] L2-VERSION: r2 §6 reserves shared manifests to the integrator after the wave; mandatory PR bump remains that owner's gate. package.json unchanged; workflow dispatch on this stacked PR does not exercise the PR-only bump job.
