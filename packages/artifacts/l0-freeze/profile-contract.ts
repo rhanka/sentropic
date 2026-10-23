@@ -1,10 +1,10 @@
 /**
- * L0 frozen profile declaration (immo #861, ask 1 shape only).
+ * L0 frozen profile declaration (immo #861, ask 1 shape, spec r2 section 2).
  *
  * Stable data shapes, bounds and version constants for explicit capability
- * selection and the effective publication profile. No compiler, no host API
- * names and no behavior: L1 wires these shapes into the factories.
- * Public host API names stay unfrozen until spec r2.
+ * selection and the effective publication profile, plus the frozen
+ * provider-profile interfaces L1 compiles. No behavior: L1 wires these
+ * shapes into the factories.
  */
 
 import type { JsonValue } from '../src/contracts.js';
@@ -29,6 +29,20 @@ export const RADAR_SELECTED_TOOL_NAMES = [
 ] as const;
 
 export type RadarSelectedToolName = (typeof RADAR_SELECTED_TOOL_NAMES)[number];
+
+/**
+ * Frozen C2 capability routes: selected capability, provider route and
+ * Radar command. The adapter accepts exactly these four method/path
+ * combinations, not an arbitrary HTTP proxy.
+ */
+export const RADAR_OPERATION_ROUTES = [
+  { capability: 'artifacts_ensure', method: 'POST', path: '/ensure', command: 'ensure' },
+  { capability: 'artifacts_publish', method: 'POST', path: '/publish', command: 'publish' },
+  { capability: 'artifacts_list', method: 'POST', path: '/list', command: 'list' },
+  { capability: 'artifacts_get', method: 'GET', path: '/meta/{artifactId}', command: 'meta' },
+] as const;
+
+export type RadarOperationRoute = (typeof RADAR_OPERATION_ROUTES)[number];
 
 /** Host-bound invocation scope for the Radar selection. */
 export const RADAR_INVOCATION_SCOPE = 'immo:read' as const;
@@ -90,6 +104,36 @@ export interface EffectiveProfile {
   readonly profileDigest: string;
 }
 
+/**
+ * Frozen provider profile input: explicit selected tools, complete
+ * operation profiles and required contract versions. Unknown and
+ * duplicate entries are rejected; an empty selection exposes and
+ * executes nothing; a missing selection fails construction.
+ */
+export interface ArtifactProviderProfile {
+  readonly version: typeof PROFILE_CONTRACT_VERSION;
+  readonly selectedCapabilities: readonly string[];
+  readonly operations: readonly OperationProfile[];
+  readonly contractRevisions: Record<string, string>;
+}
+
+/**
+ * Compiled profile driving schema generation, validation, normalization,
+ * defaults, command hashing and runtime limits. Selection, full profile
+ * data and provider-contract revisions participate in the digest; a
+ * semantic-only change invalidates the evidence even when JSON Schema
+ * text is unchanged.
+ */
+export interface CompiledArtifactsProfile extends ArtifactProviderProfile {
+  readonly schemas: Record<string, Record<string, unknown>>;
+  readonly profileDigest: string;
+}
+
+/** Compiler signature: L1 implements it against these frozen shapes. */
+export type CompileArtifactsProfile = (
+  input: ArtifactProviderProfile,
+) => CompiledArtifactsProfile;
+
 const isKnownToolName = (value: string): boolean =>
   (KNOWN_ARTIFACT_TOOL_NAMES as readonly string[]).includes(value);
 
@@ -117,10 +161,23 @@ export function validateBindingName(value: unknown): boolean {
 /**
  * Caller idempotency keys: original string, trim() must be nonempty,
  * at most 256 UTF-16 code units. Whitespace around a nonempty value is
- * retained; no trimming or Unicode normalization is applied.
+ * retained; no trimming or Unicode normalization is applied. Lone high
+ * or low surrogates are rejected before UTF-8 conversion, derivation or
+ * storage so distinct caller keys can never alias one durable identity
+ * through replacement-character encoding.
  */
 export function validateCallerIdempotencyKey(value: unknown): boolean {
-  return typeof value === 'string' && value.length <= 256 && value.trim().length > 0;
+  if (typeof value !== 'string') return false;
+  if (value.length > 256 || value.trim().length === 0) return false;
+  for (let i = 0; i < value.length; i++) {
+    const unit = value.charCodeAt(i);
+    if (unit < 0xd800 || unit > 0xdfff) continue;
+    if (unit > 0xdbff) return false;
+    const next = i + 1 < value.length ? value.charCodeAt(i + 1) : 0;
+    if (next < 0xdc00 || next > 0xdfff) return false;
+    i++;
+  }
+  return true;
 }
 
 /** Radar publication files carry 1-32 entries within the decoded-byte budget. */
