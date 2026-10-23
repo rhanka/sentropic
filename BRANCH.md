@@ -47,12 +47,14 @@
   - [x] `api/tests/unit/gateway-package-version.test.ts` (version literal follows the gateway bump only; BR96-EX8)
   - [x] `packages/llm-mesh/README.md`, `packages/cluster-mesh/README.md`, `spec/SPEC_EVOL_LLM_MESH.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` (judge semantics only)
 - [x] **Forbidden Paths (must not change in this branch)**:
-  - [x] `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `.github/workflows/idp-identity-sync.yml`, `plan/**`, `.track/**`
+  - [x] `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `.github/workflows/idp-identity-sync.yml`, `plan/**`
   - [x] `packages/contracts/**`, `packages/events/**`, `package.json`
 - [x] `packages/llm-gateway/src/**`, `packages/llm-gateway/tests/**`, `packages/llm-gateway/scripts/**`, `packages/llm-gateway/README.md`, `packages/llm-gateway/CHANGELOG.md`, `packages/llm-gateway/LICENSE`, `packages/llm-gateway/tsconfig.json`, `packages/llm-gateway/tsconfig.test.json`
 - [x] `packages/cluster-mesh/tests/packaging/helpers.ts`, `packages/cluster-mesh/tests/packaging/*.mjs`, `packages/cluster-mesh/tests/packaging/*.sh`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer/**`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer-pinned/**`, `packages/cluster-mesh/tests/packaging/fixtures/separate-runtime/**`
   - [x] `ui/**`, `apps/**`, `deploy/**`, `api/src/db/**`, `api/drizzle/**`, `api/src/services/llm-metering/**`
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] `.track/events.jsonl`, `.track/head.json` (workflow-managed consolidate/acceptance records only, no product content; BR96-EX16)
+  - [x] `ui/package-lock.json` (nested EX10 vite 7.3.6 to 7.3.7 security pin only, otherwise converged to main; BR96-EX10, BR96-EX16)
   - [x] `api/vitest.config.ts` (judge-subpath aliases only; declare a numeric branch exception before editing)
   - [x] `api/src/routes/namespaces/llm-mesh.ts` (only aiSettingsSchema/updateUserSettings if the existing typesafe refusal needs a source edit)
   - [x] `package-lock.json` (root lock mirrors for the 0.27.0/0.21.0/0.20.0 cascade only, BR96-EX4; dompurify 3.4.17 security pin only, BR96-EX13)
@@ -62,7 +64,7 @@
   - [x] `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.ts`, `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (coupled `<0.28.0`/`<0.22.0` peer range and 13 `.d.ts` integration leaf assertions only; BR96-EX9)
   - [x] `.github/workflows/ci.yml`, `scripts/ci/publishable-ci-wiring.test.mjs` (cluster-mesh qualification `PEERS` tuple `@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0` only; BR96-EX9)
   - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; BR96-EX12, BR96-EX14)
-- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13, BR96-EX14.
+- [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13, BR96-EX14, BR96-EX15, BR96-EX16.
 
 ## Feedback Loop
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
@@ -325,11 +327,11 @@
   - [x] Judge code, versions, locks and memory pin untouched by this merge; R1 fixes and EX10/EX11 intact. Gates: R1 10/10 PASS, V4-L1 14/14 PASS, memory-l5-verify ok.
 - [x] **Lot V4-L2 — Decision migration and generic core (spec v4 §2/§12, probes P15–P23, P27/P28-L2, P32/P33, keep V4-L1)**
   - [x] Rename per §12.1 map (module `@sentropic/llm-mesh/decision`, `src/decision/`, factories/methods/types, `decision`/`decisionOnly`, cluster IDs/loaders/tests/README examples, `adapter.decision`/`client.decide` per §2); no legacy alias (unpublished API, §12.2 preferred path); branch label stays `feat/llm-judge`.
-  - [x] Generic core (Sol V4-L2 R1 VERDICT: CHANGES addressed): complete canonical definition equality, required trusted context for all evaluators, generic descriptor/backend with structured injected transport, closed versioned scalar profile with evidence binding, public pure validator, detached context freeze, required explicit allowlist.
+  - [x] Generic core (Sol V4-L2 R1 VERDICT: CHANGES addressed; R2 reopened F3/F4/F5/F6 areas and closed them in Lot V4-L2-R2 below): complete canonical definition equality, required trusted context for all evaluators, generic descriptor/backend with structured injected transport, closed versioned scalar profile with evidence binding, public pure validator, detached context freeze, required explicit allowlist.
   - [x] Probes P15–P23, P27-P28 L2, P32–P33 with discriminating regression tests; V4-L1 14/14 + R1 10/10 keep passing migrated.
 - [x] **Lot V4-L2-R1 — Sol V4-L2 R1 findings F1–F11 (review pr693_sol_v4l2_r1.md, VERDICT: CHANGES)**
-  - [ ] F1 scalar raw boundary; F2 required validationContext; F3 generic host/structured backend; F4 complete definition/tariff binding; F5 closed scalar profile; F6 public pure validator.
-  - [ ] F8 required allowlist; F9 tracked docs migration; F10 scope/exception regularization (done in scope commit); F11 atomic commits with per-commit plan updates.
+  - [x] F1 scalar raw boundary; F2 required validationContext; F3 generic host/structured backend; F4 complete definition/tariff binding; F5 closed scalar profile; F6 public pure validator.
+  - [x] F8 required allowlist; F9 tracked docs migration; F10 scope/exception regularization (done in scope commit); F11 atomic commits with per-commit plan updates.
   - [x] F7 context freeze detachment (bounded snapshot first, shared criterion parser, detached frozen copy only).
   - [x] F1 scalar raw boundary (closed scalar raw permission/shape/bytes/consistency before reconstruction).
   - [x] F5 closed scalar profile (version v1 only, confidence meaningRef binding, required evidence, graded direction).
@@ -353,6 +355,22 @@
   - [x] Probes P15–P23 (context/identity/profile/pricing/structured), P27–P28 L2 slices, P32–P33 (packed consumer, canonical-names agreement, README migration path); V4-L1 14/14 + R1 10/10 keep passing migrated. Mesh 1302/1302, cluster 1014 passed, lazy-package 78/78 with re-pinned selected lock (sibling llm-mesh 0.27.1). api unit/integration covered by CI (compose stack not run locally).
 - [x] **Lot SEC-DOMPURIFY — dompurify 3.4.14 to 3.4.17 security floor (BR96-EX13)**
   - [x] Pinned bump (ui/package.json floor + ui/root lock pins, integrity from registry dist); local audit-gate OK with empty unallowlisted set. V4-L2 fixes, main merge and selected lock untouched.
+  - [x] MERGE-MAIN-4 convergence: main #725 pins dompurify exactly (`3.4.17`, no caret) in ui/package.json + ui lock; this branch adopts the exact pin on both files plus the funding-metadata drop, so the ui tree matches main and the audit gate stays green. Floor intent unchanged (3.4.17 minimum, patched release).
+- [x] **Lot MERGE-MAIN-4 — integrate origin/main at e6d173278 (#710 L5 fingerprint, #709 Engram, #725 dompurify)**
+  - [x] No rebase, no force-push. Conflicts (6): BRANCH.md keeps ours; package-lock.json + ui/package.json + ui/package-lock.json take main's exact `3.4.17` dompurify pin (EX13 intent preserved, tree converges); memory manifest/sidecar take main's hardened P1 provenance (lockFingerprint v4, lock snapshots, toolchain snapshots) pending re-pin to the merged root lock; ui lock nested vite 7.3.6→7.3.7 residual kept per EX10.
+  - [x] Judge code, R1/R2 fixes and selected lock untouched by the merge; incoming Engram memory (cluster-mesh) auto-merges. cluster-mesh stays 0.21.2 both sides, llm-mesh 0.27.0→0.27.1 on this branch.
+- [x] **BR96-EX15 — cluster-mesh 0.21.2 to 0.21.3 patch bump (CI enforce-package-bump, re-based)**
+  - [x] Rationale: merging main #709/#710 moved the bump gate baseline to 0.21.2, equal to the branch version, while the branch still carries cluster-mesh src changes (decision surfaces); the gate requires a strictly different version. Impact: version line only in packages/cluster-mesh/package.json, TRAIN_CLUSTER_MESH_VERSION, selected fixture tarball name and root-lock workspace entry; same shape as BR96-EX11. Rollback: revert the version lines (gate goes red again).
+- [x] **BR96-EX16 — committed-path scope regularization for the PR union (conditional paths)**
+  - [x] Rationale: mechanical committed-path validation (union vs merge-base) flags `.track/events.jsonl` + `.track/head.json` (forbidden `.track/**`), `ui/package-lock.json` (forbidden `ui/**`) and root `package-lock.json` / memory history (conditional). The .track appends are workflow-managed consolidate records (realization.anchored + acceptance.run), not product changes; the ui lock residual is the EX10 nested vite 7.3.6→7.3.7 security pin main lacks; root/history paths ride under existing EX12/EX14. Impact: declaration plus relocating `.track/**` out of Forbidden into two narrow conditional files (the track log is workflow-managed and cannot stay untouched on a track-using branch); zero source changes. Rollback: restore the Forbidden `.track/**` item and remove this entry (validation reports these paths again).
+- [x] **Lot V4-L2-R2 — Sol V4-L2 R2 findings R2-F1–R2-F6 (review pr693_sol_v4l2_r2.md, VERDICT: CHANGES)**
+  - [x] R2-F1 evidence transmission + provider binding (bounded payload with full criterion/content, closed revisioned schema, compilation digests, execution cap; adapter registers under the descriptor-selected provider).
+  - [x] R2-F2 transport identity/usage evidence (served model + both counters validated in-band; missing/foreign reports SERVED_IDENTITY_MISMATCH/USAGE_INVALID with conservative unknown usage; no invented 100/5 counters or configured model ID).
+  - [x] R2-F3 output bound + conservative liability (required `maxBillableOutputTokens` for non-JEV quotes, protocol output reserve, pending + reserve floor whenever a priced component is unknown).
+  - [x] R2-F4 definition/tariff authority binding (host lookup key carries protocol/authority/priceRevision; optional price authority/protocol cells validated when present; output-bound and score-semantics mutations break preflight equality).
+  - [x] R2-F5 closed host boundary (closed verdict/score/scale keys, meaning bound to declared-or-protocol semantics, scale bound to criterion, provider raw rejected, verdict rebuilt field by field).
+  - [x] R2-F6 native context/profile contradiction (native-distribution-v1 rejects optional rationale; native binary/graded require score semantics; scalar profile keeps optional rationale).
+  - [x] Discriminating regressions per finding; V4-L1 14/14 + R1 10/10 keep passing; scratch R2 probes retired (review file preserved in .h2a/reviews).
 - [x] **BR96-EX14 — memory L5 manifest re-pin for dompurify root-lock bump (conditional path)**
   - [x] Rationale: pre-candidate manifest pins declaredLockSha256; the EX13 dompurify floor bump changed the root lock sha (95147556 to f084b8f9) so memory-l5-qualification failed with a freeze/lock mismatch; the job runs because the memory_l5 filter includes package-lock.json. Impact: retained superseded manifest in history/2b089c31.json, re-pinned declaredLockSha256, rewrote both sidecars; archives/inventory/provenance (br3Commit 6ec93105b, l5Head 4dd9dcc4b) untouched. Rollback: restore the prior manifest/sidecars with the prior lock sha.
 - [ ] **Lot N-1 — Docs consolidation**
