@@ -110,7 +110,7 @@
     "@modelcontextprotocol/sdk": "^1.31.0"
   },
   "peerDependencies": {
-    "hono": "^4.10.7"
+    "hono": "^4.13.13"
   },
   "peerDependenciesMeta": {
     "hono": {
@@ -120,7 +120,7 @@
   "devDependencies": {
     "@microsoft/api-extractor": "^7.58.9",
     "@types/node": "^22.10.10",
-    "hono": "^4.10.7",
+    "hono": "^4.13.13",
     "typescript": "5.4.5",
     "vitest": "4.1.0"
   }

@@ -174,7 +174,7 @@
     "@sentropic/events": "^0.2.0",
     "@sentropic/mcp-platform": ">=0.4.0 <0.5.0",
     "@stablelib/sha256": "2.0.1",
-    "hono": "^4.10.7"
+    "hono": "^4.13.13"
   },
   "peerDependencies": {
     "@sentropic/comments": "^0.3.0",

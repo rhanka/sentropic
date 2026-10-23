@@ -48,7 +48,7 @@
     "@sentropic/oauth-verify": "^0.1.0"
   },
   "peerDependencies": {
-    "hono": "^4.10.7",
+    "hono": "^4.13.13",
     "jose": "^5.10.0"
   },
   "peerDependenciesMeta": {
