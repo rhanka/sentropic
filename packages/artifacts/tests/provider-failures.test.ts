@@ -1,10 +1,11 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { DERIVATION_VECTORS, type InternalIdempotencyKey } from '../l0-freeze/command-identity-contract.js';
-import { FAILURE_PROJECTIONS, type ArtifactFailure as FrozenFailure,
+import { FAILURE_PROJECTIONS, ORDINARY_FAILURE_PROJECTIONS, type ArtifactFailure as FrozenFailure,
+  type OrdinaryFailure as FrozenOrdinaryFailure,
   type ArtifactOutcome as FrozenOutcome } from '../l0-freeze/failure-contract.js';
 import type { ArtifactAuthorizationDecision } from '../l0-freeze/commit-contract.js';
 import type { HttpResponse } from '../src/http.js';
-import type { ArtifactFailure, ArtifactOutcome, ArtifactPublicRefusal } from '../src/server/failures.js';
+import type { ArtifactOperationalFailure, ArtifactOrdinaryFailure, ArtifactOutcome, ArtifactPublicRefusal } from '../src/server/failures.js';
 
 const scopedKey = DERIVATION_VECTORS[0].sha256 as InternalIdempotencyKey;
 const storageScopeId = DERIVATION_VECTORS[0].binding.scope;
@@ -88,7 +89,7 @@ describe('trusted domain and adapter mappings', () => {
           status: row.httpStatus, publicCode: row.publicCode, retriable: row.retriable },
       }) : row.category === 'provider_error' ? new Error('private') : new ArtifactOperationError(row.category);
     const failure = await expectProjection(cause, {
-      category: row.category, variant: row.variant, httpStatus: row.httpStatus,
+      kind: 'operational', category: row.category, variant: row.variant, httpStatus: row.httpStatus,
       publicCode: row.publicCode, retriable: row.retriable,
     }, { ...context, phase: row.phase, commitState: row.commitState });
     expect(projectArtifactWriteFailure(failure, { dispatched: true, write: true })?.reason).toBe(row.radarLedgerReason);
@@ -106,9 +107,27 @@ describe('trusted domain and adapter mappings', () => {
 
   it('should consume frozen guard and outcome declarations without losing fields', () => {
     expectTypeOf<ArtifactPublicRefusal>().toEqualTypeOf<Extract<ArtifactAuthorizationDecision, { allowed: false }>>();
-    expectTypeOf<Omit<ArtifactFailure, 'category'>>().toEqualTypeOf<Omit<FrozenFailure, 'category'>>();
+    expectTypeOf<ArtifactOperationalFailure>().toEqualTypeOf<FrozenFailure>();
+    expectTypeOf<ArtifactOrdinaryFailure>().toEqualTypeOf<FrozenOrdinaryFailure>();
     expectTypeOf<FrozenOutcome<HttpResponse>>().toExtend<ArtifactOutcome<HttpResponse>>();
   });
+
+  it.each(ORDINARY_FAILURE_PROJECTIONS)('should project frozen ordinary $category without write accounting', async (row) => {
+    const { ArtifactOperationError } = await failures();
+    const { projectArtifactWriteFailure } = await projections();
+    const failure = await expectProjection(new ArtifactOperationError(row.category), {
+      ...row, kind: 'ordinary',
+    }, { ...context, phase: row.phase, commitState: row.commitState });
+    expect(projectArtifactWriteFailure(failure, { dispatched: true, write: true })).toBeUndefined();
+  });
+
+  it.each(['anonymous', 'access_denied', 'admission_unavailable'] as const)
+    ('should keep %s in the admission branch without write accounting', async (kind) => {
+      const { ArtifactOperationError } = await failures();
+      const { projectArtifactWriteFailure } = await projections();
+      const failure = await expectProjection(new ArtifactOperationError(kind), { kind: 'admission' });
+      expect(projectArtifactWriteFailure(failure, { dispatched: true, write: true })).toBeUndefined();
+    });
 
   it('should consume the frozen L0 key-lock phase and full derived identity', async () => {
     const { FINALIZATION_PHASES } = await import('../l0-freeze/commit-contract.js');

@@ -5,12 +5,10 @@ export type ArtifactInternalKey = string & { readonly __brand: 'internal-key' };
 export type ArtifactErrorKind =
   | 'provider_unavailable' | 'command_conflict' | 'pointer_conflict'
   | 'unauthorized_at_commit' | 'capability_unselected' | 'admission_unavailable'
-  | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'verification_failed';
-export type ArtifactFailureCategory =
-  | Exclude<ArtifactErrorKind, 'command_conflict' | 'pointer_conflict'> | 'conflict' | 'provider_error';
+  | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed';
+export type ArtifactFailureCategory = ArtifactFailure['category'];
 
-export interface ArtifactFailure {
-  readonly category: ArtifactFailureCategory;
+interface ArtifactFailureFields {
   readonly variant?: string;
   readonly httpStatus: number;
   readonly publicCode: string;
@@ -22,6 +20,25 @@ export interface ArtifactFailure {
   /** Original thrown value, retained by identity and deliberately non-enumerable. */
   readonly cause: unknown;
 }
+
+export interface ArtifactOperationalFailure extends ArtifactFailureFields {
+  readonly kind: 'operational';
+  readonly category: 'capability_unselected' | 'provider_unavailable' | 'conflict' | 'unauthorized_at_commit' | 'provider_error';
+}
+
+export interface ArtifactOrdinaryFailure extends Omit<ArtifactFailureFields, 'variant' | 'retriable'> {
+  readonly kind: 'ordinary';
+  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed';
+  readonly retriable: false;
+}
+
+/** Entry authority outcomes are separate from ordinary and operational failures. */
+export interface ArtifactAdmissionFailure extends ArtifactFailureFields {
+  readonly kind: 'admission';
+  readonly category: 'admission_unavailable' | 'anonymous' | 'access_denied';
+}
+
+export type ArtifactFailure = ArtifactOperationalFailure | ArtifactOrdinaryFailure | ArtifactAdmissionFailure;
 
 export type ArtifactOutcome<T> =
   | { readonly ok: true; readonly result: T; readonly invocationId: string;
@@ -77,7 +94,7 @@ const UNAVAILABLE_CODES = new Set([
 const TIMEOUT_NAMES = new Set(['TimeoutError', 'RequestTimeout', 'RequestTimeoutError']);
 const DOMAIN_STATUS = {
   invalid_request: 400, anonymous: 401, access_denied: 403,
-  not_found: 404, gone: 410, verification_failed: 422,
+  not_found: 404, gone: 410, unprocessable: 422, verification_failed: 422,
 } as const;
 
 function field(value: unknown, name: string): unknown {
@@ -96,20 +113,27 @@ function chain(cause: unknown): unknown[] {
   return values;
 }
 
-type Projection = Pick<ArtifactFailure, 'category' | 'variant' | 'httpStatus' | 'publicCode' | 'retriable'>;
-const unavailable = (category: 'provider_unavailable' | 'admission_unavailable' = 'provider_unavailable'): Projection => ({
-  category, variant: category === 'admission_unavailable' ? 'entry_outage' : 'dispatch_failure',
-  httpStatus: 503, publicCode: 'capability_unavailable', retriable: true,
-});
-const conflict = (variant = 'key_contention'): Projection => ({ category: 'conflict', variant, httpStatus: 409, publicCode: 'conflict', retriable: false });
-const internal = (): Projection => ({ category: 'provider_error', variant: 'unclassified', httpStatus: 500, publicCode: 'internal_error', retriable: false });
+type FailureProjection<T> = T extends ArtifactFailure
+  ? Omit<T, 'invocationId' | 'operation' | 'phase' | 'commitState' | 'cause'> : never;
+type Projection = FailureProjection<ArtifactFailure>;
+const unavailable = (category: 'provider_unavailable' | 'admission_unavailable' = 'provider_unavailable'): Projection => {
+  const fields = { httpStatus: 503, publicCode: 'capability_unavailable', retriable: true };
+  return category === 'admission_unavailable'
+    ? { ...fields, kind: 'admission', category, variant: 'entry_outage' }
+    : { ...fields, kind: 'operational', category, variant: 'dispatch_failure' };
+};
+const conflict = (variant = 'key_contention'): Projection => ({ kind: 'operational', category: 'conflict', variant, httpStatus: 409, publicCode: 'conflict', retriable: false });
+const internal = (): Projection => ({ kind: 'operational', category: 'provider_error', variant: 'unclassified', httpStatus: 500, publicCode: 'internal_error', retriable: false });
 
 function operationProjection(error: ArtifactOperationError): Projection {
   const { kind } = error;
   switch (kind) {
     case 'provider_unavailable': case 'admission_unavailable': return unavailable(kind);
     case 'command_conflict': case 'pointer_conflict': return conflict(kind);
-    case 'capability_unselected': return { ...unavailable(), category: kind, variant: 'unselected_operation', retriable: false };
+    case 'capability_unselected': return {
+      kind: 'operational', category: kind, variant: 'unselected_operation',
+      httpStatus: 503, publicCode: 'capability_unavailable', retriable: false,
+    };
     case 'unauthorized_at_commit': {
       const refusal = error.details.refusal ?? { allowed: false, reason: 'denied', status: 403, publicCode: 'access_denied', retriable: false };
       // Stable host-approved codes only; a malformed mapping never exposes its text.
@@ -117,13 +141,15 @@ function operationProjection(error: ArtifactOperationError): Projection {
         || !/^[a-z][a-z0-9_]{0,63}$/.test(refusal.publicCode)) return internal();
       const authorityUnavailable = refusal.reason === 'unavailable' && refusal.status === 503;
       return {
-        category: kind, httpStatus: refusal.status,
+        kind: 'operational', category: kind, httpStatus: refusal.status,
         variant: authorityUnavailable ? 'authority_unavailable' : 'policy_denial',
         publicCode: refusal.status === 503 ? 'capability_unavailable' : refusal.publicCode,
         retriable: authorityUnavailable,
       };
     }
-    default: return { category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
+    case 'anonymous': case 'access_denied':
+      return { kind: 'admission', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
+    default: return { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
   }
 }
 
