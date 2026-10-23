@@ -45,6 +45,18 @@ const failAfterHang = <T>(decided: Promise<T>): Promise<T> => Promise.race([deci
   new Promise<never>((_, reject) => setTimeout(() => reject(new Error('decide() hung')), 2000))]);
 
 describe('canonical decision client trusted context (P15/P16/P21)', () => {
+  it('refuses a native-profile rationale contradiction before fetch with zero resolution (R2-F6)', async () => {
+    const request = decisionRequest();
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ kind: 'error', ok: false }), { status: 200 }));
+    const client = clientWith(fetch, (snapshot) => {
+      const semantics = { nativeDecision: false,
+        score: { meaning: 'probability-true', min: 0, max: 1 }, confidence: null, rationale: 'optional' };
+      return { ...contextFor(snapshot), semantics };
+    });
+    const result = await failAfterHang(client.decide(request));
+    expect(result).toMatchObject({ kind: 'connection-failure', receipt: null, callStatus: 'not-sent' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it('refuses an omitted resolver before headers and fetch with zero resolution (F2)', async () => {
     const fetch = vi.fn();
     const headers = vi.fn(() => ({}));
