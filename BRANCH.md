@@ -48,7 +48,7 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
 
 ## Feedback Loop
 - [x] L0-EXCLUDE-1 (superseded): spec r2 forwarded; section 3.2 host API names frozen in the PR #721 fix wave
-- [ ] L0-Q0 (attention): i-cond Q0 inventory (due 22 Oct 12:00 Toronto) not yet forwarded; integrate on arrival as amendment without changing frozen shapes unless r2 requires it
+- [ ] L0-Q0 (attention): i-cond Q0 inventory (due 22 Oct 12:00 Toronto) not yet forwarded; integrate on arrival as amendment without changing frozen shapes unless r2 requires it. Q0-dependent qualification (trusted domains, canonical actor mapping) is NOT part of the frozen contract until the pinned receipt lands
 - [x] L0-R2 (addressed): PR #721 Sol r1 findings fixed in this wave — P1-1 host/transaction freeze, P1-2 outcome variants, P1-3 surrogate rejection, P1-4 key/scope vectors, P1-5 integration train, P2-1 CR-1..CR-5 map
 - [x] L0-CI (acknowledge): CI run 39720063546 failed on the 0.2.0-rc.1 package.json bump (probe version equality, mesh eresolve against frozen range); L0 restructured to docs plus vectors plus l0-freeze with no src or version change, bump deferred to L1
 

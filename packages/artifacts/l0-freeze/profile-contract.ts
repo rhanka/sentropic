@@ -148,6 +148,17 @@ export type CompileArtifactsProfile = (
   input: ArtifactProviderProfile,
 ) => CompiledArtifactsProfile;
 
+/**
+ * Semantic-only profile pair: identical expressible JSON Schema text with
+ * different effective semantics. The digest MUST invalidate on such a
+ * change even when schema text is unchanged.
+ */
+export const PROFILE_SEMANTIC_PAIR = {
+  schemaText: '{"type":"object","properties":{"files":{"type":"array"}}}',
+  first: { operation: 'publish', limits: { maxFiles: 32, maxTotalBytes: 262144 }, defaults: {} },
+  second: { operation: 'publish', limits: { maxFiles: 16, maxTotalBytes: 262144 }, defaults: {} },
+} as const;
+
 const isKnownToolName = (value: string): boolean =>
   (KNOWN_ARTIFACT_TOOL_NAMES as readonly string[]).includes(value);
 
