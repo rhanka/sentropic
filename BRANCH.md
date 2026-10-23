@@ -39,6 +39,7 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
 
 ## Feedback Loop
 - `SECDAILY-EX6-note` / `attention`: toolbox path `api/Dockerfile` is listed in Allowed Paths as read-only inventory reference only, no modification in S1. It fixes the exact existing approved toolbox path (`ci-tools` and `ci-esbuild` stages) that S2c exception SECDAILY-EX6 depends on.
+- `owner-all-public` / `acknowledge`: binding owner decision (OWNER-REQUEST.md 2026-10-23 disclosure section) supersedes the spec private-scan design. No private scan repo, everything runs in the public repos, fix PRs are public and auto-merged after other-model review and green CI. S1 contract adapted accordingly.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -63,48 +64,49 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
   - Switch back to `tmp/worktrees/sec-s1` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline and constraints**
-  - [ ] Read `rules/MASTER.md` and `rules/workflow.md`.
-  - [ ] Create isolated worktree `tmp/worktrees/sec-s1` from `origin/main` on branch `feat/security-autofix-s1`.
-  - [ ] Capture Makefile targets needed for debug/testing.
-  - [ ] Define environment mapping (`ENV=test-sec-s1`) for this branch.
-  - [ ] Confirm command style: `make ... ENV=test-sec-s1` with `ENV` last.
-  - [ ] Confirm scope and guardrails.
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
-  - [ ] Resolve existing toolbox path `api/Dockerfile` (`ci-tools`, `ci-esbuild` stages) as inventory fact for SECDAILY-EX6.
-- [ ] **Lot 1 — S1 contract `.security/security-fix.json`**
-  - [ ] Declare inventory surfaces (three images, root/UI/kit locks, SAST roots, derived pins).
-  - [ ] Declare HIGH/CRITICAL severity contract with identical flags before/after and reconciliation.
-  - [ ] Declare raw/register join with 67-row expiry split (60 due 2026-11-20, 7 expired).
-  - [ ] Declare grouping into remediation units and bounded lots (3 units, 10 files, 150 lines).
-  - [ ] Declare exact automatic scope from spec section 7 with exclusion list.
-  - [ ] Integrate P3-1 credential naming (read-only App installation on scan repository).
-  - [ ] Integrate P3-4 bumpGate manual class for published package dependency edits.
-  - [ ] Declare N=2 reconciliation rule with reset conditions.
-  - [ ] Declare kill switches and rate limits.
-  - [ ] Lot gate:
-    - [ ] `make scope-check ENV=test-sec-s1`
-    - [ ] `make commit MSG="..." ENV=test-sec-s1` with selective `git add`
-- [ ] **Lot 2 — S1 modules `scripts/security/daily/schema.mjs` and `inventory.mjs`**
-  - [ ] Implement schema validation for contract, findings, units, lots, reconciliation evidence.
-  - [ ] Implement inventory of locks, images, SAST roots, derived-pin consumers.
-  - [ ] Implement raw/register join, grouping, lot batching, reconciliation streak check.
-  - [ ] Implement bumpGate manual classification hook.
-  - [ ] Lot gate:
-    - [ ] `make scope-check ENV=test-sec-s1`
-    - [ ] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-s1`
-- [ ] **Lot 3 — S1 tests `schema.test.mjs` and `inventory.test.mjs`**
-  - [ ] Cover three images, root/UI/kit locks, 67-row expiry split, seven stale-container candidates.
-  - [ ] Cover N=2 complete-scan fixture, severity flags, aliases, malformed data.
-  - [ ] Cover P3-1 credential fields and P3-4 manual class.
-  - [ ] Lot gate:
-    - [ ] `make scope-check ENV=test-sec-s1`
-    - [ ] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-s1`
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] No spec consolidation needed for S1 contract branch.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
+  - [x] Create isolated worktree `tmp/worktrees/sec-s1` from `origin/main` on branch `feat/security-autofix-s1`.
+  - [x] Capture Makefile targets needed for debug/testing.
+  - [x] Define environment mapping (`ENV=test-sec-s1`) for this branch.
+  - [x] Confirm command style: `make ... ENV=test-sec-s1` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
+  - [x] Resolve existing toolbox path `api/Dockerfile` (`ci-tools`, `ci-esbuild` stages) as inventory fact for SECDAILY-EX6.
+- [x] **Lot 1 — S1 contract `.security/security-fix.json`**
+  - [x] Declare inventory surfaces (three images, root/UI/kit locks, SAST roots, derived pins).
+  - [x] Declare HIGH/CRITICAL severity contract with identical flags before/after and reconciliation.
+  - [x] Declare raw/register join with 67-row expiry split (60 due 2026-11-20, 7 expired).
+  - [x] Declare grouping into remediation units and bounded lots (3 units, 10 files, 150 lines).
+  - [x] Declare exact automatic scope from spec section 7 with exclusion list.
+  - [x] Integrate P3-1 credential naming (read-only access on the public repository, owner all-public decision).
+  - [x] Integrate P3-4 bumpGate manual class for published package dependency edits.
+  - [x] Declare N=2 reconciliation rule with reset conditions.
+  - [x] Declare kill switches and rate limits.
+  - [x] Lot gate:
+    - [x] `make scope-check ENV=test-sec-s1`
+    - [x] `make commit MSG="..." ENV=test-sec-s1` with selective `git add`
+- [x] **Lot 2 — S1 modules `scripts/security/daily/schema.mjs` and `inventory.mjs`**
+  - [x] Implement schema validation for contract, findings, units, lots, reconciliation evidence.
+  - [x] Implement inventory of locks, images, SAST roots, derived-pin consumers.
+  - [x] Implement raw/register join, grouping, lot batching, reconciliation streak check.
+  - [x] Implement bumpGate manual classification hook.
+  - [x] Lot gate:
+    - [x] `make scope-check ENV=test-sec-s1`
+    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-s1`
+- [x] **Lot 3 — S1 tests `schema.test.mjs` and `inventory.test.mjs`**
+  - [x] Cover three images, root/UI/kit locks, 67-row expiry split, seven stale-container candidates.
+  - [x] Cover N=2 complete-scan fixture, severity flags, aliases, malformed data.
+  - [x] Cover P3-1 credential fields and P3-4 manual class.
+  - [x] Cover owner all-public decision (no private scan repo or storage).
+  - [x] Lot gate:
+    - [x] `make scope-check ENV=test-sec-s1`
+    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-s1`
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] No spec consolidation needed for S1 contract branch.
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck and lint not applicable to plain Node security scripts.
-  - [ ] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-s1`.
+  - [x] Typecheck and lint not applicable to plain Node security scripts.
+  - [x] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-s1` (14 pass).
   - [ ] Final gate step 1: create draft PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run and verify branch CI green.
   - [ ] Final gate step 3: do not merge, report PR number, head SHA, CI URL.
