@@ -26,6 +26,7 @@
 
 ## Feedback Loop
 - [x] Report H1–H9 replacements and all source divergences in `docs/governance/validation/converge32.md`.
+- [ ] Owner wording decision: 35 collapsed zone occurrences cannot contain their unchanged title/subtitle at 460 × 200. Keep complete text and diagnostics; strict fit stays blocking, without changing font sizes or timeouts.
 - [x] Replace inherited #711 plan; generated routes/portable and inherited-plan replacement exceed routine line budget. Keep handwritten implementation commits near 150 lines.
 - [x] No Track writes: scope excludes `.track/**`; mechanical harness checks remain mandatory.
 
@@ -50,9 +51,10 @@
 - [ ] **Lot 3 — Qualification**
   - [x] Run new `scripts/check-{convergence,card-parity,routing-budget}.mjs`; card parity, pinned footer at 0/1/2 lines and routing budgets pass. Strict fit stays blocking on unchanged long zone text.
   - [x] Geometry: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 121 ms. Browser fit remains pending the recorded wording conflict.
-  - [ ] Source, geometry, browser (600 interactions + 240 stress toggles), content and unchanged idle/1800 ms performance gates.
+  - [x] Source, geometry, 896 browser interactions (656 normal + 240 stress), card parity and unchanged idle/1800 ms performance budgets pass. Strict text fit remains blocking and is reported separately.
   - [x] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
 - [ ] **Lot 4 — Delivery**
-  - [ ] Record H1–H9 file:line replacements, divergences and validation in `validation/converge32.md`.
+  - [x] Record H1–H9 file:line replacements, divergences and validation in `validation/converge32.md`.
   - [ ] Rebuild/deliver portable, refresh SHA256SUMS; scope check before each selective make commit.
-  - [ ] Push draft PR using this plan as body, post four-lot plan; green final-head CI; report PR/SHA/digest; do not merge.
+  - [x] Create draft PR #726 using this plan as body and post the four-step plan; keep it draft and unmerged.
+  - [ ] Post-push gate: record exact-head green CI and the final portable digest in the PR delivery comment; no further source commit is needed for that external result.
