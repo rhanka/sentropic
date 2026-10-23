@@ -161,10 +161,23 @@ export function validateBindingName(value: unknown): boolean {
 /**
  * Caller idempotency keys: original string, trim() must be nonempty,
  * at most 256 UTF-16 code units. Whitespace around a nonempty value is
- * retained; no trimming or Unicode normalization is applied.
+ * retained; no trimming or Unicode normalization is applied. Lone high
+ * or low surrogates are rejected before UTF-8 conversion, derivation or
+ * storage so distinct caller keys can never alias one durable identity
+ * through replacement-character encoding.
  */
 export function validateCallerIdempotencyKey(value: unknown): boolean {
-  return typeof value === 'string' && value.length <= 256 && value.trim().length > 0;
+  if (typeof value !== 'string') return false;
+  if (value.length > 256 || value.trim().length === 0) return false;
+  for (let i = 0; i < value.length; i++) {
+    const unit = value.charCodeAt(i);
+    if (unit < 0xd800 || unit > 0xdfff) continue;
+    if (unit > 0xdbff) return false;
+    const next = i + 1 < value.length ? value.charCodeAt(i + 1) : 0;
+    if (next < 0xdc00 || next > 0xdfff) return false;
+    i++;
+  }
+  return true;
 }
 
 /** Radar publication files carry 1-32 entries within the decoded-byte budget. */
