@@ -52,16 +52,15 @@ export function freezeDeep<T>(value: T): T {
 
 /** Command/profile codec: objects sort recursively; arrays retain order. */
 export function orderedJson(value: unknown): string {
-  const canonicalize = (entry: JsonValue): JsonValue => {
-    if (Array.isArray(entry)) return entry.map(canonicalize);
+  const canonicalize = (entry: JsonValue): string => {
+    if (Array.isArray(entry)) return `[${entry.map(canonicalize).join(',')}]`;
     if (entry !== null && typeof entry === 'object') {
-      const out = Object.create(null) as Record<string, JsonValue>;
-      for (const key of Object.keys(entry).sort()) out[key] = canonicalize(entry[key]!);
-      return out;
+      return `{${Object.keys(entry).sort().map((key) =>
+        `${JSON.stringify(key)}:${canonicalize(entry[key]!)}`).join(',')}}`;
     }
-    return entry;
+    return JSON.stringify(entry);
   };
-  return JSON.stringify(canonicalize(copyJson(value)));
+  return canonicalize(copyJson(value));
 }
 export function orderedDigest(value: unknown): string {
   return createHash('sha256').update(orderedJson(value), 'utf8').digest('hex');
