@@ -77,7 +77,7 @@ describe('decision-only chat selection', () => {
   it.each(['local', 'unknown-provider', 'openai'])(
     'preserves ordinary empty-inventory fallback (%s)', (providerId) => {
       expect(resolveDefaultSelection({ providerId, modelId: 'missing-model' }, []))
-        .toEqual({ provider_id: 'openai', model_id: 'gpt-4.1-nano' });
+        .toEqual({ provider_id: 'openai', model_id: 'gpt-5.4-nano' });
     });
 
   it('retains a valid chat pair and rejects an inferred marked provider', () => {

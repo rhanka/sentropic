@@ -31,6 +31,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { callLLMStream } from '../../src/services/llm-runtime';
+import { CHAT_COMMON_PROMPTS } from '../../src/config/default-chat-system';
 import { generateCommentResolutionProposal } from '../../src/services/context-comments';
 import { queueManager } from '../../src/services/queue-manager';
 
@@ -57,7 +58,15 @@ describe('Chat tools API - comment_assistant', () => {
   const assistantMessageIds: string[] = [];
   const sessionIds: string[] = [];
 
+  // Retirement bump (BR96-EX20): the successor default model supports reasoning,
+  // so the effort evaluator would consume the first mocked stream of every test.
+  // This comment_assistant suite runs without the eval template (medium fallback,
+  // no extra LLM call), as before the bump; evaluation stays covered by dedicated tests.
+  let savedReasoningEffortEvalTemplate: string | undefined;
+
   beforeEach(async () => {
+    savedReasoningEffortEvalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval;
+    CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
     user = await createAuthenticatedUser('editor', `editor-${createTestId()}@example.com`);
     viewer = await createAuthenticatedUser('guest', `viewer-${createTestId()}@example.com`);
     admin = await createAuthenticatedUser('admin', `admin-${createTestId()}@example.com`);
@@ -133,6 +142,10 @@ describe('Chat tools API - comment_assistant', () => {
     await cleanupAuthData();
     assistantMessageIds.length = 0;
     sessionIds.length = 0;
+    if (savedReasoningEffortEvalTemplate !== undefined) {
+      CHAT_COMMON_PROMPTS.reasoning_effort_eval = savedReasoningEffortEvalTemplate;
+      savedReasoningEffortEvalTemplate = undefined;
+    }
     vi.clearAllMocks();
   });
 
