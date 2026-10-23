@@ -13,6 +13,10 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - [ ] **Allowed Paths (implementation scope)**:
+  - [x] `docs/governance/kit/package-lock.json` (BR709-EX10: inherited unchanged from origin/main only)
+  - [x] `docs/governance/kit/package.json` (BR709-EX10: inherited unchanged from origin/main only)
+  - [x] `ui/package-lock.json` (BR709-EX10: inherited unchanged from origin/main only)
+  - [x] `ui/package.json` (BR709-EX10: inherited unchanged from origin/main only)
   - [ ] `packages/cluster-mesh/src/engram-memory/**`
   - [ ] `packages/cluster-mesh/tests/engram-memory/**`
   - [ ] `packages/cluster-mesh/assets/storage/engram-memory/**`
@@ -62,6 +66,7 @@
   - [ ] Engram checkouts remain read-only; published SQL bytes and L5 lock-coupling follow-up remain outside this implementation.
 
 ## Feedback Loop
+- [x] BR709-EX10 (owner-authorized final integration of origin/main at 25af28bbc, no rebase): retain this branch plan and Engram 0.21.1 changes; inherit upstream DOMPurify 3.4.17 manifests, overrides and locks unchanged. Retain both immutable L5 predecessor manifests and regenerate the candidate and digest through Make against the merged root lock; refresh packaging fixture locks only if required. Inherited upstream paths are not authored changes. Impact: merge reconciliation and derived pins only. Rollback: revert the merge commit. Authorization: owner final integration instruction and merge GO for PR 709.
 - [x] BR709-EX9 verification: Docker-run audit-gate passes both UI production and all-workspace production scopes with no HIGH/CRITICAL exceptions. The authored lock diff is exactly the DOMPurify version/resolved/integrity tuple (3.4.17). P1 regeneration passes using unchanged, previously built platform/broker archives; manifest SHA-256 1595638035c607c6369fb24dce64d4d1e89d8a74a03bb5b84546fe72a02e5d5c.
 - [x] `BR709-EX9` (`package-lock.json` DOMPurify entry only, conditional `tools/memory-mcp-l5/artifacts/**` for lock coupling): update DOMPurify 3.4.14 to 3.4.17 within the existing UI ^3.4.14 range. Reason: CI 39846780982 blocks UI/API/toolbox image audit on GHSA-cg2g-xh64-v4q7 (critical), GHSA-mrv2-3pqr-j5jr (high), and three low advisories; npm reports fixed in 3.4.17. Impact: one patch-level resolved dependency, no manifest/code/allowlist change; Engram 0.21.1 and all approved pins preserved. Retain P1 predecessor 1257687ea451e2993f3765b3a0440e7692b32de7130e75f391107d0dcba4cc4c before sanctioned regeneration. Rollback: restore previous lock and retained manifest. Authorization: owner requirement for CI green on the exact head; directly blocking dependency repair.
 - [x] BR709-EX8 validation: registry version/gitHead/integrity match the conductor artifact; recursive Engram lock closure has no pg, pgvector, neo4j-driver or Spanner edge; host api pg dependency retained. All 70 Engram tests (11 files) pass with 0.21.1; officeparser 8.2.0 and file-type 22.1.0 remain pinned. P1 predecessor 3bb9f6983b523cec260b930b866a3be2bbe92c5f1319750037890e111788fdc7 retained byte-for-byte; refreshed manifest 1257687ea451e2993f3765b3a0440e7692b32de7130e75f391107d0dcba4cc4c passes the packer. Generated lock pruning is one indivisible dependency update.
