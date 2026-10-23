@@ -22,6 +22,7 @@ import {
   PROFILE_BOUNDS,
   PROFILE_CONTRACT_VERSION,
   PROFILE_RESERVED_FIRST_SEGMENTS,
+  PROFILE_SEMANTIC_PAIR,
   PROFILE_TEXT_MIME_TYPES,
   RADAR_INVOCATION_SCOPE,
   RADAR_OPERATION_ROUTES,
@@ -196,6 +197,19 @@ describe('effective-profile contract', () => {
     const body = deepFreeze(structuredClone(CANONICAL_COMMAND_FIXTURES[0].body));
     expect(() => canonicalizeJson(body)).not.toThrow();
     expect(canonicalizeJson(body)).toBe(CANONICAL_COMMAND_FIXTURES[0].canonical);
+  });
+
+  it('should isolate separate principals with distinct key digests', () => {
+    const alice = DERIVATION_VECTORS.find((vector) => vector.name === 'ensure-alice');
+    const issuerAlice = DERIVATION_VECTORS.find((vector) => vector.name === 'ensure-issuer-alice');
+    expect(alice?.preimage).toBe('s|alice|ensure||key-2');
+    expect(issuerAlice?.preimage).toBe('s|issuer|alice|ensure||key-2');
+    expect(alice?.sha256).not.toBe(issuerAlice?.sha256);
+  });
+
+  it('should distinguish semantic-only profile pairs under identical schema text', () => {
+    const { first, second } = PROFILE_SEMANTIC_PAIR;
+    expect(canonicalizeJson(first)).not.toBe(canonicalizeJson(second));
   });
 
   it('should freeze the four C2 capability routes', () => {

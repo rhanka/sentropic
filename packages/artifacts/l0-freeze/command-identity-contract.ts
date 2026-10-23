@@ -78,6 +78,24 @@ export const DERIVATION_VECTORS: readonly DerivationVector[] = [
     preimage: 'tenant:t1|alice|ensure||key-2',
     sha256: '437be4b21dce49e880ba3cc697fef667bed4ed0c0ec90e9cbdbad43f1a4a5cbb',
   },
+  {
+    name: 'ensure-alice',
+    binding: {
+      algorithm: 'radar-derive-idempotency-v1', scope: 's', actor: 'alice',
+      operation: 'ensure', objectId: '', callerKey: 'key-2',
+    },
+    preimage: 's|alice|ensure||key-2',
+    sha256: '68934203b875d8ea78a6533b2a971f86b49c1c32416da4af8bd786058a49e1fa',
+  },
+  {
+    name: 'ensure-issuer-alice',
+    binding: {
+      algorithm: 'radar-derive-idempotency-v1', scope: 's', actor: 'issuer|alice',
+      operation: 'ensure', objectId: '', callerKey: 'key-2',
+    },
+    preimage: 's|issuer|alice|ensure||key-2',
+    sha256: '1d9b9a3f67238ad0cc6a7ac257232c2d0a1e5dc709d58d09901a2ca68fb98b28',
+  },
 ];
 
 /**
