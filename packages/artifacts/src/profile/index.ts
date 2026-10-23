@@ -3,7 +3,7 @@ import { ARTIFACT_CAPABILITY_NAMES, ArtifactProfileInputError, PROFILE_CONTRACT_
   type ArtifactCapabilityName, type ArtifactProviderProfile, type ArtifactSchema,
   type CompiledArtifactsProfile } from './contracts.js';
 import { copyJson, freezeDeep, isRecord, orderedDigest } from './json.js';
-import { capabilitySchema } from './schemas.js';
+import { assertCompleteOperation, capabilitySchema } from './schemas.js';
 import { matchesSchema, normalizeArguments } from './validation.js';
 export * from './contracts.js';
 export { RADAR_ARTIFACTS_PROFILE } from './radar.js';
@@ -36,6 +36,7 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       !(ARTIFACT_CAPABILITY_NAMES as readonly string[]).includes(`artifacts_${op.operation}`) ||
       Object.keys(op).some((key) => !['operation', 'limits', 'defaults'].includes(key)) ||
       Object.values(op.limits).some((n) => typeof n !== 'number' || !Number.isSafeInteger(n) || n <= 0)) throw new Error('invalid operation profile');
+    assertCompleteOperation(op);
     for (const [minimum, maximum] of [['bindingNameMinUnits', 'bindingNameMaxUnits'],
       ['publishFilesMin', 'publishFilesMax'], ['listLimitMin', 'listLimitMax']]) {
       if (op.limits[minimum] > op.limits[maximum]) throw new Error('inconsistent profile bounds');

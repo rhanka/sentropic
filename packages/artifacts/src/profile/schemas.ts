@@ -9,6 +9,23 @@ const id = { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 const primitiveRecord = { type: 'object', propertyNames: { not: { enum: ['__proto__', 'constructor', 'prototype'] } },
   additionalProperties: { type: ['string', 'number', 'boolean', 'null'] }, default: {} };
 
+/** Required configuration includes semantic limits absent from JSON Schema. */
+export function assertCompleteOperation(config: OperationProfile): void {
+  const required: Record<string, { limits: string[]; defaults: string[] }> = {
+    ensure: { limits: ['bindingNameMinUnits', 'bindingNameMaxUnits', 'idempotencyKeyMaxUnits'],
+      defaults: ['parameters'] },
+    publish: { limits: ['idempotencyKeyMaxUnits', 'publishFilesMin', 'publishFilesMax',
+      'maxDecodedFileBytes', 'maxDecodedTotalBytes'], defaults: ['profile'] },
+    list: { limits: ['listLimitMin', 'listLimitMax'], defaults: ['limit', 'offset'] },
+    commit_upload: { limits: ['idempotencyKeyMaxUnits'], defaults: ['profile'] },
+  };
+  const fields = required[config.operation];
+  if (fields && (fields.limits.some((key) => !Object.hasOwn(config.limits, key)) ||
+    fields.defaults.some((key) => !Object.hasOwn(config.defaults, key)))) {
+    throw new Error(`incomplete operation profile: ${config.operation}`);
+  }
+}
+
 export function operationProfile(profile: ArtifactProviderProfile, operation: string): OperationProfile {
   const configured = profile.operations.find((entry) => entry.operation === operation);
   if (!configured) throw new Error(`missing operation profile: ${operation}`);

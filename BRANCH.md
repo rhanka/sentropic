@@ -68,4 +68,7 @@
 - [x] Gates: CI make typecheck-artifacts, lint-artifacts, test-artifacts and integration/pack/probe pass; mechanical scope-check before every commit.
 - [x] Local gates: lint-artifacts and final cached-toolchain typecheck/238 unit tests pass; local test-artifacts temporary npm install stalled and was stopped after the exact CI gate passed.
 - [x] Delivery: pushed feat/artifacts-861-L1; DRAFT PR #724 against feat/artifacts-861-contracts; no merge.
+- [x] Astra P2-1: reproduce missing semantic budget acceptance; require every operation limit/default before schema generation; retain one-byte success and overflow refusal.
+- [ ] Astra P2-2: permit inert primitive prototype-named entries and preserve their command identity.
+- [ ] Integrate PR #721 L0-fix commits by merge and reconcile corrected profile/context/outcome shapes.
 - [ ] Global CI green: requires integration/security remediation of the evidenced dompurify audit failures and the reserved version/bump gate.
