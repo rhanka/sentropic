@@ -6,6 +6,19 @@ is explicit four-tool input; the compiler never substitutes it for missing
 selection. Empty selection exposes no schema and refuses every dispatch.
 Additional known capabilities require explicit operation profiles.
 
+The corrected L0 input uses top-level `selectedCapabilities`; the compiler
+returns those capabilities, version, operations and contract revisions at
+top level alongside schemas and digest. Omitted `rules` expands to the fixed
+v1 C4 semantic rules recorded in the Radar constant; supplied rules remain
+explicitly validated. The expanded rules always enter the immutable profile
+and digest. This does not supply missing selection, limits or defaults.
+Runtime declarations mirror the unpacked `l0-freeze` shapes because that
+directory is outside the package's runtime source/build boundary.
+Selection errors expose `httpStatus` and `variant: unselected_operation`;
+L6 adds invocation correlation when projecting them, without write dispatch.
+The trusted authority uses L0's `actorId` and `storageScopeId`; guard and
+transaction behavior remain L3/L6 responsibilities.
+
 The compiled object owns immutable selection, schemas, semantic rules,
 operation limits/defaults, principal idempotency metadata and integrity digest.
 No caller schema override is accepted. The digest covers semantic byte limits

@@ -1,5 +1,5 @@
 import { isArtifactId, type JsonValue } from '../contracts.js';
-import { ArtifactProfileInputError, type ArtifactProviderProfile, type ArtifactSchema } from './contracts.js';
+import { ArtifactProfileInputError, type EffectiveArtifactProfile, type ArtifactSchema } from './contracts.js';
 import { copyJson, freezeDeep, isRecord } from './json.js';
 import { operationProfile } from './schemas.js';
 
@@ -48,7 +48,7 @@ export function matchesSchema(value: unknown, schema: ArtifactSchema): boolean {
   return true;
 }
 
-export function normalizeArguments(profile: ArtifactProviderProfile, name: string, input: unknown,
+export function normalizeArguments(profile: EffectiveArtifactProfile, name: string, input: unknown,
   schema: ArtifactSchema, envelopeKey?: string): Readonly<Record<string, JsonValue>> {
   const args = copyJson(input);
   requireInput(isRecord(args) && matchesSchema(args, schema));

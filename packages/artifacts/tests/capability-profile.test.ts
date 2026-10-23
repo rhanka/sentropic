@@ -1,17 +1,38 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { ArtifactProviderProfile as FrozenProviderProfile,
+  CompiledArtifactsProfile as FrozenCompiledProfile } from '../l0-freeze/profile-contract.js';
 let compileArtifactsProfile: typeof import('../src/profile/index.js').compileArtifactsProfile;
 let RADAR_ARTIFACTS_PROFILE: typeof import('../src/profile/index.js').RADAR_ARTIFACTS_PROFILE;
 
-const compile = (tools = [...RADAR_ARTIFACTS_PROFILE.selection.tools]) =>
-  compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selection: { tools } });
+const compile = (selectedCapabilities = [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities]) =>
+  compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selectedCapabilities });
 
 describe('compiled capability profile', () => {
   beforeEach(async () => {
     ({ compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } = await import('../src/profile/index.js'));
   });
+  it('should compile the corrected L0 provider input and expose its inherited output fields', () => {
+    const input: FrozenProviderProfile = { version: RADAR_ARTIFACTS_PROFILE.version,
+      selectedCapabilities: ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'],
+      operations: RADAR_ARTIFACTS_PROFILE.operations, contractRevisions: RADAR_ARTIFACTS_PROFILE.contractRevisions };
+    const compiled: FrozenCompiledProfile = compileArtifactsProfile(input);
+    expect(compiled.selectedCapabilities).toEqual(input.selectedCapabilities);
+    expect(compiled.operations).toEqual(input.operations);
+    expect(compiled.contractRevisions).toEqual(input.contractRevisions);
+    expect(compiled.version).toBe(input.version);
+    expect(compiled.profileDigest).toBe(compile().profileDigest);
+    expect(Object.isFrozen(compiled.operations)).toBe(true);
+  });
+
+  it('should expose the corrected L0 selection projection without invocation correlation', () => {
+    expect(() => compile([]).validate('artifacts_publish', null)).toThrowError(
+      expect.objectContaining({ httpStatus: 503, category: 'capability_unselected',
+        variant: 'unselected_operation', phase: 'selection', retriable: false, commitState: 'not_committed' }),
+    );
+  });
   it('should expose exactly the deterministic selected set when input order varies', () => {
     const a = compile();
-    const b = compile([...RADAR_ARTIFACTS_PROFILE.selection.tools].reverse());
+    const b = compile([...RADAR_ARTIFACTS_PROFILE.selectedCapabilities].reverse());
     expect(a.selectedCapabilities).toEqual([
       'artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get',
     ]);
@@ -22,8 +43,8 @@ describe('compiled capability profile', () => {
   });
 
   it('should refuse missing, unknown and duplicate selections during composition', () => {
-    for (const selection of [undefined, { tools: ['unknown'] }, { tools: ['artifacts_get', 'artifacts_get'] }]) {
-      expect(() => compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selection } as never)).toThrow();
+    for (const selectedCapabilities of [undefined, ['unknown'], ['artifacts_get', 'artifacts_get']]) {
+      expect(() => compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selectedCapabilities } as never)).toThrow();
     }
   });
 
@@ -61,7 +82,7 @@ describe('compiled capability profile', () => {
       }
     }
     const source = structuredClone(RADAR_ARTIFACTS_PROFILE);
-    source.selection = { tools: [] };
+    source.selectedCapabilities = [];
     delete source.operations.find((op) => op.operation === 'publish')!.limits.maxDecodedTotalBytes;
     expect(() => compileArtifactsProfile(source)).toThrow();
   });

@@ -29,14 +29,18 @@ export interface ArtifactProfileRules {
 }
 export interface ArtifactProviderProfile {
   readonly version: typeof PROFILE_CONTRACT_VERSION;
-  readonly selection: { readonly tools: readonly string[] };
+  readonly selectedCapabilities: readonly string[];
   readonly operations: readonly OperationProfile[];
   readonly contractRevisions: Record<string, string>;
+  /** Omission selects the fixed v1 semantics, never a capability selection. */
+  readonly rules?: ArtifactProfileRules;
+}
+export interface EffectiveArtifactProfile extends ArtifactProviderProfile {
   readonly rules: ArtifactProfileRules;
 }
-export interface CompiledArtifactsProfile {
+export interface CompiledArtifactsProfile extends EffectiveArtifactProfile {
   readonly selectedCapabilities: readonly ArtifactCapabilityName[];
-  readonly profile: ArtifactProviderProfile;
+  readonly profile: EffectiveArtifactProfile;
   readonly profileDigest: string;
   readonly schemas: Readonly<Partial<Record<ArtifactCapabilityName, ArtifactSchema>>>;
   readonly idempotency: Readonly<Partial<Record<ArtifactCapabilityName,
@@ -49,6 +53,8 @@ export interface CompiledArtifactsProfile {
 /** Projection fields are data-only; invocation correlation is added by L6. */
 export class ArtifactProfileInputError extends Error {
   readonly status: number;
+  readonly httpStatus: number;
+  readonly variant: 'unselected_operation' | 'invalid_request';
   readonly publicCode: string;
   readonly category: 'invalid_request' | 'capability_unselected';
   readonly retriable = false;
@@ -58,6 +64,8 @@ export class ArtifactProfileInputError extends Error {
     super(unselected ? 'capability_unavailable' : 'invalid_request');
     this.name = 'ArtifactProfileInputError';
     this.status = unselected ? 503 : 400;
+    this.httpStatus = this.status;
+    this.variant = unselected ? 'unselected_operation' : 'invalid_request';
     this.publicCode = this.message;
     this.category = unselected ? 'capability_unselected' : 'invalid_request';
     this.phase = unselected ? 'selection' : 'validation';
