@@ -6,6 +6,7 @@ import {
   RFC8693_GRANT_TYPE,
   type SignedProjectionReference,
 } from '../src/index.js';
+import { FakeTokenIssuer } from './fixtures/fake-token-issuer.js';
 
 const ref: SignedProjectionReference = {
   kind: 'memory_snapshot', reference: 'snapshot:1', homeNodeId: 'node:local',
@@ -56,5 +57,76 @@ describe('degenerate cluster mesh', () => {
     expect(run).toHaveBeenCalledWith('h2a', [
       'nhi', 'attest', '--instance', 'codex:local:123', '--private-key', '/run/key.pem',
     ]);
+  });
+
+  it('should report tokenExchange available and exchange when binding and policy pass preflight', async () => {
+    const run = vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '' }));
+    const issuer = new FakeTokenIssuer({ issuer: 'https://fake-idp.example.test' });
+    const mesh = createDegenerateClusterMesh({
+      self: { kind: 'server', nodeId: 'node:local', issuer: ref.issuer, endpoint: 'https://app.example.test', state: 'active' },
+      workstations: { async listAttached() { return []; } },
+      memberships: { async resolveApproved(input) { return { tenantId: 'tenant-acme', userId: input.userId, status: 'approved' }; } },
+      projections: {
+        async create() { return ref; }, async verify() { return true; }, async resolve() { return {}; },
+      },
+      nhiRunner: { run },
+      devices: {
+        issueDeviceCode() { return { deviceCode: 'd', userCode: 'u', intervalSec: 5, expiresAt: new Date(0) }; },
+        pollDeviceCode() { return { status: 'expired' }; },
+        approveDeviceCode() { return { ok: false, reason: 'not_found' }; },
+      },
+      tokenExchange: {
+        issuer,
+        audiences: ['remote-instance'],
+        subjectAudience: 'https://mesh.example.test',
+        workloadClientId: 'workload-1',
+        workloadActorSub: 'workload-1',
+        environment: 'test',
+      },
+    });
+
+    expect(mesh.capabilities.tokenExchange).toBe('available');
+    const subjectToken = await issuer.issueSubject({ subject: 'user-1', scope: ['openid'] });
+    const response = await mesh.trust.tokenExchange.exchange({
+      grantType: RFC8693_GRANT_TYPE,
+      subjectToken,
+      subjectTokenType: ACCESS_TOKEN_TYPE,
+      audience: 'remote-instance',
+      scope: ['openid'],
+    });
+    expect(response.tokenType).toBe('Bearer');
+    expect(response.accessToken).not.toBe(subjectToken);
+  });
+
+  it('should stay gated without exchange policy and throw on an invalid one', async () => {
+    const run = vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '' }));
+    const issuer = new FakeTokenIssuer({ issuer: 'https://fake-idp.example.test' });
+    const base = {
+      self: { kind: 'server', nodeId: 'node:local', issuer: ref.issuer, endpoint: 'https://app.example.test', state: 'active' },
+      workstations: { async listAttached() { return []; } },
+      memberships: { async resolveApproved(input: { userId: string }) { return { tenantId: 'tenant-acme', userId: input.userId, status: 'approved' }; } },
+      projections: {
+        async create() { return ref; }, async verify() { return true; }, async resolve() { return {}; },
+      },
+      nhiRunner: { run },
+      devices: {
+        issueDeviceCode() { return { deviceCode: 'd', userCode: 'u', intervalSec: 5, expiresAt: new Date(0) }; },
+        pollDeviceCode() { return { status: 'expired' }; },
+        approveDeviceCode() { return { ok: false, reason: 'not_found' }; },
+      },
+    };
+
+    expect(createDegenerateClusterMesh(base).capabilities.tokenExchange).toBe('gated');
+    expect(() => createDegenerateClusterMesh({
+      ...base,
+      tokenExchange: {
+        issuer,
+        audiences: [],
+        subjectAudience: 'https://mesh.example.test',
+        workloadClientId: 'workload-1',
+        workloadActorSub: 'workload-1',
+        environment: 'test',
+      },
+    })).toThrow(TypeError);
   });
 });

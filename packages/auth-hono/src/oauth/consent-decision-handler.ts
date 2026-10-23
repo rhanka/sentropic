@@ -4,7 +4,8 @@ import type { AuthHonoPorts } from '../ports.js';
 import { appendParams, oauthJsonError, redirectOrJson } from './http-utils.js';
 import { issueAuthorizedCode } from './issue-authorized-code.js';
 import type { OAuthContinuationCodec, OAuthContinuationState } from './state-codec.js';
-import { resolveOAuthSession } from './session-resolver.js';
+import { isSubjectAllowed, meetsRequiredAcr } from './authorize-handler.js';
+import { resolveOAuthAcr, resolveOAuthSession } from './session-resolver.js';
 
 export interface OAuthConsentHandlerOptions {
   authorizationCodeTtlSeconds?: number;
@@ -101,6 +102,17 @@ const validateConsentState = async (
   const session = await resolveOAuthSession(c.req.raw, options.ports);
   if (!session || session.user.id !== payload.userId) {
     return oauthJsonError(c, 401, 'login_required', 'A valid user session is required.');
+  }
+
+  // F7: the session cookie may have been replaced during the consent window
+  // (e.g. magic-link login in another tab). Re-check the LIVE session against
+  // the client policy before minting a code.
+  const client = await options.ports.oauthStateStore.findClient(payload.clientId);
+  if (
+    !isSubjectAllowed(session.user.id, client?.allowedUserIds) ||
+    !meetsRequiredAcr(resolveOAuthAcr(session.sessionRecord), client?.requiredAcr)
+  ) {
+    return oauthJsonError(c, 403, 'access_denied', 'The current session does not satisfy the client policy.');
   }
 
   return payload;

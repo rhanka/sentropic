@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.22.0
+
+- Add the `engram-memory` module registration increment (contract
+  `memory-binding-v1`): pinned semantic manifest, JCS/NFC codecs, fixed
+  work limits, K7/K8/P3 first-proof validators and the public
+  `@sentropic/cluster-mesh/engram-memory` leaf. Registry already holds
+  0.21.0, so this additive feature ships as 0.22.0.
+- Admit `engram-memory` in the shared storage module union with Postgres
+  registration/storage factories and explicit host SQLite driver injection.
+  Composition refuses with typed errors while G1b tables, the G1d provider
+  seam and qualified durable profiles are unavailable; no fallback driver.
+
+## 0.19.1
+
+- Widen optional peer ranges to the PR1 durable/exact routing union:
+  `@sentropic/llm-mesh >=0.22.0 <0.28.0` and `@sentropic/llm-gateway >=0.19.0 <0.22.0`
+  in `package.json` and `src/modules/catalog.ts`. Retain the previously qualified
+  `0.22.x`–`0.26.x` / `0.19.x`–`0.20.x` tuples while admitting `0.27.0` / `0.21.0`.
+
+## 0.19.0
+
+- Add the generic K1–K4 storage port and injected-driver PostgreSQL backend,
+  with immutable boundaries, staged publication, retained receipts, visibility
+  barriers, fenced writers, outbox and qualified purge profiles.
+- Add comments M2 storage, import transport, complete typed receipt recovery,
+  retained export/readback and canonical HTTP composition. Frozen comments M1
+  remains unchanged; `@sentropic/comments@^0.3.0` is an optional peer.
+- Export `./storage`, `./storage/postgres`, `./comments`, `./comments/hono`,
+  `./loaders/comments` and `./compose/comments`; ship `assets/storage`.
+- Pin runtime `@stablelib/sha256@2.0.1` for portable restartable digest state.
+- Require a host-managed stable PostgreSQL cursor key. Verify asset-owned DDL
+  with typed drift errors and explicit operator re-attestation. Core and module
+  migrations have independent local version chains and explicit dependencies.
+- Merge PR #679 first, then rebase this candidate and recheck/re-bump above
+  main and npm before publication.
+
+## 0.18.0
+
+- Widen optional peer ranges to the #662 union: llm-mesh `>=0.22.0 <0.27.0`, llm-gateway `>=0.19.0 <0.21.0` (V7-M1). The strict published-tuple install test (`tests/packaging/tuple-strict.spec.ts`) proves a plain `npm install` with no `--legacy-peer-deps` escape.
+- Add the production RFC 8693 exchange binding (`src/trust/token-exchange-http.ts`):
+  authenticated form POST with `client_secret_basic` to the configured issuer,
+  bounded timeout/body, no redirects, redacted errors, and full validation of the
+  returned token (signature, issuer, exact audience, subject, workload `client_id`,
+  mandatory `act`, scope subset, 300-second and subject-expiry TTL ceilings).
+- Harden the exchange client: caller-supplied actors refused, empty requested
+  scopes refused, exact target-audience allowlist and single subject-audience
+  equality required at construction, workload `act`/`client_id` always asserted,
+  `maxTtlSec` hard-capped at 300 seconds.
+- Harden the mandatory cache: identity key (subject fingerprint/`jti`, origin and
+  workload clients, environment, tenant, policy revision), bounded entries with
+  insertion-order eviction, single-flight, subject/tenant invalidation hooks,
+  early-use safety margin, and recomputed `expiresIn` on hits.
+- `createDegenerateClusterMesh({ tokenExchange })` replaces `tokenExchangeIssuer`:
+  `capabilities.tokenExchange` is `'available'` only after the binding plus policy
+  passes its local preflight, `'gated'` otherwise. `available` proves only this
+  trust/egress port, not registry or module delivery.
+- Expose the MCP leaf entries `./mcp/registry`, `./mcp/stdio`, `./compose/mcp`
+  and `./loaders/mcp` (`createMcpNamespaceModule`, `loadMcpPlatform*` loaders)
+  against the optional `@sentropic/mcp-platform >=0.3.0 <0.4.0` peer (plus
+  `@modelcontextprotocol/sdk ^1.31.0` for stdio).
+- Add `./mcp/artifacts` (`createArtifactsBuiltin`) for the `sentropic.artifacts`
+  provider and `loadArtifactsMcp` through `./loaders/mcp`. The selected leaf needs
+  the optional `@sentropic/artifacts >=0.1.0 <0.2.0` peer and the MCP platform
+  peer above; importing the root does not load artifacts.
+
 ## 0.16.0
 
 - Post-#664 version bump strictly greater than npm (0.15.0) and main

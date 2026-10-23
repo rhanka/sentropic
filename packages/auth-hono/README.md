@@ -77,7 +77,7 @@ All package handlers emit structured responses to keep contracts predictable acr
 | Endpoint | Description |
 | --- | --- |
 | `GET /oauth/authorize` | Authorization Code + PKCE entry point (S256 required) |
-| `POST /oauth/token` | Token issuance (`grant_type=authorization_code` and `client_credentials` since 0.4.0) |
+| `POST /oauth/token` | Token issuance (`grant_type=authorization_code` and `client_credentials` since 0.4.0, plus RFC 8693 `urn:ietf:params:oauth:grant-type:token-exchange` since 0.16.0) |
 | `GET\|POST /oauth/userinfo` | Returns claims for a valid access token |
 | `POST /oauth/revoke` | Revokes an access token (RFC 7009) |
 | `POST /oauth/introspect` | Token introspection (RFC 7662, client-auth required) |
@@ -245,7 +245,8 @@ On failure it returns 401/403 with a `WWW-Authenticate` header.
 
 | Claim | Source | Notes |
 | --- | --- | --- |
-| `acr` | Session type | `urn:sentropic:loa:passkey-fresh` (passkey session), `urn:sentropic:loa:bearer` (magic-link session) |
+| `acr` | Session type | `urn:sentropic:loa:passkey-fresh` (passkey session with user verification, `mfaVerified=true`), `urn:sentropic:loa:bearer` (magic-link/federation session) |
+| `amr` | Session type (RFC 8176) | `["hwk","user","mfa"]` (passkey+UV), `["pwd"]` (single-factor bearer) in id_token, access_token, userinfo |
 | `auth_time` | `session.createdAt` | Strong-auth timestamp tracking lands in BR-39j |
 | `tenant_id` | `oauth_clients.tenant_id` | Forward-compat column; real tenants in BR-39e |
 

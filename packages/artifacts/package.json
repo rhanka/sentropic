@@ -1,0 +1,184 @@
+{
+  "name": "@sentropic/artifacts",
+  "version": "0.1.4",
+  "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/artifacts"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js"
+    },
+    "./codecs": {
+      "types": "./dist/codecs.d.ts",
+      "import": "./dist/codecs.js"
+    },
+    "./adapters/s3": {
+      "types": "./dist/adapters/s3.d.ts",
+      "import": "./dist/adapters/s3.js"
+    },
+    "./adapters/postgres": {
+      "types": "./dist/adapters/postgres.d.ts",
+      "import": "./dist/adapters/postgres.js"
+    },
+    "./migrations/*": "./migrations/*",
+    "./server/ports": {
+      "types": "./dist/server/ports.d.ts",
+      "import": "./dist/server/ports.js"
+    },
+    "./server/service": {
+      "types": "./dist/server/service.d.ts",
+      "import": "./dist/server/service.js"
+    },
+    "./server/authorization": {
+      "types": "./dist/server/authorization.d.ts",
+      "import": "./dist/server/authorization.js"
+    },
+    "./server/bindings": {
+      "types": "./dist/server/bindings.d.ts",
+      "import": "./dist/server/bindings.js"
+    },
+    "./server/idempotency": {
+      "types": "./dist/server/idempotency.d.ts",
+      "import": "./dist/server/idempotency.js"
+    },
+    "./server/object-intents": {
+      "types": "./dist/server/object-intents.d.ts",
+      "import": "./dist/server/object-intents.js"
+    },
+    "./server/uploads": {
+      "types": "./dist/server/uploads.d.ts",
+      "import": "./dist/server/uploads.js"
+    },
+    "./server/publication": {
+      "types": "./dist/server/publication.d.ts",
+      "import": "./dist/server/publication.js"
+    },
+    "./server/access": {
+      "types": "./dist/server/access.d.ts",
+      "import": "./dist/server/access.js"
+    },
+    "./server/sources": {
+      "types": "./dist/server/sources.d.ts",
+      "import": "./dist/server/sources.js"
+    },
+    "./server/fork": {
+      "types": "./dist/server/fork.d.ts",
+      "import": "./dist/server/fork.js"
+    },
+    "./server/lifecycle": {
+      "types": "./dist/server/lifecycle.d.ts",
+      "import": "./dist/server/lifecycle.js"
+    },
+    "./server/gc": {
+      "types": "./dist/server/gc.d.ts",
+      "import": "./dist/server/gc.js"
+    },
+    "./server/runtime": {
+      "types": "./dist/server/runtime.d.ts",
+      "import": "./dist/server/runtime.js"
+    },
+    "./server/reader-profile": {
+      "types": "./dist/server/reader-profile.d.ts",
+      "import": "./dist/server/reader-profile.js"
+    },
+    "./server/templates": {
+      "types": "./dist/server/templates.d.ts",
+      "import": "./dist/server/templates.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
+    },
+    "./mcp-core": {
+      "types": "./dist/mcp-core.d.ts",
+      "import": "./dist/mcp-core.js"
+    },
+    "./content/grants": {
+      "types": "./dist/content/grants.d.ts",
+      "import": "./dist/content/grants.js"
+    },
+    "./content/handler": {
+      "types": "./dist/content/handler.d.ts",
+      "import": "./dist/content/handler.js"
+    },
+    "./content/routing": {
+      "types": "./dist/content/routing.d.ts",
+      "import": "./dist/content/routing.js"
+    },
+    "./content/headers": {
+      "types": "./dist/content/headers.d.ts",
+      "import": "./dist/content/headers.js"
+    },
+    "./content/api-profile": {
+      "types": "./dist/content/api-profile.d.ts",
+      "import": "./dist/content/api-profile.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
+    },
+    "./parameters": {
+      "types": "./dist/parameters.d.ts",
+      "import": "./dist/parameters.js"
+    },
+    "./provider": {
+      "types": "./dist/provider-definition.d.ts",
+      "import": "./dist/provider-definition.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    }
+  },
+  "files": [
+    "dist",
+    "migrations",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-s3": "^3.980.0",
+    "@sentropic/mcp-platform": ">=0.3.0 <0.5.0",
+    "pg": "^8.12.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": true
+    },
+    "@sentropic/mcp-platform": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.980.0",
+    "@types/node": "^22.10.10",
+    "@types/pg": "^8.15.5",
+    "pg": "^8.12.0",
+    "typescript": "5.4.5",
+    "vitest": "4.1.0"
+  }
+}

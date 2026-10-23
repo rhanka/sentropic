@@ -105,6 +105,36 @@ implement server-to-server federation.
 
 ## Lazy integration surface (0.12+, tuple of 0.14)
 
+### Comments and generic storage candidate (0.19)
+
+The `0.19.0` candidate adds `/storage` (neutral shared kernel),
+`/storage/postgres` (host-injected SQL driver and migration assets), `/comments`,
+`/comments/hono`, `/loaders/comments` and `/compose/comments`. Selecting comments
+requires optional peer `@sentropic/comments ^0.3.0`; the qualified exact peer is
+`0.3.0`. Root/generic storage and disabled comments composition do not evaluate it.
+The host owns database connections, migration history, issued scope grants and
+domain capability/resolution/decision ports. Startup verifies installed assets;
+it never schedules migrations or opens its own connection.
+
+`createCommentsPostgresStorage` and `createCommentsModule` expose the unchanged
+24-method M1 persistence store, operational content/lifecycle services, and seven
+bounded import/export/receipt methods. Transactions use `store.transaction().run`.
+Use issued `module.withContext(grant, callback)` contexts. Full-runtime Hono
+composition uses `createCanonicalCommentsNamespaceModule` and a host grant resolver;
+raw lifecycle append and physical-completion routes are unavailable. Dedicated
+review/submission/assignment operational APIs and SQLite parity remain separate.
+
+The archive includes checksum-ordered PostgreSQL SQL assets and the digest-pinned
+unchanged M1 conformance oracle under `assets/storage/`. The repository
+[host guide](https://github.com/rhanka/sentropic/blob/feat/cluster-mesh-comments-m2/docs/comments-annotations/immo-host-guide.md)
+and [installed evidence](https://github.com/rhanka/sentropic/blob/feat/cluster-mesh-comments-m2/docs/comments-annotations/evidence/installed-module.md)
+describe exact calls, fragment/terminal receipt rules and tested bounds. Import
+preparation stays private until one canonical root publication; acknowledgements
+are progress rather than complete receipts. The host retains exact qualified
+archive/lock bytes before any separately approved delivery.
+
+### Optional provider leaves
+
 Cluster Mesh is the single integration surface for llm-mesh and llm-gateway. Those
 providers stay independent packages and never depend on cluster-mesh. They are
 **optional peers**: a bare install pulls none of them, and the root entry
@@ -115,11 +145,19 @@ providers stay independent packages and never depend on cluster-mesh. They are
 | `/llm-mesh`, `/llm-mesh/facade`, `/llm-mesh/enrollment`, `/llm-mesh/node`, `/llm-mesh/transport/cloud-code` | matching `@sentropic/llm-mesh` entry | `@sentropic/llm-mesh >=0.22.0 <0.27.0` |
 | `/gateway` | `@sentropic/llm-gateway` root (neither auth mode) | llm-mesh + `@sentropic/llm-gateway >=0.19.0 <0.21.0` |
 | `/gateway/auth` (service mode) | `@sentropic/llm-gateway/auth` | gateway + `@sentropic/mcp-auth >=0.2.1 <0.3.0`, `jose ^5.10.0` |
-| `/gateway/auth-hono` (session mode) | `@sentropic/llm-gateway/auth-hono` | gateway + `@sentropic/auth-hono ^0.15.0` |
+| `/gateway/auth-hono` (session mode) | `@sentropic/llm-gateway/auth-hono` | gateway + `@sentropic/auth-hono ^0.15.0 \|\| ^0.16.0` |
 | `/loaders/<leaf>` | async typed loader (`loadLlmMesh`, `loadGateway`, `loadGatewayAuth`, ...) | as its leaf, resolved on call |
 | `/compose/llm-mesh`, `/compose/gateway` | `createLlmMeshNamespaceModule`, `createGatewayNamespaceModule` | as the loaders they call |
+| `/mcp/registry`, `/mcp/stdio` | Embedded `@sentropic/mcp-platform` MCP kernel entries | Platform and SDK installed transitively by mesh |
+| `/compose/mcp`, `/loaders/mcp` | `createMcpNamespaceModule`, `loadMcpPlatform{Registry,Stdio,Bridge,Entry,Hono}` | as its leaf, resolved on call |
+| `/mcp/artifacts` | `createArtifactsBuiltin`, `createArtifactsToolExecutor` | `@sentropic/artifacts >=0.1.3 <0.2.0`; platform embedded in mesh |
 
-Static leaves are `export *` re-exports of the provider namespace: same values,
+The `./mcp/artifacts` export provides the `sentropic.artifacts` builtin factory;
+its optional `@sentropic/artifacts >=0.1.3 <0.2.0` peer must be installed when
+that leaf is imported. `loadArtifactsMcp` from `./loaders/mcp` acquires the same
+provider through the module registry. The root entry remains usable without it.
+
+Static provider re-export leaves use `export *`: same values,
 types, overloads and class identity. Importing a leaf selects that provider; a
 missing provider fails native ESM linking of the importing module. Loaders take a
 registry from `createClusterMeshModules({ disabled? })` (one per composition root) and
@@ -129,7 +167,7 @@ load_failed | source_unavailable`). Recognize it with `isClusterMeshModuleUnavai
 or by `code`, never by `instanceof` (duplicate copies have distinct constructors).
 `modules.probe()` reports metadata-only availability without evaluating providers;
 pass `modules` to `createDegenerateClusterMesh` to expose `capabilities.modules`.
-MCP and other catalogued capabilities are listed as `source_unavailable` until a
+Other catalogued capabilities are listed as `source_unavailable` until a
 later minor delivers them.
 
 **Startup preflight (fail closed before bind).** llm-gateway imports its auth peers
@@ -177,15 +215,16 @@ resolution anchor at the installed package; bundling the root inline (as the API
 build does) embeds no provider code. TypeScript >= 5.7 is required with
 `skipLibCheck: false` (hono's declarations); with `skipLibCheck: true`, a missing
 peer surfaces as TS2305 on the named import. Frozen tuple (committed lockfile):
-cluster-mesh 0.16.0, llm-mesh 0.26.0, llm-gateway 0.20.0, mcp-auth 0.2.1,
-oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7; session mode with auth-hono 0.15.0
-(llm-gateway 0.20.0's declared peer range `^0.15.0`); the latest versions inside
+cluster-mesh 0.18.0, llm-mesh 0.26.1, llm-gateway 0.20.1, mcp-auth 0.2.2,
+oauth-verify 0.1.0, jose 5.10.0, hono 4.13.0; session mode with auth-hono 0.16.0
+(llm-gateway 0.20.1's declared peer range `^0.15.0 || ^0.16.0`); the latest versions inside
 every declared range are re-qualified on each release run. The previous tuple
 (llm-mesh 0.21.x, llm-gateway 0.18.x) is refused, see "Upgrading to 0.13" below.
 
-The current release target is **cluster-mesh 0.16.0, llm-mesh 0.26.0 and
-llm-gateway 0.20.0** (llm-mesh/llm-gateway still unpublished; cluster-mesh 0.15.0
-is published on npm). Final sibling archive qualification
+The current release target is **cluster-mesh 0.18.0, llm-mesh 0.26.1 and
+llm-gateway 0.20.1** (cluster-mesh 0.18.0 is the unpublished branch candidate;
+main carries llm-mesh 0.26.1 and llm-gateway 0.20.0 — see the Post-Rebase Gate in
+BRANCH.md). Final sibling archive qualification
 and the selected-lock integrity refresh remain release gates; the selected fixture
 retains the baseline until that final refresh. The widened ranges retain the prior
 qualified minors.
@@ -275,16 +314,27 @@ qualification and is rejected in production.
 
 ## Gated seams
 
-The public surface already defines the future federal ports, but the v1 runtime fails
-closed for all of them:
+The public surface already defines the future federal ports. The v1 runtime fails
+closed for all of them except RFC 8693 token exchange, which is available when a
+binding plus policy is configured (see below):
 
 - inter-server discovery and member revocation;
-- RFC 8693 token exchange;
 - remote signed-projection resolution;
 - memory snapshot replication and purge.
 
 Invoking one of these seams throws `CapabilityGatedError`. The package exposes no broker
 HTTP route, trusted-issuer store, inter-server directory, or replication runtime.
+
+## RFC 8693 token exchange (configured)
+
+`createDegenerateClusterMesh({ tokenExchange })` wires the exchange client when the
+binding plus policy passes its local preflight; otherwise `capabilities.tokenExchange`
+stays `'gated'`. The production binding (`trust/token-exchange-http.ts`) performs an
+authenticated RFC 8693 form POST with `client_secret_basic`, validates the returned
+token (signature, issuer, exact audience, subject, workload `client_id`, mandatory
+`act`, scope subset, TTL ceilings), and caches it for at most 60 seconds with an
+early-use safety margin. `tokenExchange: 'available'` proves only this trust/egress
+port: it neither delivers the MCP provider registry nor qualifies any module leaf.
 
 ## Construction
 
@@ -314,3 +364,53 @@ Manual publication is forbidden. For the first release, merge the validated pack
 run the `ci.yml` workflow with `bootstrap_publish_target=cluster-mesh`, then attach the
 npm OIDC trusted publisher to `rhanka/sentropic` and `ci.yml`. Later releases use the
 repository CI publication path.
+# Stateful MCP wrapping (0.21.0)
+
+`createStatefulMcpNamespace` from `@sentropic/cluster-mesh/compose/mcp-stateful`
+wraps an existing host through the explicit StatefulMcpHost contract.
+Immo installs `@sentropic/cluster-mesh@0.21.0` and `@sentropic/artifacts@0.1.3`.
+Mesh declares platform `>=0.4.0 <0.5.0` as a regular dependency (qualified at 0.4.0),
+so npm installs platform and its SDK automatically. A regular dependency preserves
+one shared kernel and normal npm resolution without duplicating bundled code.
+The host uses these mesh entries for composition, registry setup and artifacts:
+
+```ts
+import { createStatefulMcpNamespace } from '@sentropic/cluster-mesh/compose/mcp-stateful';
+import { createMcpRegistry, computeManifestDigest } from '@sentropic/cluster-mesh/mcp/registry';
+import { createArtifactsBuiltin, createArtifactsToolExecutor } from '@sentropic/cluster-mesh/mcp/artifacts';
+```
+
+The host owns
+authentication, HTTP budgets, server/transport/session objects, ownership and
+expiry rules, cancellation and close-once cleanup. The composer owns immutable
+request authority, digest-bound registry/schema preflight and per-call policy
+followed by live account/domain authorization.
+
+The host's `bind` must pause new dispatch including initialize, drain old calls
+to their existing deadline, register both bridge handlers on every existing
+public McpServer.server, clear obsolete bearer state, disable high-level tool
+updates, and register all future servers before connect. Drain timeout precedes
+mutation; installation failure keeps admission closed with safe 503 responses.
+The composer binds once and caches the complete host router. Mount that router
+at root to retain /mcp and public protected-resource metadata paths:
+
+```ts
+const wrapped = await createStatefulMcpNamespace(modules, options);
+const plugin = createClusterMeshPlugin({
+  runtime, namespaces: [wrapped], mounts: { '/mcp': '/' },
+});
+```
+
+The host alone sees credentials and passes sanitized SDK requests. Domain
+callbacks receive verified, frozen claims/attributes and combined cancellation;
+never raw requests, bearer values or an exchange capability. Claim labels must
+have host-evaluated verified predicates. Protected remote access fails closed
+until the separately authorized exchange integration. This release does not
+activate Radar's receiver #865 or its production cutover.
+
+Core qualification uses twelve Immo tools with Mesh 0.21.0 and its transitive
+Platform 0.4.0 dependency. The qualified optional variant adds Artifacts 0.1.3,
+whose platform peer range is widened to `>=0.3.0 <0.5.0`, and exposes all 27 tools
+through Mesh exports.
+The installed consumer lane is
+`make cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=test-cm-wrap`.

@@ -182,6 +182,7 @@ export const createOauthStateStoreAdapter = (
 
 const toOauthClientRecord = (row: typeof oauthClients.$inferSelect): OauthClientRecord => ({
   allowedScopes: row.allowedScopes,
+  allowedUserIds: row.allowedUserIds ?? [],
   clientId: row.clientId,
   clientSecretHash: row.clientSecretHash,
   createdAt: row.createdAt,
@@ -192,6 +193,7 @@ const toOauthClientRecord = (row: typeof oauthClients.$inferSelect): OauthClient
   ownerUserId: row.ownerUserId,
   redirectUris: row.redirectUris,
   requirePkce: row.requirePkce,
+  requiredAcr: row.requiredAcr ?? null,
   resourceIndicators: row.resourceIndicators,
   responseTypes: row.responseTypes,
   tenantId: row.tenantId,
@@ -206,6 +208,7 @@ const toServiceClientRecord = (row: typeof serviceClients.$inferSelect): Service
   createdAt: row.createdAt,
   displayName: row.displayName,
   dpopBoundAccessTokens: row.dpopBoundAccessTokens,
+  exchangePolicy: toExchangePolicy(row.exchangePolicy),
   id: row.id,
   resourceIndicators: row.resourceIndicators,
   revokedAt: row.revokedAt,
@@ -213,11 +216,70 @@ const toServiceClientRecord = (row: typeof serviceClients.$inferSelect): Service
   tenantId: row.tenantId,
 });
 
+// 2-IdP: the exchange policy is stored as nullable jsonb (default-deny). A NULL
+// column preserves legacy service-client defaults (no exchange, client_credentials
+// allowed). A non-null but malformed payload maps to a disabled deny-all marker
+// (M1 fail-closed): both exchange and client_credentials are refused, never
+// assimilated to a legacy row. Allowlist validation stays fail-closed in the
+// token-exchange handler, never here.
+const FAIL_CLOSED_EXCHANGE_POLICY: NonNullable<ServiceClientRecord['exchangePolicy']> = {
+  actorSub: 'invalid',
+  allowClientCredentials: false,
+  allowedScopes: [],
+  allowedSubjectAudiences: [],
+  allowedSubjectClients: [],
+  allowedTargetAudiences: [],
+  enabled: false,
+  maxTtlSeconds: 1,
+};
+
+const toExchangePolicy = (value: unknown): ServiceClientRecord['exchangePolicy'] => {
+  if (value == null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) return FAIL_CLOSED_EXCHANGE_POLICY;
+  const policy = value as Record<string, unknown>;
+  const stringList = (key: string): string[] | null => {
+    const list = policy[key];
+    if (!Array.isArray(list) || list.some((entry) => typeof entry !== 'string')) return null;
+    return list as string[];
+  };
+  const subjectClients = stringList('allowedSubjectClients');
+  const subjectAudiences = stringList('allowedSubjectAudiences');
+  const targetAudiences = stringList('allowedTargetAudiences');
+  const scopes = stringList('allowedScopes');
+  const actorSub = policy.actorSub;
+  const maxTtlSeconds = policy.maxTtlSeconds;
+  if (
+    typeof policy.enabled !== 'boolean' ||
+    !subjectClients || !subjectAudiences || !targetAudiences || !scopes ||
+    typeof actorSub !== 'string' || !actorSub ||
+    typeof maxTtlSeconds !== 'number' || !(maxTtlSeconds > 0) ||
+    typeof policy.allowClientCredentials !== 'boolean'
+  ) {
+    return FAIL_CLOSED_EXCHANGE_POLICY;
+  }
+  const environment = policy.environment;
+  return {
+    actorSub,
+    allowClientCredentials: policy.allowClientCredentials,
+    allowedScopes: scopes,
+    allowedSubjectAudiences: subjectAudiences,
+    allowedSubjectClients: subjectClients,
+    allowedTargetAudiences: targetAudiences,
+    enabled: policy.enabled,
+    ...(typeof environment === 'string' ? { environment } : {}),
+    maxTtlSeconds,
+  };
+};
+
 const toAuthCodePayload = (row: typeof authorizationCodes.$inferSelect): AuthCodePayload => {
   const payload = row.payload as Partial<AuthCodePayload> | null;
 
+  // F7: fail closed — a code payload without an ACR is treated as a
+  // single-factor bearer session, never as passkey-fresh.
+  const acr = typeof payload?.acr === 'string' ? payload.acr : 'urn:sentropic:loa:bearer';
   return {
-    acr: typeof payload?.acr === 'string' ? payload.acr : 'urn:sentropic:loa:passkey-fresh',
+    acr,
+    amr: Array.isArray(payload?.amr) ? payload.amr : (acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
     authTime: toDate(payload?.authTime) ?? row.createdAt,
     clientId: row.clientId,
     codeChallenge: row.codeChallenge,

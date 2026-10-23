@@ -142,7 +142,8 @@ validity. L1-local owner inspection uses
 (CISEAT-EX3, synthetic-gated, categories only), with an explicit
 sidecar file backend or an `unverified` verdict.
 
-Mesh stays at 0.26.x inside gateway 0.20.0's declared `^0.26.0` range
+After the 2026-10-23 main integration, mesh stays at 0.27.x inside
+gateway 0.21.0's declared `^0.27.0` range (candidate mesh 0.27.1)
 (R6-1); the workspace lock holds exactly one linked `llm-mesh` copy.
 Shared refresh single-flight stays process-local; cross-runner authority
 is the central exclusion plus pending state (recorded for L3 §3.4).

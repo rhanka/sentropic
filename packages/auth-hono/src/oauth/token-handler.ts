@@ -1,17 +1,21 @@
 import type { Context } from 'hono';
 
 import type { AuthHonoPorts, AuthHonoUserRecord } from '../ports.js';
+import { resolveConfidentialClient } from './confidential-client.js';
 import { createJwksService } from './jwks-service.js';
 import { oauthJsonError } from './http-utils.js';
 import { sha256Base64url } from './crypto-utils.js';
 import { OAuthDpopProofError, verifyOAuthDpopProof } from './dpop.js';
 import type { AuthCodePayload, OauthClientRecord, ServiceClientRecord, TokenMeta } from './state-store-types.js';
+import { TOKEN_EXCHANGE_GRANT_TYPE } from './state-store-types.js';
+import { handleTokenExchange } from './token-exchange-handler.js';
 
 const DEFAULT_SERVICE_ACCESS_TOKEN_TTL_SECONDS = 900;
 
 export interface OAuthTokenHandlerOptions {
   accessTokenTtlSeconds?: number;
   dpopIatSkewSeconds?: number;
+  exchangeEnvironment?: string | null;
   idTokenTtlSeconds?: number;
   issuer: string;
   ports: AuthHonoPorts;
@@ -36,12 +40,19 @@ export const createOAuthTokenHandler =
     if (grantType === 'client_credentials') {
       return handleClientCredentials(c, form, options);
     }
+    if (grantType === TOKEN_EXCHANGE_GRANT_TYPE) {
+      return handleTokenExchange(c, form, {
+        exchangeEnvironment: options.exchangeEnvironment,
+        issuer: options.issuer,
+        ports: options.ports,
+      });
+    }
     if (grantType !== 'authorization_code') {
       return oauthJsonError(
         c,
         400,
         'unsupported_grant_type',
-        'Only authorization_code and client_credentials grants are supported.'
+        'Only authorization_code, client_credentials and token-exchange grants are supported.'
       );
     }
 
@@ -112,13 +123,23 @@ const parseClientCredentials = (
   authorization: string | undefined,
   form: URLSearchParams
 ): { clientId: string | null; secret?: string } => {
+  // m8: a malformed Basic header fails closed with 401 downstream instead of
+  // throwing into a 500; client_id/secret are RFC 6749 §2.3.1 URL-decoded.
   if (authorization?.startsWith('Basic ')) {
-    const decoded = atob(authorization.slice('Basic '.length));
+    let decoded: string;
+    try {
+      decoded = atob(authorization.slice('Basic '.length).trim());
+    } catch {
+      return { clientId: null, secret: undefined };
+    }
     const separator = decoded.indexOf(':');
-    return {
-      clientId: separator >= 0 ? decoded.slice(0, separator) : decoded,
-      secret: separator >= 0 ? decoded.slice(separator + 1) : '',
-    };
+    const rawId = separator >= 0 ? decoded.slice(0, separator) : decoded;
+    const rawSecret = separator >= 0 ? decoded.slice(separator + 1) : '';
+    try {
+      return { clientId: decodeURIComponent(rawId), secret: decodeURIComponent(rawSecret) };
+    } catch {
+      return { clientId: null, secret: undefined };
+    }
   }
 
   return {
@@ -195,6 +216,14 @@ const handleClientCredentials = async (
   const auth = await authenticateServiceClient(c, form, options.ports, findServiceClient);
   if (auth instanceof Response) return auth;
 
+  // M1 fail-closed: any present exchange policy that does not explicitly allow
+  // client_credentials denies it, regardless of `enabled`. A null/absent policy
+  // preserves legacy service-client defaults; a malformed row is normalized by
+  // the host adapter to a disabled deny-all marker, never to null.
+  if (auth.client.exchangePolicy != null && auth.client.exchangePolicy.allowClientCredentials !== true) {
+    return oauthJsonError(c, 400, 'unauthorized_client', 'This client is restricted to token exchange.');
+  }
+
   const scope = resolveServiceScope(c, form, auth.client);
   if (scope instanceof Response) return scope;
 
@@ -244,13 +273,14 @@ const authenticateServiceClient = async (
     return oauthJsonError(c, 401, 'invalid_client', 'Client authentication is required.');
   }
 
-  const client = await findServiceClient(credentials.clientId);
+  // m4: shared confidential-client core (lookup + constant-time secret check).
+  const client = await resolveConfidentialClient({
+    ports,
+    clientId: credentials.clientId,
+    secret: credentials.secret,
+    findServiceClient,
+  });
   if (!client) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
-
-  const secretHash = await ports.tokens.hashSecret(credentials.secret);
-  if (secretHash !== client.clientSecretHash) {
-    return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
-  }
 
   return { client, secret: credentials.secret };
 };
@@ -397,9 +427,11 @@ const issueTokens = async (
   // it from the mounted token path keeps reusable composition roots distinct. The id_token `aud`
   // (client_id) is untouched.
   const accessAudience = codePayload.resource ?? userinfoAudience;
+  const amr = codePayload.amr ?? (codePayload.acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']);
   const accessToken = await jwks.signJwt(
     {
       acr: codePayload.acr,
+      amr,
       auth_time: toEpochSeconds(codePayload.authTime),
       client_id: client.clientId,
       ...(cnf ? { cnf } : {}),
@@ -442,6 +474,7 @@ const issueTokens = async (
     const idToken = await jwks.signJwt(
       {
         acr: codePayload.acr,
+        amr,
         auth_time: toEpochSeconds(codePayload.authTime),
         ...(cnf ? { cnf } : {}),
         ...(scopes.includes('email') ? { email: user.email, email_verified: user.emailVerified } : {}),
@@ -491,6 +524,8 @@ const tokenMeta = (input: {
   jti: string;
   tokenType: 'access_token' | 'id_token';
 }): TokenMeta => ({
+  acr: input.codePayload.acr,
+  amr: input.codePayload.amr ?? (input.codePayload.acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
   audience: input.audience,
   clientId: input.client.clientId,
   createdAt: input.codePayload.createdAt,

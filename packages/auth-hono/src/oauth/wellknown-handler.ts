@@ -7,6 +7,7 @@ import { createJwksService } from './jwks-service.js';
 export const DEFAULT_SCOPES_SUPPORTED: readonly string[] = Object.freeze(['openid', 'profile', 'email']);
 
 export interface CreateWellKnownRouterOptions {
+  additionalGrantTypesSupported?: readonly string[];
   issuer: string;
   oauthPathPrefix?: string;
   ports: AuthHonoPorts;
@@ -34,16 +35,17 @@ export const buildAuthorizationServerMetadata = (
   issuer: string,
   oauthPrefix: string,
   additionalScopesSupported: readonly string[] = [],
+  additionalGrantTypesSupported: readonly string[] = [],
 ): Record<string, unknown> => ({
   authorization_endpoint: `${issuer}${oauthPrefix}/authorize`,
   // RFC 9207 (authorization-response `iss`): advertised so a mix-up-defending client (claude.ai)
   // knows this AS emits, and it can validate, the `iss` parameter on the authorization response.
   authorization_response_iss_parameter_supported: true,
-  claims_supported: ['sub', 'aud', 'iss', 'exp', 'iat', 'nonce', 'auth_time', 'acr', 'email', 'email_verified', 'name', 'tid'],
+  claims_supported: ['sub', 'aud', 'iss', 'exp', 'iat', 'nonce', 'auth_time', 'acr', 'amr', 'email', 'email_verified', 'name', 'tid'],
   code_challenge_methods_supported: ['S256'],
   dpop_signing_alg_values_supported: ['EdDSA'],
   end_session_endpoint: `${issuer}${oauthPrefix}/end_session`,
-  grant_types_supported: ['authorization_code', 'client_credentials'],
+  grant_types_supported: [...new Set(['authorization_code', 'client_credentials', ...additionalGrantTypesSupported])],
   id_token_signing_alg_values_supported: ['EdDSA'],
   introspection_endpoint: `${issuer}${oauthPrefix}/introspect`,
   issuer,
@@ -66,6 +68,7 @@ export const createWellKnownRouter = (options: CreateWellKnownRouterOptions): Ho
     issuer,
     oauthPrefix,
     options.additionalScopesSupported ?? [],
+    options.additionalGrantTypesSupported ?? [],
   );
 
   // OIDC Discovery + the RFC 8414 alias resolve to the identical metadata document.

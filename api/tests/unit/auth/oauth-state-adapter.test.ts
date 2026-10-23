@@ -113,6 +113,17 @@ describe('createOauthStateStoreAdapter', () => {
     });
   });
 
+  it('fails closed to bearer when a stored code payload lacks an ACR (F7)', async () => {
+    const adapter = createAdapter();
+    const { acr: _dropped, amr: _droppedAmr, ...payloadWithoutAcr } = createPayload();
+
+    await adapter.saveAuthCode('code-no-acr', payloadWithoutAcr, 60);
+    const consumed = await adapter.consumeAuthCode('code-no-acr');
+
+    expect(consumed?.acr).toBe('urn:sentropic:loa:bearer');
+    expect(consumed?.amr).toEqual(['pwd']);
+  });
+
   it('stores token metadata and revokes by jti', async () => {
     const adapter = createAdapter();
 
@@ -180,5 +191,72 @@ describe('createOauthStateStoreAdapter', () => {
     });
     await expect(adapter.findServiceClient?.('service-revoked')).resolves.toBeNull();
     await expect(adapter.findServiceClient?.('service-missing')).resolves.toBeNull();
+  });
+
+  it('maps a valid exchange policy and fails closed on malformed or absent policies', async () => {
+    const adapter = createAdapter();
+    const policy = {
+      actorSub: 'immo-mcp-workload',
+      allowClientCredentials: false,
+      allowedScopes: ['immo:read', 'immo:search'],
+      allowedSubjectAudiences: ['https://immo.sent-tech.ca/mcp'],
+      allowedSubjectClients: ['immo-mcp'],
+      allowedTargetAudiences: ['https://immo.sent-tech.ca'],
+      enabled: true,
+      environment: null,
+      maxTtlSeconds: 300,
+    };
+
+    await db.insert(serviceClients).values({
+      allowedScopes: ['immo:read', 'immo:search'],
+      clientId: 'service-exchange',
+      clientSecretHash: 'hash:service-secret',
+      createdAt: now,
+      displayName: 'Exchange Service',
+      dpopBoundAccessTokens: false,
+      exchangePolicy: policy,
+      id: 'service-exchange-row',
+      resourceIndicators: ['https://immo.sent-tech.ca'],
+      tenantId: null,
+    });
+    await db.insert(serviceClients).values({
+      allowedScopes: ['service:ping'],
+      clientId: 'service-malformed',
+      clientSecretHash: 'hash:service-secret',
+      createdAt: now,
+      displayName: 'Malformed Service',
+      dpopBoundAccessTokens: false,
+      exchangePolicy: { enabled: true, actorSub: 'x' },
+      id: 'service-malformed-row',
+      resourceIndicators: [],
+      tenantId: null,
+    });
+    await db.insert(serviceClients).values({
+      allowedScopes: ['service:ping'],
+      clientId: 'service-legacy',
+      clientSecretHash: 'hash:service-secret',
+      createdAt: now,
+      displayName: 'Legacy Service',
+      dpopBoundAccessTokens: false,
+      id: 'service-legacy-row',
+      resourceIndicators: [],
+      tenantId: null,
+    });
+
+    await expect(adapter.findServiceClient?.('service-exchange')).resolves.toMatchObject({
+      clientId: 'service-exchange',
+      exchangePolicy: {
+        actorSub: 'immo-mcp-workload',
+        allowClientCredentials: false,
+        enabled: true,
+        maxTtlSeconds: 300,
+      },
+    });
+    await expect(
+      adapter.findServiceClient?.('service-malformed')?.then((client) => client?.exchangePolicy ?? null),
+    ).resolves.toMatchObject({ allowClientCredentials: false, enabled: false });
+    await expect(
+      adapter.findServiceClient?.('service-legacy')?.then((client) => client?.exchangePolicy ?? null),
+    ).resolves.toBeNull();
   });
 });

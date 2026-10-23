@@ -1,0 +1,212 @@
+/**
+ * m5 — artifacts HTTP hardening (final review minor m5): error bodies are
+ * stable codes, never raw internal messages; an actor with no read access
+ * cannot distinguish an existing artifact from an unknown one (no 404/403
+ * existence oracle); source payloads are parsed without unchecked casts.
+ */
+import { describe, expect, it, vi } from 'vitest';
+import { createHttpArtifactApp, type HttpRequest } from '../src/http.js';
+import { createArtifactsToolExecutor } from '../src/mcp-core.js';
+import { createArtifactService } from '../src/server/service.js';
+import {
+  createPublicationService,
+  createMemoryStateStore,
+  createMemoryBlobStore,
+} from '../src/server/publication.js';
+import { createMemoryIntentStore } from '../src/server/object-intents.js';
+import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
+import { createLifecycleService, createMemoryLifecycleStore } from '../src/server/lifecycle.js';
+import { createForkService, createMemoryForkStore } from '../src/server/fork.js';
+import { createMemoryAclStore } from '../src/server/access.js';
+import { createMemorySourceStore, parseSourceRef } from '../src/server/sources.js';
+import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
+import { defineParameters } from '../src/parameters.js';
+
+const OWNER = 'owner-1';
+const READER = 'reader-1';
+const STRANGER = 'stranger-1';
+const MISSING = '00000000-0000-4000-8000-000000000000';
+const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true }]);
+const FILES = [{ path: 'index.html', mimeType: 'text/html', bytes: [1, 2, 3] }];
+
+function makeApp(limits = {}, sources = createMemorySourceStore()) {
+  const state = createMemoryStateStore();
+  const blobs = createMemoryBlobStore();
+  return createHttpArtifactApp({
+    parameterSchema: SCHEMA,
+    artifacts: createArtifactService({ kv: createMemoryKv(), uuid: createCryptoUuid() }),
+    publication: createPublicationService({
+      limits,
+      state,
+      blobs,
+      intents: createMemoryIntentStore(),
+      idempotency: createIdempotencyStore(createMemoryIdempotencyKv()),
+    }),
+    lifecycle: createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z', state),
+    forks: createForkService(createMemoryForkStore()),
+    acls: createMemoryAclStore(),
+    sources,
+    blobs,
+  });
+}
+
+function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
+  return { method, path, body, actorId, storageScopeId: "scope-1" };
+}
+
+async function seeded() {
+  const app = makeApp();
+  const ensured = await app.handle(
+    req('POST', '/ensure', {
+      bindingName: 'site', storageScopeId: 'scope-1', idempotencyKey: 'k-1',
+      paramsHash: 'h-1', parameters: { title: 'Hello' },
+    }, OWNER),
+  );
+  const id = (ensured.body as { artifactId: string }).artifactId;
+  await app.handle(req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'read' }, OWNER));
+  await app.handle(req('POST', '/publish', {
+    artifactId: id, profile: {}, files: FILES, idempotencyKey: 'p-1', paramsHash: 'h-1',
+  }, OWNER));
+  const current = await app.handle(req('GET', `/current/${id}`, undefined, OWNER));
+  const manifest = JSON.parse((current.body as { manifest: string }).manifest) as {
+    files: { digest: string }[];
+  };
+  return { app, id, digest: manifest.files[0]?.digest ?? '' };
+}
+
+describe('http security (m5)', () => {
+  it.each(['HTTP', 'MCP'])('should bind source presence and content to %s publication replays', async (transport) => {
+    const sources = createMemorySourceStore();
+    const putSource = vi.spyOn(sources, 'putSource');
+    const app = makeApp({}, sources);
+    const executor = createArtifactsToolExecutor({ app, defaultStorageScopeId: 'scope-1' });
+    const ensured = await app.handle(req('POST', '/ensure', { bindingName: 'sources',
+      idempotencyKey: 'ensure', parameters: { title: 'Sources' } }, OWNER));
+    const artifactId = (ensured.body as { artifactId: string }).artifactId;
+    const publish = (args: Record<string, unknown>) => transport === 'HTTP'
+      ? app.handle(req('POST', '/publish', args, OWNER))
+      : executor.invoke({ tool: 'artifacts_publish', actorId: OWNER, args });
+    const source = { kind: 'base-commit', commit: 'A' };
+    const input = { artifactId, files: FILES, idempotencyKey: 'publish', source };
+    const first = await publish(input);
+    expect(first.status).toBe(201);
+    expect(await publish(input)).toEqual(first);
+    expect(putSource).toHaveBeenCalledTimes(1);
+    for (const changed of [undefined, { ...source, commit: 'B' }]) {
+      expect((await publish({ ...input, source: changed })).status).toBe(409);
+      expect(await sources.getSource(artifactId)).toEqual(source);
+    }
+    expect(putSource).toHaveBeenCalledTimes(1);
+    const absent = { ...input, idempotencyKey: 'absent', source: undefined };
+    expect((await publish(absent)).status).toBe(201);
+    expect((await publish({ ...absent, source })).status).toBe(409);
+    const recipe = { ...input, idempotencyKey: 'recipe', source: { kind: 'recipe', steps: ['build', 'pack'] } };
+    expect((await publish(recipe)).status).toBe(201);
+    expect((await publish({ ...recipe, source: { kind: 'recipe', steps: ['pack', 'build'] } })).status).toBe(409);
+  });
+
+  it('should bound inline byte arrays, UTF-8 text, aggregate bytes and file counts', async () => {
+    const app = makeApp({ maxFiles: 2, maxFileBytes: 3, maxTotalBytes: 3 });
+    const ensured = await app.handle(req('POST', '/ensure', { bindingName: 'bounded',
+      idempotencyKey: 'ensure', parameters: { title: 'Bounded' } }, OWNER));
+    const artifactId = (ensured.body as { artifactId: string }).artifactId;
+    const file = { path: 'index.html', mimeType: 'text/html', bytes: [1, 2] };
+    for (const files of [
+      [{ ...file, bytes: [1, 2, 3, 4] }],
+      [{ path: file.path, mimeType: file.mimeType, text: 'éé' }],
+      [file, { ...file, path: 'second' }], [file, file, file],
+    ]) expect((await app.handle(req('POST', '/publish', { artifactId, files }, OWNER))).status).toBe(400);
+    expect((await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER))).status).toBe(404);
+    expect((await app.handle(req('POST', '/publish', { artifactId,
+      files: [{ ...file, bytes: [1, 2, 3] }] }, OWNER))).status).toBe(201);
+  });
+
+  it('should trust host scope and validated parameters instead of body scope or hash', async () => {
+    const app = makeApp();
+    const body = { bindingName: 'scope-test', storageScopeId: 'forged',
+      idempotencyKey: 'same', paramsHash: 'forged', parameters: { title: 'One' } };
+    const request = req('POST', '/ensure', body, OWNER);
+    expect((await app.handle({ ...request, storageScopeId: undefined })).status).toBe(400);
+    const first = await app.handle(request);
+    expect(first.status).toBe(201);
+    expect((await app.handle({ ...request, body: { ...body, storageScopeId: 'other', paramsHash: 'other' } })).body)
+      .toMatchObject({ ...(first.body as object), replayed: true });
+    expect((await app.handle({ ...request, storageScopeId: 'other' })).status).toBe(409);
+    expect((await app.handle({ ...request, body: { ...body, parameters: { title: 'Two' } } })).status).toBe(409);
+    const bob = await app.handle({ ...request, actorId: 'bob' });
+    expect(bob.status).toBe(201);
+    expect(bob.body).not.toMatchObject({ artifactId: (first.body as { artifactId: string }).artifactId });
+  });
+
+  it('gives strangers identical 404 answers for existing and unknown artifacts', async () => {
+    const { app, id, digest } = await seeded();
+    const attempts: Array<[string, string, unknown]> = [
+      ['POST', '/publish', { artifactId: id, profile: {}, files: FILES, idempotencyKey: 'x-1' }],
+      ['POST', '/fork', { artifactId: id }],
+      ['POST', '/withdraw', { artifactId: id }],
+      ['POST', '/access/grant', { artifactId: id, principalId: STRANGER, grant: 'read' }],
+      ['POST', '/sources', { artifactId: id, source: { kind: 'inline-original' } }],
+      ['GET', `/source/${id}`, undefined],
+      ['GET', `/content/${id}/${digest}`, undefined],
+      ['GET', `/current/${id}`, undefined],
+    ];
+    for (const [method, path, body] of attempts) {
+      const existing = await app.handle(req(method, path, body, STRANGER));
+      const unknownPath = path.replace(id, MISSING);
+      const unknownBody =
+        typeof body === 'object' && body !== null
+          ? { ...(body as Record<string, unknown>), artifactId: MISSING }
+          : body;
+      const unknown = await app.handle(req(method, unknownPath, unknownBody, STRANGER));
+      expect(existing.status, `${method} ${path}`).toBe(404);
+      expect(existing, `${method} ${path}`).toEqual(unknown);
+    }
+  });
+
+  it('keeps precise 403 answers for actors who can already read the artifact', async () => {
+    const { app, id } = await seeded();
+    const publish = await app.handle(
+      req('POST', '/publish', { artifactId: id, profile: {}, files: FILES, idempotencyKey: 'x-2' }, READER),
+    );
+    expect(publish.status).toBe(403);
+    const source = await app.handle(req('GET', `/source/${id}`, undefined, READER));
+    expect(source.status).toBe(403);
+    const grant = await app.handle(
+      req('POST', '/access/grant', { artifactId: id, principalId: STRANGER, grant: 'read' }, READER),
+    );
+    expect(grant.status).toBe(403);
+  });
+
+  it('returns stable error codes and never raw internal messages', async () => {
+    const { app, id } = await seeded();
+    const notFound = await app.handle(req('GET', `/current/${MISSING}`, undefined, OWNER));
+    expect(notFound.body).toEqual({ error: 'not_found' });
+    const denied = await app.handle(
+      req('POST', '/publish', { artifactId: id, profile: {}, files: FILES, idempotencyKey: 'x-3' }, READER),
+    );
+    expect(denied.body).toEqual({ error: 'access_denied' });
+    const invalid = await app.handle(req('POST', '/ensure', { bindingName: 'x' }, OWNER));
+    expect(invalid.body).toEqual({ error: 'invalid_request' });
+    const conflict = await app.handle(req('POST', '/purge', { artifactId: id }, OWNER));
+    expect(conflict.body).toEqual({ error: 'conflict' });
+    for (const res of [notFound, denied, invalid, conflict]) {
+      expect(JSON.stringify(res.body)).not.toContain(id);
+      expect(JSON.stringify(res.body)).not.toContain('artifact:');
+    }
+  });
+
+  it('parses source refs fail-closed without unchecked casts', () => {
+    expect(parseSourceRef({ kind: 'inline-original' })).toEqual({ kind: 'inline-original' });
+    expect(parseSourceRef({ kind: 'base-commit', commit: 'abc' })).toEqual({
+      kind: 'base-commit', commit: 'abc',
+    });
+    expect(parseSourceRef({ kind: 'recipe', steps: ['build'] })).toEqual({
+      kind: 'recipe', steps: ['build'],
+    });
+    expect(() => parseSourceRef({ kind: 'base-commit' })).toThrow(/invalid source/);
+    expect(() => parseSourceRef({ kind: 'recipe', steps: [42] })).toThrow(/invalid source/);
+    expect(() => parseSourceRef({ kind: 'nope' })).toThrow(/invalid source/);
+    expect(() => parseSourceRef('inline-original')).toThrow(/invalid source/);
+    expect(() => parseSourceRef(undefined)).toThrow(/invalid source/);
+  });
+});
