@@ -50,6 +50,34 @@ describe('compiled capability profile', () => {
       .toBe(262144);
   });
 
+  it('should reject each missing operation limit or default during composition', () => {
+    for (const operation of RADAR_ARTIFACTS_PROFILE.operations) {
+      for (const section of ['limits', 'defaults'] as const) {
+        for (const field of Object.keys(operation[section])) {
+          const source = structuredClone(RADAR_ARTIFACTS_PROFILE);
+          delete source.operations.find((op) => op.operation === operation.operation)![section][field];
+          expect(() => compileArtifactsProfile(source), `${operation.operation}.${section}.${field}`).toThrow();
+        }
+      }
+    }
+    const source = structuredClone(RADAR_ARTIFACTS_PROFILE);
+    source.selection = { tools: [] };
+    delete source.operations.find((op) => op.operation === 'publish')!.limits.maxDecodedTotalBytes;
+    expect(() => compileArtifactsProfile(source)).toThrow();
+  });
+
+  it('should accept a one-byte publication under a complete semantic budget', () => {
+    const source = structuredClone(RADAR_ARTIFACTS_PROFILE);
+    source.operations.find((op) => op.operation === 'publish')!.limits.maxDecodedTotalBytes = 1;
+    const compiled = compileArtifactsProfile(source);
+    const args = { artifactId: '123e4567-e89b-12d3-a456-426614174000', idempotencyKey: 'key',
+      files: [{ path: 'a', mimeType: 'text/html', text: 'a' }] };
+    expect(compiled.validate('artifacts_publish', args).files)
+      .toEqual([{ path: 'a', mimeType: 'text/html', bytes: [97] }]);
+    expect(() => compiled.validate('artifacts_publish', { ...args,
+      files: [{ ...args.files[0], text: 'ab' }] })).toThrow();
+  });
+
   it('should reject unsupported versions and supplied mismatching schemas at composition', () => {
     expect(() => compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, version: 'future' } as never)).toThrow();
     expect(() => compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, schemas: {} } as never)).toThrow();
