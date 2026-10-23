@@ -1,4 +1,5 @@
 import type { JsonValue } from '../contracts.js';
+import type { EffectiveArtifactCommand } from '../server/command-identity.js';
 
 export const PROFILE_CONTRACT_VERSION = 'artifacts-profile/v1' as const;
 export const ARTIFACT_CAPABILITY_NAMES = [
@@ -42,6 +43,7 @@ export interface CompiledArtifactsProfile extends EffectiveArtifactProfile {
   readonly selectedCapabilities: readonly ArtifactCapabilityName[];
   readonly profile: EffectiveArtifactProfile;
   readonly profileDigest: string;
+  readonly validators: CompiledValidators;
   readonly schemas: Readonly<Partial<Record<ArtifactCapabilityName, ArtifactSchema>>>;
   readonly idempotency: Readonly<Partial<Record<ArtifactCapabilityName,
     { readonly required: true; readonly scope: 'principal' }>>>;
@@ -50,24 +52,33 @@ export interface CompiledArtifactsProfile extends EffectiveArtifactProfile {
   capabilityForRoute(method: string, path: string): ArtifactCapabilityName | undefined;
 }
 
+export interface CompiledValidators {
+  readonly validateBindingName: (value: unknown) => boolean;
+  readonly validateCallerKey: (value: unknown) => boolean;
+  readonly validateFileEntry: (entry: unknown) => boolean;
+  readonly normalizeCommand: (command: unknown) => EffectiveArtifactCommand;
+}
+
 /** Projection fields are data-only; invocation correlation is added by L6. */
 export class ArtifactProfileInputError extends Error {
+  readonly kind: 'operational' | 'ordinary';
   readonly status: number;
   readonly httpStatus: number;
   readonly variant: 'unselected_operation' | 'invalid_request';
   readonly publicCode: string;
   readonly category: 'invalid_request' | 'capability_unselected';
   readonly retriable = false;
-  readonly phase: 'selection' | 'validation';
+  readonly phase: 'selection' | 'entry';
   readonly commitState = 'not_committed';
   constructor(unselected = false) {
     super(unselected ? 'capability_unavailable' : 'invalid_request');
     this.name = 'ArtifactProfileInputError';
+    this.kind = unselected ? 'operational' : 'ordinary';
     this.status = unselected ? 503 : 400;
     this.httpStatus = this.status;
     this.variant = unselected ? 'unselected_operation' : 'invalid_request';
     this.publicCode = this.message;
     this.category = unselected ? 'capability_unselected' : 'invalid_request';
-    this.phase = unselected ? 'selection' : 'validation';
+    this.phase = unselected ? 'selection' : 'entry';
   }
 }

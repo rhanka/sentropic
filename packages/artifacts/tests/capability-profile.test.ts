@@ -30,6 +30,30 @@ describe('compiled capability profile', () => {
         variant: 'unselected_operation', phase: 'selection', retriable: false, commitState: 'not_committed' }),
     );
   });
+  it('should expose profile-bound L0 semantic validators and typed entry refusal', () => {
+    const source = structuredClone(RADAR_ARTIFACTS_PROFILE);
+    source.operations.find((op) => op.operation === 'ensure')!.limits.bindingNameMaxUnits = 2;
+    source.operations.find((op) => op.operation === 'publish')!.limits.maxDecodedFileBytes = 1;
+    const compiled: FrozenCompiledProfile = compileArtifactsProfile(source);
+    const { validators } = compiled;
+    expect(Object.isFrozen(validators)).toBe(true);
+    expect(validators.validateBindingName('ab')).toBe(true);
+    expect(validators.validateBindingName('abc')).toBe(false);
+    expect(validators.validateCallerKey(' key ')).toBe(true);
+    for (const key of [' ', '\ud800', 'x'.repeat(257)]) expect(validators.validateCallerKey(key)).toBe(false);
+    const file = { path: 'a', mimeType: 'text/html', text: 'a' };
+    expect(validators.validateFileEntry(file)).toBe(true);
+    for (const change of [{ text: 'é' }, { path: 'api/a' }, { bytes: [97] }]) {
+      expect(validators.validateFileEntry({ ...file, ...change })).toBe(false);
+    }
+    source.operations.find((op) => op.operation === 'publish')!.limits.maxDecodedFileBytes = 100;
+    expect(validators.validateFileEntry({ ...file, text: 'aa' })).toBe(false);
+    expect(() => compile().validate('artifacts_ensure', {})).toThrowError(expect.objectContaining({
+      kind: 'ordinary', category: 'invalid_request', phase: 'entry', httpStatus: 400, retriable: false,
+    }));
+    expect(() => compile([]).validate('artifacts_publish', {})).toThrowError(
+      expect.objectContaining({ kind: 'operational', category: 'capability_unselected' }));
+  });
   it('should expose exactly the deterministic selected set when input order varies', () => {
     const a = compile();
     const b = compile([...RADAR_ARTIFACTS_PROFILE.selectedCapabilities].reverse());

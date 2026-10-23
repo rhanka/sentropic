@@ -6,6 +6,7 @@ import { copyJson, freezeDeep, isRecord, orderedDigest } from './json.js';
 import { assertCompleteOperation, capabilitySchema } from './schemas.js';
 import { matchesSchema, normalizeArguments } from './validation.js';
 import { RADAR_ARTIFACTS_PROFILE } from './radar.js';
+import { compileValidators } from './validators.js';
 export * from './contracts.js';
 export { RADAR_ARTIFACTS_PROFILE } from './radar.js';
 
@@ -87,6 +88,7 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
   };
   const compiled: CompiledArtifactsProfile = {
     ...profile, selectedCapabilities, profile, schemas, idempotency,
+    get validators() { return validators; },
     profileDigest: orderedDigest({ selection: selectedCapabilities, profile, schemas,
       providerContractRevisions: profile.contractRevisions }),
     assertSelected,
@@ -103,6 +105,7 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       return name && selectedCapabilities.includes(name) ? name : undefined;
     },
   };
+  const validators = compileValidators(compiled);
   compiledProfiles.add(compiled);
   return freezeDeep(compiled);
 }

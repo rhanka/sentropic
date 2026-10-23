@@ -91,3 +91,4 @@
 - [ ] Merge actual L0 origin d41f470927c1dfd52c239f57ba3f2589723d3285, adapt compiled validators and canonical command fixtures, preserve Astra r1 fixes, and rerun scope gates.
 - [x] L0 merge: preserve corrected participant/coordinator operations, ordinary/operational outcomes, frozen command fixtures and release handoff unchanged; only BRANCH.md conflicts, resolved to the L1 scope. No .track change against either parent.
 - [x] Align command hash body with corrected L0 golden fixtures (forced payload provenance); encode integer-like object keys in UTF-16 order. Baseline container probe reproduced the numeric-key digest mismatch; retain manifest digests and Astra r1 regressions.
+- [x] Wire L0 compiled semantic validators to immutable profile schemas and the trusted command factory; distinguish ordinary entry failures from operational selection failures.

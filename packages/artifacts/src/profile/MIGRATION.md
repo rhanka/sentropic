@@ -19,6 +19,16 @@ L6 adds invocation correlation when projecting them, without write dispatch.
 The trusted authority uses L0's `actorId` and `storageScopeId`; guard and
 transaction behavior remain L3/L6 responsibilities.
 
+`validators` exposes L0's binding-name, caller-key and file-entry checks,
+bound to the compiled limits and schemas. Whole-command normalization uses
+trusted `ArtifactCommandInput` (`capability`, `args`, `authority`, `derivation`,
+optional `envelopeKey`); this host-only wrapper calls the same command factory.
+Public arguments still cannot provide authority or hash fields. Granular
+checks return false for invalid input; batch budgets run in full validation.
+Validation errors carry `kind: ordinary` and `phase: entry`; unselected
+operations carry `kind: operational` and `phase: selection`. L2/L6 attach
+invocation correlation and private causes when constructing typed outcomes.
+
 The compiled object owns immutable selection, schemas, semantic rules,
 operation limits/defaults, principal idempotency metadata and integrity digest.
 No caller schema override is accepted. The digest covers semantic byte limits
