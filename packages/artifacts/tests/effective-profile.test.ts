@@ -8,9 +8,11 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   AMBIGUOUS_DERIVATION_CASE,
+  CANONICAL_COMMAND_FIXTURES,
   COMMAND_IDENTITY_RELATIONS,
   DERIVATION_VECTORS,
   buildDerivationPreimage,
+  canonicalizeJson,
   detectAmbiguousSplit,
   resolvePlatformEnvelope,
 } from '../l0-freeze/command-identity-contract.js';
@@ -20,6 +22,7 @@ import {
   PROFILE_BOUNDS,
   PROFILE_CONTRACT_VERSION,
   PROFILE_RESERVED_FIRST_SEGMENTS,
+  PROFILE_SEMANTIC_PAIR,
   PROFILE_TEXT_MIME_TYPES,
   RADAR_INVOCATION_SCOPE,
   RADAR_OPERATION_ROUTES,
@@ -168,6 +171,45 @@ describe('effective-profile contract', () => {
     expect(COMMAND_IDENTITY_RELATIONS.map((entry) => entry.expectation)).toEqual([
       'converge', 'conflict', 'computed-only',
     ]);
+  });
+
+  it('should encode golden effective commands with stable digests', () => {
+    for (const fixture of CANONICAL_COMMAND_FIXTURES) {
+      expect(canonicalizeJson(fixture.body)).toBe(fixture.canonical);
+      expect(createHash('sha256').update(fixture.canonical, 'utf8').digest('hex'))
+        .toBe(fixture.sha256);
+    }
+    const [baseline, shuffled, swapped, changedMime] = CANONICAL_COMMAND_FIXTURES;
+    expect(shuffled.canonical).toBe(baseline.canonical);
+    expect(shuffled.sha256).toBe(baseline.sha256);
+    expect(swapped.sha256).not.toBe(baseline.sha256);
+    expect(changedMime.sha256).not.toBe(baseline.sha256);
+  });
+
+  it('should never mutate the encoded command input', () => {
+    const deepFreeze = (value: unknown): unknown => {
+      if (value !== null && typeof value === 'object') {
+        Object.freeze(value);
+        Object.values(value).forEach(deepFreeze);
+      }
+      return value;
+    };
+    const body = deepFreeze(structuredClone(CANONICAL_COMMAND_FIXTURES[0].body));
+    expect(() => canonicalizeJson(body)).not.toThrow();
+    expect(canonicalizeJson(body)).toBe(CANONICAL_COMMAND_FIXTURES[0].canonical);
+  });
+
+  it('should isolate separate principals with distinct key digests', () => {
+    const alice = DERIVATION_VECTORS.find((vector) => vector.name === 'ensure-alice');
+    const issuerAlice = DERIVATION_VECTORS.find((vector) => vector.name === 'ensure-issuer-alice');
+    expect(alice?.preimage).toBe('s|alice|ensure||key-2');
+    expect(issuerAlice?.preimage).toBe('s|issuer|alice|ensure||key-2');
+    expect(alice?.sha256).not.toBe(issuerAlice?.sha256);
+  });
+
+  it('should distinguish semantic-only profile pairs under identical schema text', () => {
+    const { first, second } = PROFILE_SEMANTIC_PAIR;
+    expect(canonicalizeJson(first)).not.toBe(canonicalizeJson(second));
   });
 
   it('should freeze the four C2 capability routes', () => {
