@@ -8,8 +8,11 @@ tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=tmp \
 cd "$workspace"
 test ! -d node_modules
 mkdir /tmp/cm-tools
+# Shallow keeps transitive dependents nested so an installed @sentropic/*
+# package can never shadow a workspace symlink below (a hoisted older
+# llm-mesh required by a peer tool would otherwise break sibling builds).
 npm_config_cache=/tmp/npm-cache npm install --prefix /tmp/cm-tools --no-save \
-  --ignore-scripts --no-audit --no-fund typescript@5.4.5 @types/node \
+  --ignore-scripts --no-audit --no-fund --install-strategy=shallow typescript@5.4.5 @types/node \
   vitest@4.1.5 pg@8.16.3 @stablelib/sha256@2.0.1 \
   @modelcontextprotocol/sdk@1.31.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 \
   $CM_PEER_TOOLS >/dev/null

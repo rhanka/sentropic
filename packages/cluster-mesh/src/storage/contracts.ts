@@ -13,7 +13,7 @@ export const errResult = (...errors: readonly string[]): ValidationResult => ({
   errors,
 });
 
-export const STORAGE_MODULE_IDS = ['comments', 'engram-live'] as const;
+export const STORAGE_MODULE_IDS = ['comments', 'engram-live', 'engram-memory'] as const;
 export type StorageModuleId = (typeof STORAGE_MODULE_IDS)[number];
 
 export const isStorageModuleId = (value: unknown): value is StorageModuleId =>

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.22.0
+
+- Add the `engram-memory` module registration increment (contract
+  `memory-binding-v1`): pinned semantic manifest, JCS/NFC codecs, fixed
+  work limits, K7/K8/P3 first-proof validators and the public
+  `@sentropic/cluster-mesh/engram-memory` leaf. Registry already holds
+  0.21.0, so this additive feature ships as 0.22.0.
+- Admit `engram-memory` in the shared storage module union with Postgres
+  registration/storage factories and explicit host SQLite driver injection.
+  Composition refuses with typed errors while G1b tables, the G1d provider
+  seam and qualified durable profiles are unavailable; no fallback driver.
+
 ## 0.19.1
 
 - Widen optional peer ranges to the PR1 durable/exact routing union:
