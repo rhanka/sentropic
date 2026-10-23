@@ -26,7 +26,11 @@
 
 ## Feedback Loop
 - [x] Report H1–H9 replacements and all source divergences in `docs/governance/validation/converge32.md`.
-- [ ] Owner wording decision: 35 collapsed zone occurrences cannot contain their unchanged title/subtitle at 460 × 200. Keep complete text and diagnostics; strict fit stays blocking, without changing font sizes or timeouts.
+- [ ] R2 owner wording/content-allocation decision: 34 remaining occurrences across eight secondary scene/locale pairs after R1; preserve complete validated text at 460 × 200 until approved. Both central scenes pass. Strict fit remains blocking, without changing font sizes or timeouts.
+- [x] Astra R1: restore and assert measured 16 px outer summary insets (428 px body); remove the incorrect central wording-conflict claim.
+- [x] Astra R3: time and gate every counted ordinary operation, require 600 measured ordinary operations plus 240 measured stress toggles, and report complete-set maxima below 1800 ms.
+- [ ] R3 complete runtime witness: three attempts stopped on different operations after 17/223/28 measured operations. Boundary/count regression probes pass; no complete passing 660 + 240 campaign is claimed. Preserve the 1800 ms gate.
+- [x] Astra additional findings: disclose final-owner 14 px versus measured 20 px leaf-body conflict and inherited unequal adjacent expanded frame heights; preserve validated values.
 - [x] Replace inherited #711 plan; generated routes/portable and inherited-plan replacement exceed routine line budget. Keep handwritten implementation commits near 150 lines.
 - [x] No Track writes: scope excludes `.track/**`; mechanical harness checks remain mandatory.
 
@@ -50,11 +54,12 @@
   - [x] Wrapping legend with semantic swatches, using the same zone/fold path.
 - [ ] **Lot 3 — Qualification**
   - [x] Run new `scripts/check-{convergence,card-parity,routing-budget}.mjs`; card parity, pinned footer at 0/1/2 lines and routing budgets pass. Strict fit stays blocking on unchanged long zone text.
-  - [x] Geometry: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 121 ms. Browser fit remains pending the recorded wording conflict.
-  - [x] Source, geometry, 896 browser interactions (656 normal + 240 stress), card parity and unchanged idle/1800 ms performance budgets pass. Strict text fit remains blocking and is reported separately.
+  - [x] Geometry after R1: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 271.48 ms. Card parity passes for all 144 leaves. Browser fit remains pending the recorded wording conflict.
+  - [x] Prior browser count corrected by R3: only 560 of 656 ordinary entries were measured; the historical maximum did not establish the complete interaction budget. Rerun the complete measured witness after R1.
   - [x] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
 - [ ] **Lot 4 — Delivery**
   - [x] Record H1–H9 file:line replacements, divergences and validation in `validation/converge32.md`.
   - [x] Rebuild/deliver portable, refresh and verify all 135 SHA256SUMS entries; scope check before each selective make commit.
   - [x] Create draft PR #726 using this plan as body and post the four-step plan; keep it draft and unmerged.
-  - [ ] Post-push gate: record exact-head green CI and the final portable digest in the PR delivery comment; no further source commit is needed for that external result.
+  - [x] R1 qualification: ten scene/locale pairs, both central views pass, eight secondary fit failures; content retains 32 slides / 52 routes with 16 remaining fit findings. Idle/load checks pass all four scenarios.
+  - [ ] Post-push gate: report exact-head CI and the final portable digest in the delivery response; keep the PR draft and unmerged while R2 and the complete R3 runtime witness remain pending.
