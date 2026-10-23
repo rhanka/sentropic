@@ -267,4 +267,5 @@ Actions with the following status should be included around tasks only if really
 ## Round M5 (main advanced during green CI)
 - [x] Merge origin/main b67e2a49a (PR 709) after the exact-head CI passed; no rebase.
 - [x] BR710-EX11: preserve main-only cluster-mesh, selected fixture and Makefile integration changes exactly; keep branch P1 format and regenerate provenance.
-- [ ] Regenerate and verify P1, then require green CI and merge with the owner GO.
+- [x] Regenerate P1 twice identically (2b85ff28), preserve 44 contracts and archive bytes, verify packed graph and all 101 tooling tests.
+- [ ] Require green CI on the exact new head and merge with the owner GO.
