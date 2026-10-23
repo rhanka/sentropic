@@ -136,10 +136,21 @@ export function parseDecisionValidationContext(candidate: unknown, request: Deci
   if (semantics.score !== null && !isBoundedMeaning(semantics.score)) return null;
   if (semantics.confidence !== null && !isBoundedConfidence(semantics.confidence)) return null;
   if (semantics.rationale !== 'forbidden' && semantics.rationale !== 'optional') return null;
+  // §3.4 native-distribution-v1 forbids fabricated native evidence: a context
+  // that permits rationale under the native profile contradicts the profile
+  // and must fail before headers or fetch, never redefine native semantics.
+  if (profile.profile === 'native-distribution-v1' && semantics.rationale !== 'forbidden') return null;
   if (!isText(source.definitionDigest) || !DIGEST_RE.test(source.definitionDigest as string)) return null;
   const registered = request.criterion.kind === 'registered';
   if (registered && !isRegisteredResolution(source.registeredResolution, request, nowMs)) return null;
   if (!registered && source.registeredResolution !== undefined) return null;
+  // Required profile evidence (§3.4): a native binary/graded verdict carries a
+  // native score, so a native context without score semantics for those kinds
+  // cannot validate anything and fails here rather than at the response.
+  const effectiveKind = registered
+    ? (source.registeredResolution as DecisionRegisteredResolution).resolvedKind
+    : request.criterion.kind;
+  if (profile.profile === 'native-distribution-v1' && effectiveKind !== 'choice' && semantics.score === null) return null;
   const ref = source.evaluator as EvaluatorRef;
   const scoreSource = (semantics as { score: DecisionValidationSemantics['score'] }).score;
   const confidenceSource = (semantics as { confidence: DecisionValidationSemantics['confidence'] }).confidence;
