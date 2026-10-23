@@ -349,3 +349,30 @@ authority escalation and lineage conflicts. Package enrollment keeps existing id
 `cloudcode-pa` target and `productAccountSource: antigravity`, and refuses the
 `gemini` route. Native profile variants stay unverified until observed; see
 `spec/SPEC_EVOL_CI_SEATS.md` and `tests/enrollment/seat-bundle.test.ts`.
+
+## CI seat import (L1, synthetic)
+
+`src/enrollment/cli-seat-import.ts` (re-exported from
+`@sentropic/llm-mesh/enrollment`) parses `--from cli` provider-shaped profiles and
+`--from token` envelopes: parse and validate only, no exchange, mint,
+hidden store reread, or refresh. CLI profiles require a
+custodian-observed `issuedAt`; unknown expiry is never infinite
+validity. `src/enrollment/agy-cli-import.ts` maps the agy package
+`cloud-code` enrollment to the `antigravity`/`cloudcode-pa` application
+tuple and refuses `gemini`, mixed, or wrong-client tuples before any
+write. `importSeatBundle`
+(`src/service/local-account-transport-service.ts`) is the single
+canonical registry: stable `seat-<cli>-<seatRef>` accounts, external
+authority marker, idempotent/stale/conflict/epoch transitions,
+persisted through the canonical register/persist path. Externally held
+seats never refresh here: expiry, 401, or dateless access becomes
+`access-unavailable` and waits for the next imported projection, with
+owner claim, secret, and policy retained. Muse device-flow seats managed
+by the mesh refresh through `muse-code.refresh`, never by re-reading a
+CLI store. Bounded lab-record inspection lives in
+`src/node/cli-seat-store-reader.ts` (re-exported from
+`@sentropic/llm-mesh/node`) with the `seat-tools/seat-inspect` helper;
+see `seat-tools/README.md`. Tests: `tests/enrollment/cli-seat-import`,
+`agy-cli-import`, `tests/service/external-seat-authority`,
+`seat-projection-delivery`, `tests/node/cli-seat-store-reader`,
+`mesh-release-invariants` (single-copy lock assertion).

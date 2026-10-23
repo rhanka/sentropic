@@ -1,0 +1,18 @@
+{
+  "node": "v24.22.0",
+  "dist": "https://nodejs.org/dist/v24.22.0",
+  "artifacts": {
+    "linux-x64": {
+      "file": "node-v24.22.0-linux-x64.tar.xz",
+      "sha256": "cc2f601cee82d9a5a233302fe307abc600727035fd7d2c3a3571755989e95008"
+    },
+    "darwin-arm64": {
+      "file": "node-v24.22.0-darwin-arm64.tar.gz",
+      "sha256": "6a9724d9b50a5f22b4816cded441b5a8d9ddae546191a5e5b7efa5a5e2ee26d5"
+    },
+    "win-x64": {
+      "file": "node-v24.22.0-win-x64.zip",
+      "sha256": "f9683a19877e12a9b167305c8db71040d812876359de21f0d2e97c3f321f80c3"
+    }
+  }
+}

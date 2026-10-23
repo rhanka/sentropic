@@ -1,107 +1,83 @@
-# Feature: decouple memory L5 P1 from whole root lockfile
+# Feature: CI seat import (L1)
 
 ## Objective
-Replace the live root-lockfile equality in the P1 packed gate with a versioned fingerprint of the resolved P1 dependency and build-tool closure.
+Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus challenge-opus-r6.md): import the five owner CLI seats (`agy`, `codex`, `vibe`, `muse`, `claude`) from connected CLIs (`--from cli|token`) into the sealed seat store, with the external refresh policy guard in `acquireDbAccountTransport` and the named transport paths, plus refusal tests, test-first.
 
 ## Scope / Guardrails
-- Scope limited to P1 pre-candidate pack/verify, manifest schema, and tooling tests.
+- Scope limited to llm-mesh CLI/token import, external refresh policy, L1-local inspect helper, API persistence/acquisition/receiver, seat delivery integration.
+- One migration max in `api/drizzle/*.sql` (if applicable).
 - Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree `tmp/worktrees/l5-p1-fingerprint`.
-- Automated test campaigns on dedicated environment (`ENV=test-l5-fingerprint`), never on root `dev`.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
-- Never run `make clean-all`.
 - All new text in English.
+- Never read, print or copy a real secret value. Live provider calls only per spec gates (P-BILLING receipts, Q1=A caps).
+- llm-mesh release stays inside main's llm-gateway 0.21.0 declared range (`^0.27.0`): patch bump only (0.27.x), with a single-copy-of-mesh lock assertion (R6-1).
+- h2a complements: (a) fix `completeMuseDeviceImport` mis-route (stores `transportProviderId` `muse` + `refreshToken`, then re-reads CLI login file) with a test; (b) shared refresh authority across consumers (`refreshInFlight` local, `InMemoryAccountTransportCoordinator`) checked for coverage by spec 3.4/L3 and recorded.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `README.md` (BR710-EX10; merge-only, exact origin/main content)
-  - `docs/governance/**` (BR710-EX10; merge-only, exact origin/main content)
-  - `package.json`
+  - `spec/SPEC_EVOL_CI_SEATS.md`
+  - `packages/llm-mesh/src/enrollment/**`
+  - `packages/llm-mesh/src/account-transports.ts`
+  - `packages/llm-mesh/src/external-seat-marker.ts`
+  - `packages/llm-mesh/src/service/external-seat-authority.ts`
+  - `packages/llm-mesh/src/service/facade.ts`
+  - `packages/llm-mesh/src/service/local-account-transport-service.ts`
+  - `packages/llm-mesh/src/node/index.ts`
+  - `packages/llm-mesh/src/node/cli-seat-store-reader.ts`
+  - `packages/llm-mesh/src/node/seat-sidecar-file-backend.ts`
+  - `packages/llm-mesh/seat-tools/**`
+  - `packages/llm-mesh/tests/**`
+  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/llm-mesh/package.json`
+  - `packages/llm-mesh/README.md`
   - `package-lock.json`
-  - `packages/cluster-mesh/**` (BR710-EX11; merge-only, exact origin/main content)
-  - `Makefile` (BR710-EX1-7 P1 changes; BR710-EX11 main-only CLUSTER_MESH_PEER_TOOLS pin)
-  - `ui/package-lock.json`
-  - `ui/package.json` (merge-only, exact origin/main DOMPurify pin)
-  - `api/Dockerfile` (BR710-EX9; preserve the main Go 1.26.10 pin during integration)
-  - `tools/memory-mcp-l5/lock-fingerprint.mjs`
-  - `tools/memory-mcp-l5/lock-closure.mjs`
-  - `tools/memory-mcp-l5/build-inputs.mjs`
-  - `tools/memory-mcp-l5/precandidate.mjs`
-  - `tools/memory-mcp-l5/pack.mjs`
-  - `tools/memory-mcp-l5/schemas/artifact-manifest-v1.schema.json`
-  - `tools/memory-mcp-l5/tests/**`
-  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
-  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`
-  - `tools/memory-mcp-l5/artifacts/history/**`
-  - `tools/memory-mcp-l5/artifacts/archives/**`
-  - `tools/memory-mcp-l5/artifacts/lock-snapshots/**`
-  - `tools/memory-mcp-l5/artifacts/toolchain/**`
+  - `package.json` (CISEAT-EX6; root test-tool mesh override only)
+  - `api/src/services/llm-account-transports.ts`
+  - `api/tests/unit/llm-account-transports.test.ts`
+  - `api/tests/unit/llm-seat-projection-import.test.ts`
+  - `api/tests/unit/llm-seat-delivery-auth.test.ts`
+  - `api/tests/api/llm-seat-delivery.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/**`
-  - `api/**`
+  - `packages/llm-gateway/**`
+  - `api/**` (except `api/src/services/llm-account-transports.ts` and the four listed test files)
   - `ui/**`
   - `e2e/**`
-  - `.github/**`
-  - `tools/memory-mcp-l5/receipt.mjs`
-  - `tools/memory-mcp-l5/schema-validator.mjs`
-  - `tools/memory-mcp-l5/schemas/checkpoint-v1.schema.json`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
+  - `api/src/routes/namespaces/llm-seat-delivery.ts`
+  - `api/src/middleware/llm-seat-delivery-auth.ts`
+  - `api/src/routes/namespaces/llm-mesh-router.ts`
+  - `deploy/k8s/base/seat-delivery-mtls.yaml`
+  - `deploy/k8s/base/kustomization.yaml`
+  - `deploy/k8s/overlays/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-- `attention`: BR710-EX11 — import PR 709 cluster-mesh files and its Makefile peer pin through the owner-authorized main merge. Reason: main advanced while CI ran. Impact: preserve upstream bytes exactly outside the branch P1 work. Rollback: revert the merge as a unit.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
-- `attention`: BR710-EX11 — import PR 709 cluster-mesh files and its Makefile peer pin through the owner-authorized main merge. Reason: main advanced while CI ran. Impact: preserve upstream bytes exactly outside the branch P1 work. Rollback: revert the merge as a unit.
 
 ## Feedback Loop
-- `attention`: BR710-EX11 — import PR 709 cluster-mesh files and its Makefile peer pin through the owner-authorized main merge. Reason: main advanced while CI ran. Impact: preserve upstream bytes exactly outside the branch P1 work. Rollback: revert the merge as a unit.
-- `attention`: BR710-EX10 — allow README.md and docs/governance/** imported by the owner-authorized merge of main (4138a0ecb, PR #711). Reason: preserve both branches while scope-checking the merge index. Impact: upstream content only, byte-identical to origin/main, no local edits. Rollback: revert the merge as a unit.
-Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
-- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
-- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
-- `attention`: BR710-EX1 — pin `@types/node@22.20.1` in `Makefile` P1-producing targets and pass the committed lock sha to the packer (4 recipe tokens, bare `@types/node` and no provenance binding today).
-- `attention`: BR710-EX2 — add `Makefile` target `lock-markdown-it-direct` (pinned sed bump 14.3.0/14.1.1→14.3.2, mirrors committed `lock-api-direct` precedent; full npm regen is ERESOLVE-blocked per the comment above that target).
-  - Reason: remediate the CI-blocking markdown-it HIGH pair (GHSA-253c-mchw-3w2r fixed in 14.3.1, GHSA-r7fv-28h4-cvq7 fixed in 14.3.2) with registry-pinned integrity; dep ranges of 14.3.x are identical so the 3-line delta is exact.
-  - Impact: root + ui locks resolve markdown-it 14.3.2; P1 closure untouched (no P1 regen).
-  - Rollback: revert the target, the override, and the two lock hunks.
-  - Reason: the P1 build toolchain installs an unpinned `@types/node` (floating `latest`); the fingerprint must bind the actual resolved toolchain deterministically (Astra R1 finding 2). Pin matches `packages/mcp-*/devDependencies ^22.10.10` and the lock nested resolution `22.20.1`. The `--head-lock-sha` provenance arg enforces generation from the committed lock (Astra R1 finding 3); host-shell evaluation matches the existing `--l5-head`/`--base` args since the pack container cannot read the worktree gitdir.
-  - Impact: build `@types/node` becomes `22.20.1` instead of floating latest; `pack.mjs` refuses a dirty lockfile; `typecheck-*`/`test-*` targets untouched.
-  - Rollback: revert the 3 tokens to bare `@types/node` and drop the `--head-lock-sha` arg.
-- `attention`: BR710-EX3 — install the P1 build toolchain via `npm ci` from a committed union toolchain snapshot and add the explicit `memory-l5-toolchain-snapshot` regen target (3 recipe install tokens + 1 additive target).
-  - Reason: Astra R2 finding 2 — the recipes fresh-install transitive ranges, so root-lock records describe a different installation (api-extractor 7.58.12 vs actual 7.58.9). One resolved toolchain record must be consumed by the producing build and checked by the verifier.
-  - Impact: builds install the byte-identical locked tree (same direct pins `typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9`); snapshot regen is explicit and reviewable; fingerprint v3 binds snapshot content plus spec satisfaction; all other targets untouched.
-  - Rollback: revert the 3 install tokens to `npm install <specs>` and drop the snapshot target; keep or revert the `v3` modules with the snapshot files retained.
-- `attention`: BR710-EX4 — remediate the NEW markdown-it advisories (GHSA-vfgh-jcmw-g37q low, GHSA-gfr2-rv44-r23c high; fixed in 14.3.3) with the same pinned-sed procedure as BR710-EX2 (root `overrides` 14.3.2→14.3.3, lock bumps in root + ui, integrity var + bump target).
-  - Reason: CI audit-gate/SCA red on the R2 head (6 jobs plus `ci-gate`); the advisories were published after the last green run and are unrelated to the R2 diff (identical ui/api locks were green at `27a560ce4`).
-  - Impact: markdown-it 14.3.2→14.3.3 in root + ui locks only; P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
-  - Rollback: revert the override, both lock hunks, and the target/var.
-- `attention`: BR710-EX5 — remediate the follow-redirects HIGH pair (GHSA-q3jh-wrc6-jgq8, GHSA-8r9p-f939-6h3c; fixed in 1.16.1) with the same pinned-sed procedure (root `overrides` pin, root lock hunk, integrity var + bump target).
-  - Reason: CI `build-api-image` + `security-sast-sca` red on the post-EX4 head; the advisories were published mid-run (narrow `>=1.16.0 <1.16.1` range, single parent `centra ^1.15.6`); unrelated to the R2 diff.
-  - Impact: follow-redirects 1.16.0→1.16.1 in the root lock only; P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
-  - Rollback: revert the override, the lock hunk, and the target/var.
-- `attention`: BR710-EX6 — remediate the vite launch-editor advisories (GHSA-587h-7wmj-h5pm HIGH incl. CVE-2026-112942, GHSA-698v-4r3x-3vcv medium, GHSA-r825-w8mm-5pxw medium; vite fixed in 7.3.7/8.2.4) with the same pinned-sed procedure (root + api lock hunks, integrity vars + bump target; no single-version override exists across the 7/8 lines so none is added).
-  - Reason: CI `security-sast-sca` (api workspace, dev included) + `security-container` (api-tool image) red; advisories published 10/20, after the last green run; unrelated to the R2 diff.
-  - Impact: vite 7.3.6→7.3.7 (root top) and 8.2.2→8.2.4 (root nested ×2, api nested ×1); ui/auth-idp vite copies untouched (their gates green, minimal diff); P1 closure untouched (no P1 regen — `memory-l5-verify` proves it).
-  - Rollback: revert the lock hunks and the target/vars.
-- `attention`: BR710-EX7 — add one effective-image equality guard line to each of the 3 P1-producing `Makefile` recipes plus the `memory-l5-pack` recipe (Astra R3 P1: execution-contract enforcement).
-  - Reason: the finding's invocation-level repro (`make memory-l5-pack LLM_MESH_NODE_IMAGE=node:22 ...`) changes the effective image of every producing recipe without touching recipe text; the parser requires the guard and the fingerprint binds it, but only a recipe-executed equality test refuses the override before anything is produced.
-  - Impact: 4 additive recipe lines; the guard only constrains values that override the makefile (`$(origin ...)` is `command line` or `environment override`) — those must equal the pin. Plain environment values are exempt (they carry make's own export plumbing to `$(MAKE)` sub-makes); makefile-internal values (`?=` default, target-scoped export) are untouched. An unconditional first version refused legitimate direct builds (CI `typecheck-lint-api`, `validate-artifacts`, `validate-mcp-platform` red); the origin-gated version restored them, and exempting plain environment restored the `probe-artifacts-packed-consumer` sub-make chain. The finding stays closed: the qualified pack path forces the pin over plain env via the target-scoped export, while command-line and `make -e` overrides are refused. All other targets untouched.
-  - Rollback: drop the 4 guard lines and revert the parser's guard requirement with them.
-- `attention`: BR710-EX9 — bump the `ci-esbuild` Go base image `1.26.9→1.26.10` (amd64 digest pin) in `api/Dockerfile` to remediate CVE-2026-111943 (Go stdlib HIGH, published mid-run; main red on the same `security-container` job).
-  - Reason: CI `security-container` + `ci-gate` red on the post-merge head; the api-tool image embeds the Go 1.26.9 toolchain; Go 1.26.10 carries the stdlib fix; single pin site; unrelated to the branch diff.
-  - Impact: api-tool image rebuilds on Go 1.26.10 (same Alpine 3.23, same esbuild pins); production target untouched (toolbox only).
-  - Rollback: revert the FROM line.
-- `attention`: BR710-EX8 — align the `ui/package-lock.json` markdown-it 14.3.3 record's dependency metadata to the published ranges (`entities ^4.5.0`, `linkify-it ^5.0.2`; Astra R3 non-blocking).
-  - Reason: the 14.3.3 record still declares the 14.3.2 ranges (`^4.4.0`/`^5.0.0`) while the installed tree resolves entities 6.0.1 + linkify-it 5.0.2; metadata-only, resolved/integrity bytes untouched, satisfies both ranges.
-  - Impact: 2 metadata tokens in the ui lock; installs reproducible (`npm ci` unaffected); P1 closure untouched.
-  - Rollback: revert the 2 tokens.
+- `CISEAT-EX6`: status active, directly blocking P0a's single-copy gate. Reason: main's development-only engram 0.21.1 depends on mesh ^0.19.0 and adds a second installed mesh. Impact: scope a root override to that exact test-tool package, resolving its mesh to the existing workspace; preserve its officeparser override and lock-only file-type pin. Removed only the stale seven-line nested lock entry, then npm install --package-lock-only and npm ls --all --package-lock-only prove every consumer dedupes to workspace mesh 0.27.1; file-type remains 22.1.0. Scoped mesh regression and real engram-memory tests remain required before acceptance; no upstream engram or product dependency version change. Rollback: remove that one nested override and regenerate only its lock edge; the single-copy gate must remain failed until resolved.
+- `CISEAT-P0A`: status active (2026-10-23). Owner requests L1 closure only, merge origin/main without rebase, exact-head CI and fresh immutable receipts; no PR merge or live seat activation. Remote baseline 7293130ee3f6bfc6dd1e2fefcc07b3bd4d751a99; main e6d17327898a0118af123ff36ae508eefda80ddf. Existing ci-seat-import worktree retains divergent local Lot 8 commits and its untracked broker; isolated author worktree tmp/worktrees/ci-seat-import-l1 starts from the published PR head and will push HEAD:feat/ci-seat-import without force.
+- `CISEAT-EX5`: status done in a53a64c4b (merge-only exception authorized by the owner). Reason: incorporate origin/main without rebase. Impact: incoming main paths are retained verbatim except the six named merge conflicts and L1 release pins; no unrelated authored changes. Rollback: revert the integration merge, preserving the original PR and local Lot 8 refs. Integration-only grants removed immediately afterward; incoming changes do not extend future implementation scope. The inherited Track files equal main byte-for-byte.
+- `R6-1-UPDATE`: status implemented, qualification pending. Main already supplies gateway 0.21.0 with mesh ^0.27.0; registry latest checked on 2026-10-23: mesh 0.27.0, gateway 0.21.0. L1 uses mesh 0.27.1, aligns seat-tools and installed fixture pins, and refreshes the packed sibling digest through the sanctioned Make flow. The selected manifest and lock root also pin 0.27.1. Preview mesh archive SHA-256: 0e236784a76bb543ec355e92455adc30cc3a6dee04a168d87c369d82a3a96139; this dirty-workspace preview is not an immutable acceptance receipt. No gateway source change is needed.
+- `CISEAT-EX2`: status active. Reason: scoped sentropic-seat-delivery receiver integration (new route `api/src/routes/namespaces/llm-seat-delivery.ts`, auth `api/src/middleware/llm-seat-delivery-auth.ts`, optional mount in `llm-mesh-router.ts` via `delivery.enabled`, service tuple/drain/reopen in `llm-account-transports.ts`). k8s mTLS manifests (`deploy/k8s/base/seat-delivery-mtls.yaml`, preprod overlay patch) are explicitly deferred to L3 P-DEPLOY, which owns TLS-termination design; no speculative infra is committed (delivery shares the api pod behind existing ingress). Impact: bounded to this integration; router behavior unchanged when `delivery` is unset. Rollback: delete the new route/middleware files, revert the router mount hunk and the service delivery functions.
+- `CISEAT-EX3`: status acknowledged (reserved downstream requirement from L0a). Reason: owner-machine native Node helper (`seat-inspect`) needs native session keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service D-Bus). Bounds: only reviewed Make entrypoints run the bounded local store reader/inspect helper natively; no host test campaign, server, second refresher or whole-home/keyring export. No `seat-reenroll` helper exists in L1 (re-enroll stays an L3 concern). Rollback: disable/remove owner targets, revoke helper GitHub session, remove private runtime dir, retire disposable lab profile only.
+- `R6-1`: status superseded by R6-1-UPDATE after main's coordinated mesh/gateway release; keep the single-copy lock and declared-range assertions.
+- `r2-rework`: status done (Opus r2 NO-GO narrow R1/R2/n1-n6, test-first with recorded red runs). R1 external-seat 401 stays `active` (API `recordLlmAccountTransportOutcome` + mesh `applyOutcome`, secret/policy retained); R2 expired agy/cloud-code zero-refresh spies (`refreshAntigravityAccessToken`, `importAntigravityEnrollment`, `fetch`); n1 per-request `deliveryTrust` (no hop env); n2 held-account owner compare; n3 same-generation/operationId 409; n4 sidecar wired via `SEAT_SIDECAR` else explicit `unverified`, reader-fixed refusal reasons, schemaVersion label charset, node+mesh pins self-enforced; n5 discriminating rotation/codex tests, README enrollment re-export path; n6 this file per template (no prose sections, gates checked). Local gates: mesh 49 files / 886 tests; API unit 127 files / 1290 passed + 2 skipped; endpoints 126 files / 1302 passed; typechecks + lints clean (0 errors, nothing on touched files); scope PASS C2. Served-token identity proven through drain + R1; one unexplained read anomaly (direct column-content read vs serving path) documented in-conductor-report, not in code. Never merge without conductor sign-off; seat-mode lot on hold.
+- `CISEAT-EX4`: status active (conductor-approved under owner default authorization). Reason: L1's required mesh patch bump (0.26.1 to 0.26.2) necessarily evolves two installed-version pins in `packages/cluster-mesh/tests/integrations/{llm,gateway}-surface.spec.ts` plus the frozen `selected` fixture lock digest (`packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`: mesh entry to 0.26.2, registry URL, sibling-bytes integrity from the sanctioned `refresh-lazy-package-lock` flow). Impact: two assertion literals + one 3-line lock entry; the lock keeps the registry URL (provisional until 0.26.2 publishes, then the registry check compares). Rollback: revert the two literals and the lock entry.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -114,158 +90,215 @@ Actions with the following status should be included around tasks only if really
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single orthogonal fix, one test cycle, no sub-workstreams.
+- Rationale: single sequential L1 integration branch; h2a consumes the published package after merge.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- UAT skipped: no UI changes in this branch.
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/feat-<slug>`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
+  - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
+- [ ] **P0a — Fresh L1 integration and qualification (2026-10-23)**
+  - [x] Preserve the divergent local Lot 8 checkout and untracked broker; isolate published #681.
+  - [x] Resolve the six origin/main conflicts without rebase; retain the five imports, refusal tests and external-refresh guard.
+  - [x] Align mesh 0.27.1, gateway 0.21.0, seat-tools and integration pins after registry verification.
+  - [x] Refresh the frozen selected lock through pack-candidate-siblings and refresh-lazy-package-lock; align its exact dependency manifest.
+  - [x] Reproduce the root duplicate-mesh failure, resolve the engram development edge and pass all three mesh-release-invariants assertions; retain file-type 22.1.0.
+  - [ ] Package gate: typecheck-llm-mesh, lint-llm-mesh, test-llm-mesh and packed Cluster Mesh qualification.
+  - [ ] API gate: unit llm-account-transports, llm-seat-projection-import, llm-seat-delivery-auth; endpoints llm-seat-delivery; typecheck-api and lint-api.
+  - [x] Remove integration-only scope grants; preserve the original L1 scope for follow-up commits.
+  - [ ] Push the exact candidate to #681, collect H/B/T/run/artifact/control hashes and require complete green CI on H.
+  - [ ] Conductor/Muse review and acceptance; no live import, L2/L3, Lot 8 activation, publication or PR merge in P0a.
+
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, packet and proposal.
-  - [x] Confirm worktree `tmp/worktrees/l5-p1-fingerprint` on branch `fix/l5-p1-lockfile-fingerprint`.
-  - [x] Run `harness check branch`.
-  - [x] Confirm ENV mapping: `ENV=test-l5-fingerprint` for all make runs, ports `API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725`.
-  - [x] Validate scope boundaries (no EXn expected).
-- [x] **Lot 1 — Fingerprint the P1 dependency and build-tool closure**
-  - [x] Add `tools/memory-mcp-l5/lock-fingerprint.mjs` (`LOCK_FINGERPRINT_VERSION=1`, `computeLockFingerprint`, relevant-key projection).
-  - [x] `precandidate.mjs`: compare pinned fingerprint against live lockfile instead of full-file sha equality; keep `declaredLockSha256` as provenance only.
-  - [x] `pack.mjs`: pin `lockFingerprintVersion` + `lockFingerprint` in manifest source; retain `declaredLockSha256`.
-  - [x] `schemas/artifact-manifest-v1.schema.json`: require versioned fingerprint in `manifestSource`; keep `declaredLockSha256`.
-  - [x] Update `tests/p1-fixture.mjs`, `tests/artifact-manifest.test.mjs`, `tests/receipt-contract.test.mjs` fixtures for the new source fields.
-  - [x] Lot gate: `make scope-check` before commit.
-- [x] **Lot 2 — Fixtures and regression tests**
-  - [x] Add `tests/lock-fingerprint.test.mjs`: unrelated lockfile edits pass, relevant dependency/build-input edits fail.
-  - [x] Extend packed-gate coverage: unrelated lock edit passes, relevant lock edit fails, contract/archive drift still fails.
-  - [x] Lot gate: `make memory-l5-tooling API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
-- [x] **Lot 3 — Regenerate P1, full gate, PR**
-  - [x] Retain superseded manifest in `artifacts/history/` (content-sha name + sidecar).
-  - [x] Rebuild dist and repack P1 via make targets.
-  - [x] Verify archives unchanged, inventory still exact 44 contracts, sidecars valid.
-  - [x] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
-  - [x] `make scope-check` before each commit; atomic commits via `make commit MSG="..."`.
-  - [x] Push branch and open DRAFT PR; do not merge.
+  - [x] Read rules (`MASTER`, `workflow`, `subagents`, `testing`, `security`) and `README.md`.
+  - [x] Confirm worktree `tmp/worktrees/ci-seat-import` on branch `feat/ci-seat-import` from `fb5e92a6a` (L0a merged, mesh 0.26.1, SeatBundleV1).
+  - [x] Capture Makefile targets (`test-llm-mesh`, `typecheck-llm-mesh`, `lint-llm-mesh`, `up-api-test`, `test-api-unit`, `test-api-endpoints`, `typecheck-api`, `lint-api`, `test-api`, `down`, `scope-check`, `commit`, `ps-all`).
+  - [x] Define environment mapping (`ENV=test-ci-seat-import`; owner-only local inspect `ENV=dev-ci-seat-import` under CISEAT-EX3) and ports (API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680).
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Confirm scope and guardrails (no secret values, Q1=A caps, P-BILLING gates, R6-1 range rule).
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `CISEAT-EX2`/`CISEAT-EX3`/`R6-1` as above.
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] No API test changes in Lot 0.
+      - [x] Sub-lot gate: none (baseline only).
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A (no UI changes in this branch).
+    - [x] **E2E tests**
+      - [x] N/A (no browser E2E in L1; P-DEPLOY gateway restart/delivery test stays in L3).
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None in Lot 0.
 
-## Round R1 (Astra review, CHANGES)
-- [x] **Lot 4 — Per-consumer resolved closure (finding 1)**
-  - [x] Add `tools/memory-mcp-l5/lock-closure.mjs`: resolve each consumer independently, follow runtime and build edges plus build-tool transitives, hash effective resolved records.
-  - [x] Red-first packed-gate regressions: nested SDK shadow, broker nested TypeScript integrity drift, `undici-types` integrity drift fail; identical nested duplicate and unrelated entry pass.
-  - [x] Lot gate: scoped tooling run on `ENV=test-l5-fingerprint`.
-- [x] **Lot 5 — Derived build-input record (finding 2, BR710-EX1)**
-  - [x] Add `tools/memory-mcp-l5/build-inputs.mjs`: derive toolchain specs from `Makefile` producing targets, hash `tsconfig` and api-extractor configs, fail closed on unpinned specs.
-  - [x] Pin `@types/node@22.20.1` in the 3 P1-producing `Makefile` targets (BR710-EX1).
-  - [x] Red-first regressions through the production verifier: `Makefile` pin change fails, `tsconfig` target change fails.
-  - [x] Lot gate: scoped tooling run on `ENV=test-l5-fingerprint`.
-- [x] **Lot 6 — Generation lock snapshot provenance (finding 3)**
-  - [x] `pack.mjs` writes `artifacts/lock-snapshots/<sha>.package-lock.json`, binds `declaredLockSnapshot` in manifest source, enforces clean-tree lock vs `HEAD`.
-  - [x] `precandidate.mjs` verifies snapshot bytes against `declaredLockSha256` independently of the live closure check.
-  - [x] Red-first regressions: missing snapshot fails, corrupt snapshot fails, zeroed `declaredLockSha256` fails, unrelated live-lock edit passes.
-  - [x] Schema requires `declaredLockSnapshot`; update fixtures.
-  - [x] Lot gate: scoped tooling run on `ENV=test-l5-fingerprint`.
-- [x] **Lot 7 — Regenerate P1, full gate, PR stays draft**
-  - [x] Retain superseded manifest in `artifacts/history/`; commit the generation lock snapshot (generated bytes, hash-verified).
-  - [x] Rebuild dist and repack P1 via make targets; inventory stays exact 44 contracts.
-  - [x] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-l5-fingerprint`.
-  - [x] Push branch; PR stays DRAFT, do not merge, do not mark ready.
+- [x] **Lot 1 — Package CLI/token import adapters (five CLIs)**
+  - [x] Add shared source-mode/authority contract: `--from cli` registrar path (selected lab profile via provider adapter, custody transfer explicit, original lab profile retired) and `--from token` bounded stdin/FD/SDK-stream path (argv never carries the value); consumer `--from cli` parses a private provider-shaped profile + trusted manifest (parse/validate only, no exchange/mint/reread/refresh).
+  - [x] Add `packages/llm-mesh/src/enrollment/cli-seat-import.ts` (common enroll/parse entry: `h2a llm-mesh account enroll <provider> --from cli|token`).
+  - [x] Add `packages/llm-mesh/src/enrollment/agy-cli-import.ts` (agy explicit mapping: package `providerId: cloud-code`, `accountTransport: cloud-code`, adapter/client/entitlement match).
+  - [x] Extend per-provider enrollment adapters without renaming global IDs (`codex`, `mistral-vibe`, `muse`, `claude-code` unchanged): canonical registration + consumer projection parsing, no second account registry.
+  - [x] Enforce: unknown expiry is not infinite validity; reimport N idempotent, N-1/another owner fails, new epoch needs controlled replacement; registrar stable opaque seat/account mapping, no secret-derived public identifiers.
+  - [x] r2 (M4/R2): codex consumer parse asserts zero provider calls via `fetch` spy.
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing, unchanged in this lot: `api/tests/unit/llm-account-transports.test.ts`.
+      - [x] New, none in this lot.
+      - [x] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/enrollment/cli-seat-import.test.ts ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: `make test-llm-mesh SCOPE=tests/enrollment/cli-seat-import.test.ts ENV=test-ci-seat-import`.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A (no UI changes in this branch).
+    - [x] **E2E tests**
+      - [x] N/A (no browser E2E in L1).
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None (synthetic only).
 
-## Round M (main merge + security remediation)
-- [x] **Lot 8 — Merge origin/main, resolve in scope**
-  - [x] Merge `origin/main` (merge commit, no squash, no rebase); conflicts limited to the P1 manifest + sidecar, resolved with ours then regenerated.
-  - [x] Containment: `track events-contains` OK, all 342 branch event ids survive.
-- [x] **Lot 9 — Remediate markdown-it HIGH (GHSA-253c-mchw-3w2r, GHSA-r7fv-28h4-cvq7)**
-  - [x] Pin `markdown-it@14.3.2` via root `overrides` (fixes both advisories; satisfies `^14.0.0`/`^14.1.0` dependent ranges).
-  - [x] Pinned sed bump in `package-lock.json` (14.3.0) and `ui/package-lock.json` (14.1.1) via `lock-markdown-it-direct` (BR710-EX2, mirrors `lock-api-direct` precedent).
-  - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock); no P1 regen expected.
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
+- [x] **Lot 2 — Package external refresh policy + Muse/agy corrections**
+  - [x] Persist and enforce external-refresh policy across token import, keyring storage, listing/reload, acquisition, explicit refresh APIs, fallback routing, application receiving store.
+  - [x] Guard `local-account-transport-service.ts` (`refreshToken` + `acquire` expiry branch): on expiry an external account becomes `access-unavailable` (classified), waits for next imported projection; never erases owner claim, never derives refresh from missing token, never routes through metered key/different account/gateway.
+  - [x] Remove consumer provider-renewal and Muse key-minting paths (including after restart and 401); Muse key preparation happens in custody before import, never in mesh consumer.
+  - [x] Fix (a) `completeMuseDeviceImport` mis-route: device-flow grant no longer refreshes by re-reading the CLI login file; expired device access becomes `access-unavailable` with zero CLI-store reads, covered by a dedicated test.
+  - [x] Check (b) shared refresh authority across consumers (`refreshInFlight` local map, `InMemoryAccountTransportCoordinator`): record coverage by spec 3.4/L3 (serialized-stream single temporal authority) in `.h2a/build/ci_seat_l1_report.md`.
+  - [x] Keep `cloud-code-credential-rotation.test.ts` covering external consumers refusing rotation; cloud-code fixture never qualifies native agy.
+  - [x] r2 R1: mesh `applyOutcome` on an external-seat 401 keeps `active` + `lastError` diagnostic, secret/policy retained (served-external-seat 401 test, red-then-green).
+  - [x] r2 R2: expired cloud-code seat never refreshes (zero-refresh spy); held-account owner compare refuses takeover via same `seatRef`.
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing, unchanged in this lot.
+      - [x] New, none in this lot.
+      - [x] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/service/external-seat-authority.test.ts ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: `make test-llm-mesh SCOPE=tests/service/external-seat-authority.test.ts ENV=test-ci-seat-import`.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A.
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None (synthetic only).
 
-## Round R2 (Astra review, CHANGES)
-- [x] **Lot 10 — Full transitive toolchain traversal (finding 1)**
-  - [x] `lock-closure.mjs`: carry traversal through all descendants once inside the build-toolchain subtree, preserving consumer resolution and edges.
-  - [x] Red-first regressions: second-level integrity change and edge deletion fail (unit + packed gate); unchanged-content hoisting passes.
-  - [x] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2` (11 files / 75 tests).
-- [x] **Lot 11 — Effective emitting commands and image (finding 3)**
-  - [x] `build-inputs.mjs`: record per-target recipe lines, docker image tokens, and `LLM_MESH_NODE_IMAGE` export/default bindings; fail closed on unknown image tokens and missing bindings.
-  - [x] Red-first regressions: single-line `tsc` flag change fails via fingerprint mismatch and image token swap fails closed (unit + packed gate).
-  - [x] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2` (11 files / 83 tests).
-- [x] **Lot 12 — Actual resolved toolchain record (finding 2, BR710-EX3)**
-  - [x] Committed union toolchain snapshot (`artifacts/toolchain/`); the 3 producing recipes consume it via `npm ci`; fingerprint v3 binds snapshot content plus spec satisfaction.
-  - [x] Explicit regen via `pack.mjs --snapshot-toolchain` and the `memory-l5-toolchain-snapshot` target; pack and verify refuse a stale snapshot.
-  - [x] Red-first regressions: snapshot transitive change and edge deletion fail (unit + packed gate); spec/snapshot mismatch throws.
-  - [x] Lot gate: scoped tooling run on `ENV=test-pr710-fix-r2` (11 files / 88 tests).
-- [ ] **Lot 13 — Regenerate P1, full gate, push, CI green**
-  - [x] Retain superseded manifest in `artifacts/history/`; rebuild dist and repack P1 via make targets; inventory stays exact 44 contracts.
-  - [x] Lot gate: `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-pr710-fix-r2`.
-  - [x] `make scope-check` before each commit; atomic commits via `make commit MSG="..."`.
-  - [ ] Push branch; PR stays DRAFT, do not merge, do not mark ready; CI green on the exact head.
+- [x] **Lot 3 — L1-local inspect helper + node export**
+  - [x] Add `packages/llm-mesh/src/node/cli-seat-store-reader.ts` (bounded reader: explicitly selected lab record only; allowlisted schema/version/capability categories; no refresh/mint/provider call/GitHub write/transfer/activation; unsupported fields/backends return unverified/refused, never raw values).
+  - [x] Add `packages/llm-mesh/seat-tools/Makefile` (`seat-helper-setup`, `seat-inspect`; no root Makefile edit), `packages/llm-mesh/seat-tools/inspect.mjs`, `packages/llm-mesh/seat-tools/package.json`, `packages/llm-mesh/seat-tools/package-lock.json`, `packages/llm-mesh/seat-tools/node-runtime.json` (pins exact reviewed Node patch/checksum + helper deps + built mesh artifact), plus `seat-tools/README.md` (inspect-only use).
+  - [x] Expose bounded reader via `packages/llm-mesh/src/node/index.ts` for L3 reuse.
+  - [x] Add `packages/llm-mesh/tests/node/cli-seat-store-reader.test.ts` (five synthetic backend adapters; selector isolation; no live-home fallback; no refresh/mint; no raw/encoded canary in stdout/stderr/errors).
+  - [x] r2 n4: sidecar wired via `SEAT_SIDECAR` (`SeatSidecarFileBackend`) else explicit `unverified`; reader-fixed refusal reasons; schemaVersion label charset; node+mesh pins enforced by the script itself.
+  - [ ] Owner dry-run format inspection only after synthetic gates (under CISEAT-EX3, `ENV=dev-ci-seat-import`, never automated): `make seat-inspect -C packages/llm-mesh/seat-tools CLI=agy ENV=dev-ci-seat-import` (repeat `codex`, `vibe`, `muse`, `claude`).
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing, unchanged in this lot.
+      - [x] New, none in this lot.
+      - [x] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/node/cli-seat-store-reader.test.ts ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: `make test-llm-mesh SCOPE=tests/node/cli-seat-store-reader.test.ts ENV=test-ci-seat-import`.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A.
+    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [ ] Owner dry-run inspect walkthrough (manual, after gates): five CLI labels return categories only.
 
-## Round R2-CI (registry advisories postdating the R2 head)
-- [x] **Lot 14 — Remediate markdown-it advisories (GHSA-vfgh-jcmw-g37q low, GHSA-gfr2-rv44-r23c high)**
-  - [x] Pin `markdown-it@14.3.3` via root `overrides` (fixes both advisories; satisfies `^14.0.0`/`^14.1.0` dependent ranges).
-  - [x] Pinned sed bump in `package-lock.json` (14.3.2) and `ui/package-lock.json` (14.3.2) via `lock-markdown-it-14-3-3` (BR710-EX4, mirrors `lock-markdown-it-direct` precedent).
-  - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock passes, 44 contracts); no P1 regen.
-  - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [x] **Lot 15 — Remediate follow-redirects HIGH (GHSA-q3jh-wrc6-jgq8, GHSA-8r9p-f939-6h3c)**
-  - [x] Pin `follow-redirects@1.16.1` via root `overrides` (fixes both advisories; single parent `centra ^1.15.6`).
-  - [x] Pinned sed bump in `package-lock.json` (1.16.0) via `lock-follow-redirects-1-16-1` (BR710-EX5).
-  - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped lock passes, 44 contracts); no P1 regen.
-  - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [x] **Lot 16 — Remediate vite launch-editor advisories (GHSA-587h-7wmj-h5pm high incl. CVE-2026-112942, GHSA-698v-4r3x-3vcv medium, GHSA-r825-w8mm-5pxw medium)**
-  - [x] Bump vite 7.3.6→7.3.7 (root top) and 8.2.2→8.2.4 (root nested ×2, api nested ×1) via `lock-vite-737-824` (BR710-EX6; no cross-line override possible).
-  - [x] Verify P1 unaffected (`memory-l5-verify` on the bumped locks passes, 44 contracts); no P1 regen.
-  - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-fix-r2` (11 files / 88 tests).
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [x] **Lot 17 — Merge origin/main (feb741083, PR #712)**
-  - [x] Auto-merged main-only regions (api image canonical artifact, ci.yml, api/Dockerfile, scripts); locks byte-identical to tip (identical 14.3.3 triple both sides).
-  - [x] BRANCH.md kept as this branch's live plan (main's BR01 record stays in main history); manifest kept at v3 (no regen — merged P1 inputs unchanged).
-  - [x] Lot gate: tooling suite + `memory-l5-verify` on the merged tree; scope-check; diff-check.
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [x] **Lot 18 — Astra R3 P1: bind the effective target wiring (BR710-EX7)**
-  - [x] Parser binds the export target membership (`llmMeshExport.targets`, `memory-l5-pack` required), the pack prerequisites (all producers + `memory-l5-runtime` required) and the per-recipe effective-image guard (origin gate + comparison + refusal); any extra `LLM_MESH_NODE_IMAGE` binding fails closed.
-  - [x] One origin-gated equality guard line in each producing recipe + the pack recipe; fingerprint v4 binds the new wiring; production-verifier regressions for both single-line mutations plus the execution-contract check (extracted guard passes on makefile-internal values and on an explicit pin, refuses command-line/environment overrides; runtime prerequisite closes the loop against the freeze file).
-  - [x] Lot gate: `make memory-l5-tooling ENV=test-pr710-astra-r3`.
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [x] **Lot 19 — Astra R3 non-blocking (BR710-EX8) + P1 regen v4**
-  - [x] Align `ui/package-lock.json` markdown-it metadata (`entities ^4.5.0`, `linkify-it ^5.0.2`); severity precision in EX4/EX6/Lot 14/Lot 16 titles.
-  - [x] Retain `f5254a27` manifest to history, regenerate P1 via `make` (provenance + exact 44-contract inventory), verify + gate.
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [x] **Lot 20 — Merge origin/main (6ec93105b, PR #708), verify, push, CI green**
-  - [x] Merge (no rebase); BRANCH.md kept as this branch's live plan; locks auto-merged (identical security triples + main's `artifacts 0.1.4`); manifest conflict resolved to branch side then regenerated.
-  - [x] Regen `9c9bc3d0` (v4, declaredLock = merged lock, 44 contracts; only deltas vs `f5254a27`: schema v3→v4 hash + new sourceHead, tuple bytes identical); verify + gate + tooling green.
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green on the exact head, then report head SHA + CI URL.
-- [x] **Lot 21b — Remediate Go stdlib CVE-2026-111943 (BR710-EX9)**
-  - [x] Bump `ci-esbuild` Go base `1.26.9→1.26.10` (amd64 digest pin) in `api/Dockerfile`; proven with Trivy before commit (1.26.9 fires the CVE, 1.26.10 clean).
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green required.
-- [x] **Lot 21 — Merge origin/main (50e612a0e, PR #716), verify, push, CI green**
-  - [x] Merge (no rebase); BRANCH.md kept as this branch's live plan; main's net delta is cluster-mesh common-rule + spec + fixtures and a `cluster-mesh 0.21.0→0.21.1` version-metadata lock hunk (auto-merged); manifest conflict (main's old-format regen) resolved to branch side then regenerated.
-  - [x] Regen `0f366625` (v4, fingerprint identical — main touched no P1 inputs; declaredLock = merged lock, 44 contracts byte-identical, tuple bytes identical); verify + gate + tooling green.
-  - [ ] Push; PR stays DRAFT, do not merge, no publish; CI green on the exact head, then report head SHA + CI URL.
+- [x] **Lot 4 — API persistence/acquisition guard + agy mapping + billed-fallback disable**
+  - [x] Update `api/src/services/llm-account-transports.ts`: external/access-only store variants for `storeAntigravityAccountTransport` (keep antigravity/cloudcode-pa/productAccountSource=antigravity) and `storeClaudeCodeAccountTransport`; parse/reload external variant in `parseClaudeCodeTokenSecret` without erasing policy or reclassifying as mesh-managed renewable; no refresh material or dummy token in consumer projections.
+  - [x] Guard `acquireDbAccountTransport:2164` before `refreshTokenIfNeeded` at `:2378` (policy read ahead of hook): external accounts skip every per-transport hook (`refreshAntigravityTokenIfNeeded:2094/:2100/:2104`, `refreshClaudeCodeTokenIfNeeded:1811/:1821`, `refreshCodexTokenIfNeeded:1748/:1758`, `refreshMuseTokenIfNeeded:1908`/`readMuseCliEntry:1927`, `refreshMistralVibeTokenIfNeeded:543`); valid unexpired access returns directly, expiry/401 classifies `access-unavailable`, retains `token_secret`/owner/lineage/policy, releases reservation, awaits next projection; policy also guards explicit refresh and outcome/401 paths; no missing-token branch erases an external account. `refreshCloudCodeTokenIfNeeded:1964/:1974` stays the forbidden cloud-code/gemini route for agy (never its guard).
+  - [x] Bypass `importAntigravityEnrollment` (`provider-connections.ts:1521`) in the new projection receiver: validate trusted access-only projection, invoke external store variant directly with exact agy tuple, zero discovery/refresh/mint side effect.
+  - [x] Disable C1 D3.3 billed-key fallback for these accounts (expiry, 401, delivery failure, exhausted seat quota never select a configured billed key).
+  - [x] Update `api/tests/unit/llm-account-transports.test.ts` (positive agy + Claude Code fixtures with no refresh token at all; import/persist/parse-reload/acquire valid unexpired access via `acquireAntigravityAccountTransport`, `acquireClaudeCodeAccountTransport`, `acquireOpenAICodexAccountTransport`, `acquireMuseAccountTransport` through the real guard; valid/expired/401/explicit-refresh cases; zero `refreshAntigravityAccessToken`/`readMuseCliEntry`/import-hook/renewal/mint/billed-fallback; `token_secret` + owner/lineage/policy preserved; newer-projection recovery; Vibe non-destructive regression).
+  - [x] Add `api/tests/unit/llm-seat-projection-import.test.ts` (agy package cloud-code to application antigravity/cloudcode-pa + productAccountSource; refuse gemini target, application cloud-code transport, mixed tuples, wrong clients with zero DB mutation/acquisition/provider calls and zero `importAntigravityEnrollment`; refuse refresh-bearing projections and live use lacking trusted billing clearance).
+  - [x] Start isolated API stack first: `make up-api-test API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+  - [x] r2 R1: API `recordLlmAccountTransportOutcome` on an external-seat 401 records unavailable, status stays `active`, secret retained (served-external-seat 401 test, red-then-green).
+  - [x] r2 R2: expired agy seat never refreshes (zero `refreshAntigravityAccessToken` spy).
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing + updated: `api/tests/unit/llm-account-transports.test.ts`.
+      - [x] New: `api/tests/unit/llm-seat-projection-import.test.ts`.
+      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-account-transports.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-seat-projection-import.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: both scoped runs above.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A.
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None (synthetic API only).
 
-## Round M2 (approved-head integration)
-- [x] **Lot 22 — Merge origin/main (3f3f3fd78, PR #717)**
-  - [x] Verify branch with harness, fetch and pull the remote branch; merge main without rebase. PR #716 is already included in the approved head.
-  - [x] Keep this branch plan; take the main Go 1.26.10 image digest, preserving the CVE remediation on both sides.
-  - [x] Root lock, P1 inputs, retained artifacts and Track log unchanged; no P1 regeneration required.
-  - [ ] Verify retained P1 and tooling, scope-check, commit via make, push and require green CI on the exact head; keep the PR draft and unmerged.
-  - [x] Retained P1 verification passes (30 files, 54 edges); all 101 tooling tests pass; all 342 Track events from each parent survive.
+- [x] **Lot 5 — Seat-delivery receiver (conditional CISEAT-EX2)**
+  - [x] Declare `CISEAT-EX2` before editing conditional paths (exact overlay files, rationale, impact, rollback).
+  - [x] Add `api/src/routes/namespaces/llm-seat-delivery.ts` + `api/src/middleware/llm-seat-delivery-auth.ts`; mount in `api/src/routes/namespaces/llm-mesh-router.ts` (existing mount edit only).
+  - [ ] Add `deploy/k8s/base/seat-delivery-mtls.yaml` + `deploy/k8s/base/kustomization.yaml` + selected target overlay patch only (P-DEPLOY resolves target; no infra changes beyond selection).
+  - [x] Implement: scoped identity, wrong-owner refusal, forged-header/direct-access refusal, drain/ack/reload, monotonic import/ack, seat drain/reopen, zero billed-key fallback.
+  - [x] Add `api/tests/unit/llm-seat-delivery-auth.test.ts` + `api/tests/api/llm-seat-delivery.test.ts`.
+  - [x] r2 n1: trusted-hop marker is per-request attestation (`deliveryTrust`), never process-wide env; all handlers require trust.
+  - [x] r2 n3: same generation + different `operationId` refused with 409 lineage conflict.
+  - [x] r2: stored-row asserts prove registry-derived owner/scope/policy; served-token identity proven through drain (M4).
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing, unchanged in this lot (except receiver mount).
+      - [x] New: `api/tests/unit/llm-seat-delivery-auth.test.ts`, `api/tests/api/llm-seat-delivery.test.ts`.
+      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-seat-delivery-auth.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+      - [x] Scoped runs while evolving tests: `make test-api-endpoints SCOPE=tests/api/llm-seat-delivery.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: both scoped runs above.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A (L3 owns `tests/e2e/seat-persistent-delivery.test.ts` with real TLS/revocation on a non-production target).
+    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [ ] Synthetic delivery walkthrough: import projection both modes, see one account; expire, see classified unavailable with zero refresh; deliver N+1, see recovery without duplication; wrong-owner and older-generation refusal.
 
-## Round M3 (owner-authorized final integration)
-- [x] **Lot 23 — Merge origin/main (4138a0ecb, PR #711)**
-  - [x] Harness branch check and remote fast-forward pull passed; merge main without rebase.
-  - [x] Resolve BRANCH.md to this branch plan; main governance work remains intact in the merged tree and its plan remains in main history.
-  - [x] Root lock, P1 build inputs, retained artifacts and Track log unchanged; no P1 regeneration required.
-  - [x] Retained P1 verifies (30 files, 54 edges); all 342 Track events from each parent survive; scope-check passes C2. All 101 tooling tests pass (11 files).
-  - [ ] Require green CI on the exact head, then merge PR #710 with the owner GO of 2026-10-22.
+- [x] **Lot 6 — Mesh version, lock assertion, spec sync**
+  - [x] Bump `packages/llm-mesh/package.json` patch only (stay 0.26.x inside gateway `^0.26.0`); refresh `package-lock.json` (required mesh metadata only, no unrelated regeneration); assert exactly one llm-mesh copy in the custody harness lock.
+  - [x] Update existing package tests for all five adapters + authority/delivery (`contracts`, `codex`, `cloud-code`, `cloud-code-credential-rotation`, `claude-code`, `mistral-vibe`, `muse`, `facade`, `local-account-transport-service`, `local-account-transport-service-claude`, `local-account-transport-service-muse`) and retain/extend `seat-bundle.test.ts` (no duplicate creation).
+  - [x] Add `packages/llm-mesh/tests/enrollment/cli-seat-import.test.ts`, `packages/llm-mesh/tests/enrollment/agy-cli-import.test.ts`, `packages/llm-mesh/tests/service/external-seat-authority.test.ts`, `packages/llm-mesh/tests/service/seat-projection-delivery.test.ts`.
+  - [x] Sync `spec/SPEC_EVOL_CI_SEATS.md` (L1 interfaces, supported/unverified table deltas, gates) and `packages/llm-mesh/README.md`.
+  - [x] r2 n5: rotation refusal discriminates (positive control + smuggled-block detection); codex parse under `fetch` spy; README enrollment re-export path corrected.
+  - [x] Lot gate:
+    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [x] **API tests**
+      - [x] Existing + updated: `api/tests/unit/llm-account-transports.test.ts`.
+      - [x] New: `api/tests/unit/llm-seat-projection-import.test.ts`, `api/tests/unit/llm-seat-delivery-auth.test.ts`, `api/tests/api/llm-seat-delivery.test.ts`.
+      - [x] Scoped runs while evolving tests: per-file `make test-api-unit` / `make test-api-endpoints` runs with `API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+      - [x] Sub-lot gate: `make test-api API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+    - [x] **UI tests (TypeScript only)**
+      - [x] N/A.
+    - [x] **E2E tests**
+      - [x] N/A.
+    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [x] None (packaging only).
 
-## Round M4 (owner-authorized DOMPurify integration)
-- [x] Merge origin/main at 25af28bbc without rebase; preserve main DOMPurify 3.4.17 and all lock records.
-- [x] Resolve plan and P1 manifest conflicts with the branch format; regenerate derived artifacts after committing the merged lock.
-- [x] Regenerate P1 provenance: two identical generations (483c48be), 44 unchanged contracts and archives, merged-lock snapshot exact; all 101 tooling tests pass.
-- [ ] Require green CI on the exact pushed head, then merge with the owner GO.
+- [x] **Lot 7 — Repair packed Cluster Mesh qualification after r2 rework**
+  - [x] Read CI run `39039913760`, job `117419061139`; compare I861-F11 on PR #679: the selected fixture retains the pre-r2 mesh archive integrity at the same `0.26.2` version.
+  - [x] Rebuild guarded siblings with the failed job's exact CI context; local mesh sha256 `a82610f421a0c3867380d29fcec0336b7c2097902734b467ff2e45901a6556cd` matches CI byte-for-byte.
+  - [x] Reproduce the exact stale-integrity refusal before the fix: `make -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import` (exit 2; existing sibling-integrity assertion).
+  - [x] Run `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`; only the mesh integrity value changes (CISEAT-EX4).
+  - [x] Lot gate: rerun the exact packed qualification above; 10 files / 63 tests pass, including the existing sibling-integrity assertion.
+  - [x] Scope gate: `make scope-check API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import` (PASS C2).
+  - [x] Prepare one atomic fixture/checklist commit under 150 changed lines; the launch packet authorizes one push, CI observation and a handoff report (no merge/publication).
+  - [x] API/UI/browser E2E changes and UAT: N/A (fixture integrity only).
 
-## Round M5 (main advanced during green CI)
-- [x] Merge origin/main b67e2a49a (PR 709) after the exact-head CI passed; no rebase.
-- [x] BR710-EX11: preserve main-only cluster-mesh, selected fixture and Makefile integration changes exactly; keep branch P1 format and regenerate provenance.
-- [x] Regenerate P1 twice identically (2b85ff28), preserve 44 contracts and archive bytes, verify packed graph and all 101 tooling tests.
-- [ ] Require green CI on the exact new head and merge with the owner GO.
+- [ ] **Lot N-2** UAT
+  - [ ] Web app (splitted by sublist for each env)
+    - [ ] Synthetic projection import through both modes shows one account (no live seat needed).
+    - [ ] Expired projection shows classified unavailable state with zero refresh calls.
+    - [ ] N+1 delivery recovers without account duplication.
+    - [ ] Wrong-owner and older-generation imports are refused.
+    - [ ] Per qualified live lab seat (only with P-BILLING receipt + Q1 quota): both imports through the trusted helper.
+
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (if not a new standalone spec).
+  - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration.
+
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint
+  - [ ] Retest UI (cf Lot1, copy checklist)
+  - [ ] Retest API (cf Lot1, copy checklist)
+  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
+  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
