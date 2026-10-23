@@ -20,6 +20,7 @@ Replace the live root-lockfile equality in the P1 packed gate with a versioned f
   - `package.json`
   - `package-lock.json`
   - `ui/package-lock.json`
+  - `ui/package.json` (merge-only, exact origin/main DOMPurify pin)
   - `api/Dockerfile` (BR710-EX9; preserve the main Go 1.26.10 pin during integration)
   - `tools/memory-mcp-l5/lock-fingerprint.mjs`
   - `tools/memory-mcp-l5/lock-closure.mjs`
@@ -251,3 +252,8 @@ Actions with the following status should be included around tasks only if really
   - [x] Root lock, P1 build inputs, retained artifacts and Track log unchanged; no P1 regeneration required.
   - [x] Retained P1 verifies (30 files, 54 edges); all 342 Track events from each parent survive; scope-check passes C2. All 101 tooling tests pass (11 files).
   - [ ] Require green CI on the exact head, then merge PR #710 with the owner GO of 2026-10-22.
+
+## Round M4 (owner-authorized DOMPurify integration)
+- [x] Merge origin/main at 25af28bbc without rebase; preserve main DOMPurify 3.4.17 and all lock records.
+- [x] Resolve plan and P1 manifest conflicts with the branch format; regenerate derived artifacts after committing the merged lock.
+- [ ] Regenerate P1 provenance, verify deterministic output and fixtures, require green CI on the exact head, then merge with the owner GO.

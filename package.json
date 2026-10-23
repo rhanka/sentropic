@@ -11,6 +11,7 @@
     "typescript": "5.4.5"
   },
   "overrides": {
+    "dompurify": "3.4.17",
     "image-size": "2.0.3",
     "@sentropic/track": "0.91.1",
     "@hono/node-server": "^1.19.17",
