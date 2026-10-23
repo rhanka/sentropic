@@ -371,6 +371,7 @@
   - [x] R2-F5 closed host boundary (closed verdict/score/scale keys, meaning bound to declared-or-protocol semantics, scale bound to criterion, provider raw rejected, verdict rebuilt field by field).
   - [x] R2-F6 native context/profile contradiction (native-distribution-v1 rejects optional rationale; native binary/graded require score semantics; scalar profile keeps optional rationale).
   - [x] Discriminating regressions per finding; V4-L1 14/14 + R1 10/10 keep passing; scratch R2 probes retired (review file preserved in .h2a/reviews).
+  - [x] R2 pack-gate re-pin (selected fixture llm-mesh sibling integrity matches the packed HEAD 0.27.1 after R2 source changes; gate prints the expected pin).
 - [x] **BR96-EX17 — memory L5 manifest regen for MERGE-MAIN-4 via sanctioned pack (conditional path)**
   - [x] Rationale: main #710 hardened P1 provenance (lockFingerprint v4, lock snapshots, toolchain snapshots) and the EX15 0.21.3 bump changed the root lock again, so the inherited manifest (lock 9e360b55) fails the freeze check. Ran `memory-l5-pack` (STAGE=pre-candidate) after committing the lock: retained main's manifest in history/2b85ff28.json, fresh manifest f2b094ae pinning root lock 3bdcfa35, br3Commit e6d173278, l5Head 23f455c6d, new lock snapshot written, 2 artifacts + 44 contracts rebuilt from exact built contracts. Impact: manifest/sidecar/history/snapshot only. Rollback: restore the retained manifest/sidecars with the prior lock sha.
 - [x] **BR96-EX14 — memory L5 manifest re-pin for dompurify root-lock bump (conditional path)**
