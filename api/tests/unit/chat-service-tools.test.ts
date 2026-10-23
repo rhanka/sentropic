@@ -35,6 +35,7 @@ vi.mock('../../src/services/context-document-source', () => ({
 import { callLLMStream } from '../../src/services/llm-runtime';
 import { loadContextDocumentContent } from '../../src/services/context-document-source';
 import { chatService } from '../../src/services/chat-service';
+import { CHAT_COMMON_PROMPTS } from '../../src/config/default-chat-system';
 
 type StreamEvent = { type: string; data: unknown };
 
@@ -54,7 +55,15 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
   let workspaceId: string;
   let folderId: string;
 
+  // Retirement bump (BR96-EX20): the successor default model supports reasoning,
+  // so the effort evaluator would consume the first mocked stream of every test.
+  // These tool-wiring suites run without the eval template (medium fallback, no
+  // extra LLM call), as before the bump; evaluation stays covered by dedicated tests.
+  let savedReasoningEffortEvalTemplate: string | undefined;
+
   beforeEach(async () => {
+    savedReasoningEffortEvalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval;
+    CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
     userId = createId();
     await db.insert(users).values({
       id: userId,
@@ -97,6 +106,10 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
+    if (savedReasoningEffortEvalTemplate !== undefined) {
+      CHAT_COMMON_PROMPTS.reasoning_effort_eval = savedReasoningEffortEvalTemplate;
+      savedReasoningEffortEvalTemplate = undefined;
+    }
     vi.clearAllMocks();
   });
 
@@ -625,6 +638,11 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
   });
 
 it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is gemini', async () => {
+    // This suite clears the eval template (see above); this test needs it back.
+    if (savedReasoningEffortEvalTemplate !== undefined) {
+      CHAT_COMMON_PROMPTS.reasoning_effort_eval = savedReasoningEffortEvalTemplate;
+    }
+    try {
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
     mock.mockReset();
@@ -678,6 +696,9 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
     expect(effortStatus).toBeDefined();
     expect((effortStatus as any).data?.effort).toBe('low');
     expect((effortStatus as any).data?.by).toBe('gemini-3.1-flash-lite');
+    } finally {
+      CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
+    }
   });
 
   it('should expose requested web tools without business context', async () => {

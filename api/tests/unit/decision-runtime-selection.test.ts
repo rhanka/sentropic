@@ -74,14 +74,14 @@ describe('decision-only runtime selection', () => {
   it.each(['openai', 'local', 'unknown-provider'])(
     'preserves ordinary provider selection and empty-local fallback (%s)', async (providerId) => {
       expect(await resolveRuntimeSelection({ providerId, model: 'gpt-4.1-nano' }))
-        .toEqual({ providerId: 'openai', model: 'gpt-4.1-nano' });
+        .toEqual({ providerId: 'openai', model: 'gpt-5.4-nano' });
       expectNoDispatch();
     });
 
   it('uses an explicit valid chat provider despite an unused marked stored default', async () => {
     vi.mocked(settingsService.getAISettings).mockResolvedValue({ ...defaults, defaultProviderId: 'muse' });
     expect(await resolveRuntimeSelection({ providerId: 'openai', model: 'gpt-4.1-nano' }))
-      .toEqual({ providerId: 'openai', model: 'gpt-4.1-nano' });
+      .toEqual({ providerId: 'openai', model: 'gpt-5.4-nano' });
     expectNoDispatch();
   });
 });
