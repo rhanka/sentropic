@@ -1,5 +1,7 @@
 /** Trusted server failures (r2 E1–E3). No driver text participates in classification. */
 export type ArtifactCommitState = 'not_committed' | 'committed' | 'unknown';
+/** Structurally identical to L0's server-derived SHA-256 internal key, never a caller key. */
+export type ArtifactInternalKey = string & { readonly __brand: 'internal-key' };
 export type ArtifactErrorKind =
   | 'provider_unavailable' | 'command_conflict' | 'pointer_conflict'
   | 'unauthorized_at_commit' | 'capability_unselected' | 'admission_unavailable'
@@ -32,7 +34,7 @@ export interface ArtifactFailureContext {
   readonly phase: string;
   readonly commitState: ArtifactCommitState;
   readonly storageScopeId?: string;
-  readonly operationKey?: string;
+  readonly operationKey?: ArtifactInternalKey;
 }
 
 /** Trusted guard's public refusal; private driver data must never populate these fields. */
@@ -54,7 +56,7 @@ export class ArtifactOperationError extends Error {
 
 /** Mint only at verified per-key row contention, using the full scoped operation key. */
 export class ArtifactKeyLockConflict extends Error {
-  constructor(readonly storageScopeId: string, readonly operationKey: string, cause: unknown) {
+  constructor(readonly storageScopeId: string, readonly operationKey: ArtifactInternalKey, cause: unknown) {
     super('artifact key lock contention', { cause });
     this.name = 'ArtifactKeyLockConflict';
   }
@@ -124,6 +126,7 @@ function classify(cause: unknown, context: ArtifactFailureContext, mapHostError?
     if (current instanceof ArtifactOperationError) return operationProjection(current);
     if (current instanceof ArtifactKeyLockConflict
       && context.phase === 'lock'
+      && /^[a-f0-9]{64}$/.test(current.operationKey)
       && context.storageScopeId === current.storageScopeId
       && context.operationKey === current.operationKey) return conflict();
     if (mapHostError !== undefined) {
