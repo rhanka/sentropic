@@ -17,7 +17,7 @@ export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEv
   if (!snapshot.ok || !isRecord(snapshot.value)) return null;
   const value = snapshot.value;
   if (!hasOnlyKeys(value, ['evaluator', 'protocol', 'wireModel', 'acceptedServedModelIds', 'qualification', 'maxBillableInputTokens',
-    'maxRequestBytes', 'maxStateQuestionBytes', 'probabilityTolerance', 'scoreNativeKeys', 'nativeDecision', 'confidence', 'compilation', 'priceProtocol', 'registeredCriteria', 'retention'])
+    'maxBillableOutputTokens', 'scoreSemantics', 'maxRequestBytes', 'maxStateQuestionBytes', 'probabilityTolerance', 'scoreNativeKeys', 'nativeDecision', 'confidence', 'compilation', 'priceProtocol', 'registeredCriteria', 'retention'])
     || !isRecord(value.evaluator) || !hasOnlyKeys(value.evaluator, ['providerId', 'evaluatorId', 'revision'])
     || (value.protocol !== undefined && (!isRecord(value) || !PROTOCOLS.has(value.protocol as string)))
     || !isCorrelationId(value.evaluator.revision) || !isRecord(value.qualification)
@@ -30,6 +30,10 @@ export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEv
     || (value.qualification.servedIdentity === 'qualified' ? value.acceptedServedModelIds.length === 0 : value.acceptedServedModelIds.length !== 0)
     || ((value.qualification.servedIdentity === 'qualified' || value.qualification.billingBound === 'qualified') && !value.qualification.evidenceRefs.length)
     || typeof value.maxBillableInputTokens !== 'number' || !Number.isSafeInteger(value.maxBillableInputTokens) || value.maxBillableInputTokens < 1
+    || typeof value.maxBillableOutputTokens !== 'number' || !Number.isSafeInteger(value.maxBillableOutputTokens) || value.maxBillableOutputTokens < 0
+    || (value.scoreSemantics !== undefined && (!isRecord(value.scoreSemantics)
+      || !hasOnlyKeys(value.scoreSemantics, ['meaning', 'meaningRef'])
+      || !isText(value.scoreSemantics.meaning) || !isText(value.scoreSemantics.meaningRef)))
     || typeof value.maxRequestBytes !== 'number' || !Number.isSafeInteger(value.maxRequestBytes) || value.maxRequestBytes < 1 || value.maxRequestBytes > 256 * 1024
     || typeof value.maxStateQuestionBytes !== 'number' || !Number.isSafeInteger(value.maxStateQuestionBytes) || value.maxStateQuestionBytes < 1 || value.maxStateQuestionBytes > value.maxRequestBytes
     || typeof value.probabilityTolerance !== 'number' || !Number.isFinite(value.probabilityTolerance) || value.probabilityTolerance < 0 || value.probabilityTolerance > 1e-4

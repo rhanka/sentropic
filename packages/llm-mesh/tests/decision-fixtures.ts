@@ -46,6 +46,36 @@ export const trustedNativeContext = (request: DecisionRequest) => {
 export const decisionPrice = () => ({ providerId: 'typesafe' as const, modelId: 'jev-1.13.0', priceRevision: 'fixture-price-v1',
   inputMicroUsdPerMtok: '42000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const });
 
+/** Synthetic structured descriptor under the new contract: explicit enforced
+ * output bound, declared scalar score semantics, qualified billing. */
+export const structuredDecisionDescriptor = () => {
+  const base = qualifiedDescriptor();
+  return { ...base, protocol: 'structured-llm' as const,
+    evaluator: { ...base.evaluator, evaluatorId: 'structured-judge-v1' },
+    wireModel: 'structured-judge-v1', scoreNativeKeys: 'scalar' as const,
+    acceptedServedModelIds: ['synthetic-structured-model'],
+    maxBillableOutputTokens: 4096,
+    scoreSemantics: { meaning: 'support', meaningRef: 'fixture:synthetic-scalar' },
+    qualification: { servedIdentity: 'qualified' as const, billingBound: 'qualified' as const,
+      evidenceRefs: ['fixture:synthetic-qualification'] },
+    confidence: { meaning: 'support', meaningRef: 'fixture:structured-support', min: 0, max: 1 } };
+};
+
+/** Transport-reported evidence body for the structured contract: the score or
+ * label plus independently validated served identity and usage counters. */
+export const structuredEvidenceBody = (evidence: { score?: number; label?: string },
+  servedModelId = 'synthetic-structured-model') => JSON.stringify({
+  ...(evidence.score !== undefined ? { score: evidence.score } : { label: evidence.label }),
+  served: { modelId: servedModelId },
+  usage: { inputTokens: 100, outputTokens: 5 },
+});
+
+export const structuredDecisionPrice = (modelId = 'structured-judge-v1') => ({
+  providerId: 'typesafe' as const, modelId, priceRevision: 'fixture-price-v1',
+  inputMicroUsdPerMtok: '42000', outputMicroUsdPerMtok: '50000',
+  minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const,
+  authority: 'fixture:synthetic-tariff', protocol: 'structured-llm' as const });
+
 /** Test-only linearized durable-port model; never a production financial authority. */
 export function decisionServiceFixture() {
   const descriptor = qualifiedDescriptor();
