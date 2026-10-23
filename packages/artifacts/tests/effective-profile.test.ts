@@ -8,9 +8,11 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   AMBIGUOUS_DERIVATION_CASE,
+  CANONICAL_COMMAND_FIXTURES,
   COMMAND_IDENTITY_RELATIONS,
   DERIVATION_VECTORS,
   buildDerivationPreimage,
+  canonicalizeJson,
   detectAmbiguousSplit,
   resolvePlatformEnvelope,
 } from '../l0-freeze/command-identity-contract.js';
@@ -168,6 +170,32 @@ describe('effective-profile contract', () => {
     expect(COMMAND_IDENTITY_RELATIONS.map((entry) => entry.expectation)).toEqual([
       'converge', 'conflict', 'computed-only',
     ]);
+  });
+
+  it('should encode golden effective commands with stable digests', () => {
+    for (const fixture of CANONICAL_COMMAND_FIXTURES) {
+      expect(canonicalizeJson(fixture.body)).toBe(fixture.canonical);
+      expect(createHash('sha256').update(fixture.canonical, 'utf8').digest('hex'))
+        .toBe(fixture.sha256);
+    }
+    const [baseline, shuffled, swapped, changedMime] = CANONICAL_COMMAND_FIXTURES;
+    expect(shuffled.canonical).toBe(baseline.canonical);
+    expect(shuffled.sha256).toBe(baseline.sha256);
+    expect(swapped.sha256).not.toBe(baseline.sha256);
+    expect(changedMime.sha256).not.toBe(baseline.sha256);
+  });
+
+  it('should never mutate the encoded command input', () => {
+    const deepFreeze = (value: unknown): unknown => {
+      if (value !== null && typeof value === 'object') {
+        Object.freeze(value);
+        Object.values(value).forEach(deepFreeze);
+      }
+      return value;
+    };
+    const body = deepFreeze(structuredClone(CANONICAL_COMMAND_FIXTURES[0].body));
+    expect(() => canonicalizeJson(body)).not.toThrow();
+    expect(canonicalizeJson(body)).toBe(CANONICAL_COMMAND_FIXTURES[0].canonical);
   });
 
   it('should freeze the four C2 capability routes', () => {
