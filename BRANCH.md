@@ -63,7 +63,7 @@
   - [x] `api/package.json` (gateway range ^0.21.0 only, keeps the workspace link; BR96-EX8)
   - [x] `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`, `packages/cluster-mesh/tests/packaging/skew-invariants.ts`, `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (coupled `<0.28.0`/`<0.22.0` peer range and 13 `.d.ts` integration leaf assertions only; BR96-EX9)
   - [x] `.github/workflows/ci.yml`, `scripts/ci/publishable-ci-wiring.test.mjs` (cluster-mesh qualification `PEERS` tuple `@sentropic/llm-mesh@0.27.0,@sentropic/llm-gateway@0.21.0` only; BR96-EX9)
-  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention only; BR96-EX12, BR96-EX14)
+  - [x] `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, `tools/memory-mcp-l5/artifacts/history/*.json`, `tools/memory-mcp-l5/artifacts/history/*.json.sha256`, `tools/memory-mcp-l5/artifacts/lock-snapshots/*.package-lock.json` (P1 provenance declaredLockSha256 re-pin plus superseded-manifest retention and pack-generated root-lock snapshots only; BR96-EX12, BR96-EX14, BR96-EX17)
 - [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13, BR96-EX14, BR96-EX15, BR96-EX16, BR96-EX17.
 
 ## Feedback Loop
