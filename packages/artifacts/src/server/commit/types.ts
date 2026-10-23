@@ -27,7 +27,16 @@ export interface CommandIdentity {
   readonly codecVersion: typeof COMMAND_CODEC_VERSION;
 }
 
-/** A4 participant lock order inside the finalization transaction. */
+/**
+ * A4 participant lock order inside the finalization transaction. The
+ * coordinator acquires it in three groups: object locks up to and including
+ * `authority-revision`, then an explicit authority re-read followed by the
+ * `quota` callbacks and the provisional quota reservation (so the guard
+ * decision never precedes the quota wait), then `blob-reference-deletion-claim`
+ * callbacks and provisional writes. Guarded replay runs only the pre-quota
+ * groups: it serializes with object/ACL/policy writers but neither charges
+ * quota nor claims blob references.
+ */
 export const PARTICIPANT_LOCK_ORDER = [
   'binding-identity',
   'artifact-lifecycle',
@@ -63,8 +72,13 @@ export interface ArtifactCommitContext extends ArtifactInvocationContext {
 
 /**
  * Opaque fence minted by the transaction-bound policy participant. It is
- * bound to one invocation and revision and is verified by the coordinator;
- * it cannot be synthesized from the revision string.
+ * bound to one transaction, one invocation and one revision, and is
+ * verified by the coordinator; it cannot be synthesized from the revision
+ * string. `mintFence` MUST return `fenceId` equal to the transaction token
+ * the coordinator supplied to `createParticipant` for this transaction. The
+ * coordinator rejects any fence whose `fenceId` differs from the current
+ * transaction, whose invocation differs from the request, or whose revision
+ * differs from the freshly re-read policy revision (`invalid_object`).
  */
 export interface ArtifactAuthorizationFence {
   readonly fenceId: string;
@@ -90,7 +104,14 @@ export type ArtifactAuthorizationDecision =
       readonly retriable: boolean;
     };
 
-/** Host guard: current account/cohort/activation/object/quota policy. */
+/**
+ * Host guard: current account/cohort/activation/object/quota policy. The
+ * coordinator may invoke the guard twice per finalization: once for the
+ * guarded decision after all lock/quota waits, and once to revalidate after
+ * the post-guard receipt/intent/barrier waits before COMMIT. The guard MUST
+ * therefore be side-effect-free (policy reads plus fence minting); only the
+ * second allowed decision gates the commit.
+ */
 export type AuthorizeCommit = (
   context: ArtifactCommitContext,
   transaction: ArtifactCommitTransaction,
@@ -258,6 +279,11 @@ export const FAILURE_PROJECTIONS: readonly FailureProjection[] = [
     retriable: false,
   },
   {
+    category: 'conflict', variant: 'quota_exhausted',
+    httpStatus: 409, publicCode: 'conflict', ledgerReason: 'provider_conflict',
+    retriable: false,
+  },
+  {
     category: 'unauthorized_at_commit', variant: 'policy_denial',
     httpStatus: 403, publicCode: 'access_denied', ledgerReason: 'unauthorized_at_commit',
     retriable: false,
@@ -316,7 +342,13 @@ export interface CommitCoordinatorOptions {
   /**
    * Points at which the test observer is invoked. Empty by default: an
    * unarmed observer is never invoked, so unbarriered runs never pause.
-   * Each armed pair pauses at most once.
+   * Each armed pair pauses at most once. Only the six coordinator
+   * transaction points are accepted; the three preparation points
+   * (`before_blob_put`, `after_blob_put_before_verify`,
+   * `before_blob_readback`) are fired by L4 preparation adapters holding the
+   * same observer, never by this coordinator (preparation precedes the key
+   * lock per A4.2). Arming a point the coordinator never fires throws at
+   * construction instead of hanging a test.
    */
   readonly testPoints?: readonly CoordinatorTestPoint[];
 }
