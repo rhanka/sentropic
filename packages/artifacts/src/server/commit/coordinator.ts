@@ -2,33 +2,38 @@
  * L3 (immo #861) — atomic finalization coordinator (spec r2 §3.1 A4).
  *
  * One atomic database finalization unit per (scope, internal key):
- * coordination row, key recheck, ordered locks, provisional writes, the
- * host guard after all waits, fenced final predicate, single success
- * insert and one COMMIT. Denial or genuine conflict rolls the unit back
- * with no committed residue. A connection loss around COMMIT
- * acknowledgment is a separate unknown outcome recovered by retrying the
- * same key. The success table is distinct from idempotency_keys, which
- * the coordinator never touches.
+ * coordination row, key recheck, ordered locks (object, authority, quota,
+ * blob-claim), provisional writes, the host guard after all waits, fenced
+ * final predicate, one success insert and one COMMIT. The quota wait always
+ * precedes the guard decision and its locks are retained through COMMIT; a
+ * second guard invocation revalidates authority after the post-guard
+ * receipt/intent/barrier waits, so an approval expiring mid-unit denies
+ * instead of committing. Denial or genuine conflict rolls the unit back
+ * with no committed residue. A connection loss around COMMIT acknowledgment
+ * is a separate unknown outcome recovered by retrying the same key. The
+ * success table is distinct from idempotency_keys, which the coordinator
+ * never touches.
  */
 import { randomUUID } from 'node:crypto';
 import {
   COMMAND_CODEC_VERSION,
+  COORDINATOR_TEST_POINTS,
   PARTICIPANT_LOCK_ORDER,
   CommitQuarantineError,
   FAILURE_PROJECTIONS,
   type ArtifactAuthorizationDecision,
+  type ArtifactAuthorizationFence,
   type ArtifactCommitContext,
   type FinalizationCoordinator,
   type ArtifactCommitTransaction,
   type ArtifactFailure,
   type CommitCoordinatorOptions,
-  type CommitExecutor,
-  type ParticipantLockClass,
   type CoordinatorTestPoint,
   type FailureCategory,
   type FinalizeConnection,
   type FinalizeRequest,
   type FinalizeResult,
+  type ParticipantLockClass,
   type StoredCommitReceipt,
 } from './types.js';
 
@@ -74,8 +79,102 @@ const isConnectionLoss = (error: unknown): boolean => {
 
 const LOCK_TIMEOUT_CODE = '55P03';
 
+/** Serialization/deadlock/cancel outcomes: retriable unavailability (r2 E3/P2-2). */
+const RETRIABLE_SQLSTATES = new Set(['40001', '40P01', '57014']);
+
+/**
+ * Granular unit phases. Failures carry the phase in which they were
+ * produced; the coordinator never generalizes to a single unit phase, so a
+ * projector can distinguish qualified key contention from infrastructure
+ * timeouts without guessing from messages.
+ */
+type UnitPhase = 'acquire' | 'lock' | 'guard' | 'commit' | 'resolve';
+
+const classifyOperational = (
+  request: FinalizeRequest,
+  phase: UnitPhase,
+  commitState: 'not_committed' | 'unknown',
+  error: unknown,
+): ArtifactFailure => {
+  const code =
+    typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+  if (code === LOCK_TIMEOUT_CODE && phase === 'lock') {
+    // E3: verified contention for the scoped per-key row lock only.
+    return failure('conflict', request, phase, commitState, error, { variant: 'key_contention' });
+  }
+  if (
+    isConnectionLoss(error) ||
+    code === LOCK_TIMEOUT_CODE ||
+    (typeof code === 'string' && RETRIABLE_SQLSTATES.has(code))
+  ) {
+    return failure('provider_unavailable', request, phase, commitState, error);
+  }
+  return failure('provider_error', request, phase, commitState, error, { variant: 'unclassified' });
+};
+
+/** Explicit per-connection settlement handle. */
+interface UnitSettlement {
+  /** Roll back and release exactly once; returns the settlement error, if any. */
+  abort(): Promise<unknown>;
+  /** Release a clean connection exactly once (post-commit or read-only resolve). */
+  releaseClean(): void;
+}
+
+/**
+ * Every leased transaction is settled exactly once, including exceptional
+ * paths: rollback failure destroys the client instead of returning an
+ * uncertain session to the pool, and repeated calls are no-ops.
+ */
+const trackSettlement = (connection: FinalizeConnection): UnitSettlement => {
+  let settled = false;
+  return {
+    async abort(): Promise<unknown> {
+      if (settled) return undefined;
+      settled = true;
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        try {
+          connection.release(rollbackError);
+        } catch {
+          /* release already attempted */
+        }
+        return rollbackError;
+      }
+      try {
+        connection.release();
+      } catch {
+        /* release already attempted */
+      }
+      return undefined;
+    },
+    releaseClean(): void {
+      if (settled) return;
+      settled = true;
+      try {
+        connection.release();
+      } catch {
+        /* release already attempted */
+      }
+    },
+  };
+};
+
+/**
+ * Pre-quota lock classes, in A4.4 order. Guarded replay runs exactly these:
+ * object/ACL/policy serialization without quota charge or blob claims.
+ */
+const PRE_QUOTA_LOCK_CLASSES: readonly ParticipantLockClass[] = PARTICIPANT_LOCK_ORDER.filter(
+  (entry) => entry !== 'quota' && entry !== 'blob-reference-deletion-claim',
+);
+
 export function createArtifactCommitCoordinator(options: CommitCoordinatorOptions): FinalizationCoordinator {
   const nowMs = options.nowMs ?? (() => Date.now());
+  for (const point of options.testPoints ?? []) {
+    if (!COORDINATOR_TEST_POINTS.includes(point)) {
+      throw new Error(`unknown coordinator test point ${point}`);
+    }
+  }
   const armed = new Set(options.testPoints ?? []);
   const fired = new Set<string>();
   const observeAt = async (
@@ -108,55 +207,44 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     purpose,
   });
 
-  const resolveUnderKey = async (
-    request: FinalizeRequest,
-  ): Promise<FinalizeResult> => {
-    const connection = await options.executor.beginFinalization();
+  /**
+   * Best-effort preparation-abandonment hook. Its failure is isolated: it
+   * never replaces the primary authorization decision with a cleanup error,
+   * and it never settles the connection a second time.
+   */
+  const abandon = async (request: FinalizeRequest): Promise<void> => {
+    if (request.noteAbandonedAttempt === undefined) return;
     try {
-      await connection.lockOperationKey(request.scopeId, request.internalKey);
-      const found = await connection.readReceipt(request.scopeId, request.internalKey);
-      await connection.rollback();
-      connection.release();
-      if (found === undefined) {
-        return {
-          ok: false,
-          failure: failure('provider_error', request, 'resolve', 'not_committed', {
-            lost: 'expected receipt after uniqueness violation',
-          }, { variant: 'unclassified' }),
-        };
-      }
-      if (found.codecVersion !== COMMAND_CODEC_VERSION) {
-        throw new CommitQuarantineError(request.scopeId, request.internalKey, found.codecVersion);
-      }
-      if (found.commandHash !== request.commandHash) {
-        return {
-          ok: false,
-          failure: failure('conflict', request, 'resolve', 'not_committed', {
-            key: request.internalKey,
-          }, { variant: 'key_contention' }),
-        };
-      }
-      return coordinator.replayGuarded(request);
-    } catch (error) {
-      if (error instanceof CommitQuarantineError) {
-        await settleAfterError(connection);
-        throw error;
-      }
-      throw error;
+      await request.noteAbandonedAttempt(request.attemptId ?? request.internalKey);
+    } catch {
+      /* abandonment hooks are best-effort; the primary decision stands */
     }
   };
 
-  const settleAfterError = async (
-    connection: FinalizeConnection,
-  ): Promise<unknown | undefined> => {
-    try {
-      await connection.rollback();
-      connection.release();
-      return undefined;
-    } catch (rollbackError) {
-      connection.release(rollbackError);
-      return rollbackError;
-    }
+  const unknownOutcome = (
+    request: FinalizeRequest,
+    phase: UnitPhase,
+    cause: unknown,
+  ): FinalizeResult => ({
+    ok: false,
+    failure: failure('provider_unavailable', request, phase, 'unknown', cause),
+  });
+
+  /**
+   * Settle the unit, record abandonment, and produce either the primary
+   * failure or an unknown outcome when settlement itself failed (the primary
+   * cause is preserved inside the unknown outcome).
+   */
+  const abortWith = async (
+    request: FinalizeRequest,
+    phase: UnitPhase,
+    settle: UnitSettlement,
+    primary: FinalizeResult,
+  ): Promise<FinalizeResult> => {
+    const settleError = await settle.abort();
+    await abandon(request);
+    if (settleError === undefined) return primary;
+    return unknownOutcome(request, phase, { decision: primary, settlement: settleError });
   };
 
   const deny = (
@@ -179,142 +267,198 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     ),
   });
 
-  const runCallerLocks = async (
+  const revokedOutcome = (request: FinalizeRequest): FinalizeResult => ({
+    ok: false,
+    failure: failure(
+      'unauthorized_at_commit',
+      request,
+      'guard',
+      'not_committed',
+      { denialReason: 'revoked' as const },
+      { publicCode: 'access_denied', status: 403, retriable: false, variant: 'policy_denial' },
+    ),
+  });
+
+  const invalidFence = (request: FinalizeRequest, detail: string): FinalizeResult => ({
+    ok: false,
+    failure: failure('unauthorized_at_commit', request, 'guard', 'not_committed', {
+      denialReason: 'invalid_object',
+      fence: detail,
+    }, { variant: 'policy_denial' }),
+  });
+
+  /**
+   * A fence is valid only when minted by this transaction: its fenceId must
+   * equal the transaction token the coordinator issued to the participant
+   * factory, its invocation must match the request, and its revision must
+   * match the freshly re-read policy revision. Fabricated, foreign or stale
+   * fences deny before any success work.
+   */
+  const verifyFence = (
+    request: FinalizeRequest,
+    transaction: ArtifactCommitTransaction,
+    fence: ArtifactAuthorizationFence,
+    currentRevision: string,
+  ): { ok: true } | { ok: false; detail: string } => {
+    if (fence.fenceId !== transaction.transactionId) return { ok: false, detail: 'foreign_fence' };
+    if (fence.invocationId !== request.invocationId) {
+      return { ok: false, detail: 'mismatched_invocation' };
+    }
+    if (fence.policyRevision !== currentRevision) return { ok: false, detail: 'stale_revision' };
+    return { ok: true };
+  };
+
+  const runLockGroup = async (
     request: FinalizeRequest,
     connection: FinalizeConnection,
+    classes: readonly ParticipantLockClass[],
   ): Promise<void> => {
-    for (const lockClass of PARTICIPANT_LOCK_ORDER) {
-      const callbacks = request.locks?.[lockClass as ParticipantLockClass];
+    for (const lockClass of classes) {
+      const callbacks = request.locks?.[lockClass];
       if (callbacks === undefined) continue;
       for (const acquire of callbacks) await acquire(connection);
     }
   };
 
-  const guardAndCommit = async (
+  const validateRequest = (request: FinalizeRequest, operation: 'finalize' | 'replay'): void => {
+    if (request.scopeId.length === 0 || request.internalKey.length === 0) {
+      throw new Error(`${operation} requires scope and internal key`);
+    }
+    if (request.commandHash.length === 0 || request.codecVersion.length === 0) {
+      throw new Error(`${operation} requires command hash and codec version`);
+    }
+    if (request.codecVersion !== COMMAND_CODEC_VERSION) {
+      throw new Error(`${operation} requires supported command codec ${COMMAND_CODEC_VERSION}`);
+    }
+  };
+
+  /**
+   * COMMIT with acknowledgment-loss isolation. Returns undefined when
+   * committed and the unknown failure when the acknowledgment was lost;
+   * any other commit error is rethrown for phase-aware classification.
+   */
+  const commitUnit = async (
     request: FinalizeRequest,
     connection: FinalizeConnection,
-    transaction: ArtifactCommitTransaction,
-    purpose: 'finalize',
-  ): Promise<FinalizeResult> => {
-    await observeAt('after_finalization_locks_before_guard', request.invocationId);
-    const decision: ArtifactAuthorizationDecision = await request.guard(
-      commitContext(request, purpose),
-      transaction,
-    );
-    if (!decision.allowed) {
-      await connection.rollback();
-      connection.release();
-      await request.noteAbandonedAttempt?.(request.attemptId ?? request.internalKey);
-      return deny(request, decision);
-    }
-    if (decision.fence.invocationId !== request.invocationId) {
-      await connection.rollback();
-      connection.release();
-      return {
-        ok: false,
-        failure: failure('unauthorized_at_commit', request, 'guard', 'not_committed', {
-          denialReason: 'invalid_object',
-        }, { variant: 'policy_denial' }),
-      };
-    }
-    const currentRevision = await transaction.participant.readRevision();
-    if (currentRevision !== decision.fence.policyRevision) {
-      await connection.rollback();
-      connection.release();
-      await request.noteAbandonedAttempt?.(request.attemptId ?? request.internalKey);
-      return {
-        ok: false,
-        failure: failure(
-          'unauthorized_at_commit',
-          request,
-          'guard',
-          'not_committed',
-          { denialReason: 'revoked' as const },
-          { publicCode: 'access_denied', status: 403, retriable: false, variant: 'policy_denial' },
-        ),
-      };
-    }
-    const reserved = await transaction.participant.reserveQuota({
-      actorId: request.actorId,
-      operation: request.operation,
-    });
-    if (!reserved.reserved) {
-      await connection.rollback();
-      connection.release();
-      await request.noteAbandonedAttempt?.(request.attemptId ?? request.internalKey);
-      return {
-        ok: false,
-        failure: failure('conflict', request, 'guard', 'not_committed', {
-          quota: 'exhausted',
-        }, { variant: 'key_contention' }),
-      };
-    }
-    const receipt: StoredCommitReceipt = {
-      scopeId: request.scopeId,
-      internalKey: request.internalKey,
-      commandHash: request.commandHash,
-      codecVersion: request.codecVersion,
-      receipt: request.receiptData,
-      createdAt: new Date(nowMs()).toISOString(),
-    };
-    await connection.insertReceipt(receipt);
-    await request.finishIntents?.(connection);
-    await observeAt('before_commit', request.invocationId);
+    settle: UnitSettlement,
+  ): Promise<FinalizeResult | undefined> => {
     try {
       await connection.commit();
     } catch (error) {
-      if (isConnectionLoss(error)) {
-        try {
-          await connection.rollback();
-          connection.release();
-        } catch (rollbackError) {
-          connection.release(rollbackError);
-        }
+      if (!isConnectionLoss(error)) throw error;
+      const settleError = await settle.abort();
+      return unknownOutcome(
+        request,
+        'commit',
+        settleError === undefined ? error : { commit: error, settlement: settleError },
+      );
+    }
+    settle.releaseClean();
+    return undefined;
+  };
+
+  const resolveUnderKey = async (
+    request: FinalizeRequest,
+  ): Promise<FinalizeResult> => {
+    const phase: UnitPhase = 'resolve';
+    let connection: FinalizeConnection | undefined;
+    try {
+      connection = await options.executor.beginFinalization();
+    } catch (error) {
+      // Nothing leased: the executor disposes a client whose BEGIN fails.
+      await abandon(request);
+      return {
+        ok: false,
+        failure: classifyOperational(request, phase, 'not_committed', error),
+      };
+    }
+    const settle = trackSettlement(connection);
+    try {
+      await connection.lockOperationKey(request.scopeId, request.internalKey);
+      const found = await connection.readReceipt(request.scopeId, request.internalKey);
+      const settleError = await settle.abort();
+      if (settleError !== undefined) {
+        await abandon(request);
+        return unknownOutcome(request, phase, { cause: 'resolve_settlement', settlement: settleError });
+      }
+      if (found === undefined) {
+        await abandon(request);
         return {
           ok: false,
-          failure: failure('provider_unavailable', request, 'commit', 'unknown', error),
+          failure: failure('provider_error', request, phase, 'not_committed', {
+            lost: 'expected receipt after uniqueness violation',
+          }, { variant: 'unclassified' }),
         };
       }
-      throw error;
+      if (found.codecVersion !== COMMAND_CODEC_VERSION) {
+        // Already settled above: the quarantine propagates without a second settle.
+        await abandon(request);
+        throw new CommitQuarantineError(request.scopeId, request.internalKey, found.codecVersion);
+      }
+      if (found.commandHash !== request.commandHash) {
+        await abandon(request);
+        return {
+          ok: false,
+          failure: failure('conflict', request, phase, 'not_committed', {
+            key: request.internalKey,
+          }, { variant: 'key_contention' }),
+        };
+      }
+      return coordinator.replayGuarded(request);
+    } catch (error) {
+      if (error instanceof CommitQuarantineError) throw error;
+      const settleError = await settle.abort();
+      await abandon(request);
+      if (settleError !== undefined) {
+        return unknownOutcome(request, phase, { cause: error, settlement: settleError });
+      }
+      return {
+        ok: false,
+        failure: classifyOperational(request, phase, 'not_committed', error),
+      };
     }
-    connection.release();
-    return {
-      ok: true,
-      result: receipt,
-      invocationId: request.invocationId,
-      commitState: 'committed',
-      replayed: false,
-    };
   };
 
   const coordinator: FinalizationCoordinator = {
     async finalize(request: FinalizeRequest): Promise<FinalizeResult> {
-      if (request.scopeId.length === 0 || request.internalKey.length === 0) {
-        throw new Error('finalize requires scope and internal key');
-      }
-      if (request.commandHash.length === 0 || request.codecVersion.length === 0) {
-        throw new Error('finalize requires command hash and codec version');
-      }
+      validateRequest(request, 'finalize');
       await observeAt('before_connection_acquire', request.invocationId);
-      await options.executor.ensureCoordinationRow(request.scopeId, request.internalKey);
-      const connection = await options.executor.beginFinalization();
+      let phase: UnitPhase = 'acquire';
+      let connection: FinalizeConnection | undefined;
       try {
+        await options.executor.ensureCoordinationRow(request.scopeId, request.internalKey);
+        connection = await options.executor.beginFinalization();
+      } catch (error) {
+        // Nothing leased: the executor disposes a client whose BEGIN fails.
+        await abandon(request);
+        return {
+          ok: false,
+          failure: isConnectionLoss(error)
+            ? failure('provider_unavailable', request, phase, 'not_committed', error)
+            : classifyOperational(request, phase, 'not_committed', error),
+        };
+      }
+      const active = connection;
+      const settle = trackSettlement(active);
+      try {
+        phase = 'lock';
         await observeAt('before_key_lock', request.invocationId);
-        await connection.lockOperationKey(request.scopeId, request.internalKey);
-        const existing = await connection.readReceipt(request.scopeId, request.internalKey);
+        await active.lockOperationKey(request.scopeId, request.internalKey);
+        const existing = await active.readReceipt(request.scopeId, request.internalKey);
         if (existing !== undefined) {
+          const settleError = await settle.abort();
+          await abandon(request);
+          if (settleError !== undefined) {
+            return unknownOutcome(request, phase, { cause: 'resolve_settlement', settlement: settleError });
+          }
           if (existing.codecVersion !== COMMAND_CODEC_VERSION) {
-            await connection.rollback();
-            connection.release();
+            // Already settled above: the quarantine propagates without a second settle.
             throw new CommitQuarantineError(
               request.scopeId,
               request.internalKey,
               existing.codecVersion,
             );
           }
-          await connection.rollback();
-          connection.release();
-          await request.noteAbandonedAttempt?.(request.attemptId ?? request.internalKey);
           if (existing.commandHash === request.commandHash) {
             return coordinator.replayGuarded(request);
           }
@@ -325,108 +469,200 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
             }, { variant: 'key_contention' }),
           };
         }
+        phase = 'guard';
         await observeAt('before_finalization_row_lock', request.invocationId);
-        await runCallerLocks(request, connection);
-        await request.provisional?.(connection);
         const transactionToken = randomUUID();
         const transaction: ArtifactCommitTransaction = {
           transactionId: transactionToken,
           invocationId: request.invocationId,
           policyRevision: request.policyRevision,
-          participant: options.policy.createParticipant(connection, transactionToken),
+          participant: options.policy.createParticipant(active, transactionToken),
         };
-        return await guardAndCommit(request, connection, transaction, 'finalize');
+        await runLockGroup(request, active, PRE_QUOTA_LOCK_CLASSES);
+        // Authority re-read before the quota wait: A4.4 class order.
+        await transaction.participant.readRevision();
+        await runLockGroup(request, active, ['quota']);
+        // Provisional quota reservation precedes the guard decision; the row
+        // lock is retained through COMMIT and rolls back on denial.
+        const reserved = await transaction.participant.reserveQuota({
+          actorId: request.actorId,
+          operation: request.operation,
+        });
+        if (!reserved.reserved) {
+          return abortWith(
+            request,
+            phase,
+            settle,
+            {
+              ok: false,
+              failure: failure('conflict', request, 'guard', 'not_committed', {
+                quota: 'exhausted',
+              }, { variant: 'quota_exhausted' }),
+            },
+          );
+        }
+        await runLockGroup(request, active, ['blob-reference-deletion-claim']);
+        await request.provisional?.(active);
+        await observeAt('after_finalization_locks_before_guard', request.invocationId);
+        const decision: ArtifactAuthorizationDecision = await request.guard(
+          commitContext(request, 'finalize'),
+          transaction,
+        );
+        if (!decision.allowed) {
+          return abortWith(request, phase, settle, deny(request, decision));
+        }
+        const currentRevision = await transaction.participant.readRevision();
+        const fenceCheck = verifyFence(request, transaction, decision.fence, currentRevision);
+        if (!fenceCheck.ok) {
+          return abortWith(request, phase, settle, invalidFence(request, fenceCheck.detail));
+        }
+        if (currentRevision !== request.policyRevision) {
+          return abortWith(request, phase, settle, revokedOutcome(request));
+        }
+        const receipt: StoredCommitReceipt = {
+          scopeId: request.scopeId,
+          internalKey: request.internalKey,
+          commandHash: request.commandHash,
+          codecVersion: request.codecVersion,
+          receipt: request.receiptData,
+          createdAt: new Date(nowMs()).toISOString(),
+        };
+        await active.insertReceipt(receipt);
+        await request.finishIntents?.(active);
+        await observeAt('before_commit', request.invocationId);
+        // Revalidate after the post-guard receipt/intent/barrier waits: a
+        // revocation, expiry or foreign fence landing here denies instead of
+        // committing an authorized-then-stale decision.
+        const recheck = await request.guard(commitContext(request, 'finalize'), transaction);
+        if (!recheck.allowed) {
+          return abortWith(request, phase, settle, deny(request, recheck));
+        }
+        const recheckRevision = await transaction.participant.readRevision();
+        const recheckFence = verifyFence(request, transaction, recheck.fence, recheckRevision);
+        if (!recheckFence.ok) {
+          return abortWith(request, phase, settle, invalidFence(request, recheckFence.detail));
+        }
+        if (recheckRevision !== request.policyRevision) {
+          return abortWith(request, phase, settle, revokedOutcome(request));
+        }
+        phase = 'commit';
+        const commitFailure = await commitUnit(request, active, settle);
+        if (commitFailure !== undefined) return commitFailure;
+        return {
+          ok: true,
+          result: receipt,
+          invocationId: request.invocationId,
+          commitState: 'committed',
+          replayed: false,
+        };
       } catch (error) {
         if (error instanceof CommitQuarantineError) throw error;
         if (isUniqueViolation(error)) {
-          await settleAfterError(connection);
+          await settle.abort();
           return resolveUnderKey(request);
         }
-        const loss = isConnectionLoss(error);
-        const rollbackError = await settleAfterError(connection);
-        if (rollbackError === undefined) {
-          const unavailable =
-            (error as { code?: unknown }).code === LOCK_TIMEOUT_CODE || loss;
-          return {
-            ok: false,
-            failure: failure(
-              unavailable ? 'provider_unavailable' : 'provider_error',
-              request,
-              'finalize',
-              'not_committed',
-              error,
-              { variant: unavailable ? 'dispatch_failure' : 'unclassified' },
-            ),
-          };
+        const settleError = await settle.abort();
+        await abandon(request);
+        if (settleError !== undefined) {
+          return unknownOutcome(request, phase, { cause: error, settlement: settleError });
         }
         return {
           ok: false,
-          failure: failure('provider_unavailable', request, 'finalize', 'unknown', {
-            cause: error,
-            rollback: rollbackError,
-          }),
+          failure: classifyOperational(request, phase, 'not_committed', error),
         };
       }
     },
 
     async replayGuarded(request: FinalizeRequest): Promise<FinalizeResult> {
+      validateRequest(request, 'replay');
       await observeAt('before_connection_acquire', request.invocationId);
-      const connection = await options.executor.beginFinalization();
+      let phase: UnitPhase = 'acquire';
+      let connection: FinalizeConnection | undefined;
       try {
+        connection = await options.executor.beginFinalization();
+      } catch (error) {
+        // Nothing leased: the executor disposes a client whose BEGIN fails.
+        await abandon(request);
+        return {
+          ok: false,
+          failure: classifyOperational(request, phase, 'not_committed', error),
+        };
+      }
+      const active = connection;
+      const settle = trackSettlement(active);
+      try {
+        phase = 'lock';
         await observeAt('before_key_lock', request.invocationId);
-        await connection.lockOperationKey(request.scopeId, request.internalKey);
+        await active.lockOperationKey(request.scopeId, request.internalKey);
+        const existing = await active.readReceipt(request.scopeId, request.internalKey);
+        // Fires after the receipt lookup (not before): a revocation racing
+        // the barrier denies on the looked-up row instead of vanishing it.
         await observeAt('after_replay_lookup_before_guard', request.invocationId);
-        const existing = await connection.readReceipt(request.scopeId, request.internalKey);
         if (existing === undefined) {
-          await connection.rollback();
-          connection.release();
-          return {
-            ok: false,
-            failure: failure('provider_error', request, 'replay', 'not_committed', {
-              lost: 'replay without a success row',
-            }, { variant: 'unclassified' }),
-          };
+          return abortWith(
+            request,
+            phase,
+            settle,
+            {
+              ok: false,
+              failure: failure('provider_error', request, phase, 'not_committed', {
+                lost: 'replay without a success row',
+              }, { variant: 'unclassified' }),
+            },
+          );
         }
         if (existing.codecVersion !== COMMAND_CODEC_VERSION) {
-          await connection.rollback();
-          connection.release();
-          throw new CommitQuarantineError(request.scopeId, request.internalKey, existing.codecVersion);
+          // Already settled below: the quarantine propagates without a second settle.
+          const settleError = await settle.abort();
+          await abandon(request);
+          if (settleError !== undefined) {
+            return unknownOutcome(request, phase, { settlement: settleError });
+          }
+          throw new CommitQuarantineError(
+            request.scopeId,
+            request.internalKey,
+            existing.codecVersion,
+          );
         }
         if (existing.commandHash !== request.commandHash) {
-          await connection.rollback();
-          connection.release();
-          return {
-            ok: false,
-            failure: failure('conflict', request, 'replay', 'not_committed', {
-              key: request.internalKey,
-            }, { variant: 'key_contention' }),
-          };
+          return abortWith(
+            request,
+            phase,
+            settle,
+            {
+              ok: false,
+              failure: failure('conflict', request, phase, 'not_committed', {
+                key: request.internalKey,
+              }, { variant: 'key_contention' }),
+            },
+          );
         }
+        phase = 'guard';
         const transactionToken = randomUUID();
         const transaction: ArtifactCommitTransaction = {
           transactionId: transactionToken,
           invocationId: request.invocationId,
           policyRevision: request.policyRevision,
-          participant: options.policy.createParticipant(connection, transactionToken),
+          participant: options.policy.createParticipant(active, transactionToken),
         };
+        // Same key/object/ACL/policy lock order as finalization, without
+        // quota charging, provisional publication writes or intent completion.
+        await runLockGroup(request, active, PRE_QUOTA_LOCK_CLASSES);
         const decision = await request.guard(commitContext(request, 'replay'), transaction);
         if (!decision.allowed) {
-          await connection.rollback();
-          connection.release();
-          return deny(request, decision);
+          return abortWith(request, phase, settle, deny(request, decision));
         }
-        if (decision.fence.invocationId !== request.invocationId) {
-          await connection.rollback();
-          connection.release();
-          return {
-            ok: false,
-            failure: failure('unauthorized_at_commit', request, 'replay', 'not_committed', {
-              denialReason: 'invalid_object',
-            }, { variant: 'policy_denial' }),
-          };
+        const currentRevision = await transaction.participant.readRevision();
+        const fenceCheck = verifyFence(request, transaction, decision.fence, currentRevision);
+        if (!fenceCheck.ok) {
+          return abortWith(request, phase, settle, invalidFence(request, fenceCheck.detail));
         }
-        await connection.commit();
-        connection.release();
+        if (currentRevision !== request.policyRevision) {
+          return abortWith(request, phase, settle, revokedOutcome(request));
+        }
+        phase = 'commit';
+        const commitFailure = await commitUnit(request, active, settle);
+        if (commitFailure !== undefined) return commitFailure;
         return {
           ok: true,
           result: existing,
@@ -436,27 +672,14 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         };
       } catch (error) {
         if (error instanceof CommitQuarantineError) throw error;
-        const rollbackError = await settleAfterError(connection);
-        if (rollbackError === undefined) {
-          const unavailable = isConnectionLoss(error);
-          return {
-            ok: false,
-            failure: failure(
-              unavailable ? 'provider_unavailable' : 'provider_error',
-              request,
-              'replay',
-              'not_committed',
-              error,
-              { variant: unavailable ? 'dispatch_failure' : 'unclassified' },
-            ),
-          };
+        const settleError = await settle.abort();
+        await abandon(request);
+        if (settleError !== undefined) {
+          return unknownOutcome(request, phase, { cause: error, settlement: settleError });
         }
         return {
           ok: false,
-          failure: failure('provider_unavailable', request, 'replay', 'unknown', {
-            cause: error,
-            rollback: rollbackError,
-          }),
+          failure: classifyOperational(request, phase, 'not_committed', error),
         };
       }
     },
