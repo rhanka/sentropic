@@ -31,7 +31,7 @@
   - `packages/artifacts/package.json`
 ## Feedback Loop
 - [x] BR861-L2-EX1: owner explicitly requested merging the L0 fix wave without rebase. The additional allowed paths are inherited merge-only L0 changes at d4bd43b3c; no direct L2 edits. Impact: updated declaration/test/docs baseline. Rollback: revert the merge with first parent as mainline. Both parents preserve the same .track tree.
-- [ ] L2-CONTRACT: L0 predates r2 and lives outside src/rootDir; define r2 types inside allowed failures.ts, with L6 to export the frozen public subpath. No L0 edits.
+- [ ] L2-CONTRACT (L6 owner): repaired L0 d4bd43b3c still lives outside src/rootDir; promote the shared outcome/commit declarations to their canonical buildable public subpaths during L6. L2 runtime variants, guard-refusal fields, internal-key brand and outcome envelopes are checked against the repaired freeze without importing out-of-root runtime modules. Ordinary domain and admission outcomes remain supported extensions; no L0 edits by L2.
 - [ ] L2-VERSION: r2 §6 reserves shared manifests to the integrator after the wave; mandatory PR bump remains that owner's gate. package.json unchanged; workflow dispatch on this stacked PR does not exercise the PR-only bump job.
 - [ ] L2-INTEGRATION: real-provider execute/adapter wiring is exclusively L6; stage-2 acceptance qualifies classifier and both projectors.
 - [ ] L2-RADAR: pinned 3fc55b4f4 helper still probes retired takeTypedCause/setFinalizeAuthorization and old selection names; Radar/L6/L8 must rebind r2, never emulate those slots.
@@ -43,6 +43,7 @@
 ## UAT Management (in orchestration context)
 - [x] No UI; real-provider Radar acceptance remains L6/L8, pinned Radar 3fc55b4f4.
 ## Plan / Todo (lot-based)
+- [x] L0 outcome/guard reconciliation: six frozen variant regressions plus a typed revoked/503 denial fail before correction. Preserve variant and optional ledger semantics; retry requires the typed unavailable reason and status 503. Declaration assertions cover guard, outcome fields and internal-key compatibility.
 - [x] L0 key reconciliation: real derivation digests replace fake keys; two regressions reject caller/truncated identities even with matching fields. The trusted marker/context require L0's internal-key brand and a full lowercase SHA-256 digest.
 - [x] L0 phase reconciliation: two regressions fail before and pass after consuming canonical lock/admit phases; full-key contention projects conflict and admission cannot enter the write ledger.
 - [x] Merge L0 repair d4bd43b3c, retaining L2 BRANCH.md and all upstream atomic commit identities; the merge includes inherited changes, with authored correction commits below 150 lines.
