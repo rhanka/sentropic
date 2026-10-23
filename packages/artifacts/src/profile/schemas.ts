@@ -6,7 +6,7 @@ const integer = (minimum: number, maximum?: number) => ({ type: 'integer', minim
 const obj = (properties: Record<string, unknown>, required: string[] = []): ArtifactSchema =>
   ({ type: 'object', properties, required, additionalProperties: false });
 const id = { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' };
-const primitiveRecord = { type: 'object', propertyNames: { not: { enum: ['__proto__', 'constructor', 'prototype'] } },
+const primitiveRecord = { type: 'object',
   additionalProperties: { type: ['string', 'number', 'boolean', 'null'] }, default: {} };
 
 /** Required configuration includes semantic limits absent from JSON Schema. */
