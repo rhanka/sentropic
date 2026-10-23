@@ -20,8 +20,11 @@ import {
 import {
   FAILURE_CATEGORIES,
   FAILURE_PROJECTIONS,
+  ORDINARY_FAILURE_CATEGORIES,
+  ORDINARY_FAILURE_PROJECTIONS,
   OUTCOME_SUCCESS_FIELDS,
 } from '../l0-freeze/failure-contract.js';
+import type { OrdinaryFailure } from '../l0-freeze/failure-contract.js';
 import { COMMAND_CODEC_VERSION } from '../l0-freeze/command-identity-contract.js';
 
 describe('commit contract', () => {
@@ -105,6 +108,48 @@ describe('commit contract', () => {
     expect(projection?.httpStatus).toBe(500);
     expect(projection?.publicCode).toBe('internal_error');
     expect(projection?.retriable).toBe(false);
+  });
+
+  it('should know the ordinary domain failure categories', () => {
+    expect([...ORDINARY_FAILURE_CATEGORIES]).toEqual([
+      'invalid_request', 'not_found', 'gone', 'unprocessable', 'verification_failed',
+    ]);
+  });
+
+  it('should project ordinary failures without ledger entries', () => {
+    expect(ORDINARY_FAILURE_PROJECTIONS.map((entry) => [
+      entry.category, entry.httpStatus, entry.publicCode,
+    ])).toEqual([
+      ['invalid_request', 400, 'invalid_request'],
+      ['not_found', 404, 'not_found'],
+      ['gone', 410, 'gone'],
+      ['unprocessable', 422, 'unprocessable'],
+      ['verification_failed', 422, 'verification_failed'],
+    ]);
+    for (const entry of ORDINARY_FAILURE_PROJECTIONS) {
+      expect(entry.retriable).toBe(false);
+      expect(entry.phase).toBe('entry');
+      expect(entry.commitState).toBe('not_committed');
+      expect('radarLedgerReason' in entry).toBe(false);
+    }
+  });
+
+  it('should keep a typed ordinary 400 failure with its private cause', () => {
+    const cause = new Error('unknown field: owner');
+    const failure: OrdinaryFailure = {
+      kind: 'ordinary',
+      category: 'invalid_request',
+      httpStatus: 400,
+      publicCode: 'invalid_request',
+      retriable: false,
+      invocationId: 'inv-1',
+      operation: 'publish',
+      phase: 'entry',
+      commitState: 'not_committed',
+      cause,
+    };
+    expect(failure.cause).toBe(cause);
+    expect(failure.commitState).toBe('not_committed');
   });
 
   it('should carry invocation, commit-state and replay on success', () => {
