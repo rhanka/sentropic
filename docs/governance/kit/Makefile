@@ -45,6 +45,11 @@ check-browser:
 check-convergence:
 	@mkdir -p .cache
 	@$(PROBE) node scripts/check-convergence.mjs
+.PHONY: check-reword
+check-reword:
+	@mkdir -p .cache
+	@git show 10b7b22bca057218b4b85b4cbe2c8aafe6de42f5:docs/governance/governance-r11-portable.html > .cache/reword-reference.html
+	@$(PROBE) node scripts/check-reword.mjs
 .PHONY: check-card-parity
 check-card-parity:
 	@mkdir -p .cache

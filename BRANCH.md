@@ -29,7 +29,7 @@
 - [x] R2 owner decision (2026-10-23): “Reformuler les textes”. Reword only the 34 overflowing collapsed occurrences; preserve package kickers, expanded text, both central scenes and all geometry/font values. Verify with `scripts/check-reword.mjs` against `10b7b22bc`.
 - [x] Astra R1: restore and assert measured 16 px outer summary insets (428 px body); remove the incorrect central wording-conflict claim.
 - [x] Astra R3: time and gate every counted ordinary operation, require 600 measured ordinary operations plus 240 measured stress toggles, and report complete-set maxima below 1800 ms.
-- [ ] R3 complete runtime witness: three attempts stopped on different operations after 17/223/28 measured operations. Boundary/count regression probes pass; no complete passing 660 + 240 campaign is claimed. Preserve the 1800 ms gate.
+- [x] R3 complete runtime witness: 660 ordinary + 240 stress operations, 16 captures, zero fit/console failures, maximum 1489 ms (stress 995 ms), below the unchanged 1800 ms gate. Baseline with API tracing also passes (997 ms); archived failure is in pre-input actionability, historical root cause unproven. See validation report.
 - [x] Astra additional findings: disclose final-owner 14 px versus measured 20 px leaf-body conflict and inherited unequal adjacent expanded frame heights; preserve validated values.
 - [x] Rebase onto main to resolve the root plan conflict blocking PR CI; preserve correction sources exactly, inherit the DOMPurify override and rebuild in isolated dependencies. Portable SHA-256 reproduces `0b8db12478f4d7badc9d2f7819ec335e7d713287a755548627e118a2b93f2b47`.
 - [x] Replace inherited #711 plan; generated routes/portable and inherited-plan replacement exceed routine line budget. Keep handwritten implementation commits near 150 lines.
@@ -53,14 +53,14 @@
 - [x] **Lot 2 — Every scene and wrapping legend**
   - [x] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
   - [x] Wrapping legend with semantic swatches, using the same zone/fold path.
-- [ ] **Lot 3 — Qualification**
-  - [x] Run new `scripts/check-{convergence,card-parity,routing-budget}.mjs`; card parity, pinned footer at 0/1/2 lines and routing budgets pass. Strict fit stays blocking on unchanged long zone text.
-  - [x] Geometry after R1: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 271.48 ms. Card parity passes for all 144 leaves. Browser fit remains pending the recorded wording conflict.
+- [x] **Lot 3 — Qualification**
+  - [x] `scripts/check-{convergence,reword,browser}.mjs`: strict fit passes all ten scene/locale pairs, exactly 34 changed collapsed occurrences / 46 strings, unchanged expanded text and geometry. Prior card parity, pinned footer and routing budgets remain valid.
+  - [x] Geometry after R1: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 271.48 ms. Card parity passes for all 144 leaves. R2 changes no geometry, routing, leaf text or font values.
   - [x] Prior browser count corrected by R3: only 560 of 656 ordinary entries were measured; the historical maximum did not establish the complete interaction budget. Rerun the complete measured witness after R1.
   - [x] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
-- [ ] **Lot 4 — Delivery**
+- [x] **Lot 4 — Delivery**
   - [x] Record H1–H9 file:line replacements, divergences and validation in `validation/converge32.md`.
-  - [x] Rebuild/deliver portable, refresh and verify all 135 SHA256SUMS entries; scope check before each selective make commit.
+  - [x] Rebuild/deliver portable, refresh and verify all 137 SHA256SUMS entries; scope check before each selective make commit (each R2 commit under 150 changed lines).
   - [x] Create draft PR #726 using this plan as body and post the four-step plan; keep it draft and unmerged.
-  - [x] R1 qualification: ten scene/locale pairs, both central views pass, eight secondary fit failures; content retains 32 slides / 52 routes with 16 remaining fit findings. Idle/load checks pass all four scenarios.
-  - [ ] Post-push gate: report exact-head CI and the final portable digest in the delivery response; keep the PR draft and unmerged while R2 and the complete R3 runtime witness remain pending.
+  - [x] R2 qualification: all ten scene/locale pairs pass, 32 slides / 52 routes pass with zero fit findings, idle/load checks pass all four scenarios. Portable SHA-256: `92a87f2985fbfcc23c6a6241f7e96db133df294624c5bdc07551e9840c8c08cd`.
+  - [x] Preserve the post-push gate: require green CI on the exact pushed head and report SHA, CI URL and string table; keep PR #726 draft and unmerged. Full string table: root `.tmp/governance-unification/726-reword.md`, also included in the PR body.
