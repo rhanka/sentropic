@@ -5,7 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Binding spec: `.tmp/immo-861-artifacts/spec-plan.md`, SHA-256 `e0bffcf079bddaf5fcef8b4232100b821f5efd225a7ffb92a239ea4b540ea9a4`.
-- [x] Base: `feat/artifacts-861-contracts` merged at `d4bd43b3c2379e1823ac1b32264d9d9febd50fed` (PR #721 L0-fix wave).
+- [x] Base: `feat/artifacts-861-contracts` merged at `d41f470927c1dfd52c239f57ba3f2589723d3285` (PR #721 Sol r2 corrections and inherited main).
 - [x] Worktree: `tmp/worktrees/artifacts-861-L1`; branch `feat/artifacts-861-L1`.
 - [x] Make-only; ENV=test-artifacts-861-724 last; no Python; selective staging; authored commits under 150 lines; upstream merge preserves L0 commit identities.
 - [x] No services/ports needed for pure unit tests; no root development environment changes.
@@ -89,3 +89,4 @@
 - [x] Reconcile L0 selectedCapabilities input/inherited compiled fields and selection httpStatus/variant; both new shape regressions fail before adaptation. Preserve actorId authority, callable trusted derivation, Unicode and envelope semantics.
 - [ ] Global CI green: requires integration/security remediation of the evidenced dompurify audit failures and the reserved version/bump gate.
 - [ ] Merge actual L0 origin d41f470927c1dfd52c239f57ba3f2589723d3285, adapt compiled validators and canonical command fixtures, preserve Astra r1 fixes, and rerun scope gates.
+- [x] L0 merge: preserve corrected participant/coordinator operations, ordinary/operational outcomes, frozen command fixtures and release handoff unchanged; only BRANCH.md conflicts, resolved to the L1 scope. No .track change against either parent.
