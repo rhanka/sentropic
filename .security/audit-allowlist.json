@@ -5,6 +5,11 @@
       "ghsa": "GHSA-mrhx-c7xc-m3w5",
       "review_due": "2026-10-30",
       "reason": "zod <4.6.6 memory-exhaustion advisory matches the pinned v3 line (3.25.76/3.23.8); the only fix is the breaking v3-to-v4 major migration (main-owned). Time-boxed pending that migration; human record in vulnerability-register.yaml."
+    },
+    {
+      "ghsa": "GHSA-866g-f22w-33x8",
+      "review_due": "2026-10-30",
+      "reason": "@ai-sdk/provider-utils <=3.0.27 uncontrolled-resource-consumption advisory on the nested dev-only copy (ollama-ai-provider 1.2.0 via engram, pinned 2.2.8, no v2 fix published); bumping the v2 line under main-owned engram risks runtime breakage. Time-boxed pending upstream/main remediation; human record in vulnerability-register.yaml."
     }
   ]
 }
