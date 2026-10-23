@@ -34,8 +34,8 @@
 ## UAT Management (in orchestration context)
 - [x] No web, Chrome or VSCode behavior changes; UAT is executable CT assertions.
 ## Plan / Todo (lot-based)
-- [ ] **Lot 1 - Fixture contract and publication reference**
-  - [ ] Add `publication-reference.ts`: scoped roots/receipts, ordinary/staged/projection races, preparation and commit crash points, reopen and revocation controls.
+- [x] **Lot 1 - Fixture contract and publication reference**
+  - [x] Add `publication-reference.ts`: scoped roots/receipts, ordinary/staged/projection races, preparation and commit crash points, reopen and revocation controls.
 - [ ] **Lot 2 - Activation reference**
   - [ ] Extend `publication-reference.ts`: two-scope one-way activation, consumer parity, resumable validation/checkpoints, captured changes, bounded final delta and legacy-policy double.
 - [ ] **Lot 3 - Reusable assertions**
