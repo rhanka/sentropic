@@ -2,6 +2,8 @@
   "$schema": "security-fix-contract-v1",
   "contract": "S1 inventory and contract",
   "specRef": "spec-plan.md r3 sha256 0d7c8345",
+  "ownerOverride": "OWNER-REQUEST.md 2026-10-23 disclosure section, binding: no private scan repo, everything runs in the public repos, supersedes the spec private-scan design",
+  "runtime": "public repositories only, no private scan repo or private storage assumed; scan workflows, reports and fix PRs are public; goal zero open vulnerability at all times",
   "severity": {
     "actionable": ["HIGH", "CRITICAL"],
     "informational": ["MEDIUM", "LOW"],
@@ -63,11 +65,11 @@
   },
   "credentials": {
     "killSwitchVar": "SECURITY_FIX_ENABLED",
-    "killSwitchRepo": "rhanka/sentropic-security-scan",
-    "reader": "read-only App installation on scan repository, Variables read plus Contents read for receipts, used only by controller/watcher and merge jobs, rotation and revocation receipts recorded",
+    "killSwitchRepo": "rhanka/sentropic",
+    "reader": "read-only access on the public repository, Variables read plus Contents read for receipts, used only by controller/watcher and merge jobs, rotation and revocation receipts recorded",
     "missingOrUnreadableMeansOff": true,
     "recheckSeconds": 15,
-    "perRepoDisable": "global switch first, then protected controller policy PR"
+    "perRepoDisable": "global switch first, then protected policy PR in the same public repository"
   },
   "bumpGateManual": {
     "rule": "dependency-section edits of published packages with bump required go to manual handoff, never automatic scope",
@@ -80,7 +82,7 @@
     "exactSurfacePlatformPathFlags": true,
     "resetOn": ["missing day", "error", "recurrence", "path change", "flag change", "policy change"],
     "freshPreMergeRescan": true,
-    "review": "independent seat plus exact-head owner GO and human merge"
+    "review": "independent other-model review plus green CI, then auto-merge within the fixed scope, no per-PR owner GO; fix PRs are public"
   },
   "limits": {
     "newPRsPerDayFleet": 2,
