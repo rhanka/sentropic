@@ -36,8 +36,8 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 1 - Fixture contract and publication reference**
   - [x] Add `publication-reference.ts`: scoped roots/receipts, ordinary/staged/projection races, preparation and commit crash points, reopen and revocation controls.
-- [ ] **Lot 2 - Activation reference**
-  - [ ] Extend `publication-reference.ts`: two-scope one-way activation, consumer parity, resumable validation/checkpoints, captured changes, bounded final delta and legacy-policy double.
+- [x] **Lot 2 - Activation reference**
+  - [x] Extend `publication-reference.ts`: two-scope one-way activation, consumer parity, resumable validation/checkpoints, captured changes, bounded final delta and legacy-policy double.
 - [ ] **Lot 3 - Reusable assertions**
   - [ ] Add `publication-assertions.ts`: CT-04 visibility/fences, CT-05 crash matrix, CT-06 concurrent/restarted retries, CT-14 activation/parity/inventory/namespace cases.
 - [ ] **Lot 4 - Mutants and final validation**
