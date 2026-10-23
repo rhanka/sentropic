@@ -19,22 +19,6 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `Makefile` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `.dockerignore` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `.github/**` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `.security/**` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `README.md` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `api/**` (CISEAT-EX5; incoming main paths only, L1 paths remain below)
-  - `apps/**` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `deploy/**` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `docs/**` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `package.json` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `packages/**` (CISEAT-EX5; incoming main paths only, L1 paths remain below)
-  - `plan/**` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `scripts/**` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `spec/**` (CISEAT-EX5; incoming main paths only, L1 paths remain below)
-  - `tools/**` (CISEAT-EX5; integration commit only, exact main bytes)
-  - `ui/**` (CISEAT-EX5; integration commit only, exact main bytes)
   - `BRANCH.md`
   - `spec/SPEC_EVOL_CI_SEATS.md`
   - `packages/llm-mesh/src/enrollment/**`
@@ -85,9 +69,9 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `CISEAT-EX6`: status active, directly blocking P0a's single-copy gate. Reason: main's development-only engram 0.21.1 depends on mesh ^0.19.0 and adds a second installed mesh. Impact: scope a root override to that exact test-tool package, resolving its mesh to the existing workspace; preserve its officeparser override and lock-only file-type pin. Qualify the installed dependency graph and existing real engram-memory tests before acceptance; no upstream engram or product dependency version change. Rollback: remove that one nested override and regenerate only its lock edge; the single-copy gate must remain failed until resolved.
+- `CISEAT-EX6`: status active, directly blocking P0a's single-copy gate. Reason: main's development-only engram 0.21.1 depends on mesh ^0.19.0 and adds a second installed mesh. Impact: scope a root override to that exact test-tool package, resolving its mesh to the existing workspace; preserve its officeparser override and lock-only file-type pin. Removed only the stale seven-line nested lock entry, then npm install --package-lock-only and npm ls --all --package-lock-only prove every consumer dedupes to workspace mesh 0.27.1; file-type remains 22.1.0. Scoped mesh regression and real engram-memory tests remain required before acceptance; no upstream engram or product dependency version change. Rollback: remove that one nested override and regenerate only its lock edge; the single-copy gate must remain failed until resolved.
 - `CISEAT-P0A`: status active (2026-10-23). Owner requests L1 closure only, merge origin/main without rebase, exact-head CI and fresh immutable receipts; no PR merge or live seat activation. Remote baseline 7293130ee3f6bfc6dd1e2fefcc07b3bd4d751a99; main e6d17327898a0118af123ff36ae508eefda80ddf. Existing ci-seat-import worktree retains divergent local Lot 8 commits and its untracked broker; isolated author worktree tmp/worktrees/ci-seat-import-l1 starts from the published PR head and will push HEAD:feat/ci-seat-import without force.
-- `CISEAT-EX5`: status active, merge-only exception authorized by the owner. Reason: incorporate origin/main without rebase. Impact: incoming main paths are retained verbatim except the six named merge conflicts and L1 release pins; no unrelated authored changes. Rollback: revert the integration merge, preserving the original PR and local Lot 8 refs. Incoming changes do not extend future implementation scope.
+- `CISEAT-EX5`: status done in a53a64c4b (merge-only exception authorized by the owner). Reason: incorporate origin/main without rebase. Impact: incoming main paths are retained verbatim except the six named merge conflicts and L1 release pins; no unrelated authored changes. Rollback: revert the integration merge, preserving the original PR and local Lot 8 refs. Integration-only grants removed immediately afterward; incoming changes do not extend future implementation scope. The inherited Track files equal main byte-for-byte.
 - `R6-1-UPDATE`: status active. Main already supplies gateway 0.21.0 with mesh ^0.27.0; registry latest checked on 2026-10-23: mesh 0.27.0, gateway 0.21.0. L1 uses mesh 0.27.1, aligns seat-tools and installed fixture pins, and refreshes the packed sibling digest through the sanctioned Make flow. No gateway source change is needed.
 - `CISEAT-EX2`: status active. Reason: scoped sentropic-seat-delivery receiver integration (new route `api/src/routes/namespaces/llm-seat-delivery.ts`, auth `api/src/middleware/llm-seat-delivery-auth.ts`, optional mount in `llm-mesh-router.ts` via `delivery.enabled`, service tuple/drain/reopen in `llm-account-transports.ts`). k8s mTLS manifests (`deploy/k8s/base/seat-delivery-mtls.yaml`, preprod overlay patch) are explicitly deferred to L3 P-DEPLOY, which owns TLS-termination design; no speculative infra is committed (delivery shares the api pod behind existing ingress). Impact: bounded to this integration; router behavior unchanged when `delivery` is unset. Rollback: delete the new route/middleware files, revert the router mount hunk and the service delivery functions.
 - `CISEAT-EX3`: status acknowledged (reserved downstream requirement from L0a). Reason: owner-machine native Node helper (`seat-inspect`) needs native session keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service D-Bus). Bounds: only reviewed Make entrypoints run the bounded local store reader/inspect helper natively; no host test campaign, server, second refresher or whole-home/keyring export. No `seat-reenroll` helper exists in L1 (re-enroll stays an L3 concern). Rollback: disable/remove owner targets, revoke helper GitHub session, remove private runtime dir, retire disposable lab profile only.
@@ -126,7 +110,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - [ ] Refresh the frozen selected lock through pack-candidate-siblings and refresh-lazy-package-lock.
   - [ ] Package gate: typecheck-llm-mesh, lint-llm-mesh, test-llm-mesh and packed Cluster Mesh qualification.
   - [ ] API gate: unit llm-account-transports, llm-seat-projection-import, llm-seat-delivery-auth; endpoints llm-seat-delivery; typecheck-api and lint-api.
-  - [ ] Remove integration-only scope grants; preserve the original L1 scope for follow-up commits.
+  - [x] Remove integration-only scope grants; preserve the original L1 scope for follow-up commits.
   - [ ] Push the exact candidate to #681, collect H/B/T/run/artifact/control hashes and require complete green CI on H.
   - [ ] Conductor/Muse review and acceptance; no live import, L2/L3, Lot 8 activation, publication or PR merge in P0a.
 

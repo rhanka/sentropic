@@ -32,7 +32,8 @@
     "ip-address": "^10.3.1",
     "source-map-js": "1.2.2",
     "@sentropic/engram@0.21.1": {
-      "officeparser": "8.2.0"
+      "officeparser": "8.2.0",
+      "@sentropic/llm-mesh": "file:packages/llm-mesh"
     }
   }
 }
