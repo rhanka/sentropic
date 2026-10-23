@@ -92,10 +92,10 @@ class PgFinalizeConnection implements FinalizeConnection {
     await this.client.query('ROLLBACK');
   }
 
-  release(): void {
+  release(error?: unknown): void {
     if (this.released) throw new Error('finalization client already released');
     this.released = true;
-    this.client.release();
+    this.client.release(error === undefined ? undefined : error as Error);
   }
 }
 
