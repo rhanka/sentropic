@@ -1,0 +1,92 @@
+{
+  "$schema": "security-fix-contract-v1",
+  "contract": "S1 inventory and contract",
+  "specRef": "spec-plan.md r3 sha256 0d7c8345",
+  "severity": {
+    "actionable": ["HIGH", "CRITICAL"],
+    "informational": ["MEDIUM", "LOW"],
+    "rawMeansBeforeSuppression": true,
+    "identicalFlagsRequired": true
+  },
+  "inventory": {
+    "images": [
+      { "key": "api-production", "dockerfile": "api/Dockerfile", "stage": "production", "make": ["build-api-image"] },
+      { "key": "api-toolbox", "dockerfile": "api/Dockerfile", "stage": "ci-tools", "builderStage": "ci-esbuild", "make": ["build-api-tool-image"] },
+      { "key": "ui-production", "dockerfile": "ui/Dockerfile", "stage": "production", "make": ["build-ui-image"] }
+    ],
+    "locks": [
+      "package-lock.json",
+      "ui/package-lock.json",
+      "docs/governance/kit/package-lock.json"
+    ],
+    "sastRoots": ["api/src", "ui/src"],
+    "sastBlockedUntil": "S2c native Rust ast-grep qualification",
+    "toolbox": {
+      "path": "api/Dockerfile",
+      "note": "Exact approved path fixed at S1 for SECDAILY-EX6, read-only in S1"
+    }
+  },
+  "register": {
+    "baselineOutstanding": 67,
+    "due2026-11-20": 60,
+    "expired": { "total": 7, "due2026-02-26": 1, "due2026-10-11": 6 },
+    "staleContainerCandidates": 7,
+    "postDeadlineRed": "2026-11-21T00:00:00Z"
+  },
+  "grouping": {
+    "unitKey": "repository + repair class + component/lock set or image identity/platform + fixed target",
+    "lotKey": "sorted unit keys",
+    "lotBounds": { "maxUnits": 3, "maxFiles": 10, "maxLines": 150 },
+    "noCrossRepo": true,
+    "noMixWithReconciliation": true
+  },
+  "automaticScope": {
+    "allow": [
+      "patch-only dependency/range or existing override value with unchanged major/minor including 0.x plus deterministic lock changes",
+      "existing image pin digest and associated patch-version tokens in same registry/repository OS release purpose architecture family with attested patch-only delta",
+      "declared deterministic derived pins such as l5-root-lock"
+    ],
+    "deny": ["source", "tests", "docs", "new dependency/override", "minor/major upgrade", "Docker instruction", "runtime config", "policy", "workflow", "Makefile", "gate", "register", "allowlist", "generated source", "L5 packed-closure", "history archive"],
+    "undeclaredRefuses": true,
+    "branchFileAbsentFromDiff": true,
+    "registerByteIdentical": true
+  },
+  "derivedPins": {
+    "l5-root-lock": {
+      "input": "exact bytes of root package-lock.json",
+      "outputs": ["tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json#source.declaredLockSha256", "tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256"],
+      "algorithm": "replace only that JSON string preserving every other byte, write lowercase sha256 of manifest bytes plus LF to sidecar",
+      "target": "security-recompute-derived-pins DERIVED_PIN=l5-root-lock",
+      "validator": "memory-l5-gate LOT=1 plus verifyPreCandidate, closure-changing bumps refused, no history archive entry"
+    },
+    "undeclaredConsumerIsBlocker": true
+  },
+  "credentials": {
+    "killSwitchVar": "SECURITY_FIX_ENABLED",
+    "killSwitchRepo": "rhanka/sentropic-security-scan",
+    "reader": "read-only App installation on scan repository, Variables read plus Contents read for receipts, used only by controller/watcher and merge jobs, rotation and revocation receipts recorded",
+    "missingOrUnreadableMeansOff": true,
+    "recheckSeconds": 15,
+    "perRepoDisable": "global switch first, then protected controller policy PR"
+  },
+  "bumpGateManual": {
+    "rule": "dependency-section edits of published packages with bump required go to manual handoff, never automatic scope",
+    "guard": "run publishable-manifest guard locally before publication so the lot never opens",
+    "ref": "scripts/ci/publishable-manifests.mjs bumpGate"
+  },
+  "reconciliation": {
+    "kind": "removal-only, separate from automatic lots",
+    "scansRequired": 2,
+    "exactSurfacePlatformPathFlags": true,
+    "resetOn": ["missing day", "error", "recurrence", "path change", "flag change", "policy change"],
+    "freshPreMergeRescan": true,
+    "review": "independent seat plus exact-head owner GO and human merge"
+  },
+  "limits": {
+    "newPRsPerDayFleet": 2,
+    "openPRsMax": 6,
+    "inferenceUnitsPerDayFleet": 4,
+    "perSlotPerDay": 2,
+    "rotation": ["codex", "muse-1", "muse-2", "claude-1", "claude-2", "agy", "vibe"]
+  }
+}
