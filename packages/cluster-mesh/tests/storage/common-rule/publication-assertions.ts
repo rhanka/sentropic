@@ -141,3 +141,52 @@ export const assertCT14 = async (factory: PublicationFactory): Promise<void> => 
     assert.equal(f.counters.effects, 2);
   }
 };
+export const assertParity = async (factory: PublicationFactory): Promise<void> => {
+  for (const proof of ['missing', 'pending', 'wrong-tuple', 'stale'] as const) {
+    const f = fixture(factory), checkpoint = await validated(f); await f.bind('b/consumer', proof);
+    await refused(() => f.activate(checkpoint, 0), /missing proof:b\/consumer/, 'CT-14/parity: missing proof prevents activation');
+    assert.equal(await f.marker(), undefined);
+    for (const scope of ['a', 'b']) for (const mutate of Object.values(f.legacy(scope))) await mutate();
+    await f.bind('b/consumer', 'pass'); await f.activate(checkpoint, 8); assert.equal(await f.unit('b'), 'b');
+    const c = f.client('b'), p = { ...proposal('claim', 'b'), epoch: 2 }; await c.publish(await c.prepare(p));
+    assert.equal(await c.read('current'), p.value);
+  }
+  const f = fixture(factory), checkpoint = await validated(f);
+  await refused(() => f.activate(checkpoint, 0, undefined, () => f.bind('b/new', 'missing')), /missing proof:b\/new/);
+  assert.equal(await f.marker(), undefined); await f.legacy('a').write(); await f.legacy('b').publish();
+};
+export const assertInventory = async (factory: PublicationFactory): Promise<void> => {
+  let f = fixture(factory), page = await f.scan(1);
+  assert.equal(f.counters.scanned, 1); const stale = page.checkpoint;
+  f = f.reopen();
+  for (const unit of ['a', 'b']) for (const kind of ['overwrite', 'delete', 'retention', 'pending'] as const) await f.change(unit, kind);
+  page = await f.scan(1); assert.equal(f.counters.scanned, 2, 'CT-14: resume without rescanning visited inventory');
+  const checkpoint = await validated(f); await f.change('excluded', 'overwrite'); assert.equal(f.counters.scanned, 2);
+  await refused(() => f.activate(stale, 8), /checkpoint/);
+  await refused(() => f.activate(checkpoint + 'tampered', 8), /checkpoint/);
+  await refused(async () => f.activate(await validated(fixture(factory)), 8), /checkpoint/);
+  await f.activate(checkpoint, 8); assert(f.counters.delta >= 1 && f.counters.delta <= 4, 'CT-14: only remaining visited-unit delta is validated');
+  assert.equal(f.counters.scanned, 2, 'CT-14: cutover does not rescan inventory');
+  await refused(() => f.unit('excluded'), /unqualified/);
+  for (const unit of ['a', 'b']) {
+    const bad = fixture(factory), cp = await validated(bad); await bad.change(unit, 'overwrite', false);
+    await refused(() => bad.activate(cp, 1), /corrupt delta/, 'CT-14/delta: changed bytes are revalidated');
+    assert.equal(await bad.marker(), undefined); await bad.legacy('a').write(); await bad.legacy('b').maintain();
+  }
+  for (const capture of [true, false]) {
+    const bad = fixture(factory), cp = await validated(bad); await bad.change('a', 'pending', true, capture);
+    await refused(() => bad.activate(cp, 0), capture ? /limit/ : /missing change capture/);
+    assert.equal(await bad.marker(), undefined); await bad.legacy('a').publish(); await bad.legacy('b').collect();
+  }
+};
+export const assertNamespace = async (factory: PublicationFactory): Promise<void> => {
+  let f = fixture(factory); const checkpoint = await validated(f);
+  const probe = async (): Promise<void> => {
+    for (const action of ['put', 'collect', 'delete'] as const)
+      await refused(() => f.legacyObject(action), /access denied/, 'CT-14/namespace: legacy put/collect/delete denied');
+    assert.equal(await f.protectedBytes(), 'protected');
+  };
+  await probe(); await f.policy(false); await refused(() => f.activate(checkpoint, 0), /namespace policy/);
+  assert.equal(await f.marker(), undefined); await f.policy(true); await f.activate(checkpoint, 0);
+  f = f.reopen(); await probe();
+};
