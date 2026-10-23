@@ -39,7 +39,8 @@ export async function admitDecision(execution: DecisionExecution, selection: Ext
   if (expired) return failed(expired);
   let candidate: unknown;
   try { candidate = await options.resolvePrice({ providerId: selection.descriptor.evaluator.providerId,
-    modelId: selection.descriptor.wireModel }); }
+    modelId: selection.descriptor.wireModel, protocol: selection.descriptor.protocol ?? 'jev-native',
+    authority: selection.descriptor.priceProtocol.authority, priceRevision: selection.descriptor.priceProtocol.revision }); }
   catch { return failed(createDecisionError('PRICING_UNAVAILABLE', 'admission')); }
   expired = decisionInterruption(execution, 'admission');
   if (expired) return failed(expired);

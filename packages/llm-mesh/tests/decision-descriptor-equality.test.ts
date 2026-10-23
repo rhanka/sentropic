@@ -30,6 +30,8 @@ describe('canonical definition equality (P17/P27-L2)', () => {
     ['price protocol revision', (d) => { d.priceProtocol = { ...d.priceProtocol, revision: 'other-price-v9' }; }],
     ['price authority', (d) => { d.priceProtocol = { ...d.priceProtocol, authority: 'other-authority' }; }],
     ['execution bound', (d) => { d.maxBillableInputTokens = 1; }],
+    ['output execution bound', (d) => { d.maxBillableOutputTokens = 1; }],
+    ['score semantics meaning', (d) => { d.scoreSemantics = { meaning: 'other-meaning', meaningRef: 'other-ref' }; }],
     ['probability tolerance', (d) => { d.probabilityTolerance = 0; }],
     ['confidence evidence reference', (d) => { d.confidence = { ...d.confidence, meaningRef: 'other-ref' }; }],
     ['qualification billing bound', (d) => { d.qualification = { ...d.qualification, billingBound: 'unqualified' }; }],

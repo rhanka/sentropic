@@ -11,6 +11,15 @@ export interface DecisionEvaluatorDescriptor {
   qualification: { servedIdentity: 'qualified' | 'unqualified';
     billingBound: 'qualified' | 'unqualified'; evidenceRefs: readonly string[] };
   maxBillableInputTokens: number;
+  /** Enforced protocol output/reasoning bound (§3.2 Execution). Zero means
+   * the descriptor admits no billable output; non-JEV quoting requires a
+   * positive bound and the structured transport transmits it as the
+   * execution cap. */
+  maxBillableOutputTokens: number;
+  /** Score meaning/scale rules (§3.2 Validation, §3.4 scalar-label-v1).
+   * The host binds structured scalar meaning to this declaration, falling
+   * back to the protocol default only when the descriptor omits it. */
+  scoreSemantics?: { meaning: string; meaningRef: string };
   maxRequestBytes: number;
   maxStateQuestionBytes: number;
   probabilityTolerance: number;
@@ -32,7 +41,8 @@ export const jevDescriptor: DecisionEvaluatorDescriptor = {
   wireModel: 'jev-1.13.0', acceptedServedModelIds: [],
   qualification: { servedIdentity: 'unqualified', billingBound: 'unqualified', evidenceRefs: [] },
   // JEV-BOUND-01 candidate only; qualification is required before financial admission.
-  maxBillableInputTokens: 65_536, maxRequestBytes: 256 * 1024, maxStateQuestionBytes: 32 * 1024,
+  // JEV admits no billable output: the output rate must be zero, so the bound is 0.
+  maxBillableInputTokens: 65_536, maxBillableOutputTokens: 0, maxRequestBytes: 256 * 1024, maxStateQuestionBytes: 32 * 1024,
   probabilityTolerance: 1e-4, scoreNativeKeys: 'index-string', nativeDecision: false,
   confidence: { meaning: 'provider-confidence', meaningRef: 'https://docs.typesafe.ai/confidence.md', min: 0, max: 1 },
   compilation: { templateDigest: '0'.repeat(64), schemaDigest: '1'.repeat(64), readout: 'jev-native-v1' },
