@@ -349,3 +349,95 @@ authority escalation and lineage conflicts. Package enrollment keeps existing id
 `cloudcode-pa` target and `productAccountSource: antigravity`, and refuses the
 `gemini` route. Native profile variants stay unverified until observed; see
 `spec/SPEC_EVOL_CI_SEATS.md` and `tests/enrollment/seat-bundle.test.ts`.
+
+## Generic Decision Capability
+
+`@sentropic/llm-mesh` provides strict decision evaluation contracts, portable client execution, and a deterministic JEV host service via three distinct export subpaths:
+
+- `@sentropic/llm-mesh/decision`: Consumer contracts (`EvaluatorRef`, `DecisionRequest`, `DecisionResult`, `DecisionVerdict`, `DecisionReceipt`) and portable remote client (`createRemoteDecisionClient`).
+- `@sentropic/llm-mesh/decision/host`: Trusted host factory (`createDecisionService`) and JEV adapter (`createJevAdapter`).
+- `@sentropic/llm-mesh/transport/jev`: Deterministic JEV transport (`createJevTransport`).
+
+### Consumer usage
+
+```ts
+import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
+
+const client = createRemoteDecisionClient({
+  baseUrl: 'https://llm.sent-tech.ca',
+  authToken: 'secret-bearer-token',
+  validationContext: (snapshot) => ({
+    evaluator: { ...snapshot.evaluator },
+    validationProfile: { profile: 'native-distribution-v1', version: 'v1' },
+    acceptedServedModelIds: ['synthetic-served-model'],
+    semantics: { nativeDecision: false,
+      score: { meaning: 'probability-true', min: 0, max: 1 },
+      confidence: null, rationale: 'forbidden' },
+    definitionDigest: 'a'.repeat(64),
+  }),
+  // Client timeout defaults to server deadline + 1 000 ms margin (11 000 ms default).
+  // Optional: timeoutMs can be provided to bound client wait below server deadline + margin.
+});
+
+const result = await client.decide({
+  schemaVersion: 1,
+  evaluator: { providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'syn-v1' },
+  inputs: { output: 'Candidate completion', state: null },
+  criterion: { kind: 'binary', instructions: 'Verify output correctness' },
+  decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 },
+  correlationId: 'corr-decision-100',
+  policy: { timeoutMs: 10_000 }, // Server deadline: 10 000 ms (client waits 11 000 ms with margin)
+});
+```
+
+### Host usage
+
+```ts
+import { createDecisionService, createJevAdapter, jevDescriptor } from '@sentropic/llm-mesh/decision/host';
+import { createJevTransport } from '@sentropic/llm-mesh/transport/jev';
+import { createProviderRegistry } from '@sentropic/llm-mesh';
+
+const adapter = createJevAdapter({
+  descriptor: jevDescriptor,
+  transport: createJevTransport({ fetch: globalThis.fetch }),
+});
+const service = createDecisionService({
+  registry: createProviderRegistry([adapter]),
+  resolveEvaluator,
+  evaluatorAllowlist: [{ providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'syn-v1' }],
+  resolvePrice,
+  authorize,
+  budget,
+  receipts,
+  resolveAuth,
+  clock,
+});
+```
+
+### Deadline & Failure Semantics
+
+- **Deadline margin**: The client waits server deadline + 1 000 ms grace margin (11 000 ms default, 61 000 ms cap) whenever client `options.timeoutMs` is omitted or ≥ server timeout + 1 000 ms, so that the server's own timeout receipt reaches the client before client-side abort. Providing `options.timeoutMs` bounds the client timeout via `Math.min(options.timeoutMs, serverTimeout + 1 000)`.
+- **Phase-aware errors**: `preflight`, `admission`, `dispatch`, `settlement`. Settlement and post-result timeouts have `retryable: false`.
+- **Advisory retry hints**: Bounded strictly to a 60-second ceiling.
+- **Normalization & security**: Unsafe JSON keys (`__proto__`, `constructor`, `prototype`) are rejected. MicroUsd prices use integer strings. Null candidate output/state is accepted; absent/undefined is refused.
+
+### Migration from judge names
+
+V4-L2 renames the capability to Sentropic Decision with no legacy alias. Update imports and call sites together; the wire contract (`schemaVersion: 1`) is unchanged.
+
+| Before | After |
+|---|---|
+| `@sentropic/llm-mesh/judge` | `@sentropic/llm-mesh/decision` |
+| `@sentropic/llm-mesh/judge/host` | `@sentropic/llm-mesh/decision/host` |
+| `createRemoteJudgeClient` | `createRemoteDecisionClient` |
+| `client.judge(request)` | `client.decide(request)` |
+| `adapter.judge(request, context)` | `adapter.decision(request, context)` |
+| `judgeRequest`, `JudgeResult`, `JudgeClient` | `decisionRequest`, `DecisionResult`, `DecisionClient` |
+| `isJudgeOnlyProvider` (api) | `isDecisionOnlyProvider` |
+
+```ts
+import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
+import type { DecisionRequest, DecisionResult } from '@sentropic/llm-mesh/decision';
+```
+
+Callers must pass the explicit trusted context: `validationContext` is required on `createRemoteDecisionClient` so revision-specific validation facts bind the transmitted snapshot; omitted resolvers refuse client-local with zero header/credential resolution. Registered criteria require a trusted resolution; without one they fail closed. The host requires an explicit `evaluatorAllowlist`; absent or unlisted evaluators refuse before credentials or dispatch.
