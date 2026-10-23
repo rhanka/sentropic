@@ -16,8 +16,9 @@ file freezes shapes, rules and quarantine behavior only.
   and caller scope fields leave the effective schema. The candidate path
   restrictions (1024-byte ceiling, `:` and DEL prohibition) move into
   schema, shared validation, migration notes and consumer fixtures.
-- Awaited (Q0): scope/subject domain examples, Unicode/whitespace/order
-  vectors, file-order cases, existing host path-policy deltas.
+- Awaited (Q0): scope/subject domain examples, existing host path-policy
+  deltas. Delivered: Unicode/whitespace/order vectors, file-order cases,
+  canonical command fixtures, separate-principal digests.
 
 ## Ask 2 — host authorization inside durable finalization
 
