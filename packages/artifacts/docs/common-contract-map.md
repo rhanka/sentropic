@@ -18,6 +18,22 @@ lot (L7). This file freezes the mapping rules L7 implements.
 | `CommonManifestBody` | Preserve version-first refusal, source boundary, schema/descriptor/encoding identities, predecessor and complete terminal inventory. Count is a decimal string equal to the object count; the digest excludes its own field. No artifacts manifest codec replaces these rules. |
 | `CommonBoundedPage` | Bounded in item count and encoded bytes with opaque continuation. Radar tool-level offset/limit is a separate API and never claims the common cursor contract. |
 
+## Normative rules (spec r2 section 1.2)
+
+Adopted subset and declared deviations against the normative common rule.
+Future common-rule admission requires a separate complete qualification
+and resolution of these deviations.
+
+| Normative rule | r2 adoption or declared deviation |
+| --- | --- |
+| **CR-1 — immutable objects** | Adopt byte ownership, create-or-verify length/digest, nonvisible preparation and shared-reference protection. A4 requires lifecycle/ACL serialization and a deletion claim protecting external purge against reference creation. No new purge-service or restore profile is claimed. L4/L8 prove publication and collection safety. |
+| **CR-2 — versioned checksum manifest** | Adopt order-sensitive command identity, immutable content commitments, version-first refusal and no silent digest migration (C6). Artifacts' existing manifest is not the common envelope: incarnation, surface/source-boundary and terminal-inventory conformance are **not claimed**. |
+| **CR-3 — one atomic publication** | Adopt one visibility decision, rights revalidation, atomic durable receipt, same-key conflict/replay and unknown-COMMIT recovery. **Deviation:** each distinct publish captures the newest head under the finalization lock and rebases onto it; two preparations started on the same old head may both succeed in serialization order. This preserves existing latest-wins artifact publishing; it does not satisfy the CR-3 ban on a stale writer acquiring authority by rereading a newer head. There is no caller-supplied expected predecessor in Radar's profile. |
+| **CR-4 — bounded listing/traversal** | **Deviation:** the HTTP layer loads all artifact IDs, filters visibility then slices; `listArtifactIds` is not backend scope-bounded. Radar's trusted ACL wrapper remains mandatory for foreign-scope hiding. Tool limit/offset bounds do not bound backend work or implement common cursors. This delivery records the limitation rather than expanding into a storage pagination redesign. |
+| **CR-5 — separated rights** | Adopt distinct rights at the mesh boundary, current durable admission, post-wait guard, guarded retry and no authority from a receipt. **Deviation:** no universal zero-storage-call local denial stage is provided; current host admission may query SQL before denying. Selection/input refusal still makes zero provider calls. A local-first/durable-second admission pipeline and deployment-level common-rule qualification are not claimed. |
+
+The structural bridge MUST refuse any common-rule admission or conformance claim. Selecting the four MCP tools registers no common storage module and waives none of CR-1…CR-5.
+
 ## Boundaries
 
 - Artifacts is not a registered common storage module (`storage/contracts.ts`
