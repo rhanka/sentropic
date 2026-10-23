@@ -24,6 +24,7 @@
   - `scripts/ci/qualify-published-install.test.mjs`
   - `scripts/ci/publishable-manifests.mjs`
   - `scripts/ci/publishable-manifests.test.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -38,6 +39,7 @@
   - [x] Declare BR0213-EXn with rationale, impact and rollback before conditional edits.
 
 ## Feedback Loop
+- [x] BR0213-EX1 — allow .github/workflows/ci.yml's Cluster Mesh post-publication wait budget only. Reason: npm processing took over three minutes on #709, exhausting 18 reads before availability. Impact: up to 36 fresh reads, ten seconds apart, for this publisher only; no publication/skip predicates change. Rollback: remove the explicit budget argument and its wiring test.
 - [x] Affected publication: @sentropic/cluster-mesh@0.21.2, registry time 2026-10-23T14:44:35Z; correction reserved as 0.21.3.
 - [ ] Establish publish qualification failure and later skip from run/job logs; fix a repository cause with a regression test.
 
@@ -57,11 +59,11 @@
   - [x] Create requested worktree/branch from origin/main; harness check branch passes.
   - [x] Use existing scoped test, lint, typecheck, pack and qualification Make targets.
 - [ ] **Lot 1 — Freeze common v1 and bump patch**
-  - [ ] File-local frozen COMMON_V1_MODULE_IDS with comments and engram-live only.
-  - [ ] Extend tests/storage/common-rule/contract.spec.ts: both original modules accepted, memory rejected with exact existing error across all common surfaces.
-  - [ ] Add tests/storage/scope-grant-modules.spec.ts: Comments valid/invalid grants and exact errors, generic memory registration and read/write grants accepted.
-  - [ ] Bump package manifest and root workspace lock to 0.21.3; peer ranges only if required.
-  - [ ] Scoped tests reproduce the defect before repair and pass after repair.
+  - [x] File-local frozen COMMON_V1_MODULE_IDS with comments and engram-live only.
+  - [x] Extend tests/storage/common-rule/contract.spec.ts: both original modules accepted, memory rejected with exact existing error across all common surfaces.
+  - [x] Add tests/storage/scope-grant-modules.spec.ts: Comments valid/invalid grants and exact errors, generic memory registration and read/write grants accepted.
+  - [x] Bump package manifest and root workspace lock to 0.21.3; peer ranges only if required.
+  - [x] Common regression fails before repair and passes afterward (10 common tests, 3 grant tests).
 - [ ] **Lot 2 — Registry qualification diagnosis and repair**
   - [ ] Inspect run 39969215826 publish-cluster-mesh failure and run 39974392072 skip.
   - [ ] Apply smallest repository repair if needed; add deterministic regression coverage.
