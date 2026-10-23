@@ -16,7 +16,8 @@
     "ip-address": "^10.3.1",
     "brace-expansion": "^2.1.7",
     "js-yaml": "^3.15.2",
-    "proxy-addr": "^2.0.8"
+    "proxy-addr": "^2.0.8",
+    "body-parser": "^2.4.0"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
