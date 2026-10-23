@@ -112,19 +112,27 @@ describe('trusted domain and adapter mappings', () => {
   });
 
   it.each([
+    [401, 'anonymous', true], [404, 'not_found', true], [410, 'gone', true],
     [403, 'activation_closed', false], [503, 'capability_unavailable', true],
     [503, 'capability_unavailable', false],
     [503, 'host_outage', false],
     [403, 'not_in_cohort', true],
   ] as const)('should preserve refusal %s/%s with host retry %s and normative outage semantics', async (status, publicCode, retriable) => {
     const { ArtifactOperationError } = await failures();
-    await expectProjection(new ArtifactOperationError('unauthorized_at_commit', {
+    const failure = await expectProjection(new ArtifactOperationError('unauthorized_at_commit', {
       cause: driver('private'), refusal: { status, publicCode, retriable },
     }), {
       category: 'unauthorized_at_commit', httpStatus: status,
       publicCode: status === 503 ? 'capability_unavailable' : publicCode,
-      retriable: status === 503 ? true : status === 403 ? false : retriable,
+      retriable: status === 503,
     }, { ...context, phase: 'guard' });
+    const { projectArtifactMcpOutcome } = await projections();
+    const { encodeToolResult } = await import('@sentropic/mcp-platform/transport/result-codec');
+    const wire = encodeToolResult(projectArtifactMcpOutcome({ ok: false, failure }, 'audit-guard'));
+    expect(wire.isError).toBe(true);
+    expect(wire._meta).toMatchObject({
+      errorCode: status === 503 ? 'capability_unavailable' : publicCode, retriable: status === 503,
+    });
   });
 
   it('should make an unselected capability unavailable without retry', async () => {
