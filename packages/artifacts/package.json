@@ -155,6 +155,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "freeze-types": "tsc --noEmit --strict --skipLibCheck --target es2022 --module nodenext --moduleResolution nodenext --verbatimModuleSyntax l0-freeze/commit-contract.ts l0-freeze/failure-contract.ts l0-freeze/profile-contract.ts l0-freeze/command-identity-contract.ts",
     "test": "vitest run tests"
   },
   "peerDependencies": {
