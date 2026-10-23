@@ -112,7 +112,7 @@ function operationProjection(error: ArtifactOperationError): Projection {
       return {
         category: kind, httpStatus: refusal.status,
         publicCode: refusal.status === 503 ? 'capability_unavailable' : refusal.publicCode,
-        retriable: refusal.status === 503 ? true : refusal.status === 403 ? false : refusal.retriable,
+        retriable: refusal.status === 503,
       };
     }
     default: return { category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
