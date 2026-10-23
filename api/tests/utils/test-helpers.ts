@@ -54,7 +54,7 @@ export function sleep(ms: number): Promise<void> {
 }
 
 export function getTestModel(): string {
-  return process.env.TEST_MODEL || 'gpt-4.1-nano';
+  return process.env.TEST_MODEL || 'gpt-5.4-nano';
 }
 
 /**
