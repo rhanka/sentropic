@@ -462,6 +462,52 @@ lock-api-direct: ## Bump proxy-addr 2.0.7 -> 2.0.8 in api + root locks (pinned, 
 	@for f in api/package-lock.json package-lock.json; do test $$(sed -n '/"node_modules\/proxy-addr": {/,/^    },/p' $$f | grep -c '"version": "2.0.8"') -eq 1 || (echo "❌ proxy-addr 2.0.8 missing in $$f" && exit 1); done
 	@! grep -q 'proxy-addr-2\.0\.7\.tgz' api/package-lock.json package-lock.json || (echo "❌ stale proxy-addr 2.0.7 reference remains" && exit 1)
 	@echo "✅ proxy-addr 2.0.8 in both locks"
+MARKDOWN_IT_NEW_INTEGRITY := sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==
+MARKDOWN_IT_ROOT_OLD_INTEGRITY := sha512-RCEsPjR+sr0x+AuYp601tKTkgFG4YEPLCzHST3cQ/fhlJkqAkz1L2/Qbp1j9qw5SBwQHFBoW8+hoN5xssOF0Tw==
+MARKDOWN_IT_UI_OLD_INTEGRITY := sha512-BuU2qnTti9YKgK5N+IeMubp14ZUKUUw7yeJbkjtosvHiP0AZ5c8IAgEMk79D0eC8F23r4Ac/q8cAIFdm2FtyoA==
+MARKDOWN_IT_1432_INTEGRITY := sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==
+MARKDOWN_IT_1433_INTEGRITY := sha512-L//tDAkjTjJCU6pBUSBTgs3Kg4InVaZuUZog/b6V12UKhcDQ7S78877ibbCanRExwPuYP1CZD7Gd2dxSy1GXRg==
+.PHONY: lock-markdown-it-14-3-3
+lock-markdown-it-14-3-3: ## Bump markdown-it 14.3.2 -> 14.3.3 in root + ui locks (pinned, no stack; BR710-EX4)
+	@echo "🔒 Bumping markdown-it to 14.3.3 in package-lock.json + ui/package-lock.json..."
+	sed -i 's|"version": "14.3.2"|"version": "14.3.3"|; s|markdown-it-14.3.2.tgz|markdown-it-14.3.3.tgz|; s|$(MARKDOWN_IT_1432_INTEGRITY)|$(MARKDOWN_IT_1433_INTEGRITY)|' package-lock.json ui/package-lock.json
+	@for f in package-lock.json ui/package-lock.json; do test $$(grep -c '"version": "14.3.3"' $$f) -eq 1 || (echo "❌ markdown-it 14.3.3 missing in $$f" && exit 1); done
+	@! grep -q 'markdown-it-14.3.2.tgz' package-lock.json ui/package-lock.json || (echo "❌ stale markdown-it 14.3.2 reference remains" && exit 1)
+	@echo "✅ markdown-it 14.3.3 in both locks"
+FOLLOW_REDIRECTS_1160_INTEGRITY := sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==
+FOLLOW_REDIRECTS_1161_INTEGRITY := sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==
+.PHONY: lock-follow-redirects-1-16-1
+lock-follow-redirects-1-16-1: ## Bump follow-redirects 1.16.0 -> 1.16.1 in the root lock (pinned, no stack; BR710-EX5)
+	@echo "🔒 Bumping follow-redirects to 1.16.1 in package-lock.json..."
+	sed -i 's|"version": "1.16.0"|"version": "1.16.1"|; s|follow-redirects-1.16.0.tgz|follow-redirects-1.16.1.tgz|; s|$(FOLLOW_REDIRECTS_1160_INTEGRITY)|$(FOLLOW_REDIRECTS_1161_INTEGRITY)|' package-lock.json
+	@test $$(grep -c '"version": "1.16.1"' package-lock.json) -eq 1 || (echo "❌ follow-redirects 1.16.1 missing in package-lock.json" && exit 1)
+	@! grep -q 'follow-redirects-1.16.0.tgz' package-lock.json || (echo "❌ stale follow-redirects 1.16.0 reference remains" && exit 1)
+	@echo "✅ follow-redirects 1.16.1 in the root lock"
+VITE_736_INTEGRITY := sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==
+VITE_737_INTEGRITY := sha512-AHEzTORMbi7/7aXp7w7KZ5+DCUdSeLsJz0grY8xHpc9DHdYb0vQu6DqJfm2tOw3gDExNgPgnJTXxM6syYFHaCA==
+VITE_822_INTEGRITY := sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q==
+VITE_824_INTEGRITY := sha512-lfauXnrf2x0p+UoA+wXh0dgFWnUjCyG6Js95KBkgaCwUU9k0DAHI4W6Q0WCx+h+5g+Alce1y4Zi2QjjK0UvGBw==
+.PHONY: lock-vite-737-824
+lock-vite-737-824: ## Bump vite 7.3.6->7.3.7 and 8.2.2->8.2.4 in root + api locks (pinned, no stack; BR710-EX6)
+	@echo "🔒 Bumping vite to 7.3.7 / 8.2.4 in package-lock.json + api/package-lock.json..."
+	sed -i 's|"version": "7.3.6"|"version": "7.3.7"|; s|vite-7.3.6.tgz|vite-7.3.7.tgz|; s|$(VITE_736_INTEGRITY)|$(VITE_737_INTEGRITY)|' package-lock.json
+	sed -i 's|"version": "8.2.2"|"version": "8.2.4"|; s|vite-8.2.2.tgz|vite-8.2.4.tgz|; s|$(VITE_822_INTEGRITY)|$(VITE_824_INTEGRITY)|' package-lock.json api/package-lock.json
+	@test $$(grep -c '"version": "7.3.7"' package-lock.json) -eq 1 || (echo "❌ vite 7.3.7 missing in package-lock.json" && exit 1)
+	@test $$(grep -c '"version": "8.2.4"' package-lock.json) -eq 2 || (echo "❌ vite 8.2.4 count wrong in package-lock.json" && exit 1)
+	@test $$(grep -c '"version": "8.2.4"' api/package-lock.json) -eq 1 || (echo "❌ vite 8.2.4 missing in api/package-lock.json" && exit 1)
+	@! grep -q 'vite-7.3.6.tgz' package-lock.json || (echo "❌ stale vite 7.3.6 reference remains" && exit 1)
+	@! grep -q 'vite-8.2.2.tgz' package-lock.json api/package-lock.json || (echo "❌ stale vite 8.2.2 reference remains" && exit 1)
+	@echo "✅ vite 7.3.7 / 8.2.4 in root + api locks"
+.PHONY: lock-markdown-it-direct
+lock-markdown-it-direct: ## Bump markdown-it 14.3.0/14.1.1 -> 14.3.2 in root + ui locks (pinned, no stack)
+	@echo "🔒 Bumping markdown-it to 14.3.2 in package-lock.json + ui/package-lock.json..."
+	sed -i '/"node_modules\/markdown-it": {/,/^    },/ { s/"version": "14\.3\.0"/"version": "14.3.2"/; s|markdown-it-14\.3\.0\.tgz|markdown-it-14.3.2.tgz|; s|$(MARKDOWN_IT_ROOT_OLD_INTEGRITY)|$(MARKDOWN_IT_NEW_INTEGRITY)|; }' package-lock.json
+	sed -i '/"node_modules\/markdown-it": {/,/^    },/ { s/"version": "14\.1\.1"/"version": "14.3.2"/; s|markdown-it-14\.1\.1\.tgz|markdown-it-14.3.2.tgz|; s|$(MARKDOWN_IT_UI_OLD_INTEGRITY)|$(MARKDOWN_IT_NEW_INTEGRITY)|; }' ui/package-lock.json
+	@test $$(sed -n '/"node_modules\/markdown-it": {/,/^    },/p' package-lock.json | grep -c '"version": "14.3.2"') -eq 1 || (echo "❌ markdown-it 14.3.2 missing in package-lock.json" && exit 1)
+	@test $$(sed -n '/"node_modules\/markdown-it": {/,/^    },/p' ui/package-lock.json | grep -c '"version": "14.3.2"') -eq 1 || (echo "❌ markdown-it 14.3.2 missing in ui/package-lock.json" && exit 1)
+	@! grep -q 'markdown-it-14\.3\.0\.tgz' package-lock.json || (echo "❌ stale markdown-it 14.3.0 reference remains" && exit 1)
+	@! grep -q 'markdown-it-14\.1\.1\.tgz' ui/package-lock.json || (echo "❌ stale markdown-it 14.1.1 reference remains" && exit 1)
+	@echo "✅ markdown-it 14.3.2 in both locks"
 
 .PHONY: lock-root
 lock-root: ## Update root package-lock.json using Node container (workspace root)
@@ -801,7 +847,7 @@ lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned m
 .PHONY: typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh publish-cluster-mesh publish-cluster-mesh-token
 # BRE-EX1: provider leaves need the optional peers' dists at dev time; link them inside the container and remove the links on
 # exit, interrupt or termination (INT/TERM exit through the EXIT trap; `docker run --init` forwards signals to the shell).
-CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2
+CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2 @sentropic/engram@0.21.1
 typecheck-cluster-mesh: ## Run self-contained cold @sentropic/cluster-mesh type checks
 	@$(MAKE) cluster-mesh-workspace CM_ACTION=typecheck ENV=$(ENV)
 
@@ -1342,8 +1388,9 @@ typecheck-mcp-platform: install-internal-packages ## Run @sentropic/mcp-platform
 
 .PHONY: build-mcp-platform
 build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform dist package
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line (or make -e) must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: build-artifacts
@@ -1443,8 +1490,9 @@ test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (buil
 
 .PHONY: api-extract-mcp-platform
 api-extract-mcp-platform: install-internal-packages ## Verify public API reports incl. ./memory; API_EXTRACT_LOCAL=1 regenerates reports explicitly (CI defaults to strict verification)
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line (or make -e) must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules temp'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node @microsoft/api-extractor@7.58.9 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local); "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local) --config api-extractor.memory.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local); "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local) --config api-extractor.memory.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules temp'
 
 .PHONY: pack-mcp-platform
@@ -3932,11 +3980,13 @@ test-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker tests (L5 Lot 1
 
 .PHONY: build-mcp-broker
 build-mcp-broker: build-mcp-platform ## Build @sentropic/mcp-broker dist package (L5 Lot 1: public platform contracts)
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line (or make -e) must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 MEMORY_L5_NODE_IMAGE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+MEMORY_L5_TOOLCHAIN := typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9
 memory-l5-lint memory-l5-tooling memory-l5-test memory-l5-packed memory-l5-pack memory-l5-receipt memory-l5-verify memory-l5-gate: export LLM_MESH_NODE_IMAGE = $(MEMORY_L5_NODE_IMAGE)
 
 .PHONY: memory-l5-runtime
@@ -3975,12 +4025,18 @@ memory-l5-packed: memory-l5-runtime ## L5 installed-consumer packed SDK suite, S
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" "$$tool_dir/node_modules/.bin/vitest" run "$(SCOPE)" --environment node --root tools/memory-mcp-l5'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
 
+.PHONY: memory-l5-toolchain-snapshot
+memory-l5-toolchain-snapshot: memory-l5-runtime ## Regenerate the P1 union toolchain snapshot from the pinned specs (explicit; review the diff)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-toolchain-snapshot requires ENV=<env> last" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --snapshot-toolchain --root /workspace
+
 .PHONY: memory-l5-pack
 memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extract-mcp-platform ## L5 packer: writes then validates ARTIFACT_MANIFEST from exact built contracts (L5-EX1)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-pack requires ENV=<env> last" >&2; exit 1; }
 	@test "$(STAGE)" = "pre-candidate" || { echo "ERROR: memory-l5-pack STAGE=$(STAGE) is owned by a later lot (only pre-candidate exists)" >&2; exit 1; }
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-pack requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --root /workspace
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line (or make -e) must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --head-lock-sha "$$(git show HEAD:package-lock.json | sha256sum | cut -d' ' -f1)" --root /workspace
 
 .PHONY: memory-l5-receipt
 memory-l5-receipt: memory-l5-runtime ## L5 receipt verifier: MODE=preflight reports obligations, MODE=checkpoint gates strictly (L5-EX1)
