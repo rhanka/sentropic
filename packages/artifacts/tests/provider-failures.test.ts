@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { DERIVATION_VECTORS, type InternalIdempotencyKey } from '../l0-freeze/command-identity-contract.js';
+
+const scopedKey = DERIVATION_VECTORS[0].sha256 as InternalIdempotencyKey;
+const storageScopeId = DERIVATION_VECTORS[0].binding.scope;
 
 // Import inside each test so the unchanged L0 baseline fails every vector.
 const failures = () => import('../src/server/failures.js');
 const projections = () => import('../src/server/outcome-projection.js');
 const context: import('../src/server/failures.js').ArtifactFailureContext = {
   invocationId: 'inv-1', operation: 'publish', phase: 'prepare',
-  commitState: 'not_committed' as const, storageScopeId: 'scope-1', operationKey: 'full-key-1',
+  commitState: 'not_committed' as const, storageScopeId, operationKey: scopedKey,
 };
 const driver = (code: string) => Object.assign(new Error('private SQL endpoint bucket credential'), { code });
 
@@ -72,14 +76,26 @@ describe('typed provider failures, r2 E2/E3', () => {
 describe('trusted domain and adapter mappings', () => {
   it('should consume the frozen L0 key-lock phase and full derived identity', async () => {
     const { FINALIZATION_PHASES } = await import('../l0-freeze/commit-contract.js');
-    const { DERIVATION_VECTORS } = await import('../l0-freeze/command-identity-contract.js');
     const { ArtifactKeyLockConflict } = await failures();
-    const operationKey = DERIVATION_VECTORS[0].sha256;
+    const operationKey = scopedKey;
     const scope = DERIVATION_VECTORS[0].binding.scope;
     const phase = FINALIZATION_PHASES.find((value) => value === 'lock')!;
     await expectProjection(new ArtifactKeyLockConflict(scope, operationKey, driver('55P03')), {
       category: 'conflict', httpStatus: 409, retriable: false,
     }, { ...context, storageScopeId: scope, operationKey, phase });
+  });
+
+  it.each(['key-1', scopedKey.slice(0, 16)])
+    ('should reject caller or truncated key %s even when both proof fields agree', async (key) => {
+      const { ArtifactKeyLockConflict } = await failures();
+      const operationKey = key as InternalIdempotencyKey;
+      await expectProjection(new ArtifactKeyLockConflict(storageScopeId, operationKey, driver('55P03')), unavailable,
+        { ...context, operationKey, phase: 'lock' });
+    });
+
+  it('should accept only the frozen internal-key brand at the trusted contention seam', async () => {
+    const { ArtifactKeyLockConflict } = await failures();
+    expectTypeOf<ConstructorParameters<typeof ArtifactKeyLockConflict>[1]>().toEqualTypeOf<InternalIdempotencyKey>();
   });
 
   it('should exclude frozen L0 admission failures from dispatched-write accounting', async () => {
@@ -99,7 +115,7 @@ describe('trusted domain and adapter mappings', () => {
   it('should qualify 55P03 only for the same full key, scope and key-lock phase', async () => {
     const { ArtifactKeyLockConflict } = await failures();
     const original = driver('55P03');
-    const cause = new ArtifactKeyLockConflict('scope-1', 'full-key-1', original);
+    const cause = new ArtifactKeyLockConflict(storageScopeId, scopedKey, original);
     const failure = await expectProjection(cause, {
       category: 'conflict', httpStatus: 409, publicCode: 'conflict', retriable: false,
     }, { ...context, phase: 'lock' });
@@ -107,11 +123,11 @@ describe('trusted domain and adapter mappings', () => {
   });
 
   it.each([
-    ['scope-2', 'full-key-1', 'lock'], ['scope-1', 'other-key', 'lock'],
-    ['scope-1', 'full-key', 'lock'], ['scope-1', 'full-key-1', 'policy'],
+    ['scope-2', scopedKey, 'lock'], [storageScopeId, DERIVATION_VECTORS[2].sha256, 'lock'],
+    [storageScopeId, scopedKey.slice(0, 16), 'lock'], [storageScopeId, scopedKey, 'policy'],
   ])('should reject conflict qualification for scope %s key %s phase %s', async (scope, key, phase) => {
     const { ArtifactKeyLockConflict } = await failures();
-    await expectProjection(new ArtifactKeyLockConflict(scope, key, driver('55P03')), unavailable, { ...context, phase });
+    await expectProjection(new ArtifactKeyLockConflict(scope, key as InternalIdempotencyKey, driver('55P03')), unavailable, { ...context, phase });
   });
 
   it.each(['command_conflict', 'pointer_conflict'] as const)

@@ -43,6 +43,7 @@
 ## UAT Management (in orchestration context)
 - [x] No UI; real-provider Radar acceptance remains L6/L8, pinned Radar 3fc55b4f4.
 ## Plan / Todo (lot-based)
+- [x] L0 key reconciliation: real derivation digests replace fake keys; two regressions reject caller/truncated identities even with matching fields. The trusted marker/context require L0's internal-key brand and a full lowercase SHA-256 digest.
 - [x] L0 phase reconciliation: two regressions fail before and pass after consuming canonical lock/admit phases; full-key contention projects conflict and admission cannot enter the write ledger.
 - [x] Merge L0 repair d4bd43b3c, retaining L2 BRANCH.md and all upstream atomic commit identities; the merge includes inherited changes, with authored correction commits below 150 lines.
 - [x] Astra P2-1: 401/404/410 refusal regressions fail before the fix (3 failed / 76 passed); only guard 503 can advertise retry. Assert classifier and encoded MCP retry, retaining same-key/fresh-guard outage semantics.
