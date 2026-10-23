@@ -5,9 +5,9 @@
 
 ## Scope / Guardrails
 - [x] Binding spec: `.tmp/immo-861-artifacts/spec-plan.md`, SHA-256 `e0bffcf079bddaf5fcef8b4232100b821f5efd225a7ffb92a239ea4b540ea9a4`.
-- [x] Base: `feat/artifacts-861-contracts` at `a5bfbacef0065313f0e54a5fadc88119ae9acab4`.
+- [x] Base: `feat/artifacts-861-contracts` merged at `d4bd43b3c2379e1823ac1b32264d9d9febd50fed` (PR #721 L0-fix wave).
 - [x] Worktree: `tmp/worktrees/artifacts-861-L1`; branch `feat/artifacts-861-L1`.
-- [x] Make-only; ENV=test-artifacts-861-L1 last; no Python; selective staging; commits under 150 lines.
+- [x] Make-only; ENV=test-artifacts-861-724 last; no Python; selective staging; authored commits under 150 lines; upstream merge preserves L0 commit identities.
 - [x] No services/ports needed for pure unit tests; no root development environment changes.
 - [x] Q0 is read-only; retain unknown/source-gap/not-covered items without extrapolation.
 
@@ -19,6 +19,11 @@
   - `packages/artifacts/tests/capability-profile.test.ts`
   - `packages/artifacts/tests/command-identity.test.ts`
   - `packages/artifacts/tests/parameters.test.ts`
+  - `packages/artifacts/README.md`
+  - `packages/artifacts/docs/**`
+  - `packages/artifacts/l0-freeze/**`
+  - `packages/artifacts/tests/commit-contract.test.ts`
+  - `packages/artifacts/tests/effective-profile.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -37,7 +42,8 @@
 - [x] Exception process: record BR861-L1-EXn reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- [ ] attention L1-VERSION: r2 assigns manifests/locks to integrator; L0 defers bump to L1. Integrator must apply the pack-only version before final CI.
+- [x] acknowledge L1-VERSION: corrected L0 assigns serial pack-only dev.N versions and lock updates to the integration owner; no L1 manifest change.
+- [x] BR861-L1-EX1: owner explicitly requested merging PR #721 L0-fix commits; added inherited docs/declarations/vector paths above for this merge only. Impact: corrected upstream contract evidence, no L1 edits to those files. Rollback: revert the merge as a unit.
 - [x] acknowledge L1-API: L0 freezes shapes only; r2 supplies public names. L6 exports and wires L1 modules.
 - [x] acknowledge L1-MIGRATION: path reconciliation notes live in the allowed profile directory; L6 consolidates migration docs.
 - [ ] attention L1-DOMAIN: Q0 has no qualified complete actor domain. L6 must bind actual verified subjects; ambiguous delimited domains fail construction without changing historical keys.
@@ -70,5 +76,6 @@
 - [x] Delivery: pushed feat/artifacts-861-L1; DRAFT PR #724 against feat/artifacts-861-contracts; no merge.
 - [x] Astra P2-1: reproduce missing semantic budget acceptance; require every operation limit/default before schema generation; retain one-byte success and overflow refusal.
 - [x] Astra P2-2: reproduce invalid_request on primitive prototype-named entries; remove the schema ban; verify own-data snapshots, unchanged prototypes and distinct command hashes.
-- [ ] Integrate PR #721 L0-fix commits by merge and reconcile corrected profile/context/outcome shapes.
+- [x] Merge PR #721 L0-fix wave at d4bd43b3; preserve L1 branch plan and all upstream code unchanged; no .track delta on either side.
+- [ ] Reconcile corrected L0 profile/context/outcome shapes with executable L1 regressions.
 - [ ] Global CI green: requires integration/security remediation of the evidenced dompurify audit failures and the reserved version/bump gate.
