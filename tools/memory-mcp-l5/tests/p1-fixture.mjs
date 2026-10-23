@@ -4,11 +4,14 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ANCILLARY } from '../precandidate.mjs';
+import { LOCK_FINGERPRINT_VERSION, computeLockFingerprint } from '../lock-fingerprint.mjs';
+import { P1_CONFIG_FILES, TOOLCHAIN_SNAPSHOT_FILES } from '../build-inputs.mjs';
 const sha = b => createHash('sha256').update(b).digest('hex');
+const VERIFIER_INPUTS = ['package-lock.json', 'Makefile', ...P1_CONFIG_FILES, ...TOOLCHAIN_SNAPSHOT_FILES];
 export function p1Fixture(extra = {}) {
   const root = mkdtempSync(join(tmpdir(), 'p1-fixture-')), head = 'a'.repeat(40), inv = [], artifacts = [];
   const put = (path, bytes) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), bytes); };
-  put('package-lock.json', readFileSync('package-lock.json'));
+  for (const path of VERIFIER_INPUTS) put(path, readFileSync(path));
   for (const path of ANCILLARY) {
     const bytes = readFileSync(path); put(path, bytes);
     inv.push({ path, version: path.startsWith('packages/') ? '0.4.0' : '1.0.0', sha256: sha(bytes) });
@@ -29,8 +32,26 @@ export function p1Fixture(extra = {}) {
     artifacts.push({ role, name, version: '0.4.0', sha256: sha(bytes), integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}`, sourceHead: head, archive });
   }
   const freeze = JSON.parse(readFileSync(join(root, 'spec/evidence/memory-mcp-l5/l0-freeze.json')));
+  const lockBytes = readFileSync(join(root, 'package-lock.json'));
+  const makefileText = readFileSync(join(root, 'Makefile'), 'utf8');
+  const configFiles = Object.fromEntries(P1_CONFIG_FILES.map((path) => [path, readFileSync(join(root, path))]));
+  const toolchainFiles = Object.fromEntries(TOOLCHAIN_SNAPSHOT_FILES.map((path) => [path, readFileSync(join(root, path))]));
+  const toolchainLocks = {
+    lock: JSON.parse(toolchainFiles[TOOLCHAIN_SNAPSHOT_FILES.find((path) => path.endsWith('.package-lock.json'))].toString('utf8')),
+    pkg: JSON.parse(toolchainFiles[TOOLCHAIN_SNAPSHOT_FILES.find((path) => path.endsWith('.package.json'))].toString('utf8')),
+  };
+  const toolchainSnapshots = TOOLCHAIN_SNAPSHOT_FILES
+    .map((path) => ({ path, sha256: sha(toolchainFiles[path]) }))
+    .sort((a, b) => (a.path < b.path ? -1 : 1));
+  const lockSha = sha(lockBytes);
+  const snapshotRel = `lock-snapshots/${lockSha}.package-lock.json`;
+  put(snapshotRel, lockBytes);
   const manifest = { manifestVersion: 1, stage: 'pre-candidate', source: { specSha256: freeze.specSha256,
-    l0Commit: freeze.l0Commit, br3Commit: head, l5Head: head, sdkRange: '^1.31.0', declaredLockSha256: sha(readFileSync('package-lock.json')) },
+    l0Commit: freeze.l0Commit, br3Commit: head, l5Head: head, sdkRange: '^1.31.0', declaredLockSha256: lockSha,
+    lockFingerprintVersion: LOCK_FINGERPRINT_VERSION,
+    lockFingerprint: computeLockFingerprint({ lockDoc: JSON.parse(lockBytes.toString('utf8')), makefileText, configFiles, toolchainLocks }),
+    declaredLockSnapshot: { path: snapshotRel, sha256: lockSha },
+    toolchainSnapshots },
     artifacts, contractInventory: inv.sort((a, b) => a.path.localeCompare(b.path)) };
   const save = () => { const bytes = `${JSON.stringify(manifest, null, 2)}\n`; put('manifest.json', bytes); put('manifest.json.sha256', `${sha(bytes)}\n`); };
   save();
