@@ -97,6 +97,28 @@ describe('radar commit setup example', () => {
     }
   });
 
+  it('retains the batch when the sweeper throws', async () => {
+    const setup = createRadarCommitSetup({ pool, clock });
+    setup.abandonedAttempts.push({
+      attemptId: 'inv-sweep-throw',
+      scopeId: 'example-scope',
+      internalKey: 'example-key-throw',
+      atMs: clock.nowMs,
+    });
+    expect(() =>
+      setup.drainAbandonedAttempts(() => {
+        throw new Error('sweep down');
+      }),
+    ).toThrow('sweep down');
+    expect(setup.abandonedAttempts.map((attempt) => attempt.attemptId)).toEqual(['inv-sweep-throw']);
+    const swept: AbandonedAttempt[][] = [];
+    setup.drainAbandonedAttempts((batch) => {
+      swept.push(batch);
+    });
+    expect(swept[0]?.map((attempt) => attempt.attemptId)).toEqual(['inv-sweep-throw']);
+    expect(setup.abandonedAttempts).toHaveLength(0);
+  });
+
   it('replays without an extra quota charge and sweeps on an interval', async () => {
     const setup = createRadarCommitSetup({ pool, clock });
     const first = await setup.finalize({

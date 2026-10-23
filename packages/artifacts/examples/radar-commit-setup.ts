@@ -190,7 +190,12 @@ export function createRadarCommitSetup(options: {
   });
   const drainAbandonedAttempts = (onSweep: (batch: AbandonedAttempt[]) => void): void => {
     if (abandonedAttempts.length === 0) return;
-    onSweep(abandonedAttempts.splice(0));
+    // Retain-then-remove: a throwing sweeper keeps the batch for the next
+    // sweep instead of losing it. Durable cleanup state, per-attempt
+    // deadlines and restart recovery stay L4-owned (intent metadata).
+    const batch = abandonedAttempts.slice();
+    onSweep(batch);
+    abandonedAttempts.splice(0, batch.length);
   };
   return {
     coordinator,
@@ -200,9 +205,17 @@ export function createRadarCommitSetup(options: {
     drainAbandonedAttempts,
     startAbandonedAttemptSweep: (onSweep, intervalMs) => {
       const timer = setInterval(() => {
-        void Promise.resolve().then(() => drainAbandonedAttempts((batch) => {
-          void onSweep(batch);
-        }));
+        // Await the sweep and isolate its failure: a failed batch is
+        // retained for the next sweep and a failing sweeper never kills the
+        // scheduler.
+        void (async () => {
+          try {
+            await onSweep(abandonedAttempts.slice());
+            abandonedAttempts.splice(0, abandonedAttempts.length);
+          } catch {
+            /* retained for the next sweep */
+          }
+        })();
       }, intervalMs);
       return () => clearInterval(timer);
     },
