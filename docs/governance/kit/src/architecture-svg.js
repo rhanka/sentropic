@@ -3,6 +3,7 @@ import { projectGovernanceScene } from './governance-projection.js';
 import { diagramIcon, groupIcons } from './architecture-icons.js';
 import { renderStructuredCard, structuredCardStyle } from './hrpolnav-card.js';
 import { t } from './i18n.js';
+import { collapsedWording } from './collapsed-wording.js';
 
 export const svgPalette = {
   neutral: { fill: 'var(--st-semantic-surface-subtle)', stroke: 'var(--st-semantic-text-secondary)', fillVar: '--surface', strokeVar: '--muted' },
@@ -33,7 +34,8 @@ export function renderSceneSvg(sceneName, scene, highlight = null, interactive =
     const toggle = interactive ? `<foreignObject data-group-toggle="${escapeXml(group.id)}" x="${x + group.width - 42}" y="${y + 10}" width="32" height="32"><div xmlns="http://www.w3.org/1999/xhtml" data-frame-mount="${escapeXml(group.id)}"></div></foreignObject>` : '';
     if (group.collapsed) {
       const card = { ...group, data: { cardIcon: groupIcons[group.id], kicker:content.kicker,
-        title:content.titleLines.join(' '), subtitle:group.subtitle } };
+        title:content.titleLines.join(' '), subtitle:group.subtitle,
+        ...collapsedWording[scene.language]?.[group.id] } };
       const cardToggle = interactive ? `<div class="card-toggle" data-group-toggle="${escapeXml(group.id)}"><div data-frame-mount="${escapeXml(group.id)}"></div></div>` : '';
       return `<g data-group="${escapeXml(group.id)}" data-tone="${group.tone}" data-parent="${escapeXml(group.parentId ?? '')}" data-collapsed="true"${routeState}><rect class="diagram-card-box" x="${x}" y="${y}" width="${group.width}" height="${group.height}"/>${renderStructuredCard(card, escapeXml, { folded:true, toggle:cardToggle })}</g>`;
     }

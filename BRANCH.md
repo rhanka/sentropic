@@ -5,7 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Worktree `tmp/worktrees/governance-converge`, branch `feat/governance-converge-hrpolnav`, base `origin/main`.
-- [x] Make-only, no Python, Docker-only Node, `ENV=test-governance-converge` last; file Chromium needs no ports or services.
+- [x] Make-only, no Python, Docker-only Node, `ENV=test-726-reword` last; file Chromium needs no ports or services.
 - [x] Read hrpolnav and design-system only; preserve validated card values, typography, icons, expanded 4/16/16 geometry and performance budgets.
 - [x] Selective staging, make commit only, no attribution trailers; push draft PR, do not merge.
 
@@ -26,7 +26,7 @@
 
 ## Feedback Loop
 - [x] Report H1–H9 replacements and all source divergences in `docs/governance/validation/converge32.md`.
-- [ ] R2 owner wording/content-allocation decision: 34 remaining occurrences across eight secondary scene/locale pairs after R1; preserve complete validated text at 460 × 200 until approved. Both central scenes pass. Strict fit remains blocking, without changing font sizes or timeouts.
+- [x] R2 owner decision (2026-10-23): “Reformuler les textes”. Reword only the 34 overflowing collapsed occurrences; preserve package kickers, expanded text, both central scenes and all geometry/font values. Verify with `scripts/check-reword.mjs` against `10b7b22bc`.
 - [x] Astra R1: restore and assert measured 16 px outer summary insets (428 px body); remove the incorrect central wording-conflict claim.
 - [x] Astra R3: time and gate every counted ordinary operation, require 600 measured ordinary operations plus 240 measured stress toggles, and report complete-set maxima below 1800 ms.
 - [ ] R3 complete runtime witness: three attempts stopped on different operations after 17/223/28 measured operations. Boundary/count regression probes pass; no complete passing 660 + 240 campaign is claimed. Preserve the 1800 ms gate.
