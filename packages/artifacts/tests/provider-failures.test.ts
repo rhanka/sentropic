@@ -43,7 +43,7 @@ describe('typed provider failures, r2 E2/E3', () => {
     await expectProjection(driver(code), unavailable);
   });
 
-  it.each(['binding', 'artifact', 'lifecycle', 'acl', 'pointer', 'policy', 'quota', 'blob-reference', 'deletion-claim', 'schema', 'infrastructure', 'key_lock'])
+  it.each(['binding', 'artifact', 'lifecycle', 'acl', 'pointer', 'policy', 'quota', 'blob-reference', 'deletion-claim', 'schema', 'infrastructure', 'lock'])
     ('should refuse to mint conflict from unqualified 55P03 at %s', async (phase) => {
       await expectProjection(driver('55P03'), unavailable, { ...context, phase });
     });
@@ -70,6 +70,27 @@ describe('typed provider failures, r2 E2/E3', () => {
 });
 
 describe('trusted domain and adapter mappings', () => {
+  it('should consume the frozen L0 key-lock phase and full derived identity', async () => {
+    const { FINALIZATION_PHASES } = await import('../l0-freeze/commit-contract.js');
+    const { DERIVATION_VECTORS } = await import('../l0-freeze/command-identity-contract.js');
+    const { ArtifactKeyLockConflict } = await failures();
+    const operationKey = DERIVATION_VECTORS[0].sha256;
+    const scope = DERIVATION_VECTORS[0].binding.scope;
+    const phase = FINALIZATION_PHASES.find((value) => value === 'lock')!;
+    await expectProjection(new ArtifactKeyLockConflict(scope, operationKey, driver('55P03')), {
+      category: 'conflict', httpStatus: 409, retriable: false,
+    }, { ...context, storageScopeId: scope, operationKey, phase });
+  });
+
+  it('should exclude frozen L0 admission failures from dispatched-write accounting', async () => {
+    const { FINALIZATION_PHASES } = await import('../l0-freeze/commit-contract.js');
+    const { classifyArtifactFailure } = await failures();
+    const { projectArtifactWriteFailure } = await projections();
+    const phase = FINALIZATION_PHASES.find((value) => value === 'admit')!;
+    const failure = classifyArtifactFailure(driver('57P06'), { ...context, phase });
+    expect(projectArtifactWriteFailure(failure, { dispatched: true, write: true })).toBeUndefined();
+  });
+
   it.each(['TimeoutError', 'RequestTimeout', 'RequestTimeoutError'])
     ('should classify an S3 request/body-stream %s without inspecting its message', async (name) => {
       await expectProjection(Object.assign(new Error('private'), { name }), unavailable);
@@ -81,13 +102,13 @@ describe('trusted domain and adapter mappings', () => {
     const cause = new ArtifactKeyLockConflict('scope-1', 'full-key-1', original);
     const failure = await expectProjection(cause, {
       category: 'conflict', httpStatus: 409, publicCode: 'conflict', retriable: false,
-    }, { ...context, phase: 'key_lock' });
+    }, { ...context, phase: 'lock' });
     expect((failure.cause as Error).cause).toBe(original);
   });
 
   it.each([
-    ['scope-2', 'full-key-1', 'key_lock'], ['scope-1', 'other-key', 'key_lock'],
-    ['scope-1', 'full-key', 'key_lock'], ['scope-1', 'full-key-1', 'policy'],
+    ['scope-2', 'full-key-1', 'lock'], ['scope-1', 'other-key', 'lock'],
+    ['scope-1', 'full-key', 'lock'], ['scope-1', 'full-key-1', 'policy'],
   ])('should reject conflict qualification for scope %s key %s phase %s', async (scope, key, phase) => {
     const { ArtifactKeyLockConflict } = await failures();
     await expectProjection(new ArtifactKeyLockConflict(scope, key, driver('55P03')), unavailable, { ...context, phase });
@@ -169,7 +190,7 @@ describe('outcome correlation, commit state and privacy', () => {
     ('should exclude %s entry refusal from write-commit accounting', async (kind) => {
       const { ArtifactOperationError, classifyArtifactFailure } = await failures();
       const { projectArtifactWriteFailure } = await projections();
-      const failure = classifyArtifactFailure(new ArtifactOperationError(kind), { ...context, phase: 'admission' });
+      const failure = classifyArtifactFailure(new ArtifactOperationError(kind), { ...context, phase: 'admit' });
       expect(projectArtifactWriteFailure(failure, { dispatched: true, write: true })).toBeUndefined();
     });
 
