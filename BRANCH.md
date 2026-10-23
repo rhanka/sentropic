@@ -63,7 +63,7 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + rebase** (single declaration-freeze lot; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: L0 is a single declaration-freeze lot with no parallel implementation workstreams. No cherry-picks onward: topics target `feat/artifacts-861-integration` and the integrator rebases/merges; L1/L2/L3 merge the updated L0 into their branches.
+- Rationale: L0 is a single declaration-freeze lot with no parallel implementation workstreams. No cherry-picks onward: topics target `feat/immo-861-integration` (r2 §6.1) and the integrator rebases/merges; L1/L2/L3 merge the updated L0 into their branches. The conductor retargets PR #721 there before merge.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
@@ -99,7 +99,7 @@ Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator decla
     - [x] make test-artifacts ENV=test-artifacts-861 last (unit only: 27 files, 216 tests passed)
     - [x] make scope-check before each commit
 - [ ] **Lot 4 — Release reservation and PR**
-  - [x] Reserve pack-only 0.2.0-dev.N versions on feat/artifacts-861-integration (integration owner, serial; frozen mesh range until L7; no package.json bump, no rc, no registry publication).
+  - [x] Reserve pack-only 0.2.0-dev.N versions on feat/immo-861-integration (integration owner, serial; frozen mesh range until L7; no package.json bump, no rc, no registry publication).
   - [x] Update packages/artifacts/README.md with L0 contract line pointer.
   - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
   - [x] Push branch and open DRAFT PR feat(artifacts): #861 L0 shared contract and vectors.
