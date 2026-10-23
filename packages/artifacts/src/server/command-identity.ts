@@ -80,12 +80,12 @@ export function createArtifactCommand(profile: CompiledArtifactsProfile, name: s
   assertWellFormed(authority.actorId);
   if (!scopeBinding || !authority.actorId) throw new ArtifactProfileInputError();
   const provenance = { kind: 'inline-original' } as const;
-  const effective = copyJson({ operation, scopeBinding, payload, provenance }) as unknown as
-    Omit<EffectiveArtifactCommand, 'identity'>;
+  const effective = copyJson({ operation, scopeBinding, payload: { ...payload, provenance } }) as unknown as
+    Omit<EffectiveArtifactCommand, 'identity' | 'provenance'>;
   const internalKey = derivation.derive({ storageScopeId: scopeBinding, actorId: authority.actorId, operation,
     objectId: operation === 'publish' ? normalized.artifactId as string : '',
     callerKey: idempotencyKey as CallerIdempotencyKey });
   if (!/^[0-9a-f]{64}$/.test(internalKey) || !derivation.algorithm) throw new Error('invalid key derivation binding');
-  return freezeDeep({ ...effective, identity: { internalKey,
+  return freezeDeep({ ...effective, provenance, identity: { internalKey,
     commandHash: commandDigest(effective), codecVersion: COMMAND_CODEC_VERSION } });
 }

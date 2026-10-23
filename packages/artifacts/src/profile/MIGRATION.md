@@ -51,7 +51,11 @@ do not substitute guessed Q0 subjects for production qualification.
 
 `createArtifactCommand` snapshots bound scope, normalized payload and forced
 `inline-original` provenance. Bytes are owned JSON arrays; object keys sort
-recursively and file-array order remains significant. Caller key, transport,
+recursively in UTF-16 order, including integer-like keys, and file-array order
+remains significant. The L0 golden hash body is exactly `operation`,
+`scopeBinding` and `payload`, with forced provenance inside `payload`.
+The required top-level provenance field mirrors that value outside the hash
+body. Caller key, transport,
 invocation ID and composition digest are excluded from the command hash.
 The separate `artifacts-command/v1` identity leaves manifest digests intact.
 Historical durable rows need L6's codec-aware quarantine/migration; this lot
