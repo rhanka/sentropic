@@ -12,6 +12,12 @@
   - `packages/artifacts/src/server/failures.ts`
   - `packages/artifacts/src/server/outcome-projection.ts`
   - `packages/artifacts/tests/provider-failures.test.ts`
+  - `packages/artifacts/l0-freeze/**`
+  - `packages/artifacts/tests/commit-contract.test.ts`
+  - `packages/artifacts/tests/effective-profile.test.ts`
+  - `packages/artifacts/docs/common-contract-map.md`
+  - `packages/artifacts/docs/migration-inventory-l0.md`
+  - `packages/artifacts/README.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -24,6 +30,7 @@
 - **Conditional Paths (explicit owner clarification required)**:
   - `packages/artifacts/package.json`
 ## Feedback Loop
+- [x] BR861-L2-EX1: owner explicitly requested merging the L0 fix wave without rebase. The additional allowed paths are inherited merge-only L0 changes at d4bd43b3c; no direct L2 edits. Impact: updated declaration/test/docs baseline. Rollback: revert the merge with first parent as mainline. Both parents preserve the same .track tree.
 - [ ] L2-CONTRACT: L0 predates r2 and lives outside src/rootDir; define r2 types inside allowed failures.ts, with L6 to export the frozen public subpath. No L0 edits.
 - [ ] L2-VERSION: r2 §6 reserves shared manifests to the integrator after the wave; mandatory PR bump remains that owner's gate. package.json unchanged; workflow dispatch on this stacked PR does not exercise the PR-only bump job.
 - [ ] L2-INTEGRATION: real-provider execute/adapter wiring is exclusively L6; stage-2 acceptance qualifies classifier and both projectors.
@@ -36,6 +43,7 @@
 ## UAT Management (in orchestration context)
 - [x] No UI; real-provider Radar acceptance remains L6/L8, pinned Radar 3fc55b4f4.
 ## Plan / Todo (lot-based)
+- [x] Merge L0 repair d4bd43b3c, retaining L2 BRANCH.md and all upstream atomic commit identities; the merge includes inherited changes, with authored correction commits below 150 lines.
 - [x] Astra P2-1: 401/404/410 refusal regressions fail before the fix (3 failed / 76 passed); only guard 503 can advertise retry. Assert classifier and encoded MCP retry, retaining same-key/fresh-guard outage semantics.
 - [x] Lot 0: rules, r2 §6/E1–E5, Q0 and L0 inspected; harness branch check passed.
 - [x] Lot 1: all 76 vectors fail individually on an isolated git archive of L0 a5bfbacef; real-app baseline capture confirms S3 500/internal_error and typed lost connection 409/conflict (ports injected below app, no probe).

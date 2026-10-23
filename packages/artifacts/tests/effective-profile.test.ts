@@ -1,10 +1,19 @@
 /**
- * L0 — effective-profile contract vectors (immo #861, ask 1 shape only).
+ * L0 — effective-profile contract vectors (immo #861, ask 1 shape).
  *
  * Frozen selection and bounds vectors for the 0.2.0 profile declaration.
  * Pure unit vectors: no DB, no S3, no app.handle, no mocked provider.
  */
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import {
+  AMBIGUOUS_DERIVATION_CASE,
+  COMMAND_IDENTITY_RELATIONS,
+  DERIVATION_VECTORS,
+  buildDerivationPreimage,
+  detectAmbiguousSplit,
+  resolvePlatformEnvelope,
+} from '../l0-freeze/command-identity-contract.js';
 import {
   COMPOSITION_DIGEST_INPUTS,
   KNOWN_ARTIFACT_TOOL_NAMES,
@@ -13,6 +22,7 @@ import {
   PROFILE_RESERVED_FIRST_SEGMENTS,
   PROFILE_TEXT_MIME_TYPES,
   RADAR_INVOCATION_SCOPE,
+  RADAR_OPERATION_ROUTES,
   RADAR_SELECTED_TOOL_NAMES,
   validateBindingName,
   validateCallerIdempotencyKey,
@@ -67,6 +77,28 @@ describe('effective-profile contract', () => {
     expect(validateCallerIdempotencyKey('  key-1  ')).toBe(true);
   });
 
+  it('should reject lone surrogates before UTF-8 conversion', () => {
+    const high = String.fromCharCode(0xd800);
+    const low = String.fromCharCode(0xdc00);
+    expect(validateCallerIdempotencyKey(high)).toBe(false);
+    expect(validateCallerIdempotencyKey(low)).toBe(false);
+    expect(validateCallerIdempotencyKey(`a${high}b`)).toBe(false);
+    expect(validateCallerIdempotencyKey(`x${high}`)).toBe(false);
+    expect(validateCallerIdempotencyKey(`${low}y`)).toBe(false);
+  });
+
+  it('should accept valid pairs, U+FFFD and astral boundaries unchanged', () => {
+    const pair = String.fromCodePoint(0x10000);
+    const replacement = String.fromCharCode(0xfffd);
+    expect(validateCallerIdempotencyKey(pair)).toBe(true);
+    expect(validateCallerIdempotencyKey(replacement)).toBe(true);
+    expect(validateCallerIdempotencyKey(pair.repeat(128))).toBe(true);
+    expect(validateCallerIdempotencyKey(pair.repeat(129))).toBe(false);
+    expect(validateCallerIdempotencyKey(
+      `${String.fromCharCode(0xe9, 0xe0, 0xfc)}-${String.fromCodePoint(0x1f3e0)}`,
+    )).toBe(true);
+  });
+
   it('should bound publish files to 1-32 entries', () => {
     expect(validatePublishFileCount(1)).toBe(true);
     expect(validatePublishFileCount(32)).toBe(true);
@@ -103,6 +135,47 @@ describe('effective-profile contract', () => {
   it('should include selection and profile in composition evidence', () => {
     expect([...COMPOSITION_DIGEST_INPUTS]).toEqual([
       'selection', 'profile', 'providerContractRevisions',
+    ]);
+  });
+
+  it('should derive the documented internal key preimages and digests', () => {
+    for (const vector of DERIVATION_VECTORS) {
+      expect(buildDerivationPreimage(vector.binding)).toBe(vector.preimage);
+      expect(createHash('sha256').update(vector.preimage, 'utf8').digest('hex'))
+        .toBe(vector.sha256);
+    }
+  });
+
+  it('should refuse ambiguous separator-bearing scope and actor splits', () => {
+    const { first, second, expected } = AMBIGUOUS_DERIVATION_CASE;
+    expect(buildDerivationPreimage(first)).toBe(buildDerivationPreimage(second));
+    expect(detectAmbiguousSplit(first, second)).toBe(true);
+    expect(expected).toBe('refuse');
+    expect(detectAmbiguousSplit(
+      { ...first, scope: 's', actor: 'alice' },
+      { ...first, scope: 's', actor: 'issuer|alice' },
+    )).toBe(false);
+  });
+
+  it('should bind the platform envelope to the tool argument', () => {
+    expect(resolvePlatformEnvelope('key-1', undefined)).toBe('accept');
+    expect(resolvePlatformEnvelope('key-1', 'key-1')).toBe('accept');
+    expect(resolvePlatformEnvelope('key-1', 'key-2')).toBe('conflict');
+    expect(resolvePlatformEnvelope(undefined, 'key-1')).toBe('envelope-only');
+  });
+
+  it('should declare the command-identity relations L1 must enforce', () => {
+    expect(COMMAND_IDENTITY_RELATIONS.map((entry) => entry.expectation)).toEqual([
+      'converge', 'conflict', 'computed-only',
+    ]);
+  });
+
+  it('should freeze the four C2 capability routes', () => {
+    expect([...RADAR_OPERATION_ROUTES]).toEqual([
+      { capability: 'artifacts_ensure', method: 'POST', path: '/ensure', command: 'ensure' },
+      { capability: 'artifacts_publish', method: 'POST', path: '/publish', command: 'publish' },
+      { capability: 'artifacts_list', method: 'POST', path: '/list', command: 'list' },
+      { capability: 'artifacts_get', method: 'GET', path: '/meta/{artifactId}', command: 'meta' },
     ]);
   });
 });
