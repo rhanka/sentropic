@@ -31,6 +31,7 @@
 - [x] Astra R3: time and gate every counted ordinary operation, require 600 measured ordinary operations plus 240 measured stress toggles, and report complete-set maxima below 1800 ms.
 - [ ] R3 complete runtime witness: three attempts stopped on different operations after 17/223/28 measured operations. Boundary/count regression probes pass; no complete passing 660 + 240 campaign is claimed. Preserve the 1800 ms gate.
 - [x] Astra additional findings: disclose final-owner 14 px versus measured 20 px leaf-body conflict and inherited unequal adjacent expanded frame heights; preserve validated values.
+- [x] Rebase onto main to resolve the root plan conflict blocking PR CI; preserve correction sources exactly, inherit the DOMPurify override and rebuild in isolated dependencies. Portable SHA-256 reproduces `0b8db12478f4d7badc9d2f7819ec335e7d713287a755548627e118a2b93f2b47`.
 - [x] Replace inherited #711 plan; generated routes/portable and inherited-plan replacement exceed routine line budget. Keep handwritten implementation commits near 150 lines.
 - [x] No Track writes: scope excludes `.track/**`; mechanical harness checks remain mandatory.
 
