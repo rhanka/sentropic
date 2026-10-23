@@ -57,6 +57,20 @@ describe('effective command identity', () => {
     expect(manifestDigest(manifest)).toBe(manifestDigest({ ...manifest, files: [...files].reverse() }));
   });
 
+  it('should include each prototype-named profile entry in command identity without prototype mutation', () => {
+    for (const key of ['__proto__', 'constructor', 'prototype']) {
+      const profile = JSON.parse(`{"${key}":"value"}`);
+      const value = command(publish({ profile }));
+      expect(value.payload.profile).toEqual(profile);
+      expect(Object.hasOwn(value.payload.profile!, key)).toBe(true);
+      expect(Object.getPrototypeOf(value.payload.profile)).toBe(Object.prototype);
+      expect(value.identity.internalKey).toBe(command().identity.internalKey);
+      expect(value.identity.commandHash).not.toBe(command().identity.commandHash);
+      expect(command(publish({ profile: { [key]: 'changed' } })).identity.commandHash)
+        .not.toBe(value.identity.commandHash);
+    }
+  });
+
   it('should preserve whitespace, Unicode normalization distinctions and canonical actor domains', () => {
     expect(command(publish({ idempotencyKey: ' key ' })).identity.internalKey)
       .not.toBe(command(publish({ idempotencyKey: 'key' })).identity.internalKey);

@@ -113,7 +113,18 @@ describe('effective Radar arguments', () => {
     }
     expect(() => validate('artifacts_ensure', ensure('key', { parameters: { title: 'x' } }))).toThrow();
     expect(() => validate('artifacts_publish', publish({ profile: { nested: {} } }))).toThrow();
-    expect(() => validate('artifacts_publish', publish({ profile: JSON.parse('{"__proto__":"x"}') }))).toThrow();
+  });
+
+  it('should retain prototype-named primitive profile entries as inert own data', () => {
+    const profile = JSON.parse('{"__proto__":"x","constructor":3,"prototype":true,"nullable":null}');
+    const normalized = validate('artifacts_publish', publish({ profile })).profile;
+    expect(normalized).toEqual(profile);
+    expect(Object.keys(normalized!)).toEqual(Object.keys(profile));
+    expect(Object.getPrototypeOf(normalized)).toBe(Object.prototype);
+    expect(Object.hasOwn(normalized!, '__proto__')).toBe(true);
+    expect(Object.isFrozen(normalized)).toBe(true);
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype);
+    expect(Object.hasOwn(Object.prototype, 'nullable')).toBe(false);
   });
 
   it('should enforce binding, UUID and pagination bounds without normalization', () => {
