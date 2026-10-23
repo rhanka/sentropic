@@ -25,6 +25,14 @@ export interface ArtifactKeyDerivationBinding {
   derive(input: ArtifactCommandAuthority & { readonly operation: 'ensure' | 'publish';
     readonly objectId: string; readonly callerKey: CallerIdempotencyKey }): InternalIdempotencyKey;
 }
+/** Trusted server input for the compiled command normalizer, never tool arguments. */
+export interface ArtifactCommandInput {
+  readonly capability: string;
+  readonly args: unknown;
+  readonly authority: ArtifactCommandAuthority;
+  readonly derivation: ArtifactKeyDerivationBinding;
+  readonly envelopeKey?: string;
+}
 
 /** Preserve Radar's durable bytes only within an explicitly qualified domain. */
 export function createRadarKeyDerivation(config: { readonly storageScopeId: string;
