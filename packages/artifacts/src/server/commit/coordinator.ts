@@ -288,11 +288,11 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
   });
 
   /**
-   * A fence is valid only when minted by this transaction: its fenceId must
-   * equal the transaction token the coordinator issued to the participant
-   * factory, its invocation must match the request, and its revision must
-   * match the freshly re-read policy revision. Fabricated, foreign or stale
-   * fences deny before any success work.
+   * A fence is valid only when minted by this transaction: its transactionId
+   * must equal the token the coordinator issued to the participant factory,
+   * its fenceId must be non-empty, its invocation must match the request,
+   * and its revision must match the freshly re-read policy revision.
+   * Fabricated, foreign or stale fences deny before any success work.
    */
   const verifyFence = (
     request: FinalizeRequest,
@@ -300,7 +300,10 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     fence: ArtifactAuthorizationFence,
     currentRevision: string,
   ): { ok: true } | { ok: false; detail: string } => {
-    if (fence.fenceId !== transaction.transactionId) return { ok: false, detail: 'foreign_fence' };
+    if (fence.transactionId !== transaction.transactionId) {
+      return { ok: false, detail: 'foreign_fence' };
+    }
+    if (fence.fenceId.length === 0) return { ok: false, detail: 'empty_fence_id' };
     if (fence.invocationId !== request.invocationId) {
       return { ok: false, detail: 'mismatched_invocation' };
     }

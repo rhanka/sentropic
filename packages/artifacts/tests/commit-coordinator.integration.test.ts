@@ -112,7 +112,8 @@ const makeParticipantFactory = (
       return { reserved: rowCount > 0 };
     },
     mintFence: (revision: string, invocationId: string) => ({
-      fenceId: transactionToken,
+      fenceId: `fence-${transactionToken}`,
+      transactionId: transactionToken,
       invocationId,
       policyRevision: revision,
     }),
@@ -815,7 +816,8 @@ describe('coordinator sol-r1 regressions', () => {
     ): Promise<ArtifactAuthorizationDecision> => ({
       allowed: true,
       fence: {
-        fenceId: 'unrelated-transaction',
+        fenceId: 'unrelated-fence',
+        transactionId: 'unrelated-transaction',
         invocationId: context.invocationId,
         policyRevision: 'rev-1',
       },
@@ -859,7 +861,8 @@ describe('coordinator sol-r1 regressions', () => {
     ): Promise<ArtifactAuthorizationDecision> => ({
       allowed: true,
       fence: {
-        fenceId: 'another-transaction',
+        fenceId: 'another-fence',
+        transactionId: 'another-transaction',
         invocationId: context.invocationId,
         policyRevision: 'rev-1',
       },
@@ -1289,7 +1292,8 @@ describe('coordinator sol-r1 regressions', () => {
     ): Promise<ArtifactAuthorizationDecision> => ({
       allowed: true,
       fence: {
-        fenceId: 'unrelated-transaction',
+        fenceId: 'unrelated-fence',
+        transactionId: 'unrelated-transaction',
         invocationId: context.invocationId,
         policyRevision: 'rev-1',
       },
