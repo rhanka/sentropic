@@ -14,6 +14,14 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `docs/governance/kit/package-lock.json`
+  - `docs/governance/kit/package.json`
+  - `package-lock.json`
+  - `package.json`
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`
+  - `ui/package-lock.json`
+  - `ui/package.json`
   - `packages/cluster-mesh/tests/storage/common-rule/kit.ts`
   - `packages/cluster-mesh/tests/storage/common-rule/objects-reference.ts`
   - `packages/cluster-mesh/tests/storage/common-rule/objects-assertions.ts`
@@ -30,6 +38,7 @@
 - [x] Exceptions require ID, reason, impact and rollback in Feedback Loop before edits.
 
 ## Feedback Loop
+- [x] BRL01B1-EX1: integrate owner-requested origin/main at 25af28bbc via merge; eight upstream dependency/derived-pin files are allowed solely for #725 integration. Impact: patched DOMPurify and aligned lock commitments; rollback: revert this integration commit. No backend changes.
 - [x] Astra P2-1: CT-01 checks bytes, commitment and receipt after each invalid retry on a separately populated identity, before/after reopen; M01-invalid-retry survived the old kit and is now killed.
 - [x] Astra P2-2: CT-02 verifies populated payload/page inventories, then requires commitment errors for a wrong nonempty digest and field/page substitutions; M02-ignore-digest survived the old kit and is now killed.
 
