@@ -48,6 +48,8 @@
 - [x] Published `@sentropic/llm-mesh@0.19.2` surface probe: all five catalog entries (`llm-mesh`, facade, enrollment, node, cloud-code transport) imported with zero missing required members in a clean container. Command: `make -f /tmp/861-L7.mk qualify-llm0192 ENV=test-861-l7`; probe SHA-256 `6270321d9a894997bcde652493fd59e11b4c74c0b0b835b2eb60115335a18a31`. This proves entry compatibility only, not the full Radar tuple.
 - [x] `make pack-cluster-mesh ENV=test-861-l7`: PASS standalone manifest guard; current mesh 0.21.2 archive SHA-256 `9634e4d34870b49efc77b170f06b3a202331412597e4a39b51dc3996e7815580`.
 - [x] First full mesh run: 1083 passed, 129 environment-gated skips, one SQLite second-holder timeout (5000 ms). `make test-cluster-mesh SCOPE=tests/storage/sqlite-corpus.spec.ts ENV=test-861-l7`: 4/4 pass unchanged. No timeout or SQLite implementation changes; full rerun required.
+- [ ] Full-suite gate remains RED after three runs: 1083/1082/1083 passes, 129 gated skips each, and 1/2/1 SQLite timeouts. Failures moved between sqlite-corpus, sqlite-capabilities/sqlite-lanes, and instance-ownership; observed host load was 22–38. No root cause or flaky acceptance is claimed. Owner: storage maintainer/integration owner; bounded scope: reproduce SQLite child-process timing in the shared runner, outside L7 paths. Acceptance: original `make test-cluster-mesh ENV=test-861-l7` passes unchanged, without timeout increases or skipped tests.
+- [x] Draft PR #735 opened against L3; source diff inspected; no authored artifacts edits or manifest/lock writes. Branch/worktree gates passed, every authored commit is below 150 changed lines.
 
 ## AI Flaky tests
 - [x] No provider-dependent acceptance or timeout changes planned.
@@ -75,7 +77,8 @@
 - [ ] **Lot 3 — Final validation and delivery**
   - [x] `make typecheck-cluster-mesh ENV=test-861-l7`.
   - [x] `make lint-cluster-mesh ENV=test-861-l7`.
-  - [ ] `make test-cluster-mesh ENV=test-861-l7` and package packing gates.
-  - [ ] Run mechanical scope checks before each atomic commit (under 150 authored lines).
-  - [ ] Review the exact diff, resolve findings, push and open a draft PR with this body.
-  - [ ] Report PR number and head SHA.
+  - [ ] `make test-cluster-mesh ENV=test-861-l7`: full-suite SQLite failures remain unresolved; all 12 artifacts-surface tests pass in each full run.
+  - [x] `make pack-cluster-mesh ENV=test-861-l7`.
+  - [x] Run mechanical scope checks before each atomic commit (under 150 authored lines).
+  - [x] Inspect the exact diff, push and open draft PR #735 with this body; merge/release review remains pending with the integration prerequisites.
+  - [x] Report PR #735 and the final head SHA in the delivery response.
