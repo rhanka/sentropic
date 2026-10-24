@@ -97,6 +97,20 @@ function facadeWith(options: ModuleOptions = {}) {
 }
 
 describe('artifacts mesh leaf', () => {
+  it('should materialize the definition only through the selected qualified loader', async () => {
+    const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition');
+    try {
+      const modules = modulesWith({ failArtifacts: true });
+      const builtin = createArtifactsBuiltin({ modules, definition: { app: fakeApp } });
+      const facade = createMcpRegistry({ modules, builtins: [builtin] });
+      facade.catalog();
+      expect(factory).not.toHaveBeenCalled();
+      facade.select(['sentropic.artifacts']);
+      expect((await facade.compile({ bindings: {}, compatibility: {} })).ok).toBe(false);
+      expect(factory).not.toHaveBeenCalled();
+    } finally { factory.mockRestore(); }
+  });
+
   it('should keep the common contract out of the storage runtime barrel', () => {
     expect(storage).not.toHaveProperty('validateCommonCapability');
   });
@@ -147,7 +161,7 @@ describe('artifacts mesh leaf', () => {
   it('should expose no capabilities when the selected definition is empty', () => {
     const definition = artifacts.createArtifactsRegistryDefinition({ app: fakeApp });
     definition.manifest = { ...definition.manifest, tools: [] };
-    const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition').mockReturnValue(definition);
+    const factory = vi.spyOn(artifacts, 'createArtifactsManifest').mockReturnValue(definition.manifest);
     try {
       expect(createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } })
         .capabilities).toEqual([]);
@@ -157,8 +171,7 @@ describe('artifacts mesh leaf', () => {
   it('should refuse a definition that changes after catalog construction', async () => {
     const definition = artifacts.createArtifactsRegistryDefinition({ app: fakeApp });
     const changed = { ...definition, manifest: { ...definition.manifest, tools: [] } };
-    const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition')
-      .mockReturnValueOnce(definition).mockReturnValue(changed);
+    const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition').mockReturnValue(changed);
     try {
       const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } });
       await expect(builtin.load()).rejects.toThrow(/definition.*changed/);
