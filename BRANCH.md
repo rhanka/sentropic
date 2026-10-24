@@ -131,3 +131,13 @@ Deliver the L3 atomic finalization coordinator with one additive migration and r
   - [x] P1-6/P2-1/P2-2 (L3-contained): testPoints rejects preparation-only points at construction; sweep batch retained on sweeper failure and async sweeps awaited/isolated; unknown request codecs rejected before storage; seam-division docs (6 coordinator points vs 3 L4 preparation points). Shared operation/transaction contract convergence stays joint L0/L3 work; public exports stay L6-owned.
   - [x] Regression proof: 19 new tests plus rewritten quota race, red on baseline (16 fail on assertions, 2 leak-timeout on settlement, rewritten quota asserts quota_exhausted) and green after; 2 characterization tests (non-key lock timeout stays 503, server-commit ack-loss recovery) pass on both and lock the behavior.
   - [x] Lot gate: typecheck, lint, unit 232/232, integration 32/32 plus 9/9 plus 11/11 plus 4/4, scope-check PASS, make down.
+- [x] **Lot 6 — Sol r2 fixes (review pr727_sol_r2, CHANGES)**
+  - [x] P1-1: flush deferred constraints (`SET CONSTRAINTS ALL IMMEDIATE`) before the final guard decision (finalize recheck + replay guard).
+  - [x] P1-2: transaction-local mint record; fence must be a recorded mint output (`unminted_fence`); finalize + replay covered.
+  - [x] P1-4: `artifact_connection_lost` in the shared ack-loss contract; any COMMIT-attempt error reports `unknown`.
+  - [x] P1-6: failures carry frozen `kind: 'operational'`; coordinator-point subset fixture; example observer passthrough + pairing docs.
+  - [x] P2-5: key-conflict qualification restricted to the key-row acquisition; receipt-table 55P03 maps to 503 retriable.
+  - [x] P2-6: settle before propagating quarantine regardless of source (single abandonment on every quarantine path).
+  - [x] P2-7: serialized interval sweeps removing only swept entries.
+  - [x] Regression proof: 13 new tests, red before (12 fail + 1 fixture holds) and green after; receipt-lock regression needed a self-lock fix in the test (countRows after locker release); arrival regression needed a two-gate design.
+  - [x] Lot gate: typecheck, lint, unit 239/239, integration 42/42 plus 7/7, scope-check PASS, make down.
