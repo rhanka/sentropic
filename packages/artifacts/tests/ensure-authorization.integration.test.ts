@@ -13,6 +13,7 @@ import type {
 } from '../src/server/commit/types.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
 import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
+import { CommitQuarantineError } from '../src/server/commit/types.js';
 import { createGuardedEnsureService, type GuardedEnsureHost } from '../src/server/service.js';
 
 const DATABASE_URL = process.env['DATABASE_URL'];
@@ -197,5 +198,41 @@ describe('ensure authorization', () => {
     expect(second.failure).toMatchObject({ category: 'conflict', httpStatus: 409, retriable: false, commitState: 'not_committed' });
     expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', [keyFor('bob', 'site-conflict-a', 'k-conflict')])).toBe(1);
     expect(await countRows('ensure_test.bindings', ' WHERE owner = $1 AND name = $2', ['bob', 'site-conflict-b'])).toBe(0);
+  });
+
+  it('grants the last quota unit to exactly one of two competing keys', async () => {
+    const service = makeService('q-last');
+    const first = await service.ensure(invoke('alice'), { bindingName: 'site-last-a', idempotencyKey: 'k-last-a' });
+    expect(first.ok).toBe(true);
+    const second = await service.ensure(invoke('alice'), { bindingName: 'site-last-b', idempotencyKey: 'k-last-b' });
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.failure).toMatchObject({ category: 'conflict', httpStatus: 409, commitState: 'not_committed' });
+    expect(await quotaUsed('q-last')).toBe(1);
+    expect(await countRows('ensure_test.bindings', ' WHERE owner = $1 AND name = $2', ['alice', 'site-last-b'])).toBe(0);
+  });
+
+  it('isolates identical caller keys between actors', async () => {
+    const service = makeService('q-main');
+    const first = await service.ensure(invoke('alice'), { bindingName: 'site-shared', idempotencyKey: 'k-shared' });
+    const second = await service.ensure(invoke('bob'), { bindingName: 'site-shared', idempotencyKey: 'k-shared' });
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(second.result.artifactId).not.toBe(first.result.artifactId);
+    expect(second.result.replayed).toBe(false);
+    expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', [keyFor('alice', 'site-shared', 'k-shared')])).toBe(1);
+    expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', [keyFor('bob', 'site-shared', 'k-shared')])).toBe(1);
+  });
+
+  it('quarantines unknown legacy codecs instead of replaying them', async () => {
+    const service = makeService('q-main');
+    const key = keyFor('alice', 'site-legacy', 'k-legacy');
+    await pool.query(
+      `INSERT INTO artifacts.operation_receipts (storage_scope_id, internal_key, command_codec, command_hash, receipt)
+       VALUES ('scope-l5', $1, 'artifacts-command/v0', 'legacy-hash', '{"artifactId":"legacy","created":true}'::jsonb)`,
+      [key]);
+    await expect(service.ensure(invoke('alice'), { bindingName: 'site-legacy', idempotencyKey: 'k-legacy' }))
+      .rejects.toBeInstanceOf(CommitQuarantineError);
+    expect(await countRows('ensure_test.bindings', ' WHERE owner = $1 AND name = $2', ['alice', 'site-legacy'])).toBe(0);
   });
 });

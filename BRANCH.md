@@ -95,17 +95,17 @@ Deliver the L5 coordinator-bound ensure path with guarded replay on top of the f
 - [x] **Lot 1 — Guarded ensure composition plus authorized replay**
   - [x] packages/artifacts/src/server/authorized-replay.ts: ensure-domain replay adapter over coordinator.replayGuarded with request-bound guard, stored-receipt to ensure-result projection, quarantine propagation.
   - [x] packages/artifacts/src/server/service.ts: guarded ensure composition alongside legacy exports (compiled profile plus key derivation plus invocation context, effective command, coordinator finalize with binding lock plus provisional effects, typed entry failures, no caller hash or scope).
-  - [ ] Lot gate:
-    - [ ] make typecheck-artifacts ENV=test-861-l5 last
-    - [ ] make lint-artifacts ENV=test-861-l5 last
+  - [x] Lot gate:
+    - [x] make typecheck-artifacts ENV=test-861-l5 last
+    - [x] make lint-artifacts ENV=test-861-l5 last
 - [ ] **Lot 2 — Ensure and replay regression tests**
   - [x] packages/artifacts/tests/service.test.ts: guarded ensure unit tests on a memory executor (success plus replay, denial with zero success row, fresh retry after denial, same-key different-command conflict, legacy tests untouched).
-  - [ ] packages/artifacts/tests/idempotency.test.ts: durable-key idempotency (refused attempt never poisons the key, success replays only while currently authorized; legacy store tests untouched).
-  - [ ] packages/artifacts/tests/ensure-authorization.integration.test.ts: real-PG ensure (guard-after-waits denial with zero committed residue, fresh denial retry, cross-invocation replay without recharge, same-key conflict, last quota unit).
+  - [x] packages/artifacts/tests/idempotency.test.ts: durable-key idempotency (refused attempt never poisons the key, success replays only while currently authorized; legacy store tests untouched).
+  - [x] packages/artifacts/tests/ensure-authorization.integration.test.ts: real-PG ensure (guard-after-waits denial with zero committed residue, fresh denial retry, cross-invocation replay without recharge, same-key conflict, last quota unit, actor isolation, legacy quarantine).
   - [ ] Lot gate:
-    - [ ] make test-artifacts SCOPE=tests/service.test.ts ENV=test-861-l5 last
-    - [ ] make test-artifacts SCOPE=tests/idempotency.test.ts ENV=test-861-l5 last
-    - [ ] make test-artifacts-integration SCOPE=tests/ensure-authorization.integration.test.ts ENV=test-861-l5 last
+    - [x] make test-artifacts SCOPE=tests/service.test.ts ENV=test-861-l5 last
+    - [x] make test-artifacts SCOPE=tests/idempotency.test.ts ENV=test-861-l5 last
+    - [x] make test-artifacts-integration SCOPE=tests/ensure-authorization.integration.test.ts ENV=test-861-l5 last
     - [ ] make test-artifacts ENV=test-861-l5 last (unit, no collateral)
     - [ ] make scope-check before each commit
 - [ ] **Lot 3 — PR and CI**
