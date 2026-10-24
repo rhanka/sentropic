@@ -121,12 +121,27 @@ describe('artifacts mesh leaf', () => {
     const selected = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'];
     definition.manifest = { ...definition.manifest,
       tools: definition.manifest.tools.filter((tool) => selected.includes(tool.name)) };
-    const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition').mockReturnValue(definition);
-    try {
-      const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } });
-      expect(builtin.capabilities).toEqual(selected);
-      expect((await builtin.load()).manifest).toEqual(definition.manifest);
-    } finally { factory.mockRestore(); }
+    if ('kind' in definition) throw new Error('expected loaded fixture');
+    definition.handlers = Object.fromEntries(Object.entries(definition.handlers)
+      .filter(([, handler]) => selected.includes(handler.capabilityRef)));
+    definition.toolValues = Object.fromEntries(Object.entries(definition.toolValues)
+      .filter(([name]) => selected.includes(name)));
+    definition.adapter = { ...definition.adapter, manifest: definition.manifest,
+      listCapabilities: async () => definition.manifest.tools };
+    expect(Object.keys(definition.toolValues).sort()).toEqual([...selected].sort());
+    expect(Object.values(definition.handlers).map((handler) => handler.capabilityRef).sort())
+      .toEqual([...selected].sort());
+    const facade = createMcpRegistry({ modules: createClusterMeshModules() });
+    facade.register(definition);
+    expect(facade.catalog()[0]?.capabilities).toEqual(selected);
+    facade.select(['sentropic.artifacts']);
+    const compiled = await facade.compile({ bindings: {}, compatibility: {
+      'sentropic.artifacts': { manifestDigest: computeManifestDigest(definition.manifest) },
+    } });
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+    expect([...compiled.registry.tools.keys()].sort()).toEqual([...selected].sort());
+    expect((await definition.adapter.listCapabilities({ principalRef: 'alice', tenantRef: 'tenant',
+      connectorInstanceId: 'artifacts' })).map((tool) => tool.name)).toEqual(selected);
   });
 
   it('should expose no capabilities when the selected definition is empty', () => {
