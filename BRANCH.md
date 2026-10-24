@@ -92,9 +92,9 @@ Deliver the L5 coordinator-bound ensure path with guarded replay on top of the f
   - [x] ENV mapping: unit/typecheck/lint/integration on ENV=test-861-l5 last argument; no services kept running.
   - [x] Confirm scope and guardrails; frozen shared ports only; no manifest edits.
   - [x] Validate scope boundaries with make scope-check before each commit.
-- [ ] **Lot 1 — Guarded ensure composition plus authorized replay**
-  - [ ] packages/artifacts/src/server/authorized-replay.ts: ensure-domain replay adapter over coordinator.replayGuarded with request-bound guard, stored-receipt to ensure-result projection, quarantine propagation.
-  - [ ] packages/artifacts/src/server/service.ts: guarded ensure composition alongside legacy exports (compiled profile plus key derivation plus invocation context, effective command, coordinator finalize with binding lock plus provisional effects, typed entry failures, no caller hash or scope).
+- [x] **Lot 1 — Guarded ensure composition plus authorized replay**
+  - [x] packages/artifacts/src/server/authorized-replay.ts: ensure-domain replay adapter over coordinator.replayGuarded with request-bound guard, stored-receipt to ensure-result projection, quarantine propagation.
+  - [x] packages/artifacts/src/server/service.ts: guarded ensure composition alongside legacy exports (compiled profile plus key derivation plus invocation context, effective command, coordinator finalize with binding lock plus provisional effects, typed entry failures, no caller hash or scope).
   - [ ] Lot gate:
     - [ ] make typecheck-artifacts ENV=test-861-l5 last
     - [ ] make lint-artifacts ENV=test-861-l5 last
