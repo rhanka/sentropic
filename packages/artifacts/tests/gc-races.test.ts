@@ -94,6 +94,23 @@ describe('garbage collection', () => {
 });
 
 describe('deletion claims', () => {
+  it('should leave purge retryable when a later digest claim fails', async () => {
+    const store = createMemoryLifecycleStore();
+    const claims = createMemoryDeletionClaimStore();
+    const lifecycle = createLifecycleService(store, undefined, undefined, claims);
+    await lifecycle.register('target', 'owner');
+    await lifecycle.trackRelease('target', 'release');
+    await lifecycle.deleteArtifact('target', 'owner');
+    await claims.claim('busy', 'other-purge');
+    await expect(lifecycle.purge('target', 'owner', ['free', 'busy'])).rejects.toThrow(/claimed/);
+    expect(await lifecycle.stateOf('target')).toBe('deleted');
+    expect(await store.getReleaseState('release')).toBe('ready');
+    expect(await claims.isClaimed('free')).toBe(false);
+    expect(await claims.isClaimed('busy')).toBe(true);
+    await claims.releaseClaim('busy');
+    await expect(lifecycle.purge('target', 'owner', ['free', 'busy', 'free'])).resolves.toMatchObject({ artifactId: 'target' });
+  });
+
   it('claims exclusively and releases', async () => {
     const claims = createMemoryDeletionClaimStore();
     await claims.claim('sha256:aa', 'purge:a-1');

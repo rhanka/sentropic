@@ -56,6 +56,7 @@ Wire publication finalization through the L3 coordinator ports: guard after wait
 
 ## Plan / Todo (lot-based)
 - [x] R1 P1-1/P1-2: retain unknown-COMMIT references; pin active preparations (publication regressions red then green).
+- [x] R1 P2-7: acquire all purge claims before terminal states; release acquired claims on contention (regression red then green).
 - [x] **Lot 0 — Worktree, base merges, scope**
   - [x] Worktree `tmp/worktrees/861-L4` from `origin/feat/artifacts-861-L3`, branch `feat/artifacts-861-L4`
   - [x] Merge `origin/feat/artifacts-861-L1` and `origin/feat/artifacts-861-L2` (no rebase)
