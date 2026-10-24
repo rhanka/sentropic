@@ -20,7 +20,8 @@ import { parseSourceRef, type SourceRef, type SourceStore } from './sources.js';
 import { publicationLimits, validatePublicationFiles, type PublicationLimits } from './publication-limits.js';
 import type { ArtifactAcl } from './access.js';
 import type { ArtifactState } from './lifecycle.js';
-import type { RefcountStore } from './gc.js';
+import { createPostgresDeletionClaimStore, type RefcountStore } from './gc.js';
+import type { CommandIdentity } from './command-identity.js';
 import type {
   AuthorizeCommit,
   CommitLockFn,
@@ -28,7 +29,6 @@ import type {
   FinalizeRequest,
   FinalizeResult,
   FinalizeTxClient,
-  InternalIdempotencyKey,
 } from './commit/types.js';
 export { DEFAULT_PUBLICATION_LIMITS, type PublicationLimits } from './publication-limits.js';
 
@@ -329,7 +329,8 @@ export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): P
       );
       const row = rows[0];
       return { state: row?.lifecycle_state ?? 'purged' as ArtifactState,
-        acl: row === undefined ? undefined : { ownerId: row.owner_id, grants: [], isPublic: false } };
+        acl: row === undefined ? undefined : { ownerId: row.owner_id, grants: [], isPublic: false,
+          withdrawn: row.lifecycle_state === 'withdrawn' } };
     },
     async putSource(artifactId: string, source: SourceRef): Promise<void> {
       await client.query(
@@ -363,11 +364,14 @@ export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): P
       );
     },
     async addReleaseRef(digest: string, holder: string): Promise<void> {
-      await client.query(
-        `INSERT INTO artifacts.blob_ref_holders (digest, holder)
-         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [digest, holder],
-      );
+      await createPostgresDeletionClaimStore(client).withDigestLock(digest, async (claims) => {
+        if (await claims.isClaimed(digest)) throw new Error(`blob scheduled for deletion: ${digest}`);
+        await client.query(
+          `INSERT INTO artifacts.blob_ref_holders (digest, holder)
+           VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [digest, holder],
+        );
+      });
     },
     async completeIntent(intentId: string): Promise<void> {
       await client.query(
@@ -379,6 +383,8 @@ export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): P
 }
 
 export interface GuardedPublishInput extends PublishInput {
+  /** Frozen trusted identity supplied by the host's L1 command normalizer. */
+  readonly identity: CommandIdentity;
   readonly actorId: string;
   readonly policyRevision: string;
   readonly callerKey?: string;
@@ -402,18 +408,6 @@ export interface GuardedPublicationDeps {
 
 export interface GuardedPublicationService {
   publishFinalized(input: GuardedPublishInput): Promise<FinalizeResult>;
-}
-
-/** Server-derived internal key: stable per caller key, never a body hash. */
-function derivePublishInternalKey(input: {
-  storageScopeId: string;
-  actorId: string;
-  artifactId: string;
-  callerKey: string;
-}): InternalIdempotencyKey {
-  return createHash('sha256')
-    .update(['publish', input.storageScopeId, input.actorId, input.artifactId, input.callerKey].join('|'), 'utf8')
-    .digest('hex') as InternalIdempotencyKey;
 }
 
 const DEFAULT_CLEANUP_WINDOW_MS = 15 * 60 * 1000;
@@ -463,13 +457,8 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
     async publishFinalized(input: GuardedPublishInput): Promise<FinalizeResult> {
       validatePublicationFiles(input.files, limits);
       const prepared = preparePublication(input);
-      const callerKey = input.callerKey ?? crypto.randomUUID();
-      const internalKey = derivePublishInternalKey({
-        storageScopeId: input.storageScopeId,
-        actorId: input.actorId,
-        artifactId: input.artifactId,
-        callerKey,
-      });
+      const { internalKey, commandHash, codecVersion } = input.identity;
+      const callerKey = input.callerKey ?? internalKey;
       const releaseId = crypto.randomUUID();
       const nowMs = Date.now();
       const intent = await deps.intents.record('commit-release', {
@@ -499,8 +488,8 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
       const request: FinalizeRequest = {
         scopeId: input.storageScopeId,
         internalKey,
-        commandHash: shaHex(Buffer.from(prepared.manifest, 'utf8')),
-        codecVersion: 'artifacts-command/v1',
+        commandHash,
+        codecVersion,
         invocationId: input.invocationId ?? crypto.randomUUID(),
         actorId: input.actorId,
         operation: 'publish',
