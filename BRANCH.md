@@ -55,6 +55,7 @@ Wire publication finalization through the L3 coordinator ports: guard after wait
   - `.github/workflows/**`
 
 ## Plan / Todo (lot-based)
+- [x] R2 P1-3/retry race: require collection claims; claim, re-check and erase under the digest lock; retry pin/re-upload regression red then green (38 focused tests, typecheck, lint and harness C2 pass).
 - [x] R1 P1-1/P1-2: retain unknown-COMMIT references; pin active preparations (publication regressions red then green).
 - [x] R1 P2-7: acquire all purge claims before terminal states; release acquired claims on contention (regression red then green).
 - [x] R1 P2-4: write source provenance through the transaction-scoped unit writer (PostgreSQL rollback regression red then green).

@@ -24,6 +24,7 @@ import {
 import {
   createGcService,
   createMemoryRefcountStore,
+  createMemoryDeletionClaimStore,
 } from '../src/server/gc.js';
 import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
 import { parseManifest } from '../src/codecs.js';
@@ -142,7 +143,7 @@ describe('crash recovery', () => {
     expect(report.failed.length).toBe(1);
     expect(report.done.length).toBe(0);
     // Recovery never promotes: no release, no pointer for the denied attempt.
-    const collection = await gc.collect(blobs, prefix);
+    const collection = await gc.collect(blobs, prefix, createMemoryDeletionClaimStore());
     expect(collection.deleted).toEqual([orphanKey]);
     expect(collection.retained).toEqual([sharedKey]);
     expect(await refs.count('sha256:' + 'cc'.repeat(32))).toBe(1);
