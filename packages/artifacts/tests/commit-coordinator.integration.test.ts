@@ -1378,3 +1378,143 @@ describe('coordinator sol-r1 regressions', () => {
     expect(coordinatorOf).toThrow('unknown coordinator test point');
   });
 });
+import { CommitQuarantineError } from '../src/server/commit/types.js';
+import { COORDINATOR_TEST_POINTS } from '../src/server/commit/types.js';
+  type StoredCommitReceipt,
+import type { ArtifactFailure as FrozenArtifactFailure } from '../l0-freeze/failure-contract.js';
+import type { CommitBarrierPoint as FrozenBarrierPoint } from '../l0-freeze/commit-contract.js';
+
+describe('coordinator sol-r2 regressions', () => {
+  interface StubLog {
+    statements: string[];
+    commits: number;
+    rollbacks: number;
+    releases: number;
+  }
+
+  const makeStubExecutor = (hooks?: {
+    commit?: () => Promise<void>;
+    existing?: StoredCommitReceipt | undefined;
+  }): { executor: CommitExecutor; log: StubLog } => {
+    const log: StubLog = { statements: [], commits: 0, rollbacks: 0, releases: 0 };
+    const connection: FinalizeConnection = {
+      query: async <T>(
+        text: string,
+        _params: readonly unknown[],
+      ): Promise<{ rows: T[]; rowCount: number }> => {
+        log.statements.push(text);
+        return { rows: [], rowCount: 0 };
+      },
+      beginReadCommitted: async () => {},
+      lockOperationKey: async () => {},
+      readReceipt: async () => hooks?.existing,
+      insertReceipt: async () => {},
+      commit: async () => {
+        log.commits += 1;
+        await hooks?.commit?.();
+      },
+      rollback: async () => {
+        log.rollbacks += 1;
+      },
+      release: (_error?: unknown) => {
+        log.releases += 1;
+      },
+    };
+    return {
+      log,
+      executor: {
+        ensureCoordinationRow: async () => {},
+        beginFinalization: async () => connection,
+      },
+    };
+  };
+
+  const makeStubPolicy = (): CommitPolicyParticipantFactory => ({
+    createParticipant: (
+      _client: FinalizeTxClient,
+      transactionToken: string,
+    ): CommitPolicyParticipant => ({
+      readRevision: async () => 'rev-1',
+      checkApproval: async () => ({ approved: true as const }),
+      reserveQuota: async () => ({ reserved: true }),
+      mintFence: (revision: string, invocationId: string) => ({
+        fenceId: `fence-${transactionToken}`,
+        transactionId: transactionToken,
+        invocationId,
+        policyRevision: revision,
+      }),
+    }),
+  });
+
+  const failUnlessFlushed = (
+    log: StubLog,
+    transaction: ArtifactCommitTransaction,
+    context: ArtifactCommitContext,
+  ): Promise<ArtifactAuthorizationDecision> => {
+    const flushed = log.statements.some((text) => text === 'SET CONSTRAINTS ALL IMMEDIATE');
+    if (!flushed) {
+      return Promise.resolve({
+        allowed: false as const,
+        reason: 'expired' as const,
+        publicCode: 'access_denied',
+        status: 403,
+        retriable: false,
+      });
+    }
+    return Promise.resolve({
+      allowed: true as const,
+      fence: transaction.participant.mintFence(context.policyRevision, context.invocationId),
+    });
+  };
+
+  it('flushes deferred work before the final authorization decision', async () => {
+    const { executor, log } = makeStubExecutor();
+    const coordinator = createArtifactCommitCoordinator({ executor, policy: makeStubPolicy() });
+    let calls = 0;
+    const guard = async (
+      context: ArtifactCommitContext,
+      transaction: ArtifactCommitTransaction,
+    ): Promise<ArtifactAuthorizationDecision> => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          allowed: true as const,
+          fence: transaction.participant.mintFence(context.policyRevision, context.invocationId),
+        };
+      }
+      return failUnlessFlushed(log, transaction, context);
+    };
+    const outcome = await coordinator.finalize(
+      baseRequest({ key: 'key-deferred-flush', commandHash: 'h-flush', guard }),
+    );
+    expect(calls).toBe(2);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.commitState).toBe('committed');
+    expect(log.commits).toBe(1);
+  });
+
+  it('flushes deferred work before the guarded replay decision', async () => {
+    const key = 'key-replay-flush';
+    const commandHash = 'h-replay-flush';
+    const existing: StoredCommitReceipt = {
+      scopeId: 'scope-l3',
+      internalKey: key as InternalIdempotencyKey,
+      commandHash,
+      codecVersion: 'artifacts-command/v1',
+      receipt: {},
+      createdAt: new Date(0).toISOString(),
+    };
+    const { executor, log } = makeStubExecutor({ existing });
+    const coordinator = createArtifactCommitCoordinator({ executor, policy: makeStubPolicy() });
+    const guard = async (
+      context: ArtifactCommitContext,
+      transaction: ArtifactCommitTransaction,
+    ): Promise<ArtifactAuthorizationDecision> => failUnlessFlushed(log, transaction, context);
+    const outcome = await coordinator.replayGuarded(baseRequest({ key, commandHash, guard }));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.replayed).toBe(true);
+    expect(outcome.commitState).toBe('committed');
+  });
+
