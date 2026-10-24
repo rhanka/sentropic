@@ -1,66 +1,95 @@
-# feat(docs): converge governance folds on the shared card base
+# Feature: Security hotfix body-parser 2.4.0 and dated zod exception
 
 ## Objective
-- [x] Follow OWNER-ORDER-711-hrpolnav-base.md: atomic 460 × 200 collapsed zones in every scene, DS IconButton and wrapping legend.
+Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public hotfix.
 
 ## Scope / Guardrails
-- [x] Worktree `tmp/worktrees/governance-converge`, branch `feat/governance-converge-hrpolnav`, base `origin/main`.
-- [x] Make-only, no Python, Docker-only Node, `ENV=test-726-reword` last; file Chromium needs no ports or services.
-- [x] Read hrpolnav and design-system only; preserve validated card values, typography, icons, expanded 4/16/16 geometry and performance budgets.
-- [x] Selective staging, make commit only, no attribution trailers; push draft PR, do not merge.
+- Scope limited to body-parser 2.4.0 lockfile bump, one dated zod exception, L5 derived-pin recompute.
+- Public repo only, no private storage. Ready-for-review PR, no merge by this session.
+- Make-only workflow, no direct Docker commands.
+- Branch development in isolated worktree `tmp/worktrees/sec-hotfix-0124`.
+- Automated test campaigns on `ENV=test-sec-hotfix`, never on root `dev`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- Zero Python in automation.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `docs/governance/**`
+  - `package-lock.json`
+  - `api/package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `.security/vulnerability-register.yaml`
+  - `.security/audit-allowlist.json`
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
-  - `plan/**`
-- **Conditional Paths**:
-  - None.
+  - `plan/NN-BRANCH_*.md`
+  - `api/Dockerfile`
+  - `ui/Dockerfile`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] Record reason, impact and rollback before touching any unlisted path.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [x] Report H1–H9 replacements and all source divergences in `docs/governance/validation/converge32.md`.
-- [x] R2 owner decision (2026-10-23): “Reformuler les textes”. Reword only the 34 overflowing collapsed occurrences; preserve package kickers, expanded text, both central scenes and all geometry/font values. Verify with `scripts/check-reword.mjs` against `10b7b22bc`.
-- [x] Astra R1: restore and assert measured 16 px outer summary insets (428 px body); remove the incorrect central wording-conflict claim.
-- [x] Astra R3: time and gate every counted ordinary operation, require 600 measured ordinary operations plus 240 measured stress toggles, and report complete-set maxima below 1800 ms.
-- [x] R3 complete runtime witness: 660 ordinary + 240 stress operations, 16 captures, zero fit/console failures, maximum 1489 ms (stress 995 ms), below the unchanged 1800 ms gate. Baseline with API tracing also passes (997 ms); archived failure is in pre-input actionability, historical root cause unproven. See validation report.
-- [x] Astra additional findings: disclose final-owner 14 px versus measured 20 px leaf-body conflict and inherited unequal adjacent expanded frame heights; preserve validated values.
-- [x] Rebase onto main to resolve the root plan conflict blocking PR CI; preserve correction sources exactly, inherit the DOMPurify override and rebuild in isolated dependencies. Portable SHA-256 reproduces `0b8db12478f4d7badc9d2f7819ec335e7d713287a755548627e118a2b93f2b47`.
-- [x] Replace inherited #711 plan; generated routes/portable and inherited-plan replacement exceed routine line budget. Keep handwritten implementation commits near 150 lines.
-- [x] No Track writes: scope excludes `.track/**`; mechanical harness checks remain mandatory.
+- `owner-all-public` / `acknowledge`: binding owner decisions. Public repos only, goal zero open findings at all times. For zod: dated exception plus migration.
+- `root-cause` / `attention`: main audit-gate red since 2026-10-24 ~07:58Z (run 40076120099). body-parser 2.3.0 in range [2.0.0, 2.4.0) fixed by 2.4.0 patch. zod 3.25.76 (< 4.6.6) has no same-major fix, only major v4, so dated exception plus migration.
 
 ## AI Flaky tests
-- [x] No provider tests apply to this offline documentation kit.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] Single author, isolated worktree.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: single minimal hotfix, one PR.
 
 ## UAT Management (in orchestration context)
-- [x] Offline Chromium in this worktree; no root dev environment.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- No UI changes in this branch, no UAT required.
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/sec-hotfix-0124`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
+  - Switch back to `tmp/worktrees/sec-hotfix-0124` after UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and scope**
-  - [x] Read owner order, rules, harness, template, hrpolnav provenance/hacks and readable DS specification; create worktree and pass mechanical branch check.
-- [x] **Lot 1 — Shared card anatomy**
-  - [x] Update `src/hrpolnav-card.js`, `src/architecture-svg.js`, `src/governance-layout.js`: atomic renderer, reserved toggle slot, centred body, shared 460 × 200 geometry.
-  - [x] Preserve all 144 leaf values, typography, icons and expanded headers; remove clamping/clipping and surface overflow. Reference card parity passes within 0.02 px.
-- [x] **Lot 2 — Every scene and wrapping legend**
-  - [x] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
-  - [x] Wrapping legend with semantic swatches, using the same zone/fold path.
-- [x] **Lot 3 — Qualification**
-  - [x] `scripts/check-{convergence,reword,browser}.mjs`: strict fit passes all ten scene/locale pairs, exactly 34 changed collapsed occurrences / 46 strings, unchanged expanded text and geometry. Prior card parity, pinned footer and routing budgets remain valid.
-  - [x] Geometry after R1: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 271.48 ms. Card parity passes for all 144 leaves. R2 changes no geometry, routing, leaf text or font values.
-  - [x] Prior browser count corrected by R3: only 560 of 656 ordinary entries were measured; the historical maximum did not establish the complete interaction budget. Rerun the complete measured witness after R1.
-  - [x] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
-- [x] **Lot 4 — Delivery**
-  - [x] Record H1–H9 file:line replacements, divergences and validation in `validation/converge32.md`.
-  - [x] Rebuild/deliver portable, refresh and verify all 137 SHA256SUMS entries; scope check before each selective make commit (each R2 commit under 150 changed lines).
-  - [x] Create draft PR #726 using this plan as body and post the four-step plan; keep it draft and unmerged.
-  - [x] R2 qualification: all ten scene/locale pairs pass, 32 slides / 52 routes pass with zero fit findings, idle/load checks pass all four scenarios. Portable SHA-256: `92a87f2985fbfcc23c6a6241f7e96db133df294624c5bdc07551e9840c8c08cd`.
-  - [x] Preserve the post-push gate: require green CI on the exact pushed head and report SHA, CI URL and string table; keep PR #726 draft and unmerged. Full string table: root `.tmp/governance-unification/726-reword.md`, also included in the PR body.
+- [ ] **Lot 0 — Baseline and constraints**
+  - [ ] Read `rules/MASTER.md` and `rules/workflow.md`.
+  - [ ] Create isolated worktree `tmp/worktrees/sec-hotfix-0124` from `origin/main` on branch `fix/security-bodyparser-zod-0124`.
+  - [ ] Reproduce audit-gate offenders via `make test-api-security-sca ENV=test-sec-hotfix` and capture GHSA ids.
+  - [ ] Define environment mapping (`ENV=test-sec-hotfix`) for this branch.
+  - [ ] Confirm command style: `make ... ENV=test-sec-hotfix` with `ENV` last.
+  - [ ] Confirm scope and guardrails.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
+- [ ] **Lot 1 — body-parser 2.4.0 lockfile bump**
+  - [ ] Fetch body-parser 2.4.0 registry metadata and verify integrity hash.
+  - [ ] Bump `node_modules/body-parser` entry in `package-lock.json`, `api/package-lock.json`, fixture lock.
+  - [ ] Prove no manifest range change needed (express `^2.2.1` admits 2.4.0).
+  - [ ] Lot gate:
+    - [ ] `make scope-check ENV=test-sec-hotfix`
+    - [ ] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
+- [ ] **Lot 2 — Dated zod exception plus L5 recompute**
+  - [ ] Add ONE `accepted_temporary` zod entry to `.security/vulnerability-register.yaml` (review_due 2026-11-07, Track ref, owner quote).
+  - [ ] Add matching zod GHSA entry to `.security/audit-allowlist.json` (review_due 2026-11-07).
+  - [ ] Recompute L5 `pre-candidate-manifest.json` lock hash and sidecar for the new root lock.
+  - [ ] Lot gate:
+    - [ ] `make scope-check ENV=test-sec-hotfix`
+    - [ ] `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-sec-hotfix`
+    - [ ] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
+- [ ] **Lot N — Final validation**
+  - [ ] Run audit gate locally via image builds (`make build-api-image`, `make build-ui-image`) until un-allowlisted set empty.
+  - [ ] Final gate step 1: create PR using `BRANCH.md` text as PR body.
+  - [ ] Final gate step 2: run and verify branch CI green on the exact head.
+  - [ ] Final gate step 3: do NOT merge, report PR number, head SHA, CI URL.
