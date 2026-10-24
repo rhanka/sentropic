@@ -42,8 +42,12 @@
 ## Feedback Loop
 - [x] BR861-EX2: inherit artifacts changes only through the explicitly requested L1/L2 merges; no authored artifacts edits. Impact: dependency ancestry; rollback: revert the merge. Merge commits retain inherited changes over 150 lines; authored commits remain under 150 lines.
 - [x] BR861-EX3: the existing release-range parser rejects the spec-required `0.19.2 || >=0.22.0 <0.28.0`; extend only alternative parsing, preserving malformed/prerelease refusal. Impact: bounded tuple loader prerequisite; rollback: revert the parser change and retain current ranges.
-- [ ] L6 handoff: MCP factories still expose fifteen tools and do not consume the L1 profile. L7 tests the bridge against selected-definition fixtures; real four-tool dispatch, actor/envelope parity and the full Radar install remain unqualified until L6 and Q3/Q4.
-- [ ] Integration owner: reserve mesh pack-only version, add common-contract export and update artifacts/llm-mesh peer ranges after qualification; manifest and lock changes remain single-writer.
+- [ ] L6 handoff: MCP factories still expose fifteen tools and do not consume the L1 profile. Owner: L6 author. Scope: MCP factory/adapter wiring and profile digest in registry integrity evidence. Acceptance: one compiled profile drives four-tool manifest, adapter, handlers and schemas; argument/envelope and actor-domain fixtures pass. L7 selected-definition tests are bridge fixtures, not real four-tool provider qualification.
+- [ ] Integration-owner handoff: reserve mesh pack-only version; add `./storage/common-contract` export; update artifacts peer/catalog to `>=0.2.0 <0.3.0` and llm-mesh peer/catalog to `0.19.2 || >=0.22.0 <0.28.0`; refresh locks with one writer. Acceptance: ordinary bump gate, catalog/manifest parity and strict full-Radar install pass. No source-package publication is authorized here.
+- [ ] Consumer handoff: i-cond/Q3/Q4 supplies the qualified full Radar tree and pinned lock/image after L6. Acceptance: strict install without force/legacy peer flags, sixteen-tool composition and both transport replay directions. The source/packed baseline tuple is not an artifacts 0.2.0 qualification receipt.
+- [x] Published `@sentropic/llm-mesh@0.19.2` surface probe: all five catalog entries (`llm-mesh`, facade, enrollment, node, cloud-code transport) imported with zero missing required members in a clean container. Command: `make -f /tmp/861-L7.mk qualify-llm0192 ENV=test-861-l7`; probe SHA-256 `6270321d9a894997bcde652493fd59e11b4c74c0b0b835b2eb60115335a18a31`. This proves entry compatibility only, not the full Radar tuple.
+- [x] `make pack-cluster-mesh ENV=test-861-l7`: PASS standalone manifest guard; current mesh 0.21.2 archive SHA-256 `9634e4d34870b49efc77b170f06b3a202331412597e4a39b51dc3996e7815580`.
+- [x] First full mesh run: 1083 passed, 129 environment-gated skips, one SQLite second-holder timeout (5000 ms). `make test-cluster-mesh SCOPE=tests/storage/sqlite-corpus.spec.ts ENV=test-861-l7`: 4/4 pass unchanged. No timeout or SQLite implementation changes; full rerun required.
 
 ## AI Flaky tests
 - [x] No provider-dependent acceptance or timeout changes planned.
@@ -67,7 +71,7 @@
 - [ ] **Lot 2 — Tuple qualification**
   - [ ] Update the six named tuple/consumer test files only where the contract requires it.
   - [ ] Qualify llm-mesh 0.19.2 and supported boundary fixtures; retain strict install evidence.
-  - [ ] Record bounded external consumer gaps without claiming full published qualification.
+  - [x] Record bounded external consumer gaps without claiming full published qualification.
 - [ ] **Lot 3 — Final validation and delivery**
   - [x] `make typecheck-cluster-mesh ENV=test-861-l7`.
   - [x] `make lint-cluster-mesh ENV=test-861-l7`.
