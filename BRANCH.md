@@ -48,12 +48,14 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
   - `api/tests/unit/llm-runtime-stream.test.ts` (BR734-EX7 only)
   - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts` (BR734-EX8 only)
   - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (BR734-EX8 only)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR734-EX9 only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR734-EX9` / `attention`: run 40131831560 passes cluster-mesh tests then the packed release gate rejects the selected lock's 0.27.0 pin against the verified 0.27.1 sibling. Rebuild with TypeScript 5.4.5 and npm pack reproduces the CI archive exactly: sha256 d06766370b135f3438be535aa6e5ebf69adf50df5379d79f1bd41f1a0866f374. Align the fixture manifest, registry URL and integrity with those measured bytes; keep the integrity gate unchanged. Impact: the selected qualification tuple only. Rollback: restore the 0.27.0 tuple together with the package version.
 - `BR734-EX8` / `attention`: run 40131082355 proves the two workspace integration tests still require installedVersion 0.27.0 after the required llm-mesh bump to 0.27.1. Update only these exact version literals; retain exact state/version assertions, namespace identity checks and published-fixture pins. Impact: two test expectations only. Rollback: restore the literals together with the llm-mesh version.
 - `BR734-EX7` / `attention`: run 40129371697 proves vision fails before dispatch because the catalog marks mistral-small-2603 text-only; the Mistral wire converter also stringifies image parts. Live GET /v1/models/mistral-small-2603 returns HTTP 200 with vision=true. Enable that exact capability and preserve image_url blocks through conversion; update the capability expectation and add a serializer regression. npm view reports 0.27.0, so bump llm-mesh to 0.27.1 and align the root lock. Impact: Mistral image requests only; other providers retain their conversion. Rollback: revert this capability and converter change with the package bump.
 - `BR734-EX6` / `attention`: run 40129371697 passes all eight document scenarios, then the organization-update turn completes with toolCalls=0 and unchanged persisted technologies. Make the live-model instruction identify the seeded organization and require organization_update before answering; retain every persisted-field assertion and every E2E timeout. Log the assistant response for future failure diagnosis. Impact: one E2E prompt and diagnostics only. Rollback: restore the original prompt.
@@ -115,6 +117,7 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
     - [x] `make memory-l5-verify ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-sec-hotfix`
     - [x] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
 - [ ] **Lot N — Final validation**
+  - [x] Align the selected qualification lock with the byte-identical llm-mesh 0.27.1 archive; the unchanged sibling-integrity checker passes locally.
   - [x] Align the two cluster-mesh workspace version expectations with llm-mesh 0.27.1; all 16 scoped integration tests pass.
   - [x] Configure live Mistral defaults and document summaries; run 40129371697 passes API AI integration, E2E A/B and all eight document scenarios.
   - [x] Correct Mistral image capability and conversion; 17 facade and 152 stream-normalization tests pass, API typecheck and lint pass.
