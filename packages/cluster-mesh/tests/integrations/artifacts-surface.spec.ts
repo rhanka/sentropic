@@ -14,6 +14,7 @@ import { loadArtifactsMcp } from '../../src/loaders/mcp/artifacts.js';
 import { createMcpRegistry } from '../../src/mcp/registry.js';
 import { createArtifactsBuiltin } from '../../src/integrations/mcp/artifacts.js';
 import * as storage from '../../src/storage/index.js';
+import * as common from '../../src/storage/common-contract.js';
 
 const SPEC_TOOLS = [
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_ensure',
@@ -96,18 +97,22 @@ function facadeWith(options: ModuleOptions = {}) {
 }
 
 describe('artifacts mesh leaf', () => {
+  it('should keep the common contract out of the storage runtime barrel', () => {
+    expect(storage).not.toHaveProperty('validateCommonCapability');
+  });
+
   it('should keep common read rights separate from publication and maintenance', () => {
     const capability = { principal: 'alice', rights: ['read'] as const,
       scope: { tenantId: 'tenant', workspaceId: 'workspace' }, policyRevision: 'policy-1' };
-    expect(storage.validateCommonCapability(capability).ok).toBe(true);
-    expect(storage.validateCommonCapability({ ...capability, rights: [] }).ok).toBe(false);
-    expect(storage.hasCommonRight(capability, 'read')).toBe(true);
+    expect(common.validateCommonCapability(capability).ok).toBe(true);
+    expect(common.validateCommonCapability({ ...capability, rights: [] }).ok).toBe(false);
+    expect(common.hasCommonRight(capability, 'read')).toBe(true);
     for (const right of ['prepare', 'publish', 'maintain'] as const) {
-      expect(storage.hasCommonRight(capability, right)).toBe(false);
+      expect(common.hasCommonRight(capability, right)).toBe(false);
     }
     const object = { id: 'object', locator: 'blob', byteLength: 1, sha256: 'a'.repeat(64) };
-    expect(storage.validateCommonObjectCommitment(object).ok).toBe(true);
-    expect(storage.validateCommonObjectCommitment({ ...object, sha256: `sha256:${object.sha256}` }).ok)
+    expect(common.validateCommonObjectCommitment(object).ok).toBe(true);
+    expect(common.validateCommonObjectCommitment({ ...object, sha256: `sha256:${object.sha256}` }).ok)
       .toBe(false);
   });
 

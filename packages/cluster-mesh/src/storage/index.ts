@@ -3,8 +3,6 @@
 // backend state and ordinary record machinery. Neutral: no pg, no
 // drizzle, no engram imports.
 
-export * from './common-contract.js';
-
 export { createKernel, createStaticAuthorityPort, type KernelHandle, type KernelOptions, type KernelRoot, type ScopeAuthorityPort } from './kernel.js';
 // The adapter surface exposes binding results by type only (R-MAJ-5): the
 // ScopedRuntime constructor and ScopedRuntimeDeps stay internal to the

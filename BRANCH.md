@@ -40,6 +40,7 @@
   - [x] Record rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] PR735 P2-3: regression failed on the runtime barrel export; common-contract consumers now import the self-sufficient data leaf directly. Public subpath registration remains integration-owner work.
 - [x] BR861-EX2: inherit artifacts changes only through the explicitly requested L1/L2 merges; no authored artifacts edits. Impact: dependency ancestry; rollback: revert the merge. Merge commits retain inherited changes over 150 lines; authored commits remain under 150 lines.
 - [x] BR861-EX3: the existing release-range parser rejects the spec-required `0.19.2 || >=0.22.0 <0.28.0`; extend only alternative parsing, preserving malformed/prerelease refusal. Impact: bounded tuple loader prerequisite; rollback: revert the parser change and retain current ranges.
 - [ ] L6 handoff: MCP factories still expose fifteen tools and do not consume the L1 profile. Owner: L6 author. Scope: MCP factory/adapter wiring and profile digest in registry integrity evidence. Acceptance: one compiled profile drives four-tool manifest, adapter, handlers and schemas; argument/envelope and actor-domain fixtures pass. L7 selected-definition tests are bridge fixtures, not real four-tool provider qualification.
