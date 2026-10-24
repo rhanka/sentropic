@@ -1,66 +1,131 @@
-# feat(docs): converge governance folds on the shared card base
+# Feature: Security Zod 4 Migration
 
 ## Objective
-- [x] Follow OWNER-ORDER-711-hrpolnav-base.md: atomic 460 × 200 collapsed zones in every scene, DS IconButton and wrapping legend.
+Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-exhaustion advisory GHSA-mrhx-c7xc-m3w5.
 
 ## Scope / Guardrails
-- [x] Worktree `tmp/worktrees/governance-converge`, branch `feat/governance-converge-hrpolnav`, base `origin/main`.
-- [x] Make-only, no Python, Docker-only Node, `ENV=test-726-reword` last; file Chromium needs no ports or services.
-- [x] Read hrpolnav and design-system only; preserve validated card values, typography, icons, expanded 4/16/16 geometry and performance budgets.
-- [x] Selective staging, make commit only, no attribution trailers; push draft PR, do not merge.
+- Scope limited to zod version bump plus required v4 API adaptations, no feature changes.
+- One migration max in `api/drizzle/*.sql` (none expected).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `tmp/worktrees/sec-zod4` (packet path).
+- Automated test campaigns run on dedicated environment (`ENV=test-sec-zod4`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- 0 Python in repos and jobs. One Docker build at a time machine-wide.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `docs/governance/**`
+  - `api/package.json`
+  - `api/package-lock.json`
+  - `api/src/**`
+  - `packages/auth-hono/**`
+  - `packages/comments/**`
+  - `packages/skills/**`
+  - `.security/vulnerability-register.yaml`
+  - `.security/audit-allowlist.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
-  - `plan/**`
-- **Conditional Paths**:
-  - None.
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `ui/**`
+  - `e2e/**`
 - **Exception process**:
-  - [x] Record reason, impact and rollback before touching any unlisted path.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] Report H1–H9 replacements and all source divergences in `docs/governance/validation/converge32.md`.
-- [x] R2 owner decision (2026-10-23): “Reformuler les textes”. Reword only the 34 overflowing collapsed occurrences; preserve package kickers, expanded text, both central scenes and all geometry/font values. Verify with `scripts/check-reword.mjs` against `10b7b22bc`.
-- [x] Astra R1: restore and assert measured 16 px outer summary insets (428 px body); remove the incorrect central wording-conflict claim.
-- [x] Astra R3: time and gate every counted ordinary operation, require 600 measured ordinary operations plus 240 measured stress toggles, and report complete-set maxima below 1800 ms.
-- [x] R3 complete runtime witness: 660 ordinary + 240 stress operations, 16 captures, zero fit/console failures, maximum 1489 ms (stress 995 ms), below the unchanged 1800 ms gate. Baseline with API tracing also passes (997 ms); archived failure is in pre-input actionability, historical root cause unproven. See validation report.
-- [x] Astra additional findings: disclose final-owner 14 px versus measured 20 px leaf-body conflict and inherited unequal adjacent expanded frame heights; preserve validated values.
-- [x] Rebase onto main to resolve the root plan conflict blocking PR CI; preserve correction sources exactly, inherit the DOMPurify override and rebuild in isolated dependencies. Portable SHA-256 reproduces `0b8db12478f4d7badc9d2f7819ec335e7d713287a755548627e118a2b93f2b47`.
-- [x] Replace inherited #711 plan; generated routes/portable and inherited-plan replacement exceed routine line budget. Keep handwritten implementation commits near 150 lines.
-- [x] No Track writes: scope excludes `.track/**`; mechanical harness checks remain mandatory.
+- [ ] `attention`: origin/main carries no zod exception in `.security/vulnerability-register.yaml` (verified 2026-10-24, GHSA-mrhx-c7xc-m3w5 entry exists only on `feat/llm-judge` as BR96-EX19) — nothing to remove unless main gains one before merge; re-check before final gate.
 
 ## AI Flaky tests
-- [x] No provider tests apply to this offline documentation kit.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] Single author, isolated worktree.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: single dependency migration, sequential per-package lots in one worktree.
 
 ## UAT Management (in orchestration context)
-- [x] Offline Chromium in this worktree; no root dev environment.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/sec-zod4`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
+  - Switch back to `tmp/worktrees/sec-zod4` after UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and scope**
-  - [x] Read owner order, rules, harness, template, hrpolnav provenance/hacks and readable DS specification; create worktree and pass mechanical branch check.
-- [x] **Lot 1 — Shared card anatomy**
-  - [x] Update `src/hrpolnav-card.js`, `src/architecture-svg.js`, `src/governance-layout.js`: atomic renderer, reserved toggle slot, centred body, shared 460 × 200 geometry.
-  - [x] Preserve all 144 leaf values, typography, icons and expanded headers; remove clamping/clipping and surface overflow. Reference card parity passes within 0.02 px.
-- [x] **Lot 2 — Every scene and wrapping legend**
-  - [x] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
-  - [x] Wrapping legend with semantic swatches, using the same zone/fold path.
-- [x] **Lot 3 — Qualification**
-  - [x] `scripts/check-{convergence,reword,browser}.mjs`: strict fit passes all ten scene/locale pairs, exactly 34 changed collapsed occurrences / 46 strings, unchanged expanded text and geometry. Prior card parity, pinned footer and routing budgets remain valid.
-  - [x] Geometry after R1: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 271.48 ms. Card parity passes for all 144 leaves. R2 changes no geometry, routing, leaf text or font values.
-  - [x] Prior browser count corrected by R3: only 560 of 656 ordinary entries were measured; the historical maximum did not establish the complete interaction budget. Rerun the complete measured witness after R1.
-  - [x] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
-- [x] **Lot 4 — Delivery**
-  - [x] Record H1–H9 file:line replacements, divergences and validation in `validation/converge32.md`.
-  - [x] Rebuild/deliver portable, refresh and verify all 137 SHA256SUMS entries; scope check before each selective make commit (each R2 commit under 150 changed lines).
-  - [x] Create draft PR #726 using this plan as body and post the four-step plan; keep it draft and unmerged.
-  - [x] R2 qualification: all ten scene/locale pairs pass, 32 slides / 52 routes pass with zero fit findings, idle/load checks pass all four scenarios. Portable SHA-256: `92a87f2985fbfcc23c6a6241f7e96db133df294624c5bdc07551e9840c8c08cd`.
-  - [x] Preserve the post-push gate: require green CI on the exact pushed head and report SHA, CI URL and string table; keep PR #726 draft and unmerged. Full string table: root `.tmp/governance-unification/726-reword.md`, also included in the PR body.
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/security.md`.
+  - [x] Created isolated worktree `tmp/worktrees/sec-zod4` on `feat/security-zod4-migration` from `origin/main` (`7fb76b7b2`).
+  - [x] Zod inventory: `api` (`^3.22.4`, locked 3.25.76) + `@hono/zod-validator ^0.7.6`; `packages/auth-hono` (`^3.25.76`, validator `^0.7.5`); `packages/comments` (`^3.25.76`); `packages/skills` (`3.23.8` pinned); `ui` and `e2e` have zero zod usage; `api/tests` touches zod only in frozen historical fixtures (out of scope).
+  - [x] Breaking API surface: `error.errors` (6 sites) becomes `error.issues`; single-arg `z.record(value)` (skills parser, product-docx, bids, products, config-product-settings) becomes `z.record(z.string(), value)`; `z.string().email()`, `z.coerce`, `.strict()`, `.refine()` unchanged in v4.
+  - [ ] Capture Makefile targets needed for debug/testing.
+  - [ ] Define environment mapping (`ENV=test-sec-zod4`) and ports for this branch.
+  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [ ] Confirm scope and guardrails.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
+
+- [ ] **Lot 1 — packages/skills zod v4**
+  - [ ] Bump `zod` to `^4.6.6` (min, resolve `>=4.6.6`, no legacy shim) in `packages/skills/package.json`.
+  - [ ] Adapt `packages/skills/src/format/parser.ts`: single-arg `z.record` becomes two-arg.
+  - [ ] Bump `packages/skills/package.json` version (patch, must exceed npm published version per `npm view`).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [ ] **API tests**
+      - [ ] No API test changes expected for this lot.
+      - [ ] Sub-lot gate: `make test-api ENV=test-sec-zod4`
+      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-sec-zod4` and document status/signature in `BRANCH.md`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] No UI test changes expected for this lot.
+      - [ ] Sub-lot gate: `make test-ui ENV=test-sec-zod4`
+    - [ ] **E2E tests**
+      - [ ] No E2E changes for this lot.
+    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
+      - [ ] No UAT (no UI change).
+
+- [ ] **Lot 2 — packages/comments zod v4**
+  - [ ] Bump `zod` to `^4.6.6` in `packages/comments/package.json`.
+  - [ ] Adapt `packages/comments/src/hono.ts` if typecheck requires.
+  - [ ] Bump `packages/comments/package.json` version (patch, must exceed npm published version per `npm view`).
+  - [ ] Lot gate: copy exact checklist of Lot 1, no UAT if last branch.
+
+- [ ] **Lot 3 — packages/auth-hono zod v4**
+  - [ ] Bump `zod` to `^4.6.6` in `packages/auth-hono/package.json`; verify `@hono/zod-validator` resolves v4-compatible (bump only if typecheck/resolution requires).
+  - [ ] Adapt `packages/auth-hono/src/*-handlers.ts` (5 files) if typecheck requires.
+  - [ ] Bump `packages/auth-hono/package.json` version (patch, must exceed npm published version per `npm view`).
+  - [ ] Lot gate: copy exact checklist of Lot 1, no UAT if last branch.
+
+- [ ] **Lot 4 — api zod v4**
+  - [ ] Bump `zod` to `^4.6.6` in `api/package.json`; refresh `api/package-lock.json` via make lock target; verify `@hono/zod-validator` resolves v4-compatible.
+  - [ ] Replace `error.errors` with `error.issues` (magic-link, config-product-ai, session-device x3, session-lifecycle, live-declarations, queue-manager).
+  - [ ] Replace single-arg `z.record(value)` with two-arg form (config-product-settings, product-docx, bids, products).
+  - [ ] Adapt `api/src/services/object-registry/json-schema-to-zod.ts` only if typecheck requires.
+  - [ ] Lot gate: copy exact checklist of Lot 1, no UAT if last branch.
+
+- [ ] **Lot 5 — Register cleanup + final validation**
+  - [ ] Re-check `.security/vulnerability-register.yaml` for any zod entry (GHSA-mrhx-c7xc-m3w5); remove it if present, else record absence.
+  - [ ] Verify `.security/audit-allowlist.json` carries no zod entry.
+  - [ ] Typecheck & Lint
+  - [ ] Retest UI (cf Lot1, copy checklist)
+  - [ ] Retest API (cf Lot1, copy checklist)
+  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
+  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
