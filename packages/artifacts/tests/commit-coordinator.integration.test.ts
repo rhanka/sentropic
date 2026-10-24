@@ -1611,3 +1611,122 @@ describe('coordinator sol-r2 regressions', () => {
     expect(outcome.failure.commitState).toBe('unknown');
   });
 
+  it('maps receipt-table contention to retriable unavailability', async () => {
+    await pool.query(
+      `INSERT INTO artifacts.operation_keys (storage_scope_id, internal_key)
+       VALUES ('scope-l3', 'key-receipt-lock') ON CONFLICT DO NOTHING`,
+    );
+    const locker = new Pool({ connectionString: DATABASE_URL });
+    const lockerClient = await locker.connect();
+    const inner = createPostgresCommitExecutor(pool);
+    const executor: CommitExecutor = {
+      ensureCoordinationRow: inner.ensureCoordinationRow.bind(inner),
+      beginFinalization: async () => {
+        const connection = await inner.beginFinalization();
+        const realRead = connection.readReceipt.bind(connection);
+        connection.readReceipt = (async (scopeId: string, internalKey: string) => {
+          await connection.query("SET LOCAL lock_timeout = '200ms'", []);
+          return realRead(scopeId, internalKey);
+        }) as FinalizeConnection['readReceipt'];
+        return connection;
+      },
+    };
+    try {
+      await lockerClient.query('BEGIN');
+      await lockerClient.query('LOCK TABLE artifacts.operation_receipts IN ACCESS EXCLUSIVE MODE');
+      const coordinator = createArtifactCommitCoordinator({
+        executor,
+        policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+      });
+      const outcome = await coordinator.finalize(
+        baseRequest({ key: 'key-receipt-lock', commandHash: 'h-receipt-lock' }),
+      );
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.failure.category).toBe('provider_unavailable');
+      expect(outcome.failure.httpStatus).toBe(503);
+      expect(outcome.failure.retriable).toBe(true);
+      expect(outcome.failure.commitState).toBe('not_committed');
+    } finally {
+      // Release the ACCESS EXCLUSIVE holder before reading: the receipt
+      // lookup below would otherwise queue behind this test's own lock.
+      await lockerClient.query('ROLLBACK');
+      lockerClient.release();
+      await locker.end();
+    }
+    expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-receipt-lock'])).toBe(0);
+  });
+
+  it('settles the unit when a hook raises quarantine before settlement', async () => {
+    const inner = createPostgresCommitExecutor(pool);
+    let rollbacks = 0;
+    let releases = 0;
+    const executor: CommitExecutor = {
+      ensureCoordinationRow: inner.ensureCoordinationRow.bind(inner),
+      beginFinalization: async () => {
+        const connection = await inner.beginFinalization();
+        const realRollback = connection.rollback.bind(connection);
+        const realRelease = connection.release.bind(connection);
+        connection.rollback = (async () => {
+          rollbacks += 1;
+          return realRollback();
+        }) as FinalizeConnection['rollback'];
+        connection.release = ((error?: unknown) => {
+          releases += 1;
+          realRelease(error);
+        }) as FinalizeConnection['release'];
+        return connection;
+      },
+    };
+    const coordinator = createArtifactCommitCoordinator({
+      executor,
+      policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
+    });
+    const key = 'key-hook-quarantine';
+    await expect(
+      coordinator.finalize(
+        baseRequest({
+          key,
+          commandHash: 'h-hook-quarantine',
+          provisional: async () => {
+            throw new CommitQuarantineError('scope-l3', key, 'legacy-9.9');
+          },
+        }),
+      ),
+    ).rejects.toThrow('commit quarantine');
+    expect(rollbacks).toBe(1);
+    expect(releases).toBe(1);
+  });
+
+  it('carries the frozen operational kind on produced failures', async () => {
+    const { executor } = makeStubExecutor();
+    const coordinator = createArtifactCommitCoordinator({ executor, policy: makeStubPolicy() });
+    const denied = async (): Promise<ArtifactAuthorizationDecision> => ({
+      allowed: false as const,
+      reason: 'denied' as const,
+      publicCode: 'access_denied',
+      status: 403,
+      retriable: false,
+    });
+    const outcome = await coordinator.finalize(
+      baseRequest({ key: 'key-kind', commandHash: 'h-kind', guard: denied }),
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect((outcome.failure as { kind?: unknown }).kind).toBe('operational');
+    const frozen: FrozenArtifactFailure = outcome.failure;
+    expect(frozen.kind).toBe('operational');
+  });
+
+  it('keeps the coordinator points inside the frozen barrier points', () => {
+    const frozenPoints: readonly FrozenBarrierPoint[] = COORDINATOR_TEST_POINTS;
+    expect([...frozenPoints]).toEqual([
+      'before_connection_acquire',
+      'before_key_lock',
+      'before_finalization_row_lock',
+      'after_finalization_locks_before_guard',
+      'after_replay_lookup_before_guard',
+      'before_commit',
+    ]);
+  });
+});
