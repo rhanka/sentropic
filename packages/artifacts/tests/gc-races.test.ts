@@ -40,7 +40,7 @@ describe('garbage collection', () => {
     await blobs.putBlob(KEY_A, owe([1]));
     await blobs.putBlob(KEY_B, owe([2]));
     await refs.addRef(digestOf(KEY_A), 'release-r1');
-    const report = await gc.collect(blobs, 'artifacts/scope-1/blobs/');
+    const report = await gc.collect(blobs, 'artifacts/scope-1/blobs/', createMemoryDeletionClaimStore());
     expect(report.deleted).toEqual([KEY_B]);
     expect(report.retained).toEqual([KEY_A]);
     expect(report.failures).toEqual([]);
@@ -52,9 +52,10 @@ describe('garbage collection', () => {
     const blobs = createMemoryBlobStore();
     const refs = createMemoryRefcountStore();
     const gc = createGcService(refs);
+    const claims = createMemoryDeletionClaimStore();
     await blobs.putBlob(KEY_A, owe([1]));
     await refs.pin(digestOf(KEY_A), 'legal-hold');
-    const report = await gc.collect(blobs, 'artifacts/scope-1/blobs/');
+    const report = await gc.collect(blobs, 'artifacts/scope-1/blobs/', claims);
     expect(report.deleted).toEqual([]);
     expect(report.retained).toEqual([KEY_A]);
     await refs.unpin(digestOf(KEY_A), 'legal-hold');
@@ -64,11 +65,12 @@ describe('garbage collection', () => {
         throw new Error('store exploded');
       },
     };
-    const report2 = await gc.collect(failingBlobs, 'artifacts/scope-1/blobs/');
+    const report2 = await gc.collect(failingBlobs, 'artifacts/scope-1/blobs/', claims);
     expect(report2.deleted).toEqual([]);
     expect(report2.failures).toHaveLength(1);
     expect(report2.failures[0]?.error).toMatch(/store exploded/);
     expect(report2.failures[0]?.key).toBe(KEY_A);
+    expect(await claims.isClaimed(digestOf(KEY_A))).toBe(false);
   });
 
   it('serializes concurrent addRef/releaseRef races exactly', async () => {
@@ -94,6 +96,40 @@ describe('garbage collection', () => {
 });
 
 describe('deletion claims', () => {
+  it('should retain retry bytes pinned after the initial GC check', async () => {
+    const blobs = createMemoryBlobStore();
+    const refs = createMemoryRefcountStore();
+    const claims = createMemoryDeletionClaimStore();
+    const guarded = createClaimGuardedRefs(refs, claims);
+    const digest = digestOf(KEY_A);
+    await blobs.putBlob(KEY_A, owe([1]));
+    let entered!: () => void;
+    let resume!: () => void;
+    const checked = new Promise<void>((resolve) => { entered = resolve; });
+    const paused = new Promise<void>((resolve) => { resume = resolve; });
+    let firstCheck = true;
+    const gc = createGcService({ ...guarded, isPinned: async (value) => {
+      const pinned = await guarded.isPinned(value);
+      if (firstCheck) {
+        firstCheck = false;
+        entered();
+        await paused;
+      }
+      return pinned;
+    } });
+    const collecting = gc.collect(blobs, 'artifacts/', claims);
+    await checked;
+    await guarded.pin(digest, 'preparation:retry');
+    await blobs.putBlob(KEY_A, owe([1]));
+    expect(await blobs.getBlob(KEY_A)).toEqual(owe([1]));
+    resume();
+    const report = await collecting;
+    expect(await guarded.isPinned(digest)).toBe(true);
+    expect(report).toEqual({ deleted: [], retained: [KEY_A], failures: [] });
+    expect(await blobs.getBlob(KEY_A)).toEqual(owe([1]));
+    expect(await claims.isClaimed(digest)).toBe(false);
+  });
+
   it.each(['addRef', 'pin'] as const)('should exclude claims during an in-flight %s', async (operation) => {
     const refs = createMemoryRefcountStore();
     const claims = createMemoryDeletionClaimStore();
