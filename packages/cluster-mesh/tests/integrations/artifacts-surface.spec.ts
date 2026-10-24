@@ -5,13 +5,15 @@
  * one platform kernel beside a local provider. Unselected builtins never
  * load; loader failures refuse compilation atomically.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as artifacts from '@sentropic/artifacts/mcp';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
 import type { ClusterMeshModules } from '../../src/modules/contracts.js';
 import { createClusterMeshModules } from '../../src/modules/registry.js';
 import { loadArtifactsMcp } from '../../src/loaders/mcp/artifacts.js';
 import { createMcpRegistry } from '../../src/mcp/registry.js';
 import { createArtifactsBuiltin } from '../../src/integrations/mcp/artifacts.js';
+import * as storage from '../../src/storage/index.js';
 
 const SPEC_TOOLS = [
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_ensure',
@@ -94,6 +96,60 @@ function facadeWith(options: ModuleOptions = {}) {
 }
 
 describe('artifacts mesh leaf', () => {
+  it('should keep common read rights separate from publication and maintenance', () => {
+    const capability = { principal: 'alice', rights: ['read'] as const,
+      scope: { tenantId: 'tenant', workspaceId: 'workspace' }, policyRevision: 'policy-1' };
+    expect(storage.validateCommonCapability(capability)).toEqual({ ok: true });
+    expect(storage.validateCommonCapability({ ...capability, rights: [] }).ok).toBe(false);
+    expect(storage.hasCommonRight(capability, 'read')).toBe(true);
+    for (const right of ['prepare', 'publish', 'maintain'] as const) {
+      expect(storage.hasCommonRight(capability, right)).toBe(false);
+    }
+    const object = { id: 'object', locator: 'blob', byteLength: 1, sha256: 'a'.repeat(64) };
+    expect(storage.validateCommonObjectCommitment(object).ok).toBe(true);
+    expect(storage.validateCommonObjectCommitment({ ...object, sha256: `sha256:${object.sha256}` }).ok)
+      .toBe(false);
+  });
+
+  it('should catalogue exactly the capabilities of the selected definition', async () => {
+    const definition = artifacts.createArtifactsRegistryDefinition({ app: fakeApp });
+    const selected = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'];
+    definition.manifest = { ...definition.manifest,
+      tools: definition.manifest.tools.filter((tool) => selected.includes(tool.name)) };
+    const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition').mockReturnValue(definition);
+    try {
+      const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } });
+      expect(builtin.capabilities).toEqual(selected);
+      expect((await builtin.load()).manifest).toEqual(definition.manifest);
+    } finally { factory.mockRestore(); }
+  });
+
+  it('should expose no capabilities when the selected definition is empty', () => {
+    const definition = artifacts.createArtifactsRegistryDefinition({ app: fakeApp });
+    definition.manifest = { ...definition.manifest, tools: [] };
+    const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition').mockReturnValue(definition);
+    try {
+      expect(createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } })
+        .capabilities).toEqual([]);
+    } finally { factory.mockRestore(); }
+  });
+
+  it('should refuse a definition that changes after catalog construction', async () => {
+    const definition = artifacts.createArtifactsRegistryDefinition({ app: fakeApp });
+    const changed = { ...definition, manifest: { ...definition.manifest, tools: [] } };
+    const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition')
+      .mockReturnValueOnce(definition).mockReturnValue(changed);
+    try {
+      const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } });
+      await expect(builtin.load()).rejects.toThrow(/definition.*changed/);
+    } finally { factory.mockRestore(); }
+  });
+
+  it('should refuse an artifacts common-rule admission claim', () => {
+    expect(() => createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp },
+      commonRuleAdmission: true } as never)).toThrow(/common.rule/);
+  });
+
   it('catalogues sentropic.artifacts with the 15 artifacts tools', () => {
     const facade = facadeWith();
     const entry = facade.catalog().find((item) => item.providerId === 'sentropic.artifacts');

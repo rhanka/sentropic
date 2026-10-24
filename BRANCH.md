@@ -19,6 +19,7 @@
   - `packages/cluster-mesh/src/loaders/mcp/artifacts.ts`
   - `packages/cluster-mesh/src/mcp/tool-configuration.ts`
   - `packages/cluster-mesh/src/storage/index.ts`
+  - `packages/cluster-mesh/src/storage/common-contract.ts`
   - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts`
   - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
   - `packages/cluster-mesh/tests/packaging/tuple-strict.spec.ts`
@@ -33,12 +34,15 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/package-lock.json`
+  - `packages/cluster-mesh/src/modules/semver.ts`
   - `packages/artifacts/**`
 - **Exception process**:
   - [x] Record rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
 - [x] BR861-EX2: inherit artifacts changes only through the explicitly requested L1/L2 merges; no authored artifacts edits. Impact: dependency ancestry; rollback: revert the merge. Merge commits retain inherited changes over 150 lines; authored commits remain under 150 lines.
+- [x] BR861-EX3: the existing release-range parser rejects the spec-required `0.19.2 || >=0.22.0 <0.28.0`; extend only alternative parsing, preserving malformed/prerelease refusal. Impact: bounded tuple loader prerequisite; rollback: revert the parser change and retain current ranges.
+- [ ] L6 handoff: MCP factories still expose fifteen tools and do not consume the L1 profile. L7 tests the bridge against selected-definition fixtures; real four-tool dispatch, actor/envelope parity and the full Radar install remain unqualified until L6 and Q3/Q4.
 - [ ] Integration owner: reserve mesh pack-only version, add common-contract export and update artifacts/llm-mesh peer ranges after qualification; manifest and lock changes remain single-writer.
 
 ## AI Flaky tests
@@ -56,7 +60,7 @@
   - [x] Read rules, spec r2 and branch template; create isolated worktree; mechanical branch check passed.
   - [x] Merge L1 and L2; inspect the compiled-profile and tuple boundaries.
 - [ ] **Lot 1 — Selected mesh composition**
-  - [ ] Write failing tests in `tests/integrations/artifacts-surface.spec.ts` before implementation.
+  - [x] Write failing tests in `tests/integrations/artifacts-surface.spec.ts` and `tests/packaging/tuple-skew.spec.ts` before implementation.
   - [ ] Derive capabilities from the compiled profile; preserve profile integrity and argument idempotency metadata.
   - [ ] Expose common data types without claiming common storage admission.
   - [ ] Qualify platform envelope and actor-domain behavior through selected dispatch.
