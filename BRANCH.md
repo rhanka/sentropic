@@ -28,6 +28,8 @@ Deliver the L3 atomic finalization coordinator with one additive migration and r
   - `packages/artifacts/tests/migration.integration.test.ts`
   - `packages/artifacts/tests/postgres.integration.test.ts`
   - `packages/artifacts/tests/radar-commit-setup.integration.test.ts`
+  - `packages/artifacts/tests/commit-contract-compatibility.test.ts`
+  - `packages/artifacts/tests/fixtures/commit-contract-compatibility.ts`
   - `packages/artifacts/examples/radar-commit-setup.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -60,6 +62,7 @@ Deliver the L3 atomic finalization coordinator with one additive migration and r
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] L3-R3-RED: observer-only regression reproduces both remaining observer failures on 4092c1666 (zero arrivals without testPoints; failed finalization with frozen arrive observer and explicit before_commit).
 - [ ] L3-L0MERGE (attention): Sol review found 5 P1 in L0 shapes; another session is fixing L0 on feat/artifacts-861-contracts. Merged through d4bd43b3c; reconciled toward the fixed declarations (fixed context, fence, transaction, variant, success-correlation shapes mirrored in src/server/commit/types.ts; FinalizationCoordinator renamed to leave the fixed role descriptor untouched; observer barrier shape intentionally unchanged — see L3-BARRIER).
 - [ ] L3-BARRIER (acknowledge): the fixed CommitBarrierObserver.arrive is sync void while the L3 testing barrier blocks per armed pair; L3 keeps its proven blocking seam (r2 names the factory members and nine points, both match) and leaves unification to integration.
 - [ ] L3-EXAMPLE (acknowledge): conductor-directed typed public example of the Radar construction (coordinator plus PG participant plus fence plus sweeper). Example imports only L3 src modules; profile/app wiring stays L6-provided and is referenced textually, not sketched. Type-check evidence comes from a one-off tsc run with the repo toolchain (tsconfig covers src only); the integration test proves it runs.
