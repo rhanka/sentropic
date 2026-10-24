@@ -106,8 +106,8 @@ Deliver the L5 coordinator-bound ensure path with guarded replay on top of the f
     - [x] make test-artifacts SCOPE=tests/service.test.ts ENV=test-861-l5 last
     - [x] make test-artifacts SCOPE=tests/idempotency.test.ts ENV=test-861-l5 last
     - [x] make test-artifacts-integration SCOPE=tests/ensure-authorization.integration.test.ts ENV=test-861-l5 last
-    - [ ] make test-artifacts ENV=test-861-l5 last (unit, no collateral)
-    - [ ] make scope-check before each commit
+    - [x] make test-artifacts ENV=test-861-l5 last (unit, no collateral)
+    - [x] make scope-check before each commit
 - [ ] **Lot 3 — PR and CI**
   - [ ] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
   - [ ] Push branch and open DRAFT PR targeting feat/artifacts-861-L3.
