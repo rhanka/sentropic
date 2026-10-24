@@ -19,6 +19,7 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
 - **Allowed Paths (implementation scope)**:
   - `api/package.json`
   - `api/package-lock.json`
+  - `package-lock.json` (root workspace lock sync for packages/* bumps)
   - `api/src/**`
   - `packages/auth-hono/**`
   - `packages/comments/**`
@@ -43,6 +44,8 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
 
 ## Feedback Loop
 - [ ] `attention`: origin/main carries no zod exception in `.security/vulnerability-register.yaml` (verified 2026-10-24, GHSA-mrhx-c7xc-m3w5 entry exists only on `feat/llm-judge` as BR96-EX19) — nothing to remove unless main gains one before merge; re-check before final gate.
+- [ ] BR01-EX1 (`acknowledge` self): touch `Makefile` (Forbidden Path), pin-only changes of `zod@3.25.76`/`zod@3.23.8` install pins to the v4 line in package typecheck/test targets (skills, auth-hono, llm-gateway, auth-client, cluster-mesh peer tools). Reason: targets hardcode the exact zod version under test; without the pin update the gates keep validating against v3. Impact: version strings in ephemeral `npm install` commands only, no target logic change. Rollback: revert pin strings to v3.
+- [x] `acknowledge`: `make scope-check` available (harness CLI installed); run before every commit.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -79,19 +82,21 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
   - [ ] Confirm scope and guardrails.
   - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
 
-- [ ] **Lot 1 — packages/skills zod v4**
-  - [ ] Bump `zod` to `^4.6.6` (min, resolve `>=4.6.6`, no legacy shim) in `packages/skills/package.json`.
-  - [ ] Adapt `packages/skills/src/format/parser.ts`: single-arg `z.record` becomes two-arg.
-  - [ ] Bump `packages/skills/package.json` version (patch, must exceed npm published version per `npm view`).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+- [x] **Lot 1 — packages/skills zod v4**
+  - [x] Bump `zod` to `^4.6.6` (min, resolve `>=4.6.6`, no legacy shim) in `packages/skills/package.json`.
+  - [x] Adapt `packages/skills/src/format/parser.ts`: single-arg `z.record` becomes two-arg.
+  - [x] Bump `packages/skills/package.json` version (patch, must exceed npm published version per `npm view`).
+  - [x] Lot gate:
+    - [x] `make typecheck-skills ENV=test-sec-zod4` PASS (zod 4.6.7)
+    - [x] `make test-skills ENV=test-sec-zod4` PASS (136/136)
+    - [x] `make lock-root` refreshed (skills zod resolves 4.6.7)
     - [ ] **API tests**
       - [ ] No API test changes expected for this lot.
-      - [ ] Sub-lot gate: `make test-api ENV=test-sec-zod4`
+      - [ ] Sub-lot gate: `make test-api ENV=test-sec-zod4` (deferred to Lot 4: api image audit gate still sees v3 in api/auth-hono/comments until their lots land; exception allowlist keeps it advisory-clean)
       - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-sec-zod4` and document status/signature in `BRANCH.md`
     - [ ] **UI tests (TypeScript only)**
       - [ ] No UI test changes expected for this lot.
-      - [ ] Sub-lot gate: `make test-ui ENV=test-sec-zod4`
+      - [ ] Sub-lot gate: `make test-ui ENV=test-sec-zod4` (deferred to Lot 4, same reason)
     - [ ] **E2E tests**
       - [ ] No E2E changes for this lot.
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
