@@ -1,34 +1,32 @@
-# Feature: #861 L3 transaction-bound coordinator and migration
+# Feature: #861 L5 ensure and guarded replay
 
 ## Objective
-Deliver the L3 atomic finalization coordinator with one additive migration and real-PostgreSQL regression tests.
+Deliver the L5 coordinator-bound ensure path with guarded replay on top of the frozen L0 contracts and the L1/L2/L3 lanes.
 
 ## Scope / Guardrails
-- Scope limited to the L3 exclusive write set below; never edit files owned by L1, L2, L4-L9 or mesh lots.
-- r2 spec is binding; L0 shapes are read-only. L3 follows r2 names, reconciles with the L0 fix on merge.
+- Scope limited to the L5 exclusive write set below; never edit files owned by L0-L4 or L6-L9 lanes.
+- r2 spec is binding; L0 shapes are read-only. L5 follows r2 names and uses frozen shared ports only.
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/artifacts-861-L3`, based on feat/artifacts-861-contracts.
-- Automated test campaigns run on dedicated environments (`ENV=test-artifacts-861-l3`), never on root `dev`.
+- Branch development happens in isolated worktree `tmp/worktrees/861-L5`, based on origin/feat/artifacts-861-L3 with L1 plus L2 merged in.
+- Automated test campaigns run on dedicated environment (`ENV=test-861-l5`), never on root `dev`.
 - UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
-- No package manifest or lock edits in L3 (single-writer integration owner rule); no version bump.
-- No export-map or barrel edits in L3 (qualified in L6/L8).
+- No package manifest or lock edits in L5 (single-writer integration owner rule); no version bump.
+- No export-map or barrel edits in L5 (qualified in L6/L8).
+- Legacy split ensure path stays intact for L6-owned consumers; L5 adds the guarded composition alongside, never a second implicit fallback.
+- Coordinator changes needed by L5 are returned to the L3 owner; L5 does not edit coordinator files.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/src/server/commit/types.ts`
-  - `packages/artifacts/src/server/commit/coordinator.ts`
-  - `packages/artifacts/src/adapters/postgres-commit.ts`
-  - `packages/artifacts/src/testing.ts`
-  - `packages/artifacts/migrations/0003_coordinator.sql`
-  - `packages/artifacts/tests/commit-coordinator.integration.test.ts`
-  - `packages/artifacts/tests/migration.integration.test.ts`
-  - `packages/artifacts/tests/postgres.integration.test.ts`
-  - `packages/artifacts/tests/radar-commit-setup.integration.test.ts`
-  - `packages/artifacts/examples/radar-commit-setup.ts`
+  - `.track/**` (branch-lifecycle step 4 re-anchor at setup only; no further track writes in this lot)
+  - `packages/artifacts/src/server/service.ts`
+  - `packages/artifacts/src/server/authorized-replay.ts`
+  - `packages/artifacts/tests/ensure-authorization.integration.test.ts`
+  - `packages/artifacts/tests/service.test.ts`
+  - `packages/artifacts/tests/idempotency.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -36,21 +34,26 @@ Deliver the L3 atomic finalization coordinator with one additive migration and r
   - `plan/NN-BRANCH_*.md` (except this branch file)
   - `packages/artifacts/package.json`
   - `packages/artifacts/src/index.ts`
+  - `packages/artifacts/src/http.ts`
   - `packages/artifacts/src/mcp-core.ts`
   - `packages/artifacts/src/mcp.ts`
-  - `packages/artifacts/src/http.ts`
   - `packages/artifacts/src/server/publication.ts`
-  - `packages/artifacts/src/server/service.ts`
-  - `packages/artifacts/src/server/idempotency.ts`
   - `packages/artifacts/src/server/object-intents.ts`
-  - `packages/artifacts/src/adapters/postgres.ts`
-  - `packages/artifacts/src/adapters/s3.ts`
+  - `packages/artifacts/src/server/lifecycle.ts`
+  - `packages/artifacts/src/server/commit/**`
+  - `packages/artifacts/src/server/failures.ts`
+  - `packages/artifacts/src/server/outcome-projection.ts`
+  - `packages/artifacts/src/server/command-identity.ts`
+  - `packages/artifacts/src/server/idempotency.ts`
+  - `packages/artifacts/src/server/bindings.ts`
+  - `packages/artifacts/src/adapters/postgres-commit.ts`
+  - `packages/artifacts/src/profile/**`
+  - `packages/artifacts/src/testing.ts`
   - `packages/artifacts/l0-freeze/**`
   - `packages/cluster-mesh/**`
   - `packages/mcp-platform/**`
   - `packages/mcp-auth/**`
   - `.github/workflows/**`
-  - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
@@ -60,13 +63,10 @@ Deliver the L3 atomic finalization coordinator with one additive migration and r
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] L3-L0MERGE (attention): Sol review found 5 P1 in L0 shapes; another session is fixing L0 on feat/artifacts-861-contracts. Merged through d4bd43b3c; reconciled toward the fixed declarations (fixed context, fence, transaction, variant, success-correlation shapes mirrored in src/server/commit/types.ts; FinalizationCoordinator renamed to leave the fixed role descriptor untouched; observer barrier shape intentionally unchanged — see L3-BARRIER).
-- [ ] L3-BARRIER (acknowledge): the fixed CommitBarrierObserver.arrive is sync void while the L3 testing barrier blocks per armed pair; L3 keeps its proven blocking seam (r2 names the factory members and nine points, both match) and leaves unification to integration.
-- [ ] L3-EXAMPLE (acknowledge): conductor-directed typed public example of the Radar construction (coordinator plus PG participant plus fence plus sweeper). Example imports only L3 src modules; profile/app wiring stays L6-provided and is referenced textually, not sketched. Type-check evidence comes from a one-off tsc run with the repo toolchain (tsconfig covers src only); the integration test proves it runs.
-- [ ] L3-NOBUMP (acknowledge): no manifest or lock edits in L3 per the r2 single-writer rule, so the enforce-package-bump gate is expected to fail on this PR until the integration owner adds the serial version commit; every other gate must be green.
-- [x] L3-ENV (acknowledge): packet ENV upper-case suffix rejected by compose project naming, so all L3 gates use lowercase ENV=test-artifacts-861-l3 with identical isolation.
-- [ ] L3-QUOTA (acknowledge): quota-exhausted finalization maps to conflict 409 non-retriable as a genuine conflict; r2 names no explicit quota-exhausted outcome.
-- [ ] L3-QUARANTINE (acknowledge): unknown legacy codec on a found success row raises a typed quarantine error for L6 projection; L3 invents no migration-condition taxonomy.
+- [x] L5-BASE (acknowledge): worktree tmp/worktrees/861-L5 on branch feat/artifacts-861-L5 from origin/feat/artifacts-861-L3; merged origin/feat/artifacts-861-L1 then origin/feat/artifacts-861-L2 (BRANCH.md conflicts resolved toward ours; L5 BRANCH.md replaces the file next). Merge commits used direct git; all other commits use make commit MSG only.
+- [x] L5-TRACK (acknowledge): branch-lifecycle containment gate PASS (candidate contains all 342 branch event ids, rc=0); step 4 consolidate ok with zero skipped items; the 4 re-anchor events ship in the init commit; no further track writes in this lot.
+- [ ] L5-LEGACY (attention): legacy createArtifactService plus ensurePrivateView stay intact because http.ts and L6-owned tests consume them; L6 removes the split path during wiring. No second implicit fallback is added by L5.
+- [ ] L5-QUOTA (attention): ensure finalization reserves quota through the coordinator participant; replay never recharges (coordinator runs pre-quota lock groups on replayGuarded).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -79,55 +79,36 @@ Deliver the L3 atomic finalization coordinator with one additive migration and r
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: L3 is one lot in the S1 parallel wave; integration happens on the integration branch after the wave.
+- Rationale: L5 is one lot in the S2 parallel wave with L4; integration happens on the integration branch after the wave.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in L3; no UAT checkpoints apply.
+- No UI changes in L5; no UAT checkpoints apply.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline and constraints**
-  - [x] Read rules/MASTER.md, rules/workflow.md, r2 spec L3 row plus sections 1-5, Q0 inventory, Sol L0 review.
-  - [x] Worktree tmp/worktrees/artifacts-861-L3 on branch feat/artifacts-861-L3 from feat/artifacts-861-contracts verified.
-  - [x] ENV mapping: unit/typecheck/lint/integration on ENV=test-artifacts-861-l3 last argument; no services kept running.
-  - [x] Confirm scope and guardrails; r2 names over L0 shapes; no manifest edits.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read rules/MASTER.md, rules/workflow.md, r2 spec S2/L5 row plus sections 2-4, L0 frozen contracts, L1/L2/L3 sources.
+  - [x] Worktree tmp/worktrees/861-L5 on branch feat/artifacts-861-L5 from origin/feat/artifacts-861-L3 verified, L1 plus L2 merged, track containment gate PASS.
+  - [x] ENV mapping: unit/typecheck/lint/integration on ENV=test-861-l5 last argument; no services kept running.
+  - [x] Confirm scope and guardrails; frozen shared ports only; no manifest edits.
   - [x] Validate scope boundaries with make scope-check before each commit.
-- [x] **Lot 1 — Coordinator migration and postgreSQL executor**
-  - [x] packages/artifacts/migrations/0003_coordinator.sql: operation_keys plus operation_receipts, additive only.
-  - [x] packages/artifacts/src/adapters/postgres-commit.ts: coordination row, READ COMMITTED finalization connections, key lock, receipt read and insert.
-  - [x] Extend packages/artifacts/tests/migration.integration.test.ts with the 0003 describe block.
-  - [x] Extend packages/artifacts/tests/postgres.integration.test.ts with coordination-row convergence.
+- [x] **Lot 1 — Guarded ensure composition plus authorized replay**
+  - [x] packages/artifacts/src/server/authorized-replay.ts: ensure-domain replay adapter over coordinator.replayGuarded with request-bound guard, stored-receipt to ensure-result projection, quarantine propagation.
+  - [x] packages/artifacts/src/server/service.ts: guarded ensure composition alongside legacy exports (compiled profile plus key derivation plus invocation context, effective command, coordinator finalize with binding lock plus provisional effects, typed entry failures, no caller hash or scope).
   - [x] Lot gate:
-    - [x] make typecheck-artifacts ENV=test-artifacts-861-l3 last
-    - [x] make lint-artifacts ENV=test-artifacts-861-l3 last
-- [x] **Lot 2 — Commit protocol types and coordinator**
-  - [x] packages/artifacts/src/server/commit/types.ts: r2-exact invocation, context, fence, decision, transaction, participant, lock order, request and receipt types (self-contained: tsc rootDir bars l0-freeze imports).
-  - [x] packages/artifacts/src/server/commit/coordinator.ts: A4 steps 1-6, guarded replay, 23505 resolution, COMMIT-ack unknown, fence verification, exactly-once release, destroy-on-uncertain-release, one-shot armed barriers.
-  - [x] packages/artifacts/src/testing.ts: createArtifactCommitBarrier with the nine r2 points.
-  - [x] Lot gate:
-    - [x] make typecheck-artifacts ENV=test-artifacts-861-l3 last
-    - [x] make lint-artifacts ENV=test-artifacts-861-l3 last
-- [x] **Lot 3 — Coordinator regression tests and baseline proof**
-  - [x] packages/artifacts/tests/commit-coordinator.integration.test.ts: 14 tests (key recheck, same-key replay, different-hash conflict, denial rollback, guard-after-waits, revision race, last-unit quota race, two-process S3-barrier race, COMMIT unknown, exactly-once release, quarantine, replay quota policy, malformed input).
-  - [x] Baseline proof: new file fails to collect, 2 migration cases fail, postgres file fails on the L0 head; all pass on this branch.
-  - [x] Lot gate:
-    - [x] make test-artifacts-integration SCOPE=tests/commit-coordinator.integration.test.ts ENV=test-artifacts-861-l3 last (14/14)
-    - [x] make test-artifacts-integration SCOPE=tests/migration.integration.test.ts ENV=test-artifacts-861-l3 last (9/9)
-    - [x] make test-artifacts-integration SCOPE=tests/postgres.integration.test.ts ENV=test-artifacts-861-l3 last (11/11)
-    - [x] make test-artifacts ENV=test-artifacts-861-l3 last (unit, no collateral: 216/216)
+    - [x] make typecheck-artifacts ENV=test-861-l5 last
+    - [x] make lint-artifacts ENV=test-861-l5 last
+- [ ] **Lot 2 — Ensure and replay regression tests**
+  - [x] packages/artifacts/tests/service.test.ts: guarded ensure unit tests on a memory executor (success plus replay, denial with zero success row, fresh retry after denial, same-key different-command conflict, legacy tests untouched).
+  - [x] packages/artifacts/tests/idempotency.test.ts: durable-key idempotency (refused attempt never poisons the key, success replays only while currently authorized; legacy store tests untouched).
+  - [x] packages/artifacts/tests/ensure-authorization.integration.test.ts: real-PG ensure (guard-after-waits denial with zero committed residue, fresh denial retry, cross-invocation replay without recharge, same-key conflict, last quota unit, actor isolation, legacy quarantine).
+  - [ ] Lot gate:
+    - [x] make test-artifacts SCOPE=tests/service.test.ts ENV=test-861-l5 last
+    - [x] make test-artifacts SCOPE=tests/idempotency.test.ts ENV=test-861-l5 last
+    - [x] make test-artifacts-integration SCOPE=tests/ensure-authorization.integration.test.ts ENV=test-861-l5 last
+    - [x] make test-artifacts ENV=test-861-l5 last (unit, no collateral)
     - [x] make scope-check before each commit
-- [ ] **Lot 4 — Merge L0 fix, PR and CI**
-  - [x] Merge feat/artifacts-861-contracts after the L0 fix lands; reconcile shared names toward the fixed declarations.
-  - [x] Ship the typed Radar construction example (examples/radar-commit-setup.ts plus tests/radar-commit-setup.integration.test.ts, 3/3 green, one-off tsc proof with the repo toolchain).
-  - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only (one merge commit used direct git for the L0-fix merge conflict resolution).
-  - [x] Push branch and open DRAFT PR feat(artifacts): #861 L3 with base feat/artifacts-861-contracts (PR #727).
-  - [x] CI status: PR #727 gets no attached runs (workflow triggers only on main-targeted PRs/pushes); obtained validation-only dispatch run 39951001586 on this HEAD instead. validate-artifacts is green (probe plus packaging plus tuple specs); enforce-package-bump skipped (PR-only gate, expected-fail on a real PR until the integrator adds the serial version). Four jobs fail on one main-line cause: unallowlisted dompurify HIGH/CRITICAL advisories in the audit gate (zero manifest/lock diff in L3; critical GHSA-cg2g-xh64-v4q7 published 2026-10-22; dedicated lane PR #725 is fully green on run 39852217141, proving the bump is the fix). Unblock sequence, owned outside L3: merge #725 to main, take the base update into this branch (no L3 file edits), re-dispatch CI. Every repo gate verified locally on HEAD (typecheck, lint, unit 232/232, integration 14/14 plus 9/9 plus 11/11 plus 3/3, scope-check PASS each commit). Do not merge.
-- [x] **Lot 5 — Sol r1 fixes (review pr727_sol_r1, CHANGES)**
-  - [x] P1-1: quota reservation (with authority re-read first, A4.4 order) precedes the guard; guard re-invoked to revalidate after receipt/intent/barrier waits; expiry mid-unit denies.
-  - [x] P1-2: fence verified against the transaction token, invocation and freshly re-read revision; foreign/stale fences deny with invalid_object.
-  - [x] P1-3: guarded replay runs the pre-quota lock groups (no quota charge, no provisional writes, no intent completion); after_replay_lookup_before_guard fires after the lookup.
-  - [x] P1-4: phase-aware SQLSTATE classification (key-row 55P03 to conflict/409 non-retriable; 40001/40P01/57014 and other lock timeouts to 503 retriable); acquire-phase failures return outcomes; explicit quota_exhausted variant.
-  - [x] P1-5: per-connection settlement tracker (exactly-once abort/release); BEGIN-failure client disposal in the adapter; abandonment hook failures isolated from the primary decision; abandonment recorded on invalid-fence/quarantine/error paths.
-  - [x] P1-6/P2-1/P2-2 (L3-contained): testPoints rejects preparation-only points at construction; sweep batch retained on sweeper failure and async sweeps awaited/isolated; unknown request codecs rejected before storage; seam-division docs (6 coordinator points vs 3 L4 preparation points). Shared operation/transaction contract convergence stays joint L0/L3 work; public exports stay L6-owned.
-  - [x] Regression proof: 19 new tests plus rewritten quota race, red on baseline (16 fail on assertions, 2 leak-timeout on settlement, rewritten quota asserts quota_exhausted) and green after; 2 characterization tests (non-key lock timeout stays 503, server-commit ack-loss recovery) pass on both and lock the behavior.
-  - [x] Lot gate: typecheck, lint, unit 232/232, integration 32/32 plus 9/9 plus 11/11 plus 4/4, scope-check PASS, make down.
+- [x] **Lot 3 — PR and CI**
+  - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
+  - [x] Push branch and open DRAFT PR targeting feat/artifacts-861-L3.
+  - [x] Local gates green: typecheck plus lint plus unit (384 passed) plus integration (6 passed) plus scope-check; PR #737, head SHA fb255dfc5a543c5e733ccf595150ca9e63100bd9.
