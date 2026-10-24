@@ -75,13 +75,76 @@ export interface GcReport {
 }
 
 export interface GcService {
-  collect(blobs: PublicationBlobStore, prefix: string): Promise<GcReport>;
+  collect(
+    blobs: PublicationBlobStore,
+    prefix: string,
+    claims?: DeletionClaimStore,
+  ): Promise<GcReport>;
+}
+
+/**
+ * Durable exclusive deletion claims (spec r2 A4/A6). Purge claims a digest
+ * before dereferencing it; reference creation MUST check the claim and
+ * refuse new references to claimed digests; erasure acknowledges the claim.
+ */
+export interface DeletionClaimStore {
+  /** Exclusive claim; throws when the digest is already claimed. */
+  claim(digest: string, holder: string): Promise<void>;
+  /** Release the claim after the blob is gone (or the purge aborts). */
+  releaseClaim(digest: string): Promise<void>;
+  isClaimed(digest: string): Promise<boolean>;
+}
+
+export function createMemoryDeletionClaimStore(): DeletionClaimStore {
+  const holders = new Map<string, string>();
+  return {
+    async claim(digest: string, holder: string): Promise<void> {
+      if (holders.has(digest)) throw new Error(`deletion already claimed: ${digest}`);
+      holders.set(digest, holder);
+    },
+    async releaseClaim(digest: string): Promise<void> {
+      if (!holders.has(digest)) throw new Error(`deletion not claimed: ${digest}`);
+      holders.delete(digest);
+    },
+    async isClaimed(digest: string): Promise<boolean> {
+      return holders.has(digest);
+    },
+  };
+}
+
+/**
+ * A RefcountStore that refuses new references to claimed digests. Purge
+ * claims first, so racing publications cannot pin a blob scheduled for
+ * deletion; already-held references still protect the blob in collect.
+ */
+export function createClaimGuardedRefs(
+  refs: RefcountStore,
+  claims: DeletionClaimStore,
+): RefcountStore {
+  return {
+    addRef: async (digest: string, holder: string): Promise<void> => {
+      if (await claims.isClaimed(digest)) {
+        throw new Error(`blob scheduled for deletion: ${digest}`);
+      }
+      await refs.addRef(digest, holder);
+    },
+    releaseRef: (digest: string, holder: string): Promise<void> =>
+      refs.releaseRef(digest, holder),
+    count: (digest: string): Promise<number> => refs.count(digest),
+    isPinned: (digest: string): Promise<boolean> => refs.isPinned(digest),
+    pin: (digest: string, holder: string): Promise<void> => refs.pin(digest, holder),
+    unpin: (digest: string, holder: string): Promise<void> => refs.unpin(digest, holder),
+  };
 }
 
 /** Create a GC service over an injected refcount store (no driver imports). */
 export function createGcService(refs: RefcountStore): GcService {
   return {
-    async collect(blobs: PublicationBlobStore, prefix: string): Promise<GcReport> {
+    async collect(
+      blobs: PublicationBlobStore,
+      prefix: string,
+      claims?: DeletionClaimStore,
+    ): Promise<GcReport> {
       const report: GcReport = { deleted: [], retained: [], failures: [] };
       for (const key of await blobs.listKeys(prefix)) {
         let digest: string;
@@ -100,6 +163,14 @@ export function createGcService(refs: RefcountStore): GcService {
           report.deleted.push(key);
         } catch (error) {
           report.failures.push({ key, error: String(error) });
+          continue;
+        }
+        if (claims !== undefined && (await claims.isClaimed(digest))) {
+          try {
+            await claims.releaseClaim(digest);
+          } catch (error) {
+            report.failures.push({ key, error: String(error) });
+          }
         }
       }
       return report;

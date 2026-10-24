@@ -11,6 +11,7 @@
  */
 import { assertArtifactAccess } from './authorization.js';
 import { evaluateAccess, type AccessAction, type ArtifactAcl } from './access.js';
+import type { DeletionClaimStore } from './gc.js';
 import type { PublicationStateStore } from './publication.js';
 
 /**
@@ -143,6 +144,7 @@ export function createLifecycleService(
   store: LifecycleStore,
   clock: () => string = () => new Date().toISOString(),
   current?: CurrentPointer,
+  claims?: DeletionClaimStore,
 ): LifecycleService {
   async function ownerOf(artifactId: string): Promise<string> {
     const owner = await store.getOwner(artifactId);
@@ -205,6 +207,13 @@ export function createLifecycleService(
         await store.setReleaseState(releaseId, 'purged');
       }
       await store.setArtifactState(artifactId, 'purged');
+      // Durable exclusive deletion claims (spec r2 A4): from here on, new
+      // references to these digests are refused; erasure acknowledges them.
+      if (claims !== undefined) {
+        for (const digest of blobDigests) {
+          await claims.claim(digest, `purge:${artifactId}`);
+        }
+      }
       return { artifactId, purgedReleases: releases, blobDigests: [...blobDigests] };
     },
     async promote(artifactId: string, actorId: string, releaseId: string, expectedCurrent: string) {
