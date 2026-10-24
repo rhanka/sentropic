@@ -5,7 +5,7 @@ import type { McpRegistryBuiltin } from '../../mcp/registry.js';
 import { loadArtifactsMcp } from '../../loaders/mcp/artifacts.js';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
 import {
-  createArtifactsRegistryDefinition,
+  createArtifactsManifest,
   ARTIFACTS_PARAMETER_SCHEMA,
   ARTIFACTS_PROVIDER_ID,
   ARTIFACTS_PROVIDER_VERSION,
@@ -33,12 +33,12 @@ export function createArtifactsBuiltin(options: {
   if (options.commonRuleAdmission !== undefined && options.commonRuleAdmission !== false) {
     throw new Error('artifacts common-rule admission is not qualified');
   }
-  const definition = createArtifactsRegistryDefinition(options.definition);
-  const digest = computeManifestDigest(definition.manifest);
+  const manifest = createArtifactsManifest(options.definition);
+  const digest = computeManifestDigest(manifest);
   return {
     providerId: ARTIFACTS_PROVIDER_ID,
     version: ARTIFACTS_PROVIDER_VERSION,
-    capabilities: definition.manifest.tools.map((tool) => tool.name),
+    capabilities: manifest.tools.map((tool) => tool.name),
     parameterSchema: ARTIFACTS_PARAMETER_SCHEMA,
     load: async () => {
       const mcp = await loadArtifactsMcp(options.modules);
