@@ -423,6 +423,28 @@ describe('guarded ensure', () => {
     await expect(outcome).rejects.toBeInstanceOf(Quarantine);
   });
 
+  it('replays a stored receipt through the explicit guarded replay without recharging quota', async () => {
+    const harness = makeGuardedHarness();
+    const ensured = await harness.service.ensure(harness.invoke('alice'), harness.args('direct', 'k-direct'));
+    expect(ensured.ok).toBe(true);
+    const effective = createArtifactCommand(
+      compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE),
+      'artifacts_ensure',
+      { bindingName: 'direct', idempotencyKey: 'k-direct' },
+      { storageScopeId: ENSURE_SCOPE, actorId: 'alice' },
+      createRadarKeyDerivation({ storageScopeId: ENSURE_SCOPE, actorIds: [...ENSURE_ACTORS] }),
+    );
+    const replayed = await harness.service.replay(harness.invoke('alice'), {
+      internalKey: effective.identity.internalKey,
+      commandHash: effective.identity.commandHash,
+    });
+    expect(replayed.ok).toBe(true);
+    if (!replayed.ok || !ensured.ok) return;
+    expect(replayed.result).toEqual({ ...ensured.result, replayed: true });
+    expect(harness.state.resolveBindingCalls).toBe(1);
+    expect(harness.state.reserveQuotaCalls).toBe(1);
+  });
+
   it('reports an unknown COMMIT without certifying effects and recovers on the same key', async () => {
     const harness = makeGuardedHarness();
     harness.failNextCommit(Object.assign(new Error('terminating connection'), { code: '57P06' }));
