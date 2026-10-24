@@ -210,3 +210,107 @@ const ensureResult = (
   commitState: 'committed',
   replayed,
 });
+
+export function createGuardedEnsureService(deps: GuardedEnsureDeps): GuardedEnsureService {
+  const finalizeRequest = (
+    invocation: ArtifactInvocationContext, command: EffectiveArtifactCommand, policyRevision: string,
+  ): { request: FinalizeRequest; captured: { artifactId?: string; created?: boolean } } => {
+    const binding: EnsureBindingInput = {
+      ownerId: invocation.actorId,
+      storageScopeId: invocation.storageScopeId,
+      bindingName: command.payload.bindingName as string,
+      attemptId: invocation.invocationId,
+    };
+    const captured: { artifactId?: string; created?: boolean } = {};
+    const request: FinalizeRequest = {
+      scopeId: invocation.storageScopeId,
+      internalKey: command.identity.internalKey,
+      commandHash: command.identity.commandHash,
+      codecVersion: command.identity.codecVersion,
+      invocationId: invocation.invocationId,
+      actorId: invocation.actorId,
+      operation: 'ensure',
+      artifactId: null,
+      bindingName: binding.bindingName,
+      policyRevision,
+      locks: { 'binding-identity': [async (client) => { await deps.host.lockBinding(client, binding); }] },
+      provisional: async (client) => {
+        const receipt = await deps.host.resolveBinding(client, binding);
+        captured.artifactId = receipt.artifactId;
+        captured.created = receipt.created;
+      },
+      noteAbandonedAttempt: (attemptId) => deps.host.abandonAttempt(attemptId),
+      attemptId: invocation.invocationId,
+      guard: invocation.authorizeCommit,
+      receiptData: captured,
+    };
+    return { request, captured };
+  };
+
+  return {
+    async ensure(invocation, args) {
+      if (invocation.actorId.length === 0 || invocation.storageScopeId.length === 0) {
+        return { ok: false, failure: anonymousFailure(invocation) };
+      }
+      let command: EffectiveArtifactCommand;
+      try {
+        const { envelopeKey, ...commandArgs } = args;
+        command = createArtifactCommand(
+          deps.profile, 'artifacts_ensure', commandArgs,
+          { storageScopeId: invocation.storageScopeId, actorId: invocation.actorId },
+          deps.derivation, envelopeKey,
+        );
+      } catch (error) {
+        if (error instanceof ArtifactProfileInputError) {
+          return { ok: false, failure: profileEntryFailure(error, invocation.invocationId) };
+        }
+        return { ok: false, failure: internalFailure(invocation.invocationId, 'entry', error) };
+      }
+      let policyRevision: string;
+      try {
+        policyRevision = await deps.host.readPolicyRevision();
+      } catch (error) {
+        return { ok: false, failure: unavailableFailure(invocation.invocationId, 'acquire', error) };
+      }
+      const { request } = finalizeRequest(invocation, command, policyRevision);
+      const outcome = await deps.coordinator.finalize(request);
+      if (!outcome.ok) return { ok: false, failure: coordinatorFailure(outcome.failure) };
+      let receipt: EnsureReceipt;
+      try {
+        receipt = projectEnsureReceipt(outcome.result);
+      } catch (error) {
+        return { ok: false, failure: internalFailure(invocation.invocationId, 'resolve', error) };
+      }
+      return ensureResult(receipt, outcome.replayed, outcome.invocationId);
+    },
+
+    async replay(invocation, args) {
+      if (invocation.actorId.length === 0 || invocation.storageScopeId.length === 0) {
+        return { ok: false, failure: anonymousFailure(invocation) };
+      }
+      let policyRevision: string;
+      try {
+        policyRevision = await deps.host.readPolicyRevision();
+      } catch (error) {
+        return { ok: false, failure: unavailableFailure(invocation.invocationId, 'acquire', error) };
+      }
+      const outcome = await replayEnsureGuarded(deps.coordinator, {
+        invocation,
+        internalKey: args.internalKey,
+        commandHash: args.commandHash,
+        policyRevision,
+        locks: args.binding === undefined ? undefined : {
+          'binding-identity': [async (client) => { await deps.host.lockBinding(client, args.binding as EnsureBindingInput); }],
+        },
+      });
+      if (!outcome.ok) return { ok: false, failure: coordinatorFailure(outcome.failure) };
+      let receipt: EnsureReceipt;
+      try {
+        receipt = projectEnsureReceipt(outcome.result);
+      } catch (error) {
+        return { ok: false, failure: internalFailure(invocation.invocationId, 'resolve', error) };
+      }
+      return ensureResult(receipt, outcome.replayed, outcome.invocationId);
+    },
+  };
+}
