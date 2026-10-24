@@ -31,6 +31,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { callLLMStream } from '../../src/services/llm-runtime';
+import { modelSupportsReasoning } from '../../src/services/model-catalog';
 import { generateCommentResolutionProposal } from '../../src/services/context-comments';
 import { queueManager } from '../../src/services/queue-manager';
 
@@ -110,6 +111,15 @@ describe('Chat tools API - comment_assistant', () => {
         { type: 'done', data: {} }
       ])
     );
+    // Absorb the best-effort reasoning-effort classifier call: when the
+    // selected model supports reasoning, runAssistantGeneration invokes
+    // callLLMStream once for effort classification before the main turn.
+    // Without this absorber the classifier consumes the test's scripted
+    // Once stream and the turn runs on the empty default (zero tool calls).
+    // Classifier output is ignored by design (fallback: medium).
+    if (modelSupportsReasoning(getTestModel())) {
+      llmStreamMock.mockImplementationOnce(() => createStream([]));
+    }
   });
 
   afterEach(async () => {
