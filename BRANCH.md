@@ -40,6 +40,8 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
 
 ## Feedback Loop
 - `owner-all-public` / `acknowledge`: binding owner decisions. Public repos only, goal zero open findings at all times. For zod: dated exception plus migration.
+- `conductor-merge-733` / `acknowledge`: merged `origin/fix/ci-mistral-small` (merge commit, no rebase) into this branch; kept this BRANCH.md on conflict. #733 is superseded by this PR.
+- `zod-rooted-only` / `acknowledge`: extended the same dated exception (2026-11-07, Track 01M5PMR6AG9QDZG9H3N57TB3FS) to exact finding IDs, all verified zod-rooted in the lock/tree: `npm_audit_api_zod_high`, `npm_audit_api_@ai-sdk_provider-utils_high` (HIGH via zod peer dep; own GHSA-866g is low), `npm_audit_api_ollama-ai-provider_high` (no own advisory), `npm_audit_ui_zod_high`, `CVE-2023-54404_api_zod_3.23.8`, `CVE-2023-54404_api_zod_3.25.76` (CVE confirmed as zod record). No non-zod finding covered. The comments-tree `GHSA-mrhx-c7xc-m3w5` (published `@sentropic/comments@0.3.0` pins zod ^3.25.76, no fixed release exists) has no exception mechanism in its plain-`npm audit` step: residual red, unblocks only via the zod v4 migration release.
 - `root-cause` / `attention`: main audit-gate red since 2026-10-24 ~07:58Z (run 40076120099). body-parser 2.3.0 in range [2.0.0, 2.4.0) fixed by 2.4.0 patch. zod 3.25.76 (< 4.6.6) has no same-major fix, only major v4, so dated exception plus migration.
 
 ## AI Flaky tests
@@ -90,7 +92,8 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
     - [x] `make memory-l5-verify ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-sec-hotfix`
     - [x] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
 - [ ] **Lot N — Final validation**
-  - [ ] Run audit gate locally via image builds (`make build-api-image-fresh`, `make build-ui-image`) until un-allowlisted set empty.
-  - [ ] Final gate step 1: create PR using `BRANCH.md` text as PR body.
+  - [x] Run audit gate locally via image builds (`make build-api-image-fresh`, `make build-ui-image`): both green, `npm ci` consistent.
+  - [x] SCA api/ui compliance green; container api compliance green (only the 2 zod findings, both accepted).
+  - [ ] Final gate step 1: PR body is `BRANCH.md` text (PR already open, update body on push).
   - [ ] Final gate step 2: run and verify branch CI green on the exact head.
   - [ ] Final gate step 3: do NOT merge, report PR number, head SHA, CI URL.
