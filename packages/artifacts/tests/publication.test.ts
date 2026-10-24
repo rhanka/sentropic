@@ -16,11 +16,63 @@ import {
   createMemoryStateStore,
   createMemoryBlobStore,
   decidePublishAuthorization,
+  createGuardedPublicationService,
+  type GuardedPublicationDeps,
 } from '../src/server/publication.js';
 import type { ArtifactAcl } from '../src/server/access.js';
 import { createMemoryIntentStore } from '../src/server/object-intents.js';
 import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
 import { parseManifest } from '../src/codecs.js';
+import { createMemoryLifecycleStore } from '../src/server/lifecycle.js';
+import { createMemoryRefcountStore, createGcService } from '../src/server/gc.js';
+import type { FinalizeRequest, FinalizeResult } from '../src/server/commit/types.js';
+
+function guardedFixture(finalize: (request: FinalizeRequest) => Promise<FinalizeResult>) {
+  const refs = createMemoryRefcountStore();
+  const blobs = createMemoryBlobStore();
+  const deps: GuardedPublicationDeps = {
+    coordinator: { finalize, replayGuarded: finalize }, refs, blobs,
+    intents: createMemoryIntentStore(), lifecycle: createMemoryLifecycleStore(),
+    resolveAcl: async () => ({ ownerId: 'owner-1', grants: [], isPublic: false }),
+    createUnitWriter: () => ({
+      putRelease: async () => {}, registerBlob: async () => {},
+      promoteCurrentLatestWins: async () => {}, completeIntent: async () => {},
+      addReleaseRef: (digest, holder) => refs.addRef(digest, holder),
+    }),
+  };
+  const input = {
+    ownerId: 'owner-1', actorId: 'owner-1', storageScopeId: 'scope-1',
+    artifactId: '11111111-1111-4111-8111-111111111111', profile: {},
+    files: [{ path: 'index.html', mimeType: 'text/html', bytes: new Uint8Array([1]) }],
+    policyRevision: 'rev-1', callerKey: 'key-1',
+  };
+  return { deps, refs, blobs, input };
+}
+
+describe('finalized publication regressions', () => {
+  it('should protect active preparation while finalization waits', async () => {
+    const f = guardedFixture(async () => {
+      const report = await createGcService(f.refs).collect(f.blobs, 'artifacts/');
+      expect(report.deleted).toEqual([]);
+      expect(report.retained).toHaveLength(1);
+      return { ok: false, failure: { commitState: 'not_committed' } } as FinalizeResult;
+    });
+    await createGuardedPublicationService(f.deps).publishFinalized(f.input);
+    expect((await createGcService(f.refs).collect(f.blobs, 'artifacts/')).deleted).toHaveLength(1);
+  });
+
+  it('should retain committed refs when COMMIT acknowledgement is lost', async () => {
+    const f = guardedFixture(async (request) => {
+      await request.provisional!({ query: async () => ({ rows: [], rowCount: 0 }) });
+      return { ok: false, failure: { commitState: 'unknown' } } as FinalizeResult;
+    });
+    await createGuardedPublicationService(f.deps).publishFinalized(f.input);
+    expect(await f.refs.count(`sha256:${createHash('sha256').update(f.input.files[0].bytes).digest('hex')}`)).toBe(1);
+    const report = await createGcService(f.refs).collect(f.blobs, 'artifacts/');
+    expect(report.deleted).toEqual([]);
+    expect(report.retained).toHaveLength(1);
+  });
+});
 
 function owe(bytes: number[]): Uint8Array {
   return new Uint8Array(bytes);

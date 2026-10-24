@@ -202,6 +202,7 @@ describe('guarded publication authorization', () => {
       blobs: new MapBlobs(),
       intents: pgIntents(),
       lifecycle: pgStore,
+      refs: pgStore,
       resolveAcl: (id: string) => pgStore.getArtifactAcl(id),
       locks: lockCallbacks(artifactId),
       noteAbandoned: (attemptId: string) => {
@@ -298,6 +299,7 @@ describe('guarded publication authorization', () => {
       blobs: new MapBlobs(),
       intents: pgIntents(),
       lifecycle: pgStore,
+      refs: pgStore,
       resolveAcl: (id: string) => pgStore.getArtifactAcl(id),
       locks: lockCallbacks(artifactId),
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
@@ -342,6 +344,7 @@ describe('guarded publication authorization', () => {
       blobs: new MapBlobs(),
       intents: pgIntents(),
       lifecycle: pgStore,
+      refs: pgStore,
       resolveAcl: (id: string) => pgStore.getArtifactAcl(id),
       locks: racingLocks,
     });
@@ -390,6 +393,7 @@ describe('guarded publication authorization', () => {
       blobs: new MapBlobs(),
       intents: pgIntents(),
       lifecycle: pgStore,
+      refs: pgStore,
       resolveAcl: (id: string) => pgStore.getArtifactAcl(id),
       locks: lockCallbacks(artifactId),
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
