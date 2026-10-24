@@ -4,7 +4,7 @@
 - [ ] Compose the selected artifacts 0.2.0 profile through mesh and qualify the package tuple.
 
 ## Scope / Guardrails
-- [x] Implement spec r2 S3/L7 only; no artifacts entrypoint edits.
+- [x] Implement spec r2 S3/L7 only; artifacts entrypoint edits are limited to PR735 P1 (BR861-EX4).
 - [x] Worktree: `tmp/worktrees/861-L7`; branch: `feat/artifacts-861-L7`; base: `origin/feat/artifacts-861-L3`.
 - [x] Merge L1 and L2 without rebase; preserve their implementation.
 - [x] Make-only; Docker-only tooling; no Python; ENV=test-861-l7 always last.
@@ -26,6 +26,8 @@
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/packaging/mcp-registry-consumer.spec.ts`
   - `packages/cluster-mesh/tests/packaging/lock-integrity-registry.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/llm0192.mk`
+  - `packages/cluster-mesh/tests/packaging/llm0192.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -40,20 +42,22 @@
   - [x] Record rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] PR735 P2-4: retain the five-entry published 0.19.2 probe and its make target under packaging tests. The versioned target passes all five imports and required-member checks; the packaging regression refuses a missing target.
 - [x] BR861-EX4 (owner PR735 request): allow authored `packages/artifacts/src/mcp-core.ts` edits only for required caller-key schemas and the envelope consistency guard. Impact: rejects invalid publication requests before app effects; rollback: revert PR735 P1. Manifests/locks remain integration-owner writes.
 - [x] PR735 P1: five regression failures reproduced missing schema requirements, missing metadata guards and acceptance of conflicting/envelope-only keys. Require principal-scoped argument keys; compiled-dispatch argument-only and equal-envelope cases succeed, conflicts and envelope-only writes refuse before app effects.
 - [x] PR735 P2-2: regression observed eager definition construction; catalog metadata now uses only the manifest factory. Full definition construction occurs after qualified module loading, with atomic refusal on loader failure.
 - [x] PR735 P2-1: regression caught fifteen handler/value entries in the four-tool fixture; the consistent selected fixture now uses the real module registry and compile path, with exactly four catalog, adapter and compiled tools and no factory mock.
 - [x] PR735 P2-3: regression failed on the runtime barrel export; common-contract consumers now import the self-sufficient data leaf directly. Public subpath registration remains integration-owner work.
-- [x] BR861-EX2: inherit artifacts changes only through the explicitly requested L1/L2 merges; no authored artifacts edits. Impact: dependency ancestry; rollback: revert the merge. Merge commits retain inherited changes over 150 lines; authored commits remain under 150 lines.
+- [x] BR861-EX2: inherit artifacts changes only through the explicitly requested L1/L2 merges; no authored artifacts edits before PR735 P1 (BR861-EX4). Impact: dependency ancestry; rollback: revert the merge. Merge commits retain inherited changes over 150 lines; authored commits remain under 150 lines.
 - [x] BR861-EX3: the existing release-range parser rejects the spec-required `0.19.2 || >=0.22.0 <0.28.0`; extend only alternative parsing, preserving malformed/prerelease refusal. Impact: bounded tuple loader prerequisite; rollback: revert the parser change and retain current ranges.
-- [ ] L6 handoff: MCP factories still expose fifteen tools and do not consume the L1 profile. Owner: L6 author. Scope: MCP factory/adapter wiring and profile digest in registry integrity evidence. Acceptance: one compiled profile drives four-tool manifest, adapter, handlers and schemas; argument/envelope and actor-domain fixtures pass. L7 selected-definition tests are bridge fixtures, not real four-tool provider qualification.
+- [ ] L6 handoff: MCP factories still expose fifteen tools and do not consume the L1 profile. Owner: L6 author. Scope: MCP factory/adapter wiring and profile digest in registry integrity evidence. Acceptance: one compiled production profile drives four-tool manifest, adapter, handlers and schemas; actor-domain fixtures pass. L7 now compiles a consistent four-tool fixture through the real registry and tests argument/envelope dispatch; production profile wiring remains L6 work.
 - [ ] Integration-owner handoff: reserve mesh pack-only version; add `./storage/common-contract` export; update artifacts peer/catalog to `>=0.2.0 <0.3.0` and llm-mesh peer/catalog to `0.19.2 || >=0.22.0 <0.28.0`; refresh locks with one writer. Acceptance: ordinary bump gate, catalog/manifest parity and strict full-Radar install pass. No source-package publication is authorized here.
 - [ ] Consumer handoff: i-cond/Q3/Q4 supplies the qualified full Radar tree and pinned lock/image after L6. Acceptance: strict install without force/legacy peer flags, sixteen-tool composition and both transport replay directions. The source/packed baseline tuple is not an artifacts 0.2.0 qualification receipt.
-- [x] Published `@sentropic/llm-mesh@0.19.2` surface probe: all five catalog entries (`llm-mesh`, facade, enrollment, node, cloud-code transport) imported with zero missing required members in a clean container. Command: `make -f /tmp/861-L7.mk qualify-llm0192 ENV=test-861-l7`; probe SHA-256 `6270321d9a894997bcde652493fd59e11b4c74c0b0b835b2eb60115335a18a31`. This proves entry compatibility only, not the full Radar tuple.
+- [x] Published `@sentropic/llm-mesh@0.19.2` surface probe: all five catalog entries (`llm-mesh`, facade, enrollment, node, cloud-code transport) imported with zero missing required members in a clean container. Reproducible command: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f packages/cluster-mesh/tests/packaging/llm0192.mk qualify-llm0192 ENV=test-861-l7`, followed by locked `make down ENV=test-861-l7`. This proves entry compatibility only, not the full Radar tuple.
 - [x] `make pack-cluster-mesh ENV=test-861-l7`: PASS standalone manifest guard; current mesh 0.21.2 archive SHA-256 `9634e4d34870b49efc77b170f06b3a202331412597e4a39b51dc3996e7815580`.
 - [x] First full mesh run: 1083 passed, 129 environment-gated skips, one SQLite second-holder timeout (5000 ms). `make test-cluster-mesh SCOPE=tests/storage/sqlite-corpus.spec.ts ENV=test-861-l7`: 4/4 pass unchanged. No timeout or SQLite implementation changes; full rerun required.
-- [ ] Full-suite gate remains RED after three runs: 1083/1082/1083 passes, 129 gated skips each, and 1/2/1 SQLite timeouts. Failures moved between sqlite-corpus, sqlite-capabilities/sqlite-lanes, and instance-ownership; observed host load was 22–38. No root cause or flaky acceptance is claimed. Owner: storage maintainer/integration owner; bounded scope: reproduce SQLite child-process timing in the shared runner, outside L7 paths. Acceptance: original `make test-cluster-mesh ENV=test-861-l7` passes unchanged, without timeout increases or skipped tests.
+- [ ] Full-suite gate remains RED: serial PR735 validation has 1093 passes, 129 gated skips and one 5000 ms timeout in `tests/storage/instance-ownership.spec.ts:73` (foreign caller fd closes). Earlier three runs had 1083/1082/1083 passes and 1/2/1 SQLite timeouts. No root cause or flaky acceptance is claimed. Owner: storage maintainer/integration owner; bounded scope: reproduce SQLite child-process timing in the shared runner, outside the five PR735 fixes. Acceptance: original `make test-cluster-mesh ENV=test-861-l7` passes unchanged, without timeout increases or skipped tests.
+- [x] PR735 regression replay in a disposable cold workspace: P1 produces five expected assertion failures; P2-1/P2-2/P2-3/P2-4 each produce one expected failure when reintroduced. Restored corrections pass all 21 artifacts mesh tests, four source tuple checks and 41 artifacts MCP/parity tests. Docker commands use the shared lock and locked stack teardown.
 - [x] Draft PR #735 opened against L3; source diff inspected; no authored artifacts edits or manifest/lock writes. Branch/worktree gates passed, every authored commit is below 150 changed lines.
 
 ## AI Flaky tests
