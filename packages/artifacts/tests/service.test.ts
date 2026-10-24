@@ -123,11 +123,14 @@ const ENSURE_SCOPE = 'scope-l5';
 const ENSURE_ACTORS = ['alice', 'bob'];
 
 interface GuardedHarness {
+  serviceFor(scope: string, actors: readonly string[]): ReturnType<typeof createGuardedEnsureService>;
   service: ReturnType<typeof createGuardedEnsureService>;
   receipts: Map<string, StoredCommitReceipt>;
   bindings: Map<string, { artifactId: string; scope: string; attempt: string }>;
-  state: { reserveQuotaCalls: number; resolveBindingCalls: number };
+  state: { reserveQuotaCalls: number; resolveBindingCalls: number; locks: string[]; purposes: string[] };
   setApproval(actor: string, approved: boolean): void;
+  failNextCommit(error: unknown): void;
+  seedLegacy(internalKey: string): void;
   invoke(actor: string, storageScopeId?: string): ArtifactInvocationContext;
   args(bindingName?: string, idempotencyKey?: string): { bindingName: string; idempotencyKey: string };
 }
@@ -137,7 +140,9 @@ const makeGuardedHarness = (options?: { quotaTotal?: number }): GuardedHarness =
   const bindings = new Map<string, { artifactId: string; scope: string; attempt: string }>();
   const approvals = new Map<string, boolean>([['alice', true], ['bob', true]]);
   const quota = { total: options?.quotaTotal ?? 100, used: 0 };
-  const state = { reserveQuotaCalls: 0, resolveBindingCalls: 0 };
+  const state = { reserveQuotaCalls: 0, resolveBindingCalls: 0, locks: [] as string[], purposes: [] as string[] };
+  let commitErrorOnce: unknown;
+  let commitErrorArmed = false;
   let invSeq = 0;
   const executor: CommitExecutor = {
     async ensureCoordinationRow(): Promise<void> {},
@@ -154,6 +159,12 @@ const makeGuardedHarness = (options?: { quotaTotal?: number }): GuardedHarness =
           staged = receipt;
         },
         async commit(): Promise<void> {
+          if (commitErrorArmed) {
+            commitErrorArmed = false;
+            const error = commitErrorOnce;
+            commitErrorOnce = undefined;
+            throw error;
+          }
           if (staged !== undefined) receipts.set(`${staged.scopeId}/${staged.internalKey}`, staged);
         },
         async rollback(): Promise<void> { staged = undefined; },
@@ -183,6 +194,7 @@ const makeGuardedHarness = (options?: { quotaTotal?: number }): GuardedHarness =
   const guard = async (
     context: ArtifactCommitContext, transaction: ArtifactCommitTransaction,
   ): Promise<ArtifactAuthorizationDecision> => {
+    state.purposes.push(context.purpose);
     const revision = await transaction.participant.readRevision();
     if (context.policyRevision !== revision) {
       return { allowed: false, reason: 'revoked', publicCode: 'access_denied', status: 403, retriable: false };
@@ -194,7 +206,9 @@ const makeGuardedHarness = (options?: { quotaTotal?: number }): GuardedHarness =
     return { allowed: true, fence: transaction.participant.mintFence(revision, context.invocationId) };
   };
   const host: GuardedEnsureHost = {
-    async lockBinding(): Promise<void> {},
+    async lockBinding(_client, binding) {
+      state.locks.push(`${binding.ownerId}/${binding.bindingName}`);
+    },
     async resolveBinding(_client, binding) {
       state.resolveBindingCalls += 1;
       const key = `${binding.ownerId}/${binding.bindingName}`;
@@ -214,11 +228,28 @@ const makeGuardedHarness = (options?: { quotaTotal?: number }): GuardedHarness =
   };
   const coordinator = createArtifactCommitCoordinator({ executor, policy });
   const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
-  const derivation = createRadarKeyDerivation({ storageScopeId: ENSURE_SCOPE, actorIds: [...ENSURE_ACTORS] });
+  const serviceFor = (scope: string, actors: readonly string[]) => createGuardedEnsureService({
+    profile,
+    coordinator,
+    derivation: createRadarKeyDerivation({ storageScopeId: scope, actorIds: [...actors] }),
+    host,
+  });
   return {
-    service: createGuardedEnsureService({ profile, coordinator, derivation, host }),
+    serviceFor,
+    service: serviceFor(ENSURE_SCOPE, ENSURE_ACTORS),
     receipts, bindings, state,
     setApproval: (actor, approved) => { approvals.set(actor, approved); },
+    failNextCommit: (error) => { commitErrorOnce = error; commitErrorArmed = true; },
+    seedLegacy: (internalKey) => {
+      receipts.set(`${ENSURE_SCOPE}/${internalKey}`, {
+        scopeId: ENSURE_SCOPE,
+        internalKey: internalKey as StoredCommitReceipt['internalKey'],
+        commandHash: 'legacy-hash',
+        codecVersion: 'artifacts-command/v0',
+        receipt: { artifactId: randomUUID(), created: true },
+        createdAt: new Date(0).toISOString(),
+      });
+    },
     invoke: (actor, storageScopeId = ENSURE_SCOPE) => ({
       invocationId: `inv-l5-${(invSeq += 1)}`, actorId: actor, storageScopeId, authorizeCommit: guard,
     }),
@@ -241,5 +272,58 @@ describe('guarded ensure', () => {
     expect(harness.state.resolveBindingCalls).toBe(1);
     expect(harness.state.reserveQuotaCalls).toBe(1);
     expect(harness.receipts.size).toBe(1);
+  });
+
+  it('denies without a replayable success and retries fresh after re-authorization', async () => {
+    const harness = makeGuardedHarness();
+    harness.setApproval('alice', false);
+    const denied = await harness.service.ensure(harness.invoke('alice'), harness.args('site', 'k-denied'));
+    expect(denied.ok).toBe(false);
+    if (denied.ok) return;
+    expect(denied.failure).toMatchObject({
+      category: 'unauthorized_at_commit',
+      httpStatus: 403,
+      publicCode: 'access_denied',
+      retriable: false,
+      commitState: 'not_committed',
+    });
+    expect(harness.receipts.size).toBe(0);
+    expect(harness.bindings.size).toBe(0);
+    harness.setApproval('alice', true);
+    const retried = await harness.service.ensure(harness.invoke('alice'), harness.args('site', 'k-denied'));
+    expect(retried.ok).toBe(true);
+    if (!retried.ok) return;
+    expect(retried.result).toMatchObject({ created: true, replayed: false });
+    expect(harness.receipts.size).toBe(1);
+  });
+
+  it('conflicts on the same key with a different command without an extra release', async () => {
+    const harness = makeGuardedHarness();
+    const first = await harness.service.ensure(harness.invoke('alice'), harness.args('site-a', 'k-shared'));
+    expect(first.ok).toBe(true);
+    const second = await harness.service.ensure(harness.invoke('alice'), harness.args('site-b', 'k-shared'));
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.failure).toMatchObject({
+      category: 'conflict',
+      httpStatus: 409,
+      publicCode: 'conflict',
+      retriable: false,
+      commitState: 'not_committed',
+    });
+    expect(harness.receipts.size).toBe(1);
+  });
+
+  it('invokes the guard after waits with finalize then replay purposes', async () => {
+    const harness = makeGuardedHarness();
+    const first = await harness.service.ensure(harness.invoke('alice'), harness.args('observed', 'k-observed'));
+    expect(first.ok).toBe(true);
+    const second = await harness.service.ensure(harness.invoke('alice'), harness.args('observed', 'k-observed'));
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.result.replayed).toBe(true);
+    expect(harness.state.purposes).toContain('finalize');
+    expect(harness.state.purposes).toContain('replay');
+    expect(harness.state.locks).toEqual(['alice/observed', 'alice/observed']);
   });
 });
