@@ -1,4 +1,5 @@
 {
+  "Débordements de texte": "Text overflows",
   "Décisions et suites": "Decisions and next steps",
   "G1 répartit les responsabilités ; G2 sépare profils et moteur de diagramme ; G3 confie la présentation d’annotate au Design System et les données à Sentropic.": "G1 assigns responsibilities; G2 separates profiles from the diagram engine; G3 assigns annotate presentation to Design System and data to Sentropic.",
   "H1 · Acté le 19 octobre 2026 : « il faut prevoir les 2 ». Chaque application Sentropic doit permettre l’hébergement des artefacts sur un sous-domaine ou sur un domaine distinct.": "H1 · Accepted on 19 October 2026: « il faut prevoir les 2 ». Each Sentropic app must support artifact hosting on a subdomain or a separate domain.",
