@@ -215,7 +215,7 @@ describe('Queue - generic workflow transition runtime behind Flow ports', () => 
         inputs: {
           folderId: 'folder-1',
           matrixMode: 'default',
-          model: 'gpt-4.1-nano',
+          model: 'mistral-small-2603',
           locale: 'fr',
         },
         generation: {
@@ -339,7 +339,7 @@ describe('Queue - generic workflow transition runtime behind Flow ports', () => 
       state: {
         inputs: {
           folderId: 'folder-join',
-          model: 'gpt-4.1-nano',
+          model: 'mistral-small-2603',
           locale: 'fr',
         },
         generation: {
@@ -433,7 +433,7 @@ describe('Queue - generic workflow transition runtime behind Flow ports', () => 
           matrixMode: 'generate',
           matrixSource: 'prompt',
           folderId: 'folder-matrix-join',
-          model: 'gpt-4.1-nano',
+          model: 'mistral-small-2603',
           locale: 'fr',
         },
       },
@@ -615,7 +615,7 @@ describe('Queue - generic workflow transition runtime behind Flow ports', () => 
           matrixMode: 'generate',
           matrixSource: 'prompt',
           folderId: 'folder-matrix-race',
-          model: 'gpt-4.1-nano',
+          model: 'mistral-small-2603',
           locale: 'fr',
         },
       },
@@ -775,7 +775,7 @@ describe('Queue - generic workflow transition runtime behind Flow ports', () => 
       state: {
         inputs: {
           folderId: 'folder-replay',
-          model: 'gpt-4.1-nano',
+          model: 'mistral-small-2603',
           locale: 'fr',
         },
         generation: {

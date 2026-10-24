@@ -121,6 +121,14 @@ test.describe('Chat heavy flows', () => {
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 5_000 });
 
+    // CI model: mistral-small-2603 (gpt-4.1-nano retired; production default unchanged).
+    // Track 01M5PCVH1Y8ZAVM7T94SRAWVR5: revert/review when seats are available.
+    const modelSelect = page.locator('#chat-model-selection');
+    await expect(
+      modelSelect.locator('option[value="mistral::mistral-small-2603"]'),
+    ).toHaveCount(1, { timeout: 10_000 });
+    await modelSelect.selectOption('mistral::mistral-small-2603');
+
     const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
     await menuButton.click();
     const menu = composerMenu(page);
