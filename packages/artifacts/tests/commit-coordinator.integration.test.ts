@@ -19,6 +19,8 @@ import { Pool } from 'pg';
 import { createPostgresCommitExecutor } from '../src/adapters/postgres-commit.js';
 import { createArtifactCommitBarrier } from '../src/testing.js';
 import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
+import { CommitQuarantineError } from '../src/server/commit/types.js';
+import { COORDINATOR_TEST_POINTS } from '../src/server/commit/types.js';
 import {
   type ArtifactCommitContext,
   type ArtifactCommitTransaction,
@@ -31,7 +33,10 @@ import {
   type FinalizeRequest,
   type FinalizeTxClient,
   type InternalIdempotencyKey,
+  type StoredCommitReceipt,
 } from '../src/server/commit/types.js';
+import type { ArtifactFailure as FrozenArtifactFailure } from '../l0-freeze/failure-contract.js';
+import type { CommitBarrierPoint as FrozenBarrierPoint } from '../l0-freeze/commit-contract.js';
 
 const DATABASE_URL = process.env['DATABASE_URL'];
 if (DATABASE_URL === undefined || DATABASE_URL.length === 0) {
@@ -1378,11 +1383,6 @@ describe('coordinator sol-r1 regressions', () => {
     expect(coordinatorOf).toThrow('unknown coordinator test point');
   });
 });
-import { CommitQuarantineError } from '../src/server/commit/types.js';
-import { COORDINATOR_TEST_POINTS } from '../src/server/commit/types.js';
-  type StoredCommitReceipt,
-import type { ArtifactFailure as FrozenArtifactFailure } from '../l0-freeze/failure-contract.js';
-import type { CommitBarrierPoint as FrozenBarrierPoint } from '../l0-freeze/commit-contract.js';
 
 describe('coordinator sol-r2 regressions', () => {
   interface StubLog {
