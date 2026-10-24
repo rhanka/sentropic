@@ -447,7 +447,8 @@ describe('AI Workflow - Complete Integration Test', () => {
     // Cleanup stream events
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, folderStreamId));
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, initiativeStreamId));
-      }, 120000);
+      // The existing phase deadlines total 282s, including the live summary job.
+      }, 300000);
 
   it('should accept the org-aware list schema with explicit org_ids', async () => {
     const orgAlphaResponse = await authenticatedRequest(
