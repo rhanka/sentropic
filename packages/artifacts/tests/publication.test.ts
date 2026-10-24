@@ -25,6 +25,8 @@ import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server
 import { parseManifest } from '../src/codecs.js';
 import { createMemoryRefcountStore, createGcService } from '../src/server/gc.js';
 import type { FinalizeRequest, FinalizeResult } from '../src/server/commit/types.js';
+import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
 
 function guardedFixture(finalize: (request: FinalizeRequest) => Promise<FinalizeResult>) {
   const refs = createMemoryRefcountStore();
@@ -33,7 +35,7 @@ function guardedFixture(finalize: (request: FinalizeRequest) => Promise<Finalize
     coordinator: { finalize, replayGuarded: finalize }, refs, blobs,
     intents: createMemoryIntentStore(),
     createUnitWriter: () => ({
-      readAuthorization: async () => ({ state: 'active', acl: { ownerId: 'owner-1', grants: [], isPublic: false } }),
+      readAuthorization: async () => ({ state: 'active', acl: { ownerId: 'owner-1', grants: [], isPublic: false, withdrawn: false } }),
       putSource: async () => {},
       putRelease: async () => {}, registerBlob: async () => {},
       promoteCurrentLatestWins: async () => {}, completeIntent: async () => {},
@@ -46,10 +48,23 @@ function guardedFixture(finalize: (request: FinalizeRequest) => Promise<Finalize
     files: [{ path: 'index.html', mimeType: 'text/html', bytes: new Uint8Array([1]) }],
     policyRevision: 'rev-1', callerKey: 'key-1',
   };
-  return { deps, refs, blobs, input };
+  const identity = createArtifactCommand(compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE),
+    'artifacts_publish', { artifactId: input.artifactId, idempotencyKey: input.callerKey,
+      files: input.files.map((file) => ({ ...file, bytes: [...file.bytes] })) }, input,
+    createRadarKeyDerivation({ storageScopeId: input.storageScopeId, actorIds: [input.actorId] })).identity;
+  return { deps, refs, blobs, input: { ...input, identity } };
 }
 
 describe('finalized publication regressions', () => {
+  it('should forward the frozen L1 identity unchanged to finalization', async () => {
+    const f = guardedFixture(async (request) => {
+      expect({ internalKey: request.internalKey, commandHash: request.commandHash,
+        codecVersion: request.codecVersion }).toEqual(f.input.identity);
+      return { ok: false, failure: { commitState: 'not_committed' } } as FinalizeResult;
+    });
+    await createGuardedPublicationService(f.deps).publishFinalized(f.input);
+  });
+
   it('should protect active preparation while finalization waits', async () => {
     const f = guardedFixture(async () => {
       const report = await createGcService(f.refs).collect(f.blobs, 'artifacts/');
