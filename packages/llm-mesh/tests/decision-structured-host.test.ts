@@ -2,14 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { createStructuredDecisionAdapter } from '../src/decision/structured.js';
 import { createDecisionService } from '../src/decision/service.js';
 import { createProviderRegistry } from '../src/registry.js';
+import type { ProviderAdapter } from '../src/registry.js';
 import { parseDecisionAdapterResult } from '../src/decision/adapter-result.js';
-import { decisionRequest, decisionServiceFixture, structuredDecisionDescriptor, structuredDecisionPrice, structuredEvidenceBody } from './decision-fixtures.js';
+import { decisionRequest, decisionServiceFixture, structuredDecisionDescriptor, structuredDecisionPrice, structuredEvidenceBody, structuredEvidenceEnvelope } from './decision-fixtures.js';
 
 const SECRET = 'synthetic-secret-canary';
 const structuredService = (sendText: string, descriptorOverrides: Record<string, unknown> = {}) => {
   const base = decisionServiceFixture();
   const descriptor = { ...structuredDecisionDescriptor(), ...descriptorOverrides };
-  const send = vi.fn(async () => sendText);
+  const send = vi.fn(async () => structuredEvidenceEnvelope(sendText));
   const adapter = createStructuredDecisionAdapter({ descriptor: descriptor as never, transport: { send } });
   const resolvePrice = vi.fn(async () => structuredDecisionPrice(descriptor.wireModel));
   const service = createDecisionService({ ...base.options,
@@ -33,7 +34,7 @@ describe('structured host boundary (R2-F4/R2-F5)', () => {
   it.each(['verdict', 'score', 'scale'])('rejects an undeclared structured %s canary at the host boundary', async (carrier) => {
     const { descriptor } = structuredService(structuredEvidenceBody({ score: 0.7 }));
     const adapter = createStructuredDecisionAdapter({ descriptor: descriptor as never,
-      transport: { send: vi.fn(async () => structuredEvidenceBody({ score: 0.7 })) } });
+      transport: { send: vi.fn(async () => structuredEvidenceEnvelope(structuredEvidenceBody({ score: 0.7 }))) } });
     const request = decisionRequest({ evaluator: { ...descriptor.evaluator } });
     const valid = await adapter.decision(request);
     if (!valid.ok) throw new Error('valid adapter fixture failed');
@@ -49,7 +50,7 @@ describe('structured host boundary (R2-F4/R2-F5)', () => {
   it('rejects a substituted structured score scale and direction at the host', async () => {
     const { descriptor } = structuredService(structuredEvidenceBody({ score: 0.7 }));
     const adapter = createStructuredDecisionAdapter({ descriptor: descriptor as never,
-      transport: { send: vi.fn(async () => structuredEvidenceBody({ score: 0.7 })) } });
+      transport: { send: vi.fn(async () => structuredEvidenceEnvelope(structuredEvidenceBody({ score: 0.7 }))) } });
     const request = decisionRequest({ evaluator: { ...descriptor.evaluator } });
     const valid = await adapter.decision(request);
     if (!valid.ok) throw new Error('valid adapter fixture failed');
@@ -64,7 +65,7 @@ describe('structured host boundary (R2-F4/R2-F5)', () => {
     const declared = structuredService(structuredEvidenceBody({ score: 0.7 }),
       { scoreSemantics: { meaning: 'support', meaningRef: 'fixture:synthetic-scalar' } });
     const adapter = createStructuredDecisionAdapter({ descriptor: declared.descriptor as never,
-      transport: { send: vi.fn(async () => structuredEvidenceBody({ score: 0.7 })) } });
+      transport: { send: vi.fn(async () => structuredEvidenceEnvelope(structuredEvidenceBody({ score: 0.7 }))) } });
     const request = decisionRequest({ evaluator: { ...declared.descriptor.evaluator } });
     const valid = await adapter.decision(request);
     if (!valid.ok) throw new Error('valid adapter fixture failed');
@@ -74,30 +75,54 @@ describe('structured host boundary (R2-F4/R2-F5)', () => {
       scoreSemantics: { meaning: 'declared-other', meaningRef: 'fixture:other' } };
     expect(parseDecisionAdapterResult(structuredClone(valid), request, rebound as never, SECRET).ok).toBe(false);
   });
-  it('prevents the service from returning an undeclared structured verdict carrier', async () => {
+  it('rejects an undeclared structured verdict carrier injected at the service boundary', async () => {
     const base = decisionServiceFixture();
     const descriptor = structuredDecisionDescriptor();
-    const send = vi.fn(async () => structuredEvidenceBody({ score: 0.7 }));
+    const send = vi.fn(async () => structuredEvidenceEnvelope(structuredEvidenceBody({ score: 0.7 })));
     const inner = createStructuredDecisionAdapter({ descriptor: descriptor as never, transport: { send } });
-    const adapter = { ...inner, decision: async (...args: Parameters<typeof inner.decision>) => {
-      const value = await inner.decision(...args);
-      if (value.ok) (value.verdict as Record<string, unknown>).extraCanary = 'SERVICE_CANARY';
-      return value;
-    } };
+    const resolvePrice = async () => structuredDecisionPrice(descriptor.wireModel);
+    const resolveEvaluator = (() => descriptor) as never;
+    const evaluatorAllowlist = [{ ...descriptor.evaluator }] as never;
+    // Success control: the untouched service dispatches once and settles the verdict.
+    const control = createDecisionService({ ...base.options,
+      registry: createProviderRegistry([inner as never]),
+      resolveEvaluator, resolvePrice: resolvePrice as never, evaluatorAllowlist });
+    const controlResult = await control.decide(decisionRequest({ evaluator: { ...descriptor.evaluator } }));
+    expect(send).toHaveBeenCalledTimes(1);
+    if (!controlResult.ok || controlResult.kind !== 'verdict') throw new Error('valid structured service unexpectedly refused');
+    // Canary: explicit per-method delegation, one method overridden. A spread
+    // would drop prototype methods such as listEvaluators and dispatch nothing.
+    send.mockClear();
+    const adapter: ProviderAdapter & { descriptor: unknown } = {
+      provider: inner.provider,
+      descriptor: inner.descriptor,
+      listModels: () => inner.listModels(),
+      listEvaluators: () => inner.listEvaluators(),
+      validateAuth: (source) => inner.validateAuth(source),
+      normalizeError: (error) => inner.normalizeError(error),
+      generate: (request, context) => inner.generate(request, context),
+      stream: (request, context) => inner.stream(request, context),
+      decision: async (request, context) => {
+        const value = await inner.decision(request, context);
+        if (value.ok) (value.verdict as Record<string, unknown>).extraCanary = 'SERVICE_CANARY';
+        return value;
+      },
+    };
     const service = createDecisionService({ ...base.options,
-      registry: createProviderRegistry([{ ...adapter, provider: inner.provider } as never]),
-      resolveEvaluator: (() => descriptor) as never,
-      resolvePrice: (async () => structuredDecisionPrice(descriptor.wireModel)) as never,
-      evaluatorAllowlist: [{ ...descriptor.evaluator }] as never });
+      registry: createProviderRegistry([adapter]),
+      resolveEvaluator, resolvePrice: resolvePrice as never, evaluatorAllowlist });
     const result = await service.decide(decisionRequest({ evaluator: { ...descriptor.evaluator } }));
+    expect(send).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(false);
+    if (result.ok || result.kind !== 'error') throw new Error('canary unexpectedly accepted');
+    expect(result.error.code).toBe('VERDICT_INVALID');
     expect(JSON.stringify(result)).not.toContain('SERVICE_CANARY');
   });
   it('serves a valid structured verdict under a distinct provider identity (R2-F1)', async () => {
     const base = decisionServiceFixture();
     const descriptor = { ...structuredDecisionDescriptor(),
       evaluator: { providerId: 'openai', evaluatorId: 'structured-judge-v1', revision: 'synthetic-v1' } };
-    const send = vi.fn(async () => structuredEvidenceBody({ score: 0.7 }));
+    const send = vi.fn(async () => structuredEvidenceEnvelope(structuredEvidenceBody({ score: 0.7 })));
     const adapter = createStructuredDecisionAdapter({ descriptor: descriptor as never, transport: { send } });
     expect(adapter.provider.providerId).toBe('openai');
     const tariff = { ...structuredDecisionPrice(descriptor.wireModel), providerId: 'openai' as const };
