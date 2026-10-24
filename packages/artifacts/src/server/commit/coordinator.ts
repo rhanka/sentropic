@@ -628,7 +628,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           return abortWith(request, phase, settle, deny(request, decision));
         }
         const currentRevision = await transaction.participant.readRevision();
-        const fenceCheck = verifyFence(request, transaction, decision.fence, currentRevision);
+        const fenceCheck = verifyFence(request, transaction, minted, decision.fence, currentRevision);
         if (!fenceCheck.ok) {
           return abortWith(request, phase, settle, invalidFence(request, fenceCheck.detail));
         }
@@ -646,6 +646,9 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         await active.insertReceipt(receipt);
         await request.finishIntents?.(active);
         await observeAt('before_commit', request.invocationId);
+        // Run deferred constraint work inside the unit, before the final
+        // decision: locks it acquires must not land during COMMIT.
+        await active.query('SET CONSTRAINTS ALL IMMEDIATE', []);
         // Revalidate after the post-guard receipt/intent/barrier waits: a
         // revocation, expiry or foreign fence landing here denies instead of
         // committing an authorized-then-stale decision.
@@ -654,7 +657,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           return abortWith(request, phase, settle, deny(request, recheck));
         }
         const recheckRevision = await transaction.participant.readRevision();
-        const recheckFence = verifyFence(request, transaction, recheck.fence, recheckRevision);
+        const recheckFence = verifyFence(request, transaction, minted, recheck.fence, recheckRevision);
         if (!recheckFence.ok) {
           return abortWith(request, phase, settle, invalidFence(request, recheckFence.detail));
         }
@@ -672,10 +675,15 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           replayed: false,
         };
       } catch (error) {
-        if (error instanceof CommitQuarantineError) throw error;
+        if (error instanceof CommitQuarantineError) {
+          return settleAndPropagateQuarantine(request, settle, error);
+        }
         if (isUniqueViolation(error)) {
           await settle.abort();
           return resolveUnderKey(request);
+        }
+        if (phase === 'commit') {
+          return unknownAfterCommitAttempt(request, settle, error);
         }
         const settleError = await settle.abort();
         await abandon(request);
@@ -709,7 +717,8 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       try {
         phase = 'lock';
         await observeAt('before_key_lock', request.invocationId);
-        await active.lockOperationKey(request.scopeId, request.internalKey);
+        const replayKeyFailure = await acquireKeyLock(request, active, settle);
+        if (replayKeyFailure !== undefined) return replayKeyFailure;
         const existing = await active.readReceipt(request.scopeId, request.internalKey);
         // Fires after the receipt lookup (not before): a revocation racing
         // the barrier denies on the looked-up row instead of vanishing it.
@@ -728,12 +737,12 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           );
         }
         if (existing.codecVersion !== COMMAND_CODEC_VERSION) {
-          // Already settled below: the quarantine propagates without a second settle.
           const settleError = await settle.abort();
-          await abandon(request);
           if (settleError !== undefined) {
+            await abandon(request);
             return unknownOutcome(request, phase, { settlement: settleError });
           }
+          // Settled above; the catch records abandonment before propagating.
           throw new CommitQuarantineError(
             request.scopeId,
             request.internalKey,
@@ -755,21 +764,19 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         }
         phase = 'guard';
         const transactionToken = randomUUID();
-        const transaction: ArtifactCommitTransaction = {
-          transactionId: transactionToken,
-          invocationId: request.invocationId,
-          policyRevision: request.policyRevision,
-          participant: options.policy.createParticipant(active, transactionToken),
-        };
+        const { transaction, minted } = bindTransaction(request, active, transactionToken);
         // Same key/object/ACL/policy lock order as finalization, without
         // quota charging, provisional publication writes or intent completion.
         await runLockGroup(request, active, PRE_QUOTA_LOCK_CLASSES);
+        // Run deferred constraint work inside the unit, before the decision:
+        // locks it acquires must not land during COMMIT.
+        await active.query('SET CONSTRAINTS ALL IMMEDIATE', []);
         const decision = await request.guard(commitContext(request, 'replay'), transaction);
         if (!decision.allowed) {
           return abortWith(request, phase, settle, deny(request, decision));
         }
         const currentRevision = await transaction.participant.readRevision();
-        const fenceCheck = verifyFence(request, transaction, decision.fence, currentRevision);
+        const fenceCheck = verifyFence(request, transaction, minted, decision.fence, currentRevision);
         if (!fenceCheck.ok) {
           return abortWith(request, phase, settle, invalidFence(request, fenceCheck.detail));
         }
@@ -787,7 +794,12 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           replayed: true,
         };
       } catch (error) {
-        if (error instanceof CommitQuarantineError) throw error;
+        if (error instanceof CommitQuarantineError) {
+          return settleAndPropagateQuarantine(request, settle, error);
+        }
+        if (phase === 'commit') {
+          return unknownAfterCommitAttempt(request, settle, error);
+        }
         const settleError = await settle.abort();
         await abandon(request);
         if (settleError !== undefined) {
