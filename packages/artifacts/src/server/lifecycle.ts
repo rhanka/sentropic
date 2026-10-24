@@ -203,17 +203,22 @@ export function createLifecycleService(
         throw new Error(`can only purge a deleted artifact: ${artifactId} is ${state}`);
       }
       const releases = await store.listArtifactReleases(artifactId);
+      const acquired: string[] = [];
+      if (claims !== undefined) {
+        try {
+          for (const digest of new Set(blobDigests)) {
+            await claims.claim(digest, `purge:${artifactId}`);
+            acquired.push(digest);
+          }
+        } catch (error) {
+          for (const digest of acquired) await claims.releaseClaim(digest);
+          throw error;
+        }
+      }
       for (const releaseId of releases) {
         await store.setReleaseState(releaseId, 'purged');
       }
       await store.setArtifactState(artifactId, 'purged');
-      // Durable exclusive deletion claims (spec r2 A4): from here on, new
-      // references to these digests are refused; erasure acknowledges them.
-      if (claims !== undefined) {
-        for (const digest of blobDigests) {
-          await claims.claim(digest, `purge:${artifactId}`);
-        }
-      }
       return { artifactId, purgedReleases: releases, blobDigests: [...blobDigests] };
     },
     async promote(artifactId: string, actorId: string, releaseId: string, expectedCurrent: string) {
