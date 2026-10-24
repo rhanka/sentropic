@@ -329,7 +329,6 @@ function allocatePorts(edges, nodes, sides) {
 function sideChoices(edge, nodes) {
   const a = nodeRect(nodes.find(n=>n.id===edge.source)), b = nodeRect(nodes.find(n=>n.id===edge.target));
   const preferred = chooseSides(a,b,edge.data?.summary);
-  if (edge.data?.summary) return [preferred];
   const horizontal = center(a).x <= center(b).x ? {sourceSide:'right',targetSide:'left'} : {sourceSide:'left',targetSide:'right'};
   const vertical = center(a).y <= center(b).y ? {sourceSide:'bottom',targetSide:'top'} : {sourceSide:'top',targetSide:'bottom'};
   return [
@@ -669,13 +668,38 @@ export function placeLabels(edges, nodes, groups = []) {
   });
 }
 
-export function routeScene(scene) {
+export function routeScene(scene, preparedPlan) {
   const obstacleNodes = [...scene.nodes, ...(scene.bands ?? []).map((band, index) => ({
     id: `band:${index}`, position: { x: band.x ?? 0, y: band.y - (band.fontSize ?? 16) },
     width: textWidth(band.title, band.fontSize ?? 16), height: (band.fontSize ?? 16) + 4,
   }))];
   const degree = new Map(scene.nodes.map((node) => [node.id, 0]));
   const nodeById = new Map(scene.nodes.map((node) => [node.id, node]));
+  const sides = ['left','right','top','bottom'];
+  const finish = (routedEdges, ports, order) => {
+    const routedById = new Map(routedEdges.map(e=>[e.id,e]));
+    const labelOrder = scene.groups?.some(g=>!g.collapsed) ? routedEdges : scene.edges.map(e=>routedById.get(e.id));
+    const placedById = new Map(placeLabels(labelOrder,obstacleNodes,scene.groups ?? []).map(e=>[e.id,e]));
+    return {...scene,edges:scene.edges.map(e=>placedById.get(e.id)),routingPlan:[
+      order.map(edge=>scene.edges.findIndex(e=>e.id===edge.id)),
+      scene.edges.map(e=>sides.indexOf(ports.get(e.id).sourceSide)*4+sides.indexOf(ports.get(e.id).targetSide)),
+    ]};
+  };
+  const candidates = !preparedPlan?.length ? [] : Array.isArray(preparedPlan[0]?.[0]) ? preparedPlan : [preparedPlan];
+  for (const candidate of candidates) {
+    const [order,codes] = candidate;
+    if (Array.isArray(order) && Array.isArray(codes) && order.length === scene.edges.length && codes.length === scene.edges.length
+      && new Set(order).size === order.length && order.every(i=>Number.isInteger(i)&&i>=0&&i<scene.edges.length)) {
+      const plans = new Map(scene.edges.map((e,i)=>[e.id,{sourceSide:sides[Math.floor(codes[i]/4)],targetSide:sides[codes[i]%4]}]));
+      if (scene.edges.every(e=>sideChoices(e,scene.nodes).some(p=>p.sourceSide===plans.get(e.id).sourceSide&&p.targetSide===plans.get(e.id).targetSide))) {
+        try {
+          const ports = allocatePorts(scene.edges,scene.nodes,plans), routed = [];
+          for (const i of order) routed.push(routeEdge(scene.edges[i],obstacleNodes,routed,scene.edges,scene.groups ?? [],ports.get(scene.edges[i].id)));
+          return {...finish(routed,ports,order.map(i=>scene.edges[i])),routingPlanUsed:true};
+        } catch { /* A stale plan is only a hint; the same validated search follows. */ }
+      }
+    }
+  }
   for (const edge of scene.edges) {
     degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
     degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
@@ -709,7 +733,15 @@ export function routeScene(scene) {
     .sort((a, b) => {
       return b.priority - a.priority || a.index - b.index;
     });
+  const longestFirst = [...entries].sort((a,b)=>b.distance-a.distance||b.priority-a.priority||a.index-b.index);
+  const [outerA,outerB] = longestFirst.map(entry=>entry.edge);
+  const siblings = (a,b) => nodeById.get(a)?.parentId && nodeById.get(a).parentId === nodeById.get(b)?.parentId;
+  // A nested fan-out needs its two outer corridors before short local links.
+  // Single outer connections retain the aligned-first reference ordering.
+  const outerFanout = outerB && (outerA.source === outerB.source && siblings(outerA.target,outerB.target)
+    || outerA.target === outerB.target && siblings(outerA.source,outerB.source));
   const routingOrders = [
+    ...(outerFanout && scene.groups?.some(g=>g.collapsed) && scene.groups.some(g=>!g.collapsed) ? [longestFirst] : []),
     [...entries].sort((a,b) => Number(aligned.has(b.edge.id))-Number(aligned.has(a.edge.id)) || a.distance-b.distance),
     [...entries].sort((a, b) => a.distance - b.distance || b.priority - a.priority || a.index - b.index),
     priorityOrder,
@@ -787,11 +819,7 @@ export function routeScene(scene) {
           if (result.error) throw result.error;
           routedEdges.push(result.edge);
         }
-        const routedById = new Map(routedEdges.map(e=>[e.id,e]));
-        // Keep the validated incremental label order when frames are open.
-        const labelOrder = scene.groups?.some(g=>!g.collapsed) ? routedEdges : scene.edges.map(e=>routedById.get(e.id));
-        const placedById = new Map(placeLabels(labelOrder,obstacleNodes,scene.groups ?? []).map(e=>[e.id,e]));
-        return {...scene,edges:scene.edges.map(e=>placedById.get(e.id))};
+        return finish(routedEdges,ports,routingOrder.map(entry=>entry.edge));
       } catch (error) { lastError=error; blocked=failed; }
       let index = routingOrder.findIndex(({edge})=>edge.id===failed);
       while (index >= 0 && choice.get(failed)+1 >= choices.get(failed).length) {

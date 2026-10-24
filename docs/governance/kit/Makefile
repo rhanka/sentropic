@@ -8,7 +8,7 @@ USER_ARGS = --user "$$(id -u):$$(id -g)"
 NODE = docker run --rm --cpus=2 --memory=2048m --pids-limit=256 $(USER_ARGS) $(MOUNTS) $(NODE_IMAGE)
 PROBE = docker run --rm $(USER_ARGS) $(MOUNTS) -v "$(PROBE_VOLUME):/app:ro" $(PROBE_MOUNTS) $(PROBE_IMAGE)
 
-.PHONY: install prepare build check-source check-geometry check-browser check-performance check-content export-static check-static validate deliver checksums
+.PHONY: install prepare build check-source check-geometry check-browser check-convergence check-performance check-content export-static check-static validate deliver checksums
 install:
 	@docker run --rm $(MOUNTS) $(NODE_IMAGE) npm ci --force --no-audit --no-fund
 	@docker run --rm -v "$(PROBE_VOLUME):/app" $(PROBE_IMAGE) npm install --prefix /app --no-audit --no-fund playwright@1.63.0
@@ -17,7 +17,12 @@ prepare:
 	@mkdir -p .cache
 	@$(NODE) node scripts/prepare-summary.mjs > .cache/summary.log
 	@$(NODE) node scripts/prepare-scenes.mjs > .cache/prepare.log
+	@$(subst --cpus=2,--cpus=4,$(NODE)) node scripts/prepare-fold-plans.mjs > .cache/fold-plans.log
 	@$(NODE) node scripts/check-source.mjs --sync-hash
+.PHONY: prepare-fold-plans
+prepare-fold-plans:
+	@mkdir -p .cache
+	@$(subst --cpus=2,--cpus=4,$(NODE)) node scripts/prepare-fold-plans.mjs > .cache/fold-plans.log
 
 build:
 	@mkdir -p .cache
@@ -30,9 +35,26 @@ check-source:
 check-geometry:
 	@mkdir -p .cache
 	@$(NODE) node scripts/check-geometry.mjs
+.PHONY: check-routing-budget
+check-routing-budget:
+	@mkdir -p .cache
+	@$(NODE) node scripts/check-routing-budget.mjs
 check-browser:
 	@mkdir -p .cache
 	@$(PROBE) node scripts/check-browser.mjs
+check-convergence:
+	@mkdir -p .cache
+	@$(PROBE) node scripts/check-convergence.mjs
+.PHONY: check-reword
+check-reword:
+	@mkdir -p .cache
+	@git show 10b7b22bca057218b4b85b4cbe2c8aafe6de42f5:docs/governance/governance-r11-portable.html > .cache/reword-reference.html
+	@$(PROBE) node scripts/check-reword.mjs
+.PHONY: check-card-parity
+check-card-parity:
+	@mkdir -p .cache
+	@git show 6bb351559:docs/governance/governance-r11-portable.html > .cache/reference.html
+	@$(PROBE) node scripts/check-card-parity.mjs
 check-performance:
 	@mkdir -p .cache
 	@$(PROBE) node scripts/check-performance.mjs
@@ -44,7 +66,7 @@ export-static:
 	@$(PROBE) node scripts/export-static.mjs
 check-static:
 	@$(PROBE) node scripts/check-static.mjs
-validate: check-source check-geometry check-browser check-performance check-content check-static
+validate: check-source check-geometry check-routing-budget check-card-parity check-convergence check-browser check-performance check-content check-static
 deliver:
 	@$(NODE) node --input-type=module -e 'import {copyFileSync} from "node:fs"; import {portableName} from "./scripts/portable-path.mjs"; copyFileSync("dist/"+portableName, "../"+portableName);'
 checksums:
