@@ -108,11 +108,12 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
   - [x] Bump `packages/comments/package.json` version (patch, must exceed npm published version per `npm view`).
   - [x] Lot gate: `make typecheck-comments ENV=test-sec-zod4` PASS, `make test-comments ENV=test-sec-zod4` PASS (102/102), `make lock-root` refreshed (comments zod nests 4.6.7); no UAT (no UI change).
 
-- [ ] **Lot 3 — packages/auth-hono zod v4**
-  - [ ] Bump `zod` to `^4.6.6` in `packages/auth-hono/package.json`; verify `@hono/zod-validator` resolves v4-compatible (bump only if typecheck/resolution requires).
-  - [ ] Adapt `packages/auth-hono/src/*-handlers.ts` (5 files) if typecheck requires.
-  - [ ] Bump `packages/auth-hono/package.json` version (patch, must exceed npm published version per `npm view`).
-  - [ ] Lot gate: copy exact checklist of Lot 1, no UAT if last branch.
+- [x] **Lot 3 — packages/auth-hono zod v4**
+  - [x] Bump `zod` to `^4.6.6` in `packages/auth-hono/package.json`; verify `@hono/zod-validator` resolves v4-compatible (bump only if typecheck/resolution requires).
+  - [x] Adapt `packages/auth-hono/src/*-handlers.ts` (5 files) if typecheck requires.
+  - [x] Bump `packages/auth-hono/package.json` version (patch, must exceed npm published version per `npm view`).
+  - [x] Lot gate: `make typecheck-auth-hono ENV=test-sec-zod4` PASS, `make test-auth-hono ENV=test-sec-zod4` PASS (239/239); `@hono/zod-validator@0.7.5` peer range already allows v4 (no bump); no UAT (no UI change).
+  - [x] `make lock-root` deferred to Lot 4 (evidence: ERESOLVE — hoisted zod stays 3.25.76 while api pins `^3.22.4`; single hoist anchor left; lock refreshes once api moves to `^4.6.6`).
 
 - [ ] **Lot 4 — api zod v4**
   - [ ] Bump `zod` to `^4.6.6` in `api/package.json`; refresh `api/package-lock.json` via make lock target; verify `@hono/zod-validator` resolves v4-compatible.
