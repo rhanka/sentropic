@@ -496,6 +496,7 @@ describe('commit coordinator', () => {
       });
       await Promise.all([prepareAttempt('inv-prep-a'), prepareAttempt('inv-prep-b')]);
       expect(prepared).toHaveLength(6);
+      const reachedB = barrier.waitUntilReached('before_key_lock', 'inv-prep-b');
       const pendingA = coordinatorA.finalize(
         baseRequest({ key: 'key-s3-race', commandHash: 'h-s3', invocationId: 'inv-prep-a' }),
       );
@@ -503,7 +504,7 @@ describe('commit coordinator', () => {
         baseRequest({ key: 'key-s3-race', commandHash: 'h-s3', invocationId: 'inv-prep-b' }),
       );
       await barrier.waitUntilReached('before_commit', 'inv-prep-a');
-      await barrier.waitUntilReached('before_key_lock', 'inv-prep-b');
+      await reachedB;
       barrier.release('before_commit', 'inv-prep-a');
       const outcomeA = await pendingA;
       expect(outcomeA.ok).toBe(true);
