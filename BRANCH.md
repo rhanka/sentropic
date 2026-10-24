@@ -33,6 +33,7 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
+  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR734-EX1 only, comments-deps-audit line only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -41,6 +42,7 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
 ## Feedback Loop
 - `owner-all-public` / `acknowledge`: binding owner decisions. Public repos only, goal zero open findings at all times. For zod: dated exception plus migration.
 - `conductor-merge-733` / `acknowledge`: merged `origin/fix/ci-mistral-small` (merge commit, no rebase) into this branch; kept this BRANCH.md on conflict. #733 is superseded by this PR.
+- `BR734-EX1` / `attention`: reason — the validate-cluster-mesh comments-deps-audit step runs a plain `npm audit` with no exception input, so the dated zod exception could not cover its GHSA-mrhx-c7xc-m3w5 finding; the recipe now evaluates the JSON audit against the existing `.security/audit-allowlist.json` (same GHSA-only, same expiry fail-closed semantics as `audit-gate.mjs`). Impact — one audit line in `cluster-mesh-comments-deps-audit` only; oracle/vectors variants share the line and inherit the same gate. Rollback — revert that line to plain `npm audit --audit-level=high`.
 - `zod-rooted-only` / `acknowledge`: extended the same dated exception (2026-11-07, Track 01M5PMR6AG9QDZG9H3N57TB3FS) to exact finding IDs, all verified zod-rooted in the lock/tree: `npm_audit_api_zod_high`, `npm_audit_api_@ai-sdk_provider-utils_high` (HIGH via zod peer dep; own GHSA-866g is low), `npm_audit_api_ollama-ai-provider_high` (no own advisory), `npm_audit_ui_zod_high`, `CVE-2023-54404_api_zod_3.23.8`, `CVE-2023-54404_api_zod_3.25.76` (CVE confirmed as zod record). No non-zod finding covered. The comments-tree `GHSA-mrhx-c7xc-m3w5` (published `@sentropic/comments@0.3.0` pins zod ^3.25.76, no fixed release exists) has no exception mechanism in its plain-`npm audit` step: residual red, unblocks only via the zod v4 migration release.
 - `root-cause` / `attention`: main audit-gate red since 2026-10-24 ~07:58Z (run 40076120099). body-parser 2.3.0 in range [2.0.0, 2.4.0) fixed by 2.4.0 patch. zod 3.25.76 (< 4.6.6) has no same-major fix, only major v4, so dated exception plus migration.
 
