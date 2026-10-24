@@ -40,6 +40,7 @@
   - [x] Record rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] PR735 P2-2: regression observed eager definition construction; catalog metadata now uses only the manifest factory. Full definition construction occurs after qualified module loading, with atomic refusal on loader failure.
 - [x] PR735 P2-1: regression caught fifteen handler/value entries in the four-tool fixture; the consistent selected fixture now uses the real module registry and compile path, with exactly four catalog, adapter and compiled tools and no factory mock.
 - [x] PR735 P2-3: regression failed on the runtime barrel export; common-contract consumers now import the self-sufficient data leaf directly. Public subpath registration remains integration-owner work.
 - [x] BR861-EX2: inherit artifacts changes only through the explicitly requested L1/L2 merges; no authored artifacts edits. Impact: dependency ancestry; rollback: revert the merge. Merge commits retain inherited changes over 150 lines; authored commits remain under 150 lines.
