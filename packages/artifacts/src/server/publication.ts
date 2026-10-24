@@ -377,8 +377,8 @@ export interface GuardedPublicationDeps {
   readonly sources?: SourceStore;
   /** Host row locks in PARTICIPANT_LOCK_ORDER classes (PG FOR UPDATE; empty for memory). */
   readonly locks?: Partial<Record<'artifact-lifecycle' | 'acl' | 'current-pointer', CommitLockFn[]>>;
-  /** Non-transactional ref store for best-effort denial compensation. */
-  readonly refs?: RefcountStore;
+  /** Shared retention store: preparation pins and denial compensation. */
+  readonly refs: RefcountStore;
   readonly noteAbandoned?: (attemptId: string) => void | Promise<void>;
   readonly cleanupWindowMs?: number;
   readonly limits?: Partial<PublicationLimits>;
@@ -466,6 +466,14 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         operation: 'publish',
         cleanupDeadlineMs: nowMs + (deps.cleanupWindowMs ?? DEFAULT_CLEANUP_WINDOW_MS),
       });
+      const pinned: string[] = [];
+      const pinReason = `preparation:${releaseId}`;
+      let preservePins = false;
+      try {
+      for (const digest of [...new Set(prepared.entries.map((entry) => entry.entry.digest))].sort()) {
+        await deps.refs.pin(digest, pinReason);
+        pinned.push(digest);
+      }
       for (const { key, bytes } of prepared.entries) {
         await deps.blobs.putBlob(key, bytes);
       }
@@ -518,8 +526,10 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         attemptId: input.attemptId ?? callerKey,
         receiptData: { releaseId, manifest: prepared.manifest },
       };
+      preservePins = true;
       const outcome = await deps.coordinator.finalize(request);
-      if (!outcome.ok && deps.refs !== undefined) {
+      preservePins = !outcome.ok && outcome.failure.commitState === 'unknown';
+      if (!outcome.ok && outcome.failure.commitState === 'not_committed') {
         // Best-effort compensation for ref stores outside the unit transaction.
         for (const digest of addedRefs) {
           try {
@@ -530,6 +540,11 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         }
       }
       return outcome;
+      } finally {
+        if (!preservePins) {
+          for (const digest of pinned) await deps.refs.unpin(digest, pinReason);
+        }
+      }
     },
   };
 }
