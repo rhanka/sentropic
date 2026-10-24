@@ -24,10 +24,10 @@ const generateDocxSchema = z.object({
   templateId: z.enum(['usecase-onepage', 'executive-synthesis-multipage']),
   entityType: z.enum(['initiative', 'folder']),
   entityId: z.string().min(1),
-  provided: z.record(z.unknown()).optional(),
-  controls: z.record(z.unknown()).optional(),
+  provided: z.record(z.string(), z.unknown()).optional(),
+  controls: z.record(z.string(), z.unknown()).optional(),
   // Backward-compatible alias (to be removed after migration)
-  options: z.record(z.unknown()).optional(),
+  options: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const docxRouter = new Hono();

@@ -9,12 +9,12 @@ import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 const createSolutionSchema = z.object({
   initiativeId: z.string().min(1),
   status: z.enum(['draft', 'validated', 'archived']).optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 const updateSolutionSchema = z.object({
   status: z.enum(['draft', 'validated', 'archived']).optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const solutionsRouter = new Hono();
