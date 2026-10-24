@@ -12,7 +12,7 @@ export interface DecisionPrice {
   providerId: string; modelId: string; priceRevision: string;
   inputMicroUsdPerMtok: MicroUsd; outputMicroUsdPerMtok: MicroUsd; minimumMicroUsd: MicroUsd;
   identityMismatchPricing: 'requested-model' | 'requires-reconciliation';
-  authority?: string; protocol?: DecisionBackendProtocol;
+  authority: string; protocol: DecisionBackendProtocol;
 }
 export interface DecisionQuote { price: DecisionPrice; reservedMicroUsd: MicroUsd }
 export const isMicroUsd = (value: unknown): value is MicroUsd => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
@@ -29,8 +29,8 @@ export function quoteDecision(request: DecisionRequest, descriptor: DecisionEval
     || !isCorrelationId(value.priceRevision)
     || !isMicroUsd(value.inputMicroUsdPerMtok) || !isMicroUsd(value.outputMicroUsdPerMtok) || !isMicroUsd(value.minimumMicroUsd)
     || !['requested-model', 'requires-reconciliation'].some((v) => v === value.identityMismatchPricing)
-    || (value.authority !== undefined && value.authority !== descriptor.priceProtocol.authority)
-    || (value.protocol !== undefined && value.protocol !== (descriptor.protocol ?? 'jev-native'))) return { ok: false, code: 'PRICING_UNAVAILABLE' };
+    || value.authority !== descriptor.priceProtocol.authority
+    || value.protocol !== (descriptor.protocol ?? 'jev-native')) return { ok: false, code: 'PRICING_UNAVAILABLE' };
   const price = freezeDecisionData(value as unknown as DecisionPrice);
   if (descriptor.qualification.billingBound !== 'qualified') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
   const isJev = (descriptor.protocol ?? 'jev-native') === 'jev-native';

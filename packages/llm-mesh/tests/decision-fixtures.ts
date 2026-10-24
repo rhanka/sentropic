@@ -5,6 +5,7 @@ import type { DecisionServiceOptions } from '../src/decision/host-options.js';
 import type { DecisionReceipt } from '../src/decision/receipt.js';
 import type { DecisionRequest } from '../src/decision/request.js';
 import { jevDescriptor } from '../src/decision/descriptor.js';
+import { mintStructuredContractDigests, STRUCTURED_READOUT_IDENTITY } from '../src/decision/structured.js';
 
 /** Synthetic qualification only: these IDs/evidence do not activate the built-in descriptor. */
 export const qualifiedDescriptor = () => structuredClone({ ...jevDescriptor,
@@ -44,17 +45,35 @@ export const trustedNativeContext = (request: DecisionRequest) => {
   };
 };
 export const decisionPrice = () => ({ providerId: 'typesafe' as const, modelId: 'jev-1.13.0', priceRevision: 'fixture-price-v1',
-  inputMicroUsdPerMtok: '42000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const });
+  inputMicroUsdPerMtok: '42000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const,
+  authority: 'fixture:synthetic-tariff', protocol: 'jev-native' as const });
 
+/**
+ * Minted digest pair for one effective structured output budget. Fixtures
+ * mint through the implementation helper so declared digests always bind
+ * the artifacts the backend actually compiles and dispatches.
+ */
+export const structuredContractDigests = (maxOutputTokens = 4096) =>
+  mintStructuredContractDigests({ maxOutputTokens, readout: STRUCTURED_READOUT_IDENTITY });
+/** Refresh the digest-bound definition (and only it) when a test overrides the enforced output budget. */
+export const withStructuredBudget = (descriptor: Record<string, unknown>, maxBillableOutputTokens: number) => {
+  const compilation = (descriptor as { compilation: { readout: string } }).compilation;
+  return { ...descriptor, maxBillableOutputTokens,
+    definition: mintStructuredContractDigests({ maxOutputTokens: maxBillableOutputTokens,
+      readout: compilation.readout }).definition };
+};
 /** Synthetic structured descriptor under the new contract: explicit enforced
  * output bound, declared scalar score semantics, qualified billing. */
 export const structuredDecisionDescriptor = () => {
   const base = qualifiedDescriptor();
+  const { definition, ...compilation } = structuredContractDigests();
   return { ...base, protocol: 'structured-llm' as const,
     evaluator: { ...base.evaluator, evaluatorId: 'structured-judge-v1' },
     wireModel: 'structured-judge-v1', scoreNativeKeys: 'scalar' as const,
     acceptedServedModelIds: ['synthetic-structured-model'],
     maxBillableOutputTokens: 4096,
+    compilation: { ...compilation, readout: STRUCTURED_READOUT_IDENTITY },
+    definition,
     scoreSemantics: { meaning: 'support', meaningRef: 'fixture:synthetic-scalar' },
     qualification: { servedIdentity: 'qualified' as const, billingBound: 'qualified' as const,
       evidenceRefs: ['fixture:synthetic-qualification'] },
@@ -63,11 +82,24 @@ export const structuredDecisionDescriptor = () => {
 
 /** Transport-reported evidence body for the structured contract: the score or
  * label plus independently validated served identity and usage counters. */
-export const structuredEvidenceBody = (evidence: { score?: number; label?: string },
-  servedModelId = 'synthetic-structured-model') => JSON.stringify({
-  ...(evidence.score !== undefined ? { score: evidence.score } : { label: evidence.label }),
+/**
+ * Generated completion text: the verdict evidence only. Served identity and
+ * reported usage never appear here; they travel in the provider envelope, so
+ * any served/usage field in this text is spoofed content, not provenance.
+ */
+export const structuredEvidenceBody = (evidence: { score?: number; label?: string }) => JSON.stringify(
+  evidence.score !== undefined ? { score: evidence.score } : { label: evidence.label },
+);
+/**
+ * Provider envelope for one transport send: the generated text plus the
+ * provider-side response metadata (served identity, reported counters).
+ */
+export const structuredEvidenceEnvelope = (text: string,
+  servedModelId = 'synthetic-structured-model',
+  usage: { inputTokens: number; outputTokens: number } = { inputTokens: 100, outputTokens: 5 }) => ({
+  text,
   served: { modelId: servedModelId },
-  usage: { inputTokens: 100, outputTokens: 5 },
+  usage: { ...usage },
 });
 
 export const structuredDecisionPrice = (modelId = 'structured-judge-v1') => ({

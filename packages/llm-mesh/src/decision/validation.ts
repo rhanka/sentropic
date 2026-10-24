@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export const DECISION_MAX_JSON_BYTES = 256 * 1024;
 export const DECISION_MAX_JSON_DEPTH = 16;
 export const DECISION_MAX_RAW_BYTES = 16 * 1024;
@@ -14,6 +16,22 @@ export const isMicroUsd = (value: unknown): value is string =>
   typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
 export const isCorrelationId = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(value);
+
+/** Canonical JSON with sorted object keys, so digests are process-stable. */
+const canonicalJson = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
+  }
+  const serialized = JSON.stringify(value) ?? 'null';
+  if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Non-finite digest input.');
+  return serialized;
+};
+
+/** sha256 hex digest over the canonical form of one compiled artifact. */
+export const digestStructuredArtifact = (value: unknown): string =>
+  createHash('sha256').update(canonicalJson(value)).digest('hex');
 
 /** Copy data descriptors only; never serialize or read fields from the live caller object. */
 function copyJson(value: unknown, depth: number, budget: { remaining: number }): unknown {

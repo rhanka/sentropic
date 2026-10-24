@@ -4,7 +4,8 @@ import { normalizeDecisionUsage, unreportedDecisionUsage } from '../src/decision
 import { decisionRequest, qualifiedDescriptor, structuredDecisionDescriptor, structuredDecisionPrice } from './decision-fixtures.js';
 
 export const price = () => ({ providerId: 'typesafe' as const, modelId: 'jev-1.13.0', priceRevision: 'fixture-price-v1',
-  inputMicroUsdPerMtok: '42000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const });
+  inputMicroUsdPerMtok: '42000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const,
+  authority: 'fixture:synthetic-tariff', protocol: 'jev-native' as const });
 describe('qualified integer decision liability', () => {
   it('reserves the qualified maximum and prices reported usage, including identity mismatch', () => {
     const result = quoteDecision(decisionRequest(), qualifiedDescriptor(), price());
@@ -25,7 +26,7 @@ describe('qualified integer decision liability', () => {
     const structured = { ...base, protocol: 'structured-llm' as const,
       evaluator: { ...base.evaluator, evaluatorId: 'structured-judge-v1' }, wireModel: 'structured-judge-v1',
       maxBillableOutputTokens: 4096 };
-    const outputPrice = { ...price(), modelId: 'structured-judge-v1', outputMicroUsdPerMtok: '50000' };
+    const outputPrice = structuredDecisionPrice('structured-judge-v1');
     const quoted = quoteDecision(decisionRequest(), structured, outputPrice);
     expect(quoted.ok).toBe(true);
     if (!quoted.ok) throw new Error('structured quote failed');
@@ -36,8 +37,8 @@ describe('qualified integer decision liability', () => {
     const base = qualifiedDescriptor();
     const unbound = { ...base, protocol: 'structured-llm' as const,
       evaluator: { ...base.evaluator, evaluatorId: 'structured-judge-v1' }, wireModel: 'structured-judge-v1' };
-    expect(quoteDecision(decisionRequest(), unbound, { ...price(), modelId: 'structured-judge-v1',
-      outputMicroUsdPerMtok: '50000' })).toEqual({ ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' });
+    expect(quoteDecision(decisionRequest(), unbound,
+      structuredDecisionPrice('structured-judge-v1'))).toEqual({ ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' });
   });
   it('retains conservative liability when priced output usage is unknown (R2-F3)', () => {
     const structured = { ...structuredDecisionDescriptor(), wireModel: 'structured-judge-v1' };
@@ -61,6 +62,20 @@ describe('qualified integer decision liability', () => {
     expect(quoteDecision(request, structured, { ...tariff, authority: 'foreign-authority' }).ok).toBe(false);
     expect(quoteDecision(request, structured, { ...tariff, protocol: 'jev-native' as const }).ok).toBe(false);
     expect(quoteDecision(request, structured, { ...tariff, priceRevision: 'fixture-price-v9' }).ok).toBe(false);
+  });
+  it.each([['authority'], ['protocol']])('rejects tariff rows without a declared %s (R3-F2)', (field) => {
+    const structured = structuredDecisionDescriptor();
+    const tariff = structuredDecisionPrice(structured.wireModel) as unknown as Record<string, unknown>;
+    const { [field]: _omitted, ...unbound } = tariff;
+    expect(quoteDecision(decisionRequest(), structured, unbound as never)).toEqual({ ok: false, code: 'PRICING_UNAVAILABLE' });
+  });
+  it('accepts one tariff row under exactly one descriptor authority (R3-F2)', () => {
+    const request = decisionRequest();
+    const first = structuredDecisionDescriptor();
+    const tariff = structuredDecisionPrice(first.wireModel);
+    expect(quoteDecision(request, first, tariff).ok).toBe(true);
+    const second = { ...first, priceProtocol: { ...first.priceProtocol, authority: 'fixture:other-authority' } };
+    expect(quoteDecision(request, second, tariff)).toEqual({ ok: false, code: 'PRICING_UNAVAILABLE' });
   });
   it('refuses absent/wrong prices and unqualified/nonzero-output liability', () => {
     const d = qualifiedDescriptor();
