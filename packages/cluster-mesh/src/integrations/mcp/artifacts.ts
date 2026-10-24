@@ -3,8 +3,9 @@ import '../../modules/topology-guard-mcp.js';
 import type { ClusterMeshModules } from '../../modules/contracts.js';
 import type { McpRegistryBuiltin } from '../../mcp/registry.js';
 import { loadArtifactsMcp } from '../../loaders/mcp/artifacts.js';
+import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
 import {
-  ARTIFACTS_TOOL_NAMES,
+  createArtifactsRegistryDefinition,
   ARTIFACTS_PARAMETER_SCHEMA,
   ARTIFACTS_PROVIDER_ID,
   ARTIFACTS_PROVIDER_VERSION,
@@ -26,15 +27,26 @@ export { createArtifactsToolExecutor, type ArtifactsApp } from '@sentropic/artif
 export function createArtifactsBuiltin(options: {
   modules: ClusterMeshModules;
   definition: ArtifactsDefinitionOptions;
+  /** Artifacts is not admitted to the common storage rule (spec r2 section 1.2). */
+  commonRuleAdmission?: false;
 }): McpRegistryBuiltin {
+  if (options.commonRuleAdmission !== undefined && options.commonRuleAdmission !== false) {
+    throw new Error('artifacts common-rule admission is not qualified');
+  }
+  const definition = createArtifactsRegistryDefinition(options.definition);
+  const digest = computeManifestDigest(definition.manifest);
   return {
     providerId: ARTIFACTS_PROVIDER_ID,
     version: ARTIFACTS_PROVIDER_VERSION,
-    capabilities: [...ARTIFACTS_TOOL_NAMES],
+    capabilities: definition.manifest.tools.map((tool) => tool.name),
     parameterSchema: ARTIFACTS_PARAMETER_SCHEMA,
     load: async () => {
       const mcp = await loadArtifactsMcp(options.modules);
-      return mcp.createArtifactsRegistryDefinition(options.definition);
+      const loaded = mcp.createArtifactsRegistryDefinition(options.definition);
+      if (computeManifestDigest(loaded.manifest) !== digest) {
+        throw new Error('artifacts definition changed after catalog construction');
+      }
+      return loaded;
     },
   };
 }

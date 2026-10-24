@@ -99,7 +99,7 @@ describe('artifacts mesh leaf', () => {
   it('should keep common read rights separate from publication and maintenance', () => {
     const capability = { principal: 'alice', rights: ['read'] as const,
       scope: { tenantId: 'tenant', workspaceId: 'workspace' }, policyRevision: 'policy-1' };
-    expect(storage.validateCommonCapability(capability)).toEqual({ ok: true });
+    expect(storage.validateCommonCapability(capability).ok).toBe(true);
     expect(storage.validateCommonCapability({ ...capability, rights: [] }).ok).toBe(false);
     expect(storage.hasCommonRight(capability, 'read')).toBe(true);
     for (const right of ['prepare', 'publish', 'maintain'] as const) {
