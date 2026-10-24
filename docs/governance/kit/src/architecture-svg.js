@@ -1,8 +1,9 @@
-import { EDGE_LABEL_SIZE, sceneFrame, frameHeaderContent, wrapText } from './architecture-layout.js';
+import { EDGE_LABEL_SIZE, sceneFrame, frameHeaderContent } from './architecture-layout.js';
 import { projectGovernanceScene } from './governance-projection.js';
 import { diagramIcon, groupIcons } from './architecture-icons.js';
 import { renderStructuredCard, structuredCardStyle } from './hrpolnav-card.js';
 import { t } from './i18n.js';
+import { collapsedWording } from './collapsed-wording.js';
 
 export const svgPalette = {
   neutral: { fill: 'var(--st-semantic-surface-subtle)', stroke: 'var(--st-semantic-text-secondary)', fillVar: '--surface', strokeVar: '--muted' },
@@ -27,21 +28,25 @@ export function renderSceneSvg(sceneName, scene, highlight = null, interactive =
     const palette = svgPalette[group.tone];
     const content = frameHeaderContent(group, group.width);
     const headerY = y + (group.collapsed ? 0 : group.headerOffset ?? 0);
-    let subtitle = `<text class="diagram-detail" x="${x + 16}" y="${headerY + 16 + content.contentHeadHeight + 6 + 22}" font-size="24">${content.subtitleLines.map((line, i) => `<tspan x="${x + 16}" dy="${i ? 24 * 1.3 : 0}">${escapeXml(line)}</tspan>`).join('')}</text>`;
-    if (group.collapsed) {
-      // SVG/card pixels: 16px inner inset plus 16px subtitle margin per side.
-      const inset = 16, margin = 16, subtitleWidth = group.width - 2 * (inset + margin);
-      const lines = wrapText(group.subtitle, subtitleWidth, 24, 'body');
-      const top = y + inset + content.contentHeadHeight, bottom = y + group.height - inset;
-      // Embedded body font at 24px: glyph bounds extend 22px above / 8px below the baseline.
-      const baseline = (top + bottom) / 2 - (lines.length - 1) * 24 * 1.3 / 2 + 7;
-      subtitle = `<text class="diagram-detail" x="${x + group.width / 2}" y="${baseline}" font-size="24" text-anchor="middle">${lines.map((line, i) => `<tspan x="${x + group.width / 2}" dy="${i ? 24 * 1.3 : 0}">${escapeXml(line)}</tspan>`).join('')}</text>`;
-    }
+    const subtitle = `<text class="diagram-detail" x="${x + 16}" y="${headerY + 16 + content.contentHeadHeight + 6 + 22}" font-size="24">${content.subtitleLines.map((line, i) => `<tspan x="${x + 16}" dy="${i ? 24 * 1.3 : 0}">${escapeXml(line)}</tspan>`).join('')}</text>`;
     const header = `${diagramIcon(groupIcons[group.id], x + 16, headerY + 16 + (content.contentHeadHeight - 70) / 2, 70)}<text class="diagram-kicker diagram-product-kicker" x="${x + 92}" y="${headerY + 16 + 22}" font-size="22">${content.kickerLines.map((line, i) => `<tspan x="${x + 92}" dy="${i ? content.kickerLineHeight : 0}">${escapeXml(line)}</tspan>`).join('')}</text><text x="${x + 92}" y="${headerY + 16 + content.kickerLineHeight * content.kickerLines.length + 32}" font-size="32" font-weight="700">${content.titleLines.map((line, i) => `<tspan x="${x + 92}" dy="${i ? content.titleLineHeight : 0}">${escapeXml(line)}</tspan>`).join('')}</text>${subtitle}`;
     const routeState = activeGroups ? (activeGroups.has(group.id) ? ' data-route-state="active"' : ' data-route-state="dimmed"') : '';
-    const toggle = interactive ? `<foreignObject data-group-toggle="${escapeXml(group.id)}" data-right="${x + group.width}" x="${x + group.width - 76}" y="${y + 10}" width="76" height="76"><div xmlns="http://www.w3.org/1999/xhtml" data-frame-mount="${escapeXml(group.id)}" style="display:flex; margin:4px"></div></foreignObject>` : '';
+    const toggle = interactive ? `<foreignObject data-group-toggle="${escapeXml(group.id)}" x="${x + group.width - 42}" y="${y + 10}" width="32" height="32"><div xmlns="http://www.w3.org/1999/xhtml" data-frame-mount="${escapeXml(group.id)}"></div></foreignObject>` : '';
+    if (group.collapsed) {
+      const card = { ...group, data: { cardIcon: groupIcons[group.id], kicker:content.kicker,
+        title:content.titleLines.join(' '), subtitle:group.subtitle,
+        ...collapsedWording[scene.language]?.[group.id] } };
+      const cardToggle = interactive ? `<div class="card-toggle" data-group-toggle="${escapeXml(group.id)}"><div data-frame-mount="${escapeXml(group.id)}"></div></div>` : '';
+      return `<g data-group="${escapeXml(group.id)}" data-tone="${group.tone}" data-parent="${escapeXml(group.parentId ?? '')}" data-collapsed="true"${routeState}><rect class="diagram-card-box" x="${x}" y="${y}" width="${group.width}" height="${group.height}"/>${renderStructuredCard(card, escapeXml, { folded:true, toggle:cardToggle })}</g>`;
+    }
     const rule = !group.collapsed ? `<line class="diagram-card-rule" x1="${x + 16}" x2="${x + group.width - 10}" y1="${y + Math.max(group.headerTextHeight, content.headerTextHeight) - 8}" y2="${y + Math.max(group.headerTextHeight, content.headerTextHeight) - 8}" vector-effect="non-scaling-stroke"/>` : '';
-    return `<g data-group="${escapeXml(group.id)}" data-tone="${group.tone}" data-parent="${escapeXml(group.parentId ?? '')}" data-collapsed="${!!group.collapsed}"${routeState}><rect class="diagram-group-box" x="${x}" y="${y}" width="${group.width}" height="${group.height}" rx="6" fill="${palette.fill}" stroke="${palette.stroke}" stroke-width="1.5"/>${rule}${header}${toggle}</g>`;
+    const legend = (group.legendEntries ?? []).map((entry,i) => {
+      const cy = y + group.headerHeight + i*64 + 32;
+      const swatch = entry.line ? `<path d="M ${x+32} ${cy} h72" stroke="var(--st-semantic-text-secondary)" stroke-width="2" ${entry.dashed ? 'stroke-dasharray="4 5"' : ''}/>`
+        : `<rect x="${x+32}" y="${cy-22}" width="72" height="44" fill="var(--diagram-fill)" stroke="var(--diagram-border)"/>`;
+      return `<g data-legend-key="${i}" data-tone="${entry.tone ?? 'neutral'}">${swatch}<text x="${x+120}" y="${cy+8}" font-size="24">${escapeXml(entry.label)}</text></g>`;
+    }).join('');
+    return `<g data-group="${escapeXml(group.id)}" data-tone="${group.tone}" data-parent="${escapeXml(group.parentId ?? '')}" data-collapsed="${!!group.collapsed}"${routeState}><rect class="diagram-group-box" x="${x}" y="${y}" width="${group.width}" height="${group.height}" rx="0" fill="${palette.fill}" stroke="${palette.stroke}" stroke-width="1.5"/>${rule}${header}${legend}${toggle}</g>`;
   }).join('');
   const edges = scene.edges.map((edge) => {
     const points = edge.data.routedPoints;
@@ -84,7 +89,7 @@ export function renderSceneSvg(sceneName, scene, highlight = null, interactive =
     .architecture-svg [data-tone="critical"] { --diagram-tone:var(--st-semantic-feedback-error); }
     .architecture-svg [data-tone="positive"] { --diagram-tone:var(--st-semantic-feedback-success); }
     .architecture-svg .diagram-group-box { fill:color-mix(in srgb,var(--diagram-tone) 6%,var(--diagram-surface)); stroke:var(--diagram-border); }
-    .architecture-svg [data-group] > text { line-height:1.3; fill:#172033; }
+    .architecture-svg [data-group] > text, .architecture-svg [data-legend-key] text { line-height:1.3; fill:#172033; }
     .architecture-svg [data-group] > .diagram-detail { fill:#172033; }
     .architecture-svg [data-group] > text:not(.diagram-detail):not(.diagram-product-kicker) { font-family:'Dossier Inter',var(--st-font-sans,sans-serif); font-weight:700; }
     .architecture-svg .diagram-card-box { fill:var(--diagram-fill); stroke:var(--diagram-border); }
@@ -104,7 +109,6 @@ export function renderSceneSvg(sceneName, scene, highlight = null, interactive =
     .architecture-svg .diagram-status path { fill:none; stroke:var(--diagram-warning); stroke-width:2; stroke-linecap:round; }
     .architecture-svg .diagram-edge-pill rect { fill:var(--st-semantic-surface-subtle); stroke:var(--st-semantic-text-secondary); stroke-width:1; }
     .architecture-svg .diagram-edge-pill text { fill:var(--st-semantic-text-primary); }
-    .architecture-svg[data-card-style="dossier"] .diagram-group-box { rx:0; }
     ${structuredCardStyle}
   </style>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" class="architecture-svg scene-canvas" data-card-style="${cardStyle}" width="${frame.width}" height="${frame.height}" viewBox="${frame.left} ${frame.top} ${frame.width} ${frame.height}" role="${interactive ? 'group' : 'img'}" aria-labelledby="${marker}-title ${marker}-desc"${activeNeedAttr} style="font-family:var(--st-font-sans,system-ui,sans-serif);color:var(--st-semantic-text-primary);fill:var(--st-semantic-text-primary)"><title id="${marker}-title">${escapeXml(sceneName)}</title><desc id="${marker}-desc">${escapeXml(scene.shortCaption)}</desc>${defs}${style}${groups}${bands}${edges}${junctions}${nodes}${labels}</svg>`;
