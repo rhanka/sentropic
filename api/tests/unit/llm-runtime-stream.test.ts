@@ -1979,6 +1979,30 @@ describe('LLM stream event normalization', () => {
     ]);
   });
 
+  it('should preserve image content parts for Mistral chat input', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('mistral');
+    const dispatch = vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: 'Red image' } }] };
+        yield { choices: [{ delta: {}, finish_reason: 'stop' }] };
+      })(),
+    );
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+    const content = [
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+    ];
+    const events = await collectStreamEvents(callLLMStream({
+      messages: [{ role: 'user', content }] as never,
+      providerId: 'mistral', model: 'mistral-small-2603',
+    }));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      requestOptions: expect.objectContaining({ messages: [{ role: 'user', content }] }),
+    }));
+    expect(events.filter((event) => event.type === 'content_delta')).toHaveLength(1);
+  });
+
   it('should convert image content parts for Gemini request input', async () => {
     const { buildGeminiRequestBody } = await import('../../src/services/llm-runtime');
 
