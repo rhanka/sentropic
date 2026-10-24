@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { createArtifactService } from '../src/server/service.js';
 import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
-import { createRadarKeyDerivation } from '../src/server/command-identity.js';
+import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
 import type {
   ArtifactAuthorizationDecision,
@@ -325,5 +325,117 @@ describe('guarded ensure', () => {
     expect(harness.state.purposes).toContain('finalize');
     expect(harness.state.purposes).toContain('replay');
     expect(harness.state.locks).toEqual(['alice/observed', 'alice/observed']);
+  });
+
+  it('rejects unselected operations before storage with no ledger entry', async () => {
+    const harness = makeGuardedHarness();
+    const unselected = createGuardedEnsureService({
+      profile: compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selectedCapabilities: [] }),
+      coordinator: createArtifactCommitCoordinator({
+        executor: {
+          async ensureCoordinationRow(): Promise<void> {},
+          async beginFinalization(): Promise<FinalizeConnection> {
+            throw new Error('must not acquire a connection for an unselected operation');
+          },
+        },
+        policy: {
+          createParticipant: () => {
+            throw new Error('must not create a participant for an unselected operation');
+          },
+        },
+      }),
+      derivation: createRadarKeyDerivation({ storageScopeId: ENSURE_SCOPE, actorIds: [...ENSURE_ACTORS] }),
+      host: {
+        async lockBinding(): Promise<void> {
+          throw new Error('must not lock for an unselected operation');
+        },
+        async resolveBinding() {
+          throw new Error('must not resolve for an unselected operation');
+        },
+        async abandonAttempt(): Promise<void> {},
+        async readPolicyRevision() { return 'rev-1'; },
+      },
+    });
+    const outcome = await unselected.ensure(harness.invoke('alice'), harness.args());
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.failure).toMatchObject({
+      category: 'capability_unselected',
+      httpStatus: 503,
+      publicCode: 'capability_unavailable',
+      retriable: false,
+      commitState: 'not_committed',
+    });
+    expect(outcome.failure.phase).toBe('selection');
+  });
+
+  it('rejects malformed input and conflicting envelopes before storage', async () => {
+    const harness = makeGuardedHarness();
+    for (const args of [
+      { bindingName: '', idempotencyKey: 'k-1' },
+      { bindingName: 'site', idempotencyKey: '   ' },
+      { bindingName: 'site', idempotencyKey: 'k-1', envelopeKey: 'other' },
+      { bindingName: 'site', idempotencyKey: 'k-1', forged: 'actor' },
+    ]) {
+      const outcome = await harness.service.ensure(harness.invoke('alice'), args);
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) continue;
+      expect(outcome.failure).toMatchObject({
+        category: 'invalid_request', httpStatus: 400, retriable: false, commitState: 'not_committed',
+      });
+    }
+    expect(harness.state.resolveBindingCalls).toBe(0);
+    expect(harness.receipts.size).toBe(0);
+  });
+
+  it('rejects anonymous callers at entry without touching finalization', async () => {
+    const harness = makeGuardedHarness();
+    const outcome = await harness.service.ensure(harness.invoke(''), harness.args());
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.failure).toMatchObject({ httpStatus: 401, commitState: 'not_committed' });
+    expect(harness.state.resolveBindingCalls).toBe(0);
+    expect(harness.receipts.size).toBe(0);
+  });
+
+  it('isolates identical caller keys between actors', async () => {
+    const harness = makeGuardedHarness();
+    const first = await harness.service.ensure(harness.invoke('alice'), harness.args('site', 'shared'));
+    const second = await harness.service.ensure(harness.invoke('bob'), harness.args('site', 'shared'));
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(second.result.artifactId).not.toBe(first.result.artifactId);
+    expect(second.result.replayed).toBe(false);
+    expect(harness.receipts.size).toBe(2);
+  });
+
+  it('quarantines unknown legacy codecs instead of replaying them', async () => {
+    const harness = makeGuardedHarness();
+    const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+    const derivation = createRadarKeyDerivation({ storageScopeId: ENSURE_SCOPE, actorIds: [...ENSURE_ACTORS] });
+    const effective = createArtifactCommand(
+      profile, 'artifacts_ensure', { bindingName: 'legacy', idempotencyKey: 'k-legacy' },
+      { storageScopeId: ENSURE_SCOPE, actorId: 'alice' }, derivation,
+    );
+    harness.seedLegacy(effective.identity.internalKey);
+    const outcome = harness.service.ensure(harness.invoke('alice'), { bindingName: 'legacy', idempotencyKey: 'k-legacy' });
+    const { CommitQuarantineError: Quarantine } = await import('../src/server/commit/types.js');
+    await expect(outcome).rejects.toBeInstanceOf(Quarantine);
+  });
+
+  it('reports an unknown COMMIT without certifying effects and recovers on the same key', async () => {
+    const harness = makeGuardedHarness();
+    harness.failNextCommit(Object.assign(new Error('terminating connection'), { code: '57P06' }));
+    const uncertain = await harness.service.ensure(harness.invoke('alice'), harness.args('site', 'k-uncertain'));
+    expect(uncertain.ok).toBe(false);
+    if (uncertain.ok) return;
+    expect(uncertain.failure).toMatchObject({
+      category: 'provider_unavailable', httpStatus: 503, retriable: true, commitState: 'unknown',
+    });
+    const recovered = await harness.service.ensure(harness.invoke('alice'), harness.args('site', 'k-uncertain'));
+    expect(recovered.ok).toBe(true);
+    if (!recovered.ok) return;
+    expect(recovered.result.replayed).toBe(false);
+    expect(harness.receipts.size).toBe(1);
   });
 });
