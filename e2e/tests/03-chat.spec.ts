@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
 
-// Timeout pour génération IA (gpt-4.1-nano = réponses rapides)
+// Timeout pour génération IA (mistral-small-2603 = réponses rapides)
 test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debugging
 
 // Important: ces tests manipulent le même compte + les mêmes sessions.
@@ -292,6 +292,14 @@ test.describe('Chat', () => {
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
     
+    // CI model: mistral-small-2603 (gpt-4.1-nano retired; production default unchanged).
+    // Track 01M5PCVH1Y8ZAVM7T94SRAWVR5: revert/review when seats are available.
+    const modelSelect = page.locator('#chat-model-selection');
+    await expect(
+      modelSelect.locator('option[value="mistral::mistral-small-2603"]'),
+    ).toHaveCount(1, { timeout: 10_000 });
+    await modelSelect.selectOption('mistral::mistral-small-2603');
+
     // Envoyer un message avec une demande de réponse spécifique pour vérifier la réponse
     const expectedResponse = 'OK';
     const message = `Réponds uniquement avec le mot ${expectedResponse}`;
@@ -1004,12 +1012,14 @@ test.describe('Chat', () => {
     await newSessionAction.click();
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
 
-    // Default model is text-only (gpt-4.1-nano); switch to a vision-capable one.
+    // Default model is text-only; switch to a vision-capable one.
+    // CI: mistral-small-2603 (OpenAI key has no credits left).
+    // Vision support on mistral-small-2603 is unverified until CI runs.
     const modelSelect = page.locator('#chat-model-selection');
     await expect(
-      modelSelect.locator('option[value="openai::gpt-5.4-nano"]')
+      modelSelect.locator('option[value="mistral::mistral-small-2603"]')
     ).toHaveCount(1, { timeout: 10_000 });
-    await modelSelect.selectOption('openai::gpt-5.4-nano');
+    await modelSelect.selectOption('mistral::mistral-small-2603');
 
     // Generate a solid red PNG in the browser and attach it via the "+" menu.
     const redPngBytes: number[] = await page.evaluate(async () => {
