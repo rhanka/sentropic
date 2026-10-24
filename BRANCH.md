@@ -60,6 +60,7 @@ Wire publication finalization through the L3 coordinator ports: guard after wait
 - [x] R1 P2-4: write source provenance through the transaction-scoped unit writer (PostgreSQL rollback regression red then green).
 - [x] R1 P2-5: read guard lifecycle/owner through the finalization client, including replay (single-connection PostgreSQL regression red then green).
 - [x] R1 P1-3: serialize claim acquisition with reference/pin insertion; provide durable PostgreSQL claim and preparation retention ports.
+- [x] R1 P2-6/P1-3 PostgreSQL: consume frozen L1 identity and check durable claims in the unit writer; identity, provenance-conflict and PostgreSQL races pass.
 - [x] **Lot 0 — Worktree, base merges, scope**
   - [x] Worktree `tmp/worktrees/861-L4` from `origin/feat/artifacts-861-L3`, branch `feat/artifacts-861-L4`
   - [x] Merge `origin/feat/artifacts-861-L1` and `origin/feat/artifacts-861-L2` (no rebase)

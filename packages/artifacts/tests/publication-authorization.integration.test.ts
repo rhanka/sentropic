@@ -20,7 +20,12 @@ import {
   createGuardedPublicationService,
   createPostgresPublicationUnitWriter,
   type PublicationBlobStore,
+  type GuardedPublicationService,
+  type GuardedPublishInput,
 } from '../src/server/publication.js';
+import { createArtifactCommand, createRadarKeyDerivation, commandDigest } from '../src/server/command-identity.js';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
+import { createPostgresDeletionClaimStore, createPostgresClaimGuardedRefs } from '../src/server/gc.js';
 import type { IntentStore } from '../src/server/object-intents.js';
 import type {
   CommitPolicyParticipantFactory,
@@ -39,6 +44,18 @@ const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinato
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const singlePool = new Pool({ connectionString: DATABASE_URL, max: 1, connectionTimeoutMillis: 500 });
+
+// The host normalizes identity before calling the internal publication port.
+const publish = (service: GuardedPublicationService, input: Omit<GuardedPublishInput, 'identity'>) => {
+  const command = createArtifactCommand(compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE), 'artifacts_publish', {
+    artifactId: input.artifactId, idempotencyKey: input.callerKey, profile: input.profile,
+    files: input.files.map((file) => ({ ...file, bytes: [...file.bytes] })),
+  }, input, createRadarKeyDerivation({ storageScopeId: input.storageScopeId, actorIds: [input.actorId] }));
+  const identity = input.source === undefined ? command.identity : { ...command.identity,
+    commandHash: commandDigest({ operation: command.operation, scopeBinding: command.scopeBinding,
+      payload: { ...command.payload, provenance: input.source } }) };
+  return service.publishFinalized({ ...input, identity });
+};
 
 const setupSchema = async (): Promise<void> => {
   const setup = new Pool({ connectionString: DATABASE_URL });
@@ -189,6 +206,42 @@ afterAll(async () => {
 });
 
 describe('guarded publication authorization', () => {
+  it('should serialize PostgreSQL references with durable deletion claims', async () => {
+    const executor = createPostgresCommitExecutor(pool);
+    const writer = await executor.beginFinalization();
+    const deleter = await executor.beginFinalization();
+    const digest = `sha256:${'ef'.repeat(32)}`;
+    let claiming: Promise<void> | undefined;
+    try {
+      await createPostgresPublicationUnitWriter(writer).addReleaseRef(digest, 'existing-release');
+      const { rows } = await deleter.query<{ pid: number }>('SELECT pg_backend_pid() AS pid', []);
+      claiming = createPostgresDeletionClaimStore(deleter).claim(digest, 'purge');
+      await expect.poll(async () => {
+        const { rows: locks } = await pool.query<{ waiting: boolean }>(
+          `SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = $1 AND locktype = 'advisory' AND NOT granted) AS waiting`,
+          [rows[0].pid]);
+        return locks[0].waiting;
+      }).toBe(true);
+      await writer.commit();
+      await claiming;
+      await deleter.commit();
+      await expect(createPostgresClaimGuardedRefs(createPostgresArtifactStore(singlePool),
+        createPostgresCommitExecutor(singlePool)).pin(digest, 'new-preparation')).rejects.toThrow(/deletion/);
+      const retry = await executor.beginFinalization();
+      try {
+        await expect(createPostgresPublicationUnitWriter(retry).addReleaseRef(digest, 'new-release'))
+          .rejects.toThrow(/deletion/);
+        await createPostgresDeletionClaimStore(retry).releaseClaim(digest);
+        await retry.commit();
+      } finally { await retry.rollback(); retry.release(); }
+    } finally {
+      await writer.rollback();
+      await claiming?.catch(() => {});
+      await deleter.rollback();
+      writer.release(); deleter.release();
+    }
+  });
+
   it('finalizes a publish with one pooled connection when active and authorized', async () => {
     const artifactId = freshArtifactId();
     await registerArtifact(artifactId, 'owner-1');
@@ -203,13 +256,13 @@ describe('guarded publication authorization', () => {
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
       blobs: new MapBlobs(),
       intents: pgIntents(),
-      refs: pgStore,
+      refs: createPostgresClaimGuardedRefs(pgStore, createPostgresCommitExecutor(singlePool)),
       locks: lockCallbacks(artifactId),
       noteAbandoned: (attemptId: string) => {
         abandoned.push(attemptId);
       },
     });
-    const outcome = await service.publishFinalized({
+    const outcome = await publish(service, {
       ownerId: 'owner-1',
       actorId: 'owner-1',
       storageScopeId: 'scope-l4',
@@ -255,14 +308,14 @@ describe('guarded publication authorization', () => {
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
       blobs: new MapBlobs(),
       intents,
-      refs: pgStore,
+      refs: createPostgresClaimGuardedRefs(pgStore, createPostgresCommitExecutor(singlePool)),
       locks: lockCallbacks(artifactId),
       noteAbandoned: (attemptId: string) => {
         abandoned.push(attemptId);
       },
     });
     const receiptsBefore = await countRows('artifacts.operation_receipts');
-    const outcome = await service.publishFinalized({
+    const outcome = await publish(service, {
       ownerId: 'owner-1',
       actorId: 'owner-1',
       storageScopeId: 'scope-l4',
@@ -299,11 +352,11 @@ describe('guarded publication authorization', () => {
       coordinator,
       blobs: new MapBlobs(),
       intents: pgIntents(),
-      refs: pgStore,
+      refs: createPostgresClaimGuardedRefs(pgStore, createPostgresCommitExecutor(singlePool)),
       locks: lockCallbacks(artifactId),
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
     });
-    const outcome = await service.publishFinalized({
+    const outcome = await publish(service, {
       ownerId: 'owner-1',
       actorId: 'intruder-9',
       storageScopeId: 'scope-l4',
@@ -342,11 +395,11 @@ describe('guarded publication authorization', () => {
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
       blobs: new MapBlobs(),
       intents: pgIntents(),
-      refs: pgStore,
+      refs: createPostgresClaimGuardedRefs(pgStore, createPostgresCommitExecutor(singlePool)),
       locks: racingLocks,
     });
     const invocationId = 'inv-revoke-race';
-    const pending = service.publishFinalized({
+    const pending = publish(service, {
       ownerId: 'owner-1',
       actorId: 'owner-1',
       storageScopeId: 'scope-l4',
@@ -380,16 +433,16 @@ describe('guarded publication authorization', () => {
   it('replays the same caller key without re-running provisional work', async () => {
     const artifactId = freshArtifactId();
     await registerArtifact(artifactId, 'owner-1');
-    const pgStore = createPostgresArtifactStore(pool);
+    const pgStore = createPostgresArtifactStore(singlePool);
     const coordinator = createArtifactCommitCoordinator({
-      executor: createPostgresCommitExecutor(pool),
+      executor: createPostgresCommitExecutor(singlePool),
       policy: participantFactory(),
     });
     const service = createGuardedPublicationService({
       coordinator,
       blobs: new MapBlobs(),
       intents: pgIntents(),
-      refs: pgStore,
+      refs: createPostgresClaimGuardedRefs(pgStore, createPostgresCommitExecutor(singlePool)),
       locks: lockCallbacks(artifactId),
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
     });
@@ -404,12 +457,15 @@ describe('guarded publication authorization', () => {
       callerKey: 'pub-key-replay',
       attemptId: 'attempt-replay',
     } as const;
-    const first = await service.publishFinalized(input);
+    const first = await publish(service, input);
     expect(first.ok).toBe(true);
-    const second = await service.publishFinalized({ ...input, attemptId: 'attempt-replay-2' });
+    const second = await publish(service, { ...input, attemptId: 'attempt-replay-2' });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.replayed).toBe(true);
     expect(await countRows('artifacts.releases', ' WHERE artifact_id = $1', [artifactId])).toBe(1);
+    const changed = await publish(service, { ...input, source: { kind: 'base-commit', commit: 'changed' } });
+    expect(changed.ok).toBe(false);
+    if (!changed.ok) expect(changed.failure.category).toBe('conflict');
   });
 });
