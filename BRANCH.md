@@ -25,7 +25,6 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
-  - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md`
   - `ui/Dockerfile`
@@ -35,12 +34,20 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
   - `packages/cluster-mesh/tests/storage/postgres.mk` (BR734-EX1 only, comments audit lines only)
   - `api/Dockerfile` (BR734-EX2 only, bundled undici 6.28.1 to 6.29.1 pin for CVE-2026-109869)
   - `api/tests/api/chat-tools.test.ts` (BR734-EX3 only, evaluator-absorbing mock, no assertion change)
+  - `api/src/config/env.ts` (BR734-EX4 only)
+  - `api/src/services/context-document.ts` (BR734-EX4 only)
+  - `docker-compose.test.yml` (BR734-EX4 only)
+  - `docker-compose*.yml` (BR734-EX4 permits only the DOCUMENT_MODEL test setting in docker-compose.test.yml)
+  - `e2e/global.setup.ts` (BR734-EX4 only)
+  - `api/tests/ai/initiative-generation-async.test.ts` (BR734-EX5 only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR734-EX4` / `attention`: owner-authorized CI repair. Run 40112282506 proves E2E A/C still select retired gpt-4.1-nano and B/D document summaries force an unfunded OpenAI model. Configure the live Mistral default through the authenticated E2E setup and expose DOCUMENT_MODEL with the existing production default; pin it to mistral-small-2603 in the test compose overlay. Impact: test configuration and one document model configuration option, no assertion or E2E timeout changes. Rollback: revert these configuration changes.
+- `BR734-EX5` / `attention`: run 40112282506 proves the complete API workflow exceeds its 120s outer budget while organization/list/detail/summary jobs keep succeeding. Its existing phase budgets total 282s; align the API-only outer budget with those phases. Impact: this live API integration test only, assertions and E2E timeouts unchanged. Rollback: restore the 120s outer API budget.
 - `owner-all-public` / `acknowledge`: binding owner decisions. Public repos only, goal zero open findings at all times. For zod: dated exception plus migration.
 - `conductor-merge-733` / `acknowledge`: merged `origin/fix/ci-mistral-small` (merge commit, no rebase) into this branch; kept this BRANCH.md on conflict. #733 is superseded by this PR.
 - `BR734-EX1` / `attention`: reason — the validate-cluster-mesh comments-deps-audit step runs a plain `npm audit` with no exception input, so the dated zod exception could not cover its GHSA-mrhx-c7xc-m3w5 finding; the recipe now evaluates the JSON audit against the existing `.security/audit-allowlist.json` (same GHSA-only, same expiry fail-closed semantics as `audit-gate.mjs`). Impact — one audit line in `cluster-mesh-comments-deps-audit` only; oracle/vectors variants share the line and inherit the same gate. Rollback — revert that line to plain `npm audit --audit-level=high`.
@@ -97,6 +104,7 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
     - [x] `make memory-l5-verify ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-sec-hotfix`
     - [x] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
 - [ ] **Lot N — Final validation**
+  - [ ] Repair live Mistral CI defaults and document summarization, then verify all checks on the pushed head.
   - [x] Run audit gate locally via image builds (`make build-api-image-fresh`, `make build-ui-image`): both green, `npm ci` consistent.
   - [x] SCA api/ui compliance green; container api compliance green (only the 2 zod findings, both accepted).
   - [ ] Final gate step 1: PR body is `BRANCH.md` text (PR already open, update body on push).
