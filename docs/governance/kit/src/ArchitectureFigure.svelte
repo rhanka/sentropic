@@ -9,11 +9,19 @@
   import { collapseGovernanceScene } from './governance-collapse.js';
 
   let { scene, label, title = 'Architecture', compact = false, highlight = null } = $props();
-  let collapsedIds = $state(scene.id === 'central' ? scene.groups.map(group => group.id) : []);
+  let collapsedIds = $state(scene.groups.map(group => group.id));
   let layoutBusy = $state(false);
   let detailRevision = 0;
   let heldInlineSvg = '';
-  const foldable = $derived(scene.id === 'central');
+  let overflowDiagnostics = $state([]);
+  let activeSceneId = scene.id;
+  const foldable = $derived(scene.groups.length > 0);
+  $effect(() => {
+    if (scene.id !== activeSceneId) {
+      activeSceneId = scene.id;
+      collapsedIds = scene.groups.map(group => group.id);
+    }
+  });
   const routed = $derived(collapseGovernanceScene(projectGovernanceScene(scene, highlight), collapsedIds));
   // Only local structured scene text reaches this renderer; it XML-escapes it.
   const svg = $derived(viewerOpen ? heldInlineSvg : renderSceneSvg(scene.id, routed, highlight, foldable));
@@ -40,37 +48,30 @@
   let offset = $state({ x: 0, y: 0 });
   let dragging = $state(false);
   const pointers = new Map();
-  let controlFrame;
-  function scheduleFrameControls() {
-    return controlFrame ??= new Promise(resolve => requestAnimationFrame(() => {
-      controlFrame = null;
-      sizeFrameControls(viewerOpen ? viewport : inlineDiagram);
-      resolve();
-    }));
+  async function scheduleFrameControls() {
+    await tick();
+    const host = viewerOpen ? viewport : inlineDiagram;
+    const diagnostics = [];
+    for (const card of host?.querySelectorAll('.service-node') ?? []) {
+      const box = card.getBoundingClientRect(), scale = box.width / 460;
+      const entity = card.closest('[data-group], [data-node]');
+      const slots = [...card.querySelectorAll('.card-code,.service-name,.card-body,.repo-label')];
+      const overflowing = slots.filter(slot => {
+        const range = document.createRange(); range.selectNodeContents(slot);
+        const rect = range.getBoundingClientRect();
+        return rect.top < box.top-scale || rect.bottom > box.bottom+scale
+          || rect.left < box.left-scale || rect.right > box.right+scale
+          || slot.scrollHeight > slot.clientHeight+1 || slot.scrollWidth > slot.clientWidth+1;
+      });
+      if (overflowing.length) {
+        const slots = overflowing.map(slot=>slot.className).join(', ');
+        card.dataset.cardOverflow = slots;
+        diagnostics.push(`${entity.dataset.group ?? entity.dataset.node}: ${slots}`);
+      } else delete card.dataset.cardOverflow;
+    }
+    if (JSON.stringify(overflowDiagnostics) !== JSON.stringify(diagnostics)) overflowDiagnostics = diagnostics;
   }
 
-  // Mount DS components inside each SVG frame header, including the viewer.
-  function sizeFrameControls(host) {
-    const root = host?.querySelector('svg');
-    const scale = root?.getScreenCTM()?.a;
-    if (!scale) return;
-    // Read all button widths before writing SVG geometry: interleaving them
-    // forces a fresh layout for every frame, on every sizing pass.
-    const measurements = [...root.querySelectorAll('[data-group-toggle]')].flatMap(control => {
-      const button = control.querySelector('button');
-      return button ? [{ control, size: button.offsetWidth }] : [];
-    });
-    for (const { control, size } of measurements) {
-      const factor = Math.min(2, 1 / scale);
-      for (const [name, value] of Object.entries({ width: size * factor + 8, height: size * factor + 8,
-        x: Number(control.dataset.right) - size * factor - 8 })) {
-        if (control.getAttribute(name) !== String(value)) control.setAttribute(name, value);
-      }
-      const style = control.firstElementChild.style, transform = `scale(${factor})`;
-      if (style.transform !== transform) style.transform = transform;
-      if (style.transformOrigin !== '4px 4px') style.transformOrigin = '4px 4px';
-    }
-  }
   function mountFrameControls(host, markup) {
     if (!host || !markup) return;
     const components = [];
@@ -458,7 +459,11 @@
   data-architecture-scene={scene.id} data-edge-count={scene.edges.length}
   data-node-count={scene.nodes.length} data-renderer="inline-svg" onkeydown={figureKeydown}>
   <Typography variant="h2" as="h3" class="architecture-title">{title}</Typography>
-  <p class="architecture-palette">{t("Ambre : ajout ou choix proposé · Bleu : identité et confiance", $language)}</p>
+  {#if overflowDiagnostics.length}
+    <ul data-diagram-diagnostics aria-label={t('Débordements de texte', $language)}>
+      {#each overflowDiagnostics as diagnostic}<li>{diagnostic}</li>{/each}
+    </ul>
+  {/if}
   <div class="diagram-controls" role="group" aria-label={t("Zoom du diagramme", $language)}>
     <Button size="sm" variant="secondary" aria-label={`${t("Dézoomer : ", $language)}${title}`} onclick={() => setInlineScale(inlineScale / ZOOM_STEP)} disabled={inlineScale <= ZOOM_MIN}><Minus size="var(--st-component-button-anatomy-density-sm-fontSize)" aria-hidden="true" /></Button>
     <output aria-label={t("Niveau de zoom", $language)}><Typography variant="body-sm" as="span">{Math.round(inlineScale * 100)} %</Typography></output>
