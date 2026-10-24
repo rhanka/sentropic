@@ -20,6 +20,7 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
   - `api/package.json`
   - `api/package-lock.json`
   - `package-lock.json` (root workspace lock sync for packages/* bumps)
+  - `package.json` (root, `overrides` pin only — forces the single v4 line tree-wide)
   - `api/src/**`
   - `packages/auth-hono/**`
   - `packages/comments/**`
@@ -46,6 +47,8 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
 - [ ] `attention`: origin/main carries no zod exception in `.security/vulnerability-register.yaml` (verified 2026-10-24, GHSA-mrhx-c7xc-m3w5 entry exists only on `feat/llm-judge` as BR96-EX19) — nothing to remove unless main gains one before merge; re-check before final gate.
 - [ ] BR01-EX1 (`acknowledge` self): touch `Makefile` (Forbidden Path), pin-only changes of `zod@3.25.76`/`zod@3.23.8` install pins to the v4 line in package typecheck/test targets (skills, auth-hono, llm-gateway, auth-client, cluster-mesh peer tools). Reason: targets hardcode the exact zod version under test; without the pin update the gates keep validating against v3. Impact: version strings in ephemeral `npm install` commands only, no target logic change. Rollback: revert pin strings to v3.
 - [x] `acknowledge`: `make scope-check` available (harness CLI installed); run before every commit.
+- [x] `acknowledge` owner decision 2026-10-24: zod migration reprioritized to P2; body-parser GHSA-27r3-jxmh-p828 owned by PR #734 (do not touch); this branch PAUSED until conductor resume after immo #861.
+- [ ] `blocked` Lot 4 verification: api image build fails its audit gate on pre-existing body-parser HIGH GHSA-27r3-jxmh-p828 (range 2.0.0-2.3.0 via express, prod path), unrelated to this migration. Evidence: pristine origin/main export audits 2 HIGH (body-parser + zod); migrated tree audits 1 HIGH (body-parser only) — zod GHSA-mrhx-c7xc-m3w5 provably closed. Repro: `make up-api-test REGISTRY=local ENV=test-sec-zod4` fails at audit-gate step on both trees. Resolution path: PR #734 owns body-parser; on resume, refresh base, re-run `make lock-api` + Lot 4 gates + Lot 5 (remove zod exception), then push + draft PR. Lot 4 src committed unverified (PAUSED WIP).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -115,12 +118,13 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
   - [x] Lot gate: `make typecheck-auth-hono ENV=test-sec-zod4` PASS, `make test-auth-hono ENV=test-sec-zod4` PASS (239/239); `@hono/zod-validator@0.7.5` peer range already allows v4 (no bump); no UAT (no UI change).
   - [x] `make lock-root` deferred to Lot 4 (evidence: ERESOLVE — hoisted zod stays 3.25.76 while api pins `^3.22.4`; single hoist anchor left; lock refreshes once api moves to `^4.6.6`).
 
-- [ ] **Lot 4 — api zod v4**
-  - [ ] Bump `zod` to `^4.6.6` in `api/package.json`; refresh `api/package-lock.json` via make lock target; verify `@hono/zod-validator` resolves v4-compatible.
-  - [ ] Replace `error.errors` with `error.issues` (magic-link, config-product-ai, session-device x3, session-lifecycle, live-declarations, queue-manager).
-  - [ ] Replace single-arg `z.record(value)` with two-arg form (config-product-settings, product-docx, bids, products).
-  - [ ] Adapt `api/src/services/object-registry/json-schema-to-zod.ts` only if typecheck requires.
-  - [ ] Lot gate: copy exact checklist of Lot 1, no UAT if last branch.
+- [ ] **Lot 4 — api zod v4 (PAUSED WIP, committed unverified)**
+  - [x] Bump `zod` to `^4.6.6` in `api/package.json`; refresh `api/package-lock.json` via make lock target (deferred to resume: `make lock-api` needs running api service, blocked by body-parser gate — see Feedback Loop).
+  - [x] Replace `error.errors` with `error.issues` (magic-link, config-product-ai, session-device x3, session-lifecycle; live-declarations + queue-manager verified custom `string[]` interfaces, untouched).
+  - [x] Replace single-arg `z.record(value)` with two-arg form (config-product-settings, product-docx, bids, products, proposals, solutions, view-templates, product-workspaces).
+  - [ ] Adapt `api/src/services/object-registry/json-schema-to-zod.ts` only if typecheck requires (pending `make typecheck-api` on resume).
+  - [x] Root `overrides` pin `"zod": "^4.6.6"` added (single hoisted 4.6.7, zero v3) — `make lock-root` green.
+  - [ ] Lot gate: `make typecheck-api`, `make test-api`, `make test-ui` — all blocked on body-parser gate (PR #734), rerun on resume; no UAT (no UI change).
 
 - [ ] **Lot 5 — Register cleanup + final validation**
   - [ ] Re-check `.security/vulnerability-register.yaml` for any zod entry (GHSA-mrhx-c7xc-m3w5); remove it if present, else record absence.

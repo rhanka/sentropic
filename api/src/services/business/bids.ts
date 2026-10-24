@@ -9,17 +9,17 @@ import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 const createBidSchema = z.object({
   initiativeId: z.string().min(1),
   status: z.enum(['draft', 'review', 'finalized', 'contract']).optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 const updateBidSchema = z.object({
   status: z.enum(['draft', 'review', 'finalized', 'contract']).optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 const attachProductSchema = z.object({
   productId: z.string().min(1),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const bidsRouter = new Hono();
