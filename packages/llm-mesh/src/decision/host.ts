@@ -4,7 +4,7 @@ export { createJevAdapter } from './adapter.js';
 export { createStructuredDecisionAdapter, STRUCTURED_CONTRACT_REVISION, STRUCTURED_SCORE_MEANING } from './structured.js';
 export { jevDescriptor } from './descriptor.js';
 export type { JevAdapterOptions } from './adapter.js';
-export type { StructuredDecisionTransport, StructuredDecisionPayload, StructuredDecisionAdapterOptions, DecisionBackend } from './structured.js';
+export type { StructuredDecisionTransport, StructuredProviderEnvelope, StructuredDecisionPayload, StructuredDecisionAdapterOptions, DecisionBackend } from './structured.js';
 export type { DecisionServiceOptions, DecisionPriceLookupKey } from './host-options.js';
 export type { DecisionHostPolicy } from './policy.js';
 export type { DecisionEvaluatorDescriptor, ResolvedDecisionCriterion } from './descriptor.js';

@@ -12,12 +12,17 @@ import type { DecisionVerdict } from './verdict.js';
 import { unreportedDecisionUsage } from './receipt.js';
 import type { DecisionUsage } from './receipt.js';
 import type { DecisionAdapterResult } from './adapter.js';
-import { hasOnlyKeys, isRecord, isText, snapshotBoundedJson } from './validation.js';
+import { digestStructuredArtifact, hasOnlyKeys, isRecord, isText, snapshotBoundedJson } from './validation.js';
 
 /** Revisioned structured output contract served by this backend. */
 export const STRUCTURED_CONTRACT_REVISION = 'structured-llm-v1';
 /** Scalar meaning asserted by this backend for structured evidence. */
 export const STRUCTURED_SCORE_MEANING = 'support';
+/** Validation profile this backend implements and enforces. */
+export const STRUCTURED_VALIDATION_PROFILE = { profile: 'structured-llm-v1', version: 'v1' } as const;
+/** Prompt template this backend instantiates; digest-bound to the descriptor. */
+export const STRUCTURED_PROMPT_TEMPLATE =
+  'structured-llm-v1 revision={revision} kind={kind} instructions={instructions}';
 /** Adapter-local conservative execution default. Service admission enforces
  * the descriptor bound; direct adapter use never invents liability. */
 const STRUCTURED_DEFAULT_MAX_OUTPUT_TOKENS = 4096;
@@ -27,10 +32,58 @@ const closedSchema = (required: readonly string[], properties: Record<string, un
   type: 'object', required: [...required], properties, additionalProperties: false,
 });
 
-/** Injected structured transport: receives the compiled bounded payload once
- * and returns the raw model text once. No repair calls, no hidden retries. */
+/** Closed evidence schema this backend sends for one criterion kind. */
+export const structuredSchemaForKind = (kind: string): Record<string, unknown> => kind === 'choice'
+  ? closedSchema(['label'], { label: { type: 'string' } })
+  : closedSchema(['score'], { score: { type: 'number' } });
+
+/** Readout identity this backend declares for its sampling configuration. */
+export const STRUCTURED_READOUT_IDENTITY = 'structured-llm-v1';
+
+/**
+ * Mint the digest-bound compilation + definition pair for one effective
+ * output budget and readout identity. The family schema digest covers all
+ * three criterion schemas; per-kind entries in the definition bind each
+ * dispatched schema individually. Fixtures mint through this helper so
+ * declared digests always bind the artifacts this backend dispatches.
+ */
+export const mintStructuredContractDigests = (input: { maxOutputTokens: number; readout: string }): {
+  templateDigest: string;
+  schemaDigest: string;
+  definition: {
+    validationProfile: { profile: string; version: string };
+    kinds: { kind: string; schemaDigest: string }[];
+    evidenceRequirements: string[];
+    executionDigest: string;
+    bundleDigest: string;
+  };
+} => {
+  const templateDigest = digestStructuredArtifact(STRUCTURED_PROMPT_TEMPLATE);
+  const schemas = { binary: structuredSchemaForKind('binary'), graded: structuredSchemaForKind('graded'),
+    choice: structuredSchemaForKind('choice') };
+  const schemaDigest = digestStructuredArtifact(schemas);
+  const kinds = (Object.keys(schemas) as ('binary' | 'graded' | 'choice')[]).map((kind) => ({
+    kind, schemaDigest: digestStructuredArtifact(schemas[kind]),
+  }));
+  const executionDigest = digestStructuredArtifact({ maxOutputTokens: input.maxOutputTokens });
+  const bundleDigest = digestStructuredArtifact({ contractRevision: STRUCTURED_CONTRACT_REVISION, readout: input.readout,
+    templateDigest, schemaDigest, executionDigest, validationProfile: { ...STRUCTURED_VALIDATION_PROFILE } });
+  return { templateDigest, schemaDigest,
+    definition: { validationProfile: { ...STRUCTURED_VALIDATION_PROFILE }, kinds,
+      evidenceRequirements: ['served-identity', 'reported-usage'], executionDigest, bundleDigest } };
+};
+
+/** Provider envelope returned by the injected structured transport: the raw
+ * model text plus the provider-side response metadata, delivered separately.
+ * Identity and usage come from this envelope only; generated text never
+ * supplies them. One send, one envelope, no repair calls, no hidden retries. */
+export interface StructuredProviderEnvelope {
+  text: string;
+  served: unknown;
+  usage: unknown;
+}
 export type StructuredDecisionTransport = {
-  send(payload: StructuredDecisionPayload, options?: { signal?: AbortSignal }): Promise<string>;
+  send(payload: StructuredDecisionPayload, options?: { signal?: AbortSignal }): Promise<StructuredProviderEnvelope>;
 };
 /** Bounded evaluated content for the transport: full resolved criterion plus
  * evaluated inputs. No tool authority travels with the data. */
@@ -49,9 +102,10 @@ export interface StructuredDecisionAdapterOptions {
 }
 
 /** Generic structured backend: compiles one criterion plus evaluated content
- * into prompt, closed schema and execution settings; parses without scraping,
- * rejects refusal/malformed/extra/missing/prose/clamp/default and invented
- * identity/usage, no retry. */
+ * into prompt, closed schema and execution settings; parses the generated
+ * verdict evidence only, rejects refusal/malformed/extra/missing/prose/
+ * clamp/default and any generated identity/usage, and takes served identity
+ * and reported counters exclusively from the provider envelope, no retry. */
 export interface DecisionBackend {
   compile(request: DecisionRequest, descriptor: DecisionEvaluatorDescriptor): StructuredDecisionPayload;
 }
@@ -60,14 +114,12 @@ const compileStructured = (request: DecisionRequest, descriptor: DecisionEvaluat
   const revision = descriptor.evaluator.revision;
   const kind = request.criterion.kind;
   const instructions = request.criterion.instructions;
-  const prompt = `structured-llm-v1 revision=${revision} kind=${kind} instructions=${instructions}`;
-  const servedSchema = closedSchema(['modelId'], { modelId: { type: 'string' } });
-  const usageSchema = closedSchema(['inputTokens', 'outputTokens'],
-    { inputTokens: { type: 'integer', minimum: 0 }, outputTokens: { type: 'integer', minimum: 0 } });
-  const evidence = { served: servedSchema, usage: usageSchema };
-  const schema = kind === 'choice'
-    ? closedSchema(['label', 'served', 'usage'], { label: { type: 'string' }, ...evidence })
-    : closedSchema(['score', 'served', 'usage'], { score: { type: 'number' }, ...evidence });
+  const prompt = STRUCTURED_PROMPT_TEMPLATE.replace('{revision}', revision).replace('{kind}', kind)
+    .replace('{instructions}', instructions);
+  // The generated-output schema carries the verdict evidence only. Served
+  // identity and reported usage travel in the provider envelope, never in
+  // model text, so generated fields cannot establish their own provenance.
+  const schema = structuredSchemaForKind(kind);
   return {
     contractRevision: STRUCTURED_CONTRACT_REVISION,
     prompt,
@@ -136,14 +188,45 @@ export class StructuredDecisionAdapter implements ProviderAdapter {
       return { ok: false, error: createDecisionError('CAPABILITY_UNSUPPORTED', 'dispatch'),
         ...empty, usage: unreportedDecisionUsage('unknown') };
     }
-    let text: string;
+    // Complete definition binding (§3.2): the declared validation profile,
+    // covered kinds, required evidence and digests must match the artifacts
+    // actually compiled and dispatched here; anything else is refused before
+    // any provider contact.
+    const definition = this.descriptor.definition;
+    const refuseDefinition = { ok: false, error: createDecisionError('CAPABILITY_UNSUPPORTED', 'dispatch'),
+      ...empty, usage: unreportedDecisionUsage('unknown') } as const;
+    const compiledPayload = compiled.value as StructuredDecisionPayload;
+    const kindEntry = definition.kinds.find((entry) => entry.kind === request.criterion.kind);
+    if (definition.validationProfile.profile !== STRUCTURED_VALIDATION_PROFILE.profile
+      || definition.validationProfile.version !== STRUCTURED_VALIDATION_PROFILE.version
+      || !kindEntry
+      || !definition.evidenceRequirements.includes('served-identity')
+      || !definition.evidenceRequirements.includes('reported-usage')) return { ...refuseDefinition };
+    const actualTemplateDigest = digestStructuredArtifact(STRUCTURED_PROMPT_TEMPLATE);
+    const actualFamily = { binary: structuredSchemaForKind('binary'), graded: structuredSchemaForKind('graded'),
+      choice: structuredSchemaForKind('choice') };
+    const actualSchemaDigest = digestStructuredArtifact(actualFamily);
+    const actualSchemaKindDigest = digestStructuredArtifact(compiledPayload.schema);
+    const actualExecutionDigest = digestStructuredArtifact({ maxOutputTokens: compiledPayload.execution.maxOutputTokens });
+    const actualBundleDigest = digestStructuredArtifact({ contractRevision: compiledPayload.contractRevision,
+      readout: this.descriptor.compilation.readout, templateDigest: actualTemplateDigest,
+      schemaDigest: actualSchemaDigest, executionDigest: actualExecutionDigest,
+      validationProfile: { ...STRUCTURED_VALIDATION_PROFILE } });
+    if (this.descriptor.compilation.templateDigest !== actualTemplateDigest
+      || this.descriptor.compilation.schemaDigest !== actualSchemaDigest
+      || kindEntry.schemaDigest !== actualSchemaKindDigest
+      || definition.executionDigest !== actualExecutionDigest
+      || definition.bundleDigest !== actualBundleDigest) return { ...refuseDefinition };
+    let envelope: StructuredProviderEnvelope;
     try {
-      text = await this.options.transport.send(compiled.value as StructuredDecisionPayload, { signal: context?.signal });
+      envelope = await this.options.transport.send(compiled.value as StructuredDecisionPayload, { signal: context?.signal });
     } catch {
       return { ok: false, error: createDecisionError('TRANSPORT_FAILED', 'dispatch'),
         ...empty, usage: unreportedDecisionUsage('unknown') };
     }
-    if (typeof text !== 'string' || new TextEncoder().encode(text).byteLength > 16384) {
+    const envelopeRecord = isRecord(envelope) ? envelope : null;
+    const text = envelopeRecord !== null && typeof envelopeRecord.text === 'string' ? envelopeRecord.text : null;
+    if (text === null || new TextEncoder().encode(text).byteLength > 16384) {
       return { ok: false, error: createDecisionError('VERDICT_INVALID', 'parse'),
         ...empty, usage: unreportedDecisionUsage('unknown') };
     }
@@ -161,20 +244,21 @@ export class StructuredDecisionAdapter implements ProviderAdapter {
     }
     const body = snapshot.value;
     // Identity before accounting: served model and both counters come from
-    // the transport; missing/substituted evidence refuses, never invents.
+    // the provider envelope only; generated text never supplies them, and
+    // missing/substituted envelope evidence refuses, never invents.
     const failIdentity = { ok: false, error: createDecisionError('SERVED_IDENTITY_MISMATCH', 'parse'),
       ...empty, usage: unreportedDecisionUsage('unknown') } as const;
     const failUsage = { ok: false, error: createDecisionError('USAGE_INVALID', 'parse'),
       ...empty, usage: unreportedDecisionUsage('unknown') } as const;
     const failVerdict = { ok: false, error: createDecisionError('VERDICT_INVALID', 'parse'),
       ...empty, usage: unreportedDecisionUsage('unknown') } as const;
-    const servedModelId = parseStructuredServedIdentity(body.served, this.descriptor);
+    const servedModelId = parseStructuredServedIdentity(envelopeRecord?.served, this.descriptor);
     if (servedModelId === null) return { ...failIdentity };
-    const usage = parseStructuredReportedUsage(body.usage);
+    const usage = parseStructuredReportedUsage(envelopeRecord?.usage);
     if (usage === null) return { ...failUsage };
     const evidence = { usage, servedEvaluator: { ...this.descriptor.evaluator }, servedModelId };
     if (request.criterion.kind === 'choice') {
-      if (!hasOnlyKeys(body, ['label', 'served', 'usage']) || !isText(body.label)
+      if (!hasOnlyKeys(body, ['label']) || !isText(body.label)
         || !request.criterion.options.some((option) => option.id === body.label)) {
         return { ...failVerdict };
       }
@@ -188,7 +272,7 @@ export class StructuredDecisionAdapter implements ProviderAdapter {
         decision, label, rationale: null, confidence: null, distribution: null } as unknown as DecisionVerdict;
       return { ok: true, verdict, ...evidence };
     }
-    if (!hasOnlyKeys(body, ['score', 'served', 'usage']) || typeof body.score !== 'number' || !Number.isFinite(body.score)) {
+    if (!hasOnlyKeys(body, ['score']) || typeof body.score !== 'number' || !Number.isFinite(body.score)) {
       return { ...failVerdict };
     }
     const max = request.criterion.kind === 'graded' ? request.criterion.levels.length - 1 : 1;
