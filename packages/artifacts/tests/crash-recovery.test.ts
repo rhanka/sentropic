@@ -21,6 +21,10 @@ import {
   reconcileIntents,
   type ObjectIntent,
 } from '../src/server/object-intents.js';
+import {
+  createGcService,
+  createMemoryRefcountStore,
+} from '../src/server/gc.js';
 import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
 import { parseManifest } from '../src/codecs.js';
 
@@ -107,5 +111,42 @@ describe('crash recovery', () => {
     expect(current).not.toBeUndefined();
     expect(parseManifest(current?.manifest ?? '')).toMatchObject({ artifactId: BASE.artifactId });
     expect(await intents.listPending()).toEqual([]);
+  });
+
+  it('fails a denied attempt without promotion and cleans only orphan blobs', async () => {
+    const blobs = createMemoryBlobStore();
+    const refs = createMemoryRefcountStore();
+    const gc = createGcService(refs);
+    const { intents } = makeService(createMemoryStateStore(), blobs);
+    const prefix = `artifacts/${BASE.storageScopeId}/blobs/`;
+    // A committed release pins the shared blob; the denied attempt staged an orphan.
+    const sharedKey = `${prefix}sha256/${'cc'.repeat(32)}`;
+    const orphanKey = `${prefix}sha256/${'dd'.repeat(32)}`;
+    await blobs.putBlob(sharedKey, owe([10]));
+    await blobs.putBlob(orphanKey, owe([11]));
+    await refs.addRef('sha256:' + 'cc'.repeat(32), 'release-committed');
+    // The denied attempt's preparation intent carries attribution but no effect.
+    const denied = await intents.record('commit-release', {
+      artifactId: BASE.artifactId,
+      releaseId: 'release-denied',
+      manifestDigest: 'sha256:' + 'dd'.repeat(32),
+      blobKeys: [orphanKey],
+      attemptId: 'attempt-denied-9',
+      operation: 'publish',
+      cleanupDeadlineMs: Date.now() - 1,
+    });
+    const report = await reconcileIntents(intents, async (intent: ObjectIntent) => {
+      if (intent.intentId === denied.intentId) return 'failed';
+      return 'failed';
+    });
+    expect(report.failed.length).toBe(1);
+    expect(report.done.length).toBe(0);
+    // Recovery never promotes: no release, no pointer for the denied attempt.
+    const collection = await gc.collect(blobs, prefix);
+    expect(collection.deleted).toEqual([orphanKey]);
+    expect(collection.retained).toEqual([sharedKey]);
+    expect(await refs.count('sha256:' + 'cc'.repeat(32))).toBe(1);
+    expect(await blobs.getBlob(orphanKey)).toBeUndefined();
+    expect(await blobs.getBlob(sharedKey)).not.toBeUndefined();
   });
 });
