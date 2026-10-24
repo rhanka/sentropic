@@ -34,6 +34,14 @@ export function createArtifactsBuiltin(options: {
     throw new Error('artifacts common-rule admission is not qualified');
   }
   const manifest = createArtifactsManifest(options.definition);
+  for (const tool of manifest.tools) {
+    if (!tool.idempotency.required) continue;
+    const required = (tool.inputSchema as { required?: unknown } | null)?.required;
+    if (tool.idempotency.scope !== 'principal' || !Array.isArray(required) ||
+      !required.includes('idempotencyKey')) {
+      throw new Error(`artifacts idempotency metadata is inconsistent: ${tool.name}`);
+    }
+  }
   const digest = computeManifestDigest(manifest);
   return {
     providerId: ARTIFACTS_PROVIDER_ID,

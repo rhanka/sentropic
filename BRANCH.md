@@ -40,6 +40,8 @@
   - [x] Record rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR861-EX4 (owner PR735 request): allow authored `packages/artifacts/src/mcp-core.ts` edits only for required caller-key schemas and the envelope consistency guard. Impact: rejects invalid publication requests before app effects; rollback: revert PR735 P1. Manifests/locks remain integration-owner writes.
+- [x] PR735 P1: five regression failures reproduced missing schema requirements, missing metadata guards and acceptance of conflicting/envelope-only keys. Require principal-scoped argument keys; compiled-dispatch argument-only and equal-envelope cases succeed, conflicts and envelope-only writes refuse before app effects.
 - [x] PR735 P2-2: regression observed eager definition construction; catalog metadata now uses only the manifest factory. Full definition construction occurs after qualified module loading, with atomic refusal on loader failure.
 - [x] PR735 P2-1: regression caught fifteen handler/value entries in the four-tool fixture; the consistent selected fixture now uses the real module registry and compile path, with exactly four catalog, adapter and compiled tools and no factory mock.
 - [x] PR735 P2-3: regression failed on the runtime barrel export; common-contract consumers now import the self-sufficient data leaf directly. Public subpath registration remains integration-owner work.
