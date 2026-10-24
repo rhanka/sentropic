@@ -139,7 +139,8 @@ test.describe('Chat organization_update tool', () => {
       await page.keyboard.press('Control+A');
       await page.keyboard.press('Backspace');
       await page.keyboard.type(
-        `Update the technologies field of this organization to exactly: ${TARGET_VALUE}`,
+        `Use organization_update to update the technologies field of organization ${orgId} (${orgName}) ` +
+        `to exactly: ${TARGET_VALUE}. Apply the change with the tool before replying; do not just describe the update.`,
       );
 
       const [sendResponse] = await Promise.all([
@@ -170,6 +171,7 @@ test.describe('Chat organization_update tool', () => {
       console.log(
         `[org-update.spec] BUG-1 proof — technologies before=${JSON.stringify(before)} after=${JSON.stringify(after)} toolCallObserved=${toolCallObserved}`,
       );
+      console.log(`[org-update.spec] assistant response: ${await assistantResponse.innerText()}`);
 
       // Primary assertion: the field changed and carries the requested value.
       expect(after).not.toBe(before);
