@@ -63,6 +63,7 @@ Deliver the L5 coordinator-bound ensure path with guarded replay on top of the f
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] L5-SOL-R1: reproduce both P2 findings with failing service tests, then preserve the replay target under the binding lock and reject unselected replay before policy/coordinator access; all 18 service tests pass.
 - [x] L5-BASE (acknowledge): worktree tmp/worktrees/861-L5 on branch feat/artifacts-861-L5 from origin/feat/artifacts-861-L3; merged origin/feat/artifacts-861-L1 then origin/feat/artifacts-861-L2 (BRANCH.md conflicts resolved toward ours; L5 BRANCH.md replaces the file next). Merge commits used direct git; all other commits use make commit MSG only.
 - [x] L5-TRACK (acknowledge): branch-lifecycle containment gate PASS (candidate contains all 342 branch event ids, rc=0); step 4 consolidate ok with zero skipped items; the 4 re-anchor events ship in the init commit; no further track writes in this lot.
 - [ ] L5-LEGACY (attention): legacy createArtifactService plus ensurePrivateView stay intact because http.ts and L6-owned tests consume them; L6 removes the split path during wiring. No second implicit fallback is added by L5.
