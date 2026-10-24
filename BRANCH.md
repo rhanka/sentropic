@@ -61,15 +61,16 @@
   - [x] Merge L1 and L2; inspect the compiled-profile and tuple boundaries.
 - [ ] **Lot 1 — Selected mesh composition**
   - [x] Write failing tests in `tests/integrations/artifacts-surface.spec.ts` and `tests/packaging/tuple-skew.spec.ts` before implementation.
-  - [ ] Derive capabilities from the compiled profile; preserve profile integrity and argument idempotency metadata.
-  - [ ] Expose common data types without claiming common storage admission.
+  - [x] Derive catalog capabilities from the selected registry definition; refuse manifest drift on load.
+  - [x] Expose common data types without claiming common storage admission; scope/fence bindings remain data-only.
   - [ ] Qualify platform envelope and actor-domain behavior through selected dispatch.
 - [ ] **Lot 2 — Tuple qualification**
   - [ ] Update the six named tuple/consumer test files only where the contract requires it.
   - [ ] Qualify llm-mesh 0.19.2 and supported boundary fixtures; retain strict install evidence.
   - [ ] Record bounded external consumer gaps without claiming full published qualification.
 - [ ] **Lot 3 — Final validation and delivery**
-  - [ ] `make typecheck-cluster-mesh ENV=test-861-l7`.
+  - [x] `make typecheck-cluster-mesh ENV=test-861-l7`.
+  - [x] `make lint-cluster-mesh ENV=test-861-l7`.
   - [ ] `make test-cluster-mesh ENV=test-861-l7` and package packing gates.
   - [ ] Run mechanical scope checks before each atomic commit (under 150 authored lines).
   - [ ] Review the exact diff, resolve findings, push and open a draft PR with this body.
