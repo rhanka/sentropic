@@ -1,9 +1,23 @@
 import type { EvaluatorRef, DecisionCriterion } from './request.js';
 import type { RetentionReceipt } from './receipt.js';
+import { digestStructuredArtifact } from './validation.js';
 
 export type ResolvedDecisionCriterion = Exclude<DecisionCriterion, { kind: 'registered' }>;
 export type DecisionBackendProtocol = 'jev-native' | 'openai-decisions' | 'systemone-local' | 'structured-llm';
 export interface DecisionEvaluatorDescriptor {
+  /**
+   * Complete definition binding (§3.2): the versioned validation profile the
+   * implementation enforces, the criterion kinds covered with their per-kind
+   * closed-schema digests, the evidence every envelope must carry, and the
+   * execution/bundle digests recomputed from the artifacts actually dispatched.
+   */
+  definition: {
+    validationProfile: { profile: string; version: string };
+    kinds: readonly { kind: string; schemaDigest: string }[];
+    evidenceRequirements: readonly string[];
+    executionDigest: string;
+    bundleDigest: string;
+  };
   evaluator: EvaluatorRef;
   protocol?: DecisionBackendProtocol;
   wireModel: string;
@@ -35,8 +49,25 @@ export interface DecisionEvaluatorDescriptor {
   retention: RetentionReceipt;
 }
 
+/**
+ * JEV-meaningful definition digests, minted at module load from the stated
+ * values: JEV carries no closed schema (native verdict per kind), no output
+ * budget and the jev-native readout. The structured adapter additionally
+ * requires the structured validation profile, so this block never admits
+ * JEV rows into the structured contract.
+ */
+const jevKindDigest = (kind: string): string => digestStructuredArtifact({ contract: 'jev-native', kind });
 /** Byte limits are local admission limits, not claims about provider tokenization. */
 export const jevDescriptor: DecisionEvaluatorDescriptor = {
+  definition: {
+    validationProfile: { profile: 'jev-native-v1', version: 'v1' },
+    kinds: [{ kind: 'binary', schemaDigest: jevKindDigest('binary') },
+      { kind: 'graded', schemaDigest: jevKindDigest('graded') },
+      { kind: 'choice', schemaDigest: jevKindDigest('choice') }],
+    evidenceRequirements: ['served-identity', 'reported-usage'],
+    executionDigest: digestStructuredArtifact({ maxOutputTokens: 0 }),
+    bundleDigest: digestStructuredArtifact({ contract: 'jev-native', readout: 'jev-native-v1' }),
+  },
   evaluator: { providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'jev-1.13.0-mesh-v1-unqualified' },
   wireModel: 'jev-1.13.0', acceptedServedModelIds: [],
   qualification: { servedIdentity: 'unqualified', billingBound: 'unqualified', evidenceRefs: [] },
