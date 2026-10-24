@@ -494,7 +494,7 @@ export async function seedTestData() {
         folderId: 'e2e-folder-admin',
         organizationId: 'e2e-organization-admin-bombardier',
         status: 'completed',
-        model: 'gpt-4.1-nano',
+        model: 'mistral-small-2603',
         createdAt: now,
         data: mkInitiativeData(
           'Maintenance prédictive flotte',
