@@ -14,13 +14,13 @@
 import type { Pool } from 'pg';
 import { createPostgresCommitExecutor } from '../src/adapters/postgres-commit.js';
 import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
-import type { CommitBarrierObserver } from '../src/testing.js';
 import type {
   ArtifactAuthorizationDecision,
   ArtifactCommitContext,
   ArtifactCommitTransaction,
   CommitPolicyParticipant,
   CommitPolicyParticipantFactory,
+  CommitCoordinatorOptions,
   CoordinatorTestPoint,
   FinalizationCoordinator,
   FinalizeRequest,
@@ -155,14 +155,14 @@ export interface RadarCommitSetup {
 
 /**
  * Build the exact Radar construction over one pool. The optional
- * `testObserver`/`testPoints` pair forwards barrier observations to the
- * coordinator (both must be supplied together; see `testing.ts`).
+ * `testObserver` forwards barrier observations to the coordinator;
+ * `testPoints` optionally filters them (see `testing.ts`).
  */
 export function createRadarCommitSetup(options: {
   pool: Pool;
   clock: { nowMs: number };
   quotaKey?: string;
-  testObserver?: CommitBarrierObserver;
+  testObserver?: CommitCoordinatorOptions['testObserver'];
   testPoints?: readonly CoordinatorTestPoint[];
 }): RadarCommitSetup {
   const quotaKey = options.quotaKey ?? 'radar-quota';

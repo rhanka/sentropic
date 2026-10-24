@@ -186,7 +186,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       throw new Error(`unknown coordinator test point ${point}`);
     }
   }
-  const armed = new Set(options.testPoints ?? []);
+  const armed = new Set(options.testPoints ?? COORDINATOR_TEST_POINTS);
   const fired = new Set<string>();
   const observeAt = async (
     point: CoordinatorTestPoint,
@@ -195,7 +195,9 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     const key = `${point}:${invocationId}`;
     if (options.testObserver === undefined || !armed.has(point) || fired.has(key)) return;
     fired.add(key);
-    await options.testObserver(point, invocationId);
+    const observer = options.testObserver;
+    await (typeof observer === 'function'
+      ? observer(point, invocationId) : observer.arrive(point, invocationId));
   };
 
   const commitContext = (

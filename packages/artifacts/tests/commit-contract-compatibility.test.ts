@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
+import { createArtifactCommitBarrier } from '../src/testing.js';
 import type { CommitBarrierObserver, CommitBarrierPoint } from '../l0-freeze/commit-contract.js';
 import type {
   CommitCoordinatorOptions, FinalizeConnection, FinalizeRequest, StoredCommitReceipt,
@@ -46,6 +51,30 @@ const request: FinalizeRequest = {
 };
 
 describe('frozen observer compatibility', () => {
+  it('should pause only the awaited invocation when binding the barrier alone', async () => {
+    const barrier = createArtifactCommitBarrier();
+    const coordinator = setup(barrier.observer);
+    const reached = barrier.waitUntilReached('before_connection_acquire', 'finalize');
+    let completed = false;
+    const pending = coordinator.finalize(request).then((outcome) => {
+      completed = true;
+      return outcome;
+    });
+    await reached;
+    expect(completed).toBe(false);
+    expect(await coordinator.finalize({ ...request, invocationId: 'other' }))
+      .toMatchObject({ ok: true });
+    barrier.release('before_connection_acquire', 'finalize');
+    expect(await pending).toMatchObject({ ok: true });
+  });
+  it('should compile the maintained frozen contract fixture', () => {
+    const compiler = createRequire(import.meta.resolve('vitest')).resolve('typescript/bin/tsc');
+    const fixture = fileURLToPath(new URL('./fixtures/commit-contract-compatibility.ts', import.meta.url));
+    execFileSync(process.execPath, [compiler, '--noEmit', '--strict', '--skipLibCheck',
+      '--target', 'es2022', '--module', 'nodenext', '--moduleResolution', 'nodenext',
+      '--verbatimModuleSyntax', '--typeRoots', resolve(dirname(compiler), '../../@types'), fixture],
+    { stdio: 'pipe' });
+  });
   it.each([undefined, ['before_commit'] as const])(
     'should observe successful finalization and replay with points %j', async (testPoints) => {
       const arrivals: Array<[CommitBarrierPoint, string]> = [];
