@@ -8,6 +8,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as artifacts from '@sentropic/artifacts/mcp';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
+import { authorizeDispatch } from '@sentropic/mcp-platform/transport/dispatch';
 import type { ClusterMeshModules } from '../../src/modules/contracts.js';
 import { createClusterMeshModules } from '../../src/modules/registry.js';
 import { loadArtifactsMcp } from '../../src/loaders/mcp/artifacts.js';
@@ -97,6 +98,63 @@ function facadeWith(options: ModuleOptions = {}) {
 }
 
 describe('artifacts mesh leaf', () => {
+  it('should require the caller key in every idempotent tool schema', () => {
+    for (const tool of artifacts.createArtifactsManifest().tools) {
+      if (tool.idempotency.required) {
+        expect(tool.inputSchema, tool.name).toHaveProperty('required', expect.arrayContaining(['idempotencyKey']));
+      }
+    }
+  });
+
+  it.each(['required', 'scope'])('should refuse inconsistent idempotency %s metadata', (field) => {
+    const manifest = artifacts.createArtifactsManifest();
+    const tool = manifest.tools.find((item) => item.name === 'artifacts_ensure')!;
+    if (field === 'required') tool.inputSchema = { ...tool.inputSchema as object, required: [] };
+    else tool.idempotency = { required: true, scope: 'tenant' };
+    const factory = vi.spyOn(artifacts, 'createArtifactsManifest').mockReturnValue(manifest);
+    try {
+      expect(() => createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } }))
+        .toThrow(/idempotency/);
+    } finally { factory.mockRestore(); }
+  });
+
+  it.each([
+    { label: 'argument only', argument: 'caller-key', envelope: undefined, allowed: true },
+    { label: 'equal envelope', argument: 'caller-key', envelope: 'caller-key', allowed: true },
+    { label: 'conflicting envelope', argument: 'caller-key', envelope: 'other-key', allowed: false },
+    { label: 'envelope only', argument: undefined, envelope: 'caller-key', allowed: false },
+  ])('should enforce caller-key consistency for $label through compiled dispatch', async (test) => {
+    const effects: unknown[] = [];
+    const app = { handle: async (request: unknown) => {
+      effects.push(request); return { status: 200, body: { ok: true } };
+    } };
+    const modules = createClusterMeshModules();
+    const builtin = createArtifactsBuiltin({ modules, definition: { app } });
+    const definition = await builtin.load();
+    if ('kind' in definition) throw new Error('expected loaded definition');
+    const facade = createMcpRegistry({ modules, builtins: [builtin] });
+    facade.select(['sentropic.artifacts']);
+    const compiled = await facade.compile({ bindings: {}, compatibility: {
+      'sentropic.artifacts': { manifestDigest: computeManifestDigest(definition.manifest) },
+    } });
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+    expect(compiled.registry.resolveTool('artifacts_publish')?.entry.idempotency)
+      .toEqual({ required: true, scope: 'principal' });
+    const decision = authorizeDispatch({ registry: compiled.registry, toolName: 'artifacts_publish',
+      principal: { sub: 'alice', clientId: 'host', scopes: [], claims: [] } });
+    if (!decision.allowed) throw new Error(decision.code);
+    const result = await definition.adapter.invokeTool({ capabilityRef: decision.capabilityName,
+      input: { artifactId: 'artifact', files: [{ path: 'index.html', mimeType: 'text/html', text: 'hello' }],
+        ...(test.argument === undefined ? {} : { idempotencyKey: test.argument }) },
+      ...(test.envelope === undefined ? {} : { idempotencyKey: test.envelope }),
+      ctx: { auditId: 'audit', principal: { sub: 'alice' } } as never });
+    expect(result).toMatchObject(test.allowed ? { ok: true } : {
+      ok: false, error: { code: 'invalid_request', retriable: false },
+    });
+    expect(effects).toHaveLength(test.allowed ? 1 : 0);
+    if (test.allowed) expect(effects[0]).toMatchObject({ body: { idempotencyKey: test.argument } });
+  });
+
   it('should materialize the definition only through the selected qualified loader', async () => {
     const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition');
     try {

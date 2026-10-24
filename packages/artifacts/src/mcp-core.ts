@@ -77,9 +77,9 @@ export const ARTIFACTS_TOOL_SPECS: readonly ToolSpec[] = [
   { name: 'artifacts_get_template', description: 'Get an approved template kit (sources + build recipe).', inputSchema: obj({ templateId: str }, ['templateId']), mutability: 'read-only' },
   { name: 'artifacts_get_api_guide', description: 'Get the versioned artifacts API guide.', inputSchema: obj({ version: str }), mutability: 'read-only' },
   { name: 'artifacts_ensure', description: 'Resolve or create the private artifact view for a binding.', inputSchema: obj({ bindingName: str, storageScopeId: str, idempotencyKey: str, paramsHash: str, parameters: record }, ['bindingName', 'idempotencyKey']), mutability: 'state-transition', idempotent: true },
-  { name: 'artifacts_publish', description: 'Publish inline files as a new release.', inputSchema: obj({ artifactId: str, files: { type: 'array', minItems: 1, items: fileEntry }, profile: record, source: sourceRef, idempotencyKey: str, paramsHash: str }, ['artifactId', 'files']), mutability: 'append', idempotent: true },
+  { name: 'artifacts_publish', description: 'Publish inline files as a new release.', inputSchema: obj({ artifactId: str, files: { type: 'array', minItems: 1, items: fileEntry }, profile: record, source: sourceRef, idempotencyKey: str, paramsHash: str }, ['artifactId', 'files', 'idempotencyKey']), mutability: 'append', idempotent: true },
   { name: 'artifacts_create_upload', description: 'Open a bounded upload session for large bytes.', inputSchema: obj({ artifactId: str, mimeType: str, maxSize: int(1) }, ['artifactId', 'mimeType']), mutability: 'state-transition' },
-  { name: 'artifacts_commit_upload', description: 'Verify staged bytes and publish them as a release.', inputSchema: obj({ artifactId: str, uploadId: str, path: str, mimeType: str, digest: str, size: int(0), profile: record, idempotencyKey: str, paramsHash: str }, ['artifactId', 'uploadId', 'path', 'mimeType', 'digest', 'size']), mutability: 'append', idempotent: true },
+  { name: 'artifacts_commit_upload', description: 'Verify staged bytes and publish them as a release.', inputSchema: obj({ artifactId: str, uploadId: str, path: str, mimeType: str, digest: str, size: int(0), profile: record, idempotencyKey: str, paramsHash: str }, ['artifactId', 'uploadId', 'path', 'mimeType', 'digest', 'size', 'idempotencyKey']), mutability: 'append', idempotent: true },
   { name: 'artifacts_list', description: 'List artifacts visible to the caller (ACL before pagination).', inputSchema: obj({ limit: int(1, 100), offset: int(0) }), mutability: 'read-only' },
   { name: 'artifacts_get', description: 'Get artifact metadata (grants visible to the owner only).', inputSchema: idOnly, mutability: 'read-only' },
   { name: 'artifacts_get_source', description: 'Export the attached source reference (separate right).', inputSchema: idOnly, mutability: 'read-only' },
@@ -339,6 +339,12 @@ export function createArtifactsAdapter(
         const args = typeof req.input === 'object' && req.input !== null && !Array.isArray(req.input)
           ? (req.input as Record<string, unknown>)
           : {};
+        if (manifest.tools.some((tool) => tool.name === req.capabilityRef && tool.idempotency.required)) {
+          const key = needString(args, 'idempotencyKey');
+          if (req.idempotencyKey !== undefined && req.idempotencyKey !== key) {
+            throw new Error('invalid request: conflicting idempotency key');
+          }
+        }
         const res = await executor.invoke({
           tool: req.capabilityRef,
           actorId: req.ctx.principal.sub,
