@@ -38,6 +38,7 @@ const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinato
 );
 
 const pool = new Pool({ connectionString: DATABASE_URL });
+const singlePool = new Pool({ connectionString: DATABASE_URL, max: 1, connectionTimeoutMillis: 500 });
 
 const setupSchema = async (): Promise<void> => {
   const setup = new Pool({ connectionString: DATABASE_URL });
@@ -184,15 +185,16 @@ afterAll(async () => {
   await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE');
   await pool.query('DROP SCHEMA IF EXISTS pub_policy CASCADE');
   await pool.end();
+  await singlePool.end();
 });
 
 describe('guarded publication authorization', () => {
-  it('finalizes a publish when active and authorized', async () => {
+  it('finalizes a publish with one pooled connection when active and authorized', async () => {
     const artifactId = freshArtifactId();
     await registerArtifact(artifactId, 'owner-1');
-    const pgStore = createPostgresArtifactStore(pool);
+    const pgStore = createPostgresArtifactStore(singlePool);
     const coordinator = createArtifactCommitCoordinator({
-      executor: createPostgresCommitExecutor(pool),
+      executor: createPostgresCommitExecutor(singlePool),
       policy: participantFactory(),
     });
     const abandoned: string[] = [];
@@ -201,9 +203,7 @@ describe('guarded publication authorization', () => {
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
       blobs: new MapBlobs(),
       intents: pgIntents(),
-      lifecycle: pgStore,
       refs: pgStore,
-      resolveAcl: (id: string) => pgStore.getArtifactAcl(id),
       locks: lockCallbacks(artifactId),
       noteAbandoned: (attemptId: string) => {
         abandoned.push(attemptId);
@@ -243,6 +243,7 @@ describe('guarded publication authorization', () => {
     const artifactId = freshArtifactId();
     await registerArtifact(artifactId, 'owner-1', 'withdrawn');
     const pgStore = createPostgresArtifactStore(pool);
+    await pgStore.putSource(artifactId, { kind: 'inline-original' });
     const coordinator = createArtifactCommitCoordinator({
       executor: createPostgresCommitExecutor(pool),
       policy: participantFactory(),
@@ -254,9 +255,7 @@ describe('guarded publication authorization', () => {
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
       blobs: new MapBlobs(),
       intents,
-      lifecycle: pgStore,
       refs: pgStore,
-      resolveAcl: (id: string) => pgStore.getArtifactAcl(id),
       locks: lockCallbacks(artifactId),
       noteAbandoned: (attemptId: string) => {
         abandoned.push(attemptId);
@@ -272,9 +271,11 @@ describe('guarded publication authorization', () => {
       files: [{ path: 'index.html', mimeType: 'text/html', bytes: new Uint8Array([4, 5, 6]) }],
       policyRevision: 'rev-1',
       callerKey: 'pub-key-withdrawn',
+      source: { kind: 'base-commit', commit: 'new-provenance' },
       attemptId: 'attempt-withdrawn',
     });
     expect(outcome.ok).toBe(false);
+    expect(await pgStore.getSource(artifactId)).toEqual({ kind: 'inline-original' });
     if (outcome.ok) return;
     expect(outcome.failure.category).toBe('unauthorized_at_commit');
     expect(abandoned).toEqual(['attempt-withdrawn']);
@@ -298,9 +299,7 @@ describe('guarded publication authorization', () => {
       coordinator,
       blobs: new MapBlobs(),
       intents: pgIntents(),
-      lifecycle: pgStore,
       refs: pgStore,
-      resolveAcl: (id: string) => pgStore.getArtifactAcl(id),
       locks: lockCallbacks(artifactId),
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
     });
@@ -343,9 +342,7 @@ describe('guarded publication authorization', () => {
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
       blobs: new MapBlobs(),
       intents: pgIntents(),
-      lifecycle: pgStore,
       refs: pgStore,
-      resolveAcl: (id: string) => pgStore.getArtifactAcl(id),
       locks: racingLocks,
     });
     const invocationId = 'inv-revoke-race';
@@ -392,9 +389,7 @@ describe('guarded publication authorization', () => {
       coordinator,
       blobs: new MapBlobs(),
       intents: pgIntents(),
-      lifecycle: pgStore,
       refs: pgStore,
-      resolveAcl: (id: string) => pgStore.getArtifactAcl(id),
       locks: lockCallbacks(artifactId),
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
     });

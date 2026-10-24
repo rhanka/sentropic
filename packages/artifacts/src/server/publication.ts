@@ -19,7 +19,7 @@ import type { IdempotencyStore } from './idempotency.js';
 import { parseSourceRef, type SourceRef, type SourceStore } from './sources.js';
 import { publicationLimits, validatePublicationFiles, type PublicationLimits } from './publication-limits.js';
 import type { ArtifactAcl } from './access.js';
-import type { ArtifactState, LifecycleStore } from './lifecycle.js';
+import type { ArtifactState } from './lifecycle.js';
 import type { RefcountStore } from './gc.js';
 import type {
   AuthorizeCommit,
@@ -311,6 +311,8 @@ export function decidePublishAuthorization(
 
 /** Transaction-scoped provisional writers for the finalized unit. */
 export interface PublicationUnitWriter {
+  readAuthorization(artifactId: string): Promise<{ state: ArtifactState; acl: ArtifactAcl | undefined }>;
+  putSource(artifactId: string, source: SourceRef): Promise<void>;
   putRelease(release: ReleaseRecord): Promise<void>;
   registerBlob(storageScopeId: string, digest: string, size: number): Promise<void>;
   promoteCurrentLatestWins(artifactId: string, releaseId: string): Promise<void>;
@@ -321,6 +323,23 @@ export interface PublicationUnitWriter {
 /** PostgreSQL unit writer over the coordinator's leased client. */
 export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): PublicationUnitWriter {
   return {
+    async readAuthorization(artifactId: string) {
+      const { rows } = await client.query<{ lifecycle_state: ArtifactState; owner_id: string }>(
+        'SELECT lifecycle_state, owner_id FROM artifacts.artifacts WHERE id = $1', [artifactId],
+      );
+      const row = rows[0];
+      return { state: row?.lifecycle_state ?? 'purged' as ArtifactState,
+        acl: row === undefined ? undefined : { ownerId: row.owner_id, grants: [], isPublic: false } };
+    },
+    async putSource(artifactId: string, source: SourceRef): Promise<void> {
+      await client.query(
+        `INSERT INTO artifacts.artifact_sources (artifact_id, kind, commit_tx, steps)
+         VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT (artifact_id) DO UPDATE
+         SET kind = EXCLUDED.kind, commit_tx = EXCLUDED.commit_tx, steps = EXCLUDED.steps`,
+        [artifactId, source.kind, source.kind === 'base-commit' ? source.commit : null,
+          source.kind === 'recipe' ? JSON.stringify(source.steps) : null],
+      );
+    },
     async putRelease(release: ReleaseRecord): Promise<void> {
       await client.query(
         `INSERT INTO artifacts.releases (id, artifact_id, manifest_digest, manifest, state, created_at)
@@ -371,10 +390,7 @@ export interface GuardedPublicationDeps {
   readonly coordinator: FinalizationCoordinator;
   readonly blobs: PublicationBlobStore;
   readonly intents: IntentStore;
-  readonly lifecycle: LifecycleStore;
   readonly createUnitWriter: (client: FinalizeTxClient) => PublicationUnitWriter;
-  readonly resolveAcl: (artifactId: string) => Promise<ArtifactAcl | undefined>;
-  readonly sources?: SourceStore;
   /** Host row locks in PARTICIPANT_LOCK_ORDER classes (PG FOR UPDATE; empty for memory). */
   readonly locks?: Partial<Record<'artifact-lifecycle' | 'acl' | 'current-pointer', CommitLockFn[]>>;
   /** Shared retention store: preparation pins and denial compensation. */
@@ -405,9 +421,8 @@ const DEFAULT_CLEANUP_WINDOW_MS = 15 * 60 * 1000;
 /** Create a publication service whose commits finalize through L3 ports. */
 export function createGuardedPublicationService(deps: GuardedPublicationDeps): GuardedPublicationService {
   const limits = publicationLimits(deps.limits);
-  const guard: AuthorizeCommit = async (context, transaction) => {
-    const state = await deps.lifecycle.getArtifactState(context.artifactId);
-    const acl = await deps.resolveAcl(context.artifactId);
+  const guard = (client: () => FinalizeTxClient): AuthorizeCommit => async (context, transaction) => {
+    const { state, acl } = await deps.createUnitWriter(client()).readAuthorization(context.artifactId);
     const verdict = decidePublishAuthorization({ lifecycleState: state, acl, actorId: context.actorId });
     if (!verdict.allowed) {
       return {
@@ -480,9 +495,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
       await verifyStagedBlobs(deps.blobs, prepared.entries);
       const addedRefs: string[] = [];
       const source = input.source === undefined ? undefined : parseSourceRef(input.source);
-      if (source !== undefined && deps.sources === undefined) {
-        throw new Error('finalized publish needs a source store for source input');
-      }
+      let finalizationClient: FinalizeTxClient | undefined;
       const request: FinalizeRequest = {
         scopeId: input.storageScopeId,
         internalKey,
@@ -494,7 +507,10 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         artifactId: input.artifactId,
         bindingName: null,
         policyRevision: input.policyRevision,
-        locks: deps.locks as FinalizeRequest['locks'],
+        locks: { ...deps.locks, 'artifact-lifecycle': [
+          async (client) => { finalizationClient = client; },
+          ...(deps.locks?.['artifact-lifecycle'] ?? []),
+        ] },
         provisional: async (client) => {
           const unit = deps.createUnitWriter(client);
           await unit.putRelease({
@@ -511,9 +527,12 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
             addedRefs.push(staged.entry.digest);
           }
           await unit.promoteCurrentLatestWins(input.artifactId, releaseId);
-          if (source !== undefined) await deps.sources?.putSource(input.artifactId, source);
+          if (source !== undefined) await unit.putSource(input.artifactId, source);
         },
-        guard,
+        guard: guard(() => {
+          if (finalizationClient === undefined) throw new Error('publication guard needs the finalization client');
+          return finalizationClient;
+        }),
         finishIntents: async (client) => {
           await deps.createUnitWriter(client).completeIntent(intent.intentId);
         },

@@ -23,7 +23,6 @@ import type { ArtifactAcl } from '../src/server/access.js';
 import { createMemoryIntentStore } from '../src/server/object-intents.js';
 import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
 import { parseManifest } from '../src/codecs.js';
-import { createMemoryLifecycleStore } from '../src/server/lifecycle.js';
 import { createMemoryRefcountStore, createGcService } from '../src/server/gc.js';
 import type { FinalizeRequest, FinalizeResult } from '../src/server/commit/types.js';
 
@@ -32,9 +31,10 @@ function guardedFixture(finalize: (request: FinalizeRequest) => Promise<Finalize
   const blobs = createMemoryBlobStore();
   const deps: GuardedPublicationDeps = {
     coordinator: { finalize, replayGuarded: finalize }, refs, blobs,
-    intents: createMemoryIntentStore(), lifecycle: createMemoryLifecycleStore(),
-    resolveAcl: async () => ({ ownerId: 'owner-1', grants: [], isPublic: false }),
+    intents: createMemoryIntentStore(),
     createUnitWriter: () => ({
+      readAuthorization: async () => ({ state: 'active', acl: { ownerId: 'owner-1', grants: [], isPublic: false } }),
+      putSource: async () => {},
       putRelease: async () => {}, registerBlob: async () => {},
       promoteCurrentLatestWins: async () => {}, completeIntent: async () => {},
       addReleaseRef: (digest, holder) => refs.addRef(digest, holder),
