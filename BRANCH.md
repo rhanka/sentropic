@@ -65,31 +65,32 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
   - Switch back to `tmp/worktrees/sec-hotfix-0124` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline and constraints**
-  - [ ] Read `rules/MASTER.md` and `rules/workflow.md`.
-  - [ ] Create isolated worktree `tmp/worktrees/sec-hotfix-0124` from `origin/main` on branch `fix/security-bodyparser-zod-0124`.
-  - [ ] Reproduce audit-gate offenders via `make test-api-security-sca ENV=test-sec-hotfix` and capture GHSA ids.
-  - [ ] Define environment mapping (`ENV=test-sec-hotfix`) for this branch.
-  - [ ] Confirm command style: `make ... ENV=test-sec-hotfix` with `ENV` last.
-  - [ ] Confirm scope and guardrails.
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
-- [ ] **Lot 1 — body-parser 2.4.0 lockfile bump**
-  - [ ] Fetch body-parser 2.4.0 registry metadata and verify integrity hash.
-  - [ ] Bump `node_modules/body-parser` entry in `package-lock.json`, `api/package-lock.json`, fixture lock.
-  - [ ] Prove no manifest range change needed (express `^2.2.1` admits 2.4.0).
-  - [ ] Lot gate:
-    - [ ] `make scope-check ENV=test-sec-hotfix`
-    - [ ] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
-- [ ] **Lot 2 — Dated zod exception plus L5 recompute**
-  - [ ] Add ONE `accepted_temporary` zod entry to `.security/vulnerability-register.yaml` (review_due 2026-11-07, Track ref, owner quote).
-  - [ ] Add matching zod GHSA entry to `.security/audit-allowlist.json` (review_due 2026-11-07).
-  - [ ] Recompute L5 `pre-candidate-manifest.json` lock hash and sidecar for the new root lock.
-  - [ ] Lot gate:
-    - [ ] `make scope-check ENV=test-sec-hotfix`
-    - [ ] `make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-sec-hotfix`
-    - [ ] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
+  - [x] Create isolated worktree `tmp/worktrees/sec-hotfix-0124` from `origin/main` on branch `fix/security-bodyparser-zod-0124`.
+  - [x] Reproduce audit-gate offenders via `make test-api-security-sca ENV=test-sec-hotfix` and capture GHSA ids.
+  - [x] Define environment mapping (`ENV=test-sec-hotfix`) for this branch.
+  - [x] Confirm command style: `make ... ENV=test-sec-hotfix` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
+- [x] **Lot 1 — body-parser 2.4.0 lockfile bump**
+  - [x] Fetch body-parser 2.4.0 registry metadata and verify integrity hash.
+  - [x] Bump `node_modules/body-parser` entry in `package-lock.json`, `api/package-lock.json`, fixture lock.
+  - [x] Prove no manifest range change needed (express `^2.2.1` admits 2.4.0).
+  - [x] Lot gate:
+    - [x] `make scope-check ENV=test-sec-hotfix`
+    - [x] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
+- [x] **Lot 2 — Dated zod exception plus L5 recompute**
+  - [x] Add ONE `accepted_temporary` zod entry to `.security/vulnerability-register.yaml` (review_due 2026-11-07, Track ref, owner quote).
+  - [x] Add matching zod GHSA entry to `.security/audit-allowlist.json` (review_due 2026-11-07).
+  - [x] Prove no L5 P1 re-pin needed: `make memory-l5-verify` passes unchanged (fingerprint outside P1 closure).
+  - [x] Leave P1 provenance to the post-merge regen flow (precedent 84667d57a), not this PR.
+  - [x] Lot gate:
+    - [x] `make scope-check ENV=test-sec-hotfix`
+    - [x] `make memory-l5-verify ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-sec-hotfix`
+    - [x] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
 - [ ] **Lot N — Final validation**
-  - [ ] Run audit gate locally via image builds (`make build-api-image`, `make build-ui-image`) until un-allowlisted set empty.
+  - [ ] Run audit gate locally via image builds (`make build-api-image-fresh`, `make build-ui-image`) until un-allowlisted set empty.
   - [ ] Final gate step 1: create PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run and verify branch CI green on the exact head.
   - [ ] Final gate step 3: do NOT merge, report PR number, head SHA, CI URL.
