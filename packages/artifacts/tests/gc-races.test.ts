@@ -94,6 +94,33 @@ describe('garbage collection', () => {
 });
 
 describe('deletion claims', () => {
+  it.each(['addRef', 'pin'] as const)('should exclude claims during an in-flight %s', async (operation) => {
+    const refs = createMemoryRefcountStore();
+    const claims = createMemoryDeletionClaimStore();
+    let entered!: () => void;
+    let resume!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const paused = new Promise<void>((resolve) => { resume = resolve; });
+    const guarded = createClaimGuardedRefs({ ...refs, [operation]: async (digest: string, holder: string) => {
+      entered();
+      await paused;
+      await refs[operation](digest, holder);
+    } }, claims);
+    const adding = guarded[operation](digestOf(KEY_A), 'publication');
+    await started;
+    let claimed = false;
+    const claiming = claims.claim(digestOf(KEY_A), 'purge').then(() => { claimed = true; });
+    await Promise.resolve();
+    await Promise.resolve();
+    const claimedBeforeAdd = claimed;
+    resume();
+    await Promise.all([adding, claiming]);
+    expect(claimedBeforeAdd).toBe(false);
+    const blobs = createMemoryBlobStore();
+    await blobs.putBlob(KEY_A, owe([1]));
+    expect((await createGcService(guarded).collect(blobs, 'artifacts/', claims)).retained).toEqual([KEY_A]);
+  });
+
   it('should leave purge retryable when a later digest claim fails', async () => {
     const store = createMemoryLifecycleStore();
     const claims = createMemoryDeletionClaimStore();
