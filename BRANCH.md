@@ -27,6 +27,12 @@ Deliver the L5 coordinator-bound ensure path with guarded replay on top of the f
   - `packages/artifacts/tests/ensure-authorization.integration.test.ts`
   - `packages/artifacts/tests/service.test.ts`
   - `packages/artifacts/tests/idempotency.test.ts`
+  - `packages/artifacts/examples/radar-commit-setup.ts`
+  - `packages/artifacts/src/server/commit/coordinator.ts`
+  - `packages/artifacts/src/server/commit/types.ts`
+  - `packages/artifacts/src/testing.ts`
+  - `packages/artifacts/tests/commit-coordinator.integration.test.ts`
+  - `packages/artifacts/tests/radar-commit-setup.integration.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -63,6 +69,7 @@ Deliver the L5 coordinator-bound ensure path with guarded replay on top of the f
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] BR861L5-EX1: owner-requested merge of origin/feat/artifacts-861-L3 (4092c1666); the six additional allowed paths are inherited unchanged from L3, not L5 implementation scope. Impact: updated coordinator and its regressions; rollback: revert the merge. BRANCH.md conflict resolved with the L5 plan; Track containment passes for both parents (346 and 342 events).
 - [x] L5-SOL-R1: reproduce both P2 findings with failing service tests, then preserve the replay target under the binding lock and reject unselected replay before policy/coordinator access; all 18 service tests pass.
 - [x] L5-BASE (acknowledge): worktree tmp/worktrees/861-L5 on branch feat/artifacts-861-L5 from origin/feat/artifacts-861-L3; merged origin/feat/artifacts-861-L1 then origin/feat/artifacts-861-L2 (BRANCH.md conflicts resolved toward ours; L5 BRANCH.md replaces the file next). Merge commits used direct git; all other commits use make commit MSG only.
 - [x] L5-TRACK (acknowledge): branch-lifecycle containment gate PASS (candidate contains all 342 branch event ids, rc=0); step 4 consolidate ok with zero skipped items; the 4 re-anchor events ship in the init commit; no further track writes in this lot.
