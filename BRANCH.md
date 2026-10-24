@@ -52,9 +52,9 @@
 - [x] No UI change; consumer qualification is the acceptance surface.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline and constraints**
+- [x] **Lot 0 — Baseline and constraints**
   - [x] Read rules, spec r2 and branch template; create isolated worktree; mechanical branch check passed.
-  - [ ] Merge L1 and L2; inspect the compiled-profile and tuple boundaries.
+  - [x] Merge L1 and L2; inspect the compiled-profile and tuple boundaries.
 - [ ] **Lot 1 — Selected mesh composition**
   - [ ] Write failing tests in `tests/integrations/artifacts-surface.spec.ts` before implementation.
   - [ ] Derive capabilities from the compiled profile; preserve profile integrity and argument idempotency metadata.
