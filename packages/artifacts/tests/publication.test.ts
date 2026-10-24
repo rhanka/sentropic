@@ -15,7 +15,9 @@ import {
   createPublicationService,
   createMemoryStateStore,
   createMemoryBlobStore,
+  decidePublishAuthorization,
 } from '../src/server/publication.js';
+import type { ArtifactAcl } from '../src/server/access.js';
 import { createMemoryIntentStore } from '../src/server/object-intents.js';
 import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
 import { parseManifest } from '../src/codecs.js';
@@ -109,5 +111,39 @@ describe('publication', () => {
     const first = await service.publish({ ...INPUT, idempotencyKey: 'k-1', paramsHash: 'h-1' });
     const second = await service.publish({ ...INPUT, idempotencyKey: 'k-1', paramsHash: 'h-1' });
     expect(second.releaseId).toBe(first.releaseId);
+  });
+});
+
+describe('publish authorization predicate', () => {
+  const acl = (ownerId: string): ArtifactAcl => ({ ownerId, grants: [], isPublic: false });
+
+  it('allows the owner on an active artifact', () => {
+    expect(
+      decidePublishAuthorization({ lifecycleState: 'active', acl: acl('owner-1'), actorId: 'owner-1' }),
+    ).toEqual({ allowed: true });
+  });
+
+  it('denies a non-owner even on an active artifact', () => {
+    expect(
+      decidePublishAuthorization({ lifecycleState: 'active', acl: acl('owner-1'), actorId: 'intruder-9' }),
+    ).toEqual({ allowed: false, reason: 'denied' });
+  });
+
+  it('denies a missing ACL closed', () => {
+    expect(
+      decidePublishAuthorization({ lifecycleState: 'active', acl: undefined, actorId: 'owner-1' }),
+    ).toEqual({ allowed: false, reason: 'denied' });
+  });
+
+  it('revokes withdrawn artifacts and rejects terminal states', () => {
+    expect(
+      decidePublishAuthorization({ lifecycleState: 'withdrawn', acl: acl('owner-1'), actorId: 'owner-1' }),
+    ).toEqual({ allowed: false, reason: 'revoked' });
+    expect(
+      decidePublishAuthorization({ lifecycleState: 'deleted', acl: acl('owner-1'), actorId: 'owner-1' }),
+    ).toEqual({ allowed: false, reason: 'invalid_object' });
+    expect(
+      decidePublishAuthorization({ lifecycleState: 'purged', acl: acl('owner-1'), actorId: 'owner-1' }),
+    ).toEqual({ allowed: false, reason: 'invalid_object' });
   });
 });
