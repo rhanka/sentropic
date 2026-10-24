@@ -5,13 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createPostgresCommitExecutor } from '../src/adapters/postgres-commit.js';
+import { createArtifactCommitBarrier } from '../src/testing.js';
 import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
 import type {
   ArtifactAuthorizationDecision, ArtifactCommitContext, ArtifactCommitTransaction, ArtifactInvocationContext,
   CommitPolicyParticipantFactory, FinalizeTxClient,
 } from '../src/server/commit/types.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
-import { createRadarKeyDerivation } from '../src/server/command-identity.js';
+import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { createGuardedEnsureService, type GuardedEnsureHost } from '../src/server/service.js';
 
 const DATABASE_URL = process.env['DATABASE_URL'];
@@ -120,6 +121,15 @@ const countRows = async (table: string, where = '', params: unknown[] = []): Pro
   const { rows } = await pool.query<{ n: string }>(`SELECT COUNT(*)::int AS n FROM ${table}${where}`, [...params]);
   return Number(rows[0]?.n ?? 0);
 };
+const quotaUsed = async (quotaKey: string): Promise<number> => {
+  const { rows } = await pool.query<{ used: string }>('SELECT used FROM ensure_test.quotas WHERE quota_key = $1', [quotaKey]);
+  return Number(rows[0]?.used ?? 0);
+};
+const keyFor = (actorId: string, bindingName: string, idempotencyKey: string): string => createArtifactCommand(
+  compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE),
+  'artifacts_ensure', { bindingName, idempotencyKey },
+  { storageScopeId: SCOPE, actorId },
+  createRadarKeyDerivation({ storageScopeId: SCOPE, actorIds: ['alice', 'bob'] })).identity.internalKey;
 beforeAll(async () => { await setupSchema(); });
 afterAll(async () => {
   await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE; DROP SCHEMA IF EXISTS ensure_test CASCADE');
@@ -143,5 +153,49 @@ describe('ensure authorization', () => {
     const { rows } = await pool.query<{ artifact_id: string | null }>(
       'SELECT artifact_id FROM ensure_test.bindings WHERE owner = $1 AND name = $2', ['alice', 'site-replay']);
     expect(rows[0]?.artifact_id).toBe(first.result.artifactId);
+  });
+
+  it('denies a revoked approval after waits with zero residue, then retries fresh on the same key', async () => {
+    const barrier = createArtifactCommitBarrier();
+    const service = makeService('q-main', undefined, {
+      observer: barrier.observer, testPoints: ['after_finalization_locks_before_guard'],
+    });
+    const invocationId = 'inv-l5-pg-barrier';
+    const invocation: ArtifactInvocationContext = { invocationId, actorId: 'alice', storageScopeId: SCOPE, authorizeCommit: allowGuard };
+    const pending = service.ensure(invocation, { bindingName: 'site-barrier', idempotencyKey: 'k-barrier' });
+    await barrier.waitUntilReached('after_finalization_locks_before_guard', invocationId);
+    await pool.query(`UPDATE ensure_test.approvals SET approved = false WHERE actor_id = 'alice'`);
+    barrier.release('after_finalization_locks_before_guard', invocationId);
+    const denied = await pending;
+    expect(denied.ok).toBe(false);
+    if (denied.ok) return;
+    expect(denied.failure).toMatchObject({ category: 'unauthorized_at_commit', httpStatus: 403, retriable: false, commitState: 'not_committed' });
+    expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', [keyFor('alice', 'site-barrier', 'k-barrier')])).toBe(0);
+    expect(await countRows('ensure_test.bindings', ' WHERE owner = $1 AND name = $2', ['alice', 'site-barrier'])).toBe(0);
+    expect(await quotaUsed('q-main')).toBe(1);
+    await pool.query(`UPDATE ensure_test.approvals SET approved = true WHERE actor_id = 'alice'`);
+    // Fresh unarmed service for the retry: the barrier served its purpose on the denied
+    // attempt, and the armed coordinator would pause every later attempt again with no release.
+    const retryService = makeService('q-main');
+    const retried = await retryService.ensure(invoke('alice'), { bindingName: 'site-barrier', idempotencyKey: 'k-barrier' });
+    expect(retried.ok).toBe(true);
+    if (!retried.ok) return;
+    expect(retried.result).toMatchObject({ created: true, replayed: false });
+    const replayed = await retryService.ensure(invoke('alice'), { bindingName: 'site-barrier', idempotencyKey: 'k-barrier' });
+    expect(replayed.ok).toBe(true);
+    if (!replayed.ok) return;
+    expect(replayed.result).toEqual({ ...retried.result, replayed: true });
+  });
+
+  it('conflicts on the same key with a different command without an extra release', async () => {
+    const service = makeService('q-main');
+    const first = await service.ensure(invoke('bob'), { bindingName: 'site-conflict-a', idempotencyKey: 'k-conflict' });
+    expect(first.ok).toBe(true);
+    const second = await service.ensure(invoke('bob'), { bindingName: 'site-conflict-b', idempotencyKey: 'k-conflict' });
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.failure).toMatchObject({ category: 'conflict', httpStatus: 409, retriable: false, commitState: 'not_committed' });
+    expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', [keyFor('bob', 'site-conflict-a', 'k-conflict')])).toBe(1);
+    expect(await countRows('ensure_test.bindings', ' WHERE owner = $1 AND name = $2', ['bob', 'site-conflict-b'])).toBe(0);
   });
 });
