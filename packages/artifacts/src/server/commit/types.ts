@@ -312,8 +312,13 @@ export const FAILURE_PROJECTIONS: readonly FailureProjection[] = [
   },
 ] as const;
 
-/** Classified internal failure with private cause and commit state. */
+/**
+ * Classified internal failure with private cause and commit state. Carries
+ * the frozen `operational` kind so L3 outcomes are assignable to the frozen
+ * failure contract (`l0-freeze/failure-contract.ts`).
+ */
 export interface ArtifactFailure {
+  readonly kind: 'operational';
   readonly category: FailureCategory;
   readonly variant?: string;
   readonly httpStatus: number;

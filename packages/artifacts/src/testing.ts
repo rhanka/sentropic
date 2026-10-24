@@ -6,6 +6,13 @@
  * `release` resumes only that invocation/point pair. The coordinator
  * rechecks authority after a resumed barrier; a barrier can never mark
  * an operation authorized or successful.
+ *
+ * Pairing requirement: pass `observer` as the coordinator `testObserver`
+ * AND list the same points in the coordinator `testPoints`. An unarmed
+ * observer is never invoked, so a bound-but-unlisted point yields zero
+ * observations by design. The three preparation points are fired by L4
+ * preparation adapters holding this same observer, never by the
+ * coordinator (arming one throws at construction).
  */
 export const COMMIT_BARRIER_POINTS = [
   'before_connection_acquire',
