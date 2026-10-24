@@ -17,7 +17,7 @@ export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEv
   if (!snapshot.ok || !isRecord(snapshot.value)) return null;
   const value = snapshot.value;
   if (!hasOnlyKeys(value, ['evaluator', 'protocol', 'wireModel', 'acceptedServedModelIds', 'qualification', 'maxBillableInputTokens',
-    'maxBillableOutputTokens', 'scoreSemantics', 'maxRequestBytes', 'maxStateQuestionBytes', 'probabilityTolerance', 'scoreNativeKeys', 'nativeDecision', 'confidence', 'compilation', 'priceProtocol', 'registeredCriteria', 'retention'])
+    'maxBillableOutputTokens', 'scoreSemantics', 'maxRequestBytes', 'maxStateQuestionBytes', 'probabilityTolerance', 'scoreNativeKeys', 'nativeDecision', 'confidence', 'compilation', 'priceProtocol', 'registeredCriteria', 'retention', 'definition'])
     || !isRecord(value.evaluator) || !hasOnlyKeys(value.evaluator, ['providerId', 'evaluatorId', 'revision'])
     || (value.protocol !== undefined && (!isRecord(value) || !PROTOCOLS.has(value.protocol as string)))
     || !isCorrelationId(value.evaluator.revision) || !isRecord(value.qualification)
@@ -60,6 +60,21 @@ export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEv
     || !isText(value.compilation.readout)
     || !isRecord(value.priceProtocol) || !hasOnlyKeys(value.priceProtocol, ['authority', 'revision'])
     || !isText(value.priceProtocol.authority) || !isText(value.priceProtocol.revision)
+    || !isRecord(value.definition) || !hasOnlyKeys(value.definition,
+      ['validationProfile', 'kinds', 'evidenceRequirements', 'executionDigest', 'bundleDigest'])
+    || !isRecord(value.definition.validationProfile)
+    || !hasOnlyKeys(value.definition.validationProfile, ['profile', 'version'])
+    || !isText(value.definition.validationProfile.profile) || !isText(value.definition.validationProfile.version)
+    || !Array.isArray(value.definition.kinds) || value.definition.kinds.length === 0
+    || !value.definition.kinds.every((entry: unknown) => isRecord(entry) && hasOnlyKeys(entry, ['kind', 'schemaDigest'])
+      && (entry.kind === 'binary' || entry.kind === 'graded' || entry.kind === 'choice')
+      && typeof entry.schemaDigest === 'string' && /^[0-9a-f]{64}$/.test(entry.schemaDigest))
+    || new Set(value.definition.kinds.map((entry: unknown) => (entry as { kind: string }).kind)).size !== value.definition.kinds.length
+    || !Array.isArray(value.definition.evidenceRequirements) || value.definition.evidenceRequirements.length === 0
+    || !value.definition.evidenceRequirements.every(isText)
+    || new Set(value.definition.evidenceRequirements).size !== value.definition.evidenceRequirements.length
+    || typeof value.definition.executionDigest !== 'string' || !/^[0-9a-f]{64}$/.test(value.definition.executionDigest)
+    || typeof value.definition.bundleDigest !== 'string' || !/^[0-9a-f]{64}$/.test(value.definition.bundleDigest)
     || !Array.isArray(value.registeredCriteria) || !isRecord(value.retention)
     || !hasOnlyKeys(value.retention, ['status', 'basis', 'evidenceRefs', 'retentionDays', 'gap'])
     || (value.retention.status !== 'unknown' && value.retention.status !== 'non-zdr' && value.retention.status !== 'not-evaluated')
