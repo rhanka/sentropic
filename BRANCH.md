@@ -69,6 +69,7 @@ Deliver the L5 coordinator-bound ensure path with guarded replay on top of the f
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] L5-SOL-R1-VERIFY: after the L3 merge, 386 unit tests and 55 PostgreSQL integration tests (ensure: 6, coordinator: 42, Radar setup: 7) pass; artifacts TypeScript and lint pass. All runners use the existing make sh-api Compose target under the shared flock with ENV=test-861-l5, followed by make down; the two new regressions failed before the fixes and pass afterwards.
 - [x] BR861L5-EX1: owner-requested merge of origin/feat/artifacts-861-L3 (4092c1666); the six additional allowed paths are inherited unchanged from L3, not L5 implementation scope. Impact: updated coordinator and its regressions; rollback: revert the merge. BRANCH.md conflict resolved with the L5 plan; Track containment passes for both parents (346 and 342 events).
 - [x] L5-SOL-R1: reproduce both P2 findings with failing service tests, then preserve the replay target under the binding lock and reject unselected replay before policy/coordinator access; all 18 service tests pass.
 - [x] L5-BASE (acknowledge): worktree tmp/worktrees/861-L5 on branch feat/artifacts-861-L5 from origin/feat/artifacts-861-L3; merged origin/feat/artifacts-861-L1 then origin/feat/artifacts-861-L2 (BRANCH.md conflicts resolved toward ours; L5 BRANCH.md replaces the file next). Merge commits used direct git; all other commits use make commit MSG only.
