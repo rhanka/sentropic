@@ -1518,3 +1518,96 @@ describe('coordinator sol-r2 regressions', () => {
     expect(outcome.commitState).toBe('committed');
   });
 
+  it('rejects a same-transaction fence that was never minted', async () => {
+    const { executor } = makeStubExecutor();
+    const coordinator = createArtifactCommitCoordinator({ executor, policy: makeStubPolicy() });
+    const guard = async (
+      context: ArtifactCommitContext,
+      transaction: ArtifactCommitTransaction,
+    ): Promise<ArtifactAuthorizationDecision> => ({
+      allowed: true as const,
+      fence: {
+        fenceId: 'never-minted',
+        transactionId: transaction.transactionId,
+        invocationId: context.invocationId,
+        policyRevision: context.policyRevision,
+      },
+    });
+    const outcome = await coordinator.finalize(
+      baseRequest({ key: 'key-unminted', commandHash: 'h-unminted', guard }),
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.failure.category).toBe('unauthorized_at_commit');
+    expect(outcome.failure.httpStatus).toBe(403);
+    expect(outcome.failure.commitState).toBe('not_committed');
+    expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-unminted'])).toBe(0);
+  });
+
+  it('rejects an unminted fence on guarded replay', async () => {
+    const key = 'key-unminted-replay';
+    const commandHash = 'h-unminted-replay';
+    const existing: StoredCommitReceipt = {
+      scopeId: 'scope-l3',
+      internalKey: key as InternalIdempotencyKey,
+      commandHash,
+      codecVersion: 'artifacts-command/v1',
+      receipt: {},
+      createdAt: new Date(0).toISOString(),
+    };
+    const { executor } = makeStubExecutor({ existing });
+    const coordinator = createArtifactCommitCoordinator({ executor, policy: makeStubPolicy() });
+    const guard = async (
+      context: ArtifactCommitContext,
+      transaction: ArtifactCommitTransaction,
+    ): Promise<ArtifactAuthorizationDecision> => ({
+      allowed: true as const,
+      fence: {
+        fenceId: 'never-minted-replay',
+        transactionId: transaction.transactionId,
+        invocationId: context.invocationId,
+        policyRevision: context.policyRevision,
+      },
+    });
+    const outcome = await coordinator.replayGuarded(baseRequest({ key, commandHash, guard }));
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.failure.category).toBe('unauthorized_at_commit');
+    expect(outcome.failure.commitState).toBe('not_committed');
+  });
+
+  it('reports unacknowledged commit loss as unknown, not not_committed', async () => {
+    const commitLoss = async (): Promise<void> => {
+      const error = new Error('lost commit acknowledgment') as Error & { code?: string };
+      error.code = 'artifact_connection_lost';
+      throw error;
+    };
+    const { executor } = makeStubExecutor({ commit: commitLoss });
+    const coordinator = createArtifactCommitCoordinator({ executor, policy: makeStubPolicy() });
+    const outcome = await coordinator.finalize(
+      baseRequest({ key: 'key-ack-loss', commandHash: 'h-ack-loss' }),
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.failure.category).toBe('provider_unavailable');
+    expect(outcome.failure.httpStatus).toBe(503);
+    expect(outcome.failure.retriable).toBe(true);
+    expect(outcome.failure.commitState).toBe('unknown');
+  });
+
+  it('reports an unclassified commit error as unknown once commit was attempted', async () => {
+    const commitBoom = async (): Promise<void> => {
+      const error = new Error('commit blew up') as Error & { code?: string };
+      error.code = 'XX000';
+      throw error;
+    };
+    const { executor } = makeStubExecutor({ commit: commitBoom });
+    const coordinator = createArtifactCommitCoordinator({ executor, policy: makeStubPolicy() });
+    const outcome = await coordinator.finalize(
+      baseRequest({ key: 'key-commit-boom', commandHash: 'h-commit-boom' }),
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.failure.commitState).toBe('unknown');
+  });
+
