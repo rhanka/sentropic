@@ -161,4 +161,23 @@ describe('guarded ensure durable keys', () => {
     expect(harness.receipts.size).toBe(1);
     expect(harness.bindings.size).toBe(1);
   });
+
+  it('replays a genuine success only while currently authorized', async () => {
+    const harness = makeIdempotencyHarness();
+    const first = await harness.service.ensure(harness.invoke(), harness.args);
+    expect(first.ok).toBe(true);
+    harness.setApproved(false);
+    const revoked = await harness.service.ensure(harness.invoke(), harness.args);
+    expect(revoked.ok).toBe(false);
+    if (revoked.ok) return;
+    expect(revoked.failure).toMatchObject({
+      category: 'unauthorized_at_commit', httpStatus: 403, commitState: 'not_committed',
+    });
+    harness.setApproved(true);
+    const replayed = await harness.service.ensure(harness.invoke(), harness.args);
+    expect(replayed.ok).toBe(true);
+    if (!replayed.ok || !first.ok) return;
+    expect(replayed.result).toEqual({ ...first.result, replayed: true });
+    expect(harness.state.resolveBindingCalls).toBe(1);
+  });
 });
