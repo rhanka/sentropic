@@ -46,12 +46,15 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
   - `packages/llm-mesh/tests/facade.test.ts` (BR734-EX7 only)
   - `api/src/services/llm-runtime/index.ts` (BR734-EX7 only)
   - `api/tests/unit/llm-runtime-stream.test.ts` (BR734-EX7 only)
+  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts` (BR734-EX8 only)
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (BR734-EX8 only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR734-EX8` / `attention`: run 40131082355 proves the two workspace integration tests still require installedVersion 0.27.0 after the required llm-mesh bump to 0.27.1. Update only these exact version literals; retain exact state/version assertions, namespace identity checks and published-fixture pins. Impact: two test expectations only. Rollback: restore the literals together with the llm-mesh version.
 - `BR734-EX7` / `attention`: run 40129371697 proves vision fails before dispatch because the catalog marks mistral-small-2603 text-only; the Mistral wire converter also stringifies image parts. Live GET /v1/models/mistral-small-2603 returns HTTP 200 with vision=true. Enable that exact capability and preserve image_url blocks through conversion; update the capability expectation and add a serializer regression. npm view reports 0.27.0, so bump llm-mesh to 0.27.1 and align the root lock. Impact: Mistral image requests only; other providers retain their conversion. Rollback: revert this capability and converter change with the package bump.
 - `BR734-EX6` / `attention`: run 40129371697 passes all eight document scenarios, then the organization-update turn completes with toolCalls=0 and unchanged persisted technologies. Make the live-model instruction identify the seeded organization and require organization_update before answering; retain every persisted-field assertion and every E2E timeout. Log the assistant response for future failure diagnosis. Impact: one E2E prompt and diagnostics only. Rollback: restore the original prompt.
 - `BR734-EX4` / `attention`: owner-authorized CI repair. Run 40112282506 proves E2E A/C still select retired gpt-4.1-nano and B/D document summaries force an unfunded OpenAI model. Configure the live Mistral default through the authenticated E2E setup and expose DOCUMENT_MODEL with the existing production default; pin it to mistral-small-2603 in the test compose overlay. Impact: test configuration and one document model configuration option, no assertion or E2E timeout changes. Rollback: revert these configuration changes.
@@ -112,6 +115,7 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
     - [x] `make memory-l5-verify ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-sec-hotfix`
     - [x] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
 - [ ] **Lot N — Final validation**
+  - [x] Align the two cluster-mesh workspace version expectations with llm-mesh 0.27.1; all 16 scoped integration tests pass.
   - [x] Configure live Mistral defaults and document summaries; run 40129371697 passes API AI integration, E2E A/B and all eight document scenarios.
   - [x] Correct Mistral image capability and conversion; 17 facade and 152 stream-normalization tests pass, API typecheck and lint pass.
   - [ ] Repair live Mistral CI defaults and document summarization, then verify all checks on the pushed head.
