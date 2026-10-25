@@ -22,6 +22,9 @@ const root = resolve('packages/artifacts');
 const modules = `${root}/node_modules`;
 rmSync(modules, { recursive: true, force: true });
 symlinkSync(tools, modules);
+const platformModules = resolve('packages/mcp-platform/node_modules');
+rmSync(platformModules, { recursive: true, force: true });
+symlinkSync(tools, platformModules);
 const tool = (name, args, cwd = root) => execFileSync(process.execPath,
   [`${tools}/${name}`, ...args], { cwd, stdio: 'inherit' });
 try {
@@ -29,12 +32,7 @@ try {
     (name) => [name, JSON.parse(readFileSync(`${tools}/${name}/package.json`)).version])));
   const [gate, scope] = process.argv.slice(2);
   if (gate === 'offline-build') {
-    const platformModules = resolve('packages/mcp-platform/node_modules');
-    rmSync(platformModules, { recursive: true, force: true });
-    symlinkSync(tools, platformModules);
-    try {
     tool('typescript/bin/tsc', ['-p', 'tsconfig.json'], resolve('packages/mcp-platform'));
-    } finally { rmSync(platformModules, { force: true }); }
     tool('typescript/bin/tsc', ['-p', 'tsconfig.json']);
     tool('typescript/bin/tsc', ['--noEmit', '--strict', '--skipLibCheck', '--target', 'es2022',
       '--module', 'nodenext', '--moduleResolution', 'nodenext', '--verbatimModuleSyntax',
@@ -49,4 +47,7 @@ try {
       ...(gate === 'offline-unit' ? ['--exclude', '**/*.integration.test.ts', '--exclude', '**/*.e2e.test.ts'] :
         ['--no-file-parallelism'])]);
   }
-} finally { if (existsSync(modules)) rmSync(modules, { force: true }); }
+} finally {
+  if (existsSync(modules)) rmSync(modules, { force: true });
+  if (existsSync(platformModules)) rmSync(platformModules, { force: true });
+}
