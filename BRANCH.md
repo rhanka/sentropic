@@ -45,7 +45,7 @@
   - [x] Read lock, rules, template, specification and Radar pins; mechanical branch check passed.
   - [x] Create worktree from integration and merge L6.
 - [ ] **Lot 1 — Publication boundary matrix**
-  - [ ] Add `packages/artifacts/tests/commit-publication-boundary.integration.test.ts`.
+  - [x] Add `packages/artifacts/tests/commit-publication-boundary.integration.test.ts` with real PG/S3 fixture.
   - [ ] Exercise applicable preparation/finalization/replay waits and denied effects using independent DB/S3 reads.
   - [ ] Exercise same-key two-process S3 races for identical and changed commands.
   - [ ] Exercise policy/lifecycle serialization, purge claims and bounded shared-blob cleanup.
