@@ -47,7 +47,7 @@
 - [x] Lot 0 — verify branch and merge complete integration without rebase.
 - [x] Lot 1 — rebuilt and packed candidate; strict full-Radar install, archive runtime and declaration compilation pass; normal lane 19/19, zero TODOs/skips.
 - [x] Lot 2 — invoked eight Radar suites with gate 1; required cases 73 passed / 72 failed / 5 setup skips. Full host workspace 157 passed / 1 failed.
-- [ ] Lot 3 — fail-closed receipt/shard validation; update receipt, scope check, atomic commits and push PR #746.
+- [x] Lot 3 — receipt and shard validation both reject qualification; evidence updated, scope checked, atomic commits prepared for push to PR #746.
 
 ## Deferred to L9
 - [x] Published bytes, provenance and activation require separate release gates.
