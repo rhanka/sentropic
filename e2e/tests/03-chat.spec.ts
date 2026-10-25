@@ -1012,14 +1012,12 @@ test.describe('Chat', () => {
     await newSessionAction.click();
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
 
-    // Default model is text-only; switch to a vision-capable one.
-    // CI: mistral-small-2603 (OpenAI key has no credits left).
-    // Vision support on mistral-small-2603 is unverified until CI runs.
+    // Use a vision model that handles the full application prompt directly.
     const modelSelect = page.locator('#chat-model-selection');
     await expect(
-      modelSelect.locator('option[value="mistral::mistral-small-2603"]')
+      modelSelect.locator('option[value="mistral::mistral-medium-3.5"]')
     ).toHaveCount(1, { timeout: 10_000 });
-    await modelSelect.selectOption('mistral::mistral-small-2603');
+    await modelSelect.selectOption('mistral::mistral-medium-3.5');
 
     // Generate a solid red PNG in the browser and attach it via the "+" menu.
     const redPngBytes: number[] = await page.evaluate(async () => {
