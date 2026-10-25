@@ -53,6 +53,7 @@ if (!coreOnly) {
     execFileSync("npm", ["install", `/pack/sentropic-artifacts-${manifest.version}.tgz`,
       "--omit=optional", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: consumer, stdio: "pipe" });
     writeFileSync(join(consumer, "probe.mjs"), readFileSync(new URL(import.meta.url)));
+    writeFileSync(join(consumer, "host.mjs"), readFileSync(new URL("./host.mjs", import.meta.url)));
     execFileSync(process.execPath, ["probe.mjs", "--core-only"], { cwd: consumer, stdio: "inherit" });
   } finally {
     rmSync(consumer, { recursive: true, force: true });
@@ -67,17 +68,8 @@ if (!coreOnly) {
 const mcp = await import(coreOnly ? "@sentropic/artifacts/mcp-core" : "@sentropic/artifacts/mcp");
 assert.equal(mcp.ARTIFACTS_PROVIDER_VERSION, manifest.version);
 assert.equal(Object.keys(mcp).some((name) => /WEB_PAGES|WebPages/u.test(name)), false);
-const http = await import("@sentropic/artifacts/http");
-const service = await import("@sentropic/artifacts/server/service");
-const publication = await import("@sentropic/artifacts/server/publication");
-const intents = await import("@sentropic/artifacts/server/object-intents");
-const idem = await import("@sentropic/artifacts/server/idempotency");
-const life = await import("@sentropic/artifacts/server/lifecycle");
-const fork = await import("@sentropic/artifacts/server/fork");
-const access = await import("@sentropic/artifacts/server/access");
-const sources = await import("@sentropic/artifacts/server/sources");
-const ports = await import("@sentropic/artifacts/server/ports");
-const params = await import("@sentropic/artifacts/parameters");
+const { createProbeHost } = await import("./host.mjs");
+const runtime = await import("@sentropic/artifacts/server/runtime");
 const kernel = coreOnly ? undefined : await import("@sentropic/mcp-platform/registry");
 const toolConfig = coreOnly ? undefined : await import("@sentropic/mcp-platform/tool-configuration");
 
@@ -93,30 +85,9 @@ if (JSON.stringify([...mcp.ARTIFACTS_TOOL_NAMES]) !== JSON.stringify(EXPECTED_TO
   throw new Error("tool name mismatch");
 }
 
-const kv = ports.createMemoryKv();
-const state = publication.createMemoryStateStore();
-const blobs = publication.createMemoryBlobStore();
-const app = http.createHttpArtifactApp({
-  parameterSchema: params.defineParameters([{ key: "title", type: "string", required: true }]),
-  artifacts: service.createArtifactService({ kv, uuid: ports.createCryptoUuid() }),
-  publication: publication.createPublicationService({
-    state,
-    blobs,
-    intents: intents.createMemoryIntentStore(),
-    idempotency: idem.createIdempotencyStore(idem.createMemoryIdempotencyKv()),
-  }),
-  lifecycle: life.createLifecycleService(
-    life.createMemoryLifecycleStore(),
-    () => "2026-01-01T00:00:00.000Z",
-    state,
-  ),
-  forks: fork.createForkService(fork.createMemoryForkStore()),
-  acls: access.createMemoryAclStore(),
-  sources: sources.createMemorySourceStore(),
-  blobs,
-});
-
-const options = { app, defaultStorageScopeId: "scope-1" };
+const host = createProbeHost();
+const { app, profile, invocation } = host;
+const options = { app, profile, createInvocation: invocation };
 const definition = coreOnly ? mcp.createArtifactsAdapter(options) : mcp.createArtifactsRegistryDefinition(options);
 if (!coreOnly) {
   const registry = kernel.createProviderRegistry();
@@ -124,7 +95,7 @@ if (!coreOnly) {
   assert.throws(() => registry.select(["sentropic.web-pages"]), /unknown provider/u);
   assert.throws(() => registry.configure("sentropic.web-pages", {}), /unknown provider/u);
   registry.select(["sentropic.artifacts"]);
-  registry.configure("sentropic.artifacts", { defaultStorageScopeId: "scope-1" });
+  registry.configure("sentropic.artifacts", {});
   const compiled = registry.compile({
     bindings: {},
     compatibility: {
@@ -132,10 +103,13 @@ if (!coreOnly) {
     },
   });
   if (!compiled.ok) throw new Error("kernel compile refused: " + JSON.stringify(compiled.diagnostics));
-  for (const name of EXPECTED_TOOLS) {
+  for (const name of profile.selectedCapabilities) {
     if (compiled.registry.resolveTool(name)?.providerId !== "sentropic.artifacts") {
       throw new Error("unresolved tool " + name);
     }
+  }
+  for (const name of EXPECTED_TOOLS.filter((name) => !profile.selectedCapabilities.includes(name))) {
+    assert.equal(compiled.registry.resolveTool(name), undefined);
   }
 }
 
