@@ -19,7 +19,7 @@ Author: codex / gpt-6.1-sol / high. Date: 2026-10-25 UTC. Base: `fbfe68f0e40d386
 - [x] Final cumulative Markdown-only path/whitespace/local-link/gate/tuple/arithmetic checks passed: eight documents, 19 unique gate rows, 1,025 units, 750 interruptions, 2/6/8/10/20/50 daily-share arithmetic and aggregate $20 envelope.
 - [x] Approved input hashes and all six exact SDK registry integrity values rechecked; three in-house registry observations/integrities retained separately in scope-release.md.
 - [x] ENV-scoped locked cleanup completed with exit zero on 2026-10-25; compose reported unset optional configuration, with no resources started or other ENV touched.
-- [ ] Draft PR created with BRANCH.md as its body; final CI metadata inspected and reported separately.
+- [x] [Draft PR #753](https://github.com/rhanka/sentropic/pull/753) created with BRANCH.md as its body; first CI metadata read returned queued run `40243979997` at `bcf3d43f5b76181f86cb844e9e0190d11df8879a`. Final exact-head status is reported separately at handoff; this is not a CI success claim.
 
 The repository's normal `make scope-check` invokes raw Docker for this ENV; that conflicts with the supplied compose-only lock. An external Make file supplies the identical installed-host `harness check scope --branch-md ... --staged-files ...` recipe while `-o build-harness` suppresses the incompatible prerequisite. No tracked Makefile/compose/CI source was changed. Each check still validates the actual staged+unstaged paths mechanically. Untracked new files were staged explicitly before their scope check.
 
