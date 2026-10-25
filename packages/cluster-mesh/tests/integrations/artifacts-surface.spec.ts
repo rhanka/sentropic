@@ -151,7 +151,7 @@ describe('artifacts mesh leaf', () => {
       principal: { sub: 'alice', clientId: 'host', scopes: [], claims: [] } });
     if (!decision.allowed) throw new Error(decision.code);
     const result = await definition.adapter.invokeTool({ capabilityRef: decision.capabilityName,
-      input: { artifactId: 'artifact', files: [{ path: 'index.html', mimeType: 'text/html', text: 'hello' }],
+      input: { artifactId: '00000000-0000-4000-8000-000000000001', files: [{ path: 'index.html', mimeType: 'text/html', text: 'hello' }],
         ...(test.argument === undefined ? {} : { idempotencyKey: test.argument }) },
       ...(test.envelope === undefined ? {} : { idempotencyKey: test.envelope }),
       ctx: { auditId: 'audit', principal: { sub: 'alice' } } as never });
