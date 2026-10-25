@@ -78,6 +78,7 @@
   - [x] Document all public exports and provider/coordinator ownership boundaries in package README.
   - [ ] Document public surface and evidence in README and `.tmp/live-stt/l1/validation.md`.
 - [ ] **L1e — Final validation and draft handoff**
+  - [x] BRLIVE-L1-EX1 red: topology rejects 0.28.0; add its admission regression before range alignment.
   - [x] Mesh regression: 47 files / 847 tests pass; source and speech-test typecheck and changed-source lint pass.
   - [ ] Scoped red/green, full mesh tests, typecheck, lint, build and packed-export checks.
   - [ ] Scope check before every commit, whitespace/line-count/trailer checks and ENV cleanup.
