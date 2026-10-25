@@ -68,8 +68,10 @@
   - [x] Add `speech/{contracts,capabilities,index}.ts`, catalogue lookup and exports.
   - [x] Registry latest 0.27.1 checked before bump; prepare 0.28.0 and update root workspace lock version.
 - [ ] **L1d — Docs consolidation**
+  - [x] Document all public exports and provider/coordinator ownership boundaries in package README.
   - [ ] Document public surface and evidence in README and `.tmp/live-stt/l1/validation.md`.
 - [ ] **L1e — Final validation and draft handoff**
+  - [x] Mesh regression: 47 files / 847 tests pass; source and speech-test typecheck and changed-source lint pass.
   - [ ] Scoped red/green, full mesh tests, typecheck, lint, build and packed-export checks.
   - [ ] Scope check before every commit, whitespace/line-count/trailer checks and ENV cleanup.
   - [ ] Record independent review availability without claiming consensus.
