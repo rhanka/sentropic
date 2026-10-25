@@ -1,11 +1,11 @@
-# Feature: #861 integration (L0–L7)
+# Fix: #861 public contract gaps
 
 ## Objective
 - [x] Integrate approved topic heads with merge commits and qualify real artifacts and mesh tuple gates without publishing.
 
 ## Scope / Guardrails
-- [x] Worktree: tmp/worktrees/861-integration; branch: feat/immo-861-integration.
-- [x] ENV=test-861-int last; Docker steps use shared flock and make down after each step.
+- [x] Worktree: tmp/worktrees/861-contract-gaps; branch: fix/artifacts-861-contract-gaps.
+- [x] ENV=test-861-gaps last; Docker steps use shared flock and make down after each step.
 - [x] Main merge and publication require owner GO.
 - [x] No rebase, squash, cherry-pick, Python, or attribution trailers.
 - [x] Merge commits preserve reviewed histories; the 150-line bound applies to new integration fixes and resolutions.
@@ -38,6 +38,12 @@
   - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
 
 ## Feedback Loop
+- [x] BR861-GAPS-EX1: permit the existing isolated Compose runner, platform build, scope check and teardown for test-861-gaps; impact is one additional test environment; rollback removes this environment from the existing guards.
+- [x] Candidate remains 0.2.0 per the owner request and r2 single-writer version reservation; no publication.
+- [ ] GAPS-1: public executor/types and packed typed example; test packed installation and compilation.
+- [ ] GAPS-2: correlated preparation inventory/deadlines and bounded safe cleanup; test denial, expiry, shared blobs and retry after cleanup failure.
+- [ ] GAPS-3: correlated purge pause and claim inspection; test both race orders on PostgreSQL.
+- [ ] GAPS-4: full artifacts unit/integration, lint, freeze, packed example, digests, push and draft PR against feat/immo-861-integration.
 - [x] INT-17: preserved owner merges #747/#748 at fbda4c3ed without rebasing: typed coordinator/abort fixes, exact Radar 0.19.2 runtime admission, packaged declaration dependency and qualification regressions. Only BRANCH.md conflicted; retain this integration plan and all incoming source/test bytes. L0 freeze and Track remain unchanged.
 - [x] INT-16: CI passed all 92 packaging tests, then the generic candidate-install qualifier rejected the stale artifacts 0.1.3 pin. Candidate, post-publication and bootstrap qualification now use 0.2.0; all 22 wiring tests and the full clean-consumer qualification passed with the guarded artifacts receipt, including every runtime entry point.
 - [x] INT-15: CI carries an artifacts 0.2.0 sibling receipt while the committed selected lock intentionally pins published 0.1.4. Verify the installed file's version/SRI against the verified receipt; retain train registry-lock checks and reject missing, stale, remote or tampered entries. Four guard tests and all 92 packaging tests passed with both real sibling receipts; frozen selected lock bytes remain unchanged.
