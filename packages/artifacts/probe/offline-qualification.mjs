@@ -38,15 +38,16 @@ try {
       '--module', 'nodenext', '--moduleResolution', 'nodenext', '--verbatimModuleSyntax',
       ...['commit', 'failure', 'profile', 'command-identity'].map((name) => `l0-freeze/${name}-contract.ts`)]);
   } else if (gate === 'offline-lint') {
-    cpSync('/offline-cache', '/tmp/lint-cache', { recursive: true });
-    execFileSync('npm', ['install', '--prefix', '/tmp/lint-tools', '--offline', '--cache', '/tmp/lint-cache',
-      '--ignore-scripts', '--no-audit', '--no-fund', 'eslint@9.39.4', 'typescript-eslint@8.59.4'], { stdio: 'inherit' });
-    writeFileSync('/tmp/lint-tools/eslint.config.mjs', `import tseslint from 'typescript-eslint';
+    cpSync('/offline-lint-tools', '/tmp/contract-lint/node_modules', { recursive: true });
+    rmSync('/tmp/contract-lint/node_modules/@sentropic', { recursive: true, force: true });
+    console.log('OFFLINE_LINT', Object.fromEntries(['eslint', 'typescript-eslint'].map((name) =>
+      [name, JSON.parse(readFileSync(`/tmp/contract-lint/node_modules/${name}/package.json`)).version])));
+    writeFileSync('/tmp/contract-lint/eslint.config.mjs', `import tseslint from 'typescript-eslint';
 export default tseslint.config(...tseslint.configs.recommended, { rules: {
   '@typescript-eslint/no-empty-object-type': 'off', '@typescript-eslint/no-explicit-any': 'off',
   '@typescript-eslint/no-unused-vars': 'off' } });`);
-    execFileSync(process.execPath, ['/tmp/lint-tools/node_modules/eslint/bin/eslint.js',
-      '--config', '/tmp/lint-tools/eslint.config.mjs', 'src', 'tests'], { cwd: root, stdio: 'inherit' });
+    execFileSync(process.execPath, ['/tmp/contract-lint/node_modules/eslint/bin/eslint.js',
+      '--config', '/tmp/contract-lint/eslint.config.mjs', 'src', 'tests'], { cwd: root, stdio: 'inherit' });
   } else if (gate === 'offline-packed') {
     process.env.ARTIFACTS_OFFLINE_TOOLS = tools;
     execFileSync(process.execPath, ['--test', `${root}/probe/packed-example.test.mjs`], { stdio: 'inherit' });

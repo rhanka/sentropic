@@ -54,6 +54,7 @@
 - [x] GAPS-PG: all three new PostgreSQL race assertions passed; reference-first fixture now drains its own pending purge claim to preserve isolation for existing inventory assertions.
 - [ ] GAPS-4: full artifacts unit/integration, lint, freeze, packed example, digests, push and draft PR against feat/immo-861-integration.
 - [x] GAPS-GATES2: 171 integration/E2E tests / 12 files passed; packed public example compiled successfully. Public cleanup/test host bindings are documented in the shipped migration guide.
+- [x] GAPS-RECEIPT: final archive SHA-256/integrity, 437 unit + 171 integration/E2E results and passing cached lint are recorded in packages/artifacts/probe/CONTRACT-GAPS-RECEIPT.md.
 - [x] GAPS-GATES1: artifacts/platform build and frozen contract compilation passed; all 437 unit tests / 35 files passed. PostgreSQL/MinIO passed 131 cases / 11 files; the remaining child-process suite needs the runner's own platform SDK dependency link.
 - [x] GAPS-INFRA: npm TLS resets reproduced twice in Docker and once on host; added an isolated offline qualification path using read-only external tool dependencies, excluding sibling @sentropic packages. Packed consumer installs archives only.
 - [x] GAPS-INFRA2: cached Node 22 declaration archive is SHA-512 verified; tool dependencies reside in a container-only node_modules directory for normal transitive resolution.
