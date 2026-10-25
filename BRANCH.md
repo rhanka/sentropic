@@ -68,6 +68,7 @@
 - [x] Inherited L5 changes are merge ancestry; authored edits stay within L6 scope.
 
 ## Feedback Loop
+- [x] PR738 P2-2: a real five-byte UTF-8/raw-byte publish failed host quota authorization before the fix; trusted commit context now carries decoded quotaBytes. Publish and guarded replay pass with exactly one reservation. Final build, lint and 430 unit tests across 33 files passed; package dry-run includes the unchanged frozen type dependencies.
 - [x] PR738 P2-1: restored the exact integration-base L0 freeze; maintained fixture failed before the source-brand adaptation, then passed for source and built public fences/transactions. Build and six compatibility/export tests passed; frozen declarations ship through a type-only private package import.
 - [x] PR738 P1: real 0.1.2 raw and 0.1.4 three-element ensure/publish keys reproduce 201 instead of 503; quarantine regressions pass after correcting the probes, without new receipts, releases, blobs or guard calls.
 - [x] Integration runner consumed via Make variable overrides for ENV=test-861-l6; no infrastructure edits.
