@@ -1,7 +1,7 @@
 # Fix: #861 L8d packed tuple defects
 
 ## Objective
-- [ ] Make strict installation with Radar llm-mesh 0.19.2 and public declaration compilation pass from packed archives.
+- [x] Make strict installation with Radar llm-mesh 0.19.2 and public declaration compilation pass from packed archives.
 
 ## Scope / Guardrails
 - [x] Branch fix/artifacts-861-pack-l8d-defects; worktree tmp/worktrees/861-pack-l8dfix; base origin/feat/immo-861-integration.
@@ -46,10 +46,11 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — read Docker lock, rules and spec r2; create worktree; mechanical branch check; merge L8d tests.
-- [ ] Lot 1 — reproduce both known failures using the original packed tests; remove TODO markers.
-- [ ] Lot 2 — update peer range and lock metadata; include required contract source in artifacts archive.
-- [ ] Lot 3 — run receipt regressions, strict Radar install, packed runtime/declaration smoke and both promoted regressions.
-- [ ] Lot 4 — verify frozen bytes/L3 signatures, scope, package-bump applicability; review diff; push and draft PR targeting feat/immo-861-integration.
+- [x] Lot 1 — reproduced both known failures using the original packed tests; removed TODO markers (2 failures, no TODOs/skips).
+- [x] Lot 2 — updated peer range and lock metadata; included required contract source in artifacts archive.
+- [x] Lot 3 — strict full-Radar install and npm ci passed (764 packages); clean packed runtime and strict NodeNext declarations passed; 2 promoted regressions and 16 receipt regressions passed, zero TODOs/skips.
+- [x] Lot 4 — verified frozen bytes/L3 signatures and package-bump applicability; reviewed minimal diff; prepared push/draft handoff targeting feat/immo-861-integration.
+- [x] Evidence: packages/artifacts/probe/l8d/PACK-FIX-RECEIPT.md; archive tuple and disposable lock/smoke receipts in tmp/l8d; final matching Compose down passed.
 
 ## Deferred to L8 qualification / L9
 - [x] Full eight-suite and four-shard qualification, image qualification, published bytes and activation remain separate gates; original L8d receipt is historical evidence.
