@@ -1,7 +1,7 @@
 # Feature: #861 integration (L0–L5, L7)
 
 ## Objective
-- [ ] Integrate approved topic heads with merge commits and qualify real artifacts and mesh tuple gates without publishing.
+- [x] Integrate approved topic heads with merge commits and qualify real artifacts and mesh tuple gates without publishing.
 
 ## Scope / Guardrails
 - [x] Worktree: tmp/worktrees/861-integration; branch: feat/immo-861-integration.
@@ -55,6 +55,6 @@
 - [x] Qualification — make test-artifacts: 407 passed, 31 files; source tree at 818b6c509; build passed; make down passed.
 - [x] Qualification — make test-artifacts-integration: 94 passed across 10 files against real PostgreSQL/MinIO; build and make down passed.
 - [x] Qualification — make lint-artifacts: 0 errors, 0 warnings; make down passed.
-- [x] Qualification — mesh artifacts-surface.spec.ts: 21 passed, 1 file.
-- [ ] Qualification — installed mesh artifacts-tuple.spec.ts and tuple-skew.spec.ts via the full test-lazy-package gate.
-- [ ] Handoff — push and open draft PR to main; report head, counts, conflicts, and lot defects.
+- [x] Qualification — mesh artifacts-surface.spec.ts: 21 passed, 1 file; make down passed.
+- [x] Qualification — full test-lazy-package: 91 passed, 15 files; artifacts-tuple: 7 passed; tuple-skew: 14 passed; types-and-bundlers: 17 passed.
+- [x] Handoff — branch pushed; draft PR [#739](https://github.com/rhanka/sentropic/pull/739) targets main; all seven approved merges retained; no new lot defects observed in the requested gates.
