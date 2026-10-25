@@ -31,11 +31,18 @@ export interface IntentStore {
   listPending(): Promise<ObjectIntent[]>;
 }
 
+/** Durable preparation history; cleanup never turns a failed attempt into success. */
+export interface PreparationIntentStore extends IntentStore {
+  listPreparationIntents(): Promise<ObjectIntent[]>;
+  claimPreparationCleanup(intentId: string, throughMs: number): Promise<ObjectIntent | undefined>;
+  settlePreparationCleanup(intentId: string): Promise<void>;
+}
+
 /** In-memory IntentStore double for unit tests. */
 export function createMemoryIntentStore(
   clock: () => string = () => new Date().toISOString(),
   ids: () => string = () => crypto.randomUUID(),
-): IntentStore {
+): PreparationIntentStore {
   const intents = new Map<string, ObjectIntent>();
   return {
     async record(kind: IntentKind, payload: Record<string, JsonValue | undefined>): Promise<ObjectIntent> {
@@ -71,6 +78,27 @@ export function createMemoryIntentStore(
       return [...intents.values()]
         .filter((intent) => intent.state === 'pending')
         .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+    },
+    async listPreparationIntents() {
+      return structuredClone([...intents.values()].filter((intent) =>
+        intent.kind === 'commit-release' && typeof intent.payload.cleanupDeadlineMs === 'number'));
+    },
+    async claimPreparationCleanup(intentId, throughMs) {
+      const intent = intents.get(intentId);
+      if (intent === undefined || intent.state === 'done' ||
+          typeof intent.payload.cleanupDeadlineMs !== 'number' ||
+          intent.payload.cleanupDeadlineMs > throughMs ||
+          intent.payload.cleanupState === 'failed-cleaned') return undefined;
+      intent.state = 'failed';
+      intent.error ??= 'preparation expired; explicit retry required';
+      intent.updatedAt = clock();
+      return structuredClone(intent);
+    },
+    async settlePreparationCleanup(intentId) {
+      const intent = intents.get(intentId);
+      if (intent === undefined || intent.state !== 'failed') throw new Error('cleanup needs a failed preparation');
+      intent.payload.cleanupState = 'failed-cleaned';
+      intent.updatedAt = clock();
     },
   };
 }
