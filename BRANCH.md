@@ -1,64 +1,92 @@
-# Feature: #861 final artifacts 0.2.0 candidate integration
+# fix(cluster-mesh): freeze common v1 module list (0.22.1)
 
 ## Objective
-- [ ] Build the final artifacts 0.2.0 / cluster-mesh 0.22.0 candidate, requalify L8d, and obtain green PR #739 CI.
+- [x] Repair common-v1 admission of engram-memory, which persists in published 0.22.0, and prepare corrective 0.22.1.
+- [ ] Qualify the exact PR head in CI; leave merge and publication to the owner's GO.
 
 ## Scope / Guardrails
-- [x] Worktree tmp/worktrees/861-integration; branch feat/immo-861-integration; merge-only integration.
-- [x] ENV=test-861-int last; shared Docker lock; matching make down after each Docker step.
-- [x] No main merge or publication; the conductor owns publication.
-- [x] Selective staging, make commit, fewer than 150 changed lines per new commit, no attribution trailers.
+- [x] Follow approved E2 r3 P2-1 and its corrective-main fallback; #709 merged as b67e2a49af789f8f51d91cc5695f89caa63db2ee.
+- [x] Base merged: origin/main e9f82d14a1a62b95050a91c36b4a01a1aed153c0; worktree: tmp/worktrees/cm-0213-fix.
+- [x] Make-only; ENV=test-cm-common-v1 last; no Python; isolated Compose qualification service without published ports.
+- [x] Selective staging and make commit only; each commit below 150 changed lines; no attribution trailers.
+- [x] Shared generic registry retains engram-memory; no authority/type migration or common descriptor/vector changes.
+- [x] Push and open a DRAFT PR; do not merge or publish without the owner's GO.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/**`
-  - `packages/cluster-mesh/**`
-  - `scripts/ci/immo-861-*`
-  - `Makefile`
-  - `docker-compose.immo-861.yml`
-  - `.track/**`
-  - `.github/workflows/ci.yml`
+  - `packages/cluster-mesh/src/storage/common-contract.ts`
+  - `packages/cluster-mesh/tests/storage/common-rule/contract.spec.ts`
+  - `packages/cluster-mesh/tests/storage/scope-grant-modules.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/package.json`
+  - `package-lock.json`
+  - `scripts/ci/qualify-published-install.mjs`
+  - `scripts/ci/qualify-published-install.test.mjs`
+  - `scripts/ci/publishable-manifests.mjs`
+  - `scripts/ci/publishable-manifests.test.mjs`
   - `scripts/ci/publishable-ci-wiring.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `ui/**`
+  - `.track/**`
+  - `plan/**`
+  - `packages/cluster-mesh/src/storage/contracts.ts`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `package-lock.json`
-  - `packages/llm-mesh/**`
-  - `api/**`
-  - `e2e/**`
+  - `.github/workflows/ci.yml`
+  - `packages/*/package.json` (peer ranges only if the bump gate requires them)
 - **Exception process**:
-  - [x] BR861-EX1: retain existing isolated Compose qualification wiring; new release targets use that same service and environment.
-  - [x] BR861-EX2: preserve approved incoming history and Track bytes without new edits outside qualification scope.
-  - [x] BR861-EX3: retain reserved candidate manifest/lock versions artifacts 0.2.0 and cluster-mesh 0.22.0.
-  - [x] BR861-EX4: retain artifacts 0.2.0 qualification pins and guarded sibling receipts.
+  - [x] Declare BR0213-EXn with rationale, impact and rollback before conditional edits.
 
 ## Feedback Loop
-- [x] INT-18: pull --no-rebase reached 464581fb813b2fbfb6b4691b250162e0dfd942e9, including #750 public executor, packed example, A6 and A4.
-- [x] INT-19: #750 replaced the integration plan with its topic plan; restore this integration scope while retaining all approved implementation bytes.
-- [x] L0 freeze and previous integration decisions remain in the retained merge history.
+- [x] Registry pre-bump check: latest is 0.22.0, integrity sha512-xy+3lnR6mwu7R8asatuUbXunuVmaAg2BWnEgGVHaI79BGNXZhQ7npvNWRoO5XnWzQZY67i0JxQ0gaQKjsXGVYQ==. Set package, workspace lock and selected candidate fixture to 0.22.1 without changing peer ranges.
+- [x] Merge origin/main e9f82d14a1a62b95050a91c36b4a01a1aed153c0 without rebase; retain the common-v1 fix and current artifacts 0.2.0 peer. Main 0.22.0 still calls isStorageModuleId and accepts engram-memory; reserve corrective 0.22.1.
+- [x] CI bump repair: job 120542263109 passed package tests, installed Comments and PG upgrade, then failed ENOENT for the selected fixture's stale sentropic-cluster-mesh-0.21.2.tgz. Update only that fixture's candidate path/version to 0.21.3; preserve every registry peer and its integrity.
+- [x] BR0213-EX1 — allow .github/workflows/ci.yml's Cluster Mesh post-publication wait budget only. Reason: npm processing took over three minutes on #709, exhausting 18 reads before availability. Impact: up to 36 fresh reads, ten seconds apart, for this publisher only; no publication/skip predicates change. Rollback: remove the explicit budget argument and its wiring test.
+- [x] Affected publication: @sentropic/cluster-mesh@0.21.2, registry time 2026-10-23T14:44:35Z; correction reserved as 0.21.3.
+- [x] [Failure evidence](https://github.com/rhanka/sentropic/actions/runs/39969215826/job/120474774878): npm accepted publication at 14:41:27Z with "being processed"; qualification exhausted 18 fresh reads at 14:44:23Z. Registry publication time is 14:44:35.992Z, about 12 seconds after failure (188 seconds after publish acceptance).
+- [x] [Later-run evidence](https://github.com/rhanka/sentropic/actions/runs/39974392072/job/120485106662): cluster_mesh_publish=false, "Matching files: none"; its publish job 120493036670 skipped. The filter correctly requires packages/cluster-mesh/** changes; this run changed root/tooling/lock files.
+- [x] Read-only requalification of registry 0.21.2 passes every runtime import and the SLSA source check against b67e2a49af789f8f51d91cc5695f89caa63db2ee; receipt retained at tmp/cm-0213-affected-registry. This confirms packaging/provenance availability, not common-v1 correctness.
+- [x] Affected integrity: sha512-ZWBR6JqlCNsYWGQX1wnjfkNKQoiWcZi2ZaJt2zdjaLHP+aXf1lAZev//QPalp5CH+ehcSOyoSdZufPMNeQHQ+Q==.
 
 ## AI Flaky tests
-- [x] No flaky acceptance, timeout increase or skipped required case.
+- [x] No AI-dependent tests or timeout relaxation; no flaky acceptance requested.
 
 ## Orchestration Mode (AI-selected)
-- [x] Multi-branch; one release integrator; L8d owns packed Radar qualification evidence.
+- [x] Mono-branch, single release integrator; no cherry-picks or delegated implementation.
+- [ ] Multi-branch (not applicable).
 
 ## UAT Management (in orchestration context)
-- [x] Package qualification only; no production activation claim.
+- [x] No web, Chrome or VS Code surface changes; validate package contracts and clean consumers.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0 — pull integration with a merge; verify branch mechanically.
-- [x] Lot 1a — artifacts unit gate: 440 tests / 35 files passed at product source 464581fb8.
-- [x] Lot 2a — add reproducible guarded packing through the existing qualification Compose service.
-- [x] Lot 2b — guard all three sibling identities and qualify the exact packed mesh archive.
-- [x] Lot 2c — prepare ownership only on this worktree's candidate output and sibling archive directories.
-- [x] Lot 2d — retain prior sibling archives outside the guarded destination before regenerating final receipts.
-- [x] Lot 1b — real PostgreSQL/MinIO integration and E2E: 172 tests / 12 files passed.
-- [x] Lot 1 — artifacts 440/35 files, real integration/E2E 172/12, lint and freeze-types pass; mesh surface 21/1, full packaging 97/15 with no skips (artifacts tuple 7, tuple skew 15, strict tuple 3, MCP tuple 2, types/bundlers 17).
-- [x] Lot 2 — guarded pack source deca5422c; artifacts SHA-256 6122ed8d2adea53be6366918f7df83238e8a7bd0596fdd48b0be752497f2ae82; mesh d01a2c7669b7e18e1597d2407790bd64a865a6fe258b6bd61f7f6fba4a6452ab; SHA-512 integrity and toolchain recorded in packages/artifacts/probe/l8d/CANDIDATE-0.2.0.md and the requested root .tmp report.
-- [x] Lot 3 — merged candidate source into L8d; strict full-Radar install, packed smoke and 19 runner tests pass against dde9f4c85 with listKeys 8d6aabb0a. E3 local branch has the same head; no newer head at pin selection.
-- [x] Lot 3 result — L8d NO-GO: Q1 0/31, Q2 0/31, acceptance 0/6; required totals 73 pass / 72 fail / 5 setup skips; full host 152 pass / 1 fail. Per-case evidence classifies 71 Radar failures and 2 H3 coverage gaps across all invoked tests; image smoke and final matching L8a/b/c shards remain uncovered.
-- [x] Lot 4a — push L8d evidence and merge its history without product, frozen-contract or Track changes; retain this integration plan.
-- [ ] Lot 4b — push final integration head and monitor PR #739 until CI passes; final CI state belongs in the external candidate receipt to avoid a metadata-only CI loop.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read rules, template, E2 r3 repair/fallback and review-opus-r3.md.
+  - [x] Create requested worktree/branch from origin/main; harness check branch passes.
+  - [x] Use existing scoped test, lint, typecheck, pack and qualification Make targets.
+- [x] **Lot 1 — Freeze common v1 and bump patch**
+  - [x] File-local frozen COMMON_V1_MODULE_IDS with comments and engram-live only.
+  - [x] Extend tests/storage/common-rule/contract.spec.ts: both original modules accepted, memory rejected with exact existing error across all common surfaces.
+  - [x] Add tests/storage/scope-grant-modules.spec.ts: Comments valid/invalid grants and exact errors, generic memory registration and read/write grants accepted.
+  - [x] Bump package manifest and root workspace lock to 0.21.3; peer ranges only if required.
+  - [x] Align the selected packed-consumer manifest/lock with the 0.21.3 candidate; preserve all peers and their integrities.
+  - [x] Common regression fails before repair and passes afterward (10 common tests, 3 grant tests).
+- [x] **Lot 2 — Registry qualification diagnosis and repair**
+  - [x] Inspect run 39969215826 publish-cluster-mesh failure and run 39974392072 skip.
+  - [x] Set Cluster Mesh's existing post-publication qualifier to 36 reads; regression accepts visibility on read 20 and refuses persistent absence at read 36. All 87 manifest/wiring tests pass.
+  - [x] make test-publishable-manifests test-qualify-published-install ENV=test-cm-0213: 87 + 18 tests pass; registry 0.21.2 requalification passes without publishing.
+- [ ] **Lot 3 — Docs consolidation and final validation**
+  - [x] Record concrete qualification cause and evidence here; no additional product specification required.
+  - [x] Local lint, typecheck and guarded pack pass. Full package tests, real PG recovery, installed Comments corpus and PG major-upgrade qualification pass in CI on 7aba104a7 (run 39990919502); two local full-suite attempts encountered 5-second SQLite timeouts, retained under root .tmp/cm-0213-full-tests*.log, without timeout changes.
+  - [ ] Complete make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-cm-0213 and verify the refreshed fixture in current-head CI.
+  - [ ] Run make scope-check ENV=test-cm-0213 before each commit and inspect every diff hunk.
+  - [x] Push; create draft PR #729 with this file as body and post the bounded execution plan.
+  - [ ] Verify current-head CI green; report PR, head SHA, CI URL and qualification cause.
+  - [ ] Owner GO to merge/publish (deliberately pending; retain BRANCH.md).
+- [ ] **Lot 4 — Refresh on published 0.22.0**
+  - [x] Merge origin/main without rebase; retain every parent Track event and the current artifacts peer.
+  - [x] Confirm the defect remains on main 0.22.0 and bump the corrective candidate to 0.22.1.
+  - [ ] Rerun the common-contract and grant vectors with type checks on the merged source.
+  - [ ] Update draft PR #729 and verify CI green on its exact head, including enforce-package-bump.
