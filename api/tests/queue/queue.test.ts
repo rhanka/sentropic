@@ -43,7 +43,7 @@ describe('Queue', () => {
 
     // Launch async enrichment job
     const enrichRes = await authenticatedRequest(app, 'POST', `/api/v1/organizations/${organizationId}/enrich`, user.sessionToken!, {
-      model: 'gpt-4.1-nano'
+      model: 'mistral-small-2603'
     });
     expect(enrichRes.status).toBe(200);
     const enrichData = await enrichRes.json();
@@ -91,7 +91,7 @@ describe('Queue', () => {
     const org2 = await orgRes2.json();
 
     const enrichRes2 = await authenticatedRequest(app, 'POST', `/api/v1/organizations/${org2.id}/enrich`, user2.sessionToken!, {
-      model: 'gpt-4.1-nano'
+      model: 'mistral-small-2603'
     });
     expect(enrichRes2.status).toBe(200);
 
@@ -103,7 +103,7 @@ describe('Queue', () => {
     const org = await orgRes.json();
 
     const enrichRes = await authenticatedRequest(app, 'POST', `/api/v1/organizations/${org.id}/enrich`, user.sessionToken!, {
-      model: 'gpt-4.1-nano'
+      model: 'mistral-small-2603'
     });
     expect(enrichRes.status).toBe(200);
 
