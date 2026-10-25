@@ -42,6 +42,10 @@
 - [ ] Radar Q3 candidate acceptance is blocked by `api/tests/integration/artifacts-provider-contract.helpers.ts:514` at pin Q2: `composeProviderHost` unconditionally raises `[missing-contract] Radar.composeArtifactHost.r2`. Radar owns the r2 host migration and separate-process/sixteen-tool extension; no candidate-pass claim.
 - [ ] CI integration gate: `.github/workflows/ci.yml:6` accepts PRs to main only. GitHub reports no commit statuses for this integration-target draft; integrator owns the planned qualification workflow.
 - [x] Radar R-HOST baseline command: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f tools/artifact-host.mk test-host SCOPE=api/tests/integration/artifacts-mcp-adapter.spec.ts ARTIFACTS_PROVIDER_ACCEPTANCE=1 API_PORT=13308 UI_PORT=9508 MAILDEV_UI_PORT=5408 ENV=test-861-l8c`; 153 host tests passed across 14 files; API MCP setup timed out at `artifacts-mcp-adapter.spec.ts:9` (`beforeAll`, 20000ms), all 5 cases skipped; runner correctly rejected the gate. Log `/tmp/861-l8c-radar-host.log`; no candidate coverage credited and no timeout changed.
+- [x] Radar R-API baseline command: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f tools/artifact-host.mk test-api SCOPE=api/tests/integration/artifacts-provider-failures.spec.ts ARTIFACTS_PROVIDER_ACCEPTANCE=1 API_PORT=13308 UI_PORT=9508 MAILDEV_UI_PORT=5408 ENV=test-861-l8c`; 32 executed failures, zero skipped, `[missing-contract] outcome-contract.ArtifactOutcome` against locked artifacts 0.1.2. Log `/tmp/861-l8c-radar-q2.log`; not a packed-candidate receipt.
+- [ ] Radar fixture defect / owner Radar: `api/tests/integration/artifacts-provider-failures.spec.ts:277` calls `rawBlobs().listKeys("")` during afterAll; S3 adapter refuses the empty prefix (`invalid blob prefix`). Existing pinned suite retains the failing cleanup. Bound fix: use the test storage-scope prefix; verify the same gate-enabled suite after tuple/host migration. No Radar edits in this lane.
+- [x] Explicit `make down` completed after upstream and both Radar steps; final Radar inspect reports no matching containers, volumes or networks.
+- [x] Draft PR: https://github.com/rhanka/sentropic/pull/745; product fixes, exact packed tuple and consumer activation acceptance remain integration/Radar responsibilities.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky allowance.
@@ -62,8 +66,8 @@
   - [x] Retain known failures with file:line evidence rather than changing another lot's implementation.
   - [x] Extend the matrix through the S3 adapter PUT, GET and response-body conversion boundaries; add typed pool/transaction timeout and explicit COMMIT-abort cases.
   - [x] Include real receipt-table contention, same-key changed-command conflict, and the existing MCP platform wire codec (`isError`, text and metadata redaction).
-- [ ] **Lot 2 — Validation and handoff**
+- [x] **Lot 2 — Validation and handoff**
   - [x] Run scoped `test-artifacts-integration`, typecheck and lint under the shared Docker lock; clean this environment after each step.
-  - [ ] Run pinned Radar MCP/failure suites, or record the exact missing prerequisite without a coverage claim.
-  - [ ] Run `make scope-check` before each atomic commit; selective staging; `make commit` only.
-  - [ ] Push and create draft PR targeting `feat/immo-861-integration`; report SHA, results and defects.
+  - [x] Run pinned Radar MCP/failure suites, or record the exact missing prerequisite without a coverage claim.
+  - [x] Run `make scope-check` before each atomic commit; selective staging; `make commit` only.
+  - [x] Push and create draft PR targeting `feat/immo-861-integration`; report SHA, results and defects.
