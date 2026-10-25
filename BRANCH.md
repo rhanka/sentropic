@@ -56,7 +56,9 @@
 - [x] Lot 2c — prepare ownership only on this worktree's candidate output and sibling archive directories.
 - [x] Lot 2d — retain prior sibling archives outside the guarded destination before regenerating final receipts.
 - [x] Lot 1b — real PostgreSQL/MinIO integration and E2E: 172 tests / 12 files passed.
-- [ ] Lot 1b — real integration, lint, frozen types and mesh surface/tuple/packaging gates.
-- [ ] Lot 2 — record packed archives, SHA-256, npm integrity, source and toolchain provenance.
-- [ ] Lot 3 — merge integration into L8d; requalify against current frozen-profile / E3 Radar pins.
-- [ ] Lot 4 — push qualification evidence and monitor PR #739 at its final head until CI passes.
+- [x] Lot 1 — artifacts 440/35 files, real integration/E2E 172/12, lint and freeze-types pass; mesh surface 21/1, full packaging 97/15 with no skips (artifacts tuple 7, tuple skew 15, strict tuple 3, MCP tuple 2, types/bundlers 17).
+- [x] Lot 2 — guarded pack source deca5422c; artifacts SHA-256 6122ed8d2adea53be6366918f7df83238e8a7bd0596fdd48b0be752497f2ae82; mesh d01a2c7669b7e18e1597d2407790bd64a865a6fe258b6bd61f7f6fba4a6452ab; SHA-512 integrity and toolchain recorded in packages/artifacts/probe/l8d/CANDIDATE-0.2.0.md and the requested root .tmp report.
+- [x] Lot 3 — merged candidate source into L8d; strict full-Radar install, packed smoke and 19 runner tests pass against dde9f4c85 with listKeys 8d6aabb0a. E3 local branch has the same head; no newer head at pin selection.
+- [x] Lot 3 result — L8d NO-GO: Q1 0/31, Q2 0/31, acceptance 0/6; required totals 73 pass / 72 fail / 5 setup skips; full host 152 pass / 1 fail. Per-case evidence classifies 71 Radar failures and 2 H3 coverage gaps across all invoked tests; image smoke and final matching L8a/b/c shards remain uncovered.
+- [x] Lot 4a — push L8d evidence and merge its history without product, frozen-contract or Track changes; retain this integration plan.
+- [ ] Lot 4b — push final integration head and monitor PR #739 until CI passes; final CI state belongs in the external candidate receipt to avoid a metadata-only CI loop.
