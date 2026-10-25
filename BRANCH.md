@@ -42,6 +42,7 @@
 - [x] Candidate remains 0.2.0 per the owner request and r2 single-writer version reservation; no publication.
 - [ ] GAPS-1: public executor/types and packed typed example; test packed installation and compilation.
 - [x] GAPS-RED: packed example missing; three preparation regression cases fail on missing exports. Regression tests committed before implementation.
+- [x] GAPS-1a: example now includes a compiled frozen-shape profile, PG participant with shared policy locks, fence minting and a serialized durable cleanup scheduler with an explicit lifetime/cadence.
 - [ ] GAPS-2: correlated preparation inventory/deadlines and bounded safe cleanup; test denial, expiry, shared blobs and retry after cleanup failure.
 - [x] GAPS-2a: memory and PostgreSQL stores retain preparation history and atomically invalidate expired attempts before cleanup; metadata uses existing JSON intents without schema or L3 port changes.
 - [x] GAPS-2b: public preparation inspection and deterministic batch-bounded cleanup retain shared references/pins, serialize deletion with claims, and surface retryable cleanup debt.
