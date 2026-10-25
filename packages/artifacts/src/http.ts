@@ -13,7 +13,7 @@ import type { ArtifactAcl, AclStore } from './server/access.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import { CommitQuarantineError, type ArtifactInvocationContext,
   type ArtifactCommitCoordinator, type FinalizeRequest } from './server/commit/types.js';
-import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome } from './server/failures.js';
+import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome, type ArtifactHostFailureMapper } from './server/failures.js';
 import { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 export { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 
@@ -35,6 +35,8 @@ export function errorBody(status: number): { error: string } {
     500: 'internal_error', 503: 'capability_unavailable' } as Record<number, string>)[status] ?? 'internal_error' };
 }
 export interface HttpAppDeps {
+  /** Trusted mapping of host wrapper errors; causes remain private. Also bind on the coordinator. */
+  mapHostError?: ArtifactHostFailureMapper;
   profile: CompiledArtifactsProfile;
   coordinator: ArtifactCommitCoordinator;
   derivation: ArtifactKeyDerivationBinding;
@@ -214,7 +216,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       } catch (cause) {
         const failure = classifyArtifactFailure(cause, { invocationId: invocation?.invocationId ?? '',
           operation, phase, commitState }, (error) => error instanceof ArtifactProfileInputError
-            ? new ArtifactOperationError(error.category) : undefined);
+            ? new ArtifactOperationError(error.category) : deps.mapHostError?.(error));
         if (cause instanceof CommitQuarantineError) {
           const migration = { ...failure, kind: 'operational' as const, category: 'provider_unavailable' as const,
             variant: 'legacy_quarantine', httpStatus: 503, publicCode: 'capability_unavailable', retriable: false };
