@@ -57,8 +57,8 @@
   - [x] Write `.tmp/live-stt/l0/baseline.md` and `gates.md`; distinguish merge, publish, integration and deployment.
 - [x] **L0c — Dependencies and provenance**
   - [x] Write `.tmp/live-stt/l0/dependencies.md`; inventory SDKs, installers, binary hashes, licenses and blocked qualification.
-- [ ] **L0d — Placement and release scope**
-  - [ ] Write `.tmp/live-stt/l0/placements.md` and `scope-release.md`; retain every owner-selected configuration.
+- [x] **L0d — Placement and release scope**
+  - [x] Write `.tmp/live-stt/l0/placements.md` and `scope-release.md`; retain every owner-selected configuration.
 - [ ] **L0e — Capacity feasibility**
   - [ ] Write `.tmp/live-stt/l0/capacity-study.md`; entitlement, allocation source, costs, limits, daily shares/dates and reservation outcome.
 - [ ] **L0f — Documentation validation and draft handoff**
