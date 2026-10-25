@@ -54,6 +54,7 @@
 - [x] Lot 2a — add reproducible guarded packing through the existing qualification Compose service.
 - [x] Lot 2b — guard all three sibling identities and qualify the exact packed mesh archive.
 - [x] Lot 2c — prepare ownership only on this worktree's candidate output and sibling archive directories.
+- [x] Lot 2d — retain prior sibling archives outside the guarded destination before regenerating final receipts.
 - [x] Lot 1b — real PostgreSQL/MinIO integration and E2E: 172 tests / 12 files passed.
 - [ ] Lot 1b — real integration, lint, frozen types and mesh surface/tuple/packaging gates.
 - [ ] Lot 2 — record packed archives, SHA-256, npm integrity, source and toolchain provenance.
