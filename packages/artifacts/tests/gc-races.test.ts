@@ -62,7 +62,7 @@ describe('garbage collection', () => {
       expect(open).toBe(true);
       events.push('delete');
       await blobs.deleteBlob(key);
-    } }, 'artifacts/', createMemoryDeletionClaimStore());
+    } }, 'artifacts/');
     expect(report.deleted).toEqual([KEY_A]);
     expect(events).toEqual(['begin', 'lock', 'delete', 'commit', 'release']);
   });

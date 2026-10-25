@@ -104,7 +104,7 @@ type DeletionClaimAccess = Pick<DeletionClaimStore, 'claim' | 'releaseClaim' | '
 export function createPostgresGcService(
   executor: CommitExecutor,
   refsForTransaction: (client: FinalizeTxClient) => RefcountStore,
-): GcService {
+): { collect(blobs: PublicationBlobStore, prefix: string): Promise<GcReport> } {
   return {
     async collect(blobs, prefix) {
       const client = await executor.beginFinalization();
