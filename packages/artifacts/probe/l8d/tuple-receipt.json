@@ -1,7 +1,7 @@
 {
   "status": "failed_qualification",
-  "sourceCommit": "49f9de00c70295b46ae76e057014b3ed9f60aa30",
-  "tupleDigest": "30dd046060b37172dc1613037bddf359d209d2846808528be6be09d2fab259be",
+  "sourceCommit": "0c20aac52d54ba722e229c745a9d94086898fa33",
+  "tupleDigest": "ab187a43078758cc3b57bd65cd00190dac795010955774381d471a3295dfacba",
   "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
   "tuple": [
     {
@@ -9,16 +9,16 @@
       "version": "0.2.0",
       "source": "./packages/artifacts",
       "path": "/workspace/tmp/l8d/packs/sentropic-artifacts-0.2.0.tgz",
-      "sha256": "243f48d61264095dc95c3201a97dd98f5e848f5f80fe334817f1eed8f38cc410",
-      "integrity": "sha512-OAC8y5Ddlo554pviN86yELyMx2U0mU0Co9HU7je9aMon8wauaP8u2tY3LQrF8vR9tNS2x4V5XCjxRe1PGOzIfA=="
+      "sha256": "fa8bc96f0e92fd4cd526243286e912b5e79d0aad8081d9d94c85263d4fe4213d",
+      "integrity": "sha512-ahdeNQaEo+cYuF1+I3l+ywM85ZLgr4JRwxqC04wfJs7e8NIjN0AnSuGNhbeV7Z89KUmqJs0ZQ3v9oTtSVdYCeg=="
     },
     {
       "name": "@sentropic/cluster-mesh",
       "version": "0.22.0",
       "source": "./packages/cluster-mesh",
       "path": "/workspace/tmp/l8d/packs/sentropic-cluster-mesh-0.22.0.tgz",
-      "sha256": "5637df094c2cf129937119689e0ecdabe80c8d0f6bd50b6d6e7f2639e1994f39",
-      "integrity": "sha512-H6sh2pLT0ey0znjz2A8QtnwKrJn5psVh15JaKlDU/HZfudnaVuh15gQGj63j6vzFujr1zg5+dpl4UVBCmQvoVA=="
+      "sha256": "d01a2c7669b7e18e1597d2407790bd64a865a6fe258b6bd61f7f6fba4a6452ab",
+      "integrity": "sha512-xy+3lnR6mwu7R8asatuUbXunuVmaAg2BWnEgGVHaI79BGNXZhQ7npvNWRoO5XnWzQZY67i0JxQ0gaQKjsXGVYQ=="
     },
     {
       "name": "@sentropic/mcp-platform",
