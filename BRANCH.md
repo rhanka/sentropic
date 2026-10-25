@@ -10,7 +10,7 @@
 - [x] ENV: `test-861-l6`; API_PORT=13336, UI_PORT=9536, MAILDEV_UI_PORT=5436.
 - [x] Shared Docker flock; existing Make targets only; tear down after each step; no Python.
 - [x] Specific-file staging; `make commit`; fewer than 150 authored changed lines per commit.
-- [x] Manifest/version changes belong to the integration owner per r2 section 6.1.
+- [x] Public host subpaths and 0.2.0 manifest are included in L6; final tuple locks/publication stay with integration.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -47,6 +47,8 @@
   - `packages/artifacts/tests/gc-races.test.ts`
   - `packages/artifacts/tests/http-uploads-templates.test.ts`
   - `packages/artifacts/docs/migration-l6.md`
+  - `packages/artifacts/examples/radar-commit-setup.ts`
+  - `packages/artifacts/tests/transport-exports.test.ts`
   - `packages/artifacts/package.json`
   - `packages/artifacts/tests/http-mcp-service-parity.test.ts`
   - `packages/artifacts/tests/http-security.test.ts`
