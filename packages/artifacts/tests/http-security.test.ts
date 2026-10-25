@@ -61,14 +61,4 @@ describe('HTTP effective-profile security', () => {
       expect(() => parseSourceRef(source)).toThrow();
     }
   });
-    });
-    expect(parseSourceRef({ kind: 'recipe', steps: ['build'] })).toEqual({
-      kind: 'recipe', steps: ['build'],
-    });
-    expect(() => parseSourceRef({ kind: 'base-commit' })).toThrow(/invalid source/);
-    expect(() => parseSourceRef({ kind: 'recipe', steps: [42] })).toThrow(/invalid source/);
-    expect(() => parseSourceRef({ kind: 'nope' })).toThrow(/invalid source/);
-    expect(() => parseSourceRef('inline-original')).toThrow(/invalid source/);
-    expect(() => parseSourceRef(undefined)).toThrow(/invalid source/);
-  });
 });
