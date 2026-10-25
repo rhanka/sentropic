@@ -39,6 +39,7 @@ import {
   type StoredCommitReceipt,
 } from './types.js';
 import { commitFenceBrand, commitTransactionBrand } from './brands.js';
+import { classifyArtifactFailure } from '../failures.js';
 
 function failure(
   category: FailureCategory,
@@ -87,8 +88,7 @@ const isConnectionLoss = (error: unknown): boolean => {
   if (typeof error !== 'object' || error === null) return false;
   const code = (error as { code?: unknown }).code;
   return (
-    (typeof code === 'string' && (CONNECTION_LOSS_CODES.has(code) || code.startsWith('08'))) ||
-    /terminating connection|connection reset|connection refused/i.test(String(error))
+    typeof code === 'string' && (CONNECTION_LOSS_CODES.has(code) || /^08[A-Z0-9]{3}$/.test(code))
   );
 };
 
@@ -111,17 +111,10 @@ const classifyOperational = (
   commitState: 'not_committed' | 'unknown',
   error: unknown,
 ): ArtifactFailure => {
-  const code =
-    typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
-  if (
-    isConnectionLoss(error) ||
-    code === LOCK_TIMEOUT_CODE ||
-    (typeof code === 'string' && RETRIABLE_SQLSTATES.has(code))
-  ) {
-    // E3: any lock timeout outside the scoped key-row acquisition is
-    // retriable infrastructure contention, never a key conflict.
-    return failure('provider_unavailable', request, phase, commitState, error);
-  }
+  const classified = classifyArtifactFailure(error, {
+    invocationId: request.invocationId, operation: request.operation, phase, commitState,
+  });
+  if (classified.kind === 'operational') return classified;
   return failure('provider_error', request, phase, commitState, error, { variant: 'unclassified' });
 };
 
@@ -313,9 +306,8 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
   };
 
   /**
-   * The COMMIT was attempted: a successful ROLLBACK afterwards cannot prove
-   * the COMMIT failed, so the outcome is unknown however the commit error
-   * classifies.
+   * Explicit SQL aborts certify no commit once settlement succeeds. Other
+   * COMMIT errors remain unknown even when a later ROLLBACK succeeds.
    */
   const unknownAfterCommitAttempt = async (
     request: FinalizeRequest,
@@ -324,6 +316,11 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
   ): Promise<FinalizeResult> => {
     const settleError = await settle.abort();
     await abandon(request);
+    const code = typeof error === 'object' && error !== null
+      ? (error as { code?: unknown }).code : undefined;
+    if (settleError === undefined && typeof code === 'string' && RETRIABLE_SQLSTATES.has(code)) {
+      return { ok: false, failure: classifyOperational(request, 'commit', 'not_committed', error) };
+    }
     return unknownOutcome(
       request,
       'commit',
