@@ -14,6 +14,7 @@ Observed 2026-10-25 UTC. Author: codex / gpt-6.1-sol / high. Scope: approved r3 
 | h2a remote main | `40693473a6e38d3230742ba969f18d34dc3cd78c`, refreshed via ls-remote; matches L0 |
 | faster-whisper remote HEAD | `a202335ef3d1bb5ad116b68ded947d248b7a506b`, refreshed via ls-remote; matches L0 |
 | Mesh registry latest | `0.27.1` before bump; prepare minor `0.28.0`, no publication |
+| Compatibility tuple refresh | Cluster `0.22.1` and gateway `0.21.0` published at L1 read; prepare `0.22.2` / `0.21.1` under BRLIVE-L1-EX1 to admit mesh 0.28 without duplicate instances |
 
 L0's complete deliverables remain at the planned study location `.tmp/live-stt/l0/` in its PR. Pin their source rather than duplicate or silently revise that concern on L1:
 
