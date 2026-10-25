@@ -1792,9 +1792,15 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
+ifeq ($(ENV),test-861-int)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1)
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
+else
+scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
+	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) node dist/bin/harness.js check scope --branch-md /workspace/BRANCH.md --staged-files "$$files"
+endif
 
 .PHONY: typecheck-cowork-desktop
 typecheck-cowork-desktop: ## Run @sentropic/cowork-desktop type checks
