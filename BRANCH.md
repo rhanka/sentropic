@@ -46,7 +46,7 @@
 - [x] Lot 0 — merge d41f47092 (contracts).
 - [x] Lot 1 — merge 0c71291a2 (profile); only the topic plan conflicted.
 - [x] Lot 2 — merge b29b6a334 (failures); only the topic plan conflicted.
-- [ ] Lot 3 — merge 157f231d5 (coordinator).
+- [x] Lot 3 — merge 157f231d5 (coordinator); only the topic plan conflicted.
 - [ ] Lot 4 — merge a8df25634 (publication/collection).
 - [ ] Lot 5 — merge c703afc68 (MCP/HTTP).
 - [ ] Lot 7 — merge eae0c261a (mesh surface/tuple).
