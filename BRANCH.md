@@ -28,6 +28,7 @@
 - [x] Read-only Radar pins: A1 f2b6c25cc9458ec285d6d4f620a55dad8c30f909; A2 b104ae90a28a5581e8eabd15f12acb58558d3396; acceptance e2e9515ea41baebf5539743f0cfa0dea750d072c; main merge 2dbde92e9a6c532abe4f9e7bed8ed9a9b381d530.
 - [x] BASE #910 retires the route called by immo-mcp data-source.ts:316; qualify pinned ARTEFACTS integration separately from current main.
 - [x] Runner records each suite independently; failures remain known_failure and missing shards remain not_covered.
+- [x] Reused integration build outputs only after matching each artifacts/mesh/platform source tree; unchanged platform/auth use exact registry archives.
 
 ## AI Flaky tests
 - [x] No flaky acceptance granted; missing contracts and skipped acceptance cases fail qualification.
