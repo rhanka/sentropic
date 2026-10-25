@@ -32,43 +32,14 @@ describe('selected pilot contract', () => {
     expect(world.releases.size).toBe(1);
   });
 
-    await call(s2, 'artifacts_set_access', FARID, {
-      artifactId: id, action: 'grant', principalId: STEVE, grant: 'read',
-    }, 200);
-    await call(s2, 'artifacts_get', STEVE, { artifactId: id }, 200);
-    await call(s2, 'artifacts_get', THIRD, { artifactId: id }, 404);
-    await call(s2, 'artifacts_get_source', STEVE, { artifactId: id }, 403);
-    // Steve forks privately; the fork survives the parent lifecycle.
-    const forked = await call(s2, 'artifacts_fork', STEVE, { artifactId: id }, 201);
-    const forkId = forked['artifactId'] as string;
-    expect(forkId).not.toBe(id);
-    // Publish v2, roll back to v1 explicitly.
-    const v2 = await call(s2, 'artifacts_publish', FARID, {
-      artifactId: id,
-      files: [{ path: 'index.html', mimeType: 'text/html', bytes: toBytes('<h1>v2</h1>') }],
-      idempotencyKey: 'p-2', paramsHash: 'h-2',
-    }, 201);
-    await call(s2, 'artifacts_promote', FARID, {
-      artifactId: id, releaseId: v1['releaseId'], expectedCurrent: v2['releaseId'],
-    }, 200);
-    const meta = await call(s2, 'artifacts_get', FARID, { artifactId: id }, 200);
-    expect(meta['currentReleaseId']).toBe(v1['releaseId']);
-    // Grant source, export, then withdraw and undo before purge.
-    await call(s2, 'artifacts_set_access', FARID, {
-      artifactId: id, action: 'grant', principalId: STEVE, grant: 'source',
-    }, 400); // duplicate principal grant refused; revoke then re-grant
-    await call(s2, 'artifacts_set_access', FARID, {
-      artifactId: id, action: 'revoke', principalId: STEVE,
-    }, 200);
-    await call(s2, 'artifacts_set_access', FARID, {
-      artifactId: id, action: 'grant', principalId: STEVE, grant: 'source',
-    }, 200);
-    const source = await call(s2, 'artifacts_get_source', STEVE, { artifactId: id }, 200);
-    expect(source).toEqual({ kind: 'inline-original' });
-    await call(s2, 'artifacts_delete', FARID, { artifactId: id }, 200);
-    const restored = await call(s2, 'artifacts_restore', FARID, { artifactId: id }, 200);
-    expect(restored['state']).toBe('active');
-    const after = await call(s2, 'artifacts_get', STEVE, { artifactId: id }, 200);
-    expect(after['state']).toBe('active');
-  });
+  it.each(['artifacts_get_api_guide', 'artifacts_get_template', 'artifacts_fork',
+    'artifacts_set_access', 'artifacts_delete', 'artifacts_restore'])(
+    'should refuse unselected pilot tool %s before a write', async (tool) => {
+      const world = createTransportWorld(['farid'], 'scope-pilot');
+      expect(await world.mcp.invoke({ tool, args: {}, invocation: world.invocation() }))
+        .toEqual({ status: 503, body: { error: 'capability_unavailable' } });
+      expect(world.receipts.size).toBe(0);
+      expect(world.bindings.size).toBe(0);
+    },
+  );
 });
