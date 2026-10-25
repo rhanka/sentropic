@@ -43,13 +43,13 @@ it('wraps the selected Immo and artifacts tuple with verified authority', async 
       expect(normalizeCorrelationId(await connection.client.callTool({ name, arguments: call.args })))
         .toEqual(normalizeCorrelationId(call.result));
     }
-    expect(await connection.client.callTool({ name: 'artifacts_get', arguments: { artifactId: 'artifact' } }))
+    expect(await connection.client.callTool({ name: 'artifacts_get', arguments: { artifactId: '00000000-0000-4000-8000-000000000001' } }))
       .toEqual({ content: [{ type: 'text', text: '{"artifact":"qualified"}' }] });
     expect(execute).toHaveBeenCalledOnce();
     expect(execute.mock.calls[0][0].actorId).toBe('owner');
     expect(JSON.stringify(execute.mock.calls)).not.toContain(tokenRef.value);
     allowed = false;
-    expect((await connection.client.callTool({ name: 'artifacts_get', arguments: { artifactId: 'artifact' } })).isError).toBe(true);
+    expect((await connection.client.callTool({ name: 'artifacts_get', arguments: { artifactId: '00000000-0000-4000-8000-000000000001' } })).isError).toBe(true);
     expect(execute).toHaveBeenCalledOnce();
     expect(connection.transport.sessionId).toBe(session);
     expect(host.stats).toMatchObject({ servers: 1, transports: 1, sdkCredentials: 0 });
