@@ -30,6 +30,7 @@
 - [x] #748 promotes ERESOLVE/TS2307 reproductions to normal assertions; no TODO acceptance.
 - [x] The normal lane test target includes both packaging regressions and the real llm-mesh 0.19.2 runtime probe.
 - [x] Runner retains per-suite pass/fail/skip counts even when fail-closed validation rejects the suite.
+- [x] Initial API setup failed on missing PostGIS; runner overlay now matches pinned Radar postgis/postgis:16-3.4. Initial evidence remains in tmp/l8d/pre-postgis.
 - [ ] Record Q1/Q2 missing-contract failures separately from Radar's scoped listKeys test defect.
 
 ## AI Flaky tests
