@@ -34,8 +34,13 @@ export interface IntentStore {
 }
 
 /** Durable preparation history; cleanup never turns a failed attempt into success. */
+export interface PreparationIntentQuery {
+  readonly artifactId?: string;
+  readonly throughMs?: number;
+  readonly limit?: number;
+}
 export interface PreparationIntentStore extends IntentStore {
-  listPreparationIntents(): Promise<ObjectIntent[]>;
+  listPreparationIntents(query?: PreparationIntentQuery): Promise<ObjectIntent[]>;
   claimPreparationCleanup(intentId: string, throughMs: number): Promise<ObjectIntent | undefined>;
   settlePreparationCleanup(intentId: string): Promise<void>;
 }
@@ -81,9 +86,17 @@ export function createMemoryIntentStore(
         .filter((intent) => intent.state === 'pending')
         .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
     },
-    async listPreparationIntents() {
-      return structuredClone([...intents.values()].filter((intent) =>
-        intent.kind === 'commit-release' && typeof intent.payload.cleanupDeadlineMs === 'number'));
+    async listPreparationIntents(query = {}) {
+      return structuredClone([...intents.values()].filter((intent) => {
+        const deadline = intent.payload.cleanupDeadlineMs;
+        return intent.kind === 'commit-release' && intent.state !== 'done' && deadline !== undefined &&
+          (query.artifactId === undefined || intent.payload.artifactId === query.artifactId) &&
+          (query.throughMs === undefined || (Number(deadline) <= query.throughMs &&
+            (intent.payload.cleanupState !== 'failed-cleaned' || Number(deadline) >= query.throughMs - 60_000)));
+      }).sort((a, b) => Number(a.payload.cleanupState === 'failed-cleaned') -
+        Number(b.payload.cleanupState === 'failed-cleaned') ||
+        Number(a.payload.cleanupDeadlineMs) - Number(b.payload.cleanupDeadlineMs))
+        .slice(0, query.limit));
     },
     async claimPreparationCleanup(intentId, throughMs) {
       const intent = intents.get(intentId);
