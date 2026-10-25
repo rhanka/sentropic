@@ -30,6 +30,7 @@
   - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
   - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
   - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
+  - `packages/llm-gateway/package.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -48,7 +49,7 @@
 - [x] L0 is an open draft; retain exact evidence commit and open G-REVIEW.
 - [x] External Make adapter rebinds existing mesh targets to existing Compose qualification service; tracked build files unchanged.
 - [x] External gates remain with L0 owners; deterministic contract work can proceed per §11.2.
-- [x] BRLIVE-L1-EX1: root npm ci dry-run fails after mesh 0.28 bump; lock refresh proves ERESOLVE on cluster's `<0.28.0` optional peer. Align manifest/lock and matching module guard to `<0.29.0`; update only version-bound fixtures and bump cluster patch. Impact: admit additive mesh 0.28; no speech config/projection. Rollback: restore range/lock/fixtures if mesh bump is reverted. Verify root dry-run plus cluster module/integration tests; publication remains external.
+- [x] BRLIVE-L1-EX1: root npm ci fails after mesh 0.28 bump; refresh proves cluster's `<0.28.0` peer conflict, then gateway's `^0.27.0` installs a second mesh. Align cluster peer/module range to `<0.29.0`, let gateway consume `^0.27.0 || ^0.28.0`, update version fixtures and patch bumps/lock. Impact: admit additive 0.28 with one workspace mesh; no speech config/projection/accounting. Rollback: restore ranges/lock/fixtures if mesh bump is reverted. Verify root dry-run and cluster module/integration tests; publication remains external.
 
 ## AI Flaky tests
 - [x] Deterministic tests only; no flaky waiver or live qualification claim.
@@ -79,6 +80,7 @@
   - [ ] Document public surface and evidence in README and `.tmp/live-stt/l1/validation.md`.
 - [ ] **L1e — Final validation and draft handoff**
   - [x] BRLIVE-L1-EX1 red: topology rejects 0.28.0; add its admission regression before range alignment.
+  - [x] Align peer/module range and installed-version fixtures; prepare cluster 0.22.2 above refreshed published 0.22.1.
   - [x] Mesh regression: 47 files / 847 tests pass; source and speech-test typecheck and changed-source lint pass.
   - [ ] Scoped red/green, full mesh tests, typecheck, lint, build and packed-export checks.
   - [ ] Scope check before every commit, whitespace/line-count/trailer checks and ENV cleanup.
