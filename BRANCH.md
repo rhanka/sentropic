@@ -29,6 +29,7 @@
 - [x] BASE #910 retires the route called by immo-mcp data-source.ts:316; qualify pinned ARTEFACTS integration separately from current main.
 - [x] Runner records each suite independently; failures remain known_failure and missing shards remain not_covered.
 - [x] Reused integration build outputs only after matching each artifacts/mesh/platform source tree; unchanged platform/auth use exact registry archives.
+- [x] Image gate stays not_covered: pinned Radar image-smoke uses forbidden raw Docker; no image qualification is inferred from a Node container pass.
 
 ## AI Flaky tests
 - [x] No flaky acceptance granted; missing contracts and skipped acceptance cases fail qualification.
