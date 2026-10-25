@@ -42,7 +42,9 @@
 - [x] Source qualification only: no archive/lock installation; provider restart persists across processes, not a PostgreSQL storage restart. Packed/published tuple and actual Radar H3 remain not covered by this shard.
 - [x] Initial fixture run failed on an omitted storage-scope seed; corrected locally. The next attempt stopped at the runner ENV guard; the recorded final run passes.
 - [x] Shared-lock cleanup after the passing test removed only test-861-l8b containers/network; no owner environment touched.
-- [ ] Lint and final remote-head verification pending; draft PR https://github.com/rhanka/sentropic/pull/742.
+- [x] `make -f /tmp/861-l8b.make lint-artifacts API_PORT=18922 UI_PORT=15922 MAILDEV_UI_PORT=11922 ENV=test-861-l8b`: passed, zero lint errors/warnings; shared flock applied.
+- [x] Draft PR: https://github.com/rhanka/sentropic/pull/742 targets feat/immo-861-integration; authored diff is this plan and the L8b test only.
+- [x] Source/build/lint gates passed locally; Radar/published acceptance and independent review remain integration gates.
 
 ## AI Flaky tests
 - [x] None accepted.
@@ -61,4 +63,4 @@
 - [x] Lot 4 — SIGKILL provider before COMMIT; inject lost COMMIT acknowledgment before/after durability.
 - [x] Lot 5 — quarantine legacy receipts and historical keys through actual transport wiring.
 - [x] Lot gate — scoped integration suite: 19 passed; build passed; no known product failures.
-- [ ] Handoff — merge refreshed integration, scope-check each atomic commit, push and open draft PR.
+- [x] Handoff — merge refreshed integration, scope-check each atomic commit, push and open draft PR.
