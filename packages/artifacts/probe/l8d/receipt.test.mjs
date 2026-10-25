@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { validateSuite, aggregate, suites } from './receipt.mjs';
+import { validateSuite, aggregate, suites, verifyArchives } from './receipt.mjs';
+import { createHash } from 'node:crypto';
 
 const sha = 'a'.repeat(64);
 const suite = (path) => ({ path, sourceSha256: sha, gate: 1, exitCode: 0,
@@ -40,4 +41,18 @@ for (const [label, mutate] of [
   ['known failure', (s) => { s[0].status = 'known_failure'; }],
 ]) test(`should refuse aggregate with ${label}`, () => {
   const input = shards(); mutate(input); assert.throws(() => aggregate(input));
+});
+
+test('should reject altered archives and incompatible tuple identities', () => {
+  const bytes = Buffer.from('candidate');
+  const tuple = [['artifacts', '0.2.0'], ['cluster-mesh', '0.22.0'],
+    ['mcp-auth', '0.2.2'], ['mcp-platform', '0.4.0']].map(([name, version]) => ({
+    name: `@sentropic/${name}`, version, path: name,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+    integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}`,
+  }));
+  verifyArchives(tuple, () => bytes);
+  assert.throws(() => verifyArchives(tuple, () => Buffer.from('tampered')));
+  tuple[0].version = '0.1.2';
+  assert.throws(() => verifyArchives(tuple, () => bytes));
 });

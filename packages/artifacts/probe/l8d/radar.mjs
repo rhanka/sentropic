@@ -53,5 +53,9 @@ const receipt = { kind: 'packed-candidate', sourceCommit, tuple, tupleDigest,
   radarPins: { integration: 'b2b802b5', A1: 'f2b6c25cc9458ec285d6d4f620a55dad8c30f909',
     A2: 'b104ae90a28a5581e8eabd15f12acb58558d3396', acceptance: 'e2e9515ea41baebf5539743f0cfa0dea750d072c' },
   install: json(`${out}/install.json`), suites: evidence, shards: [...shards, own] };
+receipt.smoke = existsSync(`${out}/smoke.json`) ? json(`${out}/smoke.json`)
+  : { status: 'not_covered', reason: 'packed smoke not run' };
+receipt.imageSmoke = { status: 'not_covered',
+  reason: 'Pinned Radar image-smoke uses raw docker build/run, forbidden by machine Docker lock; consumer runner owner must migrate it to Compose.' };
 writeFileSync(`${out}/receipt.json`, JSON.stringify(receipt, null, 2));
 if (own.status !== 'passed') process.exitCode = 1;
