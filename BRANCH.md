@@ -48,10 +48,11 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — Read Docker lock, Radar analysis and spec r2; create worktree; mechanical branch check.
-- [ ] Lot 1 — Reproduce account suspension after barrier in HTTP publication; host callback and refusal code; retain lifecycle/ACL/revision checks.
+- [x] Lot 1 — Reproduce account suspension after barrier in HTTP publication; host callback and refusal code; retain lifecycle/ACL/revision checks.
   - [x] Baseline regression run: four failures; host callback called zero times; HTTP/MCP S3 timeout and coordinator acquisition returned non-retriable `provider_error`.
-  - [ ] Tests: `tests/host-acceptance.test.ts`, `tests/fixtures/transport-world.ts`; demonstrate red then green.
+  - [x] Tests: `tests/host-acceptance.test.ts`, `tests/fixtures/transport-world.ts`; four baseline failures, four passes after fixes.
 - [ ] Lot 2 — Wire optional `mapHostError` through HTTP, MCP and coordinator classification.
+  - [x] Additive dependencies wired; HTTP/MCP S3 and coordinator acquisition regressions pass.
   - [ ] Tests: `tests/host-acceptance.test.ts`, `tests/commit-failure-parity.integration.test.ts`; typed timeout red then green, private causes and retry parity.
 - [ ] Lot 3 — Bump artifacts to 0.2.1; update packed host composition and documentation.
   - [ ] Tests: `probe/packed-example.test.mjs`; verify registry version, freeze bytes and package bump.

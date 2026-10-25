@@ -432,19 +432,6 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         retriable: false,
       };
     }
-    const approval = await transaction.participant.checkApproval({
-      actorId: context.actorId,
-      operation: context.operation,
-    });
-    if (!approval.approved) {
-      return {
-        allowed: false,
-        reason: approval.reason ?? 'denied',
-        publicCode: 'access_denied',
-        status: 403,
-        retriable: false,
-      };
-    }
     const revision = await transaction.participant.readRevision();
     if (revision !== context.policyRevision) {
       return {
