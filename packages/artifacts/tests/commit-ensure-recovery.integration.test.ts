@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { Pool } from 'pg';
 import { createPostgresCommitExecutor } from '../src/adapters/postgres-commit.js';
 import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
@@ -79,6 +80,78 @@ function compose(db = pool, options: { executor?: CommitExecutor; barrier?: Retu
       ...(options.barrier ? { testObserver: options.barrier.observer, testPoints: options.points } : {}) }),
   });
 }
+// Separate Node processes consume the built provider, retaining the same real PostgreSQL state.
+const workerSource = `
+import { Pool } from 'pg';
+import { randomUUID } from 'node:crypto';
+import { createPostgresCommitExecutor } from './dist/adapters/postgres-commit.js';
+import { createArtifactCommitCoordinator } from './dist/server/commit/coordinator.js';
+import { createGuardedEnsureService } from './dist/server/service.js';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from './dist/profile/index.js';
+import { createRadarKeyDerivation } from './dist/server/command-identity.js';
+const db = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+const [key, mode] = process.argv.slice(1);
+const scope = 'scope-l8b';
+let created = false;
+const coordinator = createArtifactCommitCoordinator({ executor: createPostgresCommitExecutor(db),
+  testPoints: ['before_commit'], testObserver: async (point) => {
+    if (mode === 'crash' && point === 'before_commit') {
+      process.stdout.write('prepared\\n'); await new Promise(() => {});
+    }
+  }, policy: { createParticipant: (client, token) => ({
+    readRevision: async () => (await client.query('SELECT revision FROM l8b.revision FOR SHARE', [])).rows[0].revision,
+    checkApproval: async () => ({ approved: (await client.query('SELECT approved FROM l8b.admission', [])).rows[0].approved }),
+    reserveQuota: async () => ({ reserved: (await client.query('UPDATE l8b.quota SET used = used + 1 WHERE used < total', [])).rowCount === 1 }),
+    mintFence: (policyRevision, invocationId) => ({ fenceId: randomUUID(), transactionId: token, invocationId, policyRevision }),
+  }) } });
+const service = createGuardedEnsureService({ coordinator, profile: compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE),
+  derivation: createRadarKeyDerivation({ storageScopeId: scope, actorIds: ['alice'] }), host: {
+    readPolicyRevision: async () => (await db.query('SELECT revision FROM l8b.revision')).rows[0].revision,
+    abandonAttempt: async () => {},
+    lockBinding: async (client, binding) => {
+      created = (await client.query('INSERT INTO artifacts.artifacts (id, storage_scope_id, owner_id, binding_name) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
+        [randomUUID(), scope, binding.ownerId, binding.bindingName])).rowCount === 1;
+      await client.query('SELECT id FROM artifacts.artifacts WHERE storage_scope_id=$1 AND owner_id=$2 AND binding_name=$3 FOR UPDATE',
+        [scope, binding.ownerId, binding.bindingName]);
+    },
+    resolveBinding: async (client, binding) => {
+      const artifactId = (await client.query('SELECT id FROM artifacts.artifacts WHERE storage_scope_id=$1 AND owner_id=$2 AND binding_name=$3',
+        [scope, binding.ownerId, binding.bindingName])).rows[0].id;
+      await client.query("INSERT INTO artifacts.artifact_access VALUES ($1, 'alice', 'read') ON CONFLICT DO NOTHING", [artifactId]);
+      return { artifactId, created };
+    },
+  } });
+const outcome = await service.ensure({ invocationId: randomUUID(), actorId: 'alice', storageScopeId: scope,
+  authorizeCommit: async (context, transaction) => ({ allowed: true,
+    fence: transaction.participant.mintFence(context.policyRevision, context.invocationId) }) },
+  { bindingName: key, idempotencyKey: key });
+await db.end();
+process.stdout.write(JSON.stringify(outcome));
+`;
+function runWorker(key: string, crash = false): Promise<{ pid: number; outcome: unknown; signal: NodeJS.Signals | null }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', workerSource, key, crash ? 'crash' : 'run'],
+      { cwd: new URL('..', import.meta.url), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    let errors = '';
+    const deadline = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('worker failed to finish/reach COMMIT within 2s')); }, 2000);
+    child.stdout.on('data', (chunk: Buffer) => {
+      output += chunk.toString();
+      if (crash && output.includes('prepared\n')) child.kill('SIGKILL');
+    });
+    child.stderr.on('data', (chunk: Buffer) => { errors += chunk.toString(); });
+    child.on('error', (error) => { clearTimeout(deadline); reject(error); });
+    child.on('close', (code, signal) => {
+      clearTimeout(deadline);
+      if (crash && output.includes('prepared\n') && signal === 'SIGKILL') {
+        resolve({ pid: child.pid!, outcome: undefined, signal });
+      } else if (code === 0) {
+        try { resolve({ pid: child.pid!, outcome: JSON.parse(output) as unknown, signal }); }
+        catch (error) { reject(error); }
+      } else reject(new Error(`provider worker exited ${code}/${signal}: ${errors}`));
+    });
+  });
+}
 async function snapshot() {
   const { rows } = await pool.query(`SELECT
     (SELECT count(*)::int FROM artifacts.artifacts) AS bindings,
@@ -111,6 +184,26 @@ afterAll(async () => {
 });
 
 describe('L8b ensure recovery on PostgreSQL', () => {
+  it('should replay a durable ensure from a new provider process without recharging', async () => {
+    const first = await runWorker('restart');
+    expect(first.outcome).toMatchObject({ ok: true, result: { created: true, replayed: false } });
+    const before = await snapshot();
+    const restarted = await runWorker('restart');
+    expect(restarted.pid).not.toBe(first.pid);
+    expect(restarted.outcome).toEqual({ ...first.outcome as object,
+      invocationId: expect.any(String), replayed: true,
+      result: { ...(first.outcome as { result: object }).result, replayed: true } });
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('should roll back a killed provider before COMMIT and recover fresh on the same key', async () => {
+    const before = await snapshot();
+    expect((await runWorker('crash', true)).signal).toBe('SIGKILL');
+    await expect.poll(snapshot, { timeout: 2000 }).toEqual(before);
+    expect((await runWorker('crash')).outcome).toMatchObject({ ok: true, result: { created: true, replayed: false } });
+    expect(await snapshot()).toEqual({ bindings: 1, lifecycle: 1, acls: 1, receipts: 1, legacy: 0, used: 1 });
+  });
+
   it.each([false, true])('should recover uncertain COMMIT with durable success=%s without a duplicate charge', async (durable) => {
     const inner = createPostgresCommitExecutor(pool);
     const executor: CommitExecutor = {
