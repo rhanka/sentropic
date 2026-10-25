@@ -41,12 +41,12 @@ function world(db: Pool, store: PublicationBlobStore, observer?: CommitBarrierOb
   const coordinator = createArtifactCommitCoordinator({ executor, testObserver: observer,
     policy: { createParticipant: (client, token) => ({
       async readRevision() {
-        const { rows } = await client.query('SELECT revision FROM l8a_policy WHERE id=1 FOR SHARE', []);
+        const { rows } = await client.query<{ revision: string }>('SELECT revision FROM l8a_policy WHERE id=1 FOR SHARE', []);
         return rows[0].revision as string;
       },
       async checkApproval() {
         if (authority.expired) return { approved: false, reason: 'expired' as const };
-        const { rows } = await client.query('SELECT approved FROM l8a_policy WHERE id=1', []);
+        const { rows } = await client.query<{ approved: boolean }>('SELECT approved FROM l8a_policy WHERE id=1', []);
         return { approved: rows[0].approved as boolean, reason: 'denied' as const };
       },
       async reserveQuota() {
@@ -385,7 +385,7 @@ describe('bounded cleanup and purge exclusion', () => {
           const barrier = createArtifactCommitBarrier({ points: ['before_commit'] });
           const pending = publish(world(pool, blobs, barrier.observer), input);
           await barrier.waitUntilReached('before_commit', input.invocationId);
-          const pid = Number((await claim.query('SELECT pg_backend_pid() AS pid', [])).rows[0].pid);
+          const pid = Number((await claim.query<{ pid: number }>('SELECT pg_backend_pid() AS pid', [])).rows[0].pid);
           const claiming = createPostgresDeletionClaimStore(claim).claim(digest, 'purge-l8a');
           try { await blocked(pid); }
           finally { barrier.release('before_commit', input.invocationId); }
