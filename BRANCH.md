@@ -46,4 +46,4 @@
 - [x] Promote all known-failure cases in commit-failure-parity.integration.test.ts; add a typed provider-outage case.
 - [x] Full PostgreSQL/MinIO integration campaign: 168 tests passed across 12 files, including L8c 40/40 and coordinator 42/42; build passed and stack removed.
 - [x] Lot 2: 431 unit tests across 33 files; 168 integration/E2E tests across 12 files; lint, build, freeze-types and scope checks passed; no skips.
-- [ ] Verify frozen bytes, push, and open a draft PR against feat/immo-861-integration.
+- [x] Frozen bytes verified, branch pushed, draft PR #747 opened against feat/immo-861-integration; peer review remains pending before merge.
