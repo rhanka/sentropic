@@ -26,6 +26,9 @@
   - `packages/artifacts/src/server/outcome-contract.ts`
   - `packages/artifacts/src/server/commit/types.ts`
   - `packages/artifacts/src/server/commit/coordinator.ts`
+  - `packages/artifacts/src/server/commit/brands.ts`
+  - `packages/artifacts/l0-freeze/commit-contract.ts`
+  - `packages/artifacts/tests/testing.test.ts`
   - `packages/artifacts/src/server/authorized-replay.ts`
   - `packages/artifacts/src/server/service.ts`
   - `packages/artifacts/src/server/publication.ts`
