@@ -3,8 +3,10 @@
   "allow": [
     {
       "ghsa": "GHSA-mrhx-c7xc-m3w5",
-      "review_due": "2026-11-07",
-      "reason": "zod <4.6.6 memory-exhaustion advisory matches the pinned v3 line (3.25.76/3.23.8); the only fix is the breaking v3-to-v4 major migration (this branch, track 01M5PMR6AG9QDZG9H3N57TB3FS). Time-boxed pending that migration; human record in vulnerability-register.yaml."
+      "package": "zod",
+      "severity": "high",
+      "reason": "Memory exhaustion below 4.6.6; no same-major fix exists, migration to zod v4 pending (Track 01M5PMR6AG9QDZG9H3N57TB3FS). Dated exception, review 2026-11-07. Human record: .security/vulnerability-register.yaml GHSA-mrhx-c7xc-m3w5_zod_3.25.76.",
+      "review_due": "2026-11-07"
     }
   ]
 }

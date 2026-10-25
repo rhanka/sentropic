@@ -473,7 +473,7 @@ export const modelProfiles = [
     label: 'Mistral Small 4',
     reasoningTier: 'standard',
     defaultTaskHints: ['chat'],
-    capabilities: modelCapabilities('mistral', 'standard'),
+    capabilities: modelCapabilities('mistral', 'standard', { vision: true }),
   },
   {
     providerId: 'mistral',
