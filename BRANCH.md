@@ -35,6 +35,7 @@
   - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
 
 ## Feedback Loop
+- [x] INT-9: migrated mesh fixtures reproduced three invalid-argument failures because their placeholder artifact IDs violate L6's UUID schema. Use valid fixture IDs; keep schema and rejection assertions unchanged.
 - [x] INT-8: mesh surface reproduced 17 failures / 4 passes because L7 fixtures omitted L6's required compiled profile. Migrate fixtures to selected capabilities and trusted invocations; preserve rejection/idempotency assertions.
 - [x] INT-7: route test-861-int platform builds through the existing qualification Compose service with the frozen toolchain snapshot; preserve the #734 producing recipe byte-for-byte. Add a make entrypoint for the package freeze-types script.
 - [x] INT-6: merged approved L6 e67a978f9; retained integration plan and L6 compiled MCP capability selection. Ported main's UTF-8 MCP regression to the trusted invocation API. Frozen L0 files and Track journal remain byte-identical.
