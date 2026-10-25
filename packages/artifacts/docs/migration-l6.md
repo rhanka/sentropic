@@ -47,6 +47,12 @@ start a cleanup scheduler; the example supplies a 30-second preparation
 lifetime and a one-second serialized sweep. Each sweep processes at most
 100 attempts. Capacity, sweep cadence and storage availability determine
 whether the configured deadline is met; failed cleanup remains observable debt.
+Reads are limited to the same batch size, with unsettled debt first. Settled
+attempts receive metadata-only existence checks for 60 seconds after their
+deadline; subsequent orphan recovery uses the host's ordinary GC. No cleanup
+or inspection downloads blob contents. Invalid metadata is retained as failed
+debt, excluded from subsequent sweeps, and returned in inspection's
+`invalidIntents`; the sweep reports it after processing the remaining batch.
 
 `/server/object-intents` exposes `inspectPreparations(host, artifactId)` and
 `scheduleBoundedPreparationCleanup(host, throughMs)`. Bind `host.intents`
