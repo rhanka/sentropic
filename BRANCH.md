@@ -52,8 +52,9 @@
 - [x] Lot 4 — merge a8df25634 (publication/collection); only the topic plan conflicted.
 - [x] Lot 5 — merge c703afc68 (MCP/HTTP); only the topic plan conflicted.
 - [x] Lot 7 — merge eae0c261a (mesh surface/tuple); only the topic plan conflicted.
-- [x] Qualification — make test-artifacts: 407 passed, 31 files; source tree at c604a9e88; build passed; make down passed.
-- [ ] Qualification — make test-artifacts-integration against PostgreSQL/MinIO; record exact counts.
-- [ ] Qualification — make lint-artifacts; record errors and warnings.
-- [ ] Qualification — mesh artifacts-surface.spec.ts, artifacts-tuple.spec.ts, tuple-skew.spec.ts.
+- [x] Qualification — make test-artifacts: 407 passed, 31 files; source tree at 818b6c509; build passed; make down passed.
+- [x] Qualification — make test-artifacts-integration: 94 passed across 10 files against real PostgreSQL/MinIO; build and make down passed.
+- [x] Qualification — make lint-artifacts: 0 errors, 0 warnings; make down passed.
+- [x] Qualification — mesh artifacts-surface.spec.ts: 21 passed, 1 file.
+- [ ] Qualification — installed mesh artifacts-tuple.spec.ts and tuple-skew.spec.ts via the full test-lazy-package gate.
 - [ ] Handoff — push and open draft PR to main; report head, counts, conflicts, and lot defects.
