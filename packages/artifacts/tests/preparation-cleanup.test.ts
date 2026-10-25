@@ -19,6 +19,18 @@ async function attempt(host: ReturnType<typeof fixture>, id: string, blobKeys = 
 }
 
 describe('bounded preparation cleanup', () => {
+  it('should recover a late external PUT without erasing historical attribution', async () => {
+    const host = fixture();
+    await attempt(host, 'late-put', [keys[0]!]);
+    await scheduleBoundedPreparationCleanup(host, 100);
+    // An external PUT acknowledged after a crashed writer's cleanup must remain measurable debt.
+    await host.blobs.putBlob(keys[0]!, new Uint8Array([2]));
+    expect((await inspectPreparations(host, 'a')).attempts[0]?.state).toBe('failed');
+    await scheduleBoundedPreparationCleanup(host, 101);
+    expect(await host.blobs.getBlob(keys[0]!)).toBeUndefined();
+    expect((await inspectPreparations(host, 'a')).attempts[0]?.attemptId).toBe('late-put');
+  });
+
   it('should retain attribution and shared bytes while settling expired preparation debt', async () => {
     const host = fixture();
     await attempt(host, 'denied');
