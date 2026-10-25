@@ -33,6 +33,46 @@ hash and guard come from the host. An optional platform envelope must exactly
 match the argument key. Keep publication URLs under one shared
 `publicationUrls` policy so HTTP and MCP return identical receipts.
 
+## Public coordinator example and cleanup
+
+The packed `examples/radar-commit-setup.ts` uses public entrypoints only:
+`@sentropic/artifacts/adapters/postgres-commit`, `/server/commit-contract`
+and `/mcp-core`. The commit contract exports `CommitExecutor`,
+`CommitCoordinatorOptions`, `ArtifactPolicyDriver` and `CoordinatorTestPoint`.
+The example compiles the frozen `ArtifactProviderProfile` shape, binds policy
+reads/quota to the acquired PostgreSQL transaction and mints its guard fence.
+
+Before activation, configure `cleanupWindowMs` on guarded publication and
+start a cleanup scheduler; the example supplies a 30-second preparation
+lifetime and a one-second serialized sweep. Each sweep processes at most
+100 attempts. Capacity, sweep cadence and storage availability determine
+whether the configured deadline is met; failed cleanup remains observable debt.
+Reads are limited to the same batch size, with unsettled debt first. Settled
+attempts receive metadata-only existence checks for 60 seconds after their
+deadline; subsequent orphan recovery uses the host's ordinary GC. No cleanup
+or inspection downloads blob contents. Invalid metadata is retained as failed
+debt, excluded from subsequent sweeps, and returned in inspection's
+`invalidIntents`; the sweep reports it after processing the remaining batch.
+
+`/server/object-intents` exposes `inspectPreparations(host, artifactId)` and
+`scheduleBoundedPreparationCleanup(host, throughMs)`. Bind `host.intents`
+to the PostgreSQL artifact store, plus `blobs`, `refs` and `claims`.
+Keep the claim store's transaction open through external DELETE, then commit
+or roll back and release it, as `startRadarPreparationCleanup` demonstrates.
+Inspection returns `attempts`, `protectedKeys` and `abandonedKeys`; every
+attempt retains its ID, invocation, blob keys, preparation time and deadline.
+Cleanup invalidates expired preparations before removing their pins, retains
+other references/pins, and never promotes an abandoned attempt to success.
+
+`/testing` exports `pausePurgeBeforeDelete(host, artifactId)` and
+`inspectDeletionClaims(host)`. Bind the test host's `storageScopeId`, `blobs`,
+inspectable `claims`, and `purge(artifactId, deletingBlobs)` callback. The
+callback must commit its durable `purge:<artifactId>` claims and use the
+supplied deletion adapter for that purge only. The pause returns `claimId`,
+`blobKeys`, `release()` and `finished`; release it in a `finally` block.
+Inspection reads durable claim history without releasing exclusion or
+granting publication authority. The seams do not alter L3 ports or profiles.
+
 ## Domain adapters and transaction boundaries
 
 `ensureHost.lockBinding` and `resolveBinding` receive the coordinator's
