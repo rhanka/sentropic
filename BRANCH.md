@@ -49,6 +49,7 @@
   - [x] Add expiry denial/retry/replay matrix at eight publication waits with independent DB/S3 reads.
   - [ ] Exercise same-key two-process S3 races for identical and changed commands.
   - [ ] Exercise policy/lifecycle serialization, purge claims and bounded shared-blob cleanup.
+  - [x] Add real PG key/quota/policy/ACL/lifecycle lock waits and both writer orders.
   - [ ] Keep demonstrated product defects as known-failure tests with file:line evidence.
 - [ ] **Lot 2 — Qualification and handoff**
   - [ ] Run scoped integration tests, typecheck and lint under the shared lock.
