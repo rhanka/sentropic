@@ -54,7 +54,9 @@ export function sleep(ms: number): Promise<void> {
 }
 
 export function getTestModel(): string {
-  return process.env.TEST_MODEL || 'gpt-4.1-nano';
+  // CI default: mistral-small-2603 (gpt-4.1-nano retired; production default unchanged).
+  // Track 01M5PCVH1Y8ZAVM7T94SRAWVR5: revert/review when seats are available.
+  return process.env.TEST_MODEL || 'mistral-small-2603';
 }
 
 /**

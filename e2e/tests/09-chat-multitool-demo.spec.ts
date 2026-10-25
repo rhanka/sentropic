@@ -22,10 +22,11 @@ import { withWorkspaceStorageState } from '../helpers/workspace-scope';
  * Driven tool chain (observed in the run): documents (read attached org
  * document) + web_search/web_extract (Tavily) + organization_update.
  *
- * MODEL: openai::gpt-5.4-nano, also exercised by the CI chat suite.
+ * MODEL: mistral::mistral-small-2603, also exercised by the CI chat suite.
  *
- * The original Gemini choice worked around an author's local OpenAI quota.
- * CI has working OpenAI credentials; its Gemini credential is rejected.
+ * gpt-4.1-nano is retired and the CI OpenAI key has no credits left;
+ * mistral-small-2603 is the CI model (production default unchanged).
+ * Track 01M5PCVH1Y8ZAVM7T94SRAWVR5: revert/review when seats are available.
  * This scenario qualifies the model-agnostic multi-tool workflow, with the
  * same completed jobs, visible answer, tool activity, and persisted mutation.
  *
@@ -53,7 +54,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const SEED_TECHNOLOGIES = 'Legacy mainframe';
-  const CHAT_MODEL = 'openai::gpt-5.4-nano';
+  const CHAT_MODEL = 'mistral::mistral-small-2603';
 
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -277,7 +278,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
       const composer = page.locator('[role="textbox"][aria-label="Composer"]');
       await expect(composer).toBeVisible({ timeout: 10_000 });
 
-      // Use the live model already exercised by the CI chat suite.
+      // Use the live CI model (mistral-small-2603) already exercised by the CI chat suite.
       const modelSelect = page.locator('#chat-model-selection');
       await expect(
         modelSelect.locator(`option[value="${CHAT_MODEL}"]`),
