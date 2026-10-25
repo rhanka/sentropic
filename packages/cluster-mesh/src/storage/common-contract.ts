@@ -18,6 +18,10 @@ import {
   type WriterFence,
 } from './contracts.js';
 
+// Keep the dedicated common-contract subpath data-only, including host scope/fence bindings.
+export { validateStorageScope, validateWriterFence } from './contracts.js';
+export type { StorageScope, WriterFence } from './contracts.js';
+
 export const COMMON_CONTRACT_VERSION = '1' as const;
 export const KNOWN_COMMON_CONTRACT_VERSIONS: readonly string[] = ['1'];
 

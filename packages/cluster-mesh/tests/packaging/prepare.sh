@@ -152,7 +152,7 @@ fi
 
 # Selected consumer: start from E8's committed lock, substituting the local artifacts candidate.
 # Candidate/sibling installs are provisional (`npm install`); the committed lock is not rewritten.
-# Verified sibling receipts still require the committed registry URL and sha512 on every sibling run.
+# Train siblings retain committed registry URL/sha512 checks; artifacts verifies its installed candidate bytes.
 mkdir -p "$work/selected"
 cp "$fixtures/selected/package.json" "$work/selected/"
 cp "$fixtures/selected/package-lock.json" "$work/selected/committed-lock.json"
@@ -179,7 +179,7 @@ if [ "${REFRESH_LOCK:-}" = 1 ]; then
     "$fixtures/selected/package.json" "$siblings"
   cp "$fixtures/selected/package-lock.json" "$work/selected/committed-lock.json"
 elif [ -f "$siblings/index.json" ]; then
-  node "$here/check-lock-integrity.mjs" siblings "$work/selected/committed-lock.json" "$siblings"
+  node "$here/check-lock-integrity.mjs" siblings "$work/selected/committed-lock.json" "$siblings" "$work/selected/package-lock.json"
 fi
 tuple selected
 
