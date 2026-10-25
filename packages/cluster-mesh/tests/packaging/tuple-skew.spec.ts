@@ -3,6 +3,22 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { enabled, fixtureDir, nodeJson, read } from './helpers.js';
 import { npmSkewViolations, runtimeRefusalViolations, type Detail, type Probe, type SkewTuple } from './skew-invariants.js';
+import { satisfiesRange } from '../../src/modules/semver.js';
+
+describe('Radar llm-mesh compatibility range', () => {
+  const range = '0.19.2 || >=0.22.0 <0.28.0';
+  it.each(['0.19.2', '0.22.0', '0.27.9'])('should admit the qualified version %s', (version) => {
+    expect(satisfiesRange(version, range)).toBe(true);
+  });
+  it.each(['0.19.1', '0.19.3', '0.20.0', '0.21.2', '0.28.0', '0.22.0-dev.1'])
+    ('should refuse the unqualified version %s', (version) => {
+      expect(satisfiesRange(version, range)).toBe(false);
+    });
+  it.each(['|| 0.19.2', '0.19.2 ||', '0.19.2 || garbage'])
+    ('should refuse a malformed alternative %s', (invalid) => {
+      expect(satisfiesRange('0.19.2', invalid)).toBe(false);
+    });
+});
 
 // Skewed trees: the old tuple and a partial bump (the candidate with the consumer's own llm-mesh ^0.21.2 and
 // llm-gateway ^0.18.0). npm's exact outcome depends on npm and on the registry state (before and after the train
