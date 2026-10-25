@@ -35,6 +35,7 @@
   - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
 
 ## Feedback Loop
+- [x] INT-12: packed round-trip uses trusted invocations and caller keys, rejects forged scope and invalid files, and reads content through the retained public runtime. Core-only (platform absent), kernel and both driver adapters passed under Compose; UTF-8 bytes, scope, CORP and zero fetches verified.
 - [x] INT-11: packed/core-only probes now construct the guarded host from installed exports and catalogue only the compiled selection; retain the global 15-name contract and optional-platform absence checks.
 - [x] INT-10: CI artifacts unit/integration gates passed, then the packed consumer failed with invalid compiled profile. Add a fresh-store host using installed public L6 exports; migrate the isolated consumer without relaxing validation or optional-peer checks.
 - [x] INT-9: migrated mesh fixtures reproduced three invalid-argument failures because their placeholder artifact IDs violate L6's UUID schema. Use valid fixture IDs; keep schema and rejection assertions unchanged.
