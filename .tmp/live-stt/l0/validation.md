@@ -27,6 +27,16 @@ The external validation Make recipes ran Perl text/hash/link checks, exact-versi
 
 All shell commands after bootstrap reads ran through RTK-prefixed Make recipes, with `ENV=test-live-stt-l0` last; Docker cleanup uses the required outer flock. No host npm/Python, ad-hoc Docker, paid API, microphone, model download, login/refresh, credential console or shared Track writer was used. The first fetch required protected Git metadata access; the granted escalation only enabled the requested Git worktree/commit/push operations.
 
+## PR #753 Opus r1 correction receipt — 2026-10-25
+
+The owner supplied `.h2a/reviews/pr753_opus_r1.md` from the repository root, SHA-256 `b3b7e82451b5efa957d62a8d46afe6f3448d365429552b262d966a64d7ce8ffd`, reviewing `008d66b5fd6ff04d1c44f69cf52892c4c3587980` with verdict CHANGES. Branch identity was checked mechanically against `feat/live-stt-l0`; the explicit branch pull was already up to date before edits.
+
+- P2-1: [capacity study](capacity-study.md) now distinguishes shared A/B from dedicated-seat candidate C, leaves all options unselected and admission at zero, and prices the 774 displaced CI units conditionally. It includes custody serialization, dated combined calendars and public Business subscription prices opened from official OpenAI documentation on 2026-10-25; account entitlement/terms and actual CI spend remain unknown.
+- P2-2: [scope disposition](scope-release.md) explicitly records L0-D01/02 as unfulfilled L0 obligations, with reasons, owning lots and mandatory entry receipts. [Gates](gates.md) and [dependencies](dependencies.md) carry the same branch-init/G-NATIVE requirements; no pin/install proof is invented.
+- Verification: host Make/harness C1/C2, documentation-only path/whitespace/local-link checks, 19 gate rows, deviation cross-references, capacity/cost/calendar arithmetic and each staged commit below 150 changed lines. No application tests, paid inference, provisioning, model download or interpreter execution are part of these corrections.
+
+The supplied single r1 review does not supply a new consensus verdict on the corrected head. No new reviewer was dispatched, no Track writer was opened and all runtime/license/entitlement gates remain as stated. Exact pushed head and CI metadata are reported at handoff separately from this document's static checks.
+
 ## Inspection limitations and preserved failures
 
 - The root/h2a worktrees contain concurrent work and were never reset/staged/committed by this task. h2a local profile edits are explicitly excluded from the frozen upstream findings.
