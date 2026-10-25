@@ -107,30 +107,36 @@ describe.skipIf(!enabled || !artifactsCompatible)('installed compatible artifact
       import * as artifacts from '@sentropic/artifacts/mcp';
       import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
       const modules = createClusterMeshModules();
+      const profile = artifacts.compileArtifactsProfile(artifacts.RADAR_ARTIFACTS_PROFILE);
       const builtin = createArtifactsBuiltin({
-        modules, definition: { app: { handle: async () => ({ status: 200, body: {} }) } },
+        modules, definition: { profile,
+          app: { profileDigest: profile.profileDigest, selectedCapabilities: profile.selectedCapabilities,
+            execute: async () => { throw new Error('unexpected dispatch'); } },
+          createInvocation: () => { throw new Error('unexpected invocation'); } },
       });
       const facade = createMcpRegistry({ modules, builtins: [builtin] });
       assert.throws(() => facade.select(['sentropic.web-pages']), /unknown provider/);
       assert.throws(() => facade.configure('sentropic.web-pages', {}), /unknown provider/);
       facade.select(['sentropic.artifacts']);
-      facade.configure('sentropic.artifacts', { defaultStorageScopeId: 'scope-1' });
+      facade.configure('sentropic.artifacts', {});
       const definition = await builtin.load();
       const compiled = await facade.compile({ bindings: {}, compatibility: {
         'sentropic.artifacts': { manifestDigest: computeManifestDigest(definition.manifest) },
       } });
       assert.equal(compiled.ok, true, JSON.stringify(compiled.diagnostics));
-      for (const name of artifacts.ARTIFACTS_TOOL_NAMES) {
+      for (const name of profile.selectedCapabilities) {
         assert.equal(compiled.registry.resolveTool(name)?.providerId, 'sentropic.artifacts');
       }
       await assert.rejects(import('@sentropic/cluster-mesh/mcp/web-pages'),
         { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
       await assert.rejects(modules.load('mcp/web-pages'), { reason: 'source_unavailable' });
       assert.equal(Object.keys(artifacts).some((name) => /WEB_PAGES|WebPages/.test(name)), false);
-      console.log(JSON.stringify({ providerId: builtin.providerId, tools: artifacts.ARTIFACTS_TOOL_NAMES }));
+      for (const name of artifacts.ARTIFACTS_TOOL_NAMES.filter(name => !profile.selectedCapabilities.includes(name))) {
+        assert.equal(compiled.registry.resolveTool(name), undefined);
+      }
+      console.log(JSON.stringify({ providerId: builtin.providerId, tools: profile.selectedCapabilities }));
     `);
     expect(result.providerId).toBe('sentropic.artifacts');
-    expect(result.tools).toHaveLength(15);
-    expect(result.tools).toEqual(expect.arrayContaining(['artifacts_ensure', 'artifacts_restore']));
+    expect(result.tools).toEqual(['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get']);
   });
 });

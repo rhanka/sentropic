@@ -63,11 +63,11 @@
   - [x] Add real S3 shared/exclusive cleanup, durable purge claims and preparation invocation attribution assertion.
   - [x] Add real PG key/quota/policy/ACL/lifecycle lock waits and both writer orders.
   - [x] Keep demonstrated product defects D1/D2 as known-failure tests with file:line evidence; no product edits.
-- [ ] **Lot 2 — Qualification and handoff**
+- [x] **Lot 2 — Qualification and handoff**
   - [x] Run scoped integration tests, strict test typecheck and scoped ESLint under the shared lock; all non-known-failure checks passed.
   - [x] Pin hashes and run Radar baseline commit-probe/finalization suites read-only; record missing candidate prerequisites.
   - [x] Merge integration `be22b0563` after its L6 merge lands; no rebase.
-  - [ ] Scope-check each commit, push, open draft PR targeting `feat/immo-861-integration`.
+  - [x] Scope-check each commit, push, open draft PR [#743](https://github.com/rhanka/sentropic/pull/743) targeting `feat/immo-861-integration`.
 
 ## Validation commands and receipts
 - [x] Runtime command: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f Makefile -f /tmp/861-l8a-ops.mk -o build-artifacts test-artifacts-integration SCOPE='tests/commit-publication-boundary.integration.test.ts --maxWorkers=1 --no-file-parallelism --reporter=verbose --reporter=json --outputFile=../../tmp/l8a-final-results.json' API_PORT=13338 UI_PORT=9538 MAILDEV_UI_PORT=5438 ENV=test-861-l8a`.
@@ -77,3 +77,4 @@
 - [x] Radar baseline command from `tmp/radar-l8a`: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f tools/artifact-host.mk -f /tmp/861-l8a-radar-ops.mk test-api SCOPE='api/tests/integration/artifacts-commit-probe.spec.ts api/tests/integration/artifacts-finalization-authorization.spec.ts --maxWorkers=1 --no-file-parallelism' ARTIFACTS_PROVIDER_ACCEPTANCE=1 API_PORT=13338 UI_PORT=9538 MAILDEV_UI_PORT=5438 ENV=test-861-l8a`.
 - [x] Radar baseline JSON SHA-256 `706b4027770ea50c388a06c15df1ce728d711aa6c551a4e0180476897f37911e`; log SHA-256 `7fee88269e687c7cca0b51ae1b1ba1696c12d641437c2fa75c21ce831c663570`, under `tmp/radar-l8a/tmp/artifact-host/test-861-l8a/`.
 - [x] Mechanical branch/scope checks passed; all authored commits change fewer than 150 lines. Merge commits preserve their two parents; `.track/events.jsonl` is byte-identical in both parents and the integration merge.
+- [x] Refreshed integration `79acec270` after draft creation; only mesh test fixtures and the integration plan changed since the tested base. L8a product/test bytes remain unchanged. Both isolated stacks were torn down with their matching Make down targets.
