@@ -7,6 +7,131 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createHttpArtifactApp, type HttpRequest } from '../src/http.js';
+import { randomUUID } from 'node:crypto';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
+import { createRadarKeyDerivation } from '../src/server/command-identity.js';
+import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
+import type { ArtifactInvocationContext, CommitExecutor, FinalizeConnection,
+  FinalizeTxClient, StoredCommitReceipt } from '../src/server/commit/types.js';
+import { createMemoryRefcountStore } from '../src/server/gc.js';
+import { createArtifactsToolExecutor } from '../src/mcp-core.js';
+
+function atomicTransport() {
+  const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+  const receipts = new Map<string, StoredCommitReceipt>();
+  const bindings = new Map<string, string>();
+  const releases = new Map<string, { releaseId: string; manifest: string }>();
+  const writes = new Map<FinalizeTxClient, (() => Promise<void>)[]>();
+  const acls = createMemoryAclStore();
+  const lifecycle = createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00Z');
+  let allowed = true;
+  let guardCalls = 0;
+  const executor: CommitExecutor = {
+    async ensureCoordinationRow() {},
+    async beginFinalization() {
+      const pending: (() => Promise<void>)[] = [];
+      const connection: FinalizeConnection = {
+        async query() { return { rows: [], rowCount: 0 }; },
+        async beginReadCommitted() {}, async lockOperationKey() {},
+        async readReceipt(scope, key) { return receipts.get(`${scope}/${key}`); },
+        async insertReceipt(receipt) { pending.push(async () => { receipts.set(`${receipt.scopeId}/${receipt.internalKey}`, receipt); }); },
+        async commit() { for (const write of pending) await write(); },
+        async rollback() { pending.length = 0; }, release() { writes.delete(connection); },
+      };
+      writes.set(connection, pending);
+      return connection;
+    },
+  };
+  const coordinator = createArtifactCommitCoordinator({ executor, policy: {
+    createParticipant: (_client, transactionId) => ({
+      async readRevision() { return 'rev-1'; }, async checkApproval() { return { approved: true }; },
+      async reserveQuota() { return { reserved: true }; },
+      mintFence: (policyRevision, invocationId) => ({ fenceId: randomUUID(), transactionId, invocationId, policyRevision }),
+    }),
+  } });
+  const invocation = (actorId = 'alice'): ArtifactInvocationContext => Object.freeze({
+    invocationId: randomUUID(), actorId, storageScopeId: 'scope-l6',
+    authorizeCommit: async (context, tx) => {
+      guardCalls += 1;
+      return allowed ? { allowed: true, fence: tx.participant.mintFence(context.policyRevision, context.invocationId) }
+        : { allowed: false, reason: 'revoked', status: 403, publicCode: 'access_denied', retriable: false };
+    },
+  });
+  const app = createHttpArtifactApp({ profile, coordinator,
+    publicationUrls: (artifactId, releaseId) => ({
+      stableUrl: `https://artifacts.test/a/${artifactId}`,
+      pinnedUrl: `https://artifacts.test/a/${artifactId}/r/${releaseId}`,
+    }),
+    derivation: createRadarKeyDerivation({ storageScopeId: 'scope-l6', actorIds: ['alice', 'bob', 'issuer|alice'] }),
+    legacyRecords: createMemoryKv(),
+    acls, lifecycle,
+    ensureHost: {
+      async readPolicyRevision() { return 'rev-1'; }, async lockBinding() {}, async abandonAttempt() {},
+      async resolveBinding(client, input) {
+        const key = `${input.ownerId}/${input.bindingName}`;
+        const existing = bindings.get(key);
+        const artifactId = existing ?? randomUUID();
+        writes.get(client)!.push(async () => {
+          bindings.set(key, artifactId);
+          await acls.putArtifactAcl(artifactId, { ownerId: input.ownerId, storageScopeId: input.storageScopeId,
+            isPublic: false, withdrawn: false, grants: [] });
+          await lifecycle.register(artifactId, input.ownerId);
+        });
+        return { artifactId, created: existing === undefined };
+      },
+    },
+    publication: {
+      blobs: createMemoryBlobStore(), intents: createMemoryIntentStore(), refs: createMemoryRefcountStore(),
+      async getCurrent(artifactId) { return releases.get(artifactId); },
+      createUnitWriter: (client) => ({
+        async readAuthorization(artifactId) { return { state: await lifecycle.stateOf(artifactId), acl: await acls.getArtifactAcl(artifactId) }; },
+        async putRelease(release) { writes.get(client)!.push(async () => { releases.set(release.artifactId, release); }); },
+        async putSource() {}, async registerBlob() {}, async promoteCurrentLatestWins() {},
+        async addReleaseRef() {}, async completeIntent() {},
+      }),
+    },
+  });
+  const mcp = createArtifactsToolExecutor({ app, profile });
+  const http = (path: string, body: unknown, context = invocation()) => app.execute({
+    method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
+  }, context);
+  return { app, mcp, http, invocation, receipts, releases, bindings,
+    deny: () => { allowed = false; }, allow: () => { allowed = true; }, guardCalls: () => guardCalls };
+}
+
+describe('L6 authorized HTTP/MCP parity', () => {
+  const args = { bindingName: 'site', idempotencyKey: ' caller key ' };
+  it('should replay ensure across transports with current authorization', async () => {
+    const host = atomicTransport();
+    const first = await host.http('/ensure', args);
+    expect(first).toMatchObject({ ok: true, commitState: 'committed' });
+    const replay = await host.mcp.execute({ tool: 'artifacts_ensure', args, invocation: host.invocation() });
+    expect(replay).toMatchObject({ ok: true, replayed: true, result: { body: { replayed: true } } });
+    expect(host.receipts.size).toBe(1);
+    host.deny();
+    expect(await host.http('/ensure', args)).toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit' } });
+    expect(host.receipts.size).toBe(1);
+  });
+  it('should leave no success after denial and allow a fresh same-key attempt', async () => {
+    const host = atomicTransport();
+    host.deny();
+    expect(await host.http('/ensure', args)).toMatchObject({ ok: false });
+    expect(host.receipts.size).toBe(0);
+    expect(host.bindings.size).toBe(0);
+    host.allow();
+    expect(await host.http('/ensure', args)).toMatchObject({ ok: true, replayed: false });
+  });
+  it('should keep canonical verified subjects distinct', async () => {
+    const host = atomicTransport();
+    await host.http('/ensure', args, host.invocation('alice'));
+    const other = await host.mcp.execute({ tool: 'artifacts_ensure', args, invocation: host.invocation('issuer|alice') });
+    expect(other).toMatchObject({ ok: true, replayed: false });
+    expect(host.receipts.size).toBe(2);
+  });
+  it('should bind the request guard through publication and replay', async () => {
+    const host = atomicTransport();
+    const ensured = await host.http('/ensure', args);
+    if (!ensured.ok) throw new Error('ensure failed');
 import { createArtifactService } from '../src/server/service.js';
 import {
   createPublicationService,
