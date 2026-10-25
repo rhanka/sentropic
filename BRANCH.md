@@ -33,6 +33,7 @@
 - [x] L3: owner accepts 157f231d5; type convergence belongs to L6, excluded from this train.
 - [x] Merge policy: retain integration BRANCH.md; report each source conflict separately.
 - [x] L5 brings reviewed Track events; preserve them without editing. The L5 scope check reported advisory failures because the initial train plan forbade Track; this plan now permits preservation of the approved history.
+- [x] INT-1: full installed packaging reproduced 90 passes / 1 failure at types-and-bundlers.spec.ts:82. The old optional-peer-only assertion rejected L7's declared platform digest import. Require the exact two runtime edges and the artifacts-only declaration edge; no runtime change.
 
 ## AI Flaky tests
 - [x] No flaky acceptance granted.
