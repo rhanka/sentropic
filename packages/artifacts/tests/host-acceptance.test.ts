@@ -81,6 +81,8 @@ describe('Radar 0.2.1 acceptance regressions', () => {
     expect(projectArtifactMcpOutcome(outcome, 'audit')).toMatchObject({ ok: false,
       error: { code: 'capability_unavailable', retriable: true } });
     expect(JSON.stringify(outcome)).not.toContain(cause.message);
+    expect(Object.keys(outcome.failure)).not.toContain('cause');
+    expect(JSON.stringify(outcome)).not.toContain('artifact_s3_timeout');
     expect(host.releases.size).toBe(0);
     expect(host.receipts.size).toBe(1);
   });
