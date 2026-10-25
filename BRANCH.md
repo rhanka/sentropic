@@ -78,7 +78,7 @@
 - [x] **L1d — Docs consolidation**
   - [x] Document all public exports and provider/coordinator ownership boundaries in package README.
   - [x] Document public surface and evidence in README and `.tmp/live-stt/l1/validation.md`.
-- [ ] **L1e — Final validation and draft handoff**
+- [x] **L1e — Final validation and draft handoff**
   - [x] Cluster compatibility green: 73 module tests + 54 integration tests; packed imports/types and workspace npm ci dry-run pass.
   - [x] BRLIVE-L1-EX1 red: topology rejects 0.28.0; add its admission regression before range alignment.
   - [x] Align peer/module range and installed-version fixtures; prepare cluster 0.22.2 above refreshed published 0.22.1.
@@ -86,7 +86,7 @@
   - [x] Scoped red/green, full mesh tests, typecheck, lint, build and packed-export checks.
   - [x] Scope check before every commit, whitespace/line-count/trailer checks and ENV cleanup.
   - [x] Review selection failed: no entitled/current-day complementary reviewer allocation; `.tmp/live-stt/l1/review.md`, G-REVIEW open.
-  - [ ] Push draft PR with plan as body; inspect exact-head CI metadata.
+  - [x] Push draft PR #754 with plan as body; CI run 40246816381 observed in progress at initial head 0e4a0d33e. Final exact-head state reported at handoff.
 
 ## Deferred to later live-speech lots
 - [x] Configuration projection, coordinator/fences/reconciliation, adapters, accounting, capacity reservations, publication and deployment.
