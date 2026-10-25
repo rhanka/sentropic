@@ -11,6 +11,11 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "imports": {
+    "#artifacts-frozen-commit": {
+      "types": "./l0-freeze/commit-contract.ts"
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -156,6 +161,7 @@
   },
   "files": [
     "dist",
+    "l0-freeze",
     "migrations",
     "docs/migration-l6.md",
     "README.md",
