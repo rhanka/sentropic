@@ -1,63 +1,58 @@
-# Fix: #861 public contract gaps
+# Feature: #861 final artifacts 0.2.0 candidate integration
 
 ## Objective
-- [x] Close upstream classes a/b for the artifacts 0.2.0 candidate: public coordinator construction, packed typed example, preparation cleanup and purge testing seams.
+- [ ] Build the final artifacts 0.2.0 / cluster-mesh 0.22.0 candidate, requalify L8d, and obtain green PR #739 CI.
 
 ## Scope / Guardrails
-- [x] Branch fix/artifacts-861-contract-gaps; worktree tmp/worktrees/861-contract-gaps; base 082fe4c60 on origin/feat/immo-861-integration.
-- [x] Make only; ENV=test-861-gaps last; shared Docker flock and matching teardown after every step; no Python or attribution trailers.
-- [x] Every commit is below 150 changed lines and uses selective staging plus make commit.
-- [x] l0-freeze, L3 port signatures and profile input are unchanged; Radar-owned class c remains outside scope.
-- [x] Candidate version remains the integration owner's reserved 0.2.0; no publication or main merge.
+- [x] Worktree tmp/worktrees/861-integration; branch feat/immo-861-integration; merge-only integration.
+- [x] ENV=test-861-int last; shared Docker lock; matching make down after each Docker step.
+- [x] No main merge or publication; the conductor owns publication.
+- [x] Selective staging, make commit, fewer than 150 changed lines per new commit, no attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `packages/artifacts/**`
-  - `Makefile`
-- **Forbidden Paths (must not change in this branch)**:
-  - `packages/artifacts/l0-freeze/**`
-  - `packages/artifacts/src/server/commit/types.ts`
-  - `packages/artifacts/src/profile/**`
   - `packages/cluster-mesh/**`
-  - `api/**`
-  - `ui/**`
+  - `scripts/ci/immo-861-*`
+  - `Makefile`
+  - `docker-compose.immo-861.yml`
   - `.track/**`
-  - `.github/**`
-  - `docker-compose*.yml`
+  - `.github/workflows/ci.yml`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+- **Forbidden Paths (must not change in this branch)**:
+  - `.cursor/rules/**`
+  - `ui/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `package-lock.json`
+  - `packages/llm-mesh/**`
+  - `api/**`
+  - `e2e/**`
 - **Exception process**:
-  - [x] BR861-GAPS-EX1: Makefile only admits test-861-gaps to the existing isolated Compose runner/build/scope/down guards; rollback removes that environment from those guards.
+  - [x] BR861-EX1: retain existing isolated Compose qualification wiring; new release targets use that same service and environment.
+  - [x] BR861-EX2: preserve approved incoming history and Track bytes without new edits outside qualification scope.
+  - [x] BR861-EX3: retain reserved candidate manifest/lock versions artifacts 0.2.0 and cluster-mesh 0.22.0.
+  - [x] BR861-EX4: retain artifacts 0.2.0 qualification pins and guarded sibling receipts.
 
 ## Feedback Loop
-- [x] Opus r1 P2-3: portable Make-path regression failed first, then passed; offline tools/cache now use overridable variables without personal absolute paths.
-- [x] Opus r1 P2-1 execution: no-download and legacy-metadata regressions failed first; per-intent validation now retains reported invalid debt without stopping valid cleanup.
-- [x] Opus r1 P2-1 query: PostgreSQL regression failed before the fix; filter completed/future intents, limit reads, prioritize unsettled debt, retire settled rechecks after 60 seconds.
-- [x] Opus r1 P2-2: orphan-first purge regression failed before the fix; uncorrelated DELETE now forwards without pausing (A4).
-- [x] Tests preceded implementation: packed example missing; preparation/purge exports missing; delayed PUT recovery reproduced and corrected.
-- [x] Preparation metadata uses existing intent JSON; cleanup cannot complete an expired preparation, delete shared bytes, or erase attempt history.
-- [x] npm TLS resets blocked normal installation; isolated cached qualification passed with recorded tool versions, without sibling package sources or relaxed assertions.
-- [x] Receipt: packages/artifacts/probe/CONTRACT-GAPS-RECEIPT.md contains exact commands, toolchain differences, SHA-256 and integrity.
-- [x] Implementation pushed to origin at 62dc8de0fefcd59ceb833472379535f035550e85; draft PR https://github.com/rhanka/sentropic/pull/750 targets feat/immo-861-integration.
+- [x] INT-18: pull --no-rebase reached 464581fb813b2fbfb6b4691b250162e0dfd942e9, including #750 public executor, packed example, A6 and A4.
+- [x] INT-19: #750 replaced the integration plan with its topic plan; restore this integration scope while retaining all approved implementation bytes.
+- [x] L0 freeze and previous integration decisions remain in the retained merge history.
 
 ## AI Flaky tests
 - [x] No flaky acceptance, timeout increase or skipped required case.
 
 ## Orchestration Mode (AI-selected)
-- [x] One code author on one isolated branch; no delegated implementation.
+- [x] Multi-branch; one release integrator; L8d owns packed Radar qualification evidence.
 
 ## UAT Management (in orchestration context)
-- [x] Package/API changes only; real PostgreSQL/MinIO and installed-consumer qualification replace UI UAT.
+- [x] Package qualification only; no production activation claim.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 1: export PostgreSQL executor and coordinator types; ship public-import Radar example with compiled profile, PG participant, fence and scheduler.
-- [x] Lot 2: preparation inventory/deadlines and bounded cleanup; preparation-cleanup.test.ts covers shared/active protection, failure retry, batches and delayed PUT.
-- [x] Lot 3: purge pause/claim inspection; purge-testing.test.ts and publication-authorization.integration.test.ts cover correlated pause, both PG race orders and expired finalization.
-- [x] Build/freeze: platform/artifacts build and frozen contract fixture compilation passed; byte comparison with base passed.
-- [x] Unit: all 440 tests / 35 files passed, including Opus r1 cleanup and purge regressions.
-- [x] Integration/E2E: all 172 tests / 12 files passed, including bounded PostgreSQL reads and the existing authorization/race proofs.
-- [x] Packed example: packed-example.test.mjs installed the exact archive into an isolated consumer and compiled the shipped example/public API fixture.
-- [x] Lint: recommended TypeScript ESLint rules passed; cached version differences documented in receipt.
-- [x] Push and draft PR #750 against feat/immo-861-integration verified at implementation SHA 62dc8de0fefcd59ceb833472379535f035550e85; this final documentation revision follows it.
-- [x] CI trigger inspection: workflow runs automatically only against main; final delivery uses workflow_dispatch on the PR branch and reports the head-specific Actions URL.
+- [x] Lot 0 — pull integration with a merge; verify branch mechanically.
+- [x] Lot 1a — artifacts unit gate: 440 tests / 35 files passed at product source 464581fb8.
+- [x] Lot 2a — add reproducible guarded packing through the existing qualification Compose service.
+- [ ] Lot 1b — real integration, lint, frozen types and mesh surface/tuple/packaging gates.
+- [ ] Lot 2 — record packed archives, SHA-256, npm integrity, source and toolchain provenance.
+- [ ] Lot 3 — merge integration into L8d; requalify against current frozen-profile / E3 Radar pins.
+- [ ] Lot 4 — push qualification evidence and monitor PR #739 at its final head until CI passes.
