@@ -34,113 +34,46 @@ export type ArtifactsManifest = AppMcpProviderManifest & {
   audit: AppMcpProviderManifest['audit'] & { artifactsProfileDigest: string };
 };
 
-): AppMcpProviderManifest {
+export function createArtifactsManifest(options: ArtifactsManifestOptions): ArtifactsManifest {
+  assertArtifactsTransportProfile(options?.profile);
+  const { profile } = options;
   const scopes = options.invocationScope === undefined ? [] : [options.invocationScope];
-  const tools: CapabilityTool[] = ARTIFACTS_TOOL_SPECS.map((spec) => ({
-    kind: 'tool',
-    name: spec.name,
-    description: spec.description,
-    requiredScopes: [...scopes],
-    requiredClaims: [],
-    inputSchema: spec.inputSchema,
-    outputSchema: { type: 'object' },
-    redactionClass: 'low',
-    mutability: spec.mutability,
-    mutatesExternalSystem: spec.mutability !== 'read-only',
-    idempotency: spec.idempotent === true
-      ? { required: true, scope: 'principal' }
-      : { required: false },
-    gates: {
-      requiresElicitation: false,
-      requiresHumanConfirmation: spec.confirm === true,
-      requiresPrincipalGate: false,
-    },
-  }));
   return {
-    appId: ARTIFACTS_APP_ID,
-    providerId: ARTIFACTS_PROVIDER_ID,
-    version: ARTIFACTS_PROVIDER_VERSION,
+    appId: ARTIFACTS_APP_ID, providerId: ARTIFACTS_PROVIDER_ID, version: ARTIFACTS_PROVIDER_VERSION,
     displayName: options.displayName ?? 'Sentropic Artifacts',
-    resources: [],
-    tools,
-    prompts: [],
-    authz: { requiredClaims: [], scopes: [...scopes], tenantResolution: 'custom-resolver' },
-    audit: { eventKinds: ['invoke'] },
-    durability: {},
+    resources: [], prompts: [],
+    tools: ARTIFACTS_TOOL_SPECS.filter((spec) => profile.selectedCapabilities.includes(spec.name)).map((spec) => ({
+      kind: 'tool', name: spec.name,
+      description: spec.description,
+      inputSchema: profile.schemas[spec.name]!, outputSchema: { type: 'object' },
+      requiredScopes: [...scopes], requiredClaims: [], redactionClass: 'low',
+      mutability: spec.mutability, mutatesExternalSystem: spec.mutability !== 'read-only',
+      idempotency: profile.idempotency[spec.name] ?? { required: false },
+      gates: { requiresElicitation: false, requiresHumanConfirmation: false, requiresPrincipalGate: false },
+    })),
+    authz: { requiredClaims: [], scopes, tenantResolution: 'custom-resolver' },
+    // The existing manifest codec includes audit metadata, including for an empty tool set.
+    audit: { eventKinds: ['invoke'], artifactsProfileDigest: profile.profileDigest }, durability: {},
   };
 }
 
-// ---------------------------------------------------------------------------
-// Part 2 — tool executor over the shared HTTP app (HTTP/MCP parity by
-// construction: one application layer, one authorization order, stable
-// error codes). Unknown tools and malformed arguments throw before any
-// app call, so a refused invocation has no effects.
-// ---------------------------------------------------------------------------
-
-export interface ArtifactsApp {
-  handle(request: HttpRequest): Promise<HttpResponse>;
-}
-
+export type ArtifactsApp = Pick<ArtifactApp, 'execute' | 'selectedCapabilities' | 'profileDigest'>;
 export interface ArtifactsInvokeInput {
   tool: string;
-  actorId: string;
-  /** Trusted host scope; tool arguments cannot select storage. */
-  storageScopeId?: string;
-  args: Record<string, unknown>;
+  invocation: ArtifactInvocationContext;
+  args: unknown;
+  idempotencyKey?: string;
+}
+function rejected(cause: unknown, invocationId: string, operation: string): ArtifactOutcome<HttpResponse> {
+  return { ok: false, failure: classifyArtifactFailure(cause, { invocationId, operation,
+    phase: cause instanceof ArtifactProfileInputError ? cause.phase : 'entry', commitState: 'not_committed' },
+  (error) => error instanceof ArtifactProfileInputError ? new ArtifactOperationError(error.category) : undefined) };
 }
 
-function needString(args: Record<string, unknown>, name: string): string {
-  const value = args[name];
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`invalid request: missing ${name}`);
-  }
-  return value;
-}
-
-function optString(args: Record<string, unknown>, name: string): string | undefined {
-  const value = args[name];
-  return typeof value === 'string' && value.length !== 0 ? value : undefined;
-}
-
-/** Create the 15-tool executor over any conforming artifacts HTTP app. */
-export function createArtifactsToolExecutor(deps: {
-  app: ArtifactsApp;
-  defaultStorageScopeId?: string;
-}) {
-  const call = (
-    actorId: string,
-    method: string,
-    path: string,
-    body?: unknown,
-    storageScopeId?: string,
-  ): Promise<HttpResponse> => deps.app.handle({
-    method, path, actorId, body, storageScopeId: storageScopeId ?? deps.defaultStorageScopeId,
-  });
-
-  function setAccess(actorId: string, args: Record<string, unknown>): Promise<HttpResponse> {
-    const artifactId = needString(args, 'artifactId');
-    const action = needString(args, 'action');
-    if (action === 'grant') {
-      const grant = needString(args, 'grant');
-      if (grant !== 'read' && grant !== 'source') {
-        throw new Error('invalid request: grant must be read or source');
-      }
-      return call(actorId, 'POST', '/access/grant', {
-        artifactId, principalId: needString(args, 'principalId'), grant,
-      });
-    }
-    if (action === 'revoke') {
-      return call(actorId, 'POST', '/access/revoke', {
-        artifactId, principalId: needString(args, 'principalId'),
-      });
-    }
-    if (action === 'set-public') {
-      if (typeof args['isPublic'] !== 'boolean') {
-        throw new Error('invalid request: isPublic must be a boolean');
-      }
-      return call(actorId, 'POST', '/access/public', { artifactId, isPublic: args['isPublic'] });
-    }
-    throw new Error(`invalid request: unknown set-access action ${action}`);
+export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: CompiledArtifactsProfile }) {
+  assertArtifactsTransportProfile(deps.profile);
+  const profile = deps.profile;
+  if (deps.app.profileDigest !== profile.profileDigest ||
   }
 
   return {
