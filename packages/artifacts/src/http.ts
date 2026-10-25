@@ -12,7 +12,7 @@ import { createGuardedPublicationService, type GuardedPublicationDeps,
 import type { ArtifactAcl, AclStore } from './server/access.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import { CommitQuarantineError, type ArtifactInvocationContext,
-  type ArtifactCommitCoordinator, type FinalizeRequest } from './server/commit/types.js';
+  type ArtifactCommitCoordinator } from './server/commit/types.js';
 import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome, type ArtifactHostFailureMapper } from './server/failures.js';
 import { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 export { projectArtifactHttpOutcome } from './server/outcome-projection.js';
@@ -150,25 +150,15 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const artifactId = normalized.artifactId as string;
           const acl = await visible(artifactId, invocation);
           if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
-          // Both finalization and fresh replay combine provider checks with this request's host guard.
-          const bindGuard = (request: FinalizeRequest): FinalizeRequest => ({ ...request,
-            guard: async (context, transaction) => {
-              const decision = await request.guard(context, transaction);
-              return decision.allowed ? invocation.authorizeCommit(context, transaction) : decision;
-            } });
-          const coordinator: ArtifactCommitCoordinator = {
-            ...deps.coordinator,
-            finalizePrepared: (request) => deps.coordinator.finalizePrepared(bindGuard(request)),
-            replayPrepared: (request) => deps.coordinator.replayPrepared(bindGuard(request)),
-          };
           const limits = profile.operations.find((entry) => entry.operation === 'publish')!.limits;
-          const publication = createGuardedPublicationService({ ...deps.publication, coordinator,
+          const publication = createGuardedPublicationService({ ...deps.publication, coordinator: deps.coordinator,
             limits: { maxFiles: limits.publishFilesMax, maxFileBytes: limits.maxDecodedFileBytes,
               maxTotalBytes: limits.maxDecodedTotalBytes } });
           const outcome = await publication.publishFinalized({
             ownerId: acl.ownerId, storageScopeId: invocation.storageScopeId, artifactId,
             identity: command!.identity, actorId: invocation.actorId, invocationId: invocation.invocationId,
             attemptId: invocation.invocationId, policyRevision: await deps.ensureHost.readPolicyRevision(),
+            authorizeCommit: invocation.authorizeCommit,
             source: { kind: 'inline-original' }, profile: normalized.profile as Record<string, JsonValue>,
             files: (normalized.files as Record<string, JsonValue>[]).map((file) => ({
               path: file.path as string, mimeType: file.mimeType as string, bytes: Uint8Array.from(file.bytes as number[]),
