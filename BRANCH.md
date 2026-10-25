@@ -30,6 +30,7 @@
 - [x] BASE #910 `ccb91aea` retired the route still called by Radar `packages/immo-mcp/src/data-source.ts:316`; current-main runs must account for CT-3/CT-9.
 - [x] Missing Radar H3 quota/admission integration remains explicitly not covered; generic provider tests cannot qualify Q4 activation.
 - [x] Temporary Make overlay selects the existing isolated Compose runner for this lane and host harness for scope checks.
+- [x] First run: all eight expiry denials and eight real-lock cases reached their invariants; corrected replay comparisons to the public receipt, excluding internal transaction timestamps.
 
 ## AI Flaky tests
 - [x] No AI-dependent cases or timeout increases.
