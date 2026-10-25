@@ -29,11 +29,19 @@
 ## Feedback Loop
 - [x] Runner workaround: `/tmp/861-l8c.Makefile` copies existing targets with only the qualification ENV guards expanded; SHA-256 `493237dbea196cfdbc93fc0859432b4565821ccef1d1975717627aecd101f6ad`.
 - [x] Final upstream command: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f /tmp/861-l8c.Makefile typecheck-artifacts lint-artifacts test-artifacts-integration SCOPE=tests/commit-failure-parity.integration.test.ts API_PORT=13308 UI_PORT=9508 MAILDEV_UI_PORT=5408 ENV=test-861-l8c`; exit 0, 33 passed + 6 expected failures, no skips; log `/tmp/861-l8c-final.log`.
+- [x] Qualified test source SHA-256: `8796f3a5e70c32727aab9f8b5e84f984099fe8ad3de6cad8fb0376232e9db9a3`.
+- [x] Execution deviation: the initial scope-check entered the default Docker harness recipe without the shared lock; it completed. Subsequent checks use the host harness through the temporary Make runner.
 - [x] The earlier 24-case smoke reused the integration checkout's generated mcp-platform declarations (identical source); the final command rebuilt mcp-platform and artifacts from this checkout.
 - [ ] Radar Q2/Q3 runs require exact packed tuple installation and a pinned read-only checkout; no registry-baseline pass counts as candidate qualification.
-- [ ] L8C-1 / owner L3 / known failure: `src/server/commit/coordinator.ts:108` ignores `TimeoutError` and `lock_timeout`, unlike `src/server/failures.ts:88`; typed pool/transaction timeout returns 500 instead of retriable 503. Two executable expected-failure cases retained.
-- [ ] L8C-2 / owner L3 / known failure: `src/server/commit/coordinator.ts:92` classifies untyped `connection reset` text as connection loss. Expected 500/non-retriable; observed 503/retriable. One executable expected-failure case retained.
-- [ ] L8C-3 / owner L3 / known failure: `src/server/commit/coordinator.ts:751` routes explicit SQL aborts `40001`, `40P01`, `57014` at COMMIT to `unknownAfterCommitAttempt` (`:320`). Expected confirmed `not_committed`; observed `unknown`, with zero durable effects. Three executable expected-failure cases retained.
+- [ ] L8C-1 / owner L3 / known failure: `packages/artifacts/src/server/commit/coordinator.ts:108` ignores `TimeoutError` and `lock_timeout`, unlike `packages/artifacts/src/server/failures.ts:88`; typed pool/transaction timeout returns 500 instead of retriable 503. Two executable expected-failure cases retained.
+- [ ] L8C-2 / owner L3 / known failure: `packages/artifacts/src/server/commit/coordinator.ts:92` classifies untyped `connection reset` text as connection loss. Expected 500/non-retriable; observed 503/retriable. One executable expected-failure case retained.
+- [ ] L8C-3 / owner L3 / known failure: `packages/artifacts/src/server/commit/coordinator.ts:751` routes explicit SQL aborts `40001`, `40P01`, `57014` at COMMIT to `unknownAfterCommitAttempt` (`:320`). Expected confirmed `not_committed`; observed `unknown`, with zero durable effects. Three executable expected-failure cases retained.
+- [x] Radar archive: `e2e9515ea41baebf5539743f0cfa0dea750d072c`; MCP and host failure sources match both A1/A2 pins byte-for-byte.
+- [x] Radar source SHA-256: MCP `e5e3b4d15382713182d50eaed504ed1a3574c1b577d8684d6856f5c8f1c8e97e`; host failures `77fcfe4baf66a5652e2a79bdfb8b12271c38c84d23069ac3c84171be543da5d3`; Q2 `628f8d1f603bdca93133f998cea1a163f362ef60c45b7e9e2846440805cba515`.
+- [x] Radar runner SHA-256 `9ecd66a3b5c2489d44b382ef0256e6fbb9f70112613f517a48fabf9e29a56d64` explicitly forwards gate 1 and rejects skipped/zero required cases; lock `6caab914f246e0b7cc2c665724a07ef979ea1fa8edf7d8105a5ff475a6b8092f` installs artifacts 0.1.2.
+- [ ] Radar Q3 candidate acceptance is blocked by `api/tests/integration/artifacts-provider-contract.helpers.ts:514` at pin Q2: `composeProviderHost` unconditionally raises `[missing-contract] Radar.composeArtifactHost.r2`. Radar owns the r2 host migration and separate-process/sixteen-tool extension; no candidate-pass claim.
+- [ ] CI integration gate: `.github/workflows/ci.yml:6` accepts PRs to main only. GitHub reports no commit statuses for this integration-target draft; integrator owns the planned qualification workflow.
+- [x] Radar R-HOST baseline command: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f tools/artifact-host.mk test-host SCOPE=api/tests/integration/artifacts-mcp-adapter.spec.ts ARTIFACTS_PROVIDER_ACCEPTANCE=1 API_PORT=13308 UI_PORT=9508 MAILDEV_UI_PORT=5408 ENV=test-861-l8c`; 153 host tests passed across 14 files; API MCP setup timed out at `artifacts-mcp-adapter.spec.ts:9` (`beforeAll`, 20000ms), all 5 cases skipped; runner correctly rejected the gate. Log `/tmp/861-l8c-radar-host.log`; no candidate coverage credited and no timeout changed.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky allowance.
@@ -48,7 +56,7 @@
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read Docker lock, master/workflow/testing rules, spec S4/L8c, Q1–Q4 and section 6.3.
   - [x] Create worktree, run `harness check branch`, merge L6 and refresh integration without rebasing.
-- [ ] **Lot 1 — Failure matrix**
+- [x] **Lot 1 — Failure matrix**
   - [x] Add `packages/artifacts/tests/commit-failure-parity.integration.test.ts` with separate child processes, real PostgreSQL coordination and E3 fault injection.
   - [x] Assert sanitized HTTP/MCP projections, correlation, no compensating execution and write/read accounting descriptors.
   - [x] Retain known failures with file:line evidence rather than changing another lot's implementation.
