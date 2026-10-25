@@ -8,6 +8,7 @@ import { createGuardedEnsureService, type GuardedEnsureHost } from '../src/serve
 import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
 import { createArtifactCommitBarrier } from '../src/testing.js';
+import { createTransportWorld } from './fixtures/transport-world.js';
 import type { ArtifactInvocationContext, AuthorizeCommit, CommitExecutor,
   CommitPolicyParticipantFactory, CoordinatorTestPoint } from '../src/server/commit/types.js';
 
@@ -110,6 +111,61 @@ afterAll(async () => {
 });
 
 describe('L8b ensure recovery on PostgreSQL', () => {
+  it.each([false, true])('should recover uncertain COMMIT with durable success=%s without a duplicate charge', async (durable) => {
+    const inner = createPostgresCommitExecutor(pool);
+    const executor: CommitExecutor = {
+      ensureCoordinationRow: inner.ensureCoordinationRow,
+      async beginFinalization() {
+        const connection = await inner.beginFinalization();
+        const commit = connection.commit.bind(connection);
+        connection.commit = async () => {
+          if (durable) await commit();
+          throw Object.assign(new Error('lost COMMIT acknowledgment'), { code: 'artifact_connection_lost' });
+        };
+        return connection;
+      },
+    };
+    const key = 'uncertain';
+    expect(await compose(pool, { executor }).ensure(invocation('uncertain'), args(key)))
+      .toMatchObject({ ok: false, failure: { category: 'provider_unavailable', httpStatus: 503,
+        retriable: true, commitState: 'unknown' } });
+    const count = durable ? 1 : 0;
+    expect(await snapshot()).toEqual({ bindings: count, lifecycle: count, acls: count, receipts: count, legacy: 0, used: count });
+    expect(await compose().ensure(invocation('recover'), args(key)))
+      .toMatchObject({ ok: true, result: { created: true, replayed: durable } });
+    expect(await snapshot()).toEqual({ bindings: 1, lifecycle: 1, acls: 1, receipts: 1, legacy: 0, used: 1 });
+  });
+
+  it('should quarantine a persisted legacy receipt after recreating the provider', async () => {
+    const identity = command('legacy').identity;
+    await pool.query(`INSERT INTO artifacts.operation_receipts
+      (storage_scope_id, internal_key, command_codec, command_hash, receipt) VALUES ($1, $2, 'legacy-0.1', $3, $4)`,
+    [scope, identity.internalKey, identity.commandHash, JSON.stringify({ artifactId: randomUUID(), created: true })]);
+    const before = await snapshot();
+    const restarted = new Pool({ connectionString });
+    try {
+      await expect(compose(restarted).ensure(invocation('legacy'), args('legacy'))).rejects.toThrow('commit quarantine');
+    } finally {
+      await restarted.end();
+    }
+    expect(await snapshot()).toEqual(before);
+    expect(await compose().ensure(invocation('fresh'), args('fresh'))).toMatchObject({ ok: true });
+  });
+
+  it.each(['0.1.2', '0.1.4'])('should refuse historical %s caller keys through HTTP and MCP', async (version) => {
+    const world = createTransportWorld();
+    const oldKey = 'old-caller-key';
+    const key = version === '0.1.2' ? oldKey : JSON.stringify(['ensure', 'alice', oldKey]);
+    await world.legacyRecords.set(key, { paramsHash: 'old-hash', result: { artifactId: 'old-artifact', created: true } });
+    const input = { bindingName: 'legacy', idempotencyKey: oldKey };
+    expect(await world.http('/ensure', input)).toMatchObject({ ok: false, failure: { httpStatus: 503, retriable: false } });
+    expect(await world.mcp.invoke({ tool: 'artifacts_ensure', args: input, invocation: world.invocation() }))
+      .toMatchObject({ status: 503 });
+    expect(world.receipts.size).toBe(0);
+    expect(world.bindings.size).toBe(0);
+    expect(world.quotaReservations).toEqual([]);
+  });
+
   it('should deny after waiting for a real exhausted connection pool', async () => {
     const db = new Pool({ connectionString, max: 1 });
     const barrier = createArtifactCommitBarrier();
