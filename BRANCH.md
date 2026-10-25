@@ -13,6 +13,7 @@
 - [x] New Radar pin contains listKeys but not the old A1/A2 topic SHAs as ancestors; the final receipt identifies the complete selected consumer head instead of asserting old ancestry.
 - [x] Final source merge retains deca5422c, the exact guarded candidate pack source; preserve incoming release tooling only, with no product or Track edits.
 - [x] Final runner emits compact suite counts, grouped failing case names and diagnostics, exact source/log hashes and candidate receipt hash for classification.
+- [x] Final observed blockers: Radar wrong executor entrypoint and unsupported phase-injection seam; classify each failing/skipped case explicitly, including host composition and H3 gaps.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
