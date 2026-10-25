@@ -35,6 +35,7 @@
 - [x] Preparation metadata uses existing intent JSON; cleanup cannot complete an expired preparation, delete shared bytes, or erase attempt history.
 - [x] npm TLS resets blocked normal installation; isolated cached qualification passed with recorded tool versions, without sibling package sources or relaxed assertions.
 - [x] Receipt: packages/artifacts/probe/CONTRACT-GAPS-RECEIPT.md contains exact commands, toolchain differences, SHA-256 and integrity.
+- [ ] Delivery blocked by external access: GitHub HTTPS TLS handshake fails, the GitHub connector transport is unavailable, and existing SSH authentication is refused; push/draft PR/CI inspection remain pending.
 
 ## AI Flaky tests
 - [x] No flaky acceptance, timeout increase or skipped required case.

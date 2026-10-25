@@ -43,3 +43,10 @@ exclusion through DELETE, shared-byte retention and fresh preparation after eras
 to the base. `make scope-check` passed before every commit; branch verification
 and whitespace checks passed. Candidate version remains the integration owner's
 reserved 0.2.0; this authoring branch does not publish or qualify Radar-owned gaps.
+
+## Delivery status
+
+Push was attempted through make and failed during GitHub TLS negotiation. HTTP/1.1
+and TLS 1.2 checks failed, the GitHub connector transport was unavailable, and
+existing SSH authentication was refused. The completed local branch has not been
+pushed; draft PR creation and CI inspection remain pending external connectivity.
