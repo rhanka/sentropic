@@ -482,6 +482,20 @@ export default async function globalSetup() {
     // - users.emailVerified MUST be true (session validation requires it)
     // - admin user has role=admin_app
     await magicLinkLoginAndSave(browser, ADMIN_USER, STORAGE_STATE_PATH);
+    // Configure defaults before any UI session or background generation starts.
+    const api = await request.newContext({ baseURL: API_BASE_URL, storageState: STORAGE_STATE_PATH });
+    try {
+      const response = await api.put('/api/v1/ai-settings', {
+        data: { defaultProviderId: 'mistral', defaultModel: 'mistral-small-2603' },
+      });
+      expect(response.ok(), await response.text()).toBe(true);
+      const configured = await api.get('/api/v1/ai-settings');
+      expect(await configured.json()).toMatchObject({
+        defaultProviderId: 'mistral', defaultModel: 'mistral-small-2603',
+      });
+    } finally {
+      await api.dispose();
+    }
     await magicLinkLoginAndSave(browser, USER_A, STORAGE_STATE_USER_A);
     await magicLinkLoginAndSave(browser, USER_B, STORAGE_STATE_USER_B);
     await magicLinkLoginAndSave(browser, USER_VICTIM, STORAGE_STATE_VICTIM);

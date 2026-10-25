@@ -801,7 +801,7 @@ const extractClaudeText = (payload: unknown): string => {
 
 type MistralMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
+  content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
   [key: string]: unknown;
 };
 
@@ -809,9 +809,13 @@ const buildMistralMessages = (
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
 ): MistralMessage[] => {
   return messages.map((m) => {
-    const content = stringifyContent(
-      (m as unknown as { content?: unknown }).content
-    );
+    const rawContent = (m as unknown as { content?: unknown }).content;
+    const parts = normalizeContentParts(rawContent);
+    const content: MistralMessage['content'] = parts
+      ? parts.map((part) => part.type === 'text'
+        ? { type: 'text', text: part.text }
+        : { type: 'image_url', image_url: { url: imageDataUrl(part)! } })
+      : stringifyContent(rawContent);
     const role = m.role as MistralMessage['role'];
     const base: MistralMessage = { role, content };
     if (role === 'assistant') {
