@@ -2,7 +2,7 @@
  * L-5e — installed artifacts tuple (spec-v8 §9 5e): in the packaging
  * fixture the candidate plus the candidate mcp-platform and artifacts
  * tarballs form a coherent tuple — mesh declares the artifacts peer
- * (optional, single 0.1.3 range), the installed artifacts candidate
+ * (optional, 0.2.0 contract range), the installed artifacts candidate
  * satisfies both declared ranges (mesh peer, artifacts→platform peer),
  * and the leaf loads the provider definition through the real module
  * registry only when selected. Source-manifest coherence runs in every
@@ -27,9 +27,16 @@ const manifest = (path: string): Pkg => JSON.parse(readFileSync(path, 'utf8')) a
 const sourceManifest = manifest(new URL('../../package.json', import.meta.url).pathname);
 
 describe('artifacts source tuple coherence', () => {
+  it('should provide a reproducible make target for the llm-mesh 0.19.2 entry probe', () => {
+    const command = readFileSync(new URL('./llm0192.mk', import.meta.url), 'utf8');
+    expect(command).toContain('qualify-llm0192: build-cluster-mesh');
+    expect(command).toContain('@sentropic/llm-mesh@0.19.2');
+    expect(command).not.toContain('/tmp/861-L7');
+  });
+
   it('declares the optional artifacts peer once, in the candidate range', () => {
     expect(sourceManifest.peerDependencies?.[ARTIFACTS_PACKAGE]).toBe(ARTIFACTS_RANGE);
-    expect(ARTIFACTS_RANGE).toBe('>=0.1.3 <0.2.0');
+    expect(ARTIFACTS_RANGE).toBe('>=0.2.0 <0.3.0');
     expect(sourceManifest.peerDependenciesMeta?.[ARTIFACTS_PACKAGE]).toEqual({ optional: true });
     expect(sourceManifest.dependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
     expect(sourceManifest.peerDependencies?.['@sentropic/mcp-platform']).toBeUndefined();
@@ -48,8 +55,10 @@ describe('artifacts source tuple coherence', () => {
     expect(descriptor.meshCoherence).toBe(false);
   });
 
-  it('pins the current artifacts candidate in the selected consumer lock', () => {
-    const version = trainVersion('artifacts');
+  it('retains the published artifacts baseline in the selected consumer lock', () => {
+    // prepare.sh installs the unpublished candidate from its real tarball separately.
+    const fixture = manifest(new URL('./fixtures/selected/package.json', import.meta.url).pathname);
+    const version = fixture.dependencies?.[ARTIFACTS_PACKAGE];
     const lock = JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8'));
     expect(lock.packages['node_modules/@sentropic/artifacts']).toMatchObject({
       version,
@@ -98,30 +107,36 @@ describe.skipIf(!enabled || !artifactsCompatible)('installed compatible artifact
       import * as artifacts from '@sentropic/artifacts/mcp';
       import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
       const modules = createClusterMeshModules();
+      const profile = artifacts.compileArtifactsProfile(artifacts.RADAR_ARTIFACTS_PROFILE);
       const builtin = createArtifactsBuiltin({
-        modules, definition: { app: { handle: async () => ({ status: 200, body: {} }) } },
+        modules, definition: { profile,
+          app: { profileDigest: profile.profileDigest, selectedCapabilities: profile.selectedCapabilities,
+            execute: async () => { throw new Error('unexpected dispatch'); } },
+          createInvocation: () => { throw new Error('unexpected invocation'); } },
       });
       const facade = createMcpRegistry({ modules, builtins: [builtin] });
       assert.throws(() => facade.select(['sentropic.web-pages']), /unknown provider/);
       assert.throws(() => facade.configure('sentropic.web-pages', {}), /unknown provider/);
       facade.select(['sentropic.artifacts']);
-      facade.configure('sentropic.artifacts', { defaultStorageScopeId: 'scope-1' });
+      facade.configure('sentropic.artifacts', {});
       const definition = await builtin.load();
       const compiled = await facade.compile({ bindings: {}, compatibility: {
         'sentropic.artifacts': { manifestDigest: computeManifestDigest(definition.manifest) },
       } });
       assert.equal(compiled.ok, true, JSON.stringify(compiled.diagnostics));
-      for (const name of artifacts.ARTIFACTS_TOOL_NAMES) {
+      for (const name of profile.selectedCapabilities) {
         assert.equal(compiled.registry.resolveTool(name)?.providerId, 'sentropic.artifacts');
       }
       await assert.rejects(import('@sentropic/cluster-mesh/mcp/web-pages'),
         { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
       await assert.rejects(modules.load('mcp/web-pages'), { reason: 'source_unavailable' });
       assert.equal(Object.keys(artifacts).some((name) => /WEB_PAGES|WebPages/.test(name)), false);
-      console.log(JSON.stringify({ providerId: builtin.providerId, tools: artifacts.ARTIFACTS_TOOL_NAMES }));
+      for (const name of artifacts.ARTIFACTS_TOOL_NAMES.filter(name => !profile.selectedCapabilities.includes(name))) {
+        assert.equal(compiled.registry.resolveTool(name), undefined);
+      }
+      console.log(JSON.stringify({ providerId: builtin.providerId, tools: profile.selectedCapabilities }));
     `);
     expect(result.providerId).toBe('sentropic.artifacts');
-    expect(result.tools).toHaveLength(15);
-    expect(result.tools).toEqual(expect.arrayContaining(['artifacts_ensure', 'artifacts_restore']));
+    expect(result.tools).toEqual(['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get']);
   });
 });
