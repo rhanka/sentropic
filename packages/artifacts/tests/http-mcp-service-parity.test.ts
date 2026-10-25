@@ -132,6 +132,53 @@ describe('L6 authorized HTTP/MCP parity', () => {
     const host = atomicTransport();
     const ensured = await host.http('/ensure', args);
     if (!ensured.ok) throw new Error('ensure failed');
+    const artifactId = (ensured.result.body as { artifactId: string }).artifactId;
+    const publish = { artifactId, idempotencyKey: 'publish', files: [{ path: 'index.html', mimeType: 'text/html', text: 'hi' }] };
+    host.deny();
+    expect(await host.http('/publish', publish)).toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit' } });
+    expect(host.releases.size).toBe(0);
+    expect(host.receipts.size).toBe(1);
+    host.allow();
+    const first = await host.http('/publish', publish);
+    expect(first).toMatchObject({ ok: true, replayed: false });
+    const replay = await host.mcp.execute({ tool: 'artifacts_publish', args: publish, invocation: host.invocation() });
+    expect(replay).toMatchObject({ ok: true, replayed: true });
+    if (!first.ok || !replay.ok) throw new Error('publish failed');
+    expect(replay.result.body).toEqual(first.result.body);
+    expect(first.result.body).toMatchObject({ artifactId,
+      stableUrl: `https://artifacts.test/a/${artifactId}`, pinnedUrl: expect.stringContaining('/r/'),
+      digest: expect.stringMatching(/^sha256:/),
+    });
+    expect(replay.result.body).not.toHaveProperty('replayed');
+    expect(host.guardCalls()).toBeGreaterThan(0);
+    expect(host.releases.size).toBe(1);
+  });
+  it.each(['bytes', 'path', 'mime', 'profile', 'order'])(
+    'should conflict on changed %s through the other transport', async (change) => {
+      const host = atomicTransport();
+      const ensured = await host.http('/ensure', args);
+      if (!ensured.ok) throw new Error('ensure failed');
+      const artifactId = (ensured.result.body as { artifactId: string }).artifactId;
+      const files = [
+        { path: 'index.html', mimeType: 'text/html', text: 'hi' },
+        { path: 'style.css', mimeType: 'text/css', text: 'body{}' },
+      ];
+      const publish = { artifactId, idempotencyKey: 'identity', files, profile: {} };
+      expect(await host.http('/publish', publish)).toMatchObject({ ok: true });
+      const changed = structuredClone(publish);
+      if (change === 'bytes') changed.files[0].text = 'changed';
+      if (change === 'path') changed.files[0].path = 'other.html';
+      if (change === 'mime') changed.files[0].mimeType = 'application/json';
+      if (change === 'profile') changed.profile = { variant: 'changed' };
+      if (change === 'order') changed.files.reverse();
+      expect(await host.mcp.execute({ tool: 'artifacts_publish', args: changed,
+        invocation: host.invocation() })).toMatchObject({ ok: false, failure: {
+        category: 'conflict', httpStatus: 409, retriable: false,
+      } });
+      expect(host.releases.size).toBe(1);
+    },
+  );
+});
 import { createArtifactService } from '../src/server/service.js';
 import {
   createPublicationService,
@@ -149,84 +196,6 @@ import { createMemoryAclStore } from '../src/server/access.js';
 import { createMemorySourceStore } from '../src/server/sources.js';
 import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
 import { defineParameters } from '../src/parameters.js';
-
-const OWNER = 'owner-1';
-const READER = 'reader-1';
-const STRANGER = 'stranger-1';
-const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true }]);
-
-function makeApp() {
-  const kv = createMemoryKv();
-  const artifacts = createArtifactService({ kv, uuid: createCryptoUuid() });
-  // One shared current pointer for publication and lifecycle (production
-  // wires both services to the same adapter on `artifact_current`).
-  const state = createMemoryStateStore();
-  const blobs = createMemoryBlobStore();
-  const publication = createPublicationService({
-    state,
-    blobs,
-    intents: createMemoryIntentStore(),
-    idempotency: createIdempotencyStore(createMemoryIdempotencyKv()),
-  });
-  const app = createHttpArtifactApp({
-    parameterSchema: SCHEMA,
-    artifacts,
-    publication,
-    lifecycle: createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z', state),
-    forks: createForkService(createMemoryForkStore()),
-    acls: createMemoryAclStore(),
-    sources: createMemorySourceStore(),
-    blobs,
-  });
-  return { app, artifacts };
-}
-
-function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
-  return { method, path, body, actorId, storageScopeId: "scope-1" };
-}
-
-function asId(body: unknown): string {
-  return (body as { artifactId: string }).artifactId;
-}
-
-async function ensureSite(app: ReturnType<typeof makeApp>['app'], actor = OWNER, key = 'k-1'): Promise<string> {
-  const res = await app.handle(
-    req('POST', '/ensure', {
-      bindingName: 'site',
-      storageScopeId: 'scope-1',
-      idempotencyKey: key,
-      paramsHash: 'h-1',
-      parameters: { title: 'Hello' },
-    }, actor),
-  );
-  expect(res.status).toBe(201);
-  return asId(res.body);
-}
-
-const FILES = [{ path: 'index.html', mimeType: 'text/html', bytes: [1, 2, 3] }];
-
-describe('http service parity', () => {
-  it.each([
-    'text/html', 'text/plain', 'text/css', 'text/javascript', 'application/javascript',
-    'application/ecmascript', 'application/json', 'application/xml', 'application/ld+json',
-    'application/atom+xml', 'image/svg+xml',
-  ])('should accept empty UTF-8 text for %s', async (mimeType) => {
-    const { app } = makeApp();
-    const artifactId = await ensureSite(app);
-    const published = await app.handle(req('POST', '/publish', {
-      artifactId, files: [{ path: 'empty', mimeType, text: '' }],
-    }, OWNER));
-    expect(published.status).toBe(201);
-    const current = await app.handle(req('GET', `/current/${artifactId}`, undefined, OWNER));
-    expect(JSON.parse((current.body as { manifest: string }).manifest).files[0].size).toBe(0);
-  });
-
-  it.each([
-    { text: 'x', bytes: [120] }, { text: '', bytes: [] }, {},
-    { text: null }, { text: 42 }, { text: ['x'] }, { text: 'x', bytes: null },
-    { mimeType: 'image/png', text: 'x' }, { mimeType: 'application/pdf', text: 'x' },
-    { mimeType: 'application/octet-stream', text: 'x' }, { mimeType: 'text/', text: 'x' },
-    { mimeType: 'text/html; charset=utf-8', text: 'x' }, { mimeType: 'text/html\n', text: 'x' },
   ])('should reject invalid text inputs without creating a release: %j', async (content) => {
     const { app } = makeApp();
     const artifactId = await ensureSite(app);
