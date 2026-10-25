@@ -107,4 +107,4 @@
   - [ ] Package typecheck, lint, unit tests and build green under shared flock.
   - [ ] `make scope-check` before each commit; update branch plan with evidence.
   - [ ] Refresh L4/L5 and merge moved heads; push draft PR targeting L4.
-- [x] Transport migration checkpoint: 20.
+- [x] Transport migration checkpoint: 21.
