@@ -33,6 +33,8 @@
 - [x] L8D-1 / known_failure / L7 owner: strict full-Radar ERESOLVE; cluster-mesh 0.22.0 excludes llm-mesh 0.19.2. Executable TODO regression retained; no product changes.
 - [x] All eight Radar suites remain not_covered until strict installation passes; their exact source hashes and blocked reasons are retained.
 - [x] L8D-2 / known_failure / L6 owner: public declaration smoke TS2307 at l0-freeze/profile-contract.ts:11; ../src/contracts.js is excluded from the archive. Executable TODO retained.
+- [x] Four shards assembled: L8a 26 passed; L8b 19 passed; L8c 33 passed + 6 expected failures; L8d 16 passed + 2 TODO failures. Common packed-byte aggregation remains failed.
+- [x] Evidence: packages/artifacts/probe/l8d/RECEIPT.md and tuple-receipt.json; full disposable results in tmp/l8d/receipt.json.
 
 ## AI Flaky tests
 - [x] No flaky acceptance granted; missing contracts and skipped acceptance cases fail qualification.
@@ -45,10 +47,12 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — read Docker lock, spec r2 L8d/6.3/Q1–Q4 and pins; mechanical branch check; L6 already included.
-- [x] Lot 1 — fail-closed suite/four-shard validation; 15 runner regressions pass, zero skips.
+- [x] Lot 1 — fail-closed suite/four-shard/archive validation; 16 regressions pass, zero skips; two known failures execute as TODO.
 - [ ] Lot 2 — strict full-Radar install; runtime/declaration/container smokes; archive/lock/image/test hashes.
+  - [x] Executed: strict install failed ERESOLVE; packed runtime passed; declarations failed TS2307; image blocked by runner policy.
 - [ ] Lot 3 — five API suites and all three host suites with gate 1; retain failures and missing interfaces.
-- [ ] Lot 4 — aggregate shards, final scope check, atomic commits, push and draft PR targeting integration.
+  - [x] Eight exact source hashes retained with explicit not_covered status; no acceptance pass claimed.
+- [x] Lot 4 — aggregate available shards, final scope check, atomic commits, push and draft PR #746 targeting integration; overall qualification remains failed.
 
 ## Deferred to L9
 - [x] Registry provenance/signatures, published-byte rerun and production activation require separate release gates.
