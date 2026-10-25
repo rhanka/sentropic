@@ -64,6 +64,7 @@
 - [ ] **L1c — Implementation**
   - [x] Define exact engine/configuration/target identities and binary media headers with frame-local validation.
   - [x] Add per-tuple four-state capabilities and fail-closed ordered media negotiation.
+  - [x] Define revisioned transcripts, admitted session receipt and independent duplex adapter port.
   - [ ] Add `speech/{contracts,capabilities,index}.ts`, catalogue lookup and exports.
   - [ ] Bump minor above registry and update root lock workspace version.
 - [ ] **L1d — Docs consolidation**
