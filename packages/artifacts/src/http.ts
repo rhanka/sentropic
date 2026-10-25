@@ -50,110 +50,61 @@ export interface HttpAppDeps {
   /** One trusted URL policy shared by HTTP and MCP receipts. */
   publicationUrls?: (artifactId: string, releaseId: string) => { stableUrl: string; pinnedUrl: string };
 }
+export interface ArtifactApp {
+  readonly selectedCapabilities: CompiledArtifactsProfile['selectedCapabilities'];
+  readonly profileDigest: string;
+  execute(request: HttpRequest, invocation: ArtifactInvocationContext): Promise<ArtifactOutcome<HttpResponse>>;
+  handle(request: HttpRequest, invocation: ArtifactInvocationContext): Promise<HttpResponse>;
 }
 
-function needObject(body: unknown): Record<string, unknown> {
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-    throw new Error('invalid request: body must be an object');
-  }
-  return body as Record<string, unknown>;
-}
-
-function needString(value: unknown, name: string): string {
-  if (typeof value !== 'string' || value.length === 0) throw new Error(`invalid request: missing ${name}`);
-  return value;
-}
-
-function needBytes(value: unknown, maxBytes: number): Uint8Array {
-  if (!Array.isArray(value)) throw new Error('invalid file bytes: must be an array');
-  if (value.length > maxBytes) throw new Error('invalid publication byte budget');
-  const bytes = new Uint8Array(value.length);
-  for (let i = 0; i < value.length; i += 1) {
-    const byte = value[i];
-    if (typeof byte !== 'number' || !Number.isInteger(byte) || byte < 0 || byte > 255) {
-      throw new Error(`invalid file bytes: byte ${i} out of range`);
-    }
-    bytes[i] = byte;
-  }
-  return bytes;
-}
-
-/** Canonical text MIME types; parameters are omitted (encoding is always UTF-8). */
+/** Retained for consumers describing canonical textual publication inputs. */
 export const TEXT_MIME_PATTERN = '^(?:text/[a-z0-9!#$&^_.+-]+|application/(?:javascript|ecmascript|json|xml|[a-z0-9!#$&^_.+-]+\\+(?:json|xml))|image/svg\\+xml)(?![\\s\\S])';
 
-function needFileBytes(entry: Record<string, unknown>, mimeType: string, maxBytes: number): Uint8Array {
-  const hasBytes = 'bytes' in entry;
-  const hasText = 'text' in entry;
-  if (hasBytes === hasText) throw new Error('invalid file: supply exactly one of bytes or text');
-  if (hasBytes) return needBytes(entry['bytes'], maxBytes);
-  if (typeof entry['text'] !== 'string' || !new RegExp(TEXT_MIME_PATTERN).test(mimeType)) {
-    throw new Error('invalid file text: expected a string and a canonical text MIME type');
+function object(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new ArtifactProfileInputError();
+  return value as Record<string, unknown>;
+}
+/** Other mutation surfaces need their own qualification before host activation. */
+export function assertArtifactsTransportProfile(value: unknown): asserts value is CompiledArtifactsProfile {
+  assertCompiledArtifactsProfile(value);
+  const supported = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'];
+  if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
+    throw new Error('unsupported artifacts transport capability');
   }
-  if (Buffer.byteLength(entry['text'], 'utf8') > maxBytes) throw new Error('invalid publication byte budget');
-  return new TextEncoder().encode(entry['text']);
 }
 
-/** Create the HTTP app over injected services (no server, no fetch). */
-export function createHttpArtifactApp(deps: HttpAppDeps) {
-  const isApproved = deps.isApprovedAccount ?? (() => false);
-  const runtime = createContentRuntime({
-    acls: deps.acls,
-    lifecycle: deps.lifecycle,
-    publication: deps.publication,
-    blobs: deps.blobs,
-  });
-
-  /**
-   * Load the ACL only when the actor may learn the artifact exists: the
-   * owner always, everyone else only with a live read right. Unknown and
-   * unreadable artifacts throw the identical error (no existence oracle).
-   */
-  // Upload sessions are bound to their creating owner + artifact in-app
-  // (the upload service itself is actor-agnostic staging).
-  const uploadOwners = new Map<string, { artifactId: string; ownerId: string }>();
-
-  function requireUploads(): { uploads: UploadService; staging: StagingStore } {
-    if (deps.uploads === undefined || deps.staging === undefined) {
-      throw new Error('invalid request: uploads are not configured on this host');
-    }
-    return { uploads: deps.uploads, staging: deps.staging };
+export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
+  assertArtifactsTransportProfile(deps.profile);
+  if (typeof deps.coordinator?.finalizePrepared !== 'function' || typeof deps.coordinator.replayPrepared !== 'function') {
+    throw new Error('artifacts requires an atomic commit coordinator');
   }
-
-  function requireTemplates(): TemplateCatalogPort {
-    if (deps.templates === undefined) {
-      throw new Error('invalid request: templates are not configured on this host');
-    }
-    return deps.templates;
+  if (deps.derivation?.algorithm !== deps.profile.rules.keyDerivationAlgorithm) {
+    throw new Error('artifacts profile/derivation mismatch');
   }
+  if (typeof deps.legacyRecords?.get !== 'function') throw new Error('artifacts requires a legacy record inventory');
+  const profile = deps.profile;
+  const ensure = createGuardedEnsureService({ profile, coordinator: deps.coordinator,
+    derivation: deps.derivation, host: deps.ensureHost });
 
-  function requireUploadOwner(uploadId: string, actorId: string): { artifactId: string } {
-    const binding = uploadOwners.get(uploadId);
-    if (binding === undefined || binding.ownerId !== actorId) {
-      throw new Error(`unknown upload: ${uploadId}`);
-    }
-    return binding;
-  }
-
-  async function requireVisible(artifactId: string, actorId: string): Promise<ArtifactAcl> {
+  async function visible(artifactId: string, invocation: ArtifactInvocationContext): Promise<ArtifactAcl> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
-    if (acl === undefined) throw new Error(`unknown artifact: ${artifactId}`);
-    if (acl.ownerId === actorId) return acl;
+    if (!acl || acl.storageScopeId !== invocation.storageScopeId) throw new ArtifactOperationError('not_found');
     const state = await deps.lifecycle.stateOf(artifactId);
-    if (!deps.lifecycle.canRead({ artifactId, state }, acl, actorId, 'read', isApproved)) {
-      throw new Error(`unknown artifact: ${artifactId}`);
+    if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount)) {
+      throw new ArtifactOperationError('not_found');
     }
     return acl;
   }
 
-  return {
-    async handle(request: HttpRequest): Promise<HttpResponse> {
+  const app: ArtifactApp = {
+    selectedCapabilities: profile.selectedCapabilities,
+    profileDigest: profile.profileDigest,
+    async execute(request, supplied) {
+      let operation = 'unsupported';
+      let phase = 'selection';
+      let commitState: 'not_committed' | 'committed' | 'unknown' = 'not_committed';
+      let invocation = supplied;
       try {
-        if (request.actorId.length === 0) return { status: 401, body: errorBody(401) };
-        const body = request.body === undefined ? {} : needObject(request.body);
-
-        if (request.method === 'POST' && request.path === '/ensure') {
-          const ensured = buildEnsureRequest(deps.parameterSchema, {
-            bindingName: needString(body['bindingName'], 'bindingName'),
             storageScopeId: needString(request.storageScopeId, 'host storageScopeId'),
             idempotencyKey: needString(body['idempotencyKey'], 'idempotencyKey'),
             paramsHash: '',
