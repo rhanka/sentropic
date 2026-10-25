@@ -48,5 +48,7 @@
 - [x] Lot 1: reproduced exactly two failures (missing invocationId and all S3 points absent), with 24 other tests passing; persist one invocation ID and invoke S3 observer barriers.
 - [x] Lot 1: promote both known-failure tests; remove the test-only S3 barrier wrapper so expiry tests exercise product hooks.
 - [x] Boundary gate: build-artifacts passed; commit-publication-boundary.integration.test.ts passed all 26 tests on real PostgreSQL/MinIO.
-- [ ] Lot 2: run boundary integration suite, publication/collection regressions, unit tests, lint and frozen declaration checks.
-- [ ] Lot 2: verify frozen files/L3 signatures unchanged, clean Compose, commit through make, push and open a draft PR targeting feat/immo-861-integration.
+- [x] Authorization gate: publication-authorization.integration.test.ts passed all 7 tests; unit gate: test-artifacts passed 431 tests across 33 files, including publication, crash recovery and GC races.
+- [x] Lot 2: boundary 26/26, authorization 7/7, unit 431/431; lint-artifacts passed without errors or warnings; freeze-types and production build passed.
+- [x] Lot 2: L3/L0 files, Makefile, Compose and Track match integration c3b881671; Docker steps cleaned through the isolated make down target.
+- [x] Handoff: make commits, branch pushed; draft PR [#744](https://github.com/rhanka/sentropic/pull/744) targets feat/immo-861-integration. Runtime source tested at 33fe6ba75; subsequent changes only record results in BRANCH.md.
