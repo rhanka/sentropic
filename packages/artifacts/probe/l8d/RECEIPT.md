@@ -2,6 +2,8 @@
 
 Status: **FAILED qualification / NO-GO for the 0.2.0 candidate gate**. Strict installation and packed compilation now pass; consumer acceptance remains blocked.
 
+Original PR #746 was already merged at 238ab2959. Requalification commits are pushed on feat/artifacts-861-L8d; replacement draft [PR #749](https://github.com/rhanka/sentropic/pull/749) targets feat/immo-861-integration. No CI run was listed for the pushed branch when checked.
+
 - Integration: `082fe4c60ccd70d7a89afb63ebed1fc42f5acdd0` (#744/#747/#748), merged without rebase in `895e67f97`.
 - Pack/build/normal-tests head: `9de58fe2bb57749d372c431736b7e0f24d99945f`; Radar rerun head: `0c20aac52d54ba722e229c745a9d94086898fa33`. Later commits contain qualification evidence/runner changes only.
 - Tuple digest: `ab187a43078758cc3b57bd65cd00190dac795010955774381d471a3295dfacba`.
