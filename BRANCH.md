@@ -73,6 +73,7 @@
 - [ ] Carry-over: receipt identity, missing binding, replay authority, late barrier and transaction-held GC exclusion.
 - [x] Replay validates receipt identity under the binding lock; missing target denies before the host guard.
 - [x] Explicitly armed barrier points hold late waiters; PostgreSQL GC retains one transaction through deletion.
+- [x] L3 integration regressions now call the canonical coordinator's prepared-unit methods.
 - [x] L6 composes provider and request guards on a request-local coordinator binding; publication.ts stays L4-owned.
 - [ ] Integration owner: expose commit-contract, outcome-contract and testing subpaths; reserve the topic version.
 - [ ] Integration owner: migrate out-of-scope HTTP upload/template and content/pilot e2e fixtures to required host composition.
