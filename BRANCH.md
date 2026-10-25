@@ -1,12 +1,12 @@
 # Feature: Artifacts transport wiring and migration (#861 L6)
 
 ## Objective
-- [ ] Bind HTTP and MCP to the selected immutable profile and authorized atomic finalizers.
+- [x] Bind HTTP and MCP to the selected immutable profile and authorized atomic finalizers.
 
 ## Scope / Guardrails
 - [x] Spec r2: `.tmp/immo-861-artifacts/spec-plan.md`, S3/L6, C1–C7, A1–A8 and E1–E3.
 - [x] Worktree: `tmp/worktrees/861-L6`; branch: `feat/artifacts-861-L6`.
-- [x] Merge L5 into L4; merge subsequent upstream changes without rebasing.
+- [x] L3 157f231d5, L4 a8df25634 and L5 c703afc68 contained; integration c5b671b35 merged without rebasing.
 - [x] ENV: `test-861-l6`; API_PORT=13336, UI_PORT=9536, MAILDEV_UI_PORT=5436.
 - [x] Shared Docker flock; existing Make targets only; tear down after each step; no Python.
 - [x] Specific-file staging; `make commit`; fewer than 150 authored changed lines per commit.
@@ -69,13 +69,18 @@
 
 ## Feedback Loop
 - [x] Integration runner consumed via Make variable overrides for ENV=test-861-l6; no infrastructure edits.
-- [x] Build, TypeScript and package lint passed through existing `sh-api` Compose target under the shared flock.
-- [x] Unit campaign: 395 passed, 12 failed, zero skips; all failures are in out-of-scope `tests/http-uploads-templates.test.ts` (missing mandatory profile in legacy fixtures).
+- [x] Build and TypeScript passed through `sh-api`; `lint-artifacts` passed through the Compose runner, all under the shared flock.
+- [x] Unit campaign: 428 passed across 33 files, zero failures or skips; extended frozen compilation fixture included.
+- [x] PostgreSQL/S3 integration: 86 passed across 7 suites, including L3/L4/L5, GC exclusion and independent HTTP/MCP instances.
+- [x] Publication E2E: 2 passed on PostgreSQL/S3; migrated content and pilot E2E: 14 passed; shared parity fixture: 9 passed.
+- [x] Commands: `make sh-api COMPOSE_RUN_API='docker compose -f docker-compose.immo-861.yml run --rm --no-deps -T qualification' API_PORT=13336 UI_PORT=9536 MAILDEV_UI_PORT=5436 ENV=test-861-l6`, stdin runs `sh /workspace/tmp/861-l6-run.sh unit tests --exclude '**/*.integration.test.ts' --exclude '**/*.e2e.test.ts'`.
+- [x] Integration command: `make -f Makefile -f /tmp/861-l6-ops.mk -o build-artifacts test-artifacts-integration SCOPE='tests/commit-coordinator.integration.test.ts tests/publication-authorization.integration.test.ts tests/ensure-authorization.integration.test.ts tests/postgres.integration.test.ts tests/migration.integration.test.ts tests/s3.integration.test.ts tests/radar-commit-setup.integration.test.ts tests/content.e2e.test.ts tests/pilot-contract.e2e.test.ts tests/publication.e2e.test.ts --maxWorkers=1 --no-file-parallelism' API_PORT=13336 UI_PORT=9536 MAILDEV_UI_PORT=5436 ENV=test-861-l6`; 88 passed before the two E2E fixture migrations, whose 14 cases then passed in the focused run.
+- [x] Final focused command uses the same `sh-api` runner with stdin `sh /workspace/tmp/861-l6-run.sh unit tests/content.e2e.test.ts tests/pilot-contract.e2e.test.ts tests/http-mcp-service-parity.test.ts`: 23 passed.
 - [x] Host `harness check scope` on the exact authored path set returned `PASS C2 (sentropic)`.
 - [x] Make scope-check uses the installed host harness through a temporary overlay, excluding inherited merge changes only during merges.
-- [ ] Carry-over: converge operational coordinator/participant onto frozen L0 shapes and compile the maintained fixture.
+- [x] Carry-over: converge operational coordinator/participant onto frozen L0 shapes and compile the maintained fixture.
 - [x] Canonical coordinator operation methods and transaction-bound admission participant implemented against the extended fixture.
-- [ ] Carry-over: receipt identity, missing binding, replay authority, late barrier and transaction-held GC exclusion.
+- [x] Carry-over: receipt identity, missing binding, replay authority, late barrier and transaction-held GC exclusion.
 - [x] Replay validates receipt identity under the binding lock; missing target denies before the host guard.
 - [x] Explicitly armed barrier points hold late waiters; PostgreSQL GC retains one transaction through deletion.
 - [x] L3 integration regressions now call the canonical coordinator's prepared-unit methods.
@@ -85,9 +90,10 @@
 - [x] Registry baseline 0.1.4 checked; 0.2.0 host export map and migration guide included, without publishing.
 - [x] Migrated content/pilot E2E fixtures to the guarded selected profile; preserved all seven content journeys.
 - [x] HTTP/MCP parity now uses the same guarded fixture as the content journeys.
-- [x] L6 composes provider and request guards on a request-local coordinator binding; publication.ts stays L4-owned.
-- [ ] Integration owner: expose commit-contract, outcome-contract and testing subpaths; reserve the topic version.
-- [ ] Integration owner: migrate out-of-scope HTTP upload/template and content/pilot e2e fixtures to required host composition.
+- [x] L6 composes provider and request guards on a request-local coordinator binding and adapts the L4/L5 callers.
+- [x] Commit-contract, outcome-contract and testing subpaths exposed; local manifest bumped to 0.2.0 after checking registry 0.1.4.
+- [x] HTTP upload/template and content/pilot E2E fixtures migrated; unselected operations remain unavailable.
+- [x] Draft PR #738 targets feat/immo-861-integration; owner release/tuple/Radar qualification remains L8/L9 work.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or timeout changes.
@@ -102,17 +108,17 @@
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read Docker lock, rules, template and r2 contracts; mechanical branch check passed.
   - [x] Create isolated L6 worktree and merge L5.
-- [ ] **Lot 1 — Transport regressions first**
+- [x] **Lot 1 — Transport regressions first**
   - [x] `http-routes.test.ts`: selected routes, missing configuration, trusted invocation.
   - [x] `mcp.test.ts`: discovery, direct dispatch, profile digest and typed projection.
-  - [ ] `http-security.test.ts`, `publication-security.test.ts`: closed inputs and sanitized failures.
-  - [x] `http-mcp-service-parity.test.ts`: shared command identity, authorized retry and replay; first 18 L6 cases passed under Compose.
-- [ ] **Lot 2 — Wire and migrate**
+  - [x] `http-security.test.ts`, `publication-security.test.ts`: closed inputs and sanitized failures.
+  - [x] `http-mcp-service-parity.test.ts`: shared command identity, authorized retry and replay; all 9 cases passed under Compose.
+- [x] **Lot 2 — Wire and migrate**
   - [x] Required compiled profile/coordinator/context; one execute path and typed projections.
   - [x] Remove split transport writes; guarded ensure/publish and legacy quarantine.
-  - [x] Export host contracts and selected MCP registry bindings; export-map promotion stays with integration owner.
-- [ ] **Lot 3 — Final validation**
-  - [ ] Package typecheck, lint, unit tests and build green under shared flock.
-  - [ ] `make scope-check` before each commit; update branch plan with evidence.
-  - [ ] Refresh L4/L5 and merge moved heads; push draft PR targeting L4.
+  - [x] Export host contracts, public subpaths and selected MCP registry bindings.
+- [x] **Lot 3 — Final validation**
+  - [x] Package typecheck, lint, unit tests and build green under shared flock.
+  - [x] `make scope-check` before each commit; branch plan updated with evidence.
+  - [x] Upstream heads refreshed; draft PR #738 targets the pushed integration branch.
 - [x] Transport migration checkpoint: 28.
