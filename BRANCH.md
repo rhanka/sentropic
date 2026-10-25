@@ -43,8 +43,8 @@
 - [x] No UI changes; real package and service tests are the qualification scope.
 
 ## Plan / Todo (lot-based)
-- [ ] Lot 0 — merge d41f47092 (contracts).
-- [ ] Lot 1 — merge origin/feat/artifacts-861-L1 (profile).
+- [x] Lot 0 — merge d41f47092 (contracts).
+- [x] Lot 1 — merge 0c71291a2 (profile); only the topic plan conflicted.
 - [ ] Lot 2 — merge origin/feat/artifacts-861-L2 (failures).
 - [ ] Lot 3 — merge 157f231d5 (coordinator).
 - [ ] Lot 4 — merge a8df25634 (publication/collection).
