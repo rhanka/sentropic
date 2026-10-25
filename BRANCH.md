@@ -43,6 +43,7 @@
   - `packages/artifacts/tests/idempotency.test.ts`
   - `packages/artifacts/tests/commit-contract-compatibility.test.ts`
   - `packages/artifacts/tests/postgres.integration.test.ts`
+  - `packages/artifacts/tests/radar-commit-setup.integration.test.ts`
   - `packages/artifacts/tests/gc-races.test.ts`
   - `packages/artifacts/tests/http-uploads-templates.test.ts`
   - `packages/artifacts/docs/migration-l6.md`
