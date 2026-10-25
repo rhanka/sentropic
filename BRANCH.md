@@ -31,6 +31,7 @@
   - [x] BR861-GAPS-EX1: Makefile only admits test-861-gaps to the existing isolated Compose runner/build/scope/down guards; rollback removes that environment from those guards.
 
 ## Feedback Loop
+- [x] Opus r1 P2-3: portable Make-path regression failed first, then passed; offline tools/cache now use overridable variables without personal absolute paths.
 - [x] Opus r1 P2-1 execution: no-download and legacy-metadata regressions failed first; per-intent validation now retains reported invalid debt without stopping valid cleanup.
 - [x] Opus r1 P2-1 query: PostgreSQL regression failed before the fix; filter completed/future intents, limit reads, prioritize unsettled debt, retire settled rechecks after 60 seconds.
 - [x] Opus r1 P2-2: orphan-first purge regression failed before the fix; uncorrelated DELETE now forwards without pausing (A4).
