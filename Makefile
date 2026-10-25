@@ -10,11 +10,15 @@ ARTIFACTS_RUN = docker run --rm
 ARTIFACTS_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 ARTIFACTS_NETWORK = --network "$$net"
+CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
+CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
 ifeq ($(ENV),test-861-int)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
 ARTIFACTS_NETWORK =
+CM_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
+CM_RUN_IMAGE = qualification
 endif
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
@@ -870,11 +874,11 @@ build-cluster-mesh: ## Build @sentropic/cluster-mesh without persistent dependen
 
 .PHONY: cluster-mesh-workspace
 cluster-mesh-workspace:
-	@docker run --rm --init $(CM_DOCKER_NETWORK) -u "$$(id -u):$$(id -g)" \
+	@$(CM_RUN) -u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
 		-e CM_SCOPE="$(patsubst packages/cluster-mesh/%,%,$(SCOPE))" \
 		-e CM_PG_URL="$(CM_PG_URL)" -e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
-		-v "$(CURDIR):/source" $(LLM_MESH_NODE_IMAGE) \
+		-v "$(CURDIR):/source" $(CM_RUN_IMAGE) \
 		sh /source/packages/cluster-mesh/tests/storage/cold-workspace.sh
 
 pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
