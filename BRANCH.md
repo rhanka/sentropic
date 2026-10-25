@@ -55,6 +55,7 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR734-R1` / `attention`: owner requests all four Opus P2 corrections: remove duplicate register keys, reject failed or malformed audits in both comments gates, remove production image grounding and keep live-model selection in tests, restore the 120s API workflow budget and fix its cause. Existing exceptions cover the reviewed files; BR734-EX10 and the timeout increase in BR734-EX5 are revoked. Impact: review corrections only; assertions and security exceptions remain intact. Rollback: revert the corresponding review-fix commit.
 - `BR734-EX10` / `attention`: run 40131831560 passes image serialization but Mistral Small 4 refuses visual analysis with the full application prompt. Live red/blue probes reproduce this in both 128px and 512px; focused live vision calls identify both colors. Analyze image-bearing streaming turns with a focused call to the same model, then pass its untrusted description alongside the original text, system instructions and tools in the main turn. Impact: one extra metered Mistral call per image-bearing user message; text-only requests and E2E assertions/timeouts are unchanged. Rollback: remove the focused grounding step and its regression.
 - `BR734-EX9` / `attention`: run 40131831560 passes cluster-mesh tests then the packed release gate rejects the selected lock's 0.27.0 pin against the verified 0.27.1 sibling. Rebuild with TypeScript 5.4.5 and npm pack reproduces the CI archive exactly: sha256 d06766370b135f3438be535aa6e5ebf69adf50df5379d79f1bd41f1a0866f374. Align the fixture manifest, registry URL and integrity with those measured bytes; keep the integrity gate unchanged. Impact: the selected qualification tuple only. Rollback: restore the 0.27.0 tuple together with the package version.
 - `BR734-EX8` / `attention`: run 40131082355 proves the two workspace integration tests still require installedVersion 0.27.0 after the required llm-mesh bump to 0.27.1. Update only these exact version literals; retain exact state/version assertions, namespace identity checks and published-fixture pins. Impact: two test expectations only. Rollback: restore the literals together with the llm-mesh version.
@@ -118,6 +119,10 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
     - [x] `make memory-l5-verify ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-sec-hotfix`
     - [x] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
 - [ ] **Lot N — Final validation**
+  - [x] P2-1: remove the eleven duplicate YAML fields from the nested toolbox zod entry.
+  - [ ] P2-2: reject audit command errors and incomplete/error JSON in both comments gates.
+  - [ ] P2-3: remove production image grounding and verify image streaming preserves the original request.
+  - [ ] P2-4: restore the 120s live API budget and resolve the underlying delay.
   - [x] Reproduce the Small 4 full-prompt vision failure with red/blue images and verify focused live image analysis plus the unchanged main chat instructions/tools.
   - [x] Align the selected qualification lock with the byte-identical llm-mesh 0.27.1 archive; the unchanged sibling-integrity checker passes locally.
   - [x] Align the two cluster-mesh workspace version expectations with llm-mesh 0.27.1; all 16 scoped integration tests pass.
