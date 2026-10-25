@@ -5,6 +5,23 @@ SHELL := /bin/bash
 ENV ?= dev
 export COMPOSE_PROJECT_NAME ?= $(ENV)
 DOCKER_COMPOSE  ?= docker compose
+# BR861-EX1: preserve the package recipes while qualifying inside Compose.
+ARTIFACTS_RUN = docker run --rm
+ARTIFACTS_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
+ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
+ARTIFACTS_NETWORK = --network "$$net"
+ARTIFACTS_PLATFORM_BUILD = build-mcp-platform
+CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
+CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
+ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
+ARTIFACTS_RUN_IMAGE = qualification
+ARTIFACTS_NETWORK =
+ARTIFACTS_PLATFORM_BUILD = immo-861-build-mcp-platform
+CM_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
+CM_RUN_IMAGE = qualification
+endif
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
 CI_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.ci.yml
@@ -859,11 +876,11 @@ build-cluster-mesh: ## Build @sentropic/cluster-mesh without persistent dependen
 
 .PHONY: cluster-mesh-workspace
 cluster-mesh-workspace:
-	@docker run --rm --init $(CM_DOCKER_NETWORK) -u "$$(id -u):$$(id -g)" \
+	@$(CM_RUN) -u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
 		-e CM_SCOPE="$(patsubst packages/cluster-mesh/%,%,$(SCOPE))" \
 		-e CM_PG_URL="$(CM_PG_URL)" -e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
-		-v "$(CURDIR):/source" $(LLM_MESH_NODE_IMAGE) \
+		-v "$(CURDIR):/source" $(CM_RUN_IMAGE) \
 		sh /source/packages/cluster-mesh/tests/storage/cold-workspace.sh
 
 pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
@@ -1393,39 +1410,47 @@ build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform d
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
+.PHONY: immo-861-build-mcp-platform freeze-types
+immo-861-build-mcp-platform: install-internal-packages
+	@case "$(ENV)" in test-861-int|test-861-gaps) ;; *) exit 1 ;; esac
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf dist node_modules; tool_dir="$$(mktemp -d)"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+
+freeze-types:
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 >/dev/null; PATH="$$tool_dir/node_modules/.bin:$$PATH" npm run freeze-types'
+
 .PHONY: build-artifacts
-build-artifacts: build-mcp-platform ## Build @sentropic/artifacts dist package
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+build-artifacts: $(ARTIFACTS_PLATFORM_BUILD) ## Build @sentropic/artifacts dist package
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: typecheck-artifacts
-typecheck-artifacts: build-mcp-platform ## Run @sentropic/artifacts type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+typecheck-artifacts: $(ARTIFACTS_PLATFORM_BUILD) ## Run @sentropic/artifacts type checks
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-artifacts
 test-artifacts: build-artifacts ## Run @sentropic/artifacts unit tests (excludes *.integration/*.e2e; use test-artifacts-integration)
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/artifacts/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "**/*.integration.test.ts" --exclude "**/*.e2e.test.ts"; fi'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/artifacts/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "**/*.integration.test.ts" --exclude "**/*.e2e.test.ts"; fi'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-artifacts-integration
 test-artifacts-integration: build-artifacts ## Run @sentropic/artifacts integration/e2e suites on disposable project postgres/minio
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d --wait postgres minio
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@$(ARTIFACTS_COMPOSE) up -d --wait postgres minio
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 	@set -eu; net="$$(docker network ls --format "{{.Name}}" | grep -E "^$(COMPOSE_PROJECT_NAME)[_-]default$$" | head -1)"; [ -n "$$net" ] || { echo "ERROR: compose network not found" >&2; exit 1; }; \
-	docker run --rm --network "$$net" $(LLM_MESH_NODE_IMAGE) node -e "const t0=Date.now();(async()=>{while(Date.now()-t0<60000){try{const r=await fetch('http://minio:9000/minio/health/live');if(r.ok)process.exit(0)}catch{ }await new Promise(r=>setTimeout(r,1000))}process.exit(1)})()" || { echo "ERROR: minio not ready" >&2; exit 1; }; \
+	$(ARTIFACTS_RUN) $(ARTIFACTS_NETWORK) $(ARTIFACTS_RUN_IMAGE) node -e "const t0=Date.now();(async()=>{while(Date.now()-t0<60000){try{const r=await fetch('http://minio:9000/minio/health/live');if(r.ok)process.exit(0)}catch{ }await new Promise(r=>setTimeout(r,1000))}process.exit(1)})()" || { echo "ERROR: minio not ready" >&2; exit 1; }; \
 	db_user="$(POSTGRES_USER)"; db_pass="$(POSTGRES_PASSWORD)"; db_name="$(POSTGRES_DB)"; [ -n "$$db_user" ] || db_user=app; [ -n "$$db_pass" ] || db_pass=app; [ -n "$$db_name" ] || db_name=app; \
 	s3_user="$(MINIO_ROOT_USER)"; s3_pass="$(MINIO_ROOT_PASSWORD)"; [ -n "$$s3_user" ] || s3_user=minioadmin; [ -n "$$s3_pass" ] || s3_pass=minioadmin; \
-	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp --network "$$net" -e DATABASE_URL="postgres://$$db_user:$$db_pass@postgres:5432/$$db_name" -e ARTIFACTS_S3_ENDPOINT="http://minio:9000" -e ARTIFACTS_S3_REGION="us-east-1" -e ARTIFACTS_S3_ACCESS_KEY_ID="$$s3_user" -e ARTIFACTS_S3_SECRET_ACCESS_KEY="$$s3_pass" -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/artifacts/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run $$scope --environment node; else for f in tests/*.integration.test.ts tests/*.e2e.test.ts; do [ -e "$$f" ] || continue; "$$tool_dir/node_modules/.bin/vitest" run "$$f" --environment node || exit 1; done; fi'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(ARTIFACTS_NETWORK) -e DATABASE_URL="postgres://$$db_user:$$db_pass@postgres:5432/$$db_name" -e ARTIFACTS_S3_ENDPOINT="http://minio:9000" -e ARTIFACTS_S3_REGION="us-east-1" -e ARTIFACTS_S3_ACCESS_KEY_ID="$$s3_user" -e ARTIFACTS_S3_SECRET_ACCESS_KEY="$$s3_pass" -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/artifacts/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run $$scope --environment node; else for f in tests/*.integration.test.ts tests/*.e2e.test.ts; do [ -e "$$f" ] || continue; "$$tool_dir/node_modules/.bin/vitest" run "$$f" --environment node || exit 1; done; fi'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: lint-artifacts
 lint-artifacts: ## Lint @sentropic/artifacts sources and tests (same generated config as lint-cluster-mesh)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
-		-w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
+		-w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; \
 		tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" \
 			--no-save --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null; \
 		printf "%s\n" "import tseslint from '\''typescript-eslint'\'';" \
@@ -1480,7 +1505,7 @@ probe-artifacts-packed-consumer: ## Second-host packed-consumer proof of the @se
 	@$(MAKE) pack-mcp-platform PACK_DESTINATION=tmp/artifacts-platform-pack ENV=$(ENV)
 	@$(MAKE) pack-artifacts PACK_DESTINATION=tmp/artifacts-pack ENV=$(ENV)
 	@cp tmp/artifacts-platform-pack/*.tgz tmp/artifacts-pack/
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs /probe/adapter-consumer.mjs ./; node ./packed-consumer.mjs; npm install /pack/*.tgz @aws-sdk/client-s3@3.1095.0 pg@8.22.0 --no-save --no-audit --no-fund >/dev/null 2>&1; node ./adapter-consumer.mjs'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs /probe/adapter-consumer.mjs /probe/host.mjs ./; node ./packed-consumer.mjs; npm install /pack/*.tgz @aws-sdk/client-s3@3.1095.0 pg@8.22.0 --no-save --no-audit --no-fund >/dev/null 2>&1; node ./adapter-consumer.mjs'
 
 .PHONY: test-mcp-platform
 test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (builds dist first for the packaged test, BR1a-EX3)
@@ -1777,9 +1802,15 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4),)
+scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
+	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
+	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
+else
 scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
 	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) node dist/bin/harness.js check scope --branch-md /workspace/BRANCH.md --staged-files "$$files"
+endif
 
 .PHONY: typecheck-cowork-desktop
 typecheck-cowork-desktop: ## Run @sentropic/cowork-desktop type checks
@@ -1871,7 +1902,7 @@ package-desktop-windows: ## Build the signable single Windows .exe for @sentropi
 
 .PHONY: install-internal-packages
 install-internal-packages: ## Install workspace deps and link internal packages into node_modules (no api/ui)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/cluster-mesh --workspace=packages/flow --workspace=packages/mcp-platform --workspace=packages/artifacts --include-workspace-root --ignore-scripts --no-audit --no-fund'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(ARTIFACTS_RUN_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/cluster-mesh --workspace=packages/flow --workspace=packages/mcp-platform --workspace=packages/artifacts --include-workspace-root --ignore-scripts --no-audit --no-fund'
 
 .PHONY: build-contracts
 build-contracts: install-internal-packages ## Build @sentropic/contracts dist package (standalone, no @sentropic deps)
@@ -2588,7 +2619,11 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
+ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
+else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
+endif
 
 # -----------------------------------------------------------------------------
 # Standalone IdP (BR-39m Phase A0 — exception BR39m-EX1)

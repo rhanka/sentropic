@@ -11,6 +11,7 @@
  */
 import { assertArtifactAccess } from './authorization.js';
 import { evaluateAccess, type AccessAction, type ArtifactAcl } from './access.js';
+import type { DeletionClaimStore } from './gc.js';
 import type { PublicationStateStore } from './publication.js';
 
 /**
@@ -143,6 +144,7 @@ export function createLifecycleService(
   store: LifecycleStore,
   clock: () => string = () => new Date().toISOString(),
   current?: CurrentPointer,
+  claims?: DeletionClaimStore,
 ): LifecycleService {
   async function ownerOf(artifactId: string): Promise<string> {
     const owner = await store.getOwner(artifactId);
@@ -201,6 +203,18 @@ export function createLifecycleService(
         throw new Error(`can only purge a deleted artifact: ${artifactId} is ${state}`);
       }
       const releases = await store.listArtifactReleases(artifactId);
+      const acquired: string[] = [];
+      if (claims !== undefined) {
+        try {
+          for (const digest of new Set(blobDigests)) {
+            await claims.claim(digest, `purge:${artifactId}`);
+            acquired.push(digest);
+          }
+        } catch (error) {
+          for (const digest of acquired) await claims.releaseClaim(digest);
+          throw error;
+        }
+      }
       for (const releaseId of releases) {
         await store.setReleaseState(releaseId, 'purged');
       }
