@@ -1,4 +1,4 @@
-# Feature: #861 integration (L0–L5, L7)
+# Feature: #861 integration (L0–L7)
 
 ## Objective
 - [x] Integrate approved topic heads with merge commits and qualify real artifacts and mesh tuple gates without publishing.
@@ -35,6 +35,7 @@
   - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
 
 ## Feedback Loop
+- [x] INT-6: merged approved L6 e67a978f9; retained integration plan and L6 compiled MCP capability selection. Ported main's UTF-8 MCP regression to the trusted invocation API. Frozen L0 files and Track journal remain byte-identical.
 - [x] INT-2: origin/main merge conflicts only in BRANCH.md; retain this integration plan. Track journal is byte-identical to the pre-merge integration head.
 - [x] INT-3: restored the frozen build-mcp-platform recipe; retained P1 packed graph verification passed (30 files, 54 edges) inside the isolated Compose runner, without regenerating evidence.
 - [x] BR861-EX3: root lock workspace metadata follows the artifacts/mesh candidate versions; no dependency resolution change; rollback with candidate manifests.
@@ -63,6 +64,8 @@
 - [x] Lot 4 — merge a8df25634 (publication/collection); only the topic plan conflicted.
 - [x] Lot 5 — merge c703afc68 (MCP/HTTP); only the topic plan conflicted.
 - [x] Lot 7 — merge eae0c261a (mesh surface/tuple); only the topic plan conflicted.
+- [x] Lot 6 — merge e67a978f9 (approved transport/type convergence); resolved plan, MCP names and MCP tests.
+- [ ] Requalification — artifacts unit/integration, lint, freeze-types and mesh surface/tuple/packaging on the final integration head.
 - [x] Qualification — make test-artifacts: 407 passed, 31 files; source tree at 818b6c509; build passed; make down passed.
 - [x] Qualification — make test-artifacts-integration: 94 passed across 10 files against real PostgreSQL/MinIO; build and make down passed.
 - [x] Qualification — make lint-artifacts: 0 errors, 0 warnings; make down passed.

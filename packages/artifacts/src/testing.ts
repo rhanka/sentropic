@@ -43,7 +43,7 @@ interface BarrierGate {
 }
 
 /** Create a correlated test barrier for one finalization run. */
-export function createArtifactCommitBarrier(): {
+export function createArtifactCommitBarrier(options?: { readonly points: readonly CommitBarrierPoint[] }): {
   observer: CommitBarrierObserver & CommitArrivalObserver;
   waitUntilReached(point: CommitBarrierPoint, invocationId: string): Promise<void>;
   release(point: CommitBarrierPoint, invocationId: string): void;
@@ -53,7 +53,7 @@ export function createArtifactCommitBarrier(): {
     const key = `${point}:${invocationId}`;
     const existing = gates.get(key);
     if (existing !== undefined) return existing;
-    const created: BarrierGate = { arrivals: 0, armed: false, waiters: [], releases: [] };
+    const created: BarrierGate = { arrivals: 0, armed: options?.points.includes(point) ?? false, waiters: [], releases: [] };
     gates.set(key, created);
     return created;
   };
