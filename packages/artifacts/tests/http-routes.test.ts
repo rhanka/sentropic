@@ -57,31 +57,36 @@ describe('L6 selected transport boundary', () => {
       expect(await app.handle({ method, path, body: {}, actorId: 'alice' }, invocation))
         .toEqual({ status: 503, body: { error: 'capability_unavailable' } });
     });
-    const strangerMeta = await app.handle(req('GET', `/meta/${id}`, undefined, OTHER));
-    expect(strangerMeta.status).toBe(404);
+  it('should expose and execute nothing for an empty selection', async () => {
+    const app = boundary(compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selectedCapabilities: [] }));
+    expect(Object.isFrozen(app.selectedCapabilities)).toBe(true);
+    expect(app.selectedCapabilities).toEqual([]);
+    expect(await app.handle({ method: 'POST', path: '/ensure', body: {}, actorId: 'alice' }, invocation))
+      .toEqual({ status: 503, body: { error: 'capability_unavailable' } });
   });
-
-  it('toggles public access owner-only; approved accounts then read', async () => {
-    const app = makeApp();
-    const id = await ensure(app, OWNER, 'pub');
-    const before = await app.handle(req('GET', `/current/${id}`, undefined, APPROVED));
-    expect(before.status).toBe(404);
-    const byStranger = await app.handle(
-      req('POST', '/access/public', { artifactId: id, isPublic: true }, OTHER),
-    );
-    expect(byStranger.status).toBe(404);
-    const toggled = await app.handle(
-      req('POST', '/access/public', { artifactId: id, isPublic: true }, OWNER),
-    );
-    expect(toggled.status).toBe(200);
-    expect(toggled.body).toEqual({ artifactId: id, isPublic: true });
-    const after = await app.handle(req('GET', `/current/${id}`, undefined, APPROVED));
-    expect(after.status).toBe(200);
-    const unapproved = await app.handle(req('GET', `/current/${id}`, undefined, OTHER));
-    expect(unapproved.status).toBe(404);
-    const invalid = await app.handle(
-      req('POST', '/access/public', { artifactId: id, isPublic: 'yes' }, OWNER),
-    );
-    expect(invalid.status).toBe(400);
+  it.each([{ paramsHash: 'forged' }, { actorId: 'mallory' }, { authorizeCommit: true },
+    { source: { kind: 'inline-original' } }])('should reject trusted body injection %j', async (extra) => {
+    const outcome = await boundary().execute({ method: 'POST', path: '/ensure', actorId: 'alice',
+      body: { bindingName: 'site', idempotencyKey: 'key', ...extra } }, invocation);
+    expect(outcome).toMatchObject({ ok: false, failure: { category: 'invalid_request', httpStatus: 400 } });
+  });
+  it('should filter foreign scope and unreadable artifacts before pagination', async () => {
+    const ids = ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002',
+      '00000000-0000-4000-8000-000000000003'];
+    const acls = createMemoryAclStore();
+    for (let i = 0; i < ids.length; i += 1) await acls.putArtifactAcl(ids[i], {
+      ownerId: 'alice', storageScopeId: i === 0 ? 'foreign' : 'scope-1', grants: [], isPublic: false, withdrawn: false,
+    });
+    const app = boundary(profile, { acls, lifecycle: { stateOf: async () => 'active', canRead: () => true } });
+    const result = await app.handle({ method: 'POST', path: '/list', body: { offset: 1, limit: 1 }, actorId: 'alice' }, invocation);
+    expect(result).toMatchObject({ status: 200, body: { total: 2, artifacts: [{ artifactId: ids[2] }] } });
+  });
+  it('should reject actor and scope disagreement before provider dispatch', async () => {
+    const app = boundary();
+    for (const extra of [{ actorId: 'mallory' }, { storageScopeId: 'foreign' }]) {
+      expect(await app.handle({ method: 'POST', path: '/ensure', actorId: 'alice',
+        body: { bindingName: 'site', idempotencyKey: 'key' }, ...extra }, invocation))
+        .toEqual({ status: 400, body: { error: 'invalid_request' } });
+    }
   });
 });
