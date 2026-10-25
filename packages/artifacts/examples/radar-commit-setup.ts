@@ -5,28 +5,28 @@
  * PostgreSQL executor, a transaction-bound PG policy/quota participant
  * registered at construction, fence minting in the host guard, and the
  * preparation-abandonment queue bound to a cleanup sweeper. Imports only
- * L3 src modules. The compiled profile and the app construction stay
- * L6-provided: pass this coordinator plus L1's compiled profile to
+ * public package entrypoints. Pass this coordinator plus the compiled profile to
  * `createHttpArtifactApp` (r2 section 3.2); nothing here invents that seam.
  * The `radar_commit_example` tables below are illustrative host tables so
  * the example runs standalone; Radar's real adapter owns its own tables.
  */
 import type { Pool } from 'pg';
-import { createPostgresCommitExecutor } from '../src/adapters/postgres-commit.js';
-import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
+import { createPostgresCommitExecutor } from '@sentropic/artifacts/adapters/postgres-commit';
+import { createArtifactCommitCoordinator } from '@sentropic/artifacts/server/commit-contract';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
 import type {
   ArtifactAuthorizationDecision,
   ArtifactCommitContext,
   ArtifactCommitTransaction,
-  CommitPolicyParticipant,
+  ArtifactPolicyDriver,
   CommitPolicyParticipantFactory,
   CommitCoordinatorOptions,
   CoordinatorTestPoint,
-  FinalizationCoordinator,
+  ArtifactCommitCoordinator,
   FinalizeRequest,
   FinalizeResult,
   InternalIdempotencyKey,
-} from '../src/server/commit/types.js';
+} from '@sentropic/artifacts/server/commit-contract';
 
 /** One abandoned preparation awaiting host cleanup. */
 export interface AbandonedAttempt {
@@ -94,7 +94,7 @@ const createParticipantFactory = (
   quotaKey: string,
   clock: { nowMs: number },
 ): CommitPolicyParticipantFactory => ({
-  createParticipant: (client, transactionToken): CommitPolicyParticipant => ({
+  createParticipant: (client, transactionToken): ArtifactPolicyDriver => ({
     async readRevision(): Promise<string> {
       const { rows } = await client.query<{ revision: string }>(
         'SELECT revision FROM radar_commit_example.policy_revision WHERE id = 1 FOR SHARE',
@@ -106,7 +106,7 @@ const createParticipantFactory = (
     },
     async checkApproval(input: { actorId: string }) {
       const { rows } = await client.query<{ approved: boolean; expires_at_ms: string }>(
-        'SELECT approved, expires_at_ms FROM radar_commit_example.approvals WHERE actor_id = $1',
+        'SELECT approved, expires_at_ms FROM radar_commit_example.approvals WHERE actor_id = $1 FOR SHARE',
         [input.actorId],
       );
       const row = rows[0];
@@ -142,7 +142,8 @@ export interface RadarCommitInput {
 }
 
 export interface RadarCommitSetup {
-  readonly coordinator: FinalizationCoordinator;
+  readonly coordinator: ArtifactCommitCoordinator;
+  readonly profile: ReturnType<typeof compileArtifactsProfile>;
   readonly abandonedAttempts: AbandonedAttempt[];
   finalizePrepared(input: RadarCommitInput): Promise<FinalizeResult>;
   replayPrepared(input: RadarCommitInput): Promise<FinalizeResult>;
@@ -210,6 +211,7 @@ export function createRadarCommitSetup(options: {
   };
   return {
     coordinator,
+    profile: compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE),
     abandonedAttempts,
     finalizePrepared: (input: RadarCommitInput) => coordinator.finalizePrepared(toRequest(input)),
     replayPrepared: (input: RadarCommitInput) => coordinator.replayPrepared(toRequest(input)),

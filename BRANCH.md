@@ -41,6 +41,7 @@
 - [x] BR861-GAPS-EX1: permit the existing isolated Compose runner, platform build, scope check and teardown for test-861-gaps; impact is one additional test environment; rollback removes this environment from the existing guards.
 - [x] Candidate remains 0.2.0 per the owner request and r2 single-writer version reservation; no publication.
 - [ ] GAPS-1: public executor/types and packed typed example; test packed installation and compilation.
+- [x] GAPS-RED: packed example missing; three preparation regression cases fail on missing exports. Regression tests committed before implementation.
 - [ ] GAPS-2: correlated preparation inventory/deadlines and bounded safe cleanup; test denial, expiry, shared blobs and retry after cleanup failure.
 - [ ] GAPS-3: correlated purge pause and claim inspection; test both race orders on PostgreSQL.
 - [ ] GAPS-4: full artifacts unit/integration, lint, freeze, packed example, digests, push and draft PR against feat/immo-861-integration.
