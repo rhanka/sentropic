@@ -116,6 +116,45 @@ describe('0001_artifacts migration', () => {
   });
 });
 
+describe('0003_coordinator migration', () => {
+  it('creates the finalization tables without touching earlier objects', async () => {
+    await client.query(migration('0003_coordinator.sql'));
+    const { rows } = await client.query(
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'artifacts' AND tablename IN
+       ('operation_keys', 'operation_receipts') ORDER BY tablename`,
+    );
+    expect(rows.map((r: { tablename: string }) => r.tablename)).toEqual([
+      'operation_keys',
+      'operation_receipts',
+    ]);
+  });
+
+  it('keys coordination rows and success receipts per scope and key', async () => {
+    await client.query(
+      `INSERT INTO artifacts.operation_keys (storage_scope_id, internal_key)
+       VALUES ('scope-l3', 'key-1')`,
+    );
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.operation_keys (storage_scope_id, internal_key)
+         VALUES ('scope-l3', 'key-1')`,
+      ),
+    ).rejects.toThrow(/duplicate key|23505/);
+    await client.query(
+      `INSERT INTO artifacts.operation_receipts
+         (storage_scope_id, internal_key, command_codec, command_hash, receipt)
+       VALUES ('scope-l3', 'key-1', 'artifacts-command/v1', 'h-1', '{"releaseId": "r-1"}')`,
+    );
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.operation_receipts
+           (storage_scope_id, internal_key, command_codec, command_hash, receipt)
+         VALUES ('scope-l3', 'key-1', 'artifacts-command/v1', 'h-2', '{"releaseId": "r-2"}')`,
+      ),
+    ).rejects.toThrow(/duplicate key|23505/);
+  });
+});
+
 describe('0002_lifecycle migration', () => {
   it('creates the lifecycle tables', async () => {
     const { rows } = await client.query(

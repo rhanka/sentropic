@@ -12,9 +12,22 @@ import type { AccessGrant, AclStore, ArtifactAcl } from '../server/access.js';
 import type { RefcountStore } from '../server/gc.js';
 import type { ArtifactState, LifecycleStore, ReleaseState } from '../server/lifecycle.js';
 import type { SourceRef, SourceStore } from '../server/sources.js';
-import type { IntentKind, IntentStore, ObjectIntent } from '../server/object-intents.js';
+import type { IntentKind, PreparationIntentStore, ObjectIntent } from '../server/object-intents.js';
 import type { IdempotencyStore, IdempotentResult } from '../server/idempotency.js';
 import type { PublicationStateStore, ReleaseRecord } from '../server/publication.js';
+import type { KvPort } from '../server/ports.js';
+
+/** Read-only migration inventory. Never promotes a legacy success into an authorized receipt. */
+export function createPostgresLegacyArtifactRecords(pool: Pool): Pick<KvPort, 'get'> {
+  return {
+    async get(key) {
+      const { rows } = await pool.query<{ params_hash: string; result: unknown }>(
+        'SELECT params_hash, result FROM artifacts.idempotency_keys WHERE key = $1', [key],
+      );
+      return rows[0] === undefined ? undefined : JSON.stringify(rows[0]);
+    },
+  };
+}
 
 export interface ArtifactBindingInput {
   storageScopeId: string;
@@ -28,7 +41,7 @@ export interface ArtifactBinding {
   created: boolean;
 }
 
-export interface PostgresArtifactBasics extends IntentStore {
+export interface PostgresArtifactBasics extends PreparationIntentStore {
   ensureArtifact(input: ArtifactBindingInput): Promise<ArtifactBinding>;
 }
 
@@ -158,6 +171,39 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
          FROM artifacts.object_intents WHERE state = 'pending' ORDER BY created_at`,
       );
       return rows.map(toIntent);
+    },
+    async listPreparationIntents(query = {}) {
+      const { rows } = await pool.query<IntentRow>(
+        `SELECT * FROM artifacts.object_intents WHERE kind = 'commit-release' AND state <> 'done'
+         AND payload ? 'cleanupDeadlineMs'
+         AND ($1::text IS NULL OR payload->>'artifactId' = $1)
+         AND ($2::numeric IS NULL OR (COALESCE(error, '') NOT LIKE 'invalid preparation metadata%'
+           AND
+           CASE WHEN jsonb_typeof(payload->'cleanupDeadlineMs') = 'number'
+             THEN (payload->>'cleanupDeadlineMs')::numeric ELSE 0 END <= $2
+           AND (payload->>'cleanupState' IS DISTINCT FROM 'failed-cleaned'
+             OR (payload->>'cleanupDeadlineMs')::numeric >= $2 - 60000)))
+         ORDER BY COALESCE(payload->>'cleanupState' = 'failed-cleaned', false),
+           CASE WHEN jsonb_typeof(payload->'cleanupDeadlineMs') = 'number'
+             THEN (payload->>'cleanupDeadlineMs')::numeric ELSE 0 END, id
+         LIMIT $3`, [query.artifactId ?? null, query.throughMs ?? null, query.limit ?? null]);
+      return rows.map(toIntent);
+    },
+    async claimPreparationCleanup(intentId, throughMs) {
+      // This UPDATE serializes with finalization's intent completion on the same row.
+      const { rows } = await pool.query<IntentRow>(
+        `UPDATE artifacts.object_intents SET state = 'failed',
+           error = COALESCE(error, 'preparation expired; explicit retry required'), updated_at = now()
+         WHERE id = $1 AND kind = 'commit-release' AND state <> 'done'
+           AND (payload->>'cleanupDeadlineMs')::numeric <= $2 RETURNING *`,
+        [intentId, throughMs]);
+      return rows[0] === undefined ? undefined : toIntent(rows[0]);
+    },
+    async settlePreparationCleanup(intentId) {
+      const { rowCount } = await pool.query(
+        `UPDATE artifacts.object_intents SET payload = payload || '{"cleanupState":"failed-cleaned"}'::jsonb,
+           updated_at = now() WHERE id = $1 AND state = 'failed'`, [intentId]);
+      if (rowCount === 0) throw new Error('cleanup needs a failed preparation');
     },
     async putRelease(release: ReleaseRecord): Promise<void> {
       const parsed = JSON.parse(release.manifest) as {
