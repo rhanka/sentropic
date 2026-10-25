@@ -47,6 +47,10 @@ radar: guard
 receipts: guard
 	@$(COMPOSE) run --rm --no-deps qualification node $(PROBE)/receipt.mjs $(OUT)/receipt.json
 
+.PHONY: aggregate
+aggregate: guard
+	@$(COMPOSE) run --rm --no-deps qualification node --input-type=module -e 'import {readFileSync} from "node:fs"; import {aggregate} from "./$(PROBE)/receipt.mjs"; console.log(aggregate(JSON.parse(readFileSync("$(OUT)/receipt.json")).shards));'
+
 scope-check: guard
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
 
