@@ -47,6 +47,7 @@
 - [x] GAPS-2a: memory and PostgreSQL stores retain preparation history and atomically invalidate expired attempts before cleanup; metadata uses existing JSON intents without schema or L3 port changes.
 - [x] GAPS-2b: public preparation inspection and deterministic batch-bounded cleanup retain shared references/pins, serialize deletion with claims, and surface retryable cleanup debt.
 - [x] GAPS-2c: added the real PostgreSQL regression for cleanup winning before a paused finalization; publication must roll back release, pointer and success.
+- [x] GAPS-2d: preparation records include unique attempt/invocation/time/deadline metadata; PostgreSQL completion refuses expired/abandoned intents in the same finalization transaction. Cleanup-released pins do not mask the coordinator outcome.
 - [ ] GAPS-3: correlated purge pause and claim inspection; test both race orders on PostgreSQL.
 - [x] GAPS-3a: added durable claim history inspection and a call-scoped purge deletion adapter with release/finished; no global monkey patch or authority shortcut.
 - [ ] GAPS-4: full artifacts unit/integration, lint, freeze, packed example, digests, push and draft PR against feat/immo-861-integration.
