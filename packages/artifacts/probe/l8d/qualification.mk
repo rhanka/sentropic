@@ -7,12 +7,18 @@ COMPOSE := docker compose --env-file /dev/null -p $(ENV) -f docker-compose.immo-
 PROBE := packages/artifacts/probe/l8d
 OUT := tmp/l8d
 
-.PHONY: guard test receipts down scope-check
+.PHONY: guard test pack install receipts down scope-check
 guard:
 	@test "$(ENV)" = test-861-l8d
 
 test: guard
 	@$(COMPOSE) run --rm --no-deps qualification node --test $(PROBE)/receipt.test.mjs
+
+pack: guard
+	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node $(PROBE)/pack.mjs
+
+install: guard
+	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node $(PROBE)/install.mjs
 
 receipts: guard
 	@$(COMPOSE) run --rm --no-deps qualification node $(PROBE)/receipt.mjs $(OUT)/receipt.json
