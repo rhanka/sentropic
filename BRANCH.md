@@ -28,6 +28,8 @@
 
 ## Feedback Loop
 - [x] Runner workaround: `/tmp/861-l8c.Makefile` copies existing targets with only the qualification ENV guards expanded; SHA-256 `493237dbea196cfdbc93fc0859432b4565821ccef1d1975717627aecd101f6ad`.
+- [x] Final upstream command: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f /tmp/861-l8c.Makefile typecheck-artifacts lint-artifacts test-artifacts-integration SCOPE=tests/commit-failure-parity.integration.test.ts API_PORT=13308 UI_PORT=9508 MAILDEV_UI_PORT=5408 ENV=test-861-l8c`; exit 0, 33 passed + 6 expected failures, no skips; log `/tmp/861-l8c-final.log`.
+- [x] The earlier 24-case smoke reused the integration checkout's generated mcp-platform declarations (identical source); the final command rebuilt mcp-platform and artifacts from this checkout.
 - [ ] Radar Q2/Q3 runs require exact packed tuple installation and a pinned read-only checkout; no registry-baseline pass counts as candidate qualification.
 - [ ] L8C-1 / owner L3 / known failure: `src/server/commit/coordinator.ts:108` ignores `TimeoutError` and `lock_timeout`, unlike `src/server/failures.ts:88`; typed pool/transaction timeout returns 500 instead of retriable 503. Two executable expected-failure cases retained.
 - [ ] L8C-2 / owner L3 / known failure: `src/server/commit/coordinator.ts:92` classifies untyped `connection reset` text as connection loss. Expected 500/non-retriable; observed 503/retriable. One executable expected-failure case retained.
@@ -48,12 +50,12 @@
   - [x] Create worktree, run `harness check branch`, merge L6 and refresh integration without rebasing.
 - [ ] **Lot 1 — Failure matrix**
   - [x] Add `packages/artifacts/tests/commit-failure-parity.integration.test.ts` with separate child processes, real PostgreSQL coordination and E3 fault injection.
-  - [ ] Assert sanitized HTTP/MCP projections, correlation, no compensating execution and write/read accounting descriptors.
+  - [x] Assert sanitized HTTP/MCP projections, correlation, no compensating execution and write/read accounting descriptors.
   - [x] Retain known failures with file:line evidence rather than changing another lot's implementation.
   - [x] Extend the matrix through the S3 adapter PUT, GET and response-body conversion boundaries; add typed pool/transaction timeout and explicit COMMIT-abort cases.
   - [x] Include real receipt-table contention, same-key changed-command conflict, and the existing MCP platform wire codec (`isError`, text and metadata redaction).
 - [ ] **Lot 2 — Validation and handoff**
-  - [ ] Run scoped `test-artifacts-integration`, typecheck and lint under the shared Docker lock; clean this environment after each step.
+  - [x] Run scoped `test-artifacts-integration`, typecheck and lint under the shared Docker lock; clean this environment after each step.
   - [ ] Run pinned Radar MCP/failure suites, or record the exact missing prerequisite without a coverage claim.
   - [ ] Run `make scope-check` before each atomic commit; selective staging; `make commit` only.
   - [ ] Push and create draft PR targeting `feat/immo-861-integration`; report SHA, results and defects.
