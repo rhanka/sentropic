@@ -33,6 +33,7 @@
   - [x] BR861-EX2 permits only the catalog llm-mesh range change for the L8d qualification defect; impact: registry, gateway coherence and topology admit exactly 0.19.2 plus the existing range; rollback: restore the catalog range and remove its 0.19.2 admission tests together with the manifest widening.
 
 ## Feedback Loop
+- [x] Post-merge integrity regression executed five Node processes inside one 5s test and timed out at 5.7s; split its five independent cases without changing assertions or timeouts. Full packaging source rerun: 52 passed, 45 fixture-dependent tests inactive.
 - [x] Merged origin/feat/immo-861-integration at 0bda0f93d without rebasing; only BRANCH.md conflicted. Retained this fix plan and incoming INT-15 installed-receipt integrity tests; Track bytes are identical across parents.
 - [x] L8d merge conflicts only in BRANCH.md; replace lane plan with this bounded fix plan.
 - [x] Spec r2 R4 requires exactly 0.19.2 || >=0.22.0 <0.28.0; no 0.20/0.21 support implied.
@@ -56,7 +57,7 @@
 - [x] Lot 4 — verified frozen bytes/L3 signatures and package-bump applicability; reviewed minimal diff; prepared push/draft handoff targeting feat/immo-861-integration.
 - [x] Evidence: packages/artifacts/probe/l8d/PACK-FIX-RECEIPT.md; archive tuple and disposable lock/smoke receipts in tmp/l8d; final matching Compose down passed.
 - [x] Lot 5 — reproduced actual packed 0.19.2 entry refusal; aligned runtime range; 72 module tests and 47 packaging checks passed, including catalog parity and boundaries (45 packed-fixture tests not activated).
-- [ ] Lot 6 — rebuild and probe the packed 0.19.2 entries; bound receipt claims; merge current integration without rebase; scope-check, commit and push.
+- [x] Lot 6 — rebuilt and probed actual packed 0.19.2 entries; smoke/declarations and 18 regressions passed; bounded receipt claims; merged current integration without rebase; scope checked and prepared push. Dedicated Compose cleanup passed after every step.
 
 ## Deferred to L8 qualification / L9
 - [x] Full eight-suite and four-shard qualification, image qualification, published bytes and activation remain separate gates; original L8d receipt is historical evidence.
