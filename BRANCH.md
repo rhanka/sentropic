@@ -78,6 +78,7 @@
 - [x] L3 integration regressions now call the canonical coordinator's prepared-unit methods.
 - [x] Added independent-connection PostgreSQL GC exclusion and concurrent HTTP/MCP ensure receipt regressions.
 - [x] Legacy inventory quarantine, typed outcome exports and selected registry handlers wired.
+- [x] Frozen participant quota reservations are scoped and memoized per transaction, with no replay recharge.
 - [x] L6 composes provider and request guards on a request-local coordinator binding; publication.ts stays L4-owned.
 - [ ] Integration owner: expose commit-contract, outcome-contract and testing subpaths; reserve the topic version.
 - [ ] Integration owner: migrate out-of-scope HTTP upload/template and content/pilot e2e fixtures to required host composition.

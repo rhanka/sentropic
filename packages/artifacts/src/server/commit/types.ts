@@ -165,6 +165,8 @@ export interface ArtifactPolicyDriver {
   reserveQuota(input: {
     actorId: string;
     operation: string;
+    storageScopeId: string;
+    bytes: number;
   }): Promise<{ reserved: boolean }>;
   /** Mint the opaque fence for an allowed decision. */
   mintFence(revision: string, invocationId: string): Omit<ArtifactAuthorizationFence, typeof commitFenceBrand>;
@@ -270,6 +272,7 @@ export interface FinalizeRequest {
   readonly bindingName?: string | null;
   readonly policyRevision: string;
   /** Fixed class order; stable bytewise order within each class is the caller's obligation. */
+  readonly quotaBytes?: number;
   readonly locks?: Partial<Record<ParticipantLockClass, CommitLockFn[]>>;
   /** Provisional writes before the guard decision. */
   readonly provisional?: (client: FinalizeTxClient) => Promise<void>;

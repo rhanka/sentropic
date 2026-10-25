@@ -10,7 +10,7 @@ import type {
   CommitCoordinatorOptions, FinalizeConnection, FinalizeRequest, StoredCommitReceipt,
 } from '../src/server/commit/types.js';
 
-function setup(testObserver: CommitBarrierObserver, testPoints?: CommitCoordinatorOptions['testPoints']) {
+function setup(testObserver: CommitBarrierObserver, testPoints?: CommitCoordinatorOptions['testPoints'], quotaCalls?: { value: number }) {
   let receipt: StoredCommitReceipt | undefined;
   const connection: FinalizeConnection = {
     query: async () => ({ rows: [], rowCount: 0 }),
@@ -29,7 +29,7 @@ function setup(testObserver: CommitBarrierObserver, testPoints?: CommitCoordinat
       createParticipant: (_client, transactionId) => ({
         readRevision: async () => 'rev-1',
         checkApproval: async () => ({ approved: true }),
-        reserveQuota: async () => ({ reserved: true }),
+        reserveQuota: async () => { if (quotaCalls) quotaCalls.value += 1; return { reserved: true }; },
         mintFence: (policyRevision, invocationId) => ({
           transactionId, fenceId: 'fence', policyRevision, invocationId,
         }),
@@ -63,12 +63,15 @@ const request: FinalizeRequest = {
 
 describe('frozen observer compatibility', () => {
   it('should execute frozen finalization and replay through the same guarded unit', async () => {
-    const coordinator = setup({ arrive() {} });
+    const quota = { value: 0 };
+    const coordinator = setup({ arrive() {} }, undefined, quota);
     const invocation = {
       invocationId: 'frozen-finalize', actorId: request.actorId, storageScopeId: request.scopeId,
       authorizeCommit: async (context, transaction) => {
         expect(transaction.participant.policyRevision).toBe('rev-1');
         expect(await transaction.participant.readAdmission(context)).toEqual({ allowed: true, reason: 'denied' });
+        expect(await transaction.participant.reserveQuota({ storageScopeId: context.storageScopeId,
+          operation: context.operation, bytes: 0 })).toEqual({ reserved: true });
         return request.guard(context, transaction);
       },
     } satisfies import('../src/server/commit/types.js').ArtifactInvocationContext;
@@ -85,6 +88,7 @@ describe('frozen observer compatibility', () => {
     expect(await coordinator.replayOperation({
       invocation: { ...invocation, invocationId: 'frozen-replay' }, internalKey: request.internalKey,
     })).toMatchObject({ ok: true, replayed: true, result: { internalKey: request.internalKey } });
+    expect(quota.value).toBe(1);
   });
 
   it('should pause only the awaited invocation when binding the barrier alone', async () => {
