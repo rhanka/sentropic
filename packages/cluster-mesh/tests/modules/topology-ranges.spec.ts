@@ -30,7 +30,7 @@ function refusal(run: () => unknown): { code?: string; reason?: string; paths?: 
 }
 
 describe('automatic leaf guard ranges', () => {
-  it.each(['0.19.2', '0.22.0', '0.27.9'])('should admit %s in both leaf guards and strict gateway topology', (version) => {
+  it.each(['0.19.2', '0.22.0', '0.27.9', '0.28.0'])('should admit %s in both leaf guards and strict gateway topology', (version) => {
     const guard = cluster('app');
     tree.install('app', fakeMesh('mesh', version));
     tree.install('app', fakeGateway('gw'));
