@@ -49,4 +49,6 @@ The contract exposes five engine placements, both mic modes, independent stages,
 
 Mechanical branch/scope checks pass. Whitespace, selective staging, commit sizes (each below 150 changed lines) and absence of attribution trailers were checked before handoff. ENV cleanup completed after each Docker step; no ports, host dependencies or other ENV resources were created.
 
+[Draft PR #754](https://github.com/rhanka/sentropic/pull/754) opened with BRANCH.md as body. Initial CI run `40246816381` was observed in progress at `0e4a0d33e0d71ad9c401b78261d50c6d216c3210`; no CI success is claimed. Subsequent handoff edits are documentation only; final exact-head CI metadata is reported separately.
+
 Paid/native/device/provider/latency/accounting campaigns, capacity reservations, independent review, package publication, consumer-lock adoption and deployment remain open under L0's named owners. $0 paid speech spend and zero campaign units reserved by this task. G-PUBLISH needs immutable protected-CI releases and clean installed consumer tuples; this local packed check does not close it. PR CI is a separate exact-head observation, reported at draft handoff.
