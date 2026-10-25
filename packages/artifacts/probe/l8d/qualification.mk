@@ -54,6 +54,9 @@ radar: guard
 receipts: guard
 	@$(COMPOSE) run --rm --no-deps qualification node $(PROBE)/receipt.mjs $(OUT)/receipt.json
 
+summary: guard
+	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node $(PROBE)/summary.mjs
+
 .PHONY: aggregate
 aggregate: guard
 	@$(COMPOSE) run --rm --no-deps qualification node --input-type=module -e 'import {readFileSync} from "node:fs"; import {aggregate} from "./$(PROBE)/receipt.mjs"; console.log(aggregate(JSON.parse(readFileSync("$(OUT)/receipt.json")).shards));'
