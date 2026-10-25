@@ -4,8 +4,8 @@
  * Runs inside an isolated consumer directory where ONLY the packed
  * `@sentropic/artifacts` and `@sentropic/mcp-platform` tarballs are
  * installed (no workspace source; fetch is trapped before any import).
- * Proves the packed candidate exposes `sentropic.artifacts` with the 15
- * `artifacts_*` tools, compiles through the platform kernel, and drives
+ * Proves the packed candidate exposes the 15-name contract and selected
+ * `sentropic.artifacts` tools, compiles through the platform kernel, and drives
  * the full ensure → publish → get → list round-trip. Prints
  * `PACKED_CONSUMER_OK` on success; any failure throws.
  */
@@ -113,11 +113,14 @@ if (!coreOnly) {
   }
 }
 
-const executor = mcp.createArtifactsToolExecutor({ app, defaultStorageScopeId: "scope-1" });
+const executor = mcp.createArtifactsToolExecutor({ app, profile });
+assert.equal((await executor.invoke({ tool: "artifacts_ensure", invocation: invocation(),
+  args: { bindingName: "site", storageScopeId: "forged", idempotencyKey: "k-1" },
+})).status, 400);
 const ensured = await executor.invoke({
   tool: "artifacts_ensure",
-  actorId: "owner-1",
-  args: { bindingName: "site", storageScopeId: "forged", idempotencyKey: "k-1", paramsHash: "h-1", parameters: { title: "Hi" } },
+  invocation: invocation(),
+  args: { bindingName: "site", idempotencyKey: "k-1" },
 });
 if (ensured.status !== 201) throw new Error("ensure status " + ensured.status);
 const artifactId = ensured.body.artifactId;
@@ -130,49 +133,52 @@ assert.equal(fileSchema.properties.text.type, "string");
 assert.equal(fileSchema.oneOf.length, 2);
 const published = await executor.invoke({
   tool: "artifacts_publish",
-  actorId: "owner-1",
+  invocation: invocation(),
   args: {
     artifactId,
-    files: [file, { path: "asset.png", mimeType: "image/png", bytes: [0, 128, 255] }],
+    files: [file, { path: "asset.css", mimeType: "text/css", bytes: [0, 128, 255] }],
     idempotencyKey: "p-1",
-    paramsHash: "h-1",
   },
 });
 if (published.status !== 201) throw new Error("publish status " + published.status);
-const request = (method, path, body) => app.handle({ method, path, body, actorId: "owner-1" });
-const current = await request("GET", `/current/${artifactId}`);
-assert.equal(current.status, 200);
-const files = JSON.parse(current.body.manifest).files;
-assert.equal(JSON.parse(current.body.manifest).storageScopeId, "scope-1");
+const request = (method, path, body) => app.handle({ method, path, body, actorId: "owner-1" }, invocation());
+const current = await host.getCurrent(artifactId);
+const files = JSON.parse(current.manifest).files;
+assert.equal(JSON.parse(current.manifest).storageScopeId, "scope-1");
 const html = files.find((entry) => entry.path === "index.html");
 assert.equal(html.digest, "sha256:" + createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex"));
 assert.equal(html.size, expectedBytes.length);
-const served = await request("GET", `/content/${artifactId}/${html.digest}`);
-assert.equal(served.status, 200);
-assert.deepEqual(served.body.bytes, expectedBytes);
-assert.equal(Buffer.from(served.body.bytes).toString("utf8"), text);
+const content = runtime.createContentRuntime({ acls: host.acls, lifecycle: host.lifecycle,
+  blobs: host.blobs, publication: { getCurrent: host.getCurrent } });
+const served = await content.serveFile({ artifactId, digest: html.digest, actorId: "owner-1" });
+assert.deepEqual([...served.bytes], expectedBytes);
+assert.equal(Buffer.from(served.bytes).toString("utf8"), text);
+let invalidAttempt = 0;
 for (const invalid of [
   { ...file, bytes: expectedBytes }, { ...file, mimeType: "image/png" },
   { ...file, text: null }, { path: file.path, mimeType: file.mimeType },
 ]) {
   const result = await executor.invoke({
-    tool: "artifacts_publish", actorId: "owner-1", args: { artifactId, files: [invalid] },
+    tool: "artifacts_publish", invocation: invocation(),
+    args: { artifactId, files: [invalid], idempotencyKey: `invalid-${invalidAttempt++}` },
   });
   assert.deepEqual(result, { status: 400, body: { error: "invalid_request" } });
 }
-const viaHttp = await request("POST", "/publish", { artifactId, files: [file] });
+const viaHttp = await request("POST", "/publish", { artifactId, files: [file], idempotencyKey: "http-publish" });
 assert.equal(viaHttp.status, 201);
 const headers = await import("@sentropic/artifacts/content/headers");
 assert.equal(headers.contentHeaders({ mimeType: "text/html", size: html.size })
   ["cross-origin-resource-policy"], "same-origin");
-const got = await executor.invoke({ tool: "artifacts_get", actorId: "owner-1", args: { artifactId } });
+const got = await executor.invoke({ tool: "artifacts_get", invocation: invocation(), args: { artifactId } });
 if (got.status !== 200) throw new Error("get status " + got.status);
-const listed = await executor.invoke({ tool: "artifacts_list", actorId: "owner-1", args: {} });
+assert.equal(got.body.storageScopeId, "scope-1");
+const listed = await executor.invoke({ tool: "artifacts_list", invocation: invocation(), args: {} });
 if (listed.body.total !== 1) throw new Error("list total mismatch");
+assert.ok(host.guardCalls() >= 3, "ensure and both publication transports must authorize commits");
 if (fetchCalls !== 0) throw new Error("network was used");
 console.log(
   (coreOnly ? "PACKED_MCP_CORE_OK platform=absent" : "PACKED_CONSUMER_OK") +
-    " tools=15 manifestDigest=" + (coreOnly ? "platform-free" : toolConfig.computeManifestDigest(definition.manifest)) +
+    " tools=" + profile.selectedCapabilities.length + " manifestDigest=" + (coreOnly ? "platform-free" : toolConfig.computeManifestDigest(definition.manifest)) +
     " version=" + manifest.version + " utf8Bytes=" + expectedBytes.length +
     " textValidation=ok corp=same-origin fetchCalls=" + fetchCalls,
 );
