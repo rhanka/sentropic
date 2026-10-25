@@ -9,6 +9,8 @@
 - [x] Shared Docker lock and matching Compose down after every step; no publication.
 - [x] Merge 895e67f97 preserves integration 082fe4c60 and #744/#747/#748; Track unchanged.
 - [x] Final requalification merges 464581fb8 (#750); preserve this lane plan and all incoming product bytes; Track unchanged.
+- [x] Final runner imports exact guarded integration archives and archives the complete Radar frozen-profile head stacked on listKeys; no source overlay.
+- [x] New Radar pin contains listKeys but not the old A1/A2 topic SHAs as ancestors; the final receipt identifies the complete selected consumer head instead of asserting old ancestry.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
