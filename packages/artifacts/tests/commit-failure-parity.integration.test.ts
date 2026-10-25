@@ -22,6 +22,9 @@ import { createRadarKeyDerivation } from './dist/server/command-identity.js';
 import { createArtifactCommitCoordinator } from './dist/server/commit/coordinator.js';
 import { createPostgresCommitExecutor } from './dist/adapters/postgres-commit.js';
 import { projectArtifactMcpOutcome, projectArtifactWriteFailure } from './dist/server/outcome-projection.js';
+import { createS3BlobStore } from './dist/adapters/s3.js';
+import { createMemoryIntentStore } from './dist/server/object-intents.js';
+import { createMemoryRefcountStore } from './dist/server/gc.js';
 const input = JSON.parse(process.env.L8C_CASE);
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 const inner = createPostgresCommitExecutor(db);
@@ -71,6 +74,17 @@ const coordinator = createArtifactCommitCoordinator({ executor, policy: {
   }),
 } });
 const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+const publishing = input.point.startsWith('s3-');
+const blobs = createS3BlobStore({ bucket: 'l8c-private-bucket', client: {
+  async send(command) {
+    if (command.constructor.name === 'PutObjectCommand') {
+      if (input.point === 's3-put') { injections++; throw cause; }
+      return {};
+    }
+    if (input.point === 's3-get') { injections++; throw cause; }
+    return { Body: { async transformToByteArray() { injections++; throw cause; } } };
+  },
+} });
 const app = createHttpArtifactApp({ profile, coordinator: {
   async finalizePrepared(request) {
     dispatches++;
@@ -88,7 +102,13 @@ ensureHost: {
     await client.query('INSERT INTO l8c_effects(scope_id, artifact_id) VALUES ($1,$2)', [input.scope, artifactId]);
     return { artifactId, created: true };
   },
-}, acls: { async listArtifactIds() { injections++; throw cause; } },
+}, acls: {
+  async listArtifactIds() { injections++; throw cause; },
+  async getArtifactAcl() { return { ownerId: 'alice', storageScopeId: input.scope, isPublic: false, withdrawn: false, grants: [] }; },
+}, lifecycle: { async stateOf() { return 'active'; } },
+publication: { blobs, intents: createMemoryIntentStore(), refs: createMemoryRefcountStore(),
+  async getCurrent() { return undefined; }, createUnitWriter() { throw new Error('S3 fault must precede finalization'); },
+}, publicationUrls: () => ({ stableUrl: 'https://pages.example.test/a', pinnedUrl: 'https://pages.example.test/r' }),
 });
 const invocation = { invocationId: input.id, actorId: 'alice', storageScopeId: input.scope,
   async authorizeCommit(context, tx) {
@@ -100,11 +120,13 @@ const invocation = { invocationId: input.id, actorId: 'alice', storageScopeId: i
   },
 };
 const write = input.point !== 'read';
-const args = write ? { bindingName: 'site', idempotencyKey: 'same caller key' } : {};
+const args = publishing ? { artifactId: '00000000-0000-4000-8000-000000000001',
+  idempotencyKey: 'same caller key', files: [{ path: 'index.html', mimeType: 'text/html', text: 'hi' }] }
+  : write ? { bindingName: 'site', idempotencyKey: 'same caller key' } : {};
 try {
   const outcome = input.transport === 'http'
-    ? await app.execute({ method: 'POST', path: write ? '/ensure' : '/list', body: args, actorId: 'alice' }, invocation)
-    : await createArtifactsToolExecutor({ app, profile }).execute({ tool: write ? 'artifacts_ensure' : 'artifacts_list', args, invocation });
+    ? await app.execute({ method: 'POST', path: publishing ? '/publish' : write ? '/ensure' : '/list', body: args, actorId: 'alice' }, invocation)
+    : await createArtifactsToolExecutor({ app, profile }).execute({ tool: publishing ? 'artifacts_publish' : write ? 'artifacts_ensure' : 'artifacts_list', args, invocation });
   const descriptor = outcome.ok ? undefined : projectArtifactWriteFailure(outcome.failure, { dispatched: true, write });
   console.log(JSON.stringify({ pid: process.pid, outcome, http: projectArtifactHttpOutcome(outcome),
     mcp: projectArtifactMcpOutcome(outcome, input.id), descriptor, dispatches, injections }));
@@ -144,6 +166,15 @@ const faults: Fault[] = [
   { label: 'unrecognized lost/conflict text', point: 'acquire', message: ' lost conflict', status: 500, category: 'provider_error' },
   { ...unavailable('lost COMMIT acknowledgement', 'commit-ack', '57P06'), state: 'unknown' },
   ...['57P06', '40001', '57014', 'ERR_STREAM_PREMATURE_CLOSE'].map(code => unavailable(`read ${code}`, 'read', code)),
+  ...['s3-put', 's3-get', 's3-stream'].flatMap(point => [
+    { label: `${point} timeout`, point, name: 'TimeoutError' },
+    unavailable(`${point} body interruption`, point, 'ERR_STREAM_PREMATURE_CLOSE'),
+  ]),
+  { label: 'typed pool acquisition timeout', point: 'acquire', name: 'TimeoutError' },
+  unavailable('unqualified lock timeout', 'acquire', '55P03'),
+  unavailable('adapter transaction timeout', 'non-key', 'lock_timeout'),
+  { label: 'untyped connection-reset text', point: 'acquire', message: ' connection reset', status: 500, category: 'provider_error' },
+  ...['40001', '40P01', '57014'].map(code => unavailable(`confirmed abort at COMMIT ${code}`, 'commit-abort', code)),
 ];
 
 async function invoke(fault: Fault, transport: string) {
@@ -176,10 +207,10 @@ describe('L8c E3 failures across isolated HTTP/MCP processes', () => {
         error: { code, message: code, retriable: status === 503 } });
       expect(JSON.stringify(result)).not.toMatch(/private|postgres:\/\/|password|SELECT secret/);
       const read = fault.point === 'read';
-      expect(result.dispatches).toBe(read ? 0 : 1);
+      expect(result.dispatches).toBe(read || fault.point.startsWith('s3-') ? 0 : 1);
       expect(result.injections).toBe(['deny', 'authority'].includes(fault.point) ? 0 : 1);
       if (read) expect(result.descriptor).toBeUndefined();
-      else expect(result.descriptor).toEqual({ invocationId: result.id, operation: 'ensure',
+      else expect(result.descriptor).toEqual({ invocationId: result.id, operation: fault.point.startsWith('s3-') ? 'publish' : 'ensure',
         reason: category === 'conflict' ? 'provider_conflict' : category, status });
       expect(result.counts).toEqual(fault.point === 'commit-ack' ? { receipts: 1, effects: 1 } : { receipts: 0, effects: 0 });
     }
