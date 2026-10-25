@@ -18,9 +18,9 @@
   - `scripts/ci/immo-861-*`
   - `Makefile`
   - `docker-compose.immo-861.yml`
+  - `.track/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `.cursor/rules/**`
-  - `.track/**`
   - `api/**`
   - `ui/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
@@ -32,6 +32,7 @@
 - [x] L0: owner accepts external CI failure tracked in #734.
 - [x] L3: owner accepts 157f231d5; type convergence belongs to L6, excluded from this train.
 - [x] Merge policy: retain integration BRANCH.md; report each source conflict separately.
+- [x] L5 brings reviewed Track events; preserve them without editing. The L5 scope check reported advisory failures because the initial train plan forbade Track; this plan now permits preservation of the approved history.
 
 ## AI Flaky tests
 - [x] No flaky acceptance granted.
@@ -49,7 +50,7 @@
 - [x] Lot 3 — merge 157f231d5 (coordinator); only the topic plan conflicted.
 - [x] Lot 4 — merge a8df25634 (publication/collection); only the topic plan conflicted.
 - [x] Lot 5 — merge c703afc68 (MCP/HTTP); only the topic plan conflicted.
-- [ ] Lot 7 — merge eae0c261a (mesh surface/tuple).
+- [x] Lot 7 — merge eae0c261a (mesh surface/tuple); only the topic plan conflicted.
 - [ ] Qualification — make test-artifacts; record exact counts and source SHA.
 - [ ] Qualification — make test-artifacts-integration against PostgreSQL/MinIO; record exact counts.
 - [ ] Qualification — make lint-artifacts; record errors and warnings.
