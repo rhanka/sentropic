@@ -26,6 +26,9 @@
 - [x] L6 changes are inherited merge ancestry; no authored product changes.
 
 ## Feedback Loop
+- [x] D1, owner L4: `packages/artifacts/src/server/publication.ts:463` records attempts without invocationId. Ordinary test failed on the missing durable field; retained as `[known failure D1]` with `it.fails`.
+- [x] D2, owner L4: `packages/artifacts/src/server/publication.ts:481` does not invoke coordinator preparationTestHooks around S3. Ordinary test observed only five coordinator points and none of the three S3 points; retained as `[known failure D2]` with `it.fails`.
+- [x] Full ordinary run: 24 passed / 2 failed / 0 skipped on real PG/MinIO; failures are D1/D2, with JSON receipt `tmp/l8a-results.json`.
 - [x] Radar read-only pins: A1 `f2b6c25cc9458ec285d6d4f620a55dad8c30f909`, A2 `b104ae90a28a5581e8eabd15f12acb58558d3396`, PR908 `e2e9515ea41baebf5539743f0cfa0dea750d072c`, main `2dbde92e9a6c532abe4f9e7bed8ed9a9b381d530`.
 - [x] BASE #910 `ccb91aea` retired the route still called by Radar `packages/immo-mcp/src/data-source.ts:316`; current-main runs must account for CT-3/CT-9.
 - [x] Missing Radar H3 quota/admission integration remains explicitly not covered; generic provider tests cannot qualify Q4 activation.
@@ -52,7 +55,7 @@
   - [ ] Exercise policy/lifecycle serialization, purge claims and bounded shared-blob cleanup.
   - [x] Add real S3 shared/exclusive cleanup, durable purge claims and preparation invocation attribution assertion.
   - [x] Add real PG key/quota/policy/ACL/lifecycle lock waits and both writer orders.
-  - [ ] Keep demonstrated product defects as known-failure tests with file:line evidence.
+  - [x] Keep demonstrated product defects D1/D2 as known-failure tests with file:line evidence; no product edits.
 - [ ] **Lot 2 — Qualification and handoff**
   - [ ] Run scoped integration tests, typecheck and lint under the shared lock.
   - [ ] Pin hashes and run Radar commit-probe/finalization suites read-only; record missing prerequisites.
