@@ -94,8 +94,8 @@ consumer() {
     pkg.dependencies = { ...pkg.dependencies };
     for (const pair of pairs) { const at = pair.indexOf("="); pkg.dependencies[pair.slice(0, at)] = pair.slice(at + 1); }
     if (process.env.CM_ARTIFACTS_COMPAT !== "1") delete pkg.dependencies["@sentropic/artifacts"];
-    const overrides = Object.fromEntries(Object.entries(pkg.dependencies)
-      .filter(([name, spec]) => name !== "@sentropic/cluster-mesh" && spec.startsWith("file:/")));
+    const overrides = { ...pkg.overrides, ...Object.fromEntries(Object.entries(pkg.dependencies)
+      .filter(([name, spec]) => name !== "@sentropic/cluster-mesh" && spec.startsWith("file:/"))) };
     if (Object.keys(overrides).length) pkg.overrides = overrides; else delete pkg.overrides;
     fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");' "$dir" "$@"
 }
