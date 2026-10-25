@@ -55,8 +55,8 @@
   - [x] Verify approved input hashes and inspect current source/registry/PR evidence without inference.
 - [x] **L0b — Heads and entry gates**
   - [x] Write `.tmp/live-stt/l0/baseline.md` and `gates.md`; distinguish merge, publish, integration and deployment.
-- [ ] **L0c — Dependencies and provenance**
-  - [ ] Write `.tmp/live-stt/l0/dependencies.md`; inventory SDKs, installers, binary hashes, licenses and blocked qualification.
+- [x] **L0c — Dependencies and provenance**
+  - [x] Write `.tmp/live-stt/l0/dependencies.md`; inventory SDKs, installers, binary hashes, licenses and blocked qualification.
 - [ ] **L0d — Placement and release scope**
   - [ ] Write `.tmp/live-stt/l0/placements.md` and `scope-release.md`; retain every owner-selected configuration.
 - [ ] **L0e — Capacity feasibility**
