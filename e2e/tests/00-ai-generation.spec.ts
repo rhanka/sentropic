@@ -128,6 +128,19 @@ test.describe('Génération IA', () => {
       return req.method() === 'POST' && /\/api\/v1\/organizations\/[^/]+\/enrich/.test(res.url());
     }, { timeout: 60_000 });
 
+    // CI model: the enrich UI posts no model, so the API resolves the user
+    // default (gpt-4.1-nano, retired; production default unchanged). Inject
+    // mistral-small-2603 into the enrich POST only for this spec's page.
+    // Track 01M5PCVH1Y8ZAVM7T94SRAWVR5: revert/review when seats are available.
+    await page.route(/\/api\/v1\/organizations\/[^/]+\/enrich/, async (route) => {
+      const req = route.request();
+      if (req.method() === 'POST') {
+        await route.continue({ postData: JSON.stringify({ model: 'mistral-small-2603' }) });
+      } else {
+        await route.continue();
+      }
+    });
+
     await aiButton.click();
     const draftRes = await draftResPromise;
     if (draftRes && !draftRes.ok()) {

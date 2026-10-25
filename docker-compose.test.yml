@@ -3,6 +3,7 @@ services:
     user: "${API_UID:-0}:${API_GID:-0}"
     environment:
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT:-true}
+      - DOCUMENT_MODEL=mistral-small-2603
       # BR70-CI1: the test api runs NODE_ENV=development, so its background outbox
       # dispatcher would race + pre-empt the explicit-dispatch outbox unit tests.
       # Suppress the autostart here; the outbox tests drive the dispatcher directly.
