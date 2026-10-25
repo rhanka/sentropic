@@ -107,49 +107,25 @@ export function createArtifactsAdapter(options: ArtifactsAdapterOptions): AppCon
   if (typeof options.createInvocation !== 'function') throw new Error('artifacts requires a trusted invocation factory');
   const executor = createArtifactsToolExecutor(options);
   return {
-      tenantRef: input.tenantRef,
+    appId: ARTIFACTS_APP_ID, connectorId: ARTIFACTS_PROVIDER_ID, manifest,
+    resolveTenant: async (input) => ({ principalRef: input.principalSub, tenantRef: input.tenantRef,
       connectorInstanceId: input.connectorInstanceId,
-      ...(input.workspaceRef === undefined ? {} : { workspaceRef: input.workspaceRef }),
-    }),
-    listCapabilities: () => Promise.resolve([...manifest.tools]),
-    async invokeTool(req): Promise<AppToolResult> {
-      const auditId = req.ctx.auditId;
+      ...(input.workspaceRef === undefined ? {} : { workspaceRef: input.workspaceRef }) }),
+    listCapabilities: async () => [...manifest.tools],
+    async invokeTool(request): Promise<AppToolResult> {
+      let outcome: ArtifactOutcome<HttpResponse>;
       try {
-        const args = typeof req.input === 'object' && req.input !== null && !Array.isArray(req.input)
-          ? (req.input as Record<string, unknown>)
-          : {};
-        if (manifest.tools.some((tool) => tool.name === req.capabilityRef && tool.idempotency.required)) {
-          const key = needString(args, 'idempotencyKey');
-          if (req.idempotencyKey !== undefined && req.idempotencyKey !== key) {
-            throw new Error('invalid request: conflicting idempotency key');
-          }
-        }
-        const res = await executor.invoke({
-          tool: req.capabilityRef,
-          actorId: req.ctx.principal.sub,
-          args,
-        });
-        if (res.status >= 200 && res.status < 300) {
-          return { ok: true, output: res.body, auditId, redactionClass: 'low' };
-        }
-        const code = errorCodeOf(res.body);
-        return {
-          ok: false, auditId, redactionClass: 'low',
-          error: { code, message: code, retriable: res.status >= 500 },
-        };
-      } catch {
-        return {
-          ok: false, auditId, redactionClass: 'low',
-          error: { code: 'invalid_request', message: 'invalid_request', retriable: false },
-        };
-      }
+        // Selection and closed input checks precede even the host invocation binding.
+        options.profile.validate(request.capabilityRef, request.input, request.idempotencyKey);
+        const invocation = await options.createInvocation(request);
+        if (invocation.actorId !== request.ctx.principal.sub) throw new ArtifactProfileInputError();
+        outcome = await executor.execute({ tool: request.capabilityRef, args: request.input,
+          invocation, idempotencyKey: request.idempotencyKey });
+      } catch (cause) { outcome = rejected(cause, request.ctx.requestId, request.capabilityRef); }
+      return projectArtifactMcpOutcome(outcome, request.ctx.auditId);
     },
-    readResource: (req) => Promise.resolve({
-      ok: false,
-      auditId: req.ctx.auditId,
-      redactionClass: 'low',
-      error: { code: 'not_found', message: 'not_found', retriable: false },
-    }),
-    validateSecrets: () => Promise.resolve([]),
+    readResource: async (request) => ({ ok: false, auditId: request.ctx.auditId, redactionClass: 'low',
+      error: { code: 'not_found', message: 'not_found', retriable: false } }),
+    validateSecrets: async () => [],
   };
 }
