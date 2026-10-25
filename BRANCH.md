@@ -36,6 +36,7 @@
 
 ## Feedback Loop
 - [x] INT-2: origin/main merge conflicts only in BRANCH.md; retain this integration plan. Track journal is byte-identical to the pre-merge integration head.
+- [x] INT-3: restored the frozen build-mcp-platform recipe; retained P1 packed graph verification passed (30 files, 54 edges) inside the isolated Compose runner, without regenerating evidence.
 - [x] L0: owner accepts external CI failure tracked in #734.
 - [x] L3: owner accepts 157f231d5; type convergence belongs to L6, excluded from this train.
 - [x] Merge policy: retain integration BRANCH.md; report each source conflict separately.
