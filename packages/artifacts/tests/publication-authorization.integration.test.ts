@@ -236,6 +236,7 @@ describe('guarded publication authorization', () => {
         expect(await store.count(digest)).toBe(1);
         expect((await inspectDeletionClaims(host)).some((claim) => claim.state === 'pending' && claim.blobKeys.includes(key))).toBe(true);
         await store.releaseRef(digest, 'live-release');
+        await createPostgresGcService(executor, () => store).collect(blobs, 'artifacts/');
       } else {
         const paused = await pausePurgeBeforeDelete(host, artifactId);
         try {
@@ -260,6 +261,7 @@ describe('guarded publication authorization', () => {
   });
 
   it('should invalidate an expired preparation before a paused finalization can commit', async () => {
+    const receiptsBefore = await countRows('artifacts.operation_receipts');
     const artifactId = freshArtifactId();
     await registerArtifact(artifactId, 'owner-1');
     const store = createPostgresArtifactStore(pool);
@@ -289,7 +291,7 @@ describe('guarded publication authorization', () => {
     expect(result.ok).toBe(false);
     expect(await countRows('artifacts.releases', ' WHERE artifact_id = $1', [artifactId])).toBe(0);
     expect(await countRows('artifacts.artifact_current', ' WHERE artifact_id = $1', [artifactId])).toBe(0);
-    expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['expired-preparation'])).toBe(0);
+    expect(await countRows('artifacts.operation_receipts')).toBe(receiptsBefore);
     expect(await blobs.listKeys('artifacts/')).toEqual([]);
   });
 
