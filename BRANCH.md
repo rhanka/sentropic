@@ -128,6 +128,7 @@
   - [x] Root npm audit after migration: zero HIGH/CRITICAL, no Zod finding. Remove npm-audit/SCA-api dated exceptions and the GHSA allowlist first; remove remaining scanner aliases in the next atomic commit.
   - [x] Removed all Zod dated exceptions, including SCA UI and API/toolbox container aliases for both 3.25.76 and 3.23.8.
   - [x] `.security/audit-allowlist.json` has no Zod entry.
+  - [x] Trim register trailing whitespace after exception removal; staged diff whitespace check PASS.
   - [x] Local API typecheck PASS; API lint PASS (0 errors, 219 warnings); package builds/typechecks PASS.
   - [x] Local UI regression: 489/489 PASS; auth-hono 239/239, comments 102/102, skills 136/136, packaging lock integrity 8/8 PASS.
   - [x] Exception-free Docker audit command PASS: `node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root`. Register parses as YAML and every lock resolves only Zod 4.6.7.
