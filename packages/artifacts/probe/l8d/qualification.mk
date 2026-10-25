@@ -20,6 +20,9 @@ pack: guard
 install: guard
 	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node $(PROBE)/install.mjs
 
+smoke: guard
+	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node $(PROBE)/smoke.mjs
+
 radar: guard
 	@mkdir -p $(OUT)
 	@git rev-parse HEAD > $(OUT)/source-commit
