@@ -45,7 +45,7 @@
 - [x] INT-4: reserved artifacts 0.2.0 and mesh 0.22.0 candidate manifests per spec r2 sections 5.2/6.1; registry baselines are 0.1.4/0.21.2. Platform 0.4.0 and mcp-auth 0.2.2 are reused; no publication or L8 acceptance claim. Artifacts build and 11 MCP tests passed.
 - [x] INT-5: aligned selected fixture declarations with its retained published artifacts 0.1.4 entry; source tuple checks pass (4 tests; 3 installed checks await their dedicated runner). Mesh surface passes 21 tests. Full local packaging reached a registry 404 for llm-mesh 0.27.1; CI's verified sibling path remains required.
 - [x] L0: owner accepts external CI failure tracked in #734.
-- [x] L3: owner accepts 157f231d5; type convergence belongs to L6, excluded from this train.
+- [x] L3: owner accepts 157f231d5; type convergence is now integrated through the approved L6 head.
 - [x] Merge policy: retain integration BRANCH.md; report each source conflict separately.
 - [x] L5 brings reviewed Track events; preserve them without editing. The L5 scope check reported advisory failures because the initial train plan forbade Track; this plan now permits preservation of the approved history.
 - [x] INT-1: full installed packaging reproduced 90 passes / 1 failure at types-and-bundlers.spec.ts:82. The old optional-peer-only assertion rejected L7's declared platform digest import. Require the exact two runtime edges and the artifacts-only declaration edge; no runtime change.
@@ -54,7 +54,7 @@
 - [x] No flaky acceptance granted.
 
 ## Orchestration Mode (AI-selected)
-- [x] Multi-branch: one integrator; merge order L0, L1, L2, L3, L4, L5, L7.
+- [x] Multi-branch: one integrator; merge order L0, L1, L2, L3, L4, L5, L7, L6.
 
 ## UAT Management (in orchestration context)
 - [x] No UI changes; real package and service tests are the qualification scope.
@@ -68,7 +68,10 @@
 - [x] Lot 5 — merge c703afc68 (MCP/HTTP); only the topic plan conflicted.
 - [x] Lot 7 — merge eae0c261a (mesh surface/tuple); only the topic plan conflicted.
 - [x] Lot 6 — merge e67a978f9 (approved transport/type convergence); resolved plan, MCP names and MCP tests.
-- [ ] Requalification — artifacts unit/integration, lint, freeze-types and mesh surface/tuple/packaging on the final integration head.
+- [x] Requalification — artifacts: 431 unit tests / 33 files; 102 PostgreSQL/MinIO integration/E2E tests / 10 files; lint and freeze-types passed.
+- [x] Requalification — mesh: surface 21 passed; stateful conformance 1 passed; typecheck passed. Full installed packaging: 91 passed / 15 files, including artifacts tuple 7, tuple skew 14 and types/bundlers 17; no skips.
+- [x] Requalification — source 982401708; guarded sibling receipt regenerated for that SHA; every Docker step used shared flock and test-861-int Compose cleanup. L0 freeze, Track and protected main/#734 files remain byte-identical to 34d467972.
+- [x] PR #738 was automatically marked merged by GitHub after integration; added the requested comment: merged via integration #739. PR #739 stays open; CI is monitored on its final pushed head.
 - [x] Qualification — make test-artifacts: 407 passed, 31 files; source tree at 818b6c509; build passed; make down passed.
 - [x] Qualification — make test-artifacts-integration: 94 passed across 10 files against real PostgreSQL/MinIO; build and make down passed.
 - [x] Qualification — make lint-artifacts: 0 errors, 0 warnings; make down passed.
