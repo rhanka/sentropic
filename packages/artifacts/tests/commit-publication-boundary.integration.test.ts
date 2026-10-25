@@ -15,6 +15,7 @@ import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/c
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
 import { createArtifactCommitBarrier, type CommitBarrierObserver, type CommitBarrierPoint } from '../src/testing.js';
 import type { PublicationBlobStore } from '../src/server/publication.js';
+import type { FinalizeRequest } from '../src/server/commit/types.js';
 
 if (!process.env['DATABASE_URL'] || !process.env['ARTIFACTS_S3_ENDPOINT']) {
   throw new Error('L8a requires make test-artifacts-integration with PostgreSQL and MinIO');
@@ -57,7 +58,22 @@ function world(db: Pool, store: PublicationBlobStore, observer?: CommitBarrierOb
     }) },
   });
   const refs = createPostgresClaimGuardedRefs(pg, executor);
-  const service = createGuardedPublicationService({ coordinator, blobs: store, intents: pg, refs,
+  // Account/activation policy belongs to the host, composed after provider lifecycle/ACL checks.
+  const bindHostGuard = (request: FinalizeRequest): FinalizeRequest => ({ ...request,
+    guard: async (context, transaction) => {
+      const decision = await request.guard(context, transaction);
+      if (!decision.allowed) return decision;
+      const approval = await transaction.participant.checkApproval({ actorId: context.actorId,
+        operation: context.operation });
+      return approval.approved ? decision : { allowed: false, reason: approval.reason ?? 'denied',
+        publicCode: 'access_denied', status: 403, retriable: false };
+    },
+  });
+  const guardedCoordinator = { ...coordinator,
+    finalizePrepared: (request: FinalizeRequest) => coordinator.finalizePrepared(bindHostGuard(request)),
+    replayPrepared: (request: FinalizeRequest) => coordinator.replayPrepared(bindHostGuard(request)),
+  };
+  const service = createGuardedPublicationService({ coordinator: guardedCoordinator, blobs: store, intents: pg, refs,
     cleanupWindowMs: 1000, createUnitWriter: createPostgresPublicationUnitWriter,
     locks: { 'artifact-lifecycle': [async (client) => {
       await client.query('SELECT id FROM artifacts.artifacts ORDER BY id FOR UPDATE', []);

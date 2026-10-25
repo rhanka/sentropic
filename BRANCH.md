@@ -56,6 +56,7 @@
 - [ ] Lot 2 — Wire optional `mapHostError` through HTTP, MCP and coordinator classification.
   - [x] Additive dependencies wired; HTTP/MCP S3 and coordinator acquisition regressions pass.
   - [ ] Tests: `tests/host-acceptance.test.ts`, `tests/commit-failure-parity.integration.test.ts`; typed timeout red then green, private causes and retry parity.
+  - [x] Existing direct-publication integration fixture now explicitly composes host approval after provider checks; its 15 expiry-denial failures exposed reliance on the removed provider approval check. Assertions retained unchanged.
 - [ ] Lot 3 — Bump artifacts to 0.2.1; update packed host composition and documentation.
   - [x] Registry latest verified as 0.2.0; package, workspace lock and provider manifest version bumped to 0.2.1.
   - [ ] Tests: `probe/packed-example.test.mjs`; verify registry version, freeze bytes and package bump.
