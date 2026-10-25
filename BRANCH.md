@@ -1,7 +1,7 @@
 # Feature: #861 L4 publication preparation fixes
 
 ## Objective
-- [ ] Correlate publication preparations and expose all three S3 barriers through the frozen L3 observer.
+- [x] Correlate publication preparations and expose all three S3 barriers through the frozen L3 observer.
 
 ## Scope / Guardrails
 - [x] Branch: fix/artifacts-861-L4-l8a-defects; worktree: tmp/worktrees/861-L4-l8fix.
@@ -45,7 +45,8 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: merge L8a qualification tests and verify branch/scope mechanically.
-- [ ] Lot 1: reproduce both defects; persist a single invocation ID before preparation and invoke S3 observer barriers.
-- [ ] Lot 1: promote both known-failure tests to ordinary regression tests.
+- [x] Lot 1: reproduced exactly two failures (missing invocationId and all S3 points absent), with 24 other tests passing; persist one invocation ID and invoke S3 observer barriers.
+- [x] Lot 1: promote both known-failure tests; remove the test-only S3 barrier wrapper so expiry tests exercise product hooks.
+- [x] Boundary gate: build-artifacts passed; commit-publication-boundary.integration.test.ts passed all 26 tests on real PostgreSQL/MinIO.
 - [ ] Lot 2: run boundary integration suite, publication/collection regressions, unit tests, lint and frozen declaration checks.
 - [ ] Lot 2: verify frozen files/L3 signatures unchanged, clean Compose, commit through make, push and open a draft PR targeting feat/immo-861-integration.
