@@ -1,8 +1,7 @@
 // Fresh-store host for the packed probe, using only installed public exports.
 import { randomUUID } from 'node:crypto';
 import { createHttpArtifactApp } from '@sentropic/artifacts/http';
-import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
-import { createRadarKeyDerivation } from '@sentropic/artifacts/server/command-identity';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, createRadarKeyDerivation } from '@sentropic/artifacts/mcp-core';
 import { createArtifactCommitCoordinator } from '@sentropic/artifacts/server/commit-contract';
 import { createMemoryAclStore } from '@sentropic/artifacts/server/access';
 import { createLifecycleService, createMemoryLifecycleStore } from '@sentropic/artifacts/server/lifecycle';
