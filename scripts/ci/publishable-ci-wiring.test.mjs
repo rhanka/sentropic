@@ -217,7 +217,7 @@ test('lint wiring follows baseline evidence, independently per package, before t
 });
 
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
-const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.27.1,@sentropic/llm-gateway@0.21.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.0';
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.27.2,@sentropic/llm-gateway@0.21.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.0';
 
 test('cluster-mesh qualification installs every declared optional Sentropic peer', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages/cluster-mesh/package.json'), 'utf8'));
@@ -394,7 +394,7 @@ test('sibling Make targets gate PACKAGE/SIBLING_DIR on the host before docker an
   }
   assert.match(recipe('pack-candidate-siblings'), /siblings '\$\(PACKAGE\)' '\$\(SIBLING_DIR\)'/);
   const r = recipe('publishable-sibling-plan');
-  assert.ok(r.indexOf("@case '$(PACKAGE)' in") < r.indexOf('docker run'), 'host slug check before docker run');
+  assert.ok(r.indexOf("@case '$(PACKAGE)' in") < r.indexOf('$(ARTIFACTS_RUN)'), 'host slug check before container launch');
   assert.match(r, /-e PACKAGE="\$\(PACKAGE\)" -e SIBLING_DIR="\$\(SIBLING_DIR\)"/);
   const inner = r.slice(r.indexOf("sh -lc '"));
   assert.ok(!/\$\((?:PACKAGE|SIBLING_DIR)\)/.test(inner), 'no Make interpolation inside the container script');
