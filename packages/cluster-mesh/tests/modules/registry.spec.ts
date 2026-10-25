@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   ClusterMeshModuleUnavailableError,
   isClusterMeshModuleUnavailableError,
@@ -21,6 +22,27 @@ const registry = (disabled: readonly string[] = []) =>
   createModuleRegistry({ disabled: disabled as never }, { anchorDir });
 
 describe('module registry', () => {
+  it('should accept the current comments leaf version and still require its optional peer', async () => {
+    const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+    tree.install('app', { name: '@sentropic/cluster-mesh', version, exports: {
+      './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
+    } });
+    await expect(registry().load('comments')).rejects.toMatchObject({
+      reason: 'not_installed', packageName: '@sentropic/comments',
+    });
+    expect(evaluations()).toEqual([]);
+  });
+
+  it('should refuse the next unqualified comments leaf minor before evaluation', async () => {
+    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.23.0', exports: {
+      './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
+    } });
+    await expect(registry().load('comments')).rejects.toMatchObject({
+      reason: 'incompatible_version', packageName: '@sentropic/cluster-mesh',
+    });
+    expect(evaluations()).toEqual([]);
+  });
+
   it('should resolve and evaluate nothing at construction', () => {
     tree.install('app', fakeMesh('mesh'));
     const modules = registry();

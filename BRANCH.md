@@ -35,6 +35,7 @@
   - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
 
 ## Feedback Loop
+- [x] INT-13: CI installed-comments probe rejected the reserved mesh 0.22.0 candidate against its own <0.22.0 descriptor. Admit 0.21/0.22 and retain the 0.23 refusal; 43 registry tests passed. Rebuilt packed bare-consumer root/storage/disabled-comments/missing-peer checks all passed under shared-lock Compose cleanup.
 - [x] INT-12: packed round-trip uses trusted invocations and caller keys, rejects forged scope and invalid files, and reads content through the retained public runtime. Core-only (platform absent), kernel and both driver adapters passed under Compose; UTF-8 bytes, scope, CORP and zero fetches verified.
 - [x] INT-11: packed/core-only probes now construct the guarded host from installed exports and catalogue only the compiled selection; retain the global 15-name contract and optional-platform absence checks.
 - [x] INT-10: CI artifacts unit/integration gates passed, then the packed consumer failed with invalid compiled profile. Add a fresh-store host using installed public L6 exports; migrate the isolated consumer without relaxing validation or optional-peer checks.
@@ -74,6 +75,7 @@
 - [x] Requalification — artifacts: 431 unit tests / 33 files; 102 PostgreSQL/MinIO integration/E2E tests / 10 files; lint and freeze-types passed.
 - [x] Requalification — mesh: surface 21 passed; stateful conformance 1 passed; typecheck passed. Full installed packaging: 91 passed / 15 files, including artifacts tuple 7, tuple skew 14 and types/bundlers 17; no skips.
 - [x] Requalification — source 982401708; guarded sibling receipt regenerated for that SHA; every Docker step used shared flock and test-861-int Compose cleanup. L0 freeze, Track and protected main/#734 files remain byte-identical to 34d467972.
+- [x] CI follow-up qualification — packed artifacts core-only and kernel consumers plus both driver adapters passed; comments version regressions and the real installed bare probe passed. Only probe fixtures and the mesh self-version descriptor changed after the full local campaign.
 - [x] PR #738 was automatically marked merged by GitHub after integration; added the requested comment: merged via integration #739. PR #739 stays open; CI is monitored on its final pushed head.
 - [x] Qualification — make test-artifacts: 407 passed, 31 files; source tree at 818b6c509; build passed; make down passed.
 - [x] Qualification — make test-artifacts-integration: 94 passed across 10 files against real PostgreSQL/MinIO; build and make down passed.
