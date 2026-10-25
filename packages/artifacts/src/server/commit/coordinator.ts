@@ -383,12 +383,18 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     request: FinalizeRequest,
     connection: FinalizeConnection,
     transactionToken: string,
+    purpose: 'finalize' | 'replay',
   ): { transaction: ArtifactCommitTransaction; minted: Set<ArtifactAuthorizationFence> } => {
     const minted = new Set<ArtifactAuthorizationFence>();
     const raw = options.policy.createParticipant(connection, transactionToken);
+    let reservation: Promise<{ reserved: boolean }> | undefined;
     const participant: ArtifactCommitParticipant = {
       policyRevision: request.policyRevision,
       async readAdmission(input) {
+        if (input.actorId !== request.actorId || input.operation !== request.operation ||
+          input.artifactId !== (request.artifactId ?? '') || input.bindingId !== (request.bindingName ?? '')) {
+          return { allowed: false, reason: 'invalid_object' };
+        }
         const revision = await raw.readRevision();
         if (revision !== input.policyRevision) return { allowed: false, reason: 'revoked' };
         const decision = await raw.checkApproval({ actorId: input.actorId, operation: input.operation });
@@ -396,7 +402,15 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       },
       readRevision: () => raw.readRevision(),
       checkApproval: (input) => raw.checkApproval(input),
-      reserveQuota: (input) => raw.reserveQuota({ actorId: request.actorId, operation: input.operation }),
+      reserveQuota(input) {
+        const bytes = request.quotaBytes ?? 0;
+        if (input.operation !== request.operation || ('storageScopeId' in input &&
+          (input.storageScopeId !== request.scopeId || input.bytes !== bytes)) ||
+          ('actorId' in input && input.actorId !== request.actorId)) return Promise.resolve({ reserved: false });
+        if (purpose === 'replay') return Promise.resolve({ reserved: true });
+        return reservation ??= raw.reserveQuota({ actorId: request.actorId, operation: request.operation,
+          storageScopeId: request.scopeId, bytes });
+      },
       mintFence: (revision, invocationId) => {
         const fence: ArtifactAuthorizationFence = Object.freeze({
           ...raw.mintFence(revision, invocationId), [commitFenceBrand]: true as const,
@@ -644,7 +658,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         phase = 'guard';
         await observeAt('before_finalization_row_lock', request.invocationId);
         const transactionToken = randomUUID();
-        const { transaction, minted } = bindTransaction(request, active, transactionToken);
+        const { transaction, minted } = bindTransaction(request, active, transactionToken, 'finalize');
         await runLockGroup(request, active, PRE_QUOTA_LOCK_CLASSES);
         // Authority re-read before the quota wait: A4.4 class order.
         await transaction.participant.readRevision();
@@ -815,7 +829,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         }
         phase = 'guard';
         const transactionToken = randomUUID();
-        const { transaction, minted } = bindTransaction(request, active, transactionToken);
+        const { transaction, minted } = bindTransaction(request, active, transactionToken, 'replay');
         // Same key/object/ACL/policy lock order as finalization, without
         // quota charging, provisional publication writes or intent completion.
         await runLockGroup(request, active, PRE_QUOTA_LOCK_CLASSES);
