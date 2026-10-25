@@ -1,0 +1,40 @@
+{
+  "status": "failed_qualification",
+  "sourceCommit": "49f9de00c70295b46ae76e057014b3ed9f60aa30",
+  "tupleDigest": "30dd046060b37172dc1613037bddf359d209d2846808528be6be09d2fab259be",
+  "image": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+  "tuple": [
+    {
+      "name": "@sentropic/artifacts",
+      "version": "0.2.0",
+      "source": "./packages/artifacts",
+      "path": "/workspace/tmp/l8d/packs/sentropic-artifacts-0.2.0.tgz",
+      "sha256": "243f48d61264095dc95c3201a97dd98f5e848f5f80fe334817f1eed8f38cc410",
+      "integrity": "sha512-OAC8y5Ddlo554pviN86yELyMx2U0mU0Co9HU7je9aMon8wauaP8u2tY3LQrF8vR9tNS2x4V5XCjxRe1PGOzIfA=="
+    },
+    {
+      "name": "@sentropic/cluster-mesh",
+      "version": "0.22.0",
+      "source": "./packages/cluster-mesh",
+      "path": "/workspace/tmp/l8d/packs/sentropic-cluster-mesh-0.22.0.tgz",
+      "sha256": "5637df094c2cf129937119689e0ecdabe80c8d0f6bd50b6d6e7f2639e1994f39",
+      "integrity": "sha512-H6sh2pLT0ey0znjz2A8QtnwKrJn5psVh15JaKlDU/HZfudnaVuh15gQGj63j6vzFujr1zg5+dpl4UVBCmQvoVA=="
+    },
+    {
+      "name": "@sentropic/mcp-platform",
+      "version": "0.4.0",
+      "source": "@sentropic/mcp-platform@0.4.0",
+      "path": "/workspace/tmp/l8d/packs/sentropic-mcp-platform-0.4.0.tgz",
+      "sha256": "67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5",
+      "integrity": "sha512-65FIZAJIzWTb1t3/IBQhwgLovjDFkbOm/s+LLy9hZGjmV7yLbCjd45XcAAbp1DDlUsX8xBEKvVMRFOOstel/jA=="
+    },
+    {
+      "name": "@sentropic/mcp-auth",
+      "version": "0.2.2",
+      "source": "@sentropic/mcp-auth@0.2.2",
+      "path": "/workspace/tmp/l8d/packs/sentropic-mcp-auth-0.2.2.tgz",
+      "sha256": "3aa546601a3ad444bae0058c6c21038ec1d12e905e27df1abb628eadc867d926",
+      "integrity": "sha512-tXH1Q5R79hgW2qeqNPqFQclHOjUSO5EPHxrV6D7kecqwSPUYNWOkEsUfuOclSmn4rud1tw+SbNn4gq2UfnPW8w=="
+    }
+  ]
+}

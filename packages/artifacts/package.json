@@ -162,6 +162,7 @@
   "files": [
     "dist",
     "l0-freeze",
+    "src/contracts.ts",
     "migrations",
     "docs/migration-l6.md",
     "README.md",

@@ -38,6 +38,7 @@
   - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
 
 ## Feedback Loop
+- [x] INT-17: preserved owner merges #747/#748 at fbda4c3ed without rebasing: typed coordinator/abort fixes, exact Radar 0.19.2 runtime admission, packaged declaration dependency and qualification regressions. Only BRANCH.md conflicted; retain this integration plan and all incoming source/test bytes. L0 freeze and Track remain unchanged.
 - [x] INT-16: CI passed all 92 packaging tests, then the generic candidate-install qualifier rejected the stale artifacts 0.1.3 pin. Candidate, post-publication and bootstrap qualification now use 0.2.0; all 22 wiring tests and the full clean-consumer qualification passed with the guarded artifacts receipt, including every runtime entry point.
 - [x] INT-15: CI carries an artifacts 0.2.0 sibling receipt while the committed selected lock intentionally pins published 0.1.4. Verify the installed file's version/SRI against the verified receipt; retain train registry-lock checks and reject missing, stale, remote or tampered entries. Four guard tests and all 92 packaging tests passed with both real sibling receipts; frozen selected lock bytes remain unchanged.
 - [x] INT-14: preserved the owner's concurrent integration merge 59e6b4e7f (#744) without rebasing: publication invocation correlation/S3 observer hooks and 26 real boundary tests. Only BRANCH.md conflicted; retained this integration plan. L0 freeze and Track remain byte-identical.

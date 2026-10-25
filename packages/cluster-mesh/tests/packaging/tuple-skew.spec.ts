@@ -4,9 +4,18 @@ import { describe, expect, it } from 'vitest';
 import { enabled, fixtureDir, nodeJson, read } from './helpers.js';
 import { npmSkewViolations, runtimeRefusalViolations, type Detail, type Probe, type SkewTuple } from './skew-invariants.js';
 import { satisfiesRange } from '../../src/modules/semver.js';
+import { LLM_MESH_RANGE, PROVIDER_CATALOG } from '../../src/modules/catalog.js';
 
 describe('Radar llm-mesh compatibility range', () => {
-  const range = '0.19.2 || >=0.22.0 <0.28.0';
+  const range = LLM_MESH_RANGE;
+  it('should keep the runtime catalog aligned with the manifest peer range', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+    expect(range).toBe('0.19.2 || >=0.22.0 <0.28.0');
+    expect(range).toBe(manifest.peerDependencies['@sentropic/llm-mesh']);
+    for (const entry of Object.values(PROVIDER_CATALOG).filter((entry) => entry.owner === 'llm-mesh')) {
+      expect(entry.range).toBe(range);
+    }
+  });
   it.each(['0.19.2', '0.22.0', '0.27.9'])('should admit the qualified version %s', (version) => {
     expect(satisfiesRange(version, range)).toBe(true);
   });
