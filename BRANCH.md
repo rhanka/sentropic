@@ -31,7 +31,7 @@
 - [x] The normal lane test target includes both packaging regressions and the real llm-mesh 0.19.2 runtime probe.
 - [x] Runner retains per-suite pass/fail/skip counts even when fail-closed validation rejects the suite.
 - [x] Initial API setup failed on missing PostGIS; runner overlay now matches pinned Radar postgis/postgis:16-3.4. Initial evidence remains in tmp/l8d/pre-postgis.
-- [ ] Record Q1/Q2 missing-contract failures separately from Radar's scoped listKeys test defect.
+- [x] Q1: 31 failed (27 effectiveProfile, 2 purge joints, 2 explicit H3 gaps); Q2: 31 effectiveProfile failures. Acceptance cleanup listKeys("") is a separate Radar test defect.
 
 ## AI Flaky tests
 - [x] No flaky acceptance; failures and skips prevent qualification.
@@ -44,8 +44,8 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — verify branch and merge complete integration without rebase.
-- [ ] Lot 1 — rebuild and pack candidate; strict full-Radar install; archive runtime and declaration compilation.
-- [ ] Lot 2 — execute eight Radar suites with gate 1; retain exact source hashes and counts.
+- [x] Lot 1 — rebuilt and packed candidate; strict full-Radar install, archive runtime and declaration compilation pass; normal lane 19/19, zero TODOs/skips.
+- [x] Lot 2 — invoked eight Radar suites with gate 1; required cases 73 passed / 72 failed / 5 setup skips. Full host workspace 157 passed / 1 failed.
 - [ ] Lot 3 — fail-closed receipt/shard validation; update receipt, scope check, atomic commits and push PR #746.
 
 ## Deferred to L9
