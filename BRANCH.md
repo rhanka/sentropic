@@ -52,6 +52,7 @@
 - [x] Lot 0 — pull integration with a merge; verify branch mechanically.
 - [x] Lot 1a — artifacts unit gate: 440 tests / 35 files passed at product source 464581fb8.
 - [x] Lot 2a — add reproducible guarded packing through the existing qualification Compose service.
+- [x] Lot 1b — real PostgreSQL/MinIO integration and E2E: 172 tests / 12 files passed.
 - [ ] Lot 1b — real integration, lint, frozen types and mesh surface/tuple/packaging gates.
 - [ ] Lot 2 — record packed archives, SHA-256, npm integrity, source and toolchain provenance.
 - [ ] Lot 3 — merge integration into L8d; requalify against current frozen-profile / E3 Radar pins.
