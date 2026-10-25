@@ -36,7 +36,13 @@ function lock(file: string, mesh: Record<string, string>): string {
 }
 
 describe('train lock integrity', () => {
-  it('should verify provisional artifacts bytes without rewriting the published baseline', () => {
+  it.each([
+    ['matching candidate', {}, 0],
+    ['stale version', { version: '0.1.4' }, 1],
+    ['tampered integrity', { integrity: 'sha512-tampered' }, 1],
+    ['remote archive', { resolved: 'https://example.test/artifacts.tgz' }, 1],
+    ['missing working lock', undefined, 1],
+  ] as const)('should check %s without rewriting the published baseline', (_label, override, status) => {
     const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'));
     index.push({ name: '@sentropic/artifacts', version: '0.2.0', file: '/x/artifacts.tgz', integrity: 'sha512-artifacts' });
     writeFileSync(join(dir, 'index.json'), JSON.stringify(index));
@@ -47,16 +53,10 @@ describe('train lock integrity', () => {
     writeFileSync(committed, JSON.stringify(baseline));
     const saved = readFileSync(committed, 'utf8');
     const working = join(dir, 'installed.json');
-    const check = (entry: Record<string, string>) => {
-      writeFileSync(working, JSON.stringify({ packages: { 'node_modules/@sentropic/artifacts': entry } }));
-      return run('siblings', committed, dir, working);
-    };
     const candidate = { version: '0.2.0', resolved: 'file:../src/artifacts.tgz', integrity: 'sha512-artifacts' };
-    expect(check(candidate).status).toBe(0);
-    expect(check({ ...candidate, version: '0.1.4' }).status).toBe(1);
-    expect(check({ ...candidate, integrity: 'sha512-tampered' }).status).toBe(1);
-    expect(check({ ...candidate, resolved: 'https://example.test/artifacts.tgz' }).status).toBe(1);
-    expect(run('siblings', committed, dir).status).toBe(1);
+    writeFileSync(working, JSON.stringify({ packages: { 'node_modules/@sentropic/artifacts': { ...candidate, ...override } } }));
+    const args = override === undefined ? [] : [working];
+    expect(run('siblings', committed, dir, ...args).status).toBe(status);
     expect(readFileSync(committed, 'utf8')).toBe(saved);
   });
 
