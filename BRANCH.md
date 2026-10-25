@@ -27,6 +27,7 @@
 
 ## Feedback Loop
 - [x] Radar integration b2b802b5 plus acceptance/helper overlay e2e9515; A1/A2 ancestry checked by pin-radar.
+- [x] Original PR #746 was already merged at 238ab2959; replacement draft PR #749 targets feat/immo-861-integration for this requalification delta.
 - [x] #748 promotes ERESOLVE/TS2307 reproductions to normal assertions; no TODO acceptance.
 - [x] The normal lane test target includes both packaging regressions and the real llm-mesh 0.19.2 runtime probe.
 - [x] Runner retains per-suite pass/fail/skip counts even when fail-closed validation rejects the suite.
@@ -47,7 +48,7 @@
 - [x] Lot 0 — verify branch and merge complete integration without rebase.
 - [x] Lot 1 — rebuilt and packed candidate; strict full-Radar install, archive runtime and declaration compilation pass; normal lane 19/19, zero TODOs/skips.
 - [x] Lot 2 — invoked eight Radar suites with gate 1; required cases 73 passed / 72 failed / 5 setup skips. Full host workspace 157 passed / 1 failed.
-- [x] Lot 3 — receipt and shard validation both reject qualification; evidence updated, scope checked, atomic commits prepared for push to PR #746.
+- [x] Lot 3 — receipt and shard validation reject qualification; evidence updated, scope checked, atomic commits pushed; draft PR #749 carries the delta after merged #746.
 
 ## Deferred to L9
 - [x] Published bytes, provenance and activation require separate release gates.
