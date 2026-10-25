@@ -144,8 +144,8 @@ export interface RadarCommitInput {
 export interface RadarCommitSetup {
   readonly coordinator: FinalizationCoordinator;
   readonly abandonedAttempts: AbandonedAttempt[];
-  finalize(input: RadarCommitInput): Promise<FinalizeResult>;
-  replayGuarded(input: RadarCommitInput): Promise<FinalizeResult>;
+  finalizePrepared(input: RadarCommitInput): Promise<FinalizeResult>;
+  replayPrepared(input: RadarCommitInput): Promise<FinalizeResult>;
   drainAbandonedAttempts(onSweep: (batch: AbandonedAttempt[]) => void): void;
   startAbandonedAttemptSweep(
     onSweep: (batch: AbandonedAttempt[]) => void | Promise<void>,
@@ -211,8 +211,8 @@ export function createRadarCommitSetup(options: {
   return {
     coordinator,
     abandonedAttempts,
-    finalize: (input: RadarCommitInput) => coordinator.finalize(toRequest(input)),
-    replayGuarded: (input: RadarCommitInput) => coordinator.replayGuarded(toRequest(input)),
+    finalizePrepared: (input: RadarCommitInput) => coordinator.finalizePrepared(toRequest(input)),
+    replayPrepared: (input: RadarCommitInput) => coordinator.replayPrepared(toRequest(input)),
     drainAbandonedAttempts,
     startAbandonedAttemptSweep: (onSweep, intervalMs) => {
       // Serialized sweeps: an overlapping tick queues behind the running
