@@ -25,6 +25,7 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
   - `packages/auth-hono/**`
   - `packages/comments/**`
   - `packages/skills/**`
+  - `packages/cluster-mesh/tests/packaging/**` (Zod resolution in the frozen consumer)
   - `.security/vulnerability-register.yaml`
   - `.security/audit-allowlist.json`
   - `BRANCH.md`
@@ -47,6 +48,8 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
 - [x] Resume 2026-10-25: merge origin/main without rebase; preserve the six WIP commits. Track item `01M5PMR6AG9QDZG9H3N57TB3FS`; owner decision verbatim: « Exception datée + migration ».
 - [x] BR01-EX2: allow the host scope-check lane for `test-sec-zod4` and an optional comparison base during the main merge. Reason: the default scope checker starts non-Compose containers, forbidden by the Docker packet. Impact: scope checking only; rollback: remove this environment and comparison-base parameter.
 - [x] Merge containment: all 342 pre-merge Track event IDs survive; no local Track writes. Main now contains the dated Zod exception and body-parser fix; requalify the resumed migration.
+- [x] Expanded inventory: 44 API source files, five auth-hono handlers, comments Hono adapter, skills parser; UI/e2e have no direct consumer. Root/API locks resolve 4.6.7; the frozen cluster-mesh selected consumer still resolves 3.25.76 and needs its own lot.
+- [x] Transitive inspection: Ollama 1.2.0 (latest published) declares a v3 peer but its runtime validation uses safeParse and the record parses successfully with 4.6.7. No application shim or v3 import introduced.
 - [ ] `attention`: origin/main carries no zod exception in `.security/vulnerability-register.yaml` (verified 2026-10-24, GHSA-mrhx-c7xc-m3w5 entry exists only on `feat/llm-judge` as BR96-EX19) — nothing to remove unless main gains one before merge; re-check before final gate.
 - [ ] BR01-EX1 (`acknowledge` self): touch `Makefile` (Forbidden Path), pin-only changes of `zod@3.25.76`/`zod@3.23.8` install pins to the v4 line in package typecheck/test targets (skills, auth-hono, llm-gateway, auth-client, cluster-mesh peer tools). Reason: targets hardcode the exact zod version under test; without the pin update the gates keep validating against v3. Impact: version strings in ephemeral `npm install` commands only, no target logic change. Rollback: revert pin strings to v3.
 - [x] `acknowledge`: `make scope-check` available (harness CLI installed); run before every commit.
@@ -144,3 +147,8 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+
+- [x] **Lot 6 — cluster-mesh frozen consumer Zod resolution**
+  - [x] Pin the selected fixture to Zod >=4.6.6, preserve overrides when preparing consumers, and refresh its Zod lock entry.
+  - [x] Frozen consumer npm ci PASS (176 packages, Zod 4.6.7); packaging lock-integrity 8/8 PASS via Compose qualification.
+  - [x] No application source or package version change; no UI/UAT change.
