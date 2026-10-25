@@ -51,7 +51,7 @@
 - [x] Lot 4 — merge a8df25634 (publication/collection); only the topic plan conflicted.
 - [x] Lot 5 — merge c703afc68 (MCP/HTTP); only the topic plan conflicted.
 - [x] Lot 7 — merge eae0c261a (mesh surface/tuple); only the topic plan conflicted.
-- [ ] Qualification — make test-artifacts; record exact counts and source SHA.
+- [x] Qualification — make test-artifacts: 407 passed, 31 files; source tree at c604a9e88; build passed; make down passed.
 - [ ] Qualification — make test-artifacts-integration against PostgreSQL/MinIO; record exact counts.
 - [ ] Qualification — make lint-artifacts; record errors and warnings.
 - [ ] Qualification — mesh artifacts-surface.spec.ts, artifacts-tuple.spec.ts, tuple-skew.spec.ts.
