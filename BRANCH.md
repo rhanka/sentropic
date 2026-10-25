@@ -30,6 +30,7 @@
 - [x] #748 promotes ERESOLVE/TS2307 reproductions to normal assertions; no TODO acceptance.
 - [x] The normal lane test target includes both packaging regressions and the real llm-mesh 0.19.2 runtime probe.
 - [x] Runner retains per-suite pass/fail/skip counts even when fail-closed validation rejects the suite.
+- [x] Standalone aggregate target evaluates delivered shards even when the image or consumer suite gates fail first.
 - [x] Initial API setup failed on missing PostGIS; runner overlay now matches pinned Radar postgis/postgis:16-3.4. Initial evidence remains in tmp/l8d/pre-postgis.
 - [x] Q1: 31 failed (27 effectiveProfile, 2 purge joints, 2 explicit H3 gaps); Q2: 31 effectiveProfile failures. Acceptance cleanup listKeys("") is a separate Radar test defect.
 
