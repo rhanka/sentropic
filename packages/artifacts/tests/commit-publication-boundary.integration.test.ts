@@ -118,29 +118,13 @@ const publishPoints: CommitBarrierPoint[] = ['before_blob_put', 'after_blob_put_
   'before_blob_readback', 'before_connection_acquire', 'before_key_lock',
   'before_finalization_row_lock', 'after_finalization_locks_before_guard', 'before_commit'];
 
-// Preparation I/O is delayed at the real adapter boundary; no fake blob success.
-function delayedBlobs(barrier: ReturnType<typeof createArtifactCommitBarrier>, invocation: string): PublicationBlobStore {
-  return {
-    async putBlob(key, bytes) {
-      await barrier.observer('before_blob_put', invocation);
-      await blobs.putBlob(key, bytes);
-      await barrier.observer('after_blob_put_before_verify', invocation);
-    },
-    async getBlob(key) {
-      await barrier.observer('before_blob_readback', invocation);
-      return blobs.getBlob(key);
-    },
-    listKeys: (prefix) => blobs.listKeys(prefix), deleteBlob: (key) => blobs.deleteBlob(key),
-  };
-}
-
 describe('publication authorization after every applicable wait', () => {
   it.each(publishPoints)('should roll back expired authority after %s and permit a fresh same-key retry', async (point) => {
     const input = inputFor(await artifact());
     const before = await snapshot();
     const authority = { expired: false };
     const barrier = createArtifactCommitBarrier({ points: [point] });
-    const w = world(pool, delayedBlobs(barrier, input.invocationId), barrier.observer, authority);
+    const w = world(pool, blobs, barrier.observer, authority);
     const pending = publish(w, input);
     await barrier.waitUntilReached(point, input.invocationId);
     authority.expired = true;
@@ -400,8 +384,7 @@ describe('bounded cleanup and purge exclusion', () => {
       } finally { await claim.rollback(); claim.release(); }
     });
 
-  // L4 owner: publication.ts:463-472 omits invocationId from the durable preparation.
-  it.fails('[known failure D1] should retain invocation attribution for every denied preparation', async () => {
+  it('should retain invocation attribution for every denied preparation', async () => {
     const input = inputFor(await artifact());
     expect(await publish(world(pool, blobs, undefined, { expired: true }), input)).toMatchObject({ ok: false });
     const attempts = (await createPostgresArtifactStore(pool).listPending())
@@ -410,8 +393,7 @@ describe('bounded cleanup and purge exclusion', () => {
     expect(attempts[0].payload).toMatchObject({ invocationId: input.invocationId, attemptId: input.attemptId });
   });
 
-  // L4 owner: publication.ts:481-484 never calls coordinator.preparationTestHooks.
-  it.fails('[known failure D2] should forward all preparation barriers through the provider observer', async () => {
+  it('should forward all preparation barriers through the provider observer', async () => {
     const input = inputFor(await artifact());
     const observed: string[] = [];
     const outcome = await publish(world(pool, blobs, async (point, invocationId) => {
@@ -419,9 +401,9 @@ describe('bounded cleanup and purge exclusion', () => {
       observed.push(point);
     }), input);
     expect(outcome).toMatchObject({ ok: true });
-    expect(observed).toEqual(expect.arrayContaining([
+    expect(observed.slice(0, 3)).toEqual([
       'before_blob_put', 'after_blob_put_before_verify', 'before_blob_readback',
-    ]));
+    ]);
   });
 });
 
