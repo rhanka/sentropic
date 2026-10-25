@@ -34,6 +34,7 @@
   - [x] Declare `BRLIVE-L0-EXn` with reason, impact and rollback before extending scope; none authorized.
 
 ## Feedback Loop
+- [x] PR753-P2-1 — Cost shared native-campaign CI displacement and custody serialization; present priced dedicated-seat candidate A/B/C without selecting or admitting capacity.
 - [x] Preserve concurrent root/h2a changes; no shared Track writer is assigned, so do not import or append `.track`.
 - [x] Existing `scope-check` builds/runs raw Docker containers incompatible with the lock's compose-only rule; use its host harness checker through an external Make recipe and skip `build-harness`.
 - [x] Record open entry gates with accountable owner, evidence and bounded closure criteria.
@@ -61,6 +62,7 @@
   - [x] Write `.tmp/live-stt/l0/placements.md` and `scope-release.md`; retain every owner-selected configuration.
 - [x] **L0e — Capacity feasibility**
   - [x] Write `.tmp/live-stt/l0/capacity-study.md`; entitlement, allocation source, costs, limits, daily shares/dates and reservation outcome.
+  - [x] Quantify 774 displaced CI units over 129 days, conditional credit costs, 144/159/174-day custody calendars and Business seat pricing/feasibility; owner choice pending.
 - [x] **L0f — Documentation validation and draft handoff**
   - [x] Check all gate IDs, local links, arithmetic, approved hashes and complete cumulative docs-only diff.
   - [x] Run `make scope-check` before each commit through the host harness recipe; check each staged diff under 150 lines.
