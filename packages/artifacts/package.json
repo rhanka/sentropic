@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/artifacts",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
   "type": "module",
   "license": "MIT",
@@ -44,6 +44,18 @@
     "./server/authorization": {
       "types": "./dist/server/authorization.d.ts",
       "import": "./dist/server/authorization.js"
+    },
+    "./server/commit-contract": {
+      "types": "./dist/server/commit-contract.d.ts",
+      "import": "./dist/server/commit-contract.js"
+    },
+    "./server/outcome-contract": {
+      "types": "./dist/server/outcome-contract.d.ts",
+      "import": "./dist/server/outcome-contract.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     },
     "./server/bindings": {
       "types": "./dist/server/bindings.d.ts",
@@ -145,6 +157,7 @@
   "files": [
     "dist",
     "migrations",
+    "docs/migration-l6.md",
     "README.md",
     "LICENSE"
   ],
