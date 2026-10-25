@@ -20,7 +20,8 @@ guard:
 	@case "$(ENV)" in test-861-l8d|test-861-pack-l8dfix) ;; *) exit 1 ;; esac
 
 test: guard
-	@$(COMPOSE) run --rm --no-deps qualification node --test $(PROBE)/receipt.test.mjs
+	@mkdir -p $(OUT)
+	@set -o pipefail; $(COMPOSE) run --rm --no-deps qualification node --test $(PROBE)/receipt.test.mjs $(PROBE)/known-failures.test.mjs $(PROBE)/mesh-0192.mjs 2>&1 | tee $(OUT)/tests.log
 
 pack: guard
 	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node $(PROBE)/pack.mjs
