@@ -12,6 +12,7 @@ guard:
 	@test "$(ENV)" = test-861-int
 
 pack: guard
+	@$(COMPOSE) run --rm --no-deps -e PACK_UID="$$(id -u)" -e PACK_GID="$$(id -g)" qualification sh -ec 'mkdir -p "$(OUT)" tmp/ci-manifest-guard/siblings/cluster-mesh; chown -R "$$PACK_UID:$$PACK_GID" "$(OUT)" tmp/ci-manifest-guard/siblings/cluster-mesh'
 	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" -e SOURCE_SHA=$(SOURCE_SHA) -e CANDIDATE_OUT=$(OUT) qualification node scripts/ci/immo-861-final-pack.mjs
 
 down: guard
