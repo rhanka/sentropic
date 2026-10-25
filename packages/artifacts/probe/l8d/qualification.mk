@@ -7,7 +7,7 @@ COMPOSE := docker compose --env-file /dev/null -p $(ENV) -f docker-compose.immo-
 PROBE := packages/artifacts/probe/l8d
 OUT := tmp/l8d
 
-.PHONY: guard test pack install receipts down scope-check
+.PHONY: guard test pack install radar receipts down scope-check
 guard:
 	@test "$(ENV)" = test-861-l8d
 
@@ -19,6 +19,12 @@ pack: guard
 
 install: guard
 	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node $(PROBE)/install.mjs
+
+radar: guard
+	@mkdir -p $(OUT)
+	@git rev-parse HEAD > $(OUT)/source-commit
+	@$(COMPOSE) up -d --wait postgres minio
+	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node $(PROBE)/radar.mjs
 
 receipts: guard
 	@$(COMPOSE) run --rm --no-deps qualification node $(PROBE)/receipt.mjs $(OUT)/receipt.json
