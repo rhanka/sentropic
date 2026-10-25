@@ -2,7 +2,7 @@
  * L-5e — installed artifacts tuple (spec-v8 §9 5e): in the packaging
  * fixture the candidate plus the candidate mcp-platform and artifacts
  * tarballs form a coherent tuple — mesh declares the artifacts peer
- * (optional, single 0.1.3 range), the installed artifacts candidate
+ * (optional, 0.2.0 contract range), the installed artifacts candidate
  * satisfies both declared ranges (mesh peer, artifacts→platform peer),
  * and the leaf loads the provider definition through the real module
  * registry only when selected. Source-manifest coherence runs in every
@@ -36,7 +36,7 @@ describe('artifacts source tuple coherence', () => {
 
   it('declares the optional artifacts peer once, in the candidate range', () => {
     expect(sourceManifest.peerDependencies?.[ARTIFACTS_PACKAGE]).toBe(ARTIFACTS_RANGE);
-    expect(ARTIFACTS_RANGE).toBe('>=0.1.3 <0.2.0');
+    expect(ARTIFACTS_RANGE).toBe('>=0.2.0 <0.3.0');
     expect(sourceManifest.peerDependenciesMeta?.[ARTIFACTS_PACKAGE]).toEqual({ optional: true });
     expect(sourceManifest.dependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
     expect(sourceManifest.peerDependencies?.['@sentropic/mcp-platform']).toBeUndefined();
@@ -55,8 +55,10 @@ describe('artifacts source tuple coherence', () => {
     expect(descriptor.meshCoherence).toBe(false);
   });
 
-  it('pins the current artifacts candidate in the selected consumer lock', () => {
-    const version = trainVersion('artifacts');
+  it('retains the published artifacts baseline in the selected consumer lock', () => {
+    // prepare.sh installs the unpublished candidate from its real tarball separately.
+    const fixture = manifest(new URL('./fixtures/selected/package.json', import.meta.url).pathname);
+    const version = fixture.dependencies?.[ARTIFACTS_PACKAGE];
     const lock = JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8'));
     expect(lock.packages['node_modules/@sentropic/artifacts']).toMatchObject({
       version,

@@ -246,7 +246,7 @@ describe('artifacts mesh leaf', () => {
     const entry = facade.catalog().find((item) => item.providerId === 'sentropic.artifacts');
     expect(entry).toMatchObject({
       providerId: 'sentropic.artifacts',
-      version: '0.1.4',
+      version: '0.2.0',
       capabilities: SPEC_TOOLS,
       availability: 'not-selected',
     });

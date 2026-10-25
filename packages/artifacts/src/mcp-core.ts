@@ -21,7 +21,7 @@ import { TEXT_MIME_PATTERN } from './http.js';
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.1.4';
+export const ARTIFACTS_PROVIDER_VERSION = '0.2.0';
 
 export const ARTIFACTS_TOOL_NAMES = [
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_ensure',
