@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { createPostgresCommitExecutor } from '../src/adapters/postgres-commit.js';
 import { createPostgresArtifactStore } from '../src/adapters/postgres.js';
-import { createArtifactCommitBarrier } from '../src/testing.js';
+import { createArtifactCommitBarrier, inspectDeletionClaims, pausePurgeBeforeDelete } from '../src/testing.js';
 import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
 import {
   createGuardedPublicationService,
@@ -207,6 +207,58 @@ afterAll(async () => {
 });
 
 describe('guarded publication authorization', () => {
+  it.each(['claim-first', 'reference-first'])('should expose durable purge claims in the %s race order', async (order) => {
+    const artifactId = freshArtifactId();
+    const digest = `sha256:${(order === 'claim-first' ? 'c8' : 'c9').repeat(32)}`;
+    const key = `artifacts/scope-l4/blobs/sha256/${digest.slice(7)}`;
+    const store = createPostgresArtifactStore(pool);
+    const executor = createPostgresCommitExecutor(pool);
+    const inspecting = await executor.beginFinalization();
+    const blobs = new MapBlobs();
+    await blobs.putBlob(key, new Uint8Array([1]));
+    const guarded = createPostgresClaimGuardedRefs(store, executor);
+    const host = { blobs, storageScopeId: 'scope-l4', claims: createPostgresDeletionClaimStore(inspecting),
+      async purge(id: string, deleting: PublicationBlobStore) {
+        const client = await executor.beginFinalization();
+        try {
+          await client.beginReadCommitted();
+          await createPostgresDeletionClaimStore(client).claim(digest, `purge:${id}`);
+          await client.commit();
+        } finally { client.release(); }
+        const result = await createPostgresGcService(executor, () => store).collect(deleting, 'artifacts/');
+        if (result.failures.length) throw new Error('purge failed');
+      } };
+    try {
+      if (order === 'reference-first') {
+        await guarded.addRef(digest, 'live-release');
+        await host.purge(artifactId, blobs);
+        expect(await blobs.getBlob(key)).toBeDefined();
+        expect(await store.count(digest)).toBe(1);
+        expect((await inspectDeletionClaims(host)).some((claim) => claim.state === 'pending' && claim.blobKeys.includes(key))).toBe(true);
+        await store.releaseRef(digest, 'live-release');
+      } else {
+        const paused = await pausePurgeBeforeDelete(host, artifactId);
+        try {
+          expect(paused.blobKeys).toEqual([key]);
+          expect((await inspectDeletionClaims(host)).find((claim) => claim.claimId === paused.claimId)?.state).toBe('pending');
+          const { rows } = await inspecting.query<{ locked: boolean }>(
+            'SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS locked', [`artifacts-blob:${digest}`]);
+          expect(rows[0]?.locked).toBe(false);
+          expect(await blobs.getBlob(key)).toBeDefined();
+        } finally { paused.release(); await paused.finished; }
+        expect(await blobs.getBlob(key)).toBeUndefined();
+        expect((await inspectDeletionClaims(host)).find((claim) => claim.claimId === paused.claimId)?.state).toBe('done');
+        // A new preparation acquires exclusion after claim resolution and writes fresh bytes.
+        await guarded.pin(digest, 'preparation:fresh');
+        await blobs.putBlob(key, new Uint8Array([2]));
+        await guarded.addRef(digest, 'fresh-release');
+        expect(await blobs.getBlob(key)).toEqual(new Uint8Array([2]));
+        await store.releaseRef(digest, 'fresh-release');
+        await store.unpin(digest, 'preparation:fresh');
+      }
+    } finally { inspecting.release(); }
+  });
+
   it('should invalidate an expired preparation before a paused finalization can commit', async () => {
     const artifactId = freshArtifactId();
     await registerArtifact(artifactId, 'owner-1');

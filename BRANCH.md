@@ -50,6 +50,7 @@
 - [x] GAPS-2d: preparation records include unique attempt/invocation/time/deadline metadata; PostgreSQL completion refuses expired/abandoned intents in the same finalization transaction. Cleanup-released pins do not mask the coordinator outcome.
 - [ ] GAPS-3: correlated purge pause and claim inspection; test both race orders on PostgreSQL.
 - [x] GAPS-3a: added durable claim history inspection and a call-scoped purge deletion adapter with release/finished; no global monkey patch or authority shortcut.
+- [x] GAPS-3b: added PostgreSQL tests for both claim/reference race orders, durable pause inspection, advisory exclusion through DELETE, retained shared bytes and fresh preparation after resolution.
 - [ ] GAPS-4: full artifacts unit/integration, lint, freeze, packed example, digests, push and draft PR against feat/immo-861-integration.
 - [x] GAPS-INFRA: npm TLS resets reproduced twice in Docker and once on host; added an isolated offline qualification path using read-only external tool dependencies, excluding sibling @sentropic packages. Packed consumer installs archives only.
 - [x] GAPS-INFRA2: cached Node 22 declaration archive is SHA-512 verified; tool dependencies reside in a container-only node_modules directory for normal transitive resolution.
