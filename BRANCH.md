@@ -122,9 +122,10 @@ Fix red main audit-gate (2 un-allowlisted HIGH findings) with a minimal public h
     - [x] `make commit MSG="..." ENV=test-sec-hotfix` with selective `git add`
 - [ ] **Lot N — Final validation**
   - [x] P2-1: remove the eleven duplicate YAML fields from the nested toolbox zod entry.
-  - [ ] P2-2: reject audit command errors and incomplete/error JSON in both comments gates.
-  - [ ] P2-3: remove production image grounding and verify image streaming preserves the original request.
-  - [ ] P2-4: restore the 120s live API budget and resolve the underlying delay.
+  - [x] P2-2: reject audit command errors and incomplete/error JSON in both comments gates; sixteen positive/negative report probes pass locally.
+  - [x] P2-3: remove production image grounding; the regression requires the original request and no separate analysis call.
+  - [x] P2-4: restore the 120s live API budget and replace the nonexistent enrichment subject with a real company.
+  - [x] Confirm the final register diff deletes only the eleven duplicate toolbox tail lines and preserves the API image exception.
   - [x] Reproduce the Small 4 full-prompt vision failure with red/blue images and verify focused live image analysis plus the unchanged main chat instructions/tools.
   - [x] Align the selected qualification lock with the byte-identical llm-mesh 0.27.1 archive; the unchanged sibling-integrity checker passes locally.
   - [x] Align the two cluster-mesh workspace version expectations with llm-mesh 0.27.1; all 16 scoped integration tests pass.
