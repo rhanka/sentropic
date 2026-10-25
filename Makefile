@@ -13,7 +13,7 @@ ARTIFACTS_NETWORK = --network "$$net"
 ARTIFACTS_PLATFORM_BUILD = build-mcp-platform
 CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
 CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
-ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-llm-judge),)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
@@ -717,9 +717,9 @@ manifest_guard_publish = $(MANIFEST_GUARD_TOOLS); node /workspace/scripts/ci/pub
 # $(1)=package slug; $(2)=optional in-container pre-pack commands.
 define manifest_guard_pack
 	@mkdir -p "$(MANIFEST_REPORT_DIR)" $(if $(PACK_DESTINATION),"$(PACK_DESTINATION)")
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
 		$(if $(PACK_DESTINATION),-v "$(abspath $(PACK_DESTINATION)):/pack-out" -e PACK_DESTINATION_HOST="$(abspath $(PACK_DESTINATION))") \
-		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace/packages/$(1) $(MANIFEST_GUARD_IMAGE) \
+		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace/packages/$(1) $(ARTIFACTS_RUN_IMAGE) \
 		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); $(2) node /workspace/scripts/ci/publishable-manifests.mjs pack --slug $(1) --report-dir /reports $(if $(PACK_DESTINATION),--destination /pack-out)'
 	@if [ -n "$(PACK_OUTPUT_FILE)" ]; then cat "$(MANIFEST_REPORT_DIR)/$(1).github-output" >> "$(PACK_OUTPUT_FILE)"; fi
 endef
@@ -789,16 +789,16 @@ pack-candidate-siblings: ## Full-pack same-PR BLOCK siblings of PACKAGE=<slug> i
 publishable-sibling-plan: ## Internal: list BLOCK packages in the dependency closure of PACKAGE into SIBLING_DIR/plan.txt
 	$(SIBLING_ARGS_GATE)
 	@case '$(PACKAGE)' in ''|-*|*[!a-z0-9-]*) echo "ERROR: invalid PACKAGE"; exit 1 ;; esac
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
 		-e PACKAGE="$(PACKAGE)" -e SIBLING_DIR="$(SIBLING_DIR)" \
-		-v "$(CURDIR):/workspace" -v "$(abspath $(SIBLING_DIR)):/siblings" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		-v "$(CURDIR):/workspace" -v "$(abspath $(SIBLING_DIR)):/siblings" -w /workspace $(ARTIFACTS_RUN_IMAGE) \
 		sh -lc 'set -eu; case "$$PACKAGE" in ""|-*|*[!a-z0-9-]*) echo "ERROR: invalid PACKAGE"; exit 1 ;; esac; \
 			[ "$$SIBLING_DIR" = "tmp/ci-manifest-guard/siblings/$$PACKAGE" ] || { echo "ERROR: invalid SIBLING_DIR"; exit 1; }; \
 			$(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs sibling-plan --slug "$$PACKAGE" --out /siblings/plan.txt'
 
 publishable-sibling-collect: ## Internal: verify sibling pack receipts and write SIBLING_DIR/receipts.json
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)/scripts/ci/publishable-manifests.mjs:/probe/publishable-manifests.mjs:ro" \
-		-v "$(abspath $(SIBLING_DIR)):/siblings" $(MANIFEST_GUARD_IMAGE) node /probe/publishable-manifests.mjs sibling-collect --dir /siblings
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)/scripts/ci/publishable-manifests.mjs:/probe/publishable-manifests.mjs:ro" \
+		-v "$(abspath $(SIBLING_DIR)):/siblings" $(ARTIFACTS_RUN_IMAGE) node /probe/publishable-manifests.mjs sibling-collect --dir /siblings
 
 .PHONY: publishable-manifests-inventory
 publishable-manifests-inventory: ## Internal step of check-publishable-manifests: classify packages, audit WARN snapshots
@@ -948,8 +948,8 @@ typecheck-skills: ## Run @sentropic/skills type checks
 
 .PHONY: build-llm-mesh
 build-llm-mesh: ## Build @sentropic/llm-mesh dist package
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf dist'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 .PHONY: build-connector-host
 build-connector-host: build-mcp-platform ## Build @sentropic/connector-host dist package
@@ -1802,7 +1802,7 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
-ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-llm-judge),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1)
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
@@ -2231,7 +2231,7 @@ test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-llm-mesh
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
 # BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
 # Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +
@@ -2619,7 +2619,7 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-llm-judge),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
