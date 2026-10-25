@@ -24,6 +24,12 @@
   - `packages/llm-mesh/README.md`
   - `package-lock.json`
   - `.tmp/live-stt/l1/**`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -42,6 +48,7 @@
 - [x] L0 is an open draft; retain exact evidence commit and open G-REVIEW.
 - [x] External Make adapter rebinds existing mesh targets to existing Compose qualification service; tracked build files unchanged.
 - [x] External gates remain with L0 owners; deterministic contract work can proceed per §11.2.
+- [x] BRLIVE-L1-EX1: root npm ci dry-run fails after mesh 0.28 bump; lock refresh proves ERESOLVE on cluster's `<0.28.0` optional peer. Align manifest/lock and matching module guard to `<0.29.0`; update only version-bound fixtures and bump cluster patch. Impact: admit additive mesh 0.28; no speech config/projection. Rollback: restore range/lock/fixtures if mesh bump is reverted. Verify root dry-run plus cluster module/integration tests; publication remains external.
 
 ## AI Flaky tests
 - [x] Deterministic tests only; no flaky waiver or live qualification claim.
