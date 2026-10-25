@@ -3,6 +3,8 @@ import { createTransportWorld } from './fixtures/transport-world.js';
 import { createArtifactCommitBarrier } from '../src/testing.js';
 import { ArtifactOperationError } from '../src/server/failures.js';
 import { projectArtifactHttpOutcome, projectArtifactMcpOutcome } from '../src/server/outcome-projection.js';
+import { createArtifactsToolExecutor, createArtifactsAdapter } from '../src/mcp-core.js';
+import type { StpConnectorContext } from '@sentropic/mcp-platform';
 
 const publishArgs = (artifactId: string) => ({ artifactId, idempotencyKey: 'publish',
   files: [{ path: 'index.html', mimeType: 'text/html', text: 'hi' }] });
@@ -15,6 +17,23 @@ const mapHostError = (cause: unknown) => (cause as { code?: string })?.code === 
   ? new ArtifactOperationError('provider_unavailable', { cause }) : undefined;
 
 describe('Radar 0.2.1 acceptance regressions', () => {
+  it('should map failures thrown by MCP host bindings and app delegates', async () => {
+    const host = createTransportWorld();
+    const cause = Object.assign(new Error('private host failure'), { code: 'artifact_s3_timeout' });
+    const app = { ...host.app, async execute() { throw cause; } };
+    const executor = createArtifactsToolExecutor({ app, profile: host.profile, mapHostError });
+    const args = { bindingName: 'site', idempotencyKey: 'ensure' };
+    const outcome = await executor.execute({ tool: 'artifacts_ensure', args, invocation: host.invocation() });
+    expect(outcome).toMatchObject({ ok: false, failure: { category: 'provider_unavailable', retriable: true } });
+    if (outcome.ok) throw new Error('expected failure');
+    expect(outcome.failure.cause).toBe(cause);
+    const adapter = createArtifactsAdapter({ app, profile: host.profile, mapHostError,
+      createInvocation() { throw cause; } });
+    const ctx = { requestId: 'request', auditId: 'audit', principal: { sub: 'alice' } } as StpConnectorContext;
+    const projected = await adapter.invokeTool({ capabilityRef: 'artifacts_ensure', input: args, ctx });
+    expect(projected).toMatchObject({ ok: false, error: { code: 'capability_unavailable', retriable: true } });
+    expect(JSON.stringify(projected)).not.toContain(cause.message);
+  });
   it('should call host authorization after suspension at the finalization barrier', async () => {
     const barrier = createArtifactCommitBarrier({ points: ['before_finalization_row_lock'] });
     const host = createTransportWorld(undefined, undefined, { testObserver: barrier.observer });

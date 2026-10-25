@@ -1,5 +1,31 @@
 # @sentropic/artifacts — generic artifact contracts (L-5a)
 
+Version 0.2.1 fixes host commit authorization being masked by the built-in
+publication guard and wires the optional trusted `mapHostError` dependency.
+Publication retains its lifecycle, ACL and policy revision checks; the host
+`authorizeCommit` binding decides account approval and its sanitized refusal code.
+
+Bind the same mapper on `createHttpArtifactApp`, `createArtifactsToolExecutor`
+(or `createArtifactsAdapter`) and `createArtifactCommitCoordinator` so host wrapper
+errors are classified at their originating layer. For example:
+
+```ts
+import { ArtifactOperationError, type ArtifactHostFailureMapper }
+  from '@sentropic/artifacts/server/outcome-contract';
+
+const mapHostError: ArtifactHostFailureMapper = cause => {
+  const code = (cause as { code?: string } | null)?.code;
+  return code === 'artifact_s3_timeout' || code === 'artifact_connection_lost'
+    ? new ArtifactOperationError('provider_unavailable', { cause }) : undefined;
+};
+```
+
+Pass `{ ...existingOptions, mapHostError }` to each construction. The packed
+`examples/radar-commit-setup.ts` also accepts this option. Unrecognized failures
+keep their existing classification; private causes never enter HTTP/MCP results.
+Frozen contracts, command identity and selected tools remain unchanged.
+
+
 Generic, host-independent artifact domain state for the Sentropic artifacts
 provider (`sentropic.artifacts`, spec-v8 §9), covering L-5a–5e. Version
 `0.1.2` adds UTF-8 text publication, exposes storage adapters and ships SQL migrations.

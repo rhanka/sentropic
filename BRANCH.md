@@ -21,6 +21,7 @@
   - `packages/artifacts/src/server/commit/types.ts`
   - `packages/artifacts/tests/**`
   - `packages/artifacts/probe/**`
+  - `packages/artifacts/examples/radar-commit-setup.ts`
   - `packages/artifacts/README.md`
   - `packages/artifacts/package.json`
   - `package-lock.json`
@@ -36,6 +37,7 @@
 
 ## Feedback Loop
 - [x] BR861-EX1: extend existing Compose qualification ENV allowlist to the requested `test-artifacts-021`; required by Docker lock and make-only constraints. Impact: only that isolated ENV selects qualification services, scope checks and cleanup. Rollback: remove its four allowlist entries.
+- [x] BR861-EX2: route existing package-pack/consumer recipes through the same Compose lane and add a packed-example check; required to verify installed mapper declarations under the Docker lock. Default commands are unchanged. Rollback: remove the pack-run indirection and example target.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests in scope.
@@ -55,8 +57,10 @@
   - [x] Additive dependencies wired; HTTP/MCP S3 and coordinator acquisition regressions pass.
   - [ ] Tests: `tests/host-acceptance.test.ts`, `tests/commit-failure-parity.integration.test.ts`; typed timeout red then green, private causes and retry parity.
 - [ ] Lot 3 — Bump artifacts to 0.2.1; update packed host composition and documentation.
+  - [x] Registry latest verified as 0.2.0; package, workspace lock and provider manifest version bumped to 0.2.1.
   - [ ] Tests: `probe/packed-example.test.mjs`; verify registry version, freeze bytes and package bump.
 - [ ] Lot 4 — Final validation and PR.
+  - [x] 445 unit tests passed; typecheck, lint, frozen declarations and maintained ABI fixture passed.
   - [ ] Run artifacts typecheck, lint, unit, integration, frozen declaration and packed-consumer checks under lock; clean each stack.
   - [ ] Review the exact diff and reconcile findings.
   - [ ] Push; PR to main with this plan as body; CI green on exact head; do not merge.
