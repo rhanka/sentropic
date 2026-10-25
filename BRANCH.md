@@ -28,6 +28,7 @@
 ## Feedback Loop
 - [x] Radar integration b2b802b5 plus acceptance/helper overlay e2e9515; A1/A2 ancestry checked by pin-radar.
 - [x] #748 promotes ERESOLVE/TS2307 reproductions to normal assertions; no TODO acceptance.
+- [x] The normal lane test target includes both packaging regressions and the real llm-mesh 0.19.2 runtime probe.
 - [x] Runner retains per-suite pass/fail/skip counts even when fail-closed validation rejects the suite.
 - [ ] Record Q1/Q2 missing-contract failures separately from Radar's scoped listKeys test defect.
 
