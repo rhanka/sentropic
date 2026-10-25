@@ -27,4 +27,29 @@ const summary = { sourceCommit: receipt.sourceCommit, candidate: receipt.candida
   receiptSha256: createHash('sha256').update(bytes).digest('hex'), suites,
   imageSmoke: receipt.imageSmoke, shards: receipt.shards };
 writeFileSync('tmp/l8d/summary.json', JSON.stringify(summary, null, 2) + '\n');
+const classify = (diagnostic) => {
+  if (diagnostic.includes('[not covered]')) return 'not covered';
+  if (/createPostgresCommitExecutor|injectPhaseFault|invalid compiled artifacts profile/.test(diagnostic)) return 'radar';
+  throw new Error(`unclassified failure: ${diagnostic}`);
+};
+const failures = suites.flatMap((suite) => suite.failures.flatMap((group) => group.cases.map((item) => ({
+  suite: suite.path, ...item,
+  classification: classify(group.diagnostic || suite.setupErrors.join('\n')),
+  diagnostic: (group.diagnostic || suite.setupErrors.join('\n')).split('\n')[0],
+}))));
+const host = JSON.parse(readFileSync('tmp/l8d/results/host.json'));
+for (const file of host.testResults) for (const item of file.assertionResults.filter((test) => test.status === 'failed')) {
+  const diagnostic = item.failureMessages.join('\n');
+  failures.push({ suite: file.name.split('/radar/')[1], title: item.fullName,
+    status: item.status, classification: classify(diagnostic), diagnostic: diagnostic.split('\n')[0] });
+}
+const evidence = { sourceCommit: summary.sourceCommit, candidateSourceCommit: receipt.candidate.sourceCommit,
+  tuple: summary.tuple, tupleDigest: summary.tupleDigest, radarPins: summary.radarPins,
+  install: summary.install, smoke: summary.smoke, receiptSha256: summary.receiptSha256,
+  suites: suites.map(({ failures, setupErrors, ...suite }) => suite),
+  hostCounts: { passed: host.numPassedTests, failed: host.numFailedTests, skipped: host.numPendingTests },
+  imageSmoke: summary.imageSmoke, shards: summary.shards };
+writeFileSync('tmp/l8d/final-evidence.json', '{\n' + Object.entries(evidence)
+  .map(([key, value]) => `  ${JSON.stringify(key)}: ${JSON.stringify(value)},`).join('\n') +
+  '\n  "failures": [\n' + failures.map((item) => '    ' + JSON.stringify(item)).join(',\n') + '\n  ]\n}\n');
 console.log(JSON.stringify(summary, null, 2));
