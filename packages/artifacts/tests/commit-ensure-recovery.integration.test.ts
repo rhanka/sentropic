@@ -93,6 +93,7 @@ beforeAll(async () => {
   for (const name of ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql']) {
     await pool.query(readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
   }
+  await pool.query('INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ($1, $2)', [scope, 'org-l8b']);
   await pool.query(`CREATE SCHEMA l8b;
     CREATE TABLE l8b.revision (revision TEXT NOT NULL); INSERT INTO l8b.revision VALUES ('r1');
     CREATE TABLE l8b.admission (approved BOOLEAN NOT NULL); INSERT INTO l8b.admission VALUES (true);
@@ -109,6 +110,66 @@ afterAll(async () => {
 });
 
 describe('L8b ensure recovery on PostgreSQL', () => {
+  it('should deny after waiting for a real exhausted connection pool', async () => {
+    const db = new Pool({ connectionString, max: 1 });
+    const barrier = createArtifactCommitBarrier();
+    const point = 'before_connection_acquire';
+    const reached = barrier.waitUntilReached(point, 'connection');
+    const before = await snapshot();
+    const pending = compose(db, { barrier, points: [point] }).ensure(invocation('connection'), args('connection'));
+    await reached;
+    const holder = await db.connect();
+    try {
+      barrier.release(point, 'connection');
+      await expect.poll(() => db.waitingCount, { timeout: 2000 }).toBe(1);
+      await pool.query('UPDATE l8b.admission SET approved = false');
+    } finally {
+      holder.release();
+      try {
+        expect(await pending).toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit', httpStatus: 403 } });
+      } finally {
+        await db.end();
+      }
+    }
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('should grant the last quota unit to one of two concurrent keys after an observed quota wait', async () => {
+    await pool.query('UPDATE l8b.quota SET total = 1');
+    const barrier = createArtifactCommitBarrier();
+    const reached = barrier.waitUntilReached('before_commit', 'quota-winner');
+    const winner = compose(pool, { barrier, points: ['before_commit'] })
+      .ensure(invocation('quota-winner'), args('quota-winner'));
+    await reached;
+    const db = new Pool({ connectionString, application_name: 'l8b-quota-loser' });
+    const loser = compose(db).ensure(invocation('quota-loser'), args('quota-loser'));
+    try {
+      await expect.poll(async () => {
+        const { rows } = await pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE application_name = 'l8b-quota-loser' AND wait_event_type = 'Lock'`);
+        return rows[0].n;
+      }, { timeout: 2000 }).toBe(1);
+    } finally {
+      barrier.release('before_commit', 'quota-winner');
+    }
+    try {
+      expect(await winner).toMatchObject({ ok: true });
+      expect(await loser).toMatchObject({ ok: false, failure: { category: 'conflict', httpStatus: 409 } });
+    } finally {
+      await db.end();
+    }
+    const before = await snapshot();
+    expect(before).toEqual({ bindings: 1, lifecycle: 1, acls: 1, receipts: 1, legacy: 0, used: 1 });
+    const restartedPool = new Pool({ connectionString, max: 1 });
+    try {
+      expect(await compose(restartedPool).ensure(invocation('quota-replay'), args('quota-winner')))
+        .toMatchObject({ ok: true, result: { replayed: true } });
+    } finally {
+      await restartedPool.end();
+    }
+    expect(await snapshot()).toEqual(before);
+  });
+
   it('should commit binding, ACL, active lifecycle, receipt and quota together', async () => {
     expect(await compose().ensure(invocation('initial'), args('initial'))).toMatchObject({ ok: true,
       result: { created: true, replayed: false } });
