@@ -65,8 +65,8 @@
   - [x] Define exact engine/configuration/target identities and binary media headers with frame-local validation.
   - [x] Add per-tuple four-state capabilities and fail-closed ordered media negotiation.
   - [x] Define revisioned transcripts, admitted session receipt and independent duplex adapter port.
-  - [ ] Add `speech/{contracts,capabilities,index}.ts`, catalogue lookup and exports.
-  - [ ] Bump minor above registry and update root lock workspace version.
+  - [x] Add `speech/{contracts,capabilities,index}.ts`, catalogue lookup and exports.
+  - [x] Registry latest 0.27.1 checked before bump; prepare 0.28.0 and update root workspace lock version.
 - [ ] **L1d — Docs consolidation**
   - [ ] Document public surface and evidence in README and `.tmp/live-stt/l1/validation.md`.
 - [ ] **L1e — Final validation and draft handoff**
