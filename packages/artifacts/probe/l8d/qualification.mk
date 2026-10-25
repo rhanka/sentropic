@@ -3,8 +3,8 @@ SHELL := /bin/bash
 ENV ?=
 export COMPOSE_PROJECT_NAME := $(ENV)
 export COMPOSE_DISABLE_ENV_FILE := 1
-COMPOSE := docker compose --env-file /dev/null -p $(ENV) -f docker-compose.immo-861.yml
 PROBE := packages/artifacts/probe/l8d
+COMPOSE := docker compose --env-file /dev/null -p $(ENV) -f docker-compose.immo-861.yml -f $(PROBE)/radar-compose.yml
 OUT := tmp/l8d
 RADAR_REPO ?= /home/antoinefa/src/radar-immobilier
 
