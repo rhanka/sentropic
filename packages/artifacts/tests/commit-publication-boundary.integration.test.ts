@@ -75,7 +75,7 @@ const publish = (w: ReturnType<typeof world>, input: ReturnType<typeof inputFor>
 async function artifact() {
   const id = randomUUID();
   await pool.query(`INSERT INTO artifacts.artifacts (id,storage_scope_id,owner_id,binding_name,profile)
-    VALUES ($1,'scope-l8a','actor',$1,'{}')`, [id]);
+    VALUES ($1::uuid,'scope-l8a','actor',$1::text,'{}')`, [id]);
   await pool.query(`INSERT INTO artifacts.artifact_access (artifact_id,principal_id,permission)
     VALUES ($1,'actor','source')`, [id]);
   return id;
@@ -173,4 +173,73 @@ describe('L8a publication boundary', () => {
     const digest = createHash('sha256').update(input.files[0].bytes).digest('hex');
     expect(await blobs.getBlob(`artifacts/scope-l8a/blobs/sha256/${digest}`)).toEqual(input.files[0].bytes);
   });
+});
+
+async function blocked(pid: number) {
+  await expect.poll(async () => Number((await pool.query(
+    'SELECT cardinality(pg_blocking_pids($1)) AS n', [pid])).rows[0].n)).toBeGreaterThan(0);
+}
+
+describe('publication serializes real PostgreSQL writers', () => {
+  it.each(['policy', 'lifecycle', 'acl', 'quota', 'key'] as const)(
+    'should reauthorize after a real %s lock wait', async (resource) => {
+      const input = inputFor(await artifact());
+      const executor = createPostgresCommitExecutor(pool);
+      const command = createArtifactCommand(profile, 'artifacts_publish', {
+        artifactId: input.artifactId, idempotencyKey: input.callerKey, profile: input.profile,
+        files: input.files.map((file) => ({ ...file, bytes: [...file.bytes] })),
+      }, input, createRadarKeyDerivation({ storageScopeId: input.storageScopeId, actorIds: [input.actorId] }));
+      await executor.ensureCoordinationRow('scope-l8a', command.identity.internalKey);
+      const writer = await pool.connect();
+      const writerPid = Number((await writer.query('SELECT pg_backend_pid() AS pid')).rows[0].pid);
+      const before = await snapshot();
+      const authority = { expired: false };
+      let pending: ReturnType<typeof publish> | undefined;
+      try {
+        await writer.query('BEGIN');
+        if (resource === 'policy') await writer.query(`UPDATE l8a_policy SET revision='r2' WHERE id=1`);
+        if (resource === 'lifecycle') await writer.query(`UPDATE artifacts.artifacts SET lifecycle_state='withdrawn' WHERE id=$1`, [input.artifactId]);
+        if (resource === 'acl') await writer.query(`UPDATE artifacts.artifact_access SET permission='read' WHERE artifact_id=$1`, [input.artifactId]);
+        if (resource === 'quota') await writer.query('SELECT * FROM l8a_quota FOR UPDATE');
+        if (resource === 'key') await writer.query(`SELECT * FROM artifacts.operation_keys
+          WHERE storage_scope_id=$1 AND internal_key=$2 FOR UPDATE`, ['scope-l8a', command.identity.internalKey]);
+        pending = publish(world(pool, blobs, undefined, authority), input);
+        await expect.poll(async () => (await pool.query(
+          `SELECT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE $1=ANY(pg_blocking_pids(a.pid))) AS waiting`,
+          [writerPid])).rows[0].waiting).toBe(true);
+        authority.expired = true;
+        await writer.query('COMMIT');
+        expect(await pending).toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit' } });
+        // Remove only the deliberately committed policy/lifecycle/ACL mutation before comparing.
+        if (resource === 'policy') await pool.query(`UPDATE l8a_policy SET revision='r1' WHERE id=1`);
+        if (resource === 'lifecycle') await pool.query(`UPDATE artifacts.artifacts SET lifecycle_state='active' WHERE id=$1`, [input.artifactId]);
+        if (resource === 'acl') await pool.query(`UPDATE artifacts.artifact_access SET permission='source' WHERE artifact_id=$1`, [input.artifactId]);
+        expect(await snapshot()).toEqual(before);
+      } finally {
+        await writer.query('ROLLBACK'); writer.release();
+        await pending;
+      }
+    });
+
+  it.each(['policy', 'lifecycle', 'acl'] as const)(
+    'should commit before a later %s writer while retaining finalization locks', async (resource) => {
+      const input = inputFor(await artifact());
+      const barrier = createArtifactCommitBarrier({ points: ['before_commit'] });
+      const pending = publish(world(pool, blobs, barrier.observer), input);
+      await barrier.waitUntilReached('before_commit', input.invocationId);
+      const writer = await pool.connect();
+      let writing: Promise<unknown> | undefined;
+      try {
+        const pid = Number((await writer.query('SELECT pg_backend_pid() AS pid')).rows[0].pid);
+        writing = resource === 'policy' ? writer.query(`UPDATE l8a_policy SET revision='r2' WHERE id=1`)
+          : resource === 'lifecycle' ? writer.query(`UPDATE artifacts.artifacts SET lifecycle_state='withdrawn' WHERE id=$1`, [input.artifactId])
+          : writer.query(`DELETE FROM artifacts.artifact_access WHERE artifact_id=$1`, [input.artifactId]);
+        await blocked(pid);
+      } finally {
+        barrier.release('before_commit', input.invocationId);
+        expect(await pending).toMatchObject({ ok: true });
+        await writing; writer.release();
+      }
+      expect((await pool.query('SELECT used FROM l8a_quota')).rows[0].used).toBe(1);
+    });
 });
