@@ -2,11 +2,15 @@ SHELL := /bin/bash
 ENV ?=
 export COMPOSE_DISABLE_ENV_FILE := 1
 COMPOSE := docker compose --env-file /dev/null -p $(ENV) -f docker-compose.immo-861.yml
-OFFLINE_TOOLS ?= /home/antoinefa/src/sentropic/tmp/worktrees/861-integration/node_modules
-OFFLINE_LINT_TOOLS ?= /home/antoinefa/src/sentropic/tmp/worktrees/861-L8d/tmp/l8d/radar/node_modules
-OFFLINE_MOUNTS = -v "$(OFFLINE_TOOLS):/offline-tools:ro" -v "$(OFFLINE_LINT_TOOLS):/offline-lint-tools:ro" -v /home/antoinefa/.npm/_cacache:/offline-cache:ro
+OFFLINE_TOOLS ?= $(CURDIR)/node_modules
+OFFLINE_LINT_TOOLS ?= $(OFFLINE_TOOLS)
+OFFLINE_CACHE ?= $(HOME)/.npm/_cacache
+OFFLINE_MOUNTS = -v "$(abspath $(OFFLINE_TOOLS)):/offline-tools:ro" -v "$(abspath $(OFFLINE_LINT_TOOLS)):/offline-lint-tools:ro" -v "$(abspath $(OFFLINE_CACHE)):/offline-cache:ro"
 
-.PHONY: guard packed-example down
+.PHONY: guard packed-example down qualification-paths
+qualification-paths:
+	@bash packages/artifacts/probe/contract-gaps-paths.test.sh
+
 guard:
 	@test "$(ENV)" = test-861-gaps
 
