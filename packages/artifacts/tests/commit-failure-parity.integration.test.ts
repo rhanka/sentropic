@@ -25,6 +25,7 @@ import { projectArtifactMcpOutcome, projectArtifactWriteFailure } from './dist/s
 import { createS3BlobStore } from './dist/adapters/s3.js';
 import { createMemoryIntentStore } from './dist/server/object-intents.js';
 import { createMemoryRefcountStore } from './dist/server/gc.js';
+import { encodeToolResult } from '@sentropic/mcp-platform/transport/result-codec';
 const input = JSON.parse(process.env.L8C_CASE);
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 const inner = createPostgresCommitExecutor(db);
@@ -63,6 +64,14 @@ const executor = {
       await commit();
       if (input.point === 'commit-ack') { injections++; throw cause; }
     };
+    if (input.point === 'schema') {
+      holder = await db.connect();
+      await holder.query('BEGIN');
+      await holder.query('LOCK TABLE artifacts.operation_receipts IN ACCESS EXCLUSIVE MODE');
+      await client.query("SET LOCAL lock_timeout = '50ms'", []);
+      const read = client.readReceipt.bind(client);
+      client.readReceipt = (...args) => { injections++; return read(...args); };
+    }
     return client;
   },
 };
@@ -88,6 +97,11 @@ const blobs = createS3BlobStore({ bucket: 'l8c-private-bucket', client: {
 const app = createHttpArtifactApp({ profile, coordinator: {
   async finalizePrepared(request) {
     dispatches++;
+    if (input.point === 'command') {
+      injections++;
+      await db.query('INSERT INTO artifacts.operation_receipts(storage_scope_id, internal_key, command_codec, command_hash, receipt) VALUES ($1,$2,$3,$4,$5)',
+        [request.scopeId, request.internalKey, request.codecVersion, 'different-command', '{}']);
+    }
     if (input.point === 'non-key') request = { ...request, locks: {
       ...request.locks, [input.lockClass]: [client => inject(client)],
     } };
@@ -129,7 +143,8 @@ try {
     : await createArtifactsToolExecutor({ app, profile }).execute({ tool: publishing ? 'artifacts_publish' : write ? 'artifacts_ensure' : 'artifacts_list', args, invocation });
   const descriptor = outcome.ok ? undefined : projectArtifactWriteFailure(outcome.failure, { dispatched: true, write });
   console.log(JSON.stringify({ pid: process.pid, outcome, http: projectArtifactHttpOutcome(outcome),
-    mcp: projectArtifactMcpOutcome(outcome, input.id), descriptor, dispatches, injections }));
+    mcp: projectArtifactMcpOutcome(outcome, input.id), wire: encodeToolResult(projectArtifactMcpOutcome(outcome, input.id)),
+    descriptor, dispatches, injections }));
 } finally {
   if (holder) { await holder.query('ROLLBACK'); holder.release(); }
   await db.end();
@@ -175,6 +190,8 @@ const faults: Fault[] = [
   ...['binding-identity', 'artifact-lifecycle', 'acl', 'current-pointer', 'authority-revision', 'quota', 'blob-reference-deletion-claim']
     .map(lockClass => ({ ...unavailable(`non-key ${lockClass}`, 'non-key', '55P03'), lockClass })),
   { label: 'qualified scoped key contention', point: 'key', status: 409, category: 'conflict' },
+  { label: 'same-key different command', point: 'command', status: 409, category: 'conflict' },
+  unavailable('real infrastructure table lock', 'schema'),
   { label: 'guard authority outage', point: 'authority', category: 'unauthorized_at_commit' },
   { label: 'guard policy denial', point: 'deny', status: 403, category: 'unauthorized_at_commit' },
   { label: 'unrecognized lost/conflict text', point: 'acquire', message: ' lost conflict', status: 500, category: 'provider_error' },
@@ -222,6 +239,9 @@ describe('L8c E3 failures across isolated HTTP/MCP processes', () => {
       expect(result.http).toEqual({ status, body: { error: code } });
       expect(result.mcp).toMatchObject({ ok: false, auditId: result.id,
         error: { code, message: code, retriable: status === 503 } });
+      expect(result.wire).toMatchObject({ isError: true,
+        _meta: { auditId: result.id, errorCode: code, retriable: status === 503 } });
+      expect(JSON.parse(result.wire.content[0].text)).toEqual({ code, message: code });
       expect(JSON.stringify(result)).not.toMatch(/private|postgres:\/\/|password|SELECT secret/);
       const read = fault.point === 'read';
       expect(result.dispatches).toBe(read || fault.point.startsWith('s3-') ? 0 : 1);
@@ -229,7 +249,8 @@ describe('L8c E3 failures across isolated HTTP/MCP processes', () => {
       if (read) expect(result.descriptor).toBeUndefined();
       else expect(result.descriptor).toEqual({ invocationId: result.id, operation: fault.point.startsWith('s3-') ? 'publish' : 'ensure',
         reason: category === 'conflict' ? 'provider_conflict' : category, status });
-      expect(result.counts).toEqual(fault.point === 'commit-ack' ? { receipts: 1, effects: 1 } : { receipts: 0, effects: 0 });
+      expect(result.counts).toEqual(fault.point === 'commit-ack' ? { receipts: 1, effects: 1 }
+        : fault.point === 'command' ? { receipts: 1, effects: 0 } : { receipts: 0, effects: 0 });
     }
     });
   }

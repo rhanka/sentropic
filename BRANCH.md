@@ -51,6 +51,7 @@
   - [ ] Assert sanitized HTTP/MCP projections, correlation, no compensating execution and write/read accounting descriptors.
   - [x] Retain known failures with file:line evidence rather than changing another lot's implementation.
   - [x] Extend the matrix through the S3 adapter PUT, GET and response-body conversion boundaries; add typed pool/transaction timeout and explicit COMMIT-abort cases.
+  - [x] Include real receipt-table contention, same-key changed-command conflict, and the existing MCP platform wire codec (`isError`, text and metadata redaction).
 - [ ] **Lot 2 — Validation and handoff**
   - [ ] Run scoped `test-artifacts-integration`, typecheck and lint under the shared Docker lock; clean this environment after each step.
   - [ ] Run pinned Radar MCP/failure suites, or record the exact missing prerequisite without a coverage claim.
