@@ -11,6 +11,7 @@
 - [x] Final requalification merges 464581fb8 (#750); preserve this lane plan and all incoming product bytes; Track unchanged.
 - [x] Final runner imports exact guarded integration archives and archives the complete Radar frozen-profile head stacked on listKeys; no source overlay.
 - [x] New Radar pin contains listKeys but not the old A1/A2 topic SHAs as ancestors; the final receipt identifies the complete selected consumer head instead of asserting old ancestry.
+- [x] Final source merge retains deca5422c, the exact guarded candidate pack source; preserve incoming release tooling only, with no product or Track edits.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
