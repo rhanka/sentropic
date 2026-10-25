@@ -30,6 +30,8 @@ export interface GuardedReplayInput {
   readonly commandHash: string;
   readonly policyRevision: string;
   readonly locks?: FinalizeRequest['locks'];
+  readonly artifactId?: string;
+  readonly bindingName?: string;
 }
 
 /** Replay one ensure through the coordinator with the request-bound guard. */
@@ -45,8 +47,9 @@ export async function replayEnsureGuarded(
     invocationId: input.invocation.invocationId,
     actorId: input.invocation.actorId,
     operation: 'ensure',
-    artifactId: null,
-    bindingName: null,
+    // The binding lock resolves the target before the coordinator builds its guard context.
+    get artifactId() { return input.artifactId ?? null; },
+    bindingName: input.bindingName ?? null,
     policyRevision: input.policyRevision,
     locks: input.locks,
     guard: input.invocation.authorizeCommit,

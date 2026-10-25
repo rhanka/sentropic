@@ -12,7 +12,7 @@
  * FinalizationCoordinator here to leave the fixed coordinator-role
  * descriptor untouched.
  */
-import type { CommitBarrierObserver, CommitBarrierPoint } from '../../testing.js';
+import type { CommitArrivalObserver, CommitBarrierObserver, CommitBarrierPoint } from '../../testing.js';
 
 /** Version of the frozen command-codec shape (r2 C6). */
 export const COMMAND_CODEC_VERSION = 'artifacts-command/v1' as const;
@@ -312,8 +312,13 @@ export const FAILURE_PROJECTIONS: readonly FailureProjection[] = [
   },
 ] as const;
 
-/** Classified internal failure with private cause and commit state. */
+/**
+ * Classified internal failure with private cause and commit state. Carries
+ * the frozen `operational` kind so L3 outcomes are assignable to the frozen
+ * failure contract (`l0-freeze/failure-contract.ts`).
+ */
 export interface ArtifactFailure {
+  readonly kind: 'operational';
   readonly category: FailureCategory;
   readonly variant?: string;
   readonly httpStatus: number;
@@ -350,10 +355,9 @@ export interface CommitCoordinatorOptions {
   readonly policy: CommitPolicyParticipantFactory;
   /** Defined clock for activation-expiry evaluation; defaults to Date.now. */
   readonly nowMs?: () => number;
-  readonly testObserver?: CommitBarrierObserver;
+  readonly testObserver?: CommitBarrierObserver | CommitArrivalObserver;
   /**
-   * Points at which the test observer is invoked. Empty by default: an
-   * unarmed observer is never invoked, so unbarriered runs never pause.
+   * Optional filter for observer arrivals; all coordinator points by default.
    * Each armed pair pauses at most once. Only the six coordinator
    * transaction points are accepted; the three preparation points
    * (`before_blob_put`, `after_blob_put_before_verify`,

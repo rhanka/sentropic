@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
+import { createArtifactCommitBarrier } from '../src/testing.js';
 import {
   createRadarCommitSetup,
   prepareRadarCommitExample,
@@ -170,5 +171,135 @@ describe('radar commit setup example', () => {
     } finally {
       stop();
     }
+  });
+
+  it('keeps arrivals that land during an async sweep', async () => {
+    const setup = createRadarCommitSetup({ pool, clock });
+    setup.abandonedAttempts.push({
+      attemptId: 'inv-sweep-a',
+      scopeId: 'example-scope',
+      internalKey: 'example-key-a',
+      atMs: clock.nowMs,
+    });
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let releaseLater!: () => void;
+    const laterGate = new Promise<void>((resolve) => {
+      releaseLater = resolve;
+    });
+    const batches: string[][] = [];
+    const stop = setup.startAbandonedAttemptSweep(async (batch) => {
+      const ids = batch.map((attempt) => attempt.attemptId);
+      batches.push(ids);
+      // The first sweep carries only the pre-sweep arrival; any follow-up
+      // sweep (which would legitimately pick up later arrivals) stays parked
+      // so the test observes the queue exactly after the first sweep.
+      if (ids.includes('inv-sweep-a')) {
+        await firstGate;
+      } else {
+        await laterGate;
+      }
+    }, 5);
+    try {
+      const startDeadline = Date.now() + 2000;
+      while (batches.length === 0 && Date.now() < startDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(batches[0]).toEqual(['inv-sweep-a']);
+      setup.abandonedAttempts.push({
+        attemptId: 'inv-sweep-b',
+        scopeId: 'example-scope',
+        internalKey: 'example-key-b',
+        atMs: clock.nowMs,
+      });
+      releaseFirst();
+      const doneDeadline = Date.now() + 2000;
+      while (setup.abandonedAttempts.length !== 1 && Date.now() < doneDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      // The in-flight sweep removed only its own batch; the mid-sweep
+      // arrival is still queued.
+      expect(batches[0]).toEqual(['inv-sweep-a']);
+      expect(setup.abandonedAttempts.map((attempt) => attempt.attemptId)).toEqual(['inv-sweep-b']);
+      releaseLater();
+    } finally {
+      stop();
+      setup.abandonedAttempts.length = 0;
+    }
+  });
+
+  it('serializes overlapping interval sweeps', async () => {
+    const setup = createRadarCommitSetup({ pool, clock });
+    setup.abandonedAttempts.push(
+      {
+        attemptId: 'inv-overlap-1',
+        scopeId: 'example-scope',
+        internalKey: 'example-key-o1',
+        atMs: clock.nowMs,
+      },
+      {
+        attemptId: 'inv-overlap-2',
+        scopeId: 'example-scope',
+        internalKey: 'example-key-o2',
+        atMs: clock.nowMs,
+      },
+    );
+    let entered = 0;
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    let releaseSweep!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseSweep = resolve;
+    });
+    const stop = setup.startAbandonedAttemptSweep(async () => {
+      entered += 1;
+      concurrent += 1;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await gate;
+      concurrent -= 1;
+    }, 5);
+    try {
+      const startDeadline = Date.now() + 2000;
+      while (entered === 0 && Date.now() < startDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(entered).toBe(1);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(entered).toBe(1);
+      releaseSweep();
+      const doneDeadline = Date.now() + 2000;
+      while (setup.abandonedAttempts.length > 0 && Date.now() < doneDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(setup.abandonedAttempts).toHaveLength(0);
+      expect(maxConcurrent).toBe(1);
+    } finally {
+      stop();
+      setup.abandonedAttempts.length = 0;
+    }
+  });
+
+  it('forwards armed barrier observations through the example construction', async () => {
+    const barrier = createArtifactCommitBarrier();
+    const setup = createRadarCommitSetup({
+      pool,
+      clock,
+      testObserver: barrier.observer,
+      testPoints: ['before_commit'],
+    });
+    const pending = setup.finalize({
+      scopeId: 'example-scope',
+      internalKey: 'example-key-obs',
+      commandHash: 'h-example-obs',
+      invocationId: 'inv-example-obs',
+      operation: 'publish',
+      receiptData: { releaseId: 'r-obs' },
+    });
+    await barrier.waitUntilReached('before_commit', 'inv-example-obs');
+    barrier.release('before_commit', 'inv-example-obs');
+    const outcome = await pending;
+    expect(outcome.ok).toBe(true);
   });
 });

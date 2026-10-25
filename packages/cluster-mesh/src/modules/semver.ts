@@ -50,7 +50,7 @@ function comparators(range: string): ((version: Version) => boolean)[] | undefin
 /** Prerelease and malformed versions or ranges never satisfy; build metadata is stripped. */
 export function satisfiesRange(version: unknown, range: string): boolean {
   const parsed = parseReleaseVersion(version);
-  const tests = comparators(range);
-  if (!parsed || !tests) return false;
-  return tests.every((test) => test(parsed));
+  const alternatives = range.split('||').map(comparators);
+  if (!parsed || alternatives.some((tests) => !tests)) return false;
+  return alternatives.some((tests) => tests!.every((test) => test(parsed)));
 }
