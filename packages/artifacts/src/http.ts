@@ -138,97 +138,50 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           phase = 'migration';
           await assertArtifactReplayMigration(deps.legacyRecords, command, invocation, normalized.idempotencyKey as string);
         }
-            const acl = await deps.acls.getArtifactAcl(artifactId);
-            if (acl === undefined) continue;
-            const state = await deps.lifecycle.stateOf(artifactId);
-            if (!deps.lifecycle.canRead({ artifactId, state }, acl, request.actorId, 'read', isApproved)) {
-              continue;
-            }
-            visible.push({ artifactId, ownerId: acl.ownerId, state, isPublic: acl.isPublic });
-          }
-          return {
-            status: 200,
-            body: {
-              total: visible.length,
-              artifacts: visible.slice(offset as number, (offset as number) + (limit as number)),
-            },
-          };
+        phase = 'dispatch';
+        if (capability === 'artifacts_ensure') {
+          const outcome = await ensure.ensure(invocation, { ...normalized,
+            envelopeKey: request.idempotencyKey } as Parameters<typeof ensure.ensure>[1]);
+          return outcome.ok ? { ...outcome, result: { status: 201, body: outcome.result } } : outcome;
         }
-
-        if (request.method === 'GET' && request.path.startsWith('/meta/')) {
-          const artifactId = request.path.slice('/meta/'.length);
-          if (artifactId.length === 0) return { status: 404, body: errorBody(404) };
-          const acl = await requireVisible(artifactId, request.actorId);
-          const state = await deps.lifecycle.stateOf(artifactId);
-          const current = await deps.publication.getCurrent(artifactId);
-          return {
-            status: 200,
-            body: {
-              artifactId,
-              ownerId: acl.ownerId,
-              storageScopeId: acl.storageScopeId,
-              state,
-              isPublic: acl.isPublic,
-              withdrawn: state === 'withdrawn',
-              currentReleaseId: current?.releaseId,
-              // Grant rosters stay owner-visible; readers learn no principals.
-              ...(request.actorId === acl.ownerId ? { grants: acl.grants } : {}),
-            },
+        if (capability === 'artifacts_publish') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+          // Both finalization and fresh replay combine provider checks with this request's host guard.
+          const bindGuard = (request: FinalizeRequest): FinalizeRequest => ({ ...request,
+            guard: async (context, transaction) => {
+              const decision = await request.guard(context, transaction);
+              return decision.allowed ? invocation.authorizeCommit(context, transaction) : decision;
+            } });
+          const coordinator: ArtifactCommitCoordinator = {
+            ...deps.coordinator,
+            finalizePrepared: (request) => deps.coordinator.finalizePrepared(bindGuard(request)),
+            replayPrepared: (request) => deps.coordinator.replayPrepared(bindGuard(request)),
           };
-        }
-
-        if (request.method === 'POST' && request.path === '/uploads') {
-          const { uploads } = requireUploads();
-          const artifactId = needString(body['artifactId'], 'artifactId');
-          const acl = await requireVisible(artifactId, request.actorId);
-          assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
-          const maxSize = body['maxSize'];
-          if (maxSize !== undefined && (!Number.isSafeInteger(maxSize) || (maxSize as number) < 1)) {
-            throw new Error('invalid request: maxSize must be a positive integer');
-          }
-          const limits = deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS;
-          const begun = await uploads.begin({
-            mimeType: needString(body['mimeType'], 'mimeType'),
-            maxSize: Math.min((maxSize as number | undefined) ?? Infinity, limits.maxFileBytes, limits.maxTotalBytes),
+          const limits = profile.operations.find((entry) => entry.operation === 'publish')!.limits;
+          const publication = createGuardedPublicationService({ ...deps.publication, coordinator,
+            limits: { maxFiles: limits.publishFilesMax, maxFileBytes: limits.maxDecodedFileBytes,
+              maxTotalBytes: limits.maxDecodedTotalBytes } });
+          const outcome = await publication.publishFinalized({
+            ownerId: acl.ownerId, storageScopeId: invocation.storageScopeId, artifactId,
+            identity: command!.identity, actorId: invocation.actorId, invocationId: invocation.invocationId,
+            attemptId: invocation.invocationId, policyRevision: await deps.ensureHost.readPolicyRevision(),
+            source: { kind: 'inline-original' }, profile: normalized.profile as Record<string, JsonValue>,
+            files: (normalized.files as Record<string, JsonValue>[]).map((file) => ({
+              path: file.path as string, mimeType: file.mimeType as string, bytes: Uint8Array.from(file.bytes as number[]),
+            })),
           });
-          uploadOwners.set(begun.uploadId, { artifactId, ownerId: request.actorId });
-          return { status: 201, body: begun };
-        }
-
-        if (request.method === 'POST' && request.path === '/uploads/append') {
-          const { uploads } = requireUploads();
-          const uploadId = needString(body['uploadId'], 'uploadId');
-          requireUploadOwner(uploadId, request.actorId);
-          const offset = body['offset'];
-          if (!Number.isSafeInteger(offset) || (offset as number) < 0) {
-            throw new Error('invalid request: offset must be a non-negative integer');
+          if (!outcome.ok) {
+            const failure = { ...outcome.failure, kind: 'operational' as const };
+            Object.defineProperty(failure, 'cause', { value: outcome.failure.cause, enumerable: false });
+            return { ok: false, failure: Object.freeze(failure) };
           }
-          const limits = deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS;
-          const remaining = Math.min(uploads.remainingBytes(uploadId, offset as number),
-            limits.maxFileBytes - (offset as number), limits.maxTotalBytes - (offset as number));
-          const appended = await uploads.append(uploadId, offset as number,
-            needBytes(body['bytes'], remaining));
-          return { status: 200, body: appended };
-        }
-
-        if (request.method === 'POST' && request.path === '/uploads/commit') {
-          const { uploads, staging } = requireUploads();
-          const uploadId = needString(body['uploadId'], 'uploadId');
-          const binding = requireUploadOwner(uploadId, request.actorId);
-          const artifactId = needString(body['artifactId'], 'artifactId');
-          if (artifactId !== binding.artifactId) {
-            throw new Error('invalid request: upload belongs to another artifact');
+          commitState = outcome.commitState;
+          const receipt = object(outcome.result.receipt);
+          if (typeof receipt.releaseId !== 'string' || typeof receipt.manifest !== 'string') {
+            throw new Error('invalid publication receipt');
           }
-          const acl = await requireVisible(artifactId, request.actorId);
-          assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
-          if (acl.storageScopeId === undefined) throw new Error('invalid request: missing storage scope');
-          const size = body['size'];
-          if (!Number.isInteger(size) || (size as number) < 0) {
-            throw new Error('invalid request: size must be a non-negative integer');
-          }
-          const files = [{
-            path: needString(body['path'], 'path'),
-            mimeType: needString(body['mimeType'], 'mimeType'),
             bytes: new Uint8Array(0),
           }];
           await uploads.commit(uploadId, {
