@@ -17,6 +17,10 @@ import {
   type WriterFence,
 } from './contracts.js';
 
+// Keep the dedicated common-contract subpath data-only, including host scope/fence bindings.
+export { validateStorageScope, validateWriterFence } from './contracts.js';
+export type { StorageScope, WriterFence } from './contracts.js';
+
 export const COMMON_CONTRACT_VERSION = '1' as const;
 const COMMON_V1_MODULE_IDS = Object.freeze(['comments', 'engram-live'] as const);
 const isCommonV1ModuleId = (value: unknown): boolean =>

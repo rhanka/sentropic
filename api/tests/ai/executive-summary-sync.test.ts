@@ -77,7 +77,7 @@ describe('Executive Summary Generation - AI', () => {
         user.sessionToken!,
         {
           folder_id: folderId,
-          model: getTestModel(), // Use test model (gpt-4.1-nano by default)
+          model: getTestModel(), // Use test model (mistral-small-2603 by default)
         }
       );
       
@@ -165,7 +165,7 @@ describe('Executive Summary Generation - AI', () => {
           folder_id: folderId,
           value_threshold: 50,
           complexity_threshold: 40,
-          model: getTestModel(), // Use test model (gpt-4.1-nano by default)
+          model: getTestModel(), // Use test model (mistral-small-2603 by default)
         }
       );
       
