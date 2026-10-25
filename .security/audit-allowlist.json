@@ -1,4 +1,12 @@
 {
   "_comment": "Machine-readable allowlist for .security/audit-gate.mjs (the exception-aware npm-audit gate used in api/Dockerfile + ui/Dockerfile). Each entry allows ONE GHSA to not fail the HIGH/CRITICAL gate until review_due. Human record + full justification: .security/vulnerability-register.yaml. Keep the two in sync.",
-  "allow": []
+  "allow": [
+    {
+      "ghsa": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "severity": "high",
+      "reason": "Memory exhaustion below 4.6.6; no same-major fix exists, migration to zod v4 pending (Track 01M5PMR6AG9QDZG9H3N57TB3FS). Dated exception, review 2026-11-07. Human record: .security/vulnerability-register.yaml GHSA-mrhx-c7xc-m3w5_zod_3.25.76.",
+      "review_due": "2026-11-07"
+    }
+  ]
 }
