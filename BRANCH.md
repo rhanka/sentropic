@@ -29,6 +29,9 @@
 ## Feedback Loop
 - [x] Runner workaround: `/tmp/861-l8c.Makefile` copies existing targets with only the qualification ENV guards expanded; SHA-256 `493237dbea196cfdbc93fc0859432b4565821ccef1d1975717627aecd101f6ad`.
 - [ ] Radar Q2/Q3 runs require exact packed tuple installation and a pinned read-only checkout; no registry-baseline pass counts as candidate qualification.
+- [ ] L8C-1 / owner L3 / known failure: `src/server/commit/coordinator.ts:108` ignores `TimeoutError` and `lock_timeout`, unlike `src/server/failures.ts:88`; typed pool/transaction timeout returns 500 instead of retriable 503. Two executable expected-failure cases retained.
+- [ ] L8C-2 / owner L3 / known failure: `src/server/commit/coordinator.ts:92` classifies untyped `connection reset` text as connection loss. Expected 500/non-retriable; observed 503/retriable. One executable expected-failure case retained.
+- [ ] L8C-3 / owner L3 / known failure: `src/server/commit/coordinator.ts:751` routes explicit SQL aborts `40001`, `40P01`, `57014` at COMMIT to `unknownAfterCommitAttempt` (`:320`). Expected confirmed `not_committed`; observed `unknown`, with zero durable effects. Three executable expected-failure cases retained.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky allowance.
@@ -46,7 +49,7 @@
 - [ ] **Lot 1 — Failure matrix**
   - [x] Add `packages/artifacts/tests/commit-failure-parity.integration.test.ts` with separate child processes, real PostgreSQL coordination and E3 fault injection.
   - [ ] Assert sanitized HTTP/MCP projections, correlation, no compensating execution and write/read accounting descriptors.
-  - [ ] Retain known failures with file:line evidence rather than changing another lot's implementation.
+  - [x] Retain known failures with file:line evidence rather than changing another lot's implementation.
   - [x] Extend the matrix through the S3 adapter PUT, GET and response-body conversion boundaries; add typed pool/transaction timeout and explicit COMMIT-abort cases.
 - [ ] **Lot 2 — Validation and handoff**
   - [ ] Run scoped `test-artifacts-integration`, typecheck and lint under the shared Docker lock; clean this environment after each step.
