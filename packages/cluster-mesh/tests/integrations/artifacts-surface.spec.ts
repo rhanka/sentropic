@@ -40,8 +40,15 @@ const modulesWith = (options: ModuleOptions = {}): ClusterMeshModules =>
     },
   }) as unknown as ClusterMeshModules;
 
+const profile = artifacts.compileArtifactsProfile(artifacts.RADAR_ARTIFACTS_PROFILE);
 const fakeApp = {
-  handle: async () => ({ status: 200, body: { ok: true } }),
+  profileDigest: profile.profileDigest, selectedCapabilities: profile.selectedCapabilities,
+  execute: async () => ({ ok: true as const, result: { status: 200, body: { ok: true } },
+    invocationId: 'probe', commitState: 'not_committed' as const, replayed: false }),
+};
+const fakeDefinition: artifacts.ArtifactsDefinitionOptions = { app: fakeApp, profile,
+  createInvocation: (request) => ({ invocationId: request.ctx.requestId, actorId: request.ctx.principal.sub,
+    storageScopeId: 'scope-1', authorizeCommit: async () => { throw new Error('unexpected guard'); } }),
 };
 
 const LIMIT_SCHEMA = {
@@ -91,7 +98,7 @@ function facadeWith(options: ModuleOptions = {}) {
   const modules = modulesWith(options);
   const facade = createMcpRegistry({
     modules,
-    builtins: [createArtifactsBuiltin({ modules, definition: { app: fakeApp } })],
+    builtins: [createArtifactsBuiltin({ modules, definition: fakeDefinition })],
   });
   facade.register(localImmo());
   return facade;
@@ -99,7 +106,7 @@ function facadeWith(options: ModuleOptions = {}) {
 
 describe('artifacts mesh leaf', () => {
   it('should require the caller key in every idempotent tool schema', () => {
-    for (const tool of artifacts.createArtifactsManifest().tools) {
+    for (const tool of artifacts.createArtifactsManifest({ profile }).tools) {
       if (tool.idempotency.required) {
         expect(tool.inputSchema, tool.name).toHaveProperty('required', expect.arrayContaining(['idempotencyKey']));
       }
@@ -107,13 +114,13 @@ describe('artifacts mesh leaf', () => {
   });
 
   it.each(['required', 'scope'])('should refuse inconsistent idempotency %s metadata', (field) => {
-    const manifest = artifacts.createArtifactsManifest();
+    const manifest = artifacts.createArtifactsManifest({ profile });
     const tool = manifest.tools.find((item) => item.name === 'artifacts_ensure')!;
     if (field === 'required') tool.inputSchema = { ...tool.inputSchema as object, required: [] };
     else tool.idempotency = { required: true, scope: 'tenant' };
     const factory = vi.spyOn(artifacts, 'createArtifactsManifest').mockReturnValue(manifest);
     try {
-      expect(() => createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } }))
+      expect(() => createArtifactsBuiltin({ modules: modulesWith(), definition: fakeDefinition }))
         .toThrow(/idempotency/);
     } finally { factory.mockRestore(); }
   });
@@ -125,11 +132,11 @@ describe('artifacts mesh leaf', () => {
     { label: 'envelope only', argument: undefined, envelope: 'caller-key', allowed: false },
   ])('should enforce caller-key consistency for $label through compiled dispatch', async (test) => {
     const effects: unknown[] = [];
-    const app = { handle: async (request: unknown) => {
-      effects.push(request); return { status: 200, body: { ok: true } };
+    const app = { ...fakeApp, execute: async (request: unknown) => {
+      effects.push(request); return fakeApp.execute();
     } };
     const modules = createClusterMeshModules();
-    const builtin = createArtifactsBuiltin({ modules, definition: { app } });
+    const builtin = createArtifactsBuiltin({ modules, definition: { ...fakeDefinition, app } });
     const definition = await builtin.load();
     if ('kind' in definition) throw new Error('expected loaded definition');
     const facade = createMcpRegistry({ modules, builtins: [builtin] });
@@ -159,7 +166,7 @@ describe('artifacts mesh leaf', () => {
     const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition');
     try {
       const modules = modulesWith({ failArtifacts: true });
-      const builtin = createArtifactsBuiltin({ modules, definition: { app: fakeApp } });
+      const builtin = createArtifactsBuiltin({ modules, definition: fakeDefinition });
       const facade = createMcpRegistry({ modules, builtins: [builtin] });
       facade.catalog();
       expect(factory).not.toHaveBeenCalled();
@@ -189,7 +196,7 @@ describe('artifacts mesh leaf', () => {
   });
 
   it('should catalogue exactly the capabilities of the selected definition', async () => {
-    const definition = artifacts.createArtifactsRegistryDefinition({ app: fakeApp });
+    const definition = artifacts.createArtifactsRegistryDefinition(fakeDefinition);
     const selected = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'];
     definition.manifest = { ...definition.manifest,
       tools: definition.manifest.tools.filter((tool) => selected.includes(tool.name)) };
@@ -217,37 +224,37 @@ describe('artifacts mesh leaf', () => {
   });
 
   it('should expose no capabilities when the selected definition is empty', () => {
-    const definition = artifacts.createArtifactsRegistryDefinition({ app: fakeApp });
+    const definition = artifacts.createArtifactsRegistryDefinition(fakeDefinition);
     definition.manifest = { ...definition.manifest, tools: [] };
     const factory = vi.spyOn(artifacts, 'createArtifactsManifest').mockReturnValue(definition.manifest);
     try {
-      expect(createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } })
+      expect(createArtifactsBuiltin({ modules: modulesWith(), definition: fakeDefinition })
         .capabilities).toEqual([]);
     } finally { factory.mockRestore(); }
   });
 
   it('should refuse a definition that changes after catalog construction', async () => {
-    const definition = artifacts.createArtifactsRegistryDefinition({ app: fakeApp });
+    const definition = artifacts.createArtifactsRegistryDefinition(fakeDefinition);
     const changed = { ...definition, manifest: { ...definition.manifest, tools: [] } };
     const factory = vi.spyOn(artifacts, 'createArtifactsRegistryDefinition').mockReturnValue(changed);
     try {
-      const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } });
+      const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: fakeDefinition });
       await expect(builtin.load()).rejects.toThrow(/definition.*changed/);
     } finally { factory.mockRestore(); }
   });
 
   it('should refuse an artifacts common-rule admission claim', () => {
-    expect(() => createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp },
+    expect(() => createArtifactsBuiltin({ modules: modulesWith(), definition: fakeDefinition,
       commonRuleAdmission: true } as never)).toThrow(/common.rule/);
   });
 
-  it('catalogues sentropic.artifacts with the 15 artifacts tools', () => {
+  it('catalogues sentropic.artifacts with exactly the compiled profile tools', () => {
     const facade = facadeWith();
     const entry = facade.catalog().find((item) => item.providerId === 'sentropic.artifacts');
     expect(entry).toMatchObject({
       providerId: 'sentropic.artifacts',
       version: '0.2.0',
-      capabilities: SPEC_TOOLS,
+      capabilities: profile.selectedCapabilities,
       availability: 'not-selected',
     });
   });
@@ -255,8 +262,8 @@ describe('artifacts mesh leaf', () => {
   it('selects and configures sentropic.artifacts beside a local provider', async () => {
     const facade = facadeWith();
     facade.select(['immo', 'sentropic.artifacts']);
-    facade.configure('sentropic.artifacts', { defaultStorageScopeId: 'scope-1' });
-    const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } });
+    facade.configure('sentropic.artifacts', {});
+    const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: fakeDefinition });
     const definition = await builtin.load();
     const compiled = await facade.compile({
       bindings: {},
@@ -267,7 +274,7 @@ describe('artifacts mesh leaf', () => {
     });
     if (!compiled.ok) throw new Error(`compile refused: ${JSON.stringify(compiled.diagnostics)}`);
     expect(compiled.registry.resolveTool('immo_search')?.providerId).toBe('immo');
-    for (const name of SPEC_TOOLS) {
+    for (const name of profile.selectedCapabilities) {
       expect(compiled.registry.resolveTool(name)?.providerId, name).toBe('sentropic.artifacts');
     }
     const entry = facade.catalog().find((item) => item.providerId === 'sentropic.artifacts');
@@ -326,7 +333,7 @@ describe('artifacts mesh leaf', () => {
       toolValues: { artifacts_list: { handlerId: 'artifacts_list-handler', values: { limit: 20 } } },
     } as never);
     facade.select(['other', 'sentropic.artifacts']);
-    const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: { app: fakeApp } });
+    const builtin = createArtifactsBuiltin({ modules: modulesWith(), definition: fakeDefinition });
     const definition = await builtin.load();
     const compiled = await facade.compile({
       bindings: {},
