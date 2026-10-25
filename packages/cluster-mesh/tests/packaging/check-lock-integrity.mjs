@@ -4,8 +4,9 @@
 //       write the committed lock from a provisional install: sibling-sourced entries get the registry
 //       `resolved` URL and the sha512 of the sibling bytes (a sibling absent or at another version in the working
 //       lock is an error and nothing is written); the candidate keeps no integrity
-//   siblings <committed-lock> <siblings-dir>
-//       every sibling run: committed entry version/resolved/integrity must equal the sibling archive
+//   siblings <committed-lock> <siblings-dir> [working-lock]
+//       train siblings match the committed registry entry; the provisional artifacts candidate
+//       matches the working file entry's version and integrity, preserving its published baseline
 //   registry <committed-lock> [required...]
 //       after publication: registry dist.tarball and dist.integrity of each published train package must equal the
 //       lock `resolved` and `integrity`; a required package (its publish job succeeded in this run) must be on the
@@ -49,17 +50,25 @@ function refresh(workingLock, committedLock, packageJson, siblingsDir) {
   if (errors === 0) fs.writeFileSync(committedLock, text);
 }
 
-function siblings(committedLock, siblingsDir) {
+function siblings(committedLock, siblingsDir, workingLock) {
   const lock = readJson(committedLock);
+  const working = workingLock === undefined ? undefined : readJson(workingLock);
   for (const sibling of readIndex(siblingsDir)) {
     if (sibling.name === CANDIDATE) continue;
-    const entry = lock.packages[`node_modules/${sibling.name}`];
+    const provisional = sibling.name === '@sentropic/artifacts';
+    if (provisional && !working) {
+      error(`${sibling.name}: provisional candidate requires the installed working lock`);
+      continue;
+    }
+    const entry = (provisional ? working : lock).packages[`node_modules/${sibling.name}`];
     if (!entry) {
-      error(`${sibling.name}@${sibling.version} is a sibling but absent from the committed lock`);
+      error(`${sibling.name}@${sibling.version} is a sibling but absent from the ${provisional ? 'working' : 'committed'} lock`);
       continue;
     }
     if (entry.version !== sibling.version) error(`${sibling.name}: lock pins ${entry.version}, sibling is ${sibling.version}`);
-    if (entry.resolved !== tarballUrl(sibling.name, sibling.version)) error(`${sibling.name}: lock resolved ${entry.resolved} is not the registry URL`);
+    if (provisional ? !entry.resolved?.startsWith('file:') : entry.resolved !== tarballUrl(sibling.name, sibling.version)) {
+      error(`${sibling.name}: lock resolved ${entry.resolved} is not the ${provisional ? 'candidate file' : 'registry URL'}`);
+    }
     if (entry.integrity !== sibling.integrity) {
       error(`${sibling.name}@${sibling.version}: lock integrity ${entry.integrity} != sibling ${sibling.integrity}`);
     } else console.log(`[lock] ${sibling.name}@${sibling.version} integrity matches the sibling archive`);
@@ -119,12 +128,12 @@ async function registry(committedLock, required) {
 
 const [command, ...args] = process.argv.slice(2);
 if (command === 'refresh' && args.length === 4) refresh(...args);
-else if (command === 'siblings' && args.length === 2) siblings(...args);
+else if (command === 'siblings' && (args.length === 2 || args.length === 3)) siblings(...args);
 else if (command === 'registry' && args.length >= 1 && args.slice(1).every((name) => TRAIN.includes(name))) {
   await registry(args[0], args.slice(1));
 } else {
   console.error('usage: check-lock-integrity.mjs refresh <working-lock> <committed-lock> <package.json> <siblings-dir>'
-    + ` | siblings <committed-lock> <siblings-dir> | registry <committed-lock> [required: ${TRAIN.join(' ')}]`);
+    + ` | siblings <committed-lock> <siblings-dir> [working-lock] | registry <committed-lock> [required: ${TRAIN.join(' ')}]`);
   process.exit(2);
 }
 process.exit(errors === 0 ? 0 : 1);
