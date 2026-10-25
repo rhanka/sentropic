@@ -84,6 +84,7 @@
 - [x] Frozen participant quota reservations are scoped and memoized per transaction, with no replay recharge.
 - [x] Registry baseline 0.1.4 checked; 0.2.0 host export map and migration guide included, without publishing.
 - [x] Migrated content/pilot E2E fixtures to the guarded selected profile; preserved all seven content journeys.
+- [x] HTTP/MCP parity now uses the same guarded fixture as the content journeys.
 - [x] L6 composes provider and request guards on a request-local coordinator binding; publication.ts stays L4-owned.
 - [ ] Integration owner: expose commit-contract, outcome-contract and testing subpaths; reserve the topic version.
 - [ ] Integration owner: migrate out-of-scope HTTP upload/template and content/pilot e2e fixtures to required host composition.
