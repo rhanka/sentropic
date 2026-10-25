@@ -1,104 +1,55 @@
-/**
- * L-5c — transport-free HTTP app (spec-v8 §9 5c).
- *
- * Part 1: request/response types, ordered error mapping, dispatch and the
- * ensure route. The app delegates to the same services as direct calls
- * (parity); only the DTO validation and status mapping live here. Created
- * views are owned by the caller — no client-supplied owner. Part 2 adds
- * publish/read; part 3 adds lifecycle/fork/access/source routes.
- *
- * Status mapping (first match wins): access denied → 403; state conflicts
- * (already/conflict/lost races, premature purge) → 409; unknown
- * artifact/release/intent/upload/blob or missing source → 404; terminal or
- * removed states (purged/deleted) → 410; failed byte verification → 422;
- * invalid input → 400; anything else → 500 (never expected).
- *
- * m5 hardening: error bodies are stable codes only (never raw internal
- * messages, which can carry driver text or stored identifiers). An actor
- * who cannot read an artifact gets the identical 404 answer as for an
- * unknown artifact on every route — no 404/403 existence oracle. Precise
- * 403 answers remain for actors who can already read the artifact.
- */
-import { buildEnsureRequest } from './client.js';
-import type { ParameterSchema } from './parameters.js';
-import type { ArtifactService } from './server/service.js';
-import type { PublicationBlobStore, PublicationService } from './server/publication.js';
-import { DEFAULT_PUBLICATION_LIMITS } from './server/publication.js';
-import { validatePublicationFiles } from './server/publication-limits.js';
-import { createContentRuntime } from './server/runtime.js';
+/** Selected HTTP control surface over the authorized atomic services. */
+import type { JsonValue } from './contracts.js';
+import { parseManifest } from './codecs.js';
+import { assertCompiledArtifactsProfile, ArtifactProfileInputError,
+  type CompiledArtifactsProfile } from './profile/index.js';
+import { createArtifactCommand, type ArtifactKeyDerivationBinding } from './server/command-identity.js';
+import { createGuardedEnsureService, type GuardedEnsureHost } from './server/service.js';
+import { assertArtifactReplayMigration } from './server/idempotency.js';
+import type { KvPort } from './server/ports.js';
+import { createGuardedPublicationService, type GuardedPublicationDeps,
+  type PublicationService } from './server/publication.js';
+import type { ArtifactAcl, AclStore } from './server/access.js';
 import type { LifecycleService } from './server/lifecycle.js';
-import type { ForkRecord, ForkService } from './server/fork.js';
-import { evaluateAccess, grantAccess, revokeAccess, type AclStore, type ArtifactAcl } from './server/access.js';
-import { parseSourceRef, type SourceStore } from './server/sources.js';
-import { assertArtifactAccess } from './server/authorization.js';
-import type { StagingStore, UploadService } from './server/uploads.js';
-import type { TemplateCatalogPort } from './server/templates.js';
+import { CommitQuarantineError, type ArtifactInvocationContext,
+  type ArtifactCommitCoordinator, type FinalizeRequest } from './server/commit/types.js';
+import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome } from './server/failures.js';
+import { projectArtifactHttpOutcome } from './server/outcome-projection.js';
+export { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 
 export interface HttpRequest {
   method: string;
   path: string;
   body: unknown;
   actorId: string;
-  /** Trusted host context, resolved alongside actorId; never copy from the body. */
+  /** Trusted host assertion, never caller authority. */
   storageScopeId?: string;
+  /** Optional platform envelope; must equal the tool argument byte for byte. */
+  idempotencyKey?: string;
 }
-
-export interface HttpResponse {
-  status: number;
-  body: unknown;
-}
-
-export interface HttpAppDeps {
-  parameterSchema: ParameterSchema;
-  artifacts: ArtifactService;
-  publication: PublicationService;
-  lifecycle: LifecycleService;
-  forks: ForkService;
-  acls: AclStore;
-  sources: SourceStore;
-  blobs: PublicationBlobStore;
-  isApprovedAccount?: (principalId: string) => boolean;
-  /** Bounded upload sessions (L-5e); upload routes refuse when unwired. */
-  uploads?: UploadService;
-  staging?: StagingStore;
-  /** Template kit + API guide catalog (L-5e); refuses when unwired. */
-  templates?: TemplateCatalogPort;
-}
-
-function errorStatus(message: string): number {
-  if (/access denied/.test(message)) return 403;
-  if (/can only purge|already |conflict|lost/.test(message)) return 409;
-  if (/unknown artifact|unknown release|unknown intent|unknown upload|unknown blob|not found|no source|no release/.test(message)) {
-    return 404;
-  }
-  if (/terminal|purged|deleted/.test(message)) return 410;
-  if (/digest|size mismatch|read-back/.test(message)) return 422;
-  if (/invalid|missing|empty|duplicate|unknown action|unknown kind|budget|offset|committed|scope mismatch|malformed|forged|byte/.test(message)) {
-    return 400;
-  }
-  return 500;
-}
-
-const ERROR_CODES: Record<number, string> = {
-  400: 'invalid_request',
-  401: 'anonymous',
-  403: 'access_denied',
-  404: 'not_found',
-  409: 'conflict',
-  410: 'gone',
-  422: 'verification_failed',
-  500: 'internal_error',
-};
-
-/** Stable error body for one status; internal messages never leave the app. */
+export interface HttpResponse { status: number; body: unknown }
+/** Stable content-route error codes; private driver messages never leave the host. */
 export function errorBody(status: number): { error: string } {
-  return { error: ERROR_CODES[status] ?? 'internal_error' };
+  return { error: ({ 400: 'invalid_request', 401: 'anonymous', 403: 'access_denied',
+    404: 'not_found', 409: 'conflict', 410: 'gone', 422: 'verification_failed',
+    500: 'internal_error', 503: 'capability_unavailable' } as Record<number, string>)[status] ?? 'internal_error' };
 }
-
-function fail(error: unknown): HttpResponse {
-  const message = error instanceof Error ? error.message : String(error);
-  const status = errorStatus(message);
-  return { status, body: errorBody(status) };
+export interface HttpAppDeps {
+  profile: CompiledArtifactsProfile;
+  coordinator: ArtifactCommitCoordinator;
+  derivation: ArtifactKeyDerivationBinding;
+  /** Explicit pilot-state inventory reader; supply an empty reader only for a verified fresh store. */
+  legacyRecords: Pick<KvPort, 'get'>;
+  ensureHost: GuardedEnsureHost;
+  publication: Omit<GuardedPublicationDeps, 'coordinator' | 'limits'> & {
+    getCurrent: PublicationService['getCurrent'];
+  };
+  acls: AclStore;
+  lifecycle: Pick<LifecycleService, 'stateOf' | 'canRead'>;
+  isApprovedAccount?: (principalId: string) => boolean;
+  /** One trusted URL policy shared by HTTP and MCP receipts. */
+  publicationUrls?: (artifactId: string, releaseId: string) => { stableUrl: string; pinnedUrl: string };
+}
 }
 
 function needObject(body: unknown): Record<string, unknown> {
