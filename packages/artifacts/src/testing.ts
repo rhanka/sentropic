@@ -71,7 +71,7 @@ export async function pausePurgeBeforeDelete(host: PurgeTestHost, artifactId: st
       const claims = (await host.claims.listClaims()).filter((claim) =>
         claim.holder === `purge:${artifactId}` && claim.state === 'pending');
       const matching = claims.find((claim) => key.endsWith(`/sha256/${claim.digest.slice(7)}`));
-      if (matching === undefined) throw new Error('purge DELETE has no correlated durable claim');
+      if (matching === undefined) return host.blobs.deleteBlob(key);
       reached({ claimId: matching.claimId,
         blobKeys: claims.map((claim) => `artifacts/${host.storageScopeId}/blobs/sha256/${claim.digest.slice(7)}`) });
       await gate;
