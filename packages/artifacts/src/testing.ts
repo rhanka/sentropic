@@ -13,6 +13,9 @@
  * preparation adapters holding this same observer, never by the
  * coordinator (arming one throws at construction).
  */
+import type { InspectableDeletionClaimStore } from './server/gc.js';
+import type { PublicationBlobStore } from './server/publication.js';
+
 export const COMMIT_BARRIER_POINTS = [
   'before_connection_acquire',
   'before_key_lock',
@@ -33,6 +36,51 @@ export type CommitBarrierObserver = (
 
 export interface CommitArrivalObserver {
   arrive(point: CommitBarrierPoint, invocationId: string): void;
+}
+
+/** Explicit host binding: purge must use the supplied deletion adapter for this call only. */
+export interface PurgeTestHost {
+  readonly claims: InspectableDeletionClaimStore;
+  readonly storageScopeId: string;
+  readonly blobs: PublicationBlobStore;
+  purge(artifactId: string, deleting: PublicationBlobStore): Promise<void>;
+}
+
+export async function inspectDeletionClaims(host: Pick<PurgeTestHost, 'claims' | 'storageScopeId'>): Promise<
+  Array<{ claimId: string; state: string; blobKeys: string[] }>
+> {
+  return (await host.claims.listClaims()).map((claim) => ({ claimId: claim.claimId, state: claim.state,
+    blobKeys: [`artifacts/${host.storageScopeId}/blobs/sha256/${claim.digest.slice(7)}`] }));
+}
+
+/** Start one correlated purge and pause immediately before its first external DELETE. */
+export async function pausePurgeBeforeDelete(host: PurgeTestHost, artifactId: string): Promise<{
+  claimId: string; blobKeys: string[]; release(): void; finished: Promise<void>;
+}> {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let reached!: (value: { claimId: string; blobKeys: string[] }) => void;
+  let fail!: (error: unknown) => void;
+  const arrival = new Promise<{ claimId: string; blobKeys: string[] }>((resolve, reject) => {
+    reached = resolve; fail = reject;
+  });
+  const deleting: PublicationBlobStore = { ...host.blobs,
+    putBlob: (key, bytes) => host.blobs.putBlob(key, bytes),
+    getBlob: (key) => host.blobs.getBlob(key), listKeys: (prefix) => host.blobs.listKeys(prefix),
+    async deleteBlob(key) {
+      const claims = (await host.claims.listClaims()).filter((claim) =>
+        claim.holder === `purge:${artifactId}` && claim.state === 'pending');
+      const matching = claims.find((claim) => key.endsWith(`/sha256/${claim.digest.slice(7)}`));
+      if (matching === undefined) return host.blobs.deleteBlob(key);
+      reached({ claimId: matching.claimId,
+        blobKeys: claims.map((claim) => `artifacts/${host.storageScopeId}/blobs/sha256/${claim.digest.slice(7)}`) });
+      await gate;
+      await host.blobs.deleteBlob(key);
+    },
+  };
+  const finished = host.purge(artifactId, deleting);
+  void finished.then(() => fail(new Error('purge finished without external DELETE')), fail);
+  return { ...await arrival, release, finished };
 }
 
 interface BarrierGate {
