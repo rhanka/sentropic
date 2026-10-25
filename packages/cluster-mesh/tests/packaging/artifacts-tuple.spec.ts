@@ -27,6 +27,13 @@ const manifest = (path: string): Pkg => JSON.parse(readFileSync(path, 'utf8')) a
 const sourceManifest = manifest(new URL('../../package.json', import.meta.url).pathname);
 
 describe('artifacts source tuple coherence', () => {
+  it('should provide a reproducible make target for the llm-mesh 0.19.2 entry probe', () => {
+    const command = readFileSync(new URL('./llm0192.mk', import.meta.url), 'utf8');
+    expect(command).toContain('qualify-llm0192: build-cluster-mesh');
+    expect(command).toContain('@sentropic/llm-mesh@0.19.2');
+    expect(command).not.toContain('/tmp/861-L7');
+  });
+
   it('declares the optional artifacts peer once, in the candidate range', () => {
     expect(sourceManifest.peerDependencies?.[ARTIFACTS_PACKAGE]).toBe(ARTIFACTS_RANGE);
     expect(ARTIFACTS_RANGE).toBe('>=0.1.3 <0.2.0');
