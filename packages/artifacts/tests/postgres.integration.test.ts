@@ -44,6 +44,22 @@ afterAll(async () => {
 });
 
 describe('postgres artifact store', () => {
+  it('should filter due cleanup reads and limit them before returning rows', async () => {
+    const payload = { cleanupDeadlineMs: 100, preparedAtMs: 10, artifactId: 'batch' };
+    const done = await store.record('commit-release', payload);
+    await store.complete(done.intentId);
+    const settled = await store.record('commit-release', payload);
+    await store.markFailed(settled.intentId, 'denied');
+    await store.settlePreparationCleanup(settled.intentId);
+    const due = await store.record('commit-release', payload);
+    expect((await store.listPreparationIntents({ throughMs: 100, limit: 1 }))
+      .map((intent) => intent.intentId)).toEqual([due.intentId]);
+    expect(await store.listPreparationIntents({ throughMs: 99, limit: 1 })).toEqual([]);
+    await store.complete(due.intentId);
+    expect(await store.listPreparationIntents({ throughMs: 60_101, limit: 1 })).toEqual([]);
+    expect((await store.listPreparationIntents({ artifactId: 'batch' })).length).toBe(1);
+  });
+
   it('ensures stable artifact bindings', async () => {
     const a = await store.ensureArtifact({
       storageScopeId: 'scope-1',

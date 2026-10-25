@@ -172,10 +172,20 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
       );
       return rows.map(toIntent);
     },
-    async listPreparationIntents() {
+    async listPreparationIntents(query = {}) {
       const { rows } = await pool.query<IntentRow>(
-        `SELECT * FROM artifacts.object_intents WHERE kind = 'commit-release'
-         AND payload ? 'cleanupDeadlineMs' ORDER BY created_at, id`);
+        `SELECT * FROM artifacts.object_intents WHERE kind = 'commit-release' AND state <> 'done'
+         AND payload ? 'cleanupDeadlineMs'
+         AND ($1::text IS NULL OR payload->>'artifactId' = $1)
+         AND ($2::numeric IS NULL OR (
+           CASE WHEN jsonb_typeof(payload->'cleanupDeadlineMs') = 'number'
+             THEN (payload->>'cleanupDeadlineMs')::numeric ELSE 0 END <= $2
+           AND (payload->>'cleanupState' IS DISTINCT FROM 'failed-cleaned'
+             OR (payload->>'cleanupDeadlineMs')::numeric >= $2 - 60000)))
+         ORDER BY COALESCE(payload->>'cleanupState' = 'failed-cleaned', false),
+           CASE WHEN jsonb_typeof(payload->'cleanupDeadlineMs') = 'number'
+             THEN (payload->>'cleanupDeadlineMs')::numeric ELSE 0 END, id
+         LIMIT $3`, [query.artifactId ?? null, query.throughMs ?? null, query.limit ?? null]);
       return rows.map(toIntent);
     },
     async claimPreparationCleanup(intentId, throughMs) {
