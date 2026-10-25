@@ -269,7 +269,7 @@ describe('guarded ensure', () => {
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.result).toEqual({ ...first.result, replayed: true });
-    expect(harness.state.resolveBindingCalls).toBe(1);
+    expect(harness.bindings.size).toBe(1);
     expect(harness.state.reserveQuotaCalls).toBe(1);
     expect(harness.receipts.size).toBe(1);
   });
