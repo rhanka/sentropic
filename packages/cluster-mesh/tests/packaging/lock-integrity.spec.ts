@@ -36,6 +36,30 @@ function lock(file: string, mesh: Record<string, string>): string {
 }
 
 describe('train lock integrity', () => {
+  it('should verify provisional artifacts bytes without rewriting the published baseline', () => {
+    const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'));
+    index.push({ name: '@sentropic/artifacts', version: '0.2.0', file: '/x/artifacts.tgz', integrity: 'sha512-artifacts' });
+    writeFileSync(join(dir, 'index.json'), JSON.stringify(index));
+    const committed = lock('baseline.json', { version: '0.22.3', resolved: MESH_URL, integrity: INTEGRITY });
+    const baseline = JSON.parse(readFileSync(committed, 'utf8'));
+    baseline.packages['node_modules/@sentropic/artifacts'] = { version: '0.1.4',
+      resolved: 'https://registry.npmjs.org/@sentropic/artifacts/-/artifacts-0.1.4.tgz', integrity: 'sha512-published' };
+    writeFileSync(committed, JSON.stringify(baseline));
+    const saved = readFileSync(committed, 'utf8');
+    const working = join(dir, 'installed.json');
+    const check = (entry: Record<string, string>) => {
+      writeFileSync(working, JSON.stringify({ packages: { 'node_modules/@sentropic/artifacts': entry } }));
+      return run('siblings', committed, dir, working);
+    };
+    const candidate = { version: '0.2.0', resolved: 'file:../src/artifacts.tgz', integrity: 'sha512-artifacts' };
+    expect(check(candidate).status).toBe(0);
+    expect(check({ ...candidate, version: '0.1.4' }).status).toBe(1);
+    expect(check({ ...candidate, integrity: 'sha512-tampered' }).status).toBe(1);
+    expect(check({ ...candidate, resolved: 'https://example.test/artifacts.tgz' }).status).toBe(1);
+    expect(run('siblings', committed, dir).status).toBe(1);
+    expect(readFileSync(committed, 'utf8')).toBe(saved);
+  });
+
   it('should assert the committed lock version, resolved URL and integrity against the sibling bytes', () => {
     expect(run('siblings', lock('ok.json', { version: '0.22.3', resolved: MESH_URL, integrity: INTEGRITY }), dir).status).toBe(0);
     const stale = run('siblings', lock('stale.json', { version: '0.22.3', resolved: MESH_URL, integrity: 'sha512-stale' }), dir);
