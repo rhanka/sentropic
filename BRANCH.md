@@ -35,6 +35,7 @@
   - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
 
 ## Feedback Loop
+- [x] INT-14: preserved the owner's concurrent integration merge 59e6b4e7f (#744) without rebasing: publication invocation correlation/S3 observer hooks and 26 real boundary tests. Only BRANCH.md conflicted; retained this integration plan. L0 freeze and Track remain byte-identical.
 - [x] INT-13: CI installed-comments probe rejected the reserved mesh 0.22.0 candidate against its own <0.22.0 descriptor. Admit 0.21/0.22 and retain the 0.23 refusal; 43 registry tests passed. Rebuilt packed bare-consumer root/storage/disabled-comments/missing-peer checks all passed under shared-lock Compose cleanup.
 - [x] INT-12: packed round-trip uses trusted invocations and caller keys, rejects forged scope and invalid files, and reads content through the retained public runtime. Core-only (platform absent), kernel and both driver adapters passed under Compose; UTF-8 bytes, scope, CORP and zero fetches verified.
 - [x] INT-11: packed/core-only probes now construct the guarded host from installed exports and catalogue only the compiled selection; retain the global 15-name contract and optional-platform absence checks.
