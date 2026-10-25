@@ -26,6 +26,8 @@
   - `packages/comments/**`
   - `packages/skills/**`
   - `packages/cluster-mesh/tests/packaging/**` (Zod resolution in the frozen consumer)
+  - `packages/cluster-mesh/tests/storage/comments-deps.package.json`
+  - `packages/cluster-mesh/tests/storage/postgres.mk` (standalone consumer Zod resolution)
   - `.security/vulnerability-register.yaml`
   - `.security/audit-allowlist.json`
   - `BRANCH.md`
@@ -51,6 +53,8 @@
 - [x] PR #752 created as draft. Refresh main again to resolve its intervening BRANCH.md update and enable CI; retain this migration plan and all incoming source changes.
 - [x] Expanded inventory: 44 API source files, five auth-hono handlers, comments Hono adapter, skills parser; UI/e2e have no direct consumer. Root/API locks resolve 4.6.7; the frozen cluster-mesh selected consumer still resolves 3.25.76 and needs its own lot.
 - [x] Transitive inspection: Ollama 1.2.0 (latest published) declares a v3 peer but its runtime validation uses safeParse and the record parses successfully with 4.6.7. No application shim or v3 import introduced.
+- [x] CI run 40243669602 reproduces a second independent consumer: comments-deps.package.json installs published comments 0.3.0 into scratch space and resolves vulnerable Zod 3. Pin Zod 4 for this audit/oracle tree and the installed-comments consumer; keep the frozen published peer identity.
+- [x] Historical memory qualification lock-snapshots are content-addressed archived evidence, not active workspace install locks; preserve their bytes and hashes.
 - [ ] BR01-EX1 (`acknowledge` self): touch `Makefile` (Forbidden Path), pin-only changes of `zod@3.25.76`/`zod@3.23.8` install pins to the v4 line in package typecheck/test targets (skills, auth-hono, llm-gateway, auth-client, cluster-mesh peer tools). Reason: targets hardcode the exact zod version under test; without the pin update the gates keep validating against v3. Impact: version strings in ephemeral `npm install` commands only, no target logic change. Rollback: revert pin strings to v3.
 - [x] `acknowledge`: `make scope-check` available (harness CLI installed); run before every commit.
 - [x] Previous pause lifted by owner resume on 2026-10-25; merged the main fixes and refreshed the API lock. Current root audit reports zero HIGH/CRITICAL.
@@ -144,3 +148,4 @@
   - [x] Pin the selected fixture to Zod >=4.6.6, preserve overrides when preparing consumers, and refresh its Zod lock entry.
   - [x] Frozen consumer npm ci PASS (176 packages, Zod 4.6.7); packaging lock-integrity 8/8 PASS via Compose qualification.
   - [x] No application source or package version change; no UI/UAT change.
+  - [x] Standalone comments audit/oracle and installed-comments consumer pin Zod 4. Reproduction after fix: six dependencies installed, Zod 4.6.7, npm production audit reports zero vulnerabilities; frozen oracle imports successfully.
