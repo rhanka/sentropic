@@ -182,69 +182,49 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           if (typeof receipt.releaseId !== 'string' || typeof receipt.manifest !== 'string') {
             throw new Error('invalid publication receipt');
           }
-            bytes: new Uint8Array(0),
-          }];
-          await uploads.commit(uploadId, {
-            digest: needString(body['digest'], 'digest'),
-            size: size as number,
-          }, (bytes) => {
-            files[0]!.bytes = bytes;
-            validatePublicationFiles(files, deps.publication.limits ?? DEFAULT_PUBLICATION_LIMITS);
-          });
-          const result = await deps.publication.publish({
-            ownerId: acl.ownerId,
-            storageScopeId: acl.storageScopeId,
-            artifactId,
-            profile: (body['profile'] ?? {}) as Record<string, string | number | boolean | null | undefined>,
-            files,
-            idempotencyKey: typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : undefined,
-            paramsHash: typeof body['paramsHash'] === 'string' ? body['paramsHash'] : undefined,
-          });
-          await deps.lifecycle.trackRelease(artifactId, result.releaseId);
-          await staging.discard(uploadId);
-          return { status: 201, body: result };
+          return { ...outcome, result: { status: 201, body: {
+            artifactId, releaseId: receipt.releaseId, manifest: receipt.manifest,
+            digest: parseManifest(receipt.manifest).digest,
+            ...deps.publicationUrls?.(artifactId, receipt.releaseId),
+          } } };
         }
-
-        if (request.method === 'GET' && request.path.startsWith('/templates/')) {
-          const templateId = request.path.slice('/templates/'.length);
-          if (templateId.length === 0 || templateId.includes('/')) {
-            return { status: 404, body: errorBody(404) };
+        if (capability === 'artifacts_get') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          const state = await deps.lifecycle.stateOf(artifactId);
+          const current = await deps.publication.getCurrent(artifactId);
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+            result: { status: 200, body: { artifactId, ownerId: acl.ownerId, storageScopeId: acl.storageScopeId,
+              state, isPublic: acl.isPublic, withdrawn: state === 'withdrawn', currentReleaseId: current?.releaseId,
+              ...(acl.ownerId === invocation.actorId ? { grants: acl.grants } : {}) } } };
+        }
+        const visibleArtifacts: unknown[] = [];
+        for (const artifactId of await deps.acls.listArtifactIds()) {
+          const acl = await deps.acls.getArtifactAcl(artifactId);
+          if (!acl || acl.storageScopeId !== invocation.storageScopeId) continue;
+          const state = await deps.lifecycle.stateOf(artifactId);
+          if (deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount)) {
+            visibleArtifacts.push({ artifactId, ownerId: acl.ownerId, state, isPublic: acl.isPublic });
           }
-          const template = await requireTemplates().getTemplate(templateId);
-          if (template === undefined) return { status: 404, body: errorBody(404) };
-          return { status: 200, body: template };
         }
-
-        if (
-          request.method === 'GET' &&
-          (request.path === '/api-guide' || request.path.startsWith('/api-guide/'))
-        ) {
-          const version = request.path === '/api-guide'
-            ? undefined
-            : request.path.slice('/api-guide/'.length);
-          if (version !== undefined && (version.length === 0 || version.includes('/'))) {
-            return { status: 404, body: errorBody(404) };
-          }
-          const guide = await requireTemplates().getApiGuide(version);
-          if (guide === undefined) return { status: 404, body: errorBody(404) };
-          return { status: 200, body: guide };
+        const offset = normalized.offset as number;
+        return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+          result: { status: 200, body: { total: visibleArtifacts.length,
+            artifacts: visibleArtifacts.slice(offset, offset + (normalized.limit as number)) } } };
+      } catch (cause) {
+        const failure = classifyArtifactFailure(cause, { invocationId: invocation?.invocationId ?? '',
+          operation, phase, commitState }, (error) => error instanceof ArtifactProfileInputError
+            ? new ArtifactOperationError(error.category) : undefined);
+        if (cause instanceof CommitQuarantineError) {
+          const migration = { ...failure, kind: 'operational' as const, category: 'provider_unavailable' as const,
+            variant: 'legacy_quarantine', httpStatus: 503, publicCode: 'capability_unavailable', retriable: false };
+          Object.defineProperty(migration, 'cause', { value: cause, enumerable: false });
+          return { ok: false, failure: Object.freeze(migration) };
         }
-
-        if (request.method === 'POST' && request.path === '/access/public') {
-          const artifactId = needString(body['artifactId'], 'artifactId');
-          const acl = await requireVisible(artifactId, request.actorId);
-          assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
-          if (typeof body['isPublic'] !== 'boolean') {
-            throw new Error('invalid request: isPublic must be a boolean');
-          }
-          await deps.acls.putArtifactAcl(artifactId, { ...acl, isPublic: body['isPublic'] });
-          return { status: 200, body: { artifactId, isPublic: body['isPublic'] } };
-        }
-
-        return { status: 404, body: errorBody(404) };
-      } catch (error) {
-        return fail(error);
+        return { ok: false, failure };
       }
     },
+    async handle(request, invocation) { return projectArtifactHttpOutcome(await app.execute(request, invocation)); },
   };
+  return Object.freeze(app);
 }
