@@ -33,6 +33,7 @@
   - [x] BR861-EX2 permits only the catalog llm-mesh range change for the L8d qualification defect; impact: registry, gateway coherence and topology admit exactly 0.19.2 plus the existing range; rollback: restore the catalog range and remove its 0.19.2 admission tests together with the manifest widening.
 
 ## Feedback Loop
+- [x] Merged origin/feat/immo-861-integration at 0bda0f93d without rebasing; only BRANCH.md conflicted. Retained this fix plan and incoming INT-15 installed-receipt integrity tests; Track bytes are identical across parents.
 - [x] L8d merge conflicts only in BRANCH.md; replace lane plan with this bounded fix plan.
 - [x] Spec r2 R4 requires exactly 0.19.2 || >=0.22.0 <0.28.0; no 0.20/0.21 support implied.
 - [x] L8D-2 is archive omission: retain frozen import and include src/contracts.ts in package files.
