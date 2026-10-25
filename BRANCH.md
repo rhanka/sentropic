@@ -1,66 +1,57 @@
-# feat(docs): converge governance folds on the shared card base
+# Feature: #861 integration (L0–L5, L7)
 
 ## Objective
-- [x] Follow OWNER-ORDER-711-hrpolnav-base.md: atomic 460 × 200 collapsed zones in every scene, DS IconButton and wrapping legend.
+- [ ] Integrate approved topic heads with merge commits and qualify real artifacts and mesh tuple gates without publishing.
 
 ## Scope / Guardrails
-- [x] Worktree `tmp/worktrees/governance-converge`, branch `feat/governance-converge-hrpolnav`, base `origin/main`.
-- [x] Make-only, no Python, Docker-only Node, `ENV=test-726-reword` last; file Chromium needs no ports or services.
-- [x] Read hrpolnav and design-system only; preserve validated card values, typography, icons, expanded 4/16/16 geometry and performance budgets.
-- [x] Selective staging, make commit only, no attribution trailers; push draft PR, do not merge.
+- [x] Worktree: tmp/worktrees/861-integration; branch: feat/immo-861-integration.
+- [x] ENV=test-861-int last; Docker steps use shared flock and make down after each step.
+- [x] Main merge and publication require owner GO.
+- [x] No rebase, squash, cherry-pick, Python, or attribution trailers.
+- [x] Merge commits preserve reviewed histories; the 150-line bound applies to new integration fixes and resolutions.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `docs/governance/**`
   - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
+  - `packages/artifacts/**`
+  - `packages/cluster-mesh/**`
+  - `scripts/ci/immo-861-*`
   - `Makefile`
-  - `docker-compose*.yml`
+  - `docker-compose.immo-861.yml`
+- **Forbidden Paths (must not change in this branch)**:
   - `.cursor/rules/**`
   - `.track/**`
-  - `plan/**`
-- **Conditional Paths**:
-  - None.
+  - `api/**`
+  - `ui/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `.github/workflows/ci.yml`
 - **Exception process**:
-  - [x] Record reason, impact and rollback before touching any unlisted path.
+  - [x] BR861-EX1: qualification runner only; purpose: exact-tuple tests under mandatory Compose lock; impact: disposable test services and host harness scope check; rollback: remove qualification wiring. Main-only publishing stays unchanged.
 
 ## Feedback Loop
-- [x] Report H1–H9 replacements and all source divergences in `docs/governance/validation/converge32.md`.
-- [x] R2 owner decision (2026-10-23): “Reformuler les textes”. Reword only the 34 overflowing collapsed occurrences; preserve package kickers, expanded text, both central scenes and all geometry/font values. Verify with `scripts/check-reword.mjs` against `10b7b22bc`.
-- [x] Astra R1: restore and assert measured 16 px outer summary insets (428 px body); remove the incorrect central wording-conflict claim.
-- [x] Astra R3: time and gate every counted ordinary operation, require 600 measured ordinary operations plus 240 measured stress toggles, and report complete-set maxima below 1800 ms.
-- [x] R3 complete runtime witness: 660 ordinary + 240 stress operations, 16 captures, zero fit/console failures, maximum 1489 ms (stress 995 ms), below the unchanged 1800 ms gate. Baseline with API tracing also passes (997 ms); archived failure is in pre-input actionability, historical root cause unproven. See validation report.
-- [x] Astra additional findings: disclose final-owner 14 px versus measured 20 px leaf-body conflict and inherited unequal adjacent expanded frame heights; preserve validated values.
-- [x] Rebase onto main to resolve the root plan conflict blocking PR CI; preserve correction sources exactly, inherit the DOMPurify override and rebuild in isolated dependencies. Portable SHA-256 reproduces `0b8db12478f4d7badc9d2f7819ec335e7d713287a755548627e118a2b93f2b47`.
-- [x] Replace inherited #711 plan; generated routes/portable and inherited-plan replacement exceed routine line budget. Keep handwritten implementation commits near 150 lines.
-- [x] No Track writes: scope excludes `.track/**`; mechanical harness checks remain mandatory.
+- [x] L0: owner accepts external CI failure tracked in #734.
+- [x] L3: owner accepts 157f231d5; type convergence belongs to L6, excluded from this train.
+- [x] Merge policy: retain integration BRANCH.md; report each source conflict separately.
 
 ## AI Flaky tests
-- [x] No provider tests apply to this offline documentation kit.
+- [x] No flaky acceptance granted.
 
 ## Orchestration Mode (AI-selected)
-- [x] Single author, isolated worktree.
+- [x] Multi-branch: one integrator; merge order L0, L1, L2, L3, L4, L5, L7.
 
 ## UAT Management (in orchestration context)
-- [x] Offline Chromium in this worktree; no root dev environment.
+- [x] No UI changes; real package and service tests are the qualification scope.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and scope**
-  - [x] Read owner order, rules, harness, template, hrpolnav provenance/hacks and readable DS specification; create worktree and pass mechanical branch check.
-- [x] **Lot 1 — Shared card anatomy**
-  - [x] Update `src/hrpolnav-card.js`, `src/architecture-svg.js`, `src/governance-layout.js`: atomic renderer, reserved toggle slot, centred body, shared 460 × 200 geometry.
-  - [x] Preserve all 144 leaf values, typography, icons and expanded headers; remove clamping/clipping and surface overflow. Reference card parity passes within 0.02 px.
-- [x] **Lot 2 — Every scene and wrapping legend**
-  - [x] Update `src/governance-collapse.js`, `src/study-layout.js`, `src/ArchitectureFigure.svelte`, `scripts/prepare-scenes.mjs`: every scene/depth, prepared folds, reversible aggregation.
-  - [x] Wrapping legend with semantic swatches, using the same zone/fold path.
-- [x] **Lot 3 — Qualification**
-  - [x] `scripts/check-{convergence,reword,browser}.mjs`: strict fit passes all ten scene/locale pairs, exactly 34 changed collapsed occurrences / 46 strings, unchanged expanded text and geometry. Prior card parity, pinned footer and routing budgets remain valid.
-  - [x] Geometry after R1: 1,758 states / 16,740 edges, no collision. Compact validated port/order plans cover 1,356 additional folds in 76 KB; worst plan replay 271.48 ms. Card parity passes for all 144 leaves. R2 changes no geometry, routing, leaf text or font values.
-  - [x] Prior browser count corrected by R3: only 560 of 656 ordinary entries were measured; the historical maximum did not establish the complete interaction budget. Rerun the complete measured witness after R1.
-  - [x] Delivered file Chromium: loaded title, visible diagram, zero console errors; 1920 px FR/EN collapsed overview and Sentropic expanded screenshots in root `.tmp/governance-unification/converge32-shots/`.
-- [x] **Lot 4 — Delivery**
-  - [x] Record H1–H9 file:line replacements, divergences and validation in `validation/converge32.md`.
-  - [x] Rebuild/deliver portable, refresh and verify all 137 SHA256SUMS entries; scope check before each selective make commit (each R2 commit under 150 changed lines).
-  - [x] Create draft PR #726 using this plan as body and post the four-step plan; keep it draft and unmerged.
-  - [x] R2 qualification: all ten scene/locale pairs pass, 32 slides / 52 routes pass with zero fit findings, idle/load checks pass all four scenarios. Portable SHA-256: `92a87f2985fbfcc23c6a6241f7e96db133df294624c5bdc07551e9840c8c08cd`.
-  - [x] Preserve the post-push gate: require green CI on the exact pushed head and report SHA, CI URL and string table; keep PR #726 draft and unmerged. Full string table: root `.tmp/governance-unification/726-reword.md`, also included in the PR body.
+- [ ] Lot 0 — merge d41f47092 (contracts).
+- [ ] Lot 1 — merge origin/feat/artifacts-861-L1 (profile).
+- [ ] Lot 2 — merge origin/feat/artifacts-861-L2 (failures).
+- [ ] Lot 3 — merge 157f231d5 (coordinator).
+- [ ] Lot 4 — merge a8df25634 (publication/collection).
+- [ ] Lot 5 — merge c703afc68 (MCP/HTTP).
+- [ ] Lot 7 — merge eae0c261a (mesh surface/tuple).
+- [ ] Qualification — make test-artifacts; record exact counts and source SHA.
+- [ ] Qualification — make test-artifacts-integration against PostgreSQL/MinIO; record exact counts.
+- [ ] Qualification — make lint-artifacts; record errors and warnings.
+- [ ] Qualification — mesh artifacts-surface.spec.ts, artifacts-tuple.spec.ts, tuple-skew.spec.ts.
+- [ ] Handoff — push and open draft PR to main; report head, counts, conflicts, and lot defects.
