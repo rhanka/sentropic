@@ -113,3 +113,75 @@ try {
   await db.end();
 }
 `;
+
+beforeAll(async () => {
+  await pool.query('CREATE SCHEMA IF NOT EXISTS artifacts');
+  await pool.query(readFileSync(new URL('../migrations/0003_coordinator.sql', import.meta.url), 'utf8'));
+  await pool.query('CREATE TABLE IF NOT EXISTS l8c_effects(scope_id text, artifact_id uuid)');
+});
+afterAll(async () => { await pool.end(); });
+
+interface Fault {
+  label: string;
+  point: string;
+  code?: string;
+  name?: string;
+  message?: string;
+  lockClass?: string;
+  status?: number;
+  category?: string;
+  state?: string;
+}
+const unavailable = (label: string, point: string, code?: string): Fault => ({ label, point, code });
+const faults: Fault[] = [
+  ...['57P06', '08006', 'artifact_connection_lost', 'ECONNRESET', 'ETIMEDOUT'].map(code => unavailable(code, 'acquire', code)),
+  ...['40001', '40P01', '57014'].map(code => unavailable(code, 'non-key', code)),
+  ...['binding-identity', 'artifact-lifecycle', 'acl', 'current-pointer', 'authority-revision', 'quota', 'blob-reference-deletion-claim']
+    .map(lockClass => ({ ...unavailable(`non-key ${lockClass}`, 'non-key', '55P03'), lockClass })),
+  { label: 'qualified scoped key contention', point: 'key', status: 409, category: 'conflict' },
+  { label: 'guard authority outage', point: 'authority', category: 'unauthorized_at_commit' },
+  { label: 'guard policy denial', point: 'deny', status: 403, category: 'unauthorized_at_commit' },
+  { label: 'unrecognized lost/conflict text', point: 'acquire', message: ' lost conflict', status: 500, category: 'provider_error' },
+  { ...unavailable('lost COMMIT acknowledgement', 'commit-ack', '57P06'), state: 'unknown' },
+  ...['57P06', '40001', '57014', 'ERR_STREAM_PREMATURE_CLOSE'].map(code => unavailable(`read ${code}`, 'read', code)),
+];
+
+async function invoke(fault: Fault, transport: string) {
+  const scope = `l8c-${crypto.randomUUID()}`;
+  const id = `invocation-${crypto.randomUUID()}`;
+  const { stdout } = await run(process.execPath, ['--input-type=module', '--eval', worker], {
+    cwd: new URL('..', import.meta.url),
+    env: { ...process.env, L8C_CASE: JSON.stringify({ ...fault, lockClass: fault.lockClass ?? 'authority-revision', transport, scope, id }) },
+  });
+  const result = JSON.parse(stdout);
+  const counts = (await pool.query(`SELECT
+    (SELECT count(*)::int FROM artifacts.operation_receipts WHERE storage_scope_id=$1) AS receipts,
+    (SELECT count(*)::int FROM l8c_effects WHERE scope_id=$1) AS effects`, [scope])).rows[0];
+  return { ...result, counts, id };
+}
+
+describe('L8c E3 failures across isolated HTTP/MCP processes', () => {
+  it.each(faults)('should classify $label without a compensating execution', async fault => {
+    const results = await Promise.all(['http', 'mcp'].map(transport => invoke(fault, transport)));
+    expect(results[0].pid).not.toBe(results[1].pid);
+    for (const result of results) {
+      const status = fault.status ?? 503;
+      const category = fault.category ?? 'provider_unavailable';
+      const code = status === 503 ? 'capability_unavailable' : status === 409 ? 'conflict'
+        : status === 403 ? 'access_denied' : 'internal_error';
+      expect(result.outcome).toMatchObject({ ok: false, failure: { category, httpStatus: status,
+        publicCode: code, retriable: status === 503, invocationId: result.id, commitState: fault.state ?? 'not_committed' } });
+      expect(result.http).toEqual({ status, body: { error: code } });
+      expect(result.mcp).toMatchObject({ ok: false, auditId: result.id,
+        error: { code, message: code, retriable: status === 503 } });
+      expect(JSON.stringify(result)).not.toMatch(/private|postgres:\/\/|password|SELECT secret/);
+      const read = fault.point === 'read';
+      expect(result.dispatches).toBe(read ? 0 : 1);
+      expect(result.injections).toBe(['deny', 'authority'].includes(fault.point) ? 0 : 1);
+      if (read) expect(result.descriptor).toBeUndefined();
+      else expect(result.descriptor).toEqual({ invocationId: result.id, operation: 'ensure',
+        reason: category === 'conflict' ? 'provider_conflict' : category, status });
+      expect(result.counts).toEqual(fault.point === 'commit-ack' ? { receipts: 1, effects: 1 } : { receipts: 0, effects: 0 });
+    }
+  });
+});
