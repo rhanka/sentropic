@@ -48,7 +48,7 @@
 - [x] Lot 2 — merge b29b6a334 (failures); only the topic plan conflicted.
 - [x] Lot 3 — merge 157f231d5 (coordinator); only the topic plan conflicted.
 - [x] Lot 4 — merge a8df25634 (publication/collection); only the topic plan conflicted.
-- [ ] Lot 5 — merge c703afc68 (MCP/HTTP).
+- [x] Lot 5 — merge c703afc68 (MCP/HTTP); only the topic plan conflicted.
 - [ ] Lot 7 — merge eae0c261a (mesh surface/tuple).
 - [ ] Qualification — make test-artifacts; record exact counts and source SHA.
 - [ ] Qualification — make test-artifacts-integration against PostgreSQL/MinIO; record exact counts.
