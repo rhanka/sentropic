@@ -61,11 +61,11 @@
   - [x] Write `.tmp/live-stt/l0/placements.md` and `scope-release.md`; retain every owner-selected configuration.
 - [x] **L0e — Capacity feasibility**
   - [x] Write `.tmp/live-stt/l0/capacity-study.md`; entitlement, allocation source, costs, limits, daily shares/dates and reservation outcome.
-- [ ] **L0f — Documentation validation and draft handoff**
+- [x] **L0f — Documentation validation and draft handoff**
   - [x] Check all gate IDs, local links, arithmetic, approved hashes and complete cumulative docs-only diff.
   - [x] Run `make scope-check` before each commit through the host harness recipe; check each staged diff under 150 lines.
   - [x] Record evidence and review limitations in `.tmp/live-stt/l0/validation.md`.
-  - [ ] Push and open draft PR with this exact branch plan as body; inspect CI metadata without paid execution.
+  - [x] Push and open draft PR #753 with this exact branch plan as body; CI metadata inspected without paid execution, final exact-head state reported at handoff.
   - [x] Run locked `make down ENV=test-live-stt-l0`; initial cleanup exits zero; recheck worktree/final head after handoff commit.
 
 ## Deferred to later live-speech lots
