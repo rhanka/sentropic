@@ -114,4 +114,87 @@ describe('L8b ensure recovery on PostgreSQL', () => {
       result: { created: true, replayed: false } });
     expect(await snapshot()).toEqual({ bindings: 1, lifecycle: 1, acls: 1, receipts: 1, legacy: 0, used: 1 });
   });
+
+  it.each<CoordinatorTestPoint>(['before_connection_acquire', 'before_key_lock', 'before_finalization_row_lock',
+    'after_finalization_locks_before_guard', 'before_commit'])(
+    'should refuse ensure after revocation at %s and permit a fresh same-key retry', async (point) => {
+      const barrier = createArtifactCommitBarrier();
+      const reached = barrier.waitUntilReached(point, point);
+      const before = await snapshot();
+      const pending = compose(pool, { barrier, points: [point] }).ensure(invocation(point), args(point));
+      await reached;
+      try {
+        await pool.query('UPDATE l8b.admission SET approved = false');
+      } finally {
+        barrier.release(point, point);
+      }
+      expect(await pending).toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit',
+        httpStatus: 403, commitState: 'not_committed' } });
+      expect(await snapshot()).toEqual(before);
+      await pool.query('UPDATE l8b.admission SET approved = true');
+      expect(await compose().ensure(invocation(`${point}-retry`), args(point)))
+        .toMatchObject({ ok: true, result: { created: true, replayed: false } });
+      expect(await snapshot()).toEqual({ bindings: 1, lifecycle: 1, acls: 1, receipts: 1, legacy: 0, used: 1 });
+    });
+
+  it.each(['ensure', 'explicit-replay'] as const)(
+    'should reauthorize %s after receipt lookup without changing the durable winner', async (mode) => {
+      const key = 'replay';
+      expect(await compose().ensure(invocation('winner'), args(key))).toMatchObject({ ok: true });
+      const before = await snapshot();
+      const barrier = createArtifactCommitBarrier();
+      const point = 'after_replay_lookup_before_guard';
+      const reached = barrier.waitUntilReached(point, mode);
+      const service = compose(pool, { barrier, points: [point] });
+      const identity = command(key).identity;
+      const pending = mode === 'ensure' ? service.ensure(invocation(mode), args(key))
+        : service.replay(invocation(mode), { ...identity,
+          binding: { ownerId: 'alice', storageScopeId: scope, bindingName: key, attemptId: mode } });
+      await reached;
+      try {
+        await pool.query('UPDATE l8b.admission SET approved = false');
+      } finally {
+        barrier.release(point, mode);
+      }
+      expect(await pending).toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit', httpStatus: 403 } });
+      expect(await snapshot()).toEqual(before);
+      await pool.query('UPDATE l8b.admission SET approved = true');
+      expect(await compose().ensure(invocation('replay-restored'), args(key)))
+        .toMatchObject({ ok: true, result: { replayed: true } });
+      expect(await snapshot()).toEqual(before);
+    });
+
+  it.each(['key', 'binding'] as const)('should recheck authority after a real PostgreSQL %s lock wait', async (kind) => {
+    const key = 'locked';
+    const identity = command(key).identity;
+    await pool.query('INSERT INTO artifacts.operation_keys VALUES ($1, $2)', [scope, identity.internalKey]);
+    if (kind === 'binding') expect(await compose().ensure(invocation('binding-seed'), args(key))).toMatchObject({ ok: true });
+    const before = await snapshot();
+    const holder = await pool.connect();
+    const applicationName = `l8b-${kind}`;
+    const waitingPool = new Pool({ connectionString, application_name: applicationName });
+    let pending: ReturnType<ReturnType<typeof compose>['ensure']> | undefined;
+    try {
+      await holder.query('BEGIN');
+      await holder.query(kind === 'key'
+        ? 'SELECT 1 FROM artifacts.operation_keys WHERE internal_key = $1 FOR UPDATE'
+        : 'SELECT 1 FROM artifacts.artifacts WHERE binding_name = $1 FOR UPDATE', [kind === 'key' ? identity.internalKey : key]);
+      pending = compose(waitingPool).ensure(invocation('blocked'), args(key));
+      await expect.poll(async () => {
+        const { rows } = await pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE application_name = $1 AND wait_event_type = 'Lock'`, [applicationName]);
+        return rows[0].n;
+      }, { timeout: 2000 }).toBe(1);
+      await pool.query('UPDATE l8b.admission SET approved = false');
+    } finally {
+      await holder.query('ROLLBACK');
+      holder.release();
+      try {
+        if (pending) expect(await pending).toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit', httpStatus: 403 } });
+      } finally {
+        await waitingPool.end();
+      }
+    }
+    expect(await snapshot()).toEqual(before);
+  });
 });
