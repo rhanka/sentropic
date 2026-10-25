@@ -57,10 +57,10 @@
 ## Plan / Todo (lot-based)
 - [x] **L1a — Baseline and constraints**
   - [x] Read lock/rules/template/spec/owner answers and all eight L0 deliverables; mechanical branch check passes.
-  - [ ] Write `.tmp/live-stt/l1/baseline.md`: L0 gates, dedicated capacity, releases and placements.
+  - [x] Write `.tmp/live-stt/l1/baseline.md`: pinned L0 gates, dedicated capacity, releases and placements.
 - [ ] **L1b — Tests first**
   - [x] Add `packages/llm-mesh/tests/speech-contract.test.ts`; red: missing speech/contracts.js before implementation.
-  - [ ] Verify negotiation, binary metadata, refusal, partial revisions and existing text compatibility.
+  - [x] Targeted green: 23 tests for negotiation, binary metadata, refusal, partial revisions and existing text compatibility.
 - [ ] **L1c — Implementation**
   - [x] Define exact engine/configuration/target identities and binary media headers with frame-local validation.
   - [x] Add per-tuple four-state capabilities and fail-closed ordered media negotiation.
