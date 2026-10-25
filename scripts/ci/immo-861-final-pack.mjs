@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const run = (command, args, options = {}) => execFileSync(command, args, { encoding: 'utf8', ...options });
@@ -21,6 +21,9 @@ for (const [slug, version] of [['artifacts', '0.2.0'], ['cluster-mesh', '0.22.0'
   const reports = `${siblings}/receipts`;
   mkdirSync(destination, { recursive: true });
   mkdirSync(reports, { recursive: true });
+  for (const file of readdirSync(destination)) {
+    renameSync(`${destination}/${file}`, `${out}/previous-${slug}-${file}`);
+  }
   run('node', [resolve('scripts/ci/publishable-manifests.mjs'), 'pack', '--slug', slug,
     '--report-dir', reports, '--destination', destination], { env, stdio: 'inherit', cwd: `packages/${slug}` });
   const path = `${destination}/sentropic-${slug}-${version}.tgz`;
