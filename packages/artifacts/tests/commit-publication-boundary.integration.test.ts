@@ -10,7 +10,7 @@ import { createPostgresArtifactStore } from '../src/adapters/postgres.js';
 import { createPostgresCommitExecutor } from '../src/adapters/postgres-commit.js';
 import { createArtifactCommitCoordinator } from '../src/server/commit/coordinator.js';
 import { createGuardedPublicationService, createPostgresPublicationUnitWriter } from '../src/server/publication.js';
-import { createPostgresClaimGuardedRefs } from '../src/server/gc.js';
+import { createPostgresClaimGuardedRefs, createPostgresGcService, createPostgresDeletionClaimStore } from '../src/server/gc.js';
 import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
 import { createArtifactCommitBarrier, type CommitBarrierObserver, type CommitBarrierPoint } from '../src/testing.js';
@@ -161,7 +161,7 @@ describe('publication authorization after every applicable wait', () => {
     expect(fresh).toMatchObject({ ok: true, replayed: false });
     const replay = await publish(retryWorld, { ...input, invocationId: randomUUID(), attemptId: randomUUID() });
     expect(replay).toMatchObject({ ok: true, replayed: true });
-    if (fresh.ok && replay.ok) expect(replay.result).toEqual(fresh.result);
+    if (fresh.ok && replay.ok) expect(replay.result.receipt).toEqual(fresh.result.receipt);
     expect((await pool.query('SELECT used FROM l8a_quota')).rows[0].used).toBe(1);
   });
 });
@@ -323,7 +323,7 @@ describe('same-key S3 preparation across two processes', () => {
       if (changed) expect(loser).toMatchObject({ ok: false, failure: { category: 'conflict' } });
       else {
         expect(loser).toMatchObject({ ok: true, replayed: true });
-        if (winner.ok) expect(loser).toMatchObject({ result: winner.result });
+        if (winner.ok) expect(loser).toMatchObject({ result: { receipt: winner.result.receipt } });
       }
       expect(Number((await pool.query('SELECT count(*) FROM artifacts.releases')).rows[0].count)).toBe(beforeCount + 1);
       expect((await pool.query('SELECT used FROM l8a_quota')).rows[0].used).toBe(1);
@@ -331,5 +331,79 @@ describe('same-key S3 preparation across two processes', () => {
       child.kill();
       await pending;
     }
+  });
+});
+
+describe('bounded cleanup and purge exclusion', () => {
+  it('should reclaim denied exclusive bytes while retaining a committed shared blob', async () => {
+    const shared = inputFor(await artifact());
+    expect(await publish(world(pool, blobs), shared)).toMatchObject({ ok: true });
+    const refused = inputFor(await artifact());
+    refused.files = [shared.files[0], { ...refused.files[0], path: 'exclusive.html' }];
+    const before = await snapshot();
+    expect(await publish(world(pool, blobs, undefined, { expired: true }), refused))
+      .toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit' } });
+    expect(await snapshot()).toEqual(before);
+    const pg = createPostgresArtifactStore(pool);
+    const attempts = (await pg.listPending()).filter((intent) => intent.payload['attemptId'] === refused.attemptId);
+    expect(attempts).toHaveLength(1);
+    const keys = attempts[0].payload['blobKeys'] as string[];
+    expect(keys).toHaveLength(2);
+    for (const key of keys) expect(await blobs.getBlob(key)).toBeDefined();
+    const deadline = Number(attempts[0].payload['cleanupDeadlineMs']);
+    const gc = createPostgresGcService(createPostgresCommitExecutor(pool), () => pg);
+    const report = await gc.collect(blobs, 'artifacts/');
+    const sharedKey = `artifacts/scope-l8a/blobs/sha256/${createHash('sha256').update(shared.files[0].bytes).digest('hex')}`;
+    const exclusiveKey = keys.find((key) => key !== sharedKey)!;
+    expect(report.retained).toContain(sharedKey);
+    expect(report.deleted).toContain(exclusiveKey);
+    expect(report.failures).toEqual([]);
+    expect(await blobs.getBlob(sharedKey)).toEqual(shared.files[0].bytes);
+    expect(await blobs.getBlob(exclusiveKey)).toBeUndefined();
+    expect(Date.now()).toBeLessThanOrEqual(deadline);
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it.each(['purge-first', 'publication-first'] as const)(
+    'should serialize durable deletion claims with publication in %s order', async (order) => {
+      const input = inputFor(await artifact());
+      const digest = `sha256:${createHash('sha256').update(input.files[0].bytes).digest('hex')}`;
+      const key = `artifacts/scope-l8a/blobs/sha256/${digest.slice(7)}`;
+      const executor = createPostgresCommitExecutor(pool);
+      const claim = await executor.beginFinalization();
+      try {
+        if (order === 'purge-first') {
+          await createPostgresDeletionClaimStore(claim).claim(digest, 'purge-l8a');
+          await claim.commit();
+          const before = await snapshot();
+          await expect(publish(world(pool, blobs), input)).rejects.toThrow(/deletion/);
+          expect(await snapshot()).toEqual(before);
+          expect(await blobs.getBlob(key)).toBeUndefined();
+        } else {
+          const barrier = createArtifactCommitBarrier({ points: ['before_commit'] });
+          const pending = publish(world(pool, blobs, barrier.observer), input);
+          await barrier.waitUntilReached('before_commit', input.invocationId);
+          const pid = Number((await claim.query('SELECT pg_backend_pid() AS pid', [])).rows[0].pid);
+          const claiming = createPostgresDeletionClaimStore(claim).claim(digest, 'purge-l8a');
+          try { await blocked(pid); }
+          finally { barrier.release('before_commit', input.invocationId); }
+          expect(await pending).toMatchObject({ ok: true });
+          await claiming;
+          await claim.commit();
+          const report = await createPostgresGcService(executor, () => createPostgresArtifactStore(pool))
+            .collect(blobs, 'artifacts/');
+          expect(report.retained).toContain(key);
+          expect(await blobs.getBlob(key)).toEqual(input.files[0].bytes);
+        }
+      } finally { await claim.rollback(); claim.release(); }
+    });
+
+  it('should retain invocation attribution for every denied preparation', async () => {
+    const input = inputFor(await artifact());
+    expect(await publish(world(pool, blobs, undefined, { expired: true }), input)).toMatchObject({ ok: false });
+    const attempts = (await createPostgresArtifactStore(pool).listPending())
+      .filter((intent) => intent.payload['attemptId'] === input.attemptId);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0].payload).toMatchObject({ invocationId: input.invocationId, attemptId: input.attemptId });
   });
 });

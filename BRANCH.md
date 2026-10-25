@@ -49,6 +49,7 @@
   - [x] Add expiry denial/retry/replay matrix at eight publication waits with independent DB/S3 reads.
   - [x] Add same-key two-process S3 races for identical and changed commands; one receipt and quota charge.
   - [ ] Exercise policy/lifecycle serialization, purge claims and bounded shared-blob cleanup.
+  - [x] Add real S3 shared/exclusive cleanup, durable purge claims and preparation invocation attribution assertion.
   - [x] Add real PG key/quota/policy/ACL/lifecycle lock waits and both writer orders.
   - [ ] Keep demonstrated product defects as known-failure tests with file:line evidence.
 - [ ] **Lot 2 — Qualification and handoff**
