@@ -10,6 +10,27 @@
  * KvPort only (ports.ts); the memory double serves unit tests.
  */
 import { createKeyMutex, createMemoryKv, type KvPort } from './ports.js';
+import { CommitQuarantineError, type ArtifactInvocationContext } from './commit/types.js';
+import type { EffectiveArtifactCommand } from './command-identity.js';
+
+/** Known 0.1.x durable key encodings. Their sorted hashes cannot prove command order or authority. */
+export async function assertArtifactReplayMigration(
+  records: Pick<KvPort, 'get'>,
+  command: EffectiveArtifactCommand,
+  invocation: ArtifactInvocationContext,
+  callerKey: string,
+): Promise<void> {
+  const { internalKey } = command.identity;
+  const keys = new Set<string>([callerKey, internalKey]);
+  for (const key of [callerKey, internalKey]) {
+    keys.add(JSON.stringify([command.operation, invocation.actorId, key]));
+  }
+  for (const key of keys) {
+    if (await records.get(`idempotency:${key}`) !== undefined) {
+      throw new CommitQuarantineError(invocation.storageScopeId, internalKey, 'legacy-unknown');
+    }
+  }
+}
 
 export interface IdempotentResult<T> {
   result: T;
