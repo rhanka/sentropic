@@ -4,7 +4,7 @@ import { createHttpArtifactApp } from '@sentropic/artifacts/http';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, createArtifactsManifest,
   ARTIFACTS_PROVIDER_VERSION } from '@sentropic/artifacts/mcp-core';
 import { createArtifactCommitBarrier } from '@sentropic/artifacts/testing';
-import { createArtifactsBuiltin } from '@sentropic/cluster-mesh/integrations/mcp/artifacts';
+import { createArtifactsBuiltin } from '@sentropic/cluster-mesh/mcp/artifacts';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
 import * as auth from '@sentropic/mcp-auth';
 import * as oauth from '@sentropic/oauth-verify';

@@ -30,6 +30,9 @@
 - [x] Runner records each suite independently; failures remain known_failure and missing shards remain not_covered.
 - [x] Reused integration build outputs only after matching each artifacts/mesh/platform source tree; unchanged platform/auth use exact registry archives.
 - [x] Image gate stays not_covered: pinned Radar image-smoke uses forbidden raw Docker; no image qualification is inferred from a Node container pass.
+- [x] L8D-1 / known_failure / L7 owner: strict full-Radar ERESOLVE; cluster-mesh 0.22.0 excludes llm-mesh 0.19.2. Executable TODO regression retained; no product changes.
+- [x] All eight Radar suites remain not_covered until strict installation passes; their exact source hashes and blocked reasons are retained.
+- [x] L8D-2 / known_failure / L6 owner: public declaration smoke TS2307 at l0-freeze/profile-contract.ts:11; ../src/contracts.js is excluded from the archive. Executable TODO retained.
 
 ## AI Flaky tests
 - [x] No flaky acceptance granted; missing contracts and skipped acceptance cases fail qualification.
