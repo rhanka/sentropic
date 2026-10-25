@@ -123,11 +123,11 @@ const ENSURE_SCOPE = 'scope-l5';
 const ENSURE_ACTORS = ['alice', 'bob'];
 
 interface GuardedHarness {
-  serviceFor(scope: string, actors: readonly string[]): ReturnType<typeof createGuardedEnsureService>;
+  serviceFor(scope: string, actors: readonly string[], profile?: ReturnType<typeof compileArtifactsProfile>): ReturnType<typeof createGuardedEnsureService>;
   service: ReturnType<typeof createGuardedEnsureService>;
   receipts: Map<string, StoredCommitReceipt>;
   bindings: Map<string, { artifactId: string; scope: string; attempt: string }>;
-  state: { reserveQuotaCalls: number; resolveBindingCalls: number; locks: string[]; purposes: string[] };
+  state: { reserveQuotaCalls: number; resolveBindingCalls: number; policyReads: number; locks: string[]; purposes: string[] };
   setApproval(actor: string, approved: boolean): void;
   failNextCommit(error: unknown): void;
   seedLegacy(internalKey: string): void;
@@ -140,7 +140,7 @@ const makeGuardedHarness = (options?: { quotaTotal?: number }): GuardedHarness =
   const bindings = new Map<string, { artifactId: string; scope: string; attempt: string }>();
   const approvals = new Map<string, boolean>([['alice', true], ['bob', true]]);
   const quota = { total: options?.quotaTotal ?? 100, used: 0 };
-  const state = { reserveQuotaCalls: 0, resolveBindingCalls: 0, locks: [] as string[], purposes: [] as string[] };
+  const state = { reserveQuotaCalls: 0, resolveBindingCalls: 0, policyReads: 0, locks: [] as string[], purposes: [] as string[] };
   let commitErrorOnce: unknown;
   let commitErrorArmed = false;
   let invSeq = 0;
@@ -224,12 +224,12 @@ const makeGuardedHarness = (options?: { quotaTotal?: number }): GuardedHarness =
     async abandonAttempt(attemptId) {
       for (const [key, row] of bindings) if (row.attempt === attemptId) bindings.delete(key);
     },
-    async readPolicyRevision() { return 'rev-1'; },
+    async readPolicyRevision() { state.policyReads += 1; return 'rev-1'; },
   };
   const coordinator = createArtifactCommitCoordinator({ executor, policy });
   const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
-  const serviceFor = (scope: string, actors: readonly string[]) => createGuardedEnsureService({
-    profile,
+  const serviceFor = (scope: string, actors: readonly string[], selectedProfile = profile) => createGuardedEnsureService({
+    profile: selectedProfile,
     coordinator,
     derivation: createRadarKeyDerivation({ storageScopeId: scope, actorIds: [...actors] }),
     host,
@@ -442,6 +442,58 @@ describe('guarded ensure', () => {
     if (!replayed.ok || !ensured.ok) return;
     expect(replayed.result).toEqual({ ...ensured.result, replayed: true });
     expect(harness.state.resolveBindingCalls).toBe(1);
+    expect(harness.state.reserveQuotaCalls).toBe(1);
+  });
+
+  it('should authorize explicit replay against the target resolved under its binding lock', async () => {
+    const harness = makeGuardedHarness();
+    const args = harness.args('target', 'k-target');
+    const ensured = await harness.service.ensure(harness.invoke('alice'), args);
+    expect(ensured.ok).toBe(true);
+    if (!ensured.ok) return;
+    const effective = createArtifactCommand(
+      compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE), 'artifacts_ensure', args,
+      { storageScopeId: ENSURE_SCOPE, actorId: 'alice' },
+      createRadarKeyDerivation({ storageScopeId: ENSURE_SCOPE, actorIds: [...ENSURE_ACTORS] }),
+    );
+    const invocation = harness.invoke('alice');
+    const replayed = await harness.service.replay({
+      ...invocation,
+      authorizeCommit: async (context, transaction) => {
+        expect(harness.state.locks).toEqual(['alice/target', 'alice/target']);
+        if (context.artifactId !== ensured.result.artifactId || context.bindingId !== 'target') {
+          return { allowed: false, reason: 'invalid_object', publicCode: 'access_denied', status: 403, retriable: false };
+        }
+        return invocation.authorizeCommit(context, transaction);
+      },
+    }, {
+      ...effective.identity,
+      binding: { ownerId: 'alice', storageScopeId: ENSURE_SCOPE, bindingName: 'target', attemptId: invocation.invocationId },
+    });
+    expect(replayed).toMatchObject({ ok: true, result: { ...ensured.result, replayed: true } });
+    expect(harness.state.reserveQuotaCalls).toBe(1);
+    expect(harness.bindings.size).toBe(1);
+  });
+
+  it('should reject explicit replay when ensure is unselected before policy or coordinator access', async () => {
+    const harness = makeGuardedHarness();
+    const args = harness.args();
+    expect((await harness.service.ensure(harness.invoke('alice'), args)).ok).toBe(true);
+    const effective = createArtifactCommand(
+      compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE), 'artifacts_ensure', args,
+      { storageScopeId: ENSURE_SCOPE, actorId: 'alice' },
+      createRadarKeyDerivation({ storageScopeId: ENSURE_SCOPE, actorIds: [...ENSURE_ACTORS] }),
+    );
+    const unselected = harness.serviceFor(ENSURE_SCOPE, ENSURE_ACTORS,
+      compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selectedCapabilities: [] }));
+    const policyReads = harness.state.policyReads;
+    const guardCalls = harness.state.purposes.length;
+    const replayed = await unselected.replay(harness.invoke('alice'), effective.identity);
+    expect(replayed).toMatchObject({ ok: false, failure: {
+      category: 'capability_unselected', phase: 'selection', retriable: false, commitState: 'not_committed',
+    } });
+    expect(harness.state.policyReads).toBe(policyReads);
+    expect(harness.state.purposes).toHaveLength(guardCalls);
     expect(harness.state.reserveQuotaCalls).toBe(1);
   });
 

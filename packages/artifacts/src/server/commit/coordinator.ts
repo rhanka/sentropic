@@ -24,6 +24,7 @@ import {
   type ArtifactAuthorizationDecision,
   type ArtifactAuthorizationFence,
   type ArtifactCommitContext,
+  type CommitPolicyParticipant,
   type FinalizationCoordinator,
   type ArtifactCommitTransaction,
   type ArtifactFailure,
@@ -50,6 +51,7 @@ function failure(
     FAILURE_PROJECTIONS.find((entry) => entry.category === category);
   if (row === undefined) throw new Error(`unknown failure category ${category}`);
   return {
+    kind: 'operational' as const,
     category,
     variant: overrides?.variant ?? row.variant,
     httpStatus: overrides?.status ?? row.httpStatus,
@@ -66,7 +68,18 @@ function failure(
 const isUniqueViolation = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && (error as { code?: unknown }).code === '23505';
 
-const CONNECTION_LOSS_CODES = new Set(['57P06', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT']);
+/**
+ * Shared acknowledgment-loss contract (r2 E3): PG connection loss plus the
+ * adapter-level unacknowledged-COMMIT code. Any of these around COMMIT
+ * means the outcome is unknown, never not_committed.
+ */
+const CONNECTION_LOSS_CODES = new Set([
+  '57P06',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'artifact_connection_lost',
+]);
 
 const isConnectionLoss = (error: unknown): boolean => {
   if (typeof error !== 'object' || error === null) return false;
@@ -98,15 +111,13 @@ const classifyOperational = (
 ): ArtifactFailure => {
   const code =
     typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
-  if (code === LOCK_TIMEOUT_CODE && phase === 'lock') {
-    // E3: verified contention for the scoped per-key row lock only.
-    return failure('conflict', request, phase, commitState, error, { variant: 'key_contention' });
-  }
   if (
     isConnectionLoss(error) ||
     code === LOCK_TIMEOUT_CODE ||
     (typeof code === 'string' && RETRIABLE_SQLSTATES.has(code))
   ) {
+    // E3: any lock timeout outside the scoped key-row acquisition is
+    // retriable infrastructure contention, never a key conflict.
     return failure('provider_unavailable', request, phase, commitState, error);
   }
   return failure('provider_error', request, phase, commitState, error, { variant: 'unclassified' });
@@ -175,7 +186,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       throw new Error(`unknown coordinator test point ${point}`);
     }
   }
-  const armed = new Set(options.testPoints ?? []);
+  const armed = new Set(options.testPoints ?? COORDINATOR_TEST_POINTS);
   const fired = new Set<string>();
   const observeAt = async (
     point: CoordinatorTestPoint,
@@ -184,7 +195,9 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     const key = `${point}:${invocationId}`;
     if (options.testObserver === undefined || !armed.has(point) || fired.has(key)) return;
     fired.add(key);
-    await options.testObserver(point, invocationId);
+    const observer = options.testObserver;
+    await (typeof observer === 'function'
+      ? observer(point, invocationId) : observer.arrive(point, invocationId));
   };
 
   const commitContext = (
@@ -247,6 +260,75 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     return unknownOutcome(request, phase, { decision: primary, settlement: settleError });
   };
 
+  /**
+   * Acquire the scoped key row. Only a lock timeout on this exact
+   * acquisition qualifies as key contention; every other lock/read timeout
+   * stays retriable unavailability via the shared classifier.
+   */
+  const acquireKeyLock = async (
+    request: FinalizeRequest,
+    connection: FinalizeConnection,
+    settle: UnitSettlement,
+  ): Promise<FinalizeResult | undefined> => {
+    try {
+      await connection.lockOperationKey(request.scopeId, request.internalKey);
+      return undefined;
+    } catch (error) {
+      const code =
+        typeof error === 'object' && error !== null
+          ? (error as { code?: unknown }).code
+          : undefined;
+      if (code === LOCK_TIMEOUT_CODE) {
+        return abortWith(
+          request,
+          'lock',
+          settle,
+          {
+            ok: false,
+            failure: failure('conflict', request, 'lock', 'not_committed', error, {
+              variant: 'key_contention',
+            }),
+          },
+        );
+      }
+      throw error;
+    }
+  };
+
+  /**
+   * Settle the unit before propagating quarantine, regardless of source.
+   * A hook raising quarantine before settlement must not leak the lease;
+   * settling twice is a no-op.
+   */
+  const settleAndPropagateQuarantine = async (
+    request: FinalizeRequest,
+    settle: UnitSettlement,
+    error: CommitQuarantineError,
+  ): Promise<never> => {
+    await settle.abort();
+    await abandon(request);
+    throw error;
+  };
+
+  /**
+   * The COMMIT was attempted: a successful ROLLBACK afterwards cannot prove
+   * the COMMIT failed, so the outcome is unknown however the commit error
+   * classifies.
+   */
+  const unknownAfterCommitAttempt = async (
+    request: FinalizeRequest,
+    settle: UnitSettlement,
+    error: unknown,
+  ): Promise<FinalizeResult> => {
+    const settleError = await settle.abort();
+    await abandon(request);
+    return unknownOutcome(
+      request,
+      'commit',
+      settleError === undefined ? error : { commit: error, settlement: settleError },
+    );
+  };
+
   const deny = (
     request: FinalizeRequest,
     decision: Extract<ArtifactAuthorizationDecision, { allowed: false }>,
@@ -293,13 +375,47 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
    * its fenceId must be non-empty, its invocation must match the request,
    * and its revision must match the freshly re-read policy revision.
    * Fabricated, foreign or stale fences deny before any success work.
+   * The credential must be one of the transaction-local mint outputs:
+   * matching fields alone never prove minting.
    */
+  const bindTransaction = (
+    request: FinalizeRequest,
+    connection: FinalizeConnection,
+    transactionToken: string,
+  ): { transaction: ArtifactCommitTransaction; minted: Set<ArtifactAuthorizationFence> } => {
+    const minted = new Set<ArtifactAuthorizationFence>();
+    const raw = options.policy.createParticipant(connection, transactionToken);
+    const participant: CommitPolicyParticipant = {
+      readRevision: () => raw.readRevision(),
+      checkApproval: (input) => raw.checkApproval(input),
+      reserveQuota: (input) => raw.reserveQuota(input),
+      mintFence: (revision, invocationId) => {
+        const fence = raw.mintFence(revision, invocationId);
+        minted.add(fence);
+        return fence;
+      },
+    };
+    return {
+      transaction: {
+        transactionId: transactionToken,
+        invocationId: request.invocationId,
+        policyRevision: request.policyRevision,
+        participant,
+      },
+      minted,
+    };
+  };
+
   const verifyFence = (
     request: FinalizeRequest,
     transaction: ArtifactCommitTransaction,
+    minted: Set<ArtifactAuthorizationFence>,
     fence: ArtifactAuthorizationFence,
     currentRevision: string,
   ): { ok: true } | { ok: false; detail: string } => {
+    if (!minted.has(fence)) {
+      return { ok: false, detail: 'unminted_fence' };
+    }
     if (fence.transactionId !== transaction.transactionId) {
       return { ok: false, detail: 'foreign_fence' };
     }
@@ -377,7 +493,8 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     }
     const settle = trackSettlement(connection);
     try {
-      await connection.lockOperationKey(request.scopeId, request.internalKey);
+      const keyFailure = await acquireKeyLock(request, connection, settle);
+      if (keyFailure !== undefined) return keyFailure;
       const found = await connection.readReceipt(request.scopeId, request.internalKey);
       const settleError = await settle.abort();
       if (settleError !== undefined) {
@@ -394,8 +511,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         };
       }
       if (found.codecVersion !== COMMAND_CODEC_VERSION) {
-        // Already settled above: the quarantine propagates without a second settle.
-        await abandon(request);
+        // Settled above; the catch records abandonment before propagating.
         throw new CommitQuarantineError(request.scopeId, request.internalKey, found.codecVersion);
       }
       if (found.commandHash !== request.commandHash) {
@@ -409,7 +525,9 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       }
       return coordinator.replayGuarded(request);
     } catch (error) {
-      if (error instanceof CommitQuarantineError) throw error;
+      if (error instanceof CommitQuarantineError) {
+        return settleAndPropagateQuarantine(request, settle, error);
+      }
       const settleError = await settle.abort();
       await abandon(request);
       if (settleError !== undefined) {
@@ -446,16 +564,17 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       try {
         phase = 'lock';
         await observeAt('before_key_lock', request.invocationId);
-        await active.lockOperationKey(request.scopeId, request.internalKey);
+        const keyFailure = await acquireKeyLock(request, active, settle);
+        if (keyFailure !== undefined) return keyFailure;
         const existing = await active.readReceipt(request.scopeId, request.internalKey);
         if (existing !== undefined) {
           const settleError = await settle.abort();
-          await abandon(request);
           if (settleError !== undefined) {
+            await abandon(request);
             return unknownOutcome(request, phase, { cause: 'resolve_settlement', settlement: settleError });
           }
           if (existing.codecVersion !== COMMAND_CODEC_VERSION) {
-            // Already settled above: the quarantine propagates without a second settle.
+            // Settled above; the catch records abandonment before propagating.
             throw new CommitQuarantineError(
               request.scopeId,
               request.internalKey,
@@ -465,6 +584,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           if (existing.commandHash === request.commandHash) {
             return coordinator.replayGuarded(request);
           }
+          await abandon(request);
           return {
             ok: false,
             failure: failure('conflict', request, 'lock', 'not_committed', {
@@ -475,12 +595,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         phase = 'guard';
         await observeAt('before_finalization_row_lock', request.invocationId);
         const transactionToken = randomUUID();
-        const transaction: ArtifactCommitTransaction = {
-          transactionId: transactionToken,
-          invocationId: request.invocationId,
-          policyRevision: request.policyRevision,
-          participant: options.policy.createParticipant(active, transactionToken),
-        };
+        const { transaction, minted } = bindTransaction(request, active, transactionToken);
         await runLockGroup(request, active, PRE_QUOTA_LOCK_CLASSES);
         // Authority re-read before the quota wait: A4.4 class order.
         await transaction.participant.readRevision();
@@ -515,7 +630,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           return abortWith(request, phase, settle, deny(request, decision));
         }
         const currentRevision = await transaction.participant.readRevision();
-        const fenceCheck = verifyFence(request, transaction, decision.fence, currentRevision);
+        const fenceCheck = verifyFence(request, transaction, minted, decision.fence, currentRevision);
         if (!fenceCheck.ok) {
           return abortWith(request, phase, settle, invalidFence(request, fenceCheck.detail));
         }
@@ -533,6 +648,9 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         await active.insertReceipt(receipt);
         await request.finishIntents?.(active);
         await observeAt('before_commit', request.invocationId);
+        // Run deferred constraint work inside the unit, before the final
+        // decision: locks it acquires must not land during COMMIT.
+        await active.query('SET CONSTRAINTS ALL IMMEDIATE', []);
         // Revalidate after the post-guard receipt/intent/barrier waits: a
         // revocation, expiry or foreign fence landing here denies instead of
         // committing an authorized-then-stale decision.
@@ -541,7 +659,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           return abortWith(request, phase, settle, deny(request, recheck));
         }
         const recheckRevision = await transaction.participant.readRevision();
-        const recheckFence = verifyFence(request, transaction, recheck.fence, recheckRevision);
+        const recheckFence = verifyFence(request, transaction, minted, recheck.fence, recheckRevision);
         if (!recheckFence.ok) {
           return abortWith(request, phase, settle, invalidFence(request, recheckFence.detail));
         }
@@ -559,10 +677,15 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           replayed: false,
         };
       } catch (error) {
-        if (error instanceof CommitQuarantineError) throw error;
+        if (error instanceof CommitQuarantineError) {
+          return settleAndPropagateQuarantine(request, settle, error);
+        }
         if (isUniqueViolation(error)) {
           await settle.abort();
           return resolveUnderKey(request);
+        }
+        if (phase === 'commit') {
+          return unknownAfterCommitAttempt(request, settle, error);
         }
         const settleError = await settle.abort();
         await abandon(request);
@@ -596,7 +719,8 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       try {
         phase = 'lock';
         await observeAt('before_key_lock', request.invocationId);
-        await active.lockOperationKey(request.scopeId, request.internalKey);
+        const replayKeyFailure = await acquireKeyLock(request, active, settle);
+        if (replayKeyFailure !== undefined) return replayKeyFailure;
         const existing = await active.readReceipt(request.scopeId, request.internalKey);
         // Fires after the receipt lookup (not before): a revocation racing
         // the barrier denies on the looked-up row instead of vanishing it.
@@ -615,12 +739,12 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           );
         }
         if (existing.codecVersion !== COMMAND_CODEC_VERSION) {
-          // Already settled below: the quarantine propagates without a second settle.
           const settleError = await settle.abort();
-          await abandon(request);
           if (settleError !== undefined) {
+            await abandon(request);
             return unknownOutcome(request, phase, { settlement: settleError });
           }
+          // Settled above; the catch records abandonment before propagating.
           throw new CommitQuarantineError(
             request.scopeId,
             request.internalKey,
@@ -642,21 +766,19 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         }
         phase = 'guard';
         const transactionToken = randomUUID();
-        const transaction: ArtifactCommitTransaction = {
-          transactionId: transactionToken,
-          invocationId: request.invocationId,
-          policyRevision: request.policyRevision,
-          participant: options.policy.createParticipant(active, transactionToken),
-        };
+        const { transaction, minted } = bindTransaction(request, active, transactionToken);
         // Same key/object/ACL/policy lock order as finalization, without
         // quota charging, provisional publication writes or intent completion.
         await runLockGroup(request, active, PRE_QUOTA_LOCK_CLASSES);
+        // Run deferred constraint work inside the unit, before the decision:
+        // locks it acquires must not land during COMMIT.
+        await active.query('SET CONSTRAINTS ALL IMMEDIATE', []);
         const decision = await request.guard(commitContext(request, 'replay'), transaction);
         if (!decision.allowed) {
           return abortWith(request, phase, settle, deny(request, decision));
         }
         const currentRevision = await transaction.participant.readRevision();
-        const fenceCheck = verifyFence(request, transaction, decision.fence, currentRevision);
+        const fenceCheck = verifyFence(request, transaction, minted, decision.fence, currentRevision);
         if (!fenceCheck.ok) {
           return abortWith(request, phase, settle, invalidFence(request, fenceCheck.detail));
         }
@@ -674,7 +796,12 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           replayed: true,
         };
       } catch (error) {
-        if (error instanceof CommitQuarantineError) throw error;
+        if (error instanceof CommitQuarantineError) {
+          return settleAndPropagateQuarantine(request, settle, error);
+        }
+        if (phase === 'commit') {
+          return unknownAfterCommitAttempt(request, settle, error);
+        }
         const settleError = await settle.abort();
         await abandon(request);
         if (settleError !== undefined) {

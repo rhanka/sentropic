@@ -20,6 +20,8 @@ import type {
   ArtifactCommitTransaction,
   CommitPolicyParticipant,
   CommitPolicyParticipantFactory,
+  CommitCoordinatorOptions,
+  CoordinatorTestPoint,
   FinalizationCoordinator,
   FinalizeRequest,
   FinalizeResult,
@@ -151,11 +153,17 @@ export interface RadarCommitSetup {
   ): () => void;
 }
 
-/** Build the exact Radar construction over one pool. */
+/**
+ * Build the exact Radar construction over one pool. The optional
+ * `testObserver` forwards barrier observations to the coordinator;
+ * `testPoints` optionally filters them (see `testing.ts`).
+ */
 export function createRadarCommitSetup(options: {
   pool: Pool;
   clock: { nowMs: number };
   quotaKey?: string;
+  testObserver?: CommitCoordinatorOptions['testObserver'];
+  testPoints?: readonly CoordinatorTestPoint[];
 }): RadarCommitSetup {
   const quotaKey = options.quotaKey ?? 'radar-quota';
   const abandonedAttempts: AbandonedAttempt[] = [];
@@ -163,6 +171,8 @@ export function createRadarCommitSetup(options: {
     executor: createPostgresCommitExecutor(options.pool),
     policy: createParticipantFactory(quotaKey, options.clock),
     nowMs: () => options.clock.nowMs,
+    testObserver: options.testObserver,
+    testPoints: options.testPoints,
   });
   const toRequest = (
     input: RadarCommitInput,
@@ -205,19 +215,39 @@ export function createRadarCommitSetup(options: {
     replayGuarded: (input: RadarCommitInput) => coordinator.replayGuarded(toRequest(input)),
     drainAbandonedAttempts,
     startAbandonedAttemptSweep: (onSweep, intervalMs) => {
-      const timer = setInterval(() => {
-        // Await the sweep and isolate its failure: a failed batch is
-        // retained for the next sweep and a failing sweeper never kills the
-        // scheduler.
+      // Serialized sweeps: an overlapping tick queues behind the running
+      // sweep instead of sweeping concurrently, and only the swept entries
+      // are removed, so arrivals landing mid-sweep are never deleted.
+      let sweeping = false;
+      let queued = false;
+      const runSweep = (): void => {
+        if (sweeping) {
+          queued = true;
+          return;
+        }
+        sweeping = true;
         void (async () => {
           try {
-            await onSweep(abandonedAttempts.slice());
-            abandonedAttempts.splice(0, abandonedAttempts.length);
-          } catch {
-            /* retained for the next sweep */
+            do {
+              queued = false;
+              const batch = abandonedAttempts.slice();
+              try {
+                await onSweep(batch);
+              } catch {
+                /* retained for the next sweep */
+                break;
+              }
+              for (const entry of batch) {
+                const index = abandonedAttempts.indexOf(entry);
+                if (index !== -1) abandonedAttempts.splice(index, 1);
+              }
+            } while (queued);
+          } finally {
+            sweeping = false;
           }
         })();
-      }, intervalMs);
+      };
+      const timer = setInterval(runSweep, intervalMs);
       return () => clearInterval(timer);
     },
   };

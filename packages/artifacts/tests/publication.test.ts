@@ -23,7 +23,7 @@ import type { ArtifactAcl } from '../src/server/access.js';
 import { createMemoryIntentStore } from '../src/server/object-intents.js';
 import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
 import { parseManifest } from '../src/codecs.js';
-import { createMemoryRefcountStore, createGcService } from '../src/server/gc.js';
+import { createMemoryRefcountStore, createMemoryDeletionClaimStore, createGcService } from '../src/server/gc.js';
 import type { FinalizeRequest, FinalizeResult } from '../src/server/commit/types.js';
 import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
@@ -67,13 +67,13 @@ describe('finalized publication regressions', () => {
 
   it('should protect active preparation while finalization waits', async () => {
     const f = guardedFixture(async () => {
-      const report = await createGcService(f.refs).collect(f.blobs, 'artifacts/');
+      const report = await createGcService(f.refs).collect(f.blobs, 'artifacts/', createMemoryDeletionClaimStore());
       expect(report.deleted).toEqual([]);
       expect(report.retained).toHaveLength(1);
       return { ok: false, failure: { commitState: 'not_committed' } } as FinalizeResult;
     });
     await createGuardedPublicationService(f.deps).publishFinalized(f.input);
-    expect((await createGcService(f.refs).collect(f.blobs, 'artifacts/')).deleted).toHaveLength(1);
+    expect((await createGcService(f.refs).collect(f.blobs, 'artifacts/', createMemoryDeletionClaimStore())).deleted).toHaveLength(1);
   });
 
   it('should retain committed refs when COMMIT acknowledgement is lost', async () => {
@@ -83,7 +83,7 @@ describe('finalized publication regressions', () => {
     });
     await createGuardedPublicationService(f.deps).publishFinalized(f.input);
     expect(await f.refs.count(`sha256:${createHash('sha256').update(f.input.files[0].bytes).digest('hex')}`)).toBe(1);
-    const report = await createGcService(f.refs).collect(f.blobs, 'artifacts/');
+    const report = await createGcService(f.refs).collect(f.blobs, 'artifacts/', createMemoryDeletionClaimStore());
     expect(report.deleted).toEqual([]);
     expect(report.retained).toHaveLength(1);
   });

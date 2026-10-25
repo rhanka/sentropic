@@ -7,8 +7,8 @@
  * throwing, so revoked access, pending purge and actual erasure stay
  * distinguishable. Reference updates serialize per digest (in-process
  * mutex); the memory double yields mid-update to simulate store latency so
- * races are genuinely exercised. Deleting state (refcounts vs purge) is
- * serialized by the caller: purge dereferences first, then collects.
+ * races are genuinely exercised. Collection claims and re-checks each
+ * digest under the exclusion shared with reference and pin creation.
  */
 import { createKeyMutex } from './ports.js';
 import type { CommitExecutor, FinalizeTxClient } from './commit/types.js';
@@ -79,7 +79,7 @@ export interface GcService {
   collect(
     blobs: PublicationBlobStore,
     prefix: string,
-    claims?: DeletionClaimStore,
+    claims: DeletionClaimStore,
   ): Promise<GcReport>;
 }
 
@@ -210,7 +210,7 @@ export function createGcService(refs: RefcountStore): GcService {
     async collect(
       blobs: PublicationBlobStore,
       prefix: string,
-      claims?: DeletionClaimStore,
+      claims: DeletionClaimStore,
     ): Promise<GcReport> {
       const report: GcReport = { deleted: [], retained: [], failures: [] };
       for (const key of await blobs.listKeys(prefix)) {
@@ -226,18 +226,25 @@ export function createGcService(refs: RefcountStore): GcService {
           continue;
         }
         try {
-          await blobs.deleteBlob(key);
-          report.deleted.push(key);
+          await claims.withDigestLock(digest, async (locked) => {
+            const alreadyClaimed = await locked.isClaimed(digest);
+            if (!alreadyClaimed) await locked.claim(digest, 'gc');
+            let deleted = false;
+            try {
+              if ((await refs.count(digest)) !== 0 || (await refs.isPinned(digest))) {
+                report.retained.push(key);
+                return;
+              }
+              await blobs.deleteBlob(key);
+              deleted = true;
+              report.deleted.push(key);
+            } finally {
+              // Preserve a purge claim until erasure; always release our GC claim.
+              if (!alreadyClaimed || deleted) await locked.releaseClaim(digest);
+            }
+          });
         } catch (error) {
           report.failures.push({ key, error: String(error) });
-          continue;
-        }
-        if (claims !== undefined && (await claims.isClaimed(digest))) {
-          try {
-            await claims.releaseClaim(digest);
-          } catch (error) {
-            report.failures.push({ key, error: String(error) });
-          }
         }
       }
       return report;

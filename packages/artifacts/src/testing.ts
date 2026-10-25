@@ -6,6 +6,12 @@
  * `release` resumes only that invocation/point pair. The coordinator
  * rechecks authority after a resumed barrier; a barrier can never mark
  * an operation authorized or successful.
+ *
+ * Pass `observer` as the coordinator `testObserver`. Register a wait before
+ * starting the operation to pause that invocation/point; other arrivals
+ * are observed without blocking. The three preparation points are fired by L4
+ * preparation adapters holding this same observer, never by the
+ * coordinator (arming one throws at construction).
  */
 export const COMMIT_BARRIER_POINTS = [
   'before_connection_acquire',
@@ -22,19 +28,23 @@ export const COMMIT_BARRIER_POINTS = [
 export type CommitBarrierPoint = (typeof COMMIT_BARRIER_POINTS)[number];
 
 export type CommitBarrierObserver = (
-  point: CommitBarrierPoint,
-  invocationId: string,
+  point: CommitBarrierPoint, invocationId: string,
 ) => Promise<void>;
+
+export interface CommitArrivalObserver {
+  arrive(point: CommitBarrierPoint, invocationId: string): void;
+}
 
 interface BarrierGate {
   arrivals: number;
+  armed: boolean;
   waiters: Array<() => void>;
   releases: Array<() => void>;
 }
 
 /** Create a correlated test barrier for one finalization run. */
 export function createArtifactCommitBarrier(): {
-  observer: CommitBarrierObserver;
+  observer: CommitBarrierObserver & CommitArrivalObserver;
   waitUntilReached(point: CommitBarrierPoint, invocationId: string): Promise<void>;
   release(point: CommitBarrierPoint, invocationId: string): void;
 } {
@@ -43,22 +53,25 @@ export function createArtifactCommitBarrier(): {
     const key = `${point}:${invocationId}`;
     const existing = gates.get(key);
     if (existing !== undefined) return existing;
-    const created: BarrierGate = { arrivals: 0, waiters: [], releases: [] };
+    const created: BarrierGate = { arrivals: 0, armed: false, waiters: [], releases: [] };
     gates.set(key, created);
     return created;
   };
+  const arrive = (point: CommitBarrierPoint, invocationId: string): Promise<void> => {
+    const gate = gateFor(point, invocationId);
+    gate.arrivals += 1;
+    for (const waiter of gate.waiters.splice(0)) waiter();
+    if (!gate.armed) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      gate.releases.push(resolve);
+    });
+  };
   return {
-    observer: (point, invocationId) => {
-      const gate = gateFor(point, invocationId);
-      gate.arrivals += 1;
-      for (const waiter of gate.waiters.splice(0)) waiter();
-      return new Promise<void>((resolve) => {
-        gate.releases.push(resolve);
-      });
-    },
+    observer: Object.assign(arrive, { arrive }),
     waitUntilReached: (point, invocationId) => {
       const gate = gateFor(point, invocationId);
       if (gate.arrivals > 0) return Promise.resolve();
+      gate.armed = true;
       return new Promise<void>((resolve) => {
         gate.waiters.push(resolve);
       });
