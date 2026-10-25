@@ -27,7 +27,7 @@
   - [x] No scope exceptions; product defects return to their lot owner with a reproducer.
 
 ## Feedback Loop
-- [ ] Runner blocker: Makefile enables Compose qualification only for `test-861-int`; integrator owns extension to this lane environment.
+- [x] Runner workaround: `/tmp/861-l8c.Makefile` copies existing targets with only the qualification ENV guards expanded; SHA-256 `493237dbea196cfdbc93fc0859432b4565821ccef1d1975717627aecd101f6ad`.
 - [ ] Radar Q2/Q3 runs require exact packed tuple installation and a pinned read-only checkout; no registry-baseline pass counts as candidate qualification.
 
 ## AI Flaky tests
@@ -44,7 +44,7 @@
   - [x] Read Docker lock, master/workflow/testing rules, spec S4/L8c, Q1–Q4 and section 6.3.
   - [x] Create worktree, run `harness check branch`, merge L6 and refresh integration without rebasing.
 - [ ] **Lot 1 — Failure matrix**
-  - [ ] Add `packages/artifacts/tests/commit-failure-parity.integration.test.ts` with separate child processes, real PostgreSQL coordination and E3 fault injection.
+  - [x] Add `packages/artifacts/tests/commit-failure-parity.integration.test.ts` with separate child processes, real PostgreSQL coordination and E3 fault injection.
   - [ ] Assert sanitized HTTP/MCP projections, correlation, no compensating execution and write/read accounting descriptors.
   - [ ] Retain known failures with file:line evidence rather than changing another lot's implementation.
 - [ ] **Lot 2 — Validation and handoff**
