@@ -36,7 +36,7 @@
 ## Feedback Loop
 - [x] Preserve concurrent root/h2a changes; no shared Track writer is assigned, so do not import or append `.track`.
 - [x] Existing `scope-check` builds/runs raw Docker containers incompatible with the lock's compose-only rule; use its host harness checker through an external Make recipe and skip `build-harness`.
-- [ ] Record open entry gates with accountable owner, evidence and bounded closure criteria.
+- [x] Record open entry gates with accountable owner, evidence and bounded closure criteria.
 
 ## AI Flaky tests
 - [x] Documentation/evidence only; no AI tests, flaky waiver or live qualification claim.
@@ -53,8 +53,8 @@
 - [x] **L0a — Baseline and constraints**
   - [x] Create isolated worktree from fetched origin/main; mechanical harness branch check passes.
   - [x] Verify approved input hashes and inspect current source/registry/PR evidence without inference.
-- [ ] **L0b — Heads and entry gates**
-  - [ ] Write `.tmp/live-stt/l0/baseline.md` and `gates.md`; distinguish merge, publish, integration and deployment.
+- [x] **L0b — Heads and entry gates**
+  - [x] Write `.tmp/live-stt/l0/baseline.md` and `gates.md`; distinguish merge, publish, integration and deployment.
 - [ ] **L0c — Dependencies and provenance**
   - [ ] Write `.tmp/live-stt/l0/dependencies.md`; inventory SDKs, installers, binary hashes, licenses and blocked qualification.
 - [ ] **L0d — Placement and release scope**
