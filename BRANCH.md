@@ -21,6 +21,7 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
+  - [x] `Makefile`, `docker-compose*.yml`, `api/**`, `e2e/**`, `docs/governance/**`, `packages/artifacts/**`, `packages/cluster-mesh/**`, `packages/llm-mesh/tests/facade.test.ts`, `scripts/ci/immo-861-*` (BR96-EX25: incoming origin/main history only; no new implementation scope)
   - [x] `BRANCH.md`, `.h2a/build/**`
   - [x] `packages/llm-mesh/src/judge/**`, `packages/llm-mesh/src/transport/jev.ts`
   - [x] `packages/llm-mesh/src/decision/**` (V4-L2 rename target; judge/** removed in the same lot, no dual tree)
@@ -73,6 +74,9 @@
 - [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13, BR96-EX14, BR96-EX15, BR96-EX16, BR96-EX17, BR96-EX18, BR96-EX19, BR96-EX20, BR96-EX21, BR96-EX22, BR96-EX23, BR96-EX24.
 
 ## Feedback Loop
+- [x] BR96-EX25: owner-authorized merge of origin/main `fa8f2334c` without rebase. Preserve incoming history outside Decision scope, main's zod audit gate and Mistral CI, reviewed Decision code and the branch plan; resolve version/peer conflicts to main's current package versions. Impact: inherited changes and bounded merge resolutions only. Rollback: revert this merge on the feature branch.
+- [x] R4-N1 validation after main integration: full Compose-isolated `make test-cluster-mesh` passed (1123 tests, 137 files; 129 existing conditional skips); decision receipt suite 4/4. Shared Docker lock and matching teardown used.
+- [x] `make typecheck-cluster-mesh` passed through the same isolated Compose lane. Owner-approved Track union applied: 350 events, valid integrity and head, both 346-event parent journals fully contained; explicit repair authorization recorded in the execution packet.
 - [x] R4-N1: bind the decision receipt test tariff to `fixture:synthetic-tariff` / `jev-native`; preserve mandatory production tariff binding. Owner requests merge of origin/main without rebase, push, and green CI on the exact head; do not merge PR #693.
 - [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
 - [x] Q2/Q5/Q6 working assumptions remain revisable: product /llm-mesh host later; common ProviderId with explicit judgeOnly marker; environment-only JEV key, no BYOK.
