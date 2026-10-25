@@ -24,6 +24,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const acls = createMemoryAclStore();
   const state = createMemoryStateStore();
   const blobs = createMemoryBlobStore();
+  const legacyRecords = createMemoryKv();
   const intents = createMemoryIntentStore();
   const lifecycle = createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00Z', state);
   let allowed = true;
@@ -71,7 +72,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     publicationUrls: (artifactId, releaseId) => ({ stableUrl: `https://artifacts.test/a/${artifactId}`,
       pinnedUrl: `https://artifacts.test/a/${artifactId}/r/${releaseId}` }),
     derivation: createRadarKeyDerivation({ storageScopeId: scope, actorIds: actors }),
-    legacyRecords: createMemoryKv(), acls, lifecycle,
+    legacyRecords, acls, lifecycle,
     ensureHost: {
       async readPolicyRevision() { return 'rev-1'; }, async lockBinding() {}, async abandonAttempt() {},
       async resolveBinding(client, input) {
@@ -107,6 +108,6 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const http = (path: string, body: unknown, context = invocation()) => app.execute({
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
-  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, blobs,
+  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, blobs, legacyRecords,
     deny: () => { allowed = false; }, allow: () => { allowed = true; }, guardCalls: () => guardCalls };
 }

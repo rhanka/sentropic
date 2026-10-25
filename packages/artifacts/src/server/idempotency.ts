@@ -21,11 +21,9 @@ export async function assertArtifactReplayMigration(
   callerKey: string,
 ): Promise<void> {
   const { internalKey } = command.identity;
-  const artifactId = command.operation === 'publish' ? command.payload.artifactId as string : undefined;
-  const keys = new Set<string>([internalKey]);
+  const keys = new Set<string>([callerKey, internalKey]);
   for (const key of [callerKey, internalKey]) {
-    keys.add(JSON.stringify(command.operation === 'publish'
-      ? ['publish', invocation.actorId, artifactId, key] : ['ensure', invocation.actorId, key]));
+    keys.add(JSON.stringify([command.operation, invocation.actorId, key]));
   }
   for (const key of keys) {
     if (await records.get(`idempotency:${key}`) !== undefined) {
