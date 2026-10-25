@@ -184,8 +184,7 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         `UPDATE artifacts.object_intents SET state = 'failed',
            error = COALESCE(error, 'preparation expired; explicit retry required'), updated_at = now()
          WHERE id = $1 AND kind = 'commit-release' AND state <> 'done'
-           AND (payload->>'cleanupDeadlineMs')::numeric <= $2
-           AND COALESCE(payload->>'cleanupState', '') <> 'failed-cleaned' RETURNING *`,
+           AND (payload->>'cleanupDeadlineMs')::numeric <= $2 RETURNING *`,
         [intentId, throughMs]);
       return rows[0] === undefined ? undefined : toIntent(rows[0]);
     },

@@ -89,8 +89,7 @@ export function createMemoryIntentStore(
       const intent = intents.get(intentId);
       if (intent === undefined || intent.state === 'done' ||
           typeof intent.payload.cleanupDeadlineMs !== 'number' ||
-          intent.payload.cleanupDeadlineMs > throughMs ||
-          intent.payload.cleanupState === 'failed-cleaned') return undefined;
+          intent.payload.cleanupDeadlineMs > throughMs) return undefined;
       intent.state = 'failed';
       intent.error ??= 'preparation expired; explicit retry required';
       intent.updatedAt = clock();
