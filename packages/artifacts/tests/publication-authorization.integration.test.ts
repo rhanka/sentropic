@@ -25,7 +25,8 @@ import {
 } from '../src/server/publication.js';
 import { createArtifactCommand, createRadarKeyDerivation, commandDigest } from '../src/server/command-identity.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
-import { createPostgresDeletionClaimStore, createPostgresClaimGuardedRefs } from '../src/server/gc.js';
+import { createPostgresDeletionClaimStore, createPostgresClaimGuardedRefs,
+  createPostgresGcService, createMemoryRefcountStore } from '../src/server/gc.js';
 import type { IntentStore } from '../src/server/object-intents.js';
 import type {
   CommitPolicyParticipantFactory,
@@ -206,6 +207,32 @@ afterAll(async () => {
 });
 
 describe('guarded publication authorization', () => {
+  it('should retain the PostgreSQL GC advisory lock until external deletion finishes', async () => {
+    const digest = `sha256:${'ab'.repeat(32)}`;
+    const key = `artifacts/scope-l4/blobs/sha256/${digest.slice(7)}`;
+    const inspector = new Pool({ connectionString: DATABASE_URL, max: 1 });
+    const refs = createMemoryRefcountStore();
+    const gc = createPostgresGcService(createPostgresCommitExecutor(pool), () => refs);
+    let deleted = false;
+    try {
+      const report = await gc.collect({
+        putBlob: async () => {}, getBlob: async () => undefined, headBlob: async () => undefined,
+        listKeys: async () => [key],
+        deleteBlob: async () => {
+          const { rows } = await inspector.query(
+            'SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired', [`artifacts-blob:${digest}`]);
+          expect(rows[0].acquired).toBe(false);
+          deleted = true;
+        },
+      }, 'artifacts/');
+      expect(deleted).toBe(true);
+      expect(report.deleted).toEqual([key]);
+      const { rows } = await inspector.query(
+        'SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired', [`artifacts-blob:${digest}`]);
+      expect(rows[0].acquired).toBe(true);
+    } finally { await inspector.end(); }
+  });
+
   it('should serialize PostgreSQL references with durable deletion claims', async () => {
     const executor = createPostgresCommitExecutor(pool);
     const writer = await executor.beginFinalization();

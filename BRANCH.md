@@ -26,7 +26,7 @@
   - [x] No source exceptions; inherited topic changes enter only through requested merges.
 
 ## Feedback Loop
-- [ ] L6 merge awaits integration resolution of mcp-core.ts and mcp.test.ts conflicts.
+- [x] Integration be22b0563 contains L6 e67a978f9; merge conflicts only in BRANCH.md, retaining this lane plan.
 - [x] Radar A1 f2b6c25cc9458ec285d6d4f620a55dad8c30f909; A2 b104ae90a28a5581e8eabd15f12acb58558d3396.
 - [x] Radar PR908 e2e9515ea41baebf5539743f0cfa0dea750d072c; main 2dbde92e9a6c532abe4f9e7bed8ed9a9b381d530.
 - [x] BASE #910 retires the route still called by immo-mcp data-source.ts:316; CT-3/CT-9 requalification required.

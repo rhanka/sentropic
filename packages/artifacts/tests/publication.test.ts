@@ -32,7 +32,7 @@ function guardedFixture(finalize: (request: FinalizeRequest) => Promise<Finalize
   const refs = createMemoryRefcountStore();
   const blobs = createMemoryBlobStore();
   const deps: GuardedPublicationDeps = {
-    coordinator: { finalize, replayGuarded: finalize }, refs, blobs,
+    coordinator: { finalizePrepared: finalize, replayPrepared: finalize }, refs, blobs,
     intents: createMemoryIntentStore(),
     createUnitWriter: () => ({
       readAuthorization: async () => ({ state: 'active', acl: { ownerId: 'owner-1', grants: [], isPublic: false, withdrawn: false } }),

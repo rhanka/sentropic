@@ -100,6 +100,30 @@ export interface DeletionClaimStore {
 
 type DeletionClaimAccess = Pick<DeletionClaimStore, 'claim' | 'releaseClaim' | 'isClaimed'>;
 
+/** GC keeps the advisory lock's transaction open through deletion and claim completion. */
+export function createPostgresGcService(
+  executor: CommitExecutor,
+  refsForTransaction: (client: FinalizeTxClient) => RefcountStore,
+): { collect(blobs: PublicationBlobStore, prefix: string): Promise<GcReport> } {
+  return {
+    async collect(blobs, prefix) {
+      const client = await executor.beginFinalization();
+      let failure: unknown;
+      try {
+        const refs = refsForTransaction(client);
+        const claims = createPostgresDeletionClaimStore(client);
+        const report = await createGcService(refs).collect(blobs, prefix, claims);
+        await client.commit();
+        return report;
+      } catch (error) {
+        failure = error;
+        try { await client.rollback(); } catch (rollbackError) { failure = rollbackError; }
+        throw error;
+      } finally { client.release(failure); }
+    },
+  };
+}
+
 /** Short preparation transactions; no leased connection spans blob I/O. */
 export function createPostgresClaimGuardedRefs(refs: RefcountStore, executor: CommitExecutor): RefcountStore {
   const insert = async (digest: string, holder: string, sql: string) => {

@@ -3,7 +3,7 @@ export * from './mcp-core.js';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
 import type { RegistryDefinition } from '@sentropic/mcp-platform/registry';
 import {
-  createArtifactsAdapter, ARTIFACTS_TOOL_SPECS, ARTIFACTS_PARAMETER_SCHEMA,
+  createArtifactsAdapter, ARTIFACTS_PARAMETER_SCHEMA,
   type ArtifactsAdapterOptions,
 } from './mcp-core.js';
 type Schema = Record<string, unknown>;
@@ -24,10 +24,10 @@ export function createArtifactsRegistryDefinition(
   const manifest = adapter.manifest;
   const handlers: Record<string, { handlerId: string; capabilityRef: string; configSchema: unknown }> = {};
   const toolValues: Record<string, { handlerId: string; values: Record<string, unknown> }> = {};
-  for (const spec of ARTIFACTS_TOOL_SPECS) {
-    const handlerId = `${spec.name}-handler`;
-    handlers[handlerId] = { handlerId, capabilityRef: spec.name, configSchema: EMPTY_TOOL_CONFIG };
-    toolValues[spec.name] = { handlerId, values: {} };
+  for (const tool of manifest.tools) {
+    const handlerId = `${tool.name}-handler`;
+    handlers[handlerId] = { handlerId, capabilityRef: tool.name, configSchema: EMPTY_TOOL_CONFIG };
+    toolValues[tool.name] = { handlerId, values: {} };
   }
   return {
     manifest,
