@@ -9,7 +9,7 @@
  * the L6 migration projection.
  */
 import type {
-  FinalizationCoordinator,
+  ArtifactCommitCoordinator,
   FinalizeRequest,
   FinalizeResult,
   InternalIdempotencyKey,
@@ -32,14 +32,16 @@ export interface GuardedReplayInput {
   readonly locks?: FinalizeRequest['locks'];
   readonly artifactId?: string;
   readonly bindingName?: string;
+  readonly validateReplayReceipt?: FinalizeRequest['validateReplayReceipt'];
+  readonly noteAbandonedAttempt?: FinalizeRequest['noteAbandonedAttempt'];
 }
 
 /** Replay one ensure through the coordinator with the request-bound guard. */
 export async function replayEnsureGuarded(
-  coordinator: FinalizationCoordinator,
+  coordinator: ArtifactCommitCoordinator,
   input: GuardedReplayInput,
 ): Promise<FinalizeResult> {
-  return coordinator.replayGuarded({
+  return coordinator.replayPrepared({
     scopeId: input.invocation.storageScopeId,
     internalKey: input.internalKey,
     commandHash: input.commandHash,
@@ -54,6 +56,9 @@ export async function replayEnsureGuarded(
     locks: input.locks,
     guard: input.invocation.authorizeCommit,
     receiptData: undefined,
+    validateReplayReceipt: input.validateReplayReceipt,
+    noteAbandonedAttempt: input.noteAbandonedAttempt,
+    attemptId: input.invocation.invocationId,
   });
 }
 

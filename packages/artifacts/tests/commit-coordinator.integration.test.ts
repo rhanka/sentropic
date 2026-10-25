@@ -196,7 +196,7 @@ describe('commit coordinator', () => {
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
     const request = baseRequest({ key: 'key-fresh', commandHash: 'h-fresh' });
-    const outcome = await coordinator.finalize(request);
+    const outcome = await coordinator.finalizePrepared(request);
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.replayed).toBe(false);
@@ -219,11 +219,11 @@ describe('commit coordinator', () => {
         'key-replay',
       ]);
     };
-    const first = await coordinator.finalize(
+    const first = await coordinator.finalizePrepared(
       baseRequest({ key: 'key-replay', commandHash: 'h-replay', provisional }),
     );
     expect(first.ok).toBe(true);
-    const second = await coordinator.finalize(
+    const second = await coordinator.finalizePrepared(
       baseRequest({ key: 'key-replay', commandHash: 'h-replay', provisional }),
     );
     expect(second.ok).toBe(true);
@@ -239,9 +239,9 @@ describe('commit coordinator', () => {
       executor: createPostgresCommitExecutor(pool),
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
-    const first = await coordinator.finalize(baseRequest({ key: 'key-conflict', commandHash: 'h-1' }));
+    const first = await coordinator.finalizePrepared(baseRequest({ key: 'key-conflict', commandHash: 'h-1' }));
     expect(first.ok).toBe(true);
-    const second = await coordinator.finalize(
+    const second = await coordinator.finalizePrepared(
       baseRequest({
         key: 'key-conflict',
         commandHash: 'h-2',
@@ -274,7 +274,7 @@ describe('commit coordinator', () => {
       executor: createPostgresCommitExecutor(pool),
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
-    const outcome = await coordinator.finalize(
+    const outcome = await coordinator.finalizePrepared(
       baseRequest({
         key: 'key-denied',
         commandHash: 'h-denied',
@@ -323,7 +323,7 @@ describe('commit coordinator', () => {
         ]);
       },
     });
-    const pending = coordinator.finalize(request);
+    const pending = coordinator.finalizePrepared(request);
     await barrier.waitUntilReached('after_finalization_locks_before_guard', 'inv-guard-wait');
     expect(provisionalCalls).toBe(1);
     const witness = new Pool({ connectionString: DATABASE_URL });
@@ -368,7 +368,7 @@ describe('commit coordinator', () => {
       commandHash: 'h-rev-race',
       invocationId: 'inv-rev-race',
     });
-    const pending = coordinator.finalize(request);
+    const pending = coordinator.finalizePrepared(request);
     await barrier.waitUntilReached('before_finalization_row_lock', 'inv-rev-race');
     const writer = new Pool({ connectionString: DATABASE_URL });
     try {
@@ -400,7 +400,7 @@ describe('commit coordinator', () => {
       commandHash: 'h-rev-after',
       invocationId: 'inv-rev-after',
     });
-    const pending = coordinator.finalize(request);
+    const pending = coordinator.finalizePrepared(request);
     await barrier.waitUntilReached('before_commit', 'inv-rev-after');
     const writer = new Pool({ connectionString: DATABASE_URL });
     try {
@@ -439,10 +439,10 @@ describe('commit coordinator', () => {
         policy: makeParticipantFactory(secondPool, { nowMs: Date.now() }, 'q-last', calls),
       });
       const [outcomeA, outcomeB] = await Promise.all([
-        coordinatorA.finalize(
+        coordinatorA.finalizePrepared(
           baseRequest({ key: 'key-quota-a', commandHash: 'h-qa', invocationId: 'inv-quota-a' }),
         ),
-        coordinatorB.finalize(
+        coordinatorB.finalizePrepared(
           baseRequest({ key: 'key-quota-b', commandHash: 'h-qb', invocationId: 'inv-quota-b' }),
         ),
       ]);
@@ -497,10 +497,10 @@ describe('commit coordinator', () => {
       await Promise.all([prepareAttempt('inv-prep-a'), prepareAttempt('inv-prep-b')]);
       expect(prepared).toHaveLength(6);
       const reachedB = barrier.waitUntilReached('before_key_lock', 'inv-prep-b');
-      const pendingA = coordinatorA.finalize(
+      const pendingA = coordinatorA.finalizePrepared(
         baseRequest({ key: 'key-s3-race', commandHash: 'h-s3', invocationId: 'inv-prep-a' }),
       );
-      const pendingB = coordinatorB.finalize(
+      const pendingB = coordinatorB.finalizePrepared(
         baseRequest({ key: 'key-s3-race', commandHash: 'h-s3', invocationId: 'inv-prep-b' }),
       );
       await barrier.waitUntilReached('before_commit', 'inv-prep-a');
@@ -547,7 +547,7 @@ describe('commit coordinator', () => {
         executor: sabotagingExecutor,
         policy: makeParticipantFactory(sabotaged, { nowMs: Date.now() }, 'q-main'),
       });
-      const first = await coordinator.finalize(
+      const first = await coordinator.finalizePrepared(
         baseRequest({ key: 'key-unknown', commandHash: 'h-unknown' }),
       );
       expect(first.ok).toBe(false);
@@ -556,7 +556,7 @@ describe('commit coordinator', () => {
       expect(first.failure.httpStatus).toBe(503);
       expect(first.failure.retriable).toBe(true);
       expect(first.failure.commitState).toBe('unknown');
-      const retry = await coordinator.finalize(
+      const retry = await coordinator.finalizePrepared(
         baseRequest({ key: 'key-unknown', commandHash: 'h-unknown' }),
       );
       expect(retry.ok).toBe(true);
@@ -591,7 +591,7 @@ describe('commit coordinator', () => {
         executor: createPostgresCommitExecutor(wrapped as unknown as Pool),
         policy: makeParticipantFactory(wrapped as unknown as Pool, { nowMs: Date.now() }, 'q-main'),
       });
-      const okOutcome = await coordinator.finalize(baseRequest({ key: 'key-rel-1', commandHash: 'h-r1' }));
+      const okOutcome = await coordinator.finalizePrepared(baseRequest({ key: 'key-rel-1', commandHash: 'h-r1' }));
       expect(okOutcome.ok).toBe(true);
       const deniedGuard = async (): Promise<ArtifactAuthorizationDecision> => ({
         allowed: false,
@@ -600,11 +600,11 @@ describe('commit coordinator', () => {
         status: 403,
         retriable: false,
       });
-      const denied = await coordinator.finalize(
+      const denied = await coordinator.finalizePrepared(
         baseRequest({ key: 'key-rel-2', commandHash: 'h-r2', guard: deniedGuard }),
       );
       expect(denied.ok).toBe(false);
-      const conflicted = await coordinator.finalize(
+      const conflicted = await coordinator.finalizePrepared(
         baseRequest({ key: 'key-rel-1', commandHash: 'h-other' }),
       );
       expect(conflicted.ok).toBe(false);
@@ -629,7 +629,7 @@ describe('commit coordinator', () => {
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
     await expect(
-      coordinator.finalize(baseRequest({ key: 'key-legacy', commandHash: 'h-legacy' })),
+      coordinator.finalizePrepared(baseRequest({ key: 'key-legacy', commandHash: 'h-legacy' })),
     ).rejects.toThrow('commit quarantine');
   });
 
@@ -639,10 +639,10 @@ describe('commit coordinator', () => {
       executor: createPostgresCommitExecutor(pool),
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main', calls),
     });
-    const first = await coordinator.finalize(baseRequest({ key: 'key-replay-q', commandHash: 'h-rq' }));
+    const first = await coordinator.finalizePrepared(baseRequest({ key: 'key-replay-q', commandHash: 'h-rq' }));
     expect(first.ok).toBe(true);
     expect(calls.reserveQuota).toBe(1);
-    const replayed = await coordinator.replayGuarded(
+    const replayed = await coordinator.replayPrepared(
       baseRequest({ key: 'key-replay-q', commandHash: 'h-rq' }),
     );
     expect(replayed.ok).toBe(true);
@@ -651,7 +651,7 @@ describe('commit coordinator', () => {
     expect(calls.reserveQuota).toBe(1);
     await pool.query("UPDATE commit_test.approvals SET approved = false WHERE actor_id = 'actor-1'");
     try {
-      const denied = await coordinator.replayGuarded(
+      const denied = await coordinator.replayPrepared(
         baseRequest({ key: 'key-replay-q', commandHash: 'h-rq' }),
       );
       expect(denied.ok).toBe(false);
@@ -668,7 +668,7 @@ describe('commit coordinator', () => {
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
     await expect(
-      coordinator.finalize(baseRequest({ key: '', commandHash: 'h-x' })),
+      coordinator.finalizePrepared(baseRequest({ key: '', commandHash: 'h-x' })),
     ).rejects.toThrow('scope and internal key');
   });
 });
@@ -729,7 +729,7 @@ describe('coordinator sol-r1 regressions', () => {
       nowMs: () => clock.nowMs,
     });
     try {
-      const pending = coordinator.finalize(
+      const pending = coordinator.finalizePrepared(
         baseRequest({
           key: 'key-exp-wait',
           commandHash: 'h-exp-wait',
@@ -773,7 +773,7 @@ describe('coordinator sol-r1 regressions', () => {
       const { rows: before } = await pool.query<{ used: number }>(
         "SELECT used FROM commit_test.quotas WHERE quota_key = 'q-main'",
       );
-      const pending = coordinator.finalize(
+      const pending = coordinator.finalizePrepared(
         baseRequest({
           key: 'key-quota-exp',
           commandHash: 'h-quota-exp',
@@ -832,7 +832,7 @@ describe('coordinator sol-r1 regressions', () => {
       executor: createPostgresCommitExecutor(pool),
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
-    const outcome = await coordinator.finalize(
+    const outcome = await coordinator.finalizePrepared(
       baseRequest({
         key: 'key-foreign-fence',
         commandHash: 'h-foreign-fence',
@@ -858,7 +858,7 @@ describe('coordinator sol-r1 regressions', () => {
       executor: createPostgresCommitExecutor(pool),
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
-    const first = await coordinator.finalize(
+    const first = await coordinator.finalizePrepared(
       baseRequest({ key: 'key-replay-foreign', commandHash: 'h-replay-foreign' }),
     );
     expect(first.ok).toBe(true);
@@ -873,7 +873,7 @@ describe('coordinator sol-r1 regressions', () => {
         policyRevision: 'rev-1',
       },
     });
-    const replayed = await coordinator.replayGuarded(
+    const replayed = await coordinator.replayPrepared(
       baseRequest({
         key: 'key-replay-foreign',
         commandHash: 'h-replay-foreign',
@@ -928,12 +928,12 @@ describe('coordinator sol-r1 regressions', () => {
         ]);
       },
     });
-    const first = await coordinator.finalize(request);
+    const first = await coordinator.finalizePrepared(request);
     expect(first.ok).toBe(true);
     expect(lockCalls).toEqual(['lifecycle', 'acl']);
     expect(provisionalCalls).toBe(1);
     expect(quotaCalls.reserveQuota).toBe(1);
-    const second = await coordinator.replayGuarded(request);
+    const second = await coordinator.replayPrepared(request);
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.replayed).toBe(true);
@@ -950,11 +950,11 @@ describe('coordinator sol-r1 regressions', () => {
       testObserver: barrier.observer,
       testPoints: ['after_replay_lookup_before_guard'],
     });
-    const first = await coordinator.finalize(
+    const first = await coordinator.finalizePrepared(
       baseRequest({ key: 'key-replay-del', commandHash: 'h-replay-del' }),
     );
     expect(first.ok).toBe(true);
-    const pending = coordinator.replayGuarded(
+    const pending = coordinator.replayPrepared(
       baseRequest({
         key: 'key-replay-del',
         commandHash: 'h-replay-del',
@@ -1010,7 +1010,7 @@ describe('coordinator sol-r1 regressions', () => {
         executor,
         policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
       });
-      const outcome = await coordinator.finalize(
+      const outcome = await coordinator.finalizePrepared(
         baseRequest({ key: 'key-lock-timeout', commandHash: 'h-lock-timeout' }),
       );
       expect(outcome.ok).toBe(false);
@@ -1054,7 +1054,7 @@ describe('coordinator sol-r1 regressions', () => {
         executor: createPostgresCommitExecutor(pool),
         policy: lockingFactory,
       });
-      const outcome = await coordinator.finalize(
+      const outcome = await coordinator.finalizePrepared(
         baseRequest({ key: 'key-quota-timeout', commandHash: 'h-quota-timeout' }),
       );
       expect(outcome.ok).toBe(false);
@@ -1082,7 +1082,7 @@ describe('coordinator sol-r1 regressions', () => {
         executor: throwingExecutor(boom(code)),
         policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
       });
-      const outcome = await coordinator.finalize(baseRequest({ key: `key-cls-${code}` }));
+      const outcome = await coordinator.finalizePrepared(baseRequest({ key: `key-cls-${code}` }));
       expect(outcome.ok).toBe(false);
       if (outcome.ok) continue;
       expect(outcome.failure.category).toBe('provider_unavailable');
@@ -1095,7 +1095,7 @@ describe('coordinator sol-r1 regressions', () => {
       executor: throwingExecutor(boom('XX999')),
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
-    const outcome = await coordinator.finalize(baseRequest({ key: 'key-cls-other' }));
+    const outcome = await coordinator.finalizePrepared(baseRequest({ key: 'key-cls-other' }));
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.failure.category).toBe('provider_error');
@@ -1116,7 +1116,7 @@ describe('coordinator sol-r1 regressions', () => {
       executor: refused,
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
-    const refusedOutcome = await refusedCoordinator.finalize(baseRequest({ key: 'key-acq-refused' }));
+    const refusedOutcome = await refusedCoordinator.finalizePrepared(baseRequest({ key: 'key-acq-refused' }));
     expect(refusedOutcome.ok).toBe(false);
     if (refusedOutcome.ok) return;
     expect(refusedOutcome.failure.category).toBe('provider_unavailable');
@@ -1132,7 +1132,7 @@ describe('coordinator sol-r1 regressions', () => {
       executor: broken,
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
-    const brokenOutcome = await brokenCoordinator.finalize(baseRequest({ key: 'key-acq-broken' }));
+    const brokenOutcome = await brokenCoordinator.finalizePrepared(baseRequest({ key: 'key-acq-broken' }));
     expect(brokenOutcome.ok).toBe(false);
     if (brokenOutcome.ok) return;
     expect(brokenOutcome.failure.category).toBe('provider_error');
@@ -1166,14 +1166,14 @@ describe('coordinator sol-r1 regressions', () => {
         executor: sabotagingExecutor,
         policy: makeParticipantFactory(sabotaged, { nowMs: Date.now() }, 'q-main'),
       });
-      const first = await coordinator.finalize(
+      const first = await coordinator.finalizePrepared(
         baseRequest({ key: 'key-unknown-real', commandHash: 'h-unknown-real' }),
       );
       expect(first.ok).toBe(false);
       if (first.ok) return;
       expect(first.failure.category).toBe('provider_unavailable');
       expect(first.failure.commitState).toBe('unknown');
-      const retry = await coordinator.finalize(
+      const retry = await coordinator.finalizePrepared(
         baseRequest({ key: 'key-unknown-real', commandHash: 'h-unknown-real' }),
       );
       expect(retry.ok).toBe(true);
@@ -1207,7 +1207,7 @@ describe('coordinator sol-r1 regressions', () => {
         executor: createPostgresCommitExecutor(breaking as unknown as Pool),
         policy: makeParticipantFactory(breaking as unknown as Pool, { nowMs: Date.now() }, 'q-main'),
       });
-      const outcome = await coordinator.finalize(baseRequest({ key: 'key-begin-fail' }));
+      const outcome = await coordinator.finalizePrepared(baseRequest({ key: 'key-begin-fail' }));
       expect(outcome.ok).toBe(false);
       if (outcome.ok) return;
       expect(outcome.failure.category).toBe('provider_error');
@@ -1244,7 +1244,7 @@ describe('coordinator sol-r1 regressions', () => {
         executor: sabotagingExecutor,
         policy: makeParticipantFactory(tracked.pool, { nowMs: Date.now() }, 'q-main'),
       });
-      const outcome = await coordinator.finalize(baseRequest({ key: 'key-resolve-settle' }));
+      const outcome = await coordinator.finalizePrepared(baseRequest({ key: 'key-resolve-settle' }));
       expect(outcome.ok).toBe(false);
       if (outcome.ok) return;
       expect(outcome.failure.category).toBe('provider_error');
@@ -1269,7 +1269,7 @@ describe('coordinator sol-r1 regressions', () => {
         executor: createPostgresCommitExecutor(tracked.pool),
         policy: makeParticipantFactory(tracked.pool, { nowMs: Date.now() }, 'q-main'),
       });
-      const outcome = await coordinator.finalize(
+      const outcome = await coordinator.finalizePrepared(
         baseRequest({
           key: 'key-deny-abandon',
           commandHash: 'h-deny-abandon',
@@ -1308,7 +1308,7 @@ describe('coordinator sol-r1 regressions', () => {
       executor: createPostgresCommitExecutor(pool),
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
-    const outcome = await coordinator.finalize(
+    const outcome = await coordinator.finalizePrepared(
       baseRequest({
         key: 'key-fence-abandon',
         commandHash: 'h-fence-abandon',
@@ -1341,7 +1341,7 @@ describe('coordinator sol-r1 regressions', () => {
         policy: makeParticipantFactory(tracked.pool, { nowMs: Date.now() }, 'q-main'),
       });
       await expect(
-        coordinator.finalize(
+        coordinator.finalizePrepared(
           baseRequest({
             key: 'key-legacy-settle',
             commandHash: 'h-legacy-settle',
@@ -1365,10 +1365,10 @@ describe('coordinator sol-r1 regressions', () => {
       policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
     });
     await expect(
-      coordinator.finalize(baseRequest({ key: 'key-bad-codec', codecVersion: 'unknown-codec' })),
+      coordinator.finalizePrepared(baseRequest({ key: 'key-bad-codec', codecVersion: 'unknown-codec' })),
     ).rejects.toThrow('supported command codec');
     await expect(
-      coordinator.replayGuarded(baseRequest({ key: 'key-bad-codec', codecVersion: 'unknown-codec' })),
+      coordinator.replayPrepared(baseRequest({ key: 'key-bad-codec', codecVersion: 'unknown-codec' })),
     ).rejects.toThrow('supported command codec');
     expect(await countRows('artifacts.operation_keys', ' WHERE internal_key = $1', ['key-bad-codec'])).toBe(0);
     expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', ['key-bad-codec'])).toBe(0);
@@ -1485,7 +1485,7 @@ describe('coordinator sol-r2 regressions', () => {
       }
       return failUnlessFlushed(log, transaction, context);
     };
-    const outcome = await coordinator.finalize(
+    const outcome = await coordinator.finalizePrepared(
       baseRequest({ key: 'key-deferred-flush', commandHash: 'h-flush', guard }),
     );
     expect(calls).toBe(2);
@@ -1512,7 +1512,7 @@ describe('coordinator sol-r2 regressions', () => {
       context: ArtifactCommitContext,
       transaction: ArtifactCommitTransaction,
     ): Promise<ArtifactAuthorizationDecision> => failUnlessFlushed(log, transaction, context);
-    const outcome = await coordinator.replayGuarded(baseRequest({ key, commandHash, guard }));
+    const outcome = await coordinator.replayPrepared(baseRequest({ key, commandHash, guard }));
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.replayed).toBe(true);
@@ -1534,7 +1534,7 @@ describe('coordinator sol-r2 regressions', () => {
         policyRevision: context.policyRevision,
       },
     });
-    const outcome = await coordinator.finalize(
+    const outcome = await coordinator.finalizePrepared(
       baseRequest({ key: 'key-unminted', commandHash: 'h-unminted', guard }),
     );
     expect(outcome.ok).toBe(false);
@@ -1570,7 +1570,7 @@ describe('coordinator sol-r2 regressions', () => {
         policyRevision: context.policyRevision,
       },
     });
-    const outcome = await coordinator.replayGuarded(baseRequest({ key, commandHash, guard }));
+    const outcome = await coordinator.replayPrepared(baseRequest({ key, commandHash, guard }));
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.failure.category).toBe('unauthorized_at_commit');
@@ -1585,7 +1585,7 @@ describe('coordinator sol-r2 regressions', () => {
     };
     const { executor } = makeStubExecutor({ commit: commitLoss });
     const coordinator = createArtifactCommitCoordinator({ executor, policy: makeStubPolicy() });
-    const outcome = await coordinator.finalize(
+    const outcome = await coordinator.finalizePrepared(
       baseRequest({ key: 'key-ack-loss', commandHash: 'h-ack-loss' }),
     );
     expect(outcome.ok).toBe(false);
@@ -1604,7 +1604,7 @@ describe('coordinator sol-r2 regressions', () => {
     };
     const { executor } = makeStubExecutor({ commit: commitBoom });
     const coordinator = createArtifactCommitCoordinator({ executor, policy: makeStubPolicy() });
-    const outcome = await coordinator.finalize(
+    const outcome = await coordinator.finalizePrepared(
       baseRequest({ key: 'key-commit-boom', commandHash: 'h-commit-boom' }),
     );
     expect(outcome.ok).toBe(false);
@@ -1639,7 +1639,7 @@ describe('coordinator sol-r2 regressions', () => {
         executor,
         policy: makeParticipantFactory(pool, { nowMs: Date.now() }, 'q-main'),
       });
-      const outcome = await coordinator.finalize(
+      const outcome = await coordinator.finalizePrepared(
         baseRequest({ key: 'key-receipt-lock', commandHash: 'h-receipt-lock' }),
       );
       expect(outcome.ok).toBe(false);
@@ -1685,7 +1685,7 @@ describe('coordinator sol-r2 regressions', () => {
     });
     const key = 'key-hook-quarantine';
     await expect(
-      coordinator.finalize(
+      coordinator.finalizePrepared(
         baseRequest({
           key,
           commandHash: 'h-hook-quarantine',
@@ -1709,7 +1709,7 @@ describe('coordinator sol-r2 regressions', () => {
       status: 403,
       retriable: false,
     });
-    const outcome = await coordinator.finalize(
+    const outcome = await coordinator.finalizePrepared(
       baseRequest({ key: 'key-kind', commandHash: 'h-kind', guard: denied }),
     );
     expect(outcome.ok).toBe(false);

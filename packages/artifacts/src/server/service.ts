@@ -25,7 +25,7 @@ import {
 } from './authorized-replay.js';
 import type {
   ArtifactInvocationContext,
-  FinalizationCoordinator,
+  ArtifactCommitCoordinator,
   FinalizeRequest,
   FinalizeTxClient,
   InternalIdempotencyKey,
@@ -132,7 +132,7 @@ export interface GuardedEnsureHost {
 
 export interface GuardedEnsureDeps {
   readonly profile: CompiledArtifactsProfile;
-  readonly coordinator: FinalizationCoordinator;
+  readonly coordinator: ArtifactCommitCoordinator;
   readonly derivation: ArtifactKeyDerivationBinding;
   readonly host: GuardedEnsureHost;
 }
@@ -230,15 +230,17 @@ export function createGuardedEnsureService(deps: GuardedEnsureDeps): GuardedEnsu
       invocationId: invocation.invocationId,
       actorId: invocation.actorId,
       operation: 'ensure',
-      artifactId: null,
+      get artifactId() { return captured.artifactId ?? null; },
       bindingName: binding.bindingName,
       policyRevision,
-      locks: { 'binding-identity': [async (client) => { await deps.host.lockBinding(client, binding); }] },
-      provisional: async (client) => {
+      locks: { 'binding-identity': [async (client) => {
+        await deps.host.lockBinding(client, binding);
         const receipt = await deps.host.resolveBinding(client, binding);
         captured.artifactId = receipt.artifactId;
         captured.created = receipt.created;
-      },
+      }] },
+      validateReplayReceipt: (receipt) => captured.created === false &&
+        projectEnsureReceipt(receipt).artifactId === captured.artifactId,
       noteAbandonedAttempt: (attemptId) => deps.host.abandonAttempt(attemptId),
       attemptId: invocation.invocationId,
       guard: invocation.authorizeCommit,
@@ -273,7 +275,7 @@ export function createGuardedEnsureService(deps: GuardedEnsureDeps): GuardedEnsu
         return { ok: false, failure: unavailableFailure(invocation.invocationId, 'acquire', error) };
       }
       const { request } = finalizeRequest(invocation, command, policyRevision);
-      const outcome = await deps.coordinator.finalize(request);
+      const outcome = await deps.coordinator.finalizePrepared(request);
       if (!outcome.ok) return { ok: false, failure: coordinatorFailure(outcome.failure) };
       let receipt: EnsureReceipt;
       try {
@@ -290,6 +292,10 @@ export function createGuardedEnsureService(deps: GuardedEnsureDeps): GuardedEnsu
       }
       try {
         deps.profile.assertSelected('artifacts_ensure');
+        if (!args.binding || args.binding.ownerId !== invocation.actorId ||
+          args.binding.storageScopeId !== invocation.storageScopeId || !args.binding.bindingName) {
+          throw new ArtifactProfileInputError();
+        }
       } catch (error) {
         if (error instanceof ArtifactProfileInputError) {
           return { ok: false, failure: profileEntryFailure(error, invocation.invocationId) };
@@ -303,6 +309,7 @@ export function createGuardedEnsureService(deps: GuardedEnsureDeps): GuardedEnsu
         return { ok: false, failure: unavailableFailure(invocation.invocationId, 'acquire', error) };
       }
       let artifactId: string | undefined;
+      let missingTarget = false;
       const binding = args.binding;
       const outcome = await replayEnsureGuarded(deps.coordinator, {
         invocation,
@@ -311,11 +318,14 @@ export function createGuardedEnsureService(deps: GuardedEnsureDeps): GuardedEnsu
         policyRevision,
         get artifactId() { return artifactId; },
         bindingName: binding?.bindingName,
+        validateReplayReceipt: (receipt) => !missingTarget &&
+          projectEnsureReceipt(receipt).artifactId === artifactId,
+        noteAbandonedAttempt: (attemptId) => deps.host.abandonAttempt(attemptId),
         locks: binding === undefined ? undefined : {
           'binding-identity': [async (client) => {
             await deps.host.lockBinding(client, binding);
             const target = await deps.host.resolveBinding(client, binding);
-            if (target.created) throw new Error('replay target missing');
+            missingTarget = target.created;
             artifactId = target.artifactId;
           }],
         },

@@ -34,310 +34,84 @@ import {
 import type { StpConnectorContext } from '@sentropic/mcp-platform';
 import { createProviderRegistry } from '@sentropic/mcp-platform/registry';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
+import { createTransportWorld } from './fixtures/transport-world.js';
 
-const OWNER = 'owner-1';
-const READER = 'reader-1';
-const STRANGER = 'stranger-1';
-const EMPTY_DIGEST = `sha256:${createHash('sha256').update(new Uint8Array(0)).digest('hex')}`;
-const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true }]);
-const SPEC_TOOLS = [
-  'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_ensure',
-  'artifacts_publish', 'artifacts_create_upload', 'artifacts_commit_upload',
-  'artifacts_list', 'artifacts_get', 'artifacts_get_source', 'artifacts_fork',
-  'artifacts_set_access', 'artifacts_promote', 'artifacts_renew',
-  'artifacts_delete', 'artifacts_restore',
-];
+it('should publish accented UTF-8 text through MCP and reject ambiguous or binary text', async () => {
+  const world = createTransportWorld();
+  const ensured = await world.http('/ensure', { bindingName: 'site', idempotencyKey: 'utf8-ensure' });
+  if (!ensured.ok) throw new Error('ensure failed');
+  const artifactId = (ensured.result.body as { artifactId: string }).artifactId;
+  const text = '<h1>Été à Montréal 🏠</h1>';
+  const file = { path: 'index.html', mimeType: 'text/html', text };
+  let attempt = 0;
+  const publish = (files: unknown[]) => world.mcp.invoke({ tool: 'artifacts_publish',
+    invocation: world.invocation(), args: { artifactId, files, idempotencyKey: `utf8-${attempt++}` } });
+  expect((await publish([file])).status).toBe(201);
+  const [blobKey] = await world.blobs.listKeys('artifacts/scope-l6/blobs/');
+  expect(new TextDecoder().decode(await world.blobs.getBlob(blobKey))).toBe(text);
+  expect((await publish([{ ...file, bytes: [65] }])).status).toBe(400);
+  expect((await publish([{ ...file, mimeType: 'image/png' }])).status).toBe(400);
+  expect(world.releases.size).toBe(1);
+});
 
-function makeApp() {
-  const state = createMemoryStateStore();
-  const blobs = createMemoryBlobStore();
-  const staging = createMemoryStaging();
-  return createHttpArtifactApp({
-    parameterSchema: SCHEMA,
-    artifacts: createArtifactService({ kv: createMemoryKv(), uuid: createCryptoUuid() }),
-    publication: createPublicationService({
-      state,
-      blobs,
-      intents: createMemoryIntentStore(),
-      idempotency: createIdempotencyStore(createMemoryIdempotencyKv()),
-    }),
-    lifecycle: createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z', state),
-    forks: createForkService(createMemoryForkStore()),
-    acls: createMemoryAclStore(),
-    sources: createMemorySourceStore(),
-    blobs,
-    uploads: createUploadService(staging, { maxUploadBytes: 1024 }),
-    staging,
-    templates: createDefaultTemplateCatalog(),
+describe('L6 compiled MCP profile', () => {
+  const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+  it('should expose exactly the selected closed schemas and required write keys', () => {
+    const manifest = createArtifactsManifest({ profile, invocationScope: 'immo:read' });
+    expect(manifest.tools.map((tool) => tool.name)).toEqual(profile.selectedCapabilities);
+    expect(manifest.tools.every((tool) => tool.requiredScopes.includes('immo:read'))).toBe(true);
+    for (const tool of manifest.tools) expect(tool.inputSchema).toEqual(profile.schemas[tool.name]);
+    expect(manifest.tools.find((tool) => tool.name === 'artifacts_publish')?.idempotency)
+      .toEqual({ required: true, scope: 'principal' });
   });
-}
-
-function makeExecutor() {
-  return createArtifactsToolExecutor({ app: makeApp(), defaultStorageScopeId: 'scope-1' });
-}
-
-function fakeCtx(sub: string): StpConnectorContext {
-  return {
-    requestId: 'req-1', correlationId: 'corr-1', auditId: 'audit-1',
-    principal: { sub, claims: {}, scopes: [], tenantRef: 'tenant-1', authTime: '2026-01-01T00:00:00.000Z' },
-    surface: 'backend', session: { mcpSessionId: 'sess-1' },
-    tenantRef: 'tenant-1', connectorInstanceId: 'inst-1', consentRefs: [], grantRefs: [],
-    getSecret: () => Promise.reject(new Error('no secrets')),
-    connectorConfig: {}, audit: { emit: () => Promise.resolve() }, logger: {},
-  };
-}
-
-async function ensureAndPublish(executor: ReturnType<typeof makeExecutor>): Promise<string> {
-  const ensured = await executor.invoke({
-    tool: 'artifacts_ensure',
-    actorId: OWNER,
-    args: { bindingName: 'site', idempotencyKey: 'k-1', paramsHash: 'h-1', parameters: { title: 'Hi' } },
+  it('should invalidate manifest integrity on a semantic-only profile change', () => {
+    const other = compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE,
+      contractRevisions: { ...RADAR_ARTIFACTS_PROFILE.contractRevisions, authorization: 'artifacts-authorization/v2' } });
+    expect(profile.schemas).toEqual(other.schemas);
+    expect(computeManifestDigest(createArtifactsManifest({ profile })))
+      .not.toBe(computeManifestDigest(createArtifactsManifest({ profile: other })));
   });
-  expect(ensured.status).toBe(201);
-  const artifactId = (ensured.body as { artifactId: string }).artifactId;
-  const files = [{ path: 'index.html', mimeType: 'text/html', bytes: [60, 104, 62] }];
-  const published = await executor.invoke({
-    tool: 'artifacts_publish', actorId: OWNER,
-    args: { artifactId, files, idempotencyKey: 'p-1', paramsHash: 'h-1' },
+  it('should require a compiled profile rather than implicitly selecting all tools', () => {
+    expect(() => createArtifactsManifest()).toThrow();
   });
-  expect(published.status).toBe(201);
-  return artifactId;
-}
+  it('should reject direct unselected dispatch before calling the app', async () => {
+    let calls = 0;
+    const app = { profileDigest: profile.profileDigest, selectedCapabilities: profile.selectedCapabilities,
+      execute: async () => { calls += 1; throw new Error('unexpected app call'); } };
+    const executor = createArtifactsToolExecutor({ app, profile });
+    const outcome = await executor.execute({ tool: 'artifacts_delete', args: { artifactId: 'x' },
+      invocation: { invocationId: 'mcp-1', actorId: 'alice', storageScopeId: 'scope-1',
+        authorizeCommit: async () => { throw new Error('unexpected guard'); } } });
+    expect(outcome).toMatchObject({ ok: false, failure: { category: 'capability_unselected', retriable: false } });
+    expect(calls).toBe(0);
+  });
+});
 
-describe('artifacts MCP provider', () => {
-  it('should publish accented UTF-8 text through MCP and reject ambiguous or binary text', async () => {
-    const app = makeApp();
-    const executor = createArtifactsToolExecutor({ app, defaultStorageScopeId: 'scope-1' });
-    const artifactId = await ensureAndPublish(executor);
-    const text = '<h1>Été à Montréal 🏠</h1>';
-    const file = { path: 'index.html', mimeType: 'text/html', text };
-    const publish = (files: unknown[]) => executor.invoke({
-      tool: 'artifacts_publish', actorId: OWNER, args: { artifactId, files },
-    });
-    expect((await publish([file])).status).toBe(201);
-    const current = await app.handle({ method: 'GET', path: `/current/${artifactId}`, actorId: OWNER, body: undefined });
-    const manifest = JSON.parse((current.body as { manifest: string }).manifest);
-    const digest = manifest.files[0].digest;
-    const bytes = [...Buffer.from(text, 'utf8')];
-    expect(digest).toBe(`sha256:${createHash('sha256').update(Buffer.from(bytes)).digest('hex')}`);
-    const served = await app.handle({ method: 'GET', path: `/content/${artifactId}/${digest}`, actorId: OWNER, body: undefined });
-    expect(served.body).toMatchObject({ bytes, size: bytes.length });
-    for (const invalid of [{ ...file, bytes }, { ...file, mimeType: 'image/png' }, { ...file, text: 7 }]) {
-      expect(await publish([invalid])).toEqual({ status: 400, body: { error: 'invalid_request' } });
-    }
+it('should align registry handlers and configured bindings with the selected manifest', () => {
+  const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+  const definition = createArtifactsRegistryDefinition({ profile,
+    app: { profileDigest: profile.profileDigest, selectedCapabilities: profile.selectedCapabilities,
+      execute: async () => { throw new Error('unexpected dispatch'); } },
+    createInvocation: () => { throw new Error('unexpected binding'); },
   });
+  expect(Object.keys(definition.toolValues).sort()).toEqual([...profile.selectedCapabilities].sort());
+  expect(Object.values(definition.handlers).map((handler) => handler.capabilityRef).sort())
+    .toEqual([...profile.selectedCapabilities].sort());
+});
 
-  it('should advertise exclusive bytes/text entries and text MIME restrictions', () => {
-    const publish = createArtifactsManifest().tools.find((tool) => tool.name === 'artifacts_publish');
-    const schema = publish?.inputSchema as { properties: { files: { items: Record<string, unknown> } } };
-    expect(schema.properties.files.items).toMatchObject({
-      required: ['path', 'mimeType'], additionalProperties: false,
-      properties: { bytes: { type: 'array' }, text: { type: 'string' } },
-      oneOf: [
-        { required: ['bytes'], not: { required: ['text'] } },
-        { required: ['text'], not: { required: ['bytes'] }, properties: { mimeType: { pattern: expect.any(String) } } },
-      ],
-    });
+it.each([
+  { capabilityRef: 'artifacts_delete', input: {}, code: 'capability_unavailable' },
+  { capabilityRef: 'artifacts_ensure', input: { bindingName: 'x' }, code: 'invalid_request' },
+  { capabilityRef: 'artifacts_ensure', input: { bindingName: 'x', idempotencyKey: 'a' }, idempotencyKey: 'b', code: 'invalid_request' },
+])('should refuse %j without binding or dispatching a host invocation', async ({ code, ...input }) => {
+  const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+  const adapter = createArtifactsAdapter({ profile,
+    app: { profileDigest: profile.profileDigest, selectedCapabilities: profile.selectedCapabilities,
+      execute: async () => { throw new Error('unexpected dispatch'); } },
+    createInvocation: () => { throw new Error('unexpected binding'); },
   });
-
-  it('exposes sentropic.artifacts with exactly the 15 spec tools', () => {
-    expect(ARTIFACTS_PROVIDER_ID).toBe('sentropic.artifacts');
-    expect([...ARTIFACTS_TOOL_NAMES]).toEqual(SPEC_TOOLS);
-    const manifest = createArtifactsManifest();
-    expect(manifest.providerId).toBe('sentropic.artifacts');
-    expect(manifest.version).toBe('0.2.0');
-    expect(manifest.tools.map((tool) => tool.name)).toEqual(SPEC_TOOLS);
-    for (const tool of manifest.tools) {
-      const schema = tool.inputSchema as { type?: unknown; additionalProperties?: unknown };
-      expect(schema.type, tool.name).toBe('object');
-      expect(schema.additionalProperties, tool.name).toBe(false);
-      expect(tool.description.length, tool.name).toBeGreaterThan(0);
-    }
-    const byName = new Map(manifest.tools.map((tool) => [tool.name, tool]));
-    expect(byName.get('artifacts_delete')?.gates.requiresHumanConfirmation).toBe(true);
-    expect(byName.get('artifacts_set_access')?.gates.requiresHumanConfirmation).toBe(true);
-    expect(byName.get('artifacts_list')?.gates.requiresHumanConfirmation).toBe(false);
-    expect(byName.get('artifacts_list')?.mutability).toBe('read-only');
-    expect(byName.get('artifacts_publish')?.mutatesExternalSystem).toBe(true);
-  });
-
-  it('binds the host invocation scope only when the host supplies one', () => {
-    const generic = createArtifactsManifest();
-    expect(generic.tools.every((tool) => tool.requiredScopes.length === 0)).toBe(true);
-    expect(generic.authz.scopes).toEqual([]);
-    const bound = createArtifactsManifest({ invocationScope: 'immo:read' });
-    expect(bound.tools.every((tool) => tool.requiredScopes.join() === 'immo:read')).toBe(true);
-    expect(bound.authz.scopes).toEqual(['immo:read']);
-  });
-
-  it('runs ensure, publish, get, list, template and guide through the executor', async () => {
-    const executor = makeExecutor();
-    const artifactId = await ensureAndPublish(executor);
-    const got = await executor.invoke({ tool: 'artifacts_get', actorId: OWNER, args: { artifactId } });
-    expect(got.status).toBe(200);
-    expect(got.body).toMatchObject({ artifactId, ownerId: OWNER, state: 'active' });
-    const listed = await executor.invoke({ tool: 'artifacts_list', actorId: OWNER, args: {} });
-    expect(listed.body).toMatchObject({ total: 1, artifacts: [{ artifactId }] });
-    const template = await executor.invoke({
-      tool: 'artifacts_get_template', actorId: OWNER, args: { templateId: 'static-html' },
-    });
-    expect(template.status).toBe(200);
-    const guide = await executor.invoke({ tool: 'artifacts_get_api_guide', actorId: OWNER, args: {} });
-    expect(guide.body).toMatchObject({ version: 'v1' });
-  });
-
-  it('refuses strangers, unknown tools and malformed arguments', async () => {
-    const executor = makeExecutor();
-    const artifactId = await ensureAndPublish(executor);
-    const stranger = await executor.invoke({
-      tool: 'artifacts_get', actorId: STRANGER, args: { artifactId },
-    });
-    expect(stranger.status).toBe(404);
-    expect(stranger.body).toEqual({ error: 'not_found' });
-    await expect(
-      executor.invoke({ tool: 'pages_ensure_site', actorId: OWNER, args: {} }),
-    ).rejects.toThrow(/unknown artifacts tool/);
-    await expect(
-      executor.invoke({ tool: 'artifacts_get', actorId: OWNER, args: {} }),
-    ).rejects.toThrow(/missing artifactId/);
-  });
-
-  it('runs share, fork, promote, renew, delete and restore through tools', async () => {
-    const executor = makeExecutor();
-    const id = await ensureAndPublish(executor);
-    const granted = await executor.invoke({
-      tool: 'artifacts_set_access', actorId: OWNER,
-      args: { artifactId: id, action: 'grant', principalId: READER, grant: 'read' },
-    });
-    expect(granted.status).toBe(200);
-    const readerGet = await executor.invoke({ tool: 'artifacts_get', actorId: READER, args: { artifactId: id } });
-    expect(readerGet.status).toBe(200);
-    const readerSource = await executor.invoke({
-      tool: 'artifacts_get_source', actorId: READER, args: { artifactId: id },
-    });
-    expect(readerSource.status).toBe(403);
-    const forked = await executor.invoke({ tool: 'artifacts_fork', actorId: READER, args: { artifactId: id } });
-    expect(forked.status).toBe(201);
-    expect((forked.body as { artifactId: string }).artifactId).not.toBe(id);
-    const v2 = await executor.invoke({
-      tool: 'artifacts_publish', actorId: OWNER,
-      args: {
-        artifactId: id,
-        files: [{ path: 'index.html', mimeType: 'text/html', bytes: [60, 50, 62] }],
-        idempotencyKey: 'p-2', paramsHash: 'h-2',
-      },
-    });
-    const v2Id = (v2.body as { releaseId: string }).releaseId;
-    const meta = await executor.invoke({ tool: 'artifacts_get', actorId: OWNER, args: { artifactId: id } });
-    const current = (meta.body as { currentReleaseId: string }).currentReleaseId;
-    expect(current).toBe(v2Id);
-    const stale = await executor.invoke({
-      tool: 'artifacts_promote', actorId: OWNER,
-      args: { artifactId: id, releaseId: v2Id, expectedCurrent: 'not-current' },
-    });
-    expect(stale.status).toBe(409);
-    const renewed = await executor.invoke({ tool: 'artifacts_renew', actorId: OWNER, args: { artifactId: id } });
-    expect(renewed.status).toBe(200);
-    const deleted = await executor.invoke({ tool: 'artifacts_delete', actorId: OWNER, args: { artifactId: id } });
-    expect(deleted.body).toMatchObject({ state: 'deleted' });
-    const restored = await executor.invoke({
-      tool: 'artifacts_restore', actorId: OWNER, args: { artifactId: id },
-    });
-    expect(restored.body).toMatchObject({ state: 'active' });
-    await expect(
-      executor.invoke({
-        tool: 'artifacts_set_access', actorId: OWNER,
-        args: { artifactId: id, action: 'bogus' },
-      }),
-    ).rejects.toThrow(/unknown set-access action/);
-  });
-
-  it('commits a bounded upload session through tools', async () => {
-    const executor = makeExecutor();
-    const id = await ensureAndPublish(executor);
-    const begun = await executor.invoke({
-      tool: 'artifacts_create_upload', actorId: OWNER,
-      args: { artifactId: id, mimeType: 'text/plain' },
-    });
-    expect(begun.status).toBe(201);
-    const uploadId = (begun.body as { uploadId: string }).uploadId;
-    const committed = await executor.invoke({
-      tool: 'artifacts_commit_upload', actorId: OWNER,
-      args: {
-        artifactId: id, uploadId, path: 'empty.txt', mimeType: 'text/plain',
-        digest: EMPTY_DIGEST, size: 0, idempotencyKey: 'u-1', paramsHash: 'h-1',
-      },
-    });
-    expect(committed.status).toBe(201);
-    const strangerUpload = await executor.invoke({
-      tool: 'artifacts_create_upload', actorId: STRANGER,
-      args: { artifactId: id, mimeType: 'text/plain' },
-    });
-    expect(strangerUpload.status).toBe(404);
-  });
-
-  it('registers and compiles through the platform kernel (section 3)', () => {
-    const definition = createArtifactsRegistryDefinition({ app: makeApp() });
-    const registry = createProviderRegistry();
-    registry.register(definition);
-    expect(() => registry.register(definition)).toThrow(/duplicate provider/);
-    registry.select(['sentropic.artifacts']);
-    registry.configure('sentropic.artifacts', { defaultStorageScopeId: 'scope-1' });
-    const missing = registry.compile({ bindings: {}, compatibility: {} });
-    expect(missing.ok).toBe(false);
-    const compiled = registry.compile({
-      bindings: {},
-      compatibility: {
-        'sentropic.artifacts': { manifestDigest: computeManifestDigest(definition.manifest) },
-      },
-    });
-    if (!compiled.ok) throw new Error(`compile refused: ${JSON.stringify(compiled.diagnostics)}`);
-    for (const name of SPEC_TOOLS) {
-      expect(compiled.registry.resolveTool(name)?.providerId, name).toBe(ARTIFACTS_PROVIDER_ID);
-    }
-    expect(compiled.registry.resolveTool('pages_ensure_site')).toBeUndefined();
-    const catalog = registry.catalog();
-    expect(catalog).toHaveLength(1);
-    expect(catalog[0]).toMatchObject({ providerId: ARTIFACTS_PROVIDER_ID, availability: 'available' });
-  });
-
-  it('refuses the previous provider ID as unknown for selection and configuration', () => {
-    const registry = createProviderRegistry();
-    registry.register(createArtifactsRegistryDefinition({ app: makeApp() }));
-    expect(() => registry.select(['sentropic.web-pages'])).toThrow(/unknown provider/);
-    expect(() => registry.configure('sentropic.web-pages', {})).toThrow(/unknown provider/);
-  });
-
-  it('invokes through the platform adapter with verified-principal identity', async () => {
-    const adapter = createArtifactsAdapter({ app: makeApp(), defaultStorageScopeId: 'scope-1' });
-    expect(adapter.connectorId).toBe(ARTIFACTS_PROVIDER_ID);
-    const tenant = await adapter.resolveTenant({
-      principalSub: OWNER, tenantRef: 'tenant-1', connectorInstanceId: 'inst-1',
-      selectorHints: { tenantRef: 'forged' },
-    });
-    expect(tenant.tenantRef).toBe('tenant-1');
-    expect(await adapter.validateSecrets(tenant)).toEqual([]);
-    expect(await adapter.listCapabilities(tenant)).toHaveLength(15);
-    const ensured = await adapter.invokeTool({
-      capabilityRef: 'artifacts_ensure',
-      input: { bindingName: 'site', idempotencyKey: 'k-1', paramsHash: 'h-1', parameters: { title: 'Hi' } },
-      ctx: fakeCtx(OWNER),
-      idempotencyKey: 'k-1',
-    });
-    if (typeof ensured === 'string' || !ensured.ok) throw new Error('ensure must succeed inline');
-    const artifactId = (ensured.output as { artifactId: string }).artifactId;
-    const stranger = await adapter.invokeTool({
-      capabilityRef: 'artifacts_get', input: { artifactId }, ctx: fakeCtx(STRANGER),
-    });
-    if (typeof stranger === 'string') throw new Error('stranger read must not defer');
-    expect(stranger.ok).toBe(false);
-    expect(stranger.error?.code).toBe('not_found');
-    const unknown = await adapter.invokeTool({
-      capabilityRef: 'pages_ensure_site', input: {}, ctx: fakeCtx(OWNER),
-    });
-    if (typeof unknown === 'string') throw new Error('unknown tool must not defer');
-    expect(unknown.ok).toBe(false);
-    expect(unknown.error?.code).toBe('invalid_request');
-    expect(unknown.error?.message).toBe('invalid_request');
-  });
+  const ctx = { requestId: 'request-1', auditId: 'audit-1', principal: { sub: 'alice' } } as StpConnectorContext;
+  expect(await adapter.invokeTool({ ...input, ctx })).toMatchObject({ ok: false,
+    error: { code, retriable: false } });
 });
