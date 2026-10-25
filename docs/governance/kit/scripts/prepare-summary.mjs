@@ -4,8 +4,9 @@ import {buildGovernanceCentral} from '../src/governance-central.js';
 import {aggregateTopLevel} from '../src/governance-summary.js';
 import {groupContent,frameHeaderContent} from '../src/architecture-layout.js';
 import {CARD_WIDTH,COLLAPSED_CARD_HEIGHT} from '../src/governance-layout.js';
-import {placeLabels} from '../src/architecture-routing.js';
+import {routeScene} from '../src/architecture-routing.js';
 import {localize} from '../src/i18n.js';
+import {withLegend} from '../src/governance-legend.js';
 const elk=new ELK();
 const layouts={};
 for(const language of ['fr','en']){
@@ -37,38 +38,10 @@ for(const language of ['fr','en']){
   const y=(ids[0]==='h2a'?Math.min:Math.max)(...row.map(g=>g.position.y));
   for(const group of row)group.position.y=y;
  }
- const routed=edges.map(e=>{
-  const s=previous.edges.find(x=>x.id===e.id).sections[0];
-  let p=[s.startPoint,...s.bendPoints??[],s.endPoint].map(p=>({x:Math.round(p.x*1000)/1000,y:Math.round(p.y*1000)/1000}));
-  const delta=id=>groups.find(g=>g.id===id).position.y-previous.children.find(n=>n.id===id).y;
-  const sourceDelta=delta(e.source),targetDelta=delta(e.target);
-  if(p.length===2&&sourceDelta!==targetDelta){
-   const x=(p[0].x+p[1].x)/2;
-   p=[p[0],{x,y:p[0].y},{x,y:p[1].y},p[1]];
-  }
-  p[0].y+=sourceDelta;p[1].y+=sourceDelta;
-  if(p.length>2){p.at(-1).y+=targetDelta;p.at(-2).y+=targetDelta;}
-  // The lower transit lane must stay below both aligned bottom frames.
-  if(e.source==='engram'&&e.target==='cluster-mesh'){
-   const y=Math.max(...groups.map(g=>g.position.y+g.height))+160;
-   p[2].y=y;p[3].y=y;
-  }
-  if(e.source==='cluster-mesh'&&e.target==='engram'){
-   const y=Math.max(...groups.map(g=>g.position.y+g.height))+225;
-   p[2].y=y;p[3].y=y;
-  }
-  if(e.source==='engram'&&e.target==='design-system'){
-   p[1].x=p.at(-1).x-64;p[2].x=p[1].x;
-  }
-  if(e.source==='h2a'&&e.target==='design-system'){
-   const target=p.at(-1),y=groups.find(g=>g.id==='design-system').position.y-72;
-   p=[p[0],p[1],{x:p[1].x,y},{x:target.x-32,y},{x:target.x-32,y:target.y},target];
-  }
-  return {...e,type:p.length===2?'straight':'architecture',data:{...e.data,routedPoints:p,routePoints:p.slice(1,-1),obstacleDetour:p.length>2}};
- });
- for(const edge of routed)edge.data.clearance=28;
- const scene={...original,projectionKey:'overview',nodes:[],groups,edges:placeLabels(routed,groups,groups)};
- layouts[language]={groups:scene.groups,edges:scene.edges};
+ const scene=routeScene({...original,projectionKey:"overview",nodes:groups,groups,edges});
+ const legend=withLegend(scene).groups.at(-1);
+ Object.assign(legend,{width:CARD_WIDTH,height:COLLAPSED_CARD_HEIGHT,collapsed:true},groupContent(legend,CARD_WIDTH,true));
+ layouts[language]={groups:[...scene.groups,legend],edges:scene.edges};
  console.log(language,{width:previous.width,height:previous.height,points:scene.edges.map(e=>({id:e.id,points:e.data.routedPoints}))});
 }
 writeFileSync(new URL('../src/governance-summary-layouts.json',import.meta.url),JSON.stringify(layouts)+'\n');

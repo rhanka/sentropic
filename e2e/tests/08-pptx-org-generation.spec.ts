@@ -109,6 +109,14 @@ test.describe('Chat PPTX generation (organization context)', () => {
       const composer = page.locator('[role="textbox"][aria-label="Composer"]');
       await expect(composer).toBeVisible({ timeout: 10_000 });
 
+      // CI model: mistral-small-2603 (gpt-4.1-nano retired; production default unchanged).
+      // Track 01M5PCVH1Y8ZAVM7T94SRAWVR5: revert/review when seats are available.
+      const modelSelect = page.locator('#chat-model-selection');
+      await expect(
+        modelSelect.locator('option[value="mistral::mistral-small-2603"]'),
+      ).toHaveCount(1, { timeout: 10_000 });
+      await modelSelect.selectOption('mistral::mistral-small-2603');
+
       const editable = composer.locator('[contenteditable="true"]');
       await editable.click();
       await page.keyboard.press('Control+A');

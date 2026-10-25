@@ -274,7 +274,7 @@ describe('Queue - organization_batch_create runtime', () => {
           initiativeCount: 2,
           locale: 'fr',
           organizationId: null,
-          model: 'gpt-4.1-nano',
+          model: 'mistral-small-2603',
         },
         orgContext: {
           selectedOrgIds: [],
@@ -314,7 +314,7 @@ describe('Queue - organization_batch_create runtime', () => {
       data: JSON.stringify({
         folderId,
         input: 'Generate initiatives for retail and existing players',
-        model: 'gpt-4.1-nano',
+        model: 'mistral-small-2603',
         locale: 'fr',
         workflow: {
           workflowRunId,
@@ -651,7 +651,7 @@ describe('Queue - organization_batch_create runtime', () => {
           initiativeCount: 2,
           locale: 'fr',
           organizationId: null,
-          model: 'gpt-4.1-nano',
+          model: 'mistral-small-2603',
         },
         orgContext: {
           selectedOrgIds: [],
@@ -1329,7 +1329,7 @@ describe('Queue - organization_batch_create runtime', () => {
             initiativeCount: 2,
             locale: 'fr',
             organizationId: null,
-            model: 'gpt-4.1-nano',
+            model: 'mistral-small-2603',
             autoCreateOrganizations: true,
           },
           orgContext: {
@@ -1361,7 +1361,7 @@ describe('Queue - organization_batch_create runtime', () => {
         data: JSON.stringify({
           folderId,
           input: 'Test',
-          model: 'gpt-4.1-nano',
+          model: 'mistral-small-2603',
           locale: 'fr',
           workflow: {
             workflowRunId,

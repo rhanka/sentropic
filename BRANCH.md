@@ -7,7 +7,7 @@
 ## Scope / Guardrails
 - [x] Follow approved E2 r3 P2-1 and its corrective-main fallback; #709 merged as b67e2a49af789f8f51d91cc5695f89caa63db2ee.
 - [x] Base: origin/main e6d17327898a0118af123ff36ae508eefda80ddf; worktree: tmp/worktrees/cm-0213-fix.
-- [x] Make-only; ENV=test-cm-0213 last; no Python; no service stack or reserved user ports.
+- [x] Make-only; ENV=test-cm-common-v1 last; no Python; isolated Compose qualification service without published ports.
 - [x] Selective staging and make commit only; each commit below 150 changed lines; no attribution trailers.
 - [x] Shared generic registry retains engram-memory; no authority/type migration or common descriptor/vector changes.
 - [x] Push and open a DRAFT PR; do not merge or publish without the owner's GO.
@@ -41,6 +41,7 @@
   - [x] Declare BR0213-EXn with rationale, impact and rollback before conditional edits.
 
 ## Feedback Loop
+- [x] Merge origin/main e9f82d14a1a62b95050a91c36b4a01a1aed153c0 without rebase; retain the common-v1 fix and current artifacts 0.2.0 peer. Main 0.22.0 still calls isStorageModuleId and accepts engram-memory; reserve corrective 0.22.1.
 - [x] CI bump repair: job 120542263109 passed package tests, installed Comments and PG upgrade, then failed ENOENT for the selected fixture's stale sentropic-cluster-mesh-0.21.2.tgz. Update only that fixture's candidate path/version to 0.21.3; preserve every registry peer and its integrity.
 - [x] BR0213-EX1 — allow .github/workflows/ci.yml's Cluster Mesh post-publication wait budget only. Reason: npm processing took over three minutes on #709, exhausting 18 reads before availability. Impact: up to 36 fresh reads, ten seconds apart, for this publisher only; no publication/skip predicates change. Rollback: remove the explicit budget argument and its wiring test.
 - [x] Affected publication: @sentropic/cluster-mesh@0.21.2, registry time 2026-10-23T14:44:35Z; correction reserved as 0.21.3.

@@ -1,11 +1,12 @@
 import { SHARED_AGENTS } from '../config/default-agents-shared';
+import { env } from '../config/env';
 import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
 import { callLLMStream } from './llm-runtime';
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { StreamEventType } from './llm-runtime';
 
-const FORCED_DOCUMENT_MODEL = 'gpt-5-nano';
+const DOCUMENT_MODEL = env.DOCUMENT_MODEL;
 const WORDS_FULL_CONTENT_LIMIT = 10_000;
 const DETAILED_SUMMARY_TARGET_WORDS = 15_000;
 const DETAILED_SUMMARY_MIN_WORDS = 4_000;
@@ -223,7 +224,7 @@ export async function generateDocumentSummary(opts: {
     .replace('{{document_text}}', opts.documentText);
 
   const { content } = await executeWithToolsStream(userPrompt, {
-    model: FORCED_DOCUMENT_MODEL,
+    model: DOCUMENT_MODEL,
     streamId: opts.streamId,
     promptId: 'document_summary',
     signal: opts.signal,
@@ -272,10 +273,10 @@ export async function generateDocumentDetailedSummary(opts: {
 
     await write('status', { state: 'summarizing_detailed_one_shot_start', estTokens });
     const r = await runResponsesContinuation({
-      model: FORCED_DOCUMENT_MODEL,
+      model: DOCUMENT_MODEL,
       userPrompt: prompt,
       maxOutputTokens: 32000,
-      ...getReasoningParamsForModel(FORCED_DOCUMENT_MODEL, 'low', 'concise'),
+      ...getReasoningParamsForModel(DOCUMENT_MODEL, 'low', 'concise'),
       signal: opts.signal,
       onStreamEvent: async (eventType, data) => {
         await write(eventType, { ...asRecord(data), phase: 'one_shot' });
@@ -317,10 +318,10 @@ export async function generateDocumentDetailedSummary(opts: {
 
     await write('status', { state: 'summarizing_detailed_chunk_start', chunkIndex: i + 1, chunkTotal: chunks.length });
     const r = await runResponsesContinuation({
-      model: FORCED_DOCUMENT_MODEL,
+      model: DOCUMENT_MODEL,
       userPrompt: chunkPrompt,
       maxOutputTokens: 32000,
-      ...getReasoningParamsForModel(FORCED_DOCUMENT_MODEL, 'low', 'concise'),
+      ...getReasoningParamsForModel(DOCUMENT_MODEL, 'low', 'concise'),
       signal: opts.signal,
       onStreamEvent: async (eventType, data) => {
         await write(eventType, {
@@ -360,7 +361,7 @@ export async function generateDocumentDetailedSummary(opts: {
 
 export function getDocumentDetailedSummaryPolicy() {
   return {
-    model: FORCED_DOCUMENT_MODEL,
+    model: DOCUMENT_MODEL,
     wordsFullContentLimit: WORDS_FULL_CONTENT_LIMIT,
     detailedSummaryMinWords: DETAILED_SUMMARY_MIN_WORDS,
   };
