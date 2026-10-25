@@ -91,9 +91,9 @@ export function createMemoryIntentStore(
         const deadline = intent.payload.cleanupDeadlineMs;
         return intent.kind === 'commit-release' && intent.state !== 'done' && deadline !== undefined &&
           (query.artifactId === undefined || intent.payload.artifactId === query.artifactId) &&
-          (query.throughMs === undefined || (Number(deadline) <= query.throughMs &&
+          (query.throughMs === undefined || (!intent.error?.startsWith('invalid preparation metadata') && Number(deadline) <= query.throughMs &&
             (intent.payload.cleanupState !== 'failed-cleaned' || Number(deadline) >= query.throughMs - 60_000)));
-      }).sort((a, b) => Number(a.payload.cleanupState === 'failed-cleaned') -
+      }).sort((a, b) => query.throughMs === undefined ? 0 : Number(a.payload.cleanupState === 'failed-cleaned') -
         Number(b.payload.cleanupState === 'failed-cleaned') ||
         Number(a.payload.cleanupDeadlineMs) - Number(b.payload.cleanupDeadlineMs))
         .slice(0, query.limit));

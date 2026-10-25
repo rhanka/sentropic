@@ -177,7 +177,8 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         `SELECT * FROM artifacts.object_intents WHERE kind = 'commit-release' AND state <> 'done'
          AND payload ? 'cleanupDeadlineMs'
          AND ($1::text IS NULL OR payload->>'artifactId' = $1)
-         AND ($2::numeric IS NULL OR (
+         AND ($2::numeric IS NULL OR (COALESCE(error, '') NOT LIKE 'invalid preparation metadata%'
+           AND
            CASE WHEN jsonb_typeof(payload->'cleanupDeadlineMs') = 'number'
              THEN (payload->>'cleanupDeadlineMs')::numeric ELSE 0 END <= $2
            AND (payload->>'cleanupState' IS DISTINCT FROM 'failed-cleaned'
