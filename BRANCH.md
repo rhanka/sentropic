@@ -44,5 +44,6 @@
 - [x] Lot 0: read Docker lock and spec r2; mechanically check branch; merge L8c.
 - [x] Lot 1: reuse L2 typed classification, remove message inference, certify explicit SQL aborts after successful settlement.
 - [x] Promote all known-failure cases in commit-failure-parity.integration.test.ts; add a typed provider-outage case.
-- [ ] Lot 2: full artifacts unit and integration suites, lint, freeze-types and scope checks.
+- [x] Full PostgreSQL/MinIO integration campaign: 168 tests passed across 12 files, including L8c 40/40 and coordinator 42/42; build passed and stack removed.
+- [x] Lot 2: 431 unit tests across 33 files; 168 integration/E2E tests across 12 files; lint, build, freeze-types and scope checks passed; no skips.
 - [ ] Verify frozen bytes, push, and open a draft PR against feat/immo-861-integration.

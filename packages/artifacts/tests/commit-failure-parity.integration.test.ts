@@ -20,6 +20,7 @@ import { createArtifactsToolExecutor } from './dist/mcp-core.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from './dist/profile/index.js';
 import { createRadarKeyDerivation } from './dist/server/command-identity.js';
 import { createArtifactCommitCoordinator } from './dist/server/commit/coordinator.js';
+import { ArtifactOperationError } from './dist/server/failures.js';
 import { createPostgresCommitExecutor } from './dist/adapters/postgres-commit.js';
 import { projectArtifactMcpOutcome, projectArtifactWriteFailure } from './dist/server/outcome-projection.js';
 import { createS3BlobStore } from './dist/adapters/s3.js';
@@ -30,7 +31,8 @@ const input = JSON.parse(process.env.L8C_CASE);
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 const inner = createPostgresCommitExecutor(db);
 const secret = 'private postgres://user:password@host/bucket SELECT secret';
-const cause = Object.assign(new Error(secret + (input.message || '')), { code: input.code });
+const cause = input.kind ? new ArtifactOperationError(input.kind)
+  : Object.assign(new Error(secret + (input.message || '')), { code: input.code });
 if (input.name) cause.name = input.name;
 let dispatches = 0;
 let injections = 0;
@@ -155,19 +157,6 @@ beforeAll(async () => {
   await pool.query('CREATE SCHEMA IF NOT EXISTS artifacts');
   await pool.query(readFileSync(new URL('../migrations/0003_coordinator.sql', import.meta.url), 'utf8'));
   await pool.query('CREATE TABLE IF NOT EXISTS l8c_effects(scope_id text, artifact_id uuid)');
-  // Setup failures must fail the suite, never satisfy an expected-failure test.
-  for (const fault of faults.filter(fault => fault.knownFailure)) {
-    const results = await Promise.all(['http', 'mcp'].map(transport => invoke(fault, transport)));
-    for (const result of results) {
-      expect(result.outcome.ok).toBe(false);
-      expect(result.outcome.failure.invocationId).toBe(result.id);
-      expect(result.injections).toBe(1);
-      expect(result.dispatches).toBe(1);
-      expect(result.counts).toEqual({ receipts: 0, effects: 0 });
-    }
-    expect(results[0].http).toEqual(results[1].http);
-    knownResults.set(fault, results);
-  }
 });
 afterAll(async () => { await pool.end(); });
 
@@ -175,13 +164,13 @@ interface Fault {
   label: string;
   point: string;
   code?: string;
+  kind?: string;
   name?: string;
   message?: string;
   lockClass?: string;
   status?: number;
   category?: string;
   state?: string;
-  knownFailure?: string;
 }
 const unavailable = (label: string, point: string, code?: string): Fault => ({ label, point, code });
 const faults: Fault[] = [
@@ -201,11 +190,12 @@ const faults: Fault[] = [
     { label: `${point} timeout`, point, name: 'TimeoutError' },
     unavailable(`${point} body interruption`, point, 'ERR_STREAM_PREMATURE_CLOSE'),
   ]),
-  { label: 'typed pool acquisition timeout', point: 'acquire', name: 'TimeoutError', knownFailure: 'L8C-1' },
+  { label: 'typed pool acquisition timeout', point: 'acquire', name: 'TimeoutError' },
+  { label: 'typed provider outage', point: 'acquire', kind: 'provider_unavailable' },
   unavailable('unqualified lock timeout', 'acquire', '55P03'),
-  { ...unavailable('adapter transaction timeout', 'non-key', 'lock_timeout'), knownFailure: 'L8C-1' },
-  { label: 'untyped connection-reset text', point: 'acquire', message: ' connection reset', status: 500, category: 'provider_error', knownFailure: 'L8C-2' },
-  ...['40001', '40P01', '57014'].map(code => ({ ...unavailable(`confirmed abort at COMMIT ${code}`, 'commit-abort', code), knownFailure: 'L8C-3' })),
+  unavailable('adapter transaction timeout', 'non-key', 'lock_timeout'),
+  { label: 'untyped connection-reset text', point: 'acquire', message: ' connection reset', status: 500, category: 'provider_error' },
+  ...['40001', '40P01', '57014'].map(code => unavailable(`confirmed abort at COMMIT ${code}`, 'commit-abort', code)),
 ];
 
 async function invoke(fault: Fault, transport: string) {
@@ -221,13 +211,11 @@ async function invoke(fault: Fault, transport: string) {
     (SELECT count(*)::int FROM l8c_effects WHERE scope_id=$1) AS effects`, [scope])).rows[0];
   return { ...result, counts, id };
 }
-const knownResults = new Map<Fault, Awaited<ReturnType<typeof invoke>>[]>();
 
 describe('L8c E3 failures across isolated HTTP/MCP processes', () => {
   for (const fault of faults) {
-    const check = fault.knownFailure ? it.fails : it;
-    check(`should classify ${fault.label}${fault.knownFailure ? ` [known failure ${fault.knownFailure}]` : ''} without a compensating execution`, async () => {
-    const results = knownResults.get(fault) ?? await Promise.all(['http', 'mcp'].map(transport => invoke(fault, transport)));
+    it(`should classify ${fault.label} without a compensating execution`, async () => {
+    const results = await Promise.all(['http', 'mcp'].map(transport => invoke(fault, transport)));
     expect(results[0].pid).not.toBe(results[1].pid);
     for (const result of results) {
       const status = fault.status ?? 503;
