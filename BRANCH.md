@@ -55,5 +55,5 @@
 - [ ] **Lot 2 — Qualification and handoff**
   - [ ] Run scoped integration tests, typecheck and lint under the shared lock.
   - [ ] Pin hashes and run Radar commit-probe/finalization suites read-only; record missing prerequisites.
-  - [ ] Merge integration after its L6 merge lands; do not rebase.
+  - [x] Merge integration `be22b0563` after its L6 merge lands; no rebase.
   - [ ] Scope-check each commit, push, open draft PR targeting `feat/immo-861-integration`.
