@@ -87,3 +87,27 @@ describe('publication security', () => {
     expect(second.releaseId).not.toBe(first.releaseId);
   });
 });
+
+// Historical success alone never authorizes a 0.2.0 replay.
+it.each(['direct', 'ensure', 'publish'])('should quarantine legacy %s records without changing data', async (encoding) => {
+  const { assertArtifactReplayMigration } = await import('../src/server/idempotency.js');
+  const { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } = await import('../src/profile/index.js');
+  const { createArtifactCommand, createRadarKeyDerivation } = await import('../src/server/command-identity.js');
+  const { createMemoryKv } = await import('../src/server/ports.js');
+  const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+  const invocation = { invocationId: 'migration-1', actorId: 'alice', storageScopeId: 'scope-l6',
+    authorizeCommit: async () => { throw new Error('migration must not invoke a guard'); } };
+  const publish = encoding === 'publish';
+  const artifactId = '00000000-0000-4000-8000-000000000001';
+  const command = createArtifactCommand(profile, publish ? 'artifacts_publish' : 'artifacts_ensure', publish
+    ? { artifactId, idempotencyKey: 'caller-key', files: [{ path: 'index.html', mimeType: 'text/html', text: 'x' }] }
+    : { bindingName: 'site', idempotencyKey: 'caller-key' }, invocation,
+  createRadarKeyDerivation({ storageScopeId: 'scope-l6', actorIds: ['alice'] }));
+  const key = encoding === 'direct' ? command.identity.internalKey : JSON.stringify(publish
+    ? ['publish', 'alice', artifactId, command.identity.internalKey] : ['ensure', 'alice', 'caller-key']);
+  const kv = createMemoryKv();
+  const raw = JSON.stringify({ paramsHash: 'unproven', result: { artifactId } });
+  await kv.putIfAbsent(`idempotency:${key}`, raw);
+  await expect(assertArtifactReplayMigration(kv, command, invocation, 'caller-key')).rejects.toMatchObject({ name: 'CommitQuarantineError' });
+  expect(await kv.get(`idempotency:${key}`)).toBe(raw);
+});

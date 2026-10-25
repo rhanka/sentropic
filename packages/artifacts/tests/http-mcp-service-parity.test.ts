@@ -147,7 +147,7 @@ describe('L6 authorized HTTP/MCP parity', () => {
     expect(replay.result.body).toEqual(first.result.body);
     expect(first.result.body).toMatchObject({ artifactId,
       stableUrl: `https://artifacts.test/a/${artifactId}`, pinnedUrl: expect.stringContaining('/r/'),
-      digest: expect.stringMatching(/^sha256:/),
+      digest: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
     expect(replay.result.body).not.toHaveProperty('replayed');
     expect(host.guardCalls()).toBeGreaterThan(0);

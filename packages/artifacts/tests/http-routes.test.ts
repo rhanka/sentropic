@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createHttpArtifactApp, type HttpRequest } from '../src/http.js';
+import { createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { createArtifactService } from '../src/server/service.js';
 import {
   createPublicationService,
@@ -83,7 +84,9 @@ describe('L6 selected transport boundary', () => {
   });
   it('should quarantine legacy successes through the actual app without dispatching a replacement', async () => {
     const keys: string[] = [];
-    const app = boundary(profile, { legacyRecords: { get: async (key) => {
+    const app = boundary(profile, {
+      derivation: createRadarKeyDerivation({ storageScopeId: 'scope-1', actorIds: ['alice'] }),
+      legacyRecords: { get: async (key) => {
       keys.push(key);
       return '{"params_hash":"legacy","result":{"artifactId":"old"}}';
     } } });
