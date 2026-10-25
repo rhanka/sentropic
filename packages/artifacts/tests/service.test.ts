@@ -497,6 +497,41 @@ describe('guarded ensure', () => {
     expect(harness.state.reserveQuotaCalls).toBe(1);
   });
 
+  it.each(['missing', 'different'])('should refuse a %s replay binding before the host guard', async (mode) => {
+    const harness = makeGuardedHarness();
+    const args = harness.args('target', 'replay-identity');
+    const first = await harness.service.ensure(harness.invoke('alice'), args);
+    expect(first.ok).toBe(true);
+    const identity = createArtifactCommand(compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE),
+      'artifacts_ensure', args, { storageScopeId: ENSURE_SCOPE, actorId: 'alice' },
+      createRadarKeyDerivation({ storageScopeId: ENSURE_SCOPE, actorIds: ENSURE_ACTORS })).identity;
+    if (mode === 'missing') harness.bindings.delete('alice/target');
+    else harness.bindings.get('alice/target')!.artifactId = randomUUID();
+    const calls = harness.state.purposes.length;
+    const invocation = harness.invoke('alice');
+    const outcome = await harness.service.replay(invocation, { ...identity,
+      binding: { ownerId: 'alice', storageScopeId: ENSURE_SCOPE,
+        bindingName: 'target', attemptId: invocation.invocationId } });
+    expect(outcome).toMatchObject({ ok: false, failure: {
+      httpStatus: 403, category: 'unauthorized_at_commit', commitState: 'not_committed',
+    } });
+    expect(harness.state.purposes).toHaveLength(calls);
+  });
+
+  it('should refuse replay without a binding explicitly before invoking a guard', async () => {
+    const harness = makeGuardedHarness();
+    const args = harness.args();
+    await harness.service.ensure(harness.invoke('alice'), args);
+    const identity = createArtifactCommand(compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE),
+      'artifacts_ensure', args, { storageScopeId: ENSURE_SCOPE, actorId: 'alice' },
+      createRadarKeyDerivation({ storageScopeId: ENSURE_SCOPE, actorIds: ENSURE_ACTORS })).identity;
+    const calls = harness.state.purposes.length;
+    expect(await harness.service.replay(harness.invoke('alice'), identity)).toMatchObject({
+      ok: false, failure: { publicCode: 'invalid_request', httpStatus: 400 },
+    });
+    expect(harness.state.purposes).toHaveLength(calls);
+  });
+
   it('reports an unknown COMMIT without certifying effects and recovers on the same key', async () => {
     const harness = makeGuardedHarness();
     harness.failNextCommit(Object.assign(new Error('terminating connection'), { code: '57P06' }));
