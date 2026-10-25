@@ -45,7 +45,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — read lock, spec r2 S4/L8b, section 6.3, Q1-Q4 and Radar pins; check branch mechanically.
-- [ ] Lot 1 — create real-PG participant and host fixture in commit-ensure-recovery.integration.test.ts.
+- [x] Lot 1 — create real-PG participant and host fixture in commit-ensure-recovery.integration.test.ts.
 - [ ] Lot 2 — exercise connection/key/binding/replay waits and denied retry without residue.
 - [ ] Lot 3 — race the last quota unit; recreate pool/service and replay without recharging.
 - [ ] Lot 4 — terminate an in-flight backend; inject lost COMMIT acknowledgment before/after durability.
