@@ -24,6 +24,22 @@
   - `packages/artifacts/src/index.ts`
   - `packages/artifacts/src/server/commit-contract.ts`
   - `packages/artifacts/src/server/outcome-contract.ts`
+  - `packages/artifacts/src/server/commit/types.ts`
+  - `packages/artifacts/src/server/commit/coordinator.ts`
+  - `packages/artifacts/src/server/authorized-replay.ts`
+  - `packages/artifacts/src/server/service.ts`
+  - `packages/artifacts/src/server/publication.ts`
+  - `packages/artifacts/src/server/gc.ts`
+  - `packages/artifacts/src/testing.ts`
+  - `packages/artifacts/tests/fixtures/commit-contract-compatibility.ts`
+  - `packages/artifacts/tests/commit-coordinator.integration.test.ts`
+  - `packages/artifacts/tests/ensure-authorization.integration.test.ts`
+  - `packages/artifacts/tests/publication-authorization.integration.test.ts`
+  - `packages/artifacts/tests/service.test.ts`
+  - `packages/artifacts/tests/gc-races.test.ts`
+  - `packages/artifacts/tests/http-uploads-templates.test.ts`
+  - `packages/artifacts/docs/migration-l6.md`
+  - `packages/artifacts/package.json`
   - `packages/artifacts/tests/http-mcp-service-parity.test.ts`
   - `packages/artifacts/tests/http-security.test.ts`
   - `packages/artifacts/tests/http-routes.test.ts`
@@ -39,7 +55,13 @@
 - [x] Inherited L5 changes are merge ancestry; authored edits stay within L6 scope.
 
 ## Feedback Loop
-- [ ] Docker package targets use standalone containers; awaiting a compliant runner or explicit owner direction.
+- [x] Integration runner consumed via Make variable overrides for ENV=test-861-l6; no infrastructure edits.
+- [x] Build, TypeScript and package lint passed through existing `sh-api` Compose target under the shared flock.
+- [x] Unit campaign: 395 passed, 12 failed, zero skips; all failures are in out-of-scope `tests/http-uploads-templates.test.ts` (missing mandatory profile in legacy fixtures).
+- [x] Host `harness check scope` on the exact authored path set returned `PASS C2 (sentropic)`.
+- [x] Make scope-check uses the installed host harness through a temporary overlay, excluding inherited merge changes only during merges.
+- [ ] Carry-over: converge operational coordinator/participant onto frozen L0 shapes and compile the maintained fixture.
+- [ ] Carry-over: receipt identity, missing binding, replay authority, late barrier and transaction-held GC exclusion.
 - [x] L6 composes provider and request guards on a request-local coordinator binding; publication.ts stays L4-owned.
 - [ ] Integration owner: expose commit-contract, outcome-contract and testing subpaths; reserve the topic version.
 - [ ] Integration owner: migrate out-of-scope HTTP upload/template and content/pilot e2e fixtures to required host composition.
@@ -63,9 +85,9 @@
   - [ ] `http-security.test.ts`, `publication-security.test.ts`: closed inputs and sanitized failures.
   - [x] `http-mcp-service-parity.test.ts`: shared command identity, authorized retry and replay; first 18 L6 cases passed under Compose.
 - [ ] **Lot 2 — Wire and migrate**
-  - [ ] Required compiled profile/coordinator/context; one execute path and typed projections.
-  - [ ] Remove split transport writes; guarded ensure/publish and legacy quarantine.
-  - [ ] Export host contracts and selected MCP registry bindings.
+  - [x] Required compiled profile/coordinator/context; one execute path and typed projections.
+  - [x] Remove split transport writes; guarded ensure/publish and legacy quarantine.
+  - [x] Export host contracts and selected MCP registry bindings; export-map promotion stays with integration owner.
 - [ ] **Lot 3 — Final validation**
   - [ ] Package typecheck, lint, unit tests and build green under shared flock.
   - [ ] `make scope-check` before each commit; update branch plan with evidence.
