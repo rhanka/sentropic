@@ -7,7 +7,7 @@
 - [x] Branch fix/artifacts-861-pack-l8d-defects; worktree tmp/worktrees/861-pack-l8dfix; base origin/feat/immo-861-integration.
 - [x] Merge origin/feat/artifacts-861-L8d without rebasing; retain original qualification evidence.
 - [x] Make-only; ENV=test-861-pack-l8dfix last; shared Docker lock and matching Compose down after each step.
-- [x] Preserve all l0-freeze bytes and L3 port signatures; no source changes or publication.
+- [x] Preserve all l0-freeze bytes and L3 port signatures; no publication.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -15,25 +15,28 @@
   - `packages/artifacts/package.json`
   - `packages/cluster-mesh/package.json`
   - `packages/artifacts/probe/l8d/**`
+  - `packages/cluster-mesh/tests/**`
+  - `packages/cluster-mesh/CHANGELOG.md`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `packages/artifacts/src/**`
   - `packages/artifacts/l0-freeze/**`
-  - `packages/cluster-mesh/src/**`
   - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `package-lock.json`
   - `.github/workflows/**`
 - **Exception process**:
   - [x] BR861-EX1 permits only matching mesh peer metadata in package-lock.json; no resolution changes; rollback with manifest range.
+  - [x] BR861-EX2 permits only the catalog llm-mesh range change for the L8d qualification defect; impact: registry, gateway coherence and topology admit exactly 0.19.2 plus the existing range; rollback: restore the catalog range and remove its 0.19.2 admission tests together with the manifest widening.
 
 ## Feedback Loop
 - [x] L8d merge conflicts only in BRANCH.md; replace lane plan with this bounded fix plan.
 - [x] Spec r2 R4 requires exactly 0.19.2 || >=0.22.0 <0.28.0; no 0.20/0.21 support implied.
 - [x] L8D-2 is archive omission: retain frozen import and include src/contracts.ts in package files.
-- [x] enforce-package-bump remains unchanged: this PR changes no src files; reserved artifacts 0.2.0 and mesh 0.22.0 remain the candidate tuple.
+- [x] Retain planned artifacts 0.2.0 and cluster-mesh 0.22.0; verify the source-change package bump against main (0.21.2), without inventing a release version.
 
 ## AI Flaky tests
 - [x] No flaky acceptance or silent skips.
@@ -51,6 +54,8 @@
 - [x] Lot 3 — strict full-Radar install and npm ci passed (764 packages); clean packed runtime and strict NodeNext declarations passed; 2 promoted regressions and 16 receipt regressions passed, zero TODOs/skips.
 - [x] Lot 4 — verified frozen bytes/L3 signatures and package-bump applicability; reviewed minimal diff; prepared push/draft handoff targeting feat/immo-861-integration.
 - [x] Evidence: packages/artifacts/probe/l8d/PACK-FIX-RECEIPT.md; archive tuple and disposable lock/smoke receipts in tmp/l8d; final matching Compose down passed.
+- [x] Lot 5 — reproduced actual packed 0.19.2 entry refusal; aligned runtime range; 72 module tests and 47 packaging checks passed, including catalog parity and boundaries (45 packed-fixture tests not activated).
+- [ ] Lot 6 — rebuild and probe the packed 0.19.2 entries; bound receipt claims; merge current integration without rebase; scope-check, commit and push.
 
 ## Deferred to L8 qualification / L9
 - [x] Full eight-suite and four-shard qualification, image qualification, published bytes and activation remain separate gates; original L8d receipt is historical evidence.
