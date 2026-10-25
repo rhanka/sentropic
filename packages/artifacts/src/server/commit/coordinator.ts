@@ -219,6 +219,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     },
     policyRevision: request.policyRevision,
     purpose,
+    quotaBytes: request.quotaBytes ?? 0,
   });
 
   /**

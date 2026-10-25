@@ -71,6 +71,8 @@ export interface ArtifactCommitContext {
   readonly commandIdentity: CommandIdentity;
   readonly policyRevision: string;
   readonly purpose: CommitPurpose;
+  /** Coordinator-supplied decoded bytes; optional to preserve frozen L0 guard compatibility. */
+  readonly quotaBytes?: number;
 }
 
 /**

@@ -88,6 +88,33 @@ describe('publication security', () => {
     const second = await service.publish({ ...INPUT, ownerId: 'bob', artifactId: 'other', idempotencyKey: 'shared' });
     expect(second.releaseId).not.toBe(first.releaseId);
   });
+
+  it('should authorize decoded publish bytes through the host quota participant without recharging', async () => {
+    const w = createTransportWorld();
+    await w.http('/ensure', { bindingName: 'site', idempotencyKey: 'setup' });
+    w.quotaReservations.length = 0;
+    const invocation = w.invocation();
+    const context = { ...invocation, authorizeCommit: async (commit, transaction) => {
+      const admission = await transaction.participant.readAdmission(commit);
+      const quota = await transaction.participant.reserveQuota({ storageScopeId: commit.storageScopeId,
+        operation: commit.operation, bytes: commit.quotaBytes ?? 0 });
+      if (!admission.allowed || !quota.reserved) return {
+        allowed: false as const, reason: 'denied' as const, status: 403, publicCode: 'access_denied', retriable: false,
+      };
+      return { allowed: true as const,
+        fence: transaction.participant.mintFence(commit.policyRevision, commit.invocationId) };
+    } } satisfies typeof invocation;
+    const body = { artifactId: w.bindings.get('alice/site')!, idempotencyKey: 'publish', files: [
+      { path: 'index.html', mimeType: 'text/html', text: 'é' },
+      { path: 'other.html', mimeType: 'text/html', bytes: [65, 66, 67] },
+    ] };
+    const first = await w.http('/publish', body, context);
+    expect(first).toMatchObject({ ok: true, replayed: false, commitState: 'committed' });
+    const replay = await w.http('/publish', body, { ...context, invocationId: 'retry' });
+    expect(replay).toMatchObject({ ok: true, replayed: true, commitState: 'committed' });
+    expect(w.quotaReservations).toEqual([5]);
+    expect(w.releases.size).toBe(1);
+  });
 });
 
 // Historical success alone never authorizes a 0.2.0 replay.
