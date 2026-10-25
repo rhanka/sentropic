@@ -2,7 +2,7 @@
 
 ## Objective
 - [x] Execute only L0 of approved live-speech r3; freeze evidence and scopes for subsequent lots.
-- [ ] Deliver baseline, entry gates, dependencies, placement/release matrix and capacity feasibility study.
+- [x] Deliver baseline, entry gates, dependencies, placement/release matrix and capacity feasibility study.
 
 ## Scope / Guardrails
 - [x] Author: codex / gpt-6.1-sol / high; owner request authorizes this documentation PR only.
@@ -62,11 +62,11 @@
 - [x] **L0e — Capacity feasibility**
   - [x] Write `.tmp/live-stt/l0/capacity-study.md`; entitlement, allocation source, costs, limits, daily shares/dates and reservation outcome.
 - [ ] **L0f — Documentation validation and draft handoff**
-  - [ ] Check all gate IDs, local links, arithmetic, approved hashes and complete cumulative docs-only diff.
-  - [ ] Run `make scope-check` before each commit through the host harness recipe; check each staged diff under 150 lines.
-  - [ ] Record evidence and review limitations in `.tmp/live-stt/l0/validation.md`.
+  - [x] Check all gate IDs, local links, arithmetic, approved hashes and complete cumulative docs-only diff.
+  - [x] Run `make scope-check` before each commit through the host harness recipe; check each staged diff under 150 lines.
+  - [x] Record evidence and review limitations in `.tmp/live-stt/l0/validation.md`.
   - [ ] Push and open draft PR with this exact branch plan as body; inspect CI metadata without paid execution.
-  - [ ] Run locked `make down ENV=test-live-stt-l0`; verify clean worktree and final head.
+  - [x] Run locked `make down ENV=test-live-stt-l0`; initial cleanup exits zero; recheck worktree/final head after handoff commit.
 
 ## Deferred to later live-speech lots
 - [x] L1 onward, runtime qualification, account/capacity changes, package publication and deployment are outside this PR.
