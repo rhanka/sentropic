@@ -81,6 +81,19 @@ describe('L6 selected transport boundary', () => {
     const result = await app.handle({ method: 'POST', path: '/list', body: { offset: 1, limit: 1 }, actorId: 'alice' }, invocation);
     expect(result).toMatchObject({ status: 200, body: { total: 2, artifacts: [{ artifactId: ids[2] }] } });
   });
+  it('should quarantine legacy successes through the actual app without dispatching a replacement', async () => {
+    const keys: string[] = [];
+    const app = boundary(profile, { legacyRecords: { get: async (key) => {
+      keys.push(key);
+      return '{"params_hash":"legacy","result":{"artifactId":"old"}}';
+    } } });
+    const outcome = await app.execute({ method: 'POST', path: '/ensure', actorId: 'alice',
+      body: { bindingName: 'site', idempotencyKey: 'original-key' } }, invocation);
+    expect(outcome).toMatchObject({ ok: false, failure: {
+      httpStatus: 503, variant: 'legacy_quarantine', retriable: false, commitState: 'not_committed',
+    } });
+    expect(keys).toHaveLength(1);
+  });
   it('should reject actor and scope disagreement before provider dispatch', async () => {
     const app = boundary();
     for (const extra of [{ actorId: 'mallory' }, { storageScopeId: 'foreign' }]) {
