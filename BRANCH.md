@@ -19,6 +19,8 @@
   - `Makefile`
   - `docker-compose.immo-861.yml`
   - `.track/**`
+  - `.github/workflows/ci.yml`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `.cursor/rules/**`
   - `ui/**`
@@ -31,10 +33,12 @@
   - `package-lock.json`
   - `packages/llm-mesh/**`
 - **Exception process**:
+  - [x] BR861-EX4: align only the three cluster-mesh qualification PEERS pins and their wiring assertion with artifacts 0.2.0; CI evidence rejected 0.1.3 against >=0.2.0 <0.3.0. Impact: qualification inputs only, no publication trigger or gate removed; rollback: restore these four version literals.
   - [x] BR861-EX1: qualification runner only; purpose: exact-tuple tests under mandatory Compose lock; impact: disposable test services and host harness scope check; rollback: remove qualification wiring. Main-only publishing stays unchanged.
   - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
 
 ## Feedback Loop
+- [x] INT-16: CI passed all 92 packaging tests, then the generic candidate-install qualifier rejected the stale artifacts 0.1.3 pin. Candidate, post-publication and bootstrap qualification now use 0.2.0; all 22 wiring tests and the full clean-consumer qualification passed with the guarded artifacts receipt, including every runtime entry point.
 - [x] INT-15: CI carries an artifacts 0.2.0 sibling receipt while the committed selected lock intentionally pins published 0.1.4. Verify the installed file's version/SRI against the verified receipt; retain train registry-lock checks and reject missing, stale, remote or tampered entries. Four guard tests and all 92 packaging tests passed with both real sibling receipts; frozen selected lock bytes remain unchanged.
 - [x] INT-14: preserved the owner's concurrent integration merge 59e6b4e7f (#744) without rebasing: publication invocation correlation/S3 observer hooks and 26 real boundary tests. Only BRANCH.md conflicted; retained this integration plan. L0 freeze and Track remain byte-identical.
 - [x] INT-13: CI installed-comments probe rejected the reserved mesh 0.22.0 candidate against its own <0.22.0 descriptor. Admit 0.21/0.22 and retain the 0.23 refusal; 43 registry tests passed. Rebuilt packed bare-consumer root/storage/disabled-comments/missing-peer checks all passed under shared-lock Compose cleanup.
