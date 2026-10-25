@@ -12,6 +12,7 @@
 - [x] Final runner imports exact guarded integration archives and archives the complete Radar frozen-profile head stacked on listKeys; no source overlay.
 - [x] New Radar pin contains listKeys but not the old A1/A2 topic SHAs as ancestors; the final receipt identifies the complete selected consumer head instead of asserting old ancestry.
 - [x] Final source merge retains deca5422c, the exact guarded candidate pack source; preserve incoming release tooling only, with no product or Track edits.
+- [x] Final runner emits compact suite counts, grouped failing case names and diagnostics, exact source/log hashes and candidate receipt hash for classification.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
