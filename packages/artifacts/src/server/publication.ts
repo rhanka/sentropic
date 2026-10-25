@@ -460,6 +460,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
       const { internalKey, commandHash, codecVersion } = input.identity;
       const callerKey = input.callerKey ?? internalKey;
       const releaseId = crypto.randomUUID();
+      const invocationId = input.invocationId ?? crypto.randomUUID();
       const nowMs = Date.now();
       const intent = await deps.intents.record('commit-release', {
         artifactId: input.artifactId,
@@ -467,6 +468,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         manifestDigest: prepared.digest,
         blobKeys: prepared.entries.map((e) => e.key),
         attemptId: input.attemptId ?? callerKey,
+        invocationId,
         operation: 'publish',
         cleanupDeadlineMs: nowMs + (deps.cleanupWindowMs ?? DEFAULT_CLEANUP_WINDOW_MS),
       });
@@ -478,9 +480,12 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         await deps.refs.pin(digest, pinReason);
         pinned.push(digest);
       }
+      await deps.coordinator.testObserver?.arrive('before_blob_put', invocationId);
       for (const { key, bytes } of prepared.entries) {
         await deps.blobs.putBlob(key, bytes);
       }
+      await deps.coordinator.testObserver?.arrive('after_blob_put_before_verify', invocationId);
+      await deps.coordinator.testObserver?.arrive('before_blob_readback', invocationId);
       await verifyStagedBlobs(deps.blobs, prepared.entries);
       const addedRefs: string[] = [];
       const source = input.source === undefined ? undefined : parseSourceRef(input.source);
@@ -490,7 +495,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         internalKey,
         commandHash,
         codecVersion,
-        invocationId: input.invocationId ?? crypto.randomUUID(),
+        invocationId,
         actorId: input.actorId,
         operation: 'publish',
         artifactId: input.artifactId,
