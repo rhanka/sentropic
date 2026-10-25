@@ -1,86 +1,48 @@
-# Feature: #861 integration (L0–L7)
+# Feature: #861 fix L3 coordinator defects found by L8c
 
 ## Objective
-- [x] Integrate approved topic heads with merge commits and qualify real artifacts and mesh tuple gates without publishing.
+- [x] Preserve typed retriable failures, classify without error text, and distinguish explicit COMMIT aborts from lost acknowledgements.
 
 ## Scope / Guardrails
-- [x] Worktree: tmp/worktrees/861-integration; branch: feat/immo-861-integration.
-- [x] ENV=test-861-int last; Docker steps use shared flock and make down after each step.
-- [x] Main merge and publication require owner GO.
-- [x] No rebase, squash, cherry-pick, Python, or attribution trailers.
-- [x] Merge commits preserve reviewed histories; the 150-line bound applies to new integration fixes and resolutions.
+- [x] Branch fix/artifacts-861-L3-l8c-defects; worktree tmp/worktrees/861-l3-l8cfix.
+- [x] Base origin/feat/immo-861-integration 8d268de0d; merge L8c 083b4f2fe without rebase.
+- [x] Make only; ENV=test-861-l3-l8cfix last; shared Docker lock and make down after each step.
+- [x] Local .tmp/qualification.make substitutes the environment name in existing Compose targets; no committed runner changes or published ports.
+- [x] Frozen L0 bytes and L3 port signatures remain unchanged; no publication.
+- [x] Retain the integration owner's reserved artifacts 0.2.0 version (registry baseline 0.1.4); spec r2 assigns manifests and locks to the integrator.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/**`
-  - `packages/cluster-mesh/**`
-  - `scripts/ci/immo-861-*`
-  - `Makefile`
-  - `docker-compose.immo-861.yml`
-  - `.track/**`
+  - `packages/artifacts/src/server/commit/coordinator.ts`
+  - `packages/artifacts/tests/commit-failure-parity.integration.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
-  - `.cursor/rules/**`
-  - `ui/**`
+  - `packages/artifacts/l0-freeze/**`
+  - `packages/artifacts/src/server/commit/types.ts`
+  - `.track/**`
+  - `Makefile`
+  - `docker-compose*.yml`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/ci.yml`
-  - `.security/**`
-  - `api/**`
-  - `e2e/**`
-  - `docker-compose.test.yml`
-  - `package-lock.json`
-  - `packages/llm-mesh/**`
+  - `packages/artifacts/package.json`
 - **Exception process**:
-  - [x] BR861-EX1: qualification runner only; purpose: exact-tuple tests under mandatory Compose lock; impact: disposable test services and host harness scope check; rollback: remove qualification wiring. Main-only publishing stays unchanged.
-  - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
+  - [x] No exceptions; inherited L8c test content is preserved by a merge commit.
 
 ## Feedback Loop
-- [x] INT-14: preserved the owner's concurrent integration merge 59e6b4e7f (#744) without rebasing: publication invocation correlation/S3 observer hooks and 26 real boundary tests. Only BRANCH.md conflicted; retained this integration plan. L0 freeze and Track remain byte-identical.
-- [x] INT-13: CI installed-comments probe rejected the reserved mesh 0.22.0 candidate against its own <0.22.0 descriptor. Admit 0.21/0.22 and retain the 0.23 refusal; 43 registry tests passed. Rebuilt packed bare-consumer root/storage/disabled-comments/missing-peer checks all passed under shared-lock Compose cleanup.
-- [x] INT-12: packed round-trip uses trusted invocations and caller keys, rejects forged scope and invalid files, and reads content through the retained public runtime. Core-only (platform absent), kernel and both driver adapters passed under Compose; UTF-8 bytes, scope, CORP and zero fetches verified.
-- [x] INT-11: packed/core-only probes now construct the guarded host from installed exports and catalogue only the compiled selection; retain the global 15-name contract and optional-platform absence checks.
-- [x] INT-10: CI artifacts unit/integration gates passed, then the packed consumer failed with invalid compiled profile. Add a fresh-store host using installed public L6 exports; migrate the isolated consumer without relaxing validation or optional-peer checks.
-- [x] INT-9: migrated mesh fixtures reproduced three invalid-argument failures because their placeholder artifact IDs violate L6's UUID schema. Use valid fixture IDs; keep schema and rejection assertions unchanged.
-- [x] INT-8: mesh surface reproduced 17 failures / 4 passes because L7 fixtures omitted L6's required compiled profile. Migrate fixtures to selected capabilities and trusted invocations; preserve rejection/idempotency assertions.
-- [x] INT-7: route test-861-int platform builds through the existing qualification Compose service with the frozen toolchain snapshot; preserve the #734 producing recipe byte-for-byte. Add a make entrypoint for the package freeze-types script.
-- [x] INT-6: merged approved L6 e67a978f9; retained integration plan and L6 compiled MCP capability selection. Ported main's UTF-8 MCP regression to the trusted invocation API. Frozen L0 files and Track journal remain byte-identical.
-- [x] INT-2: origin/main merge conflicts only in BRANCH.md; retain this integration plan. Track journal is byte-identical to the pre-merge integration head.
-- [x] INT-3: restored the frozen build-mcp-platform recipe; retained P1 packed graph verification passed (30 files, 54 edges) inside the isolated Compose runner, without regenerating evidence.
-- [x] BR861-EX3: root lock workspace metadata follows the artifacts/mesh candidate versions; no dependency resolution change; rollback with candidate manifests.
-- [x] INT-4: reserved artifacts 0.2.0 and mesh 0.22.0 candidate manifests per spec r2 sections 5.2/6.1; registry baselines are 0.1.4/0.21.2. Platform 0.4.0 and mcp-auth 0.2.2 are reused; no publication or L8 acceptance claim. Artifacts build and 11 MCP tests passed.
-- [x] INT-5: aligned selected fixture declarations with its retained published artifacts 0.1.4 entry; source tuple checks pass (4 tests; 3 installed checks await their dedicated runner). Mesh surface passes 21 tests. Full local packaging reached a registry 404 for llm-mesh 0.27.1; CI's verified sibling path remains required.
-- [x] L0: owner accepts external CI failure tracked in #734.
-- [x] L3: owner accepts 157f231d5; type convergence is now integrated through the approved L6 head.
-- [x] Merge policy: retain integration BRANCH.md; report each source conflict separately.
-- [x] L5 brings reviewed Track events; preserve them without editing. The L5 scope check reported advisory failures because the initial train plan forbade Track; this plan now permits preservation of the approved history.
-- [x] INT-1: full installed packaging reproduced 90 passes / 1 failure at types-and-bundlers.spec.ts:82. The old optional-peer-only assertion rejected L7's declared platform digest import. Require the exact two runtime edges and the artifacts-only declaration edge; no runtime change.
+- [x] Reproduced all six expected failures as ordinary tests: 6 failed, 33 passed before the fix.
+- [ ] Independent peer review before merge.
 
 ## AI Flaky tests
-- [x] No flaky acceptance granted.
+- [x] No flaky acceptance or skipped regression cases.
 
 ## Orchestration Mode (AI-selected)
-- [x] Multi-branch: one integrator; merge order L0, L1, L2, L3, L4, L5, L7, L6.
+- [x] Single author; inherited L8c qualification merged before the fix.
 
 ## UAT Management (in orchestration context)
-- [x] No UI changes; real package and service tests are the qualification scope.
+- [x] Package-only change; HTTP/MCP behavior checked against real PostgreSQL in separate child processes.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0 — merge d41f47092 (contracts).
-- [x] Lot 1 — merge 0c71291a2 (profile); only the topic plan conflicted.
-- [x] Lot 2 — merge b29b6a334 (failures); only the topic plan conflicted.
-- [x] Lot 3 — merge 157f231d5 (coordinator); only the topic plan conflicted.
-- [x] Lot 4 — merge a8df25634 (publication/collection); only the topic plan conflicted.
-- [x] Lot 5 — merge c703afc68 (MCP/HTTP); only the topic plan conflicted.
-- [x] Lot 7 — merge eae0c261a (mesh surface/tuple); only the topic plan conflicted.
-- [x] Lot 6 — merge e67a978f9 (approved transport/type convergence); resolved plan, MCP names and MCP tests.
-- [x] Requalification — artifacts: 431 unit tests / 33 files; 102 PostgreSQL/MinIO integration/E2E tests / 10 files; lint and freeze-types passed.
-- [x] Requalification — mesh: surface 21 passed; stateful conformance 1 passed; typecheck passed. Full installed packaging: 91 passed / 15 files, including artifacts tuple 7, tuple skew 14 and types/bundlers 17; no skips.
-- [x] Requalification — source 982401708; guarded sibling receipt regenerated for that SHA; every Docker step used shared flock and test-861-int Compose cleanup. L0 freeze, Track and protected main/#734 files remain byte-identical to 34d467972.
-- [x] CI follow-up qualification — packed artifacts core-only and kernel consumers plus both driver adapters passed; comments version regressions and the real installed bare probe passed. Only probe fixtures and the mesh self-version descriptor changed after the full local campaign.
-- [x] PR #738 was automatically marked merged by GitHub after integration; added the requested comment: merged via integration #739. PR #739 stays open; CI is monitored on its final pushed head.
-- [x] Qualification — make test-artifacts: 407 passed, 31 files; source tree at 818b6c509; build passed; make down passed.
-- [x] Qualification — make test-artifacts-integration: 94 passed across 10 files against real PostgreSQL/MinIO; build and make down passed.
-- [x] Qualification — make lint-artifacts: 0 errors, 0 warnings; make down passed.
-- [x] Qualification — mesh artifacts-surface.spec.ts: 21 passed, 1 file; make down passed.
-- [x] Qualification — full test-lazy-package: 91 passed, 15 files; artifacts-tuple: 7 passed; tuple-skew: 14 passed; types-and-bundlers: 17 passed.
-- [x] Handoff — branch pushed; draft PR [#739](https://github.com/rhanka/sentropic/pull/739) targets main; all seven approved merges retained; no new lot defects observed in the requested gates.
+- [x] Lot 0: read Docker lock and spec r2; mechanically check branch; merge L8c.
+- [x] Lot 1: reuse L2 typed classification, remove message inference, certify explicit SQL aborts after successful settlement.
+- [x] Promote all known-failure cases in commit-failure-parity.integration.test.ts; add a typed provider-outage case.
+- [ ] Lot 2: full artifacts unit and integration suites, lint, freeze-types and scope checks.
+- [ ] Verify frozen bytes, push, and open a draft PR against feat/immo-861-integration.
