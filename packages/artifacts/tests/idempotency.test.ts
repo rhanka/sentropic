@@ -178,6 +178,6 @@ describe('guarded ensure durable keys', () => {
     expect(replayed.ok).toBe(true);
     if (!replayed.ok || !first.ok) return;
     expect(replayed.result).toEqual({ ...first.result, replayed: true });
-    expect(harness.state.resolveBindingCalls).toBe(1);
+    expect(harness.bindings.size).toBe(1);
   });
 });

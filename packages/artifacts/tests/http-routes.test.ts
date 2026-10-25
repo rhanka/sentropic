@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createHttpArtifactApp, type HttpRequest } from '../src/http.js';
+import { createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { createArtifactService } from '../src/server/service.js';
 import {
   createPublicationService,
@@ -19,126 +20,89 @@ import { createMemoryAclStore } from '../src/server/access.js';
 import { createMemorySourceStore } from '../src/server/sources.js';
 import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
 import { defineParameters } from '../src/parameters.js';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
+import type { HttpAppDeps } from '../src/http.js';
+import type { ArtifactInvocationContext } from '../src/server/commit/types.js';
 
-const OWNER = 'owner-1';
-const OTHER = 'owner-2';
-const READER = 'reader-1';
-const APPROVED = 'approved-1';
-const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true }]);
-const FILES = [{ path: 'index.html', mimeType: 'text/html', bytes: [1] }];
-
-function makeApp() {
-  const state = createMemoryStateStore();
-  const blobs = createMemoryBlobStore();
-  return createHttpArtifactApp({
-    parameterSchema: SCHEMA,
-    artifacts: createArtifactService({ kv: createMemoryKv(), uuid: createCryptoUuid() }),
-    publication: createPublicationService({
-      state,
-      blobs,
-      intents: createMemoryIntentStore(),
-      idempotency: createIdempotencyStore(createMemoryIdempotencyKv()),
-    }),
-    lifecycle: createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z', state),
-    forks: createForkService(createMemoryForkStore()),
-    acls: createMemoryAclStore(),
-    sources: createMemorySourceStore(),
-    blobs,
-    isApprovedAccount: (principalId) => principalId === APPROVED,
+describe('L6 selected transport boundary', () => {
+  const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+  const invocation: ArtifactInvocationContext = Object.freeze({
+    invocationId: 'transport-1', actorId: 'alice', storageScopeId: 'scope-1',
+    authorizeCommit: async () => ({ allowed: false, reason: 'revoked', status: 403,
+      publicCode: 'access_denied', retriable: false }),
   });
-}
-
-function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
-  return { method, path, body, actorId, storageScopeId: "scope-1" };
-}
-
-type App = ReturnType<typeof makeApp>;
-
-async function ensure(app: App, actor: string, binding: string): Promise<string> {
-  const res = await app.handle(
-    req('POST', '/ensure', {
-      bindingName: binding, storageScopeId: 'scope-1', idempotencyKey: `k-${actor}-${binding}`,
-      paramsHash: 'h-1', parameters: { title: binding },
-    }, actor),
-  );
-  expect(res.status).toBe(201);
-  const id = (res.body as { artifactId: string }).artifactId;
-  await app.handle(
-    req('POST', '/publish', {
-      artifactId: id, profile: {}, files: FILES, idempotencyKey: `p-${actor}-${binding}`, paramsHash: 'h-1',
-    }, actor),
-  );
-  return id;
-}
-
-describe('http list/meta/public routes', () => {
-  it('lists only visible artifacts, filtered before pagination', async () => {
-    const app = makeApp();
-    const mine1 = await ensure(app, OWNER, 'one');
-    const mine2 = await ensure(app, OWNER, 'two');
-    const theirs = await ensure(app, OTHER, 'three');
-    await app.handle(
-      req('POST', '/access/grant', { artifactId: mine2, principalId: READER, grant: 'read' }, OWNER),
-    );
-    const own = await app.handle(req('POST', '/list', {}, OWNER));
-    expect(own.status).toBe(200);
-    expect(own.body).toMatchObject({ total: 2 });
-    const ownIds = (own.body as { artifacts: { artifactId: string }[] }).artifacts.map((a) => a.artifactId);
-    expect(ownIds).toEqual([mine1, mine2]);
-    const reader = await app.handle(req('POST', '/list', {}, READER));
-    expect(reader.body).toMatchObject({ total: 1, artifacts: [{ artifactId: mine2 }] });
-    const other = await app.handle(req('POST', '/list', {}, OTHER));
-    expect(other.body).toMatchObject({ total: 1, artifacts: [{ artifactId: theirs }] });
-    const page = await app.handle(req('POST', '/list', { limit: 1, offset: 1 }, OWNER));
-    expect(page.body).toMatchObject({ total: 2, artifacts: [{ artifactId: mine2 }] });
-    const badLimit = await app.handle(req('POST', '/list', { limit: 0 }, OWNER));
-    expect(badLimit.status).toBe(400);
-    const badOffset = await app.handle(req('POST', '/list', { offset: -1 }, OWNER));
-    expect(badOffset.status).toBe(400);
+  function boundary(selected = profile, extra: Partial<HttpAppDeps> = {}) {
+    const unexpected = () => { throw new Error('unexpected provider call'); };
+    return createHttpArtifactApp({ profile: selected,
+      coordinator: { finalizePrepared: unexpected, replayPrepared: unexpected },
+      derivation: { algorithm: 'radar-derive-idempotency-v1', derive: unexpected },
+      legacyRecords: { get: unexpected },
+      ensureHost: { readPolicyRevision: unexpected },
+      publication: { getCurrent: unexpected },
+      acls: { getArtifactAcl: unexpected, listArtifactIds: unexpected },
+      lifecycle: { stateOf: unexpected },
+      ...extra,
+    } as unknown as HttpAppDeps);
+  }
+  it('should require an explicit compiled profile and coordinator at startup', () => {
+    expect(() => createHttpArtifactApp({} as HttpAppDeps)).toThrow();
+    expect(() => createHttpArtifactApp({ profile } as HttpAppDeps)).toThrow();
   });
-
-  it('returns metadata with grants visible to the owner only', async () => {
-    const app = makeApp();
-    const id = await ensure(app, OWNER, 'meta');
-    await app.handle(
-      req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'read' }, OWNER),
-    );
-    const ownerMeta = await app.handle(req('GET', `/meta/${id}`, undefined, OWNER));
-    expect(ownerMeta.status).toBe(200);
-    expect(ownerMeta.body).toMatchObject({
-      artifactId: id, ownerId: OWNER, state: 'active', isPublic: false,
-      grants: [{ principalId: READER, grant: 'read' }],
+  it.each([['POST', '/delete'], ['GET', '/current/x'], ['GET', '/ensure'],
+    ['POST', '/meta/00000000-0000-4000-8000-000000000001']])(
+    'should refuse unsupported route %s %s before storage', async (method, path) => {
+      const app = boundary();
+      const outcome = await app.execute({ method, path, body: {}, actorId: 'alice' }, invocation);
+      expect(outcome).toMatchObject({ ok: false, failure: { category: 'capability_unselected',
+        phase: 'selection', commitState: 'not_committed', retriable: false, invocationId: 'transport-1' } });
+      expect(await app.handle({ method, path, body: {}, actorId: 'alice' }, invocation))
+        .toEqual({ status: 503, body: { error: 'capability_unavailable' } });
     });
-    expect(typeof (ownerMeta.body as { currentReleaseId: unknown }).currentReleaseId).toBe('string');
-    const readerMeta = await app.handle(req('GET', `/meta/${id}`, undefined, READER));
-    expect(readerMeta.status).toBe(200);
-    expect(readerMeta.body).toMatchObject({ artifactId: id, ownerId: OWNER });
-    expect((readerMeta.body as { grants?: unknown }).grants).toBeUndefined();
-    const strangerMeta = await app.handle(req('GET', `/meta/${id}`, undefined, OTHER));
-    expect(strangerMeta.status).toBe(404);
+  it('should expose and execute nothing for an empty selection', async () => {
+    const app = boundary(compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE, selectedCapabilities: [] }));
+    expect(Object.isFrozen(app.selectedCapabilities)).toBe(true);
+    expect(app.selectedCapabilities).toEqual([]);
+    expect(await app.handle({ method: 'POST', path: '/ensure', body: {}, actorId: 'alice' }, invocation))
+      .toEqual({ status: 503, body: { error: 'capability_unavailable' } });
   });
-
-  it('toggles public access owner-only; approved accounts then read', async () => {
-    const app = makeApp();
-    const id = await ensure(app, OWNER, 'pub');
-    const before = await app.handle(req('GET', `/current/${id}`, undefined, APPROVED));
-    expect(before.status).toBe(404);
-    const byStranger = await app.handle(
-      req('POST', '/access/public', { artifactId: id, isPublic: true }, OTHER),
-    );
-    expect(byStranger.status).toBe(404);
-    const toggled = await app.handle(
-      req('POST', '/access/public', { artifactId: id, isPublic: true }, OWNER),
-    );
-    expect(toggled.status).toBe(200);
-    expect(toggled.body).toEqual({ artifactId: id, isPublic: true });
-    const after = await app.handle(req('GET', `/current/${id}`, undefined, APPROVED));
-    expect(after.status).toBe(200);
-    const unapproved = await app.handle(req('GET', `/current/${id}`, undefined, OTHER));
-    expect(unapproved.status).toBe(404);
-    const invalid = await app.handle(
-      req('POST', '/access/public', { artifactId: id, isPublic: 'yes' }, OWNER),
-    );
-    expect(invalid.status).toBe(400);
+  it.each([{ paramsHash: 'forged' }, { actorId: 'mallory' }, { authorizeCommit: true },
+    { source: { kind: 'inline-original' } }])('should reject trusted body injection %j', async (extra) => {
+    const outcome = await boundary().execute({ method: 'POST', path: '/ensure', actorId: 'alice',
+      body: { bindingName: 'site', idempotencyKey: 'key', ...extra } }, invocation);
+    expect(outcome).toMatchObject({ ok: false, failure: { category: 'invalid_request', httpStatus: 400 } });
+  });
+  it('should filter foreign scope and unreadable artifacts before pagination', async () => {
+    const ids = ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002',
+      '00000000-0000-4000-8000-000000000003'];
+    const acls = createMemoryAclStore();
+    for (let i = 0; i < ids.length; i += 1) await acls.putArtifactAcl(ids[i], {
+      ownerId: 'alice', storageScopeId: i === 0 ? 'foreign' : 'scope-1', grants: [], isPublic: false, withdrawn: false,
+    });
+    const app = boundary(profile, { acls, lifecycle: { stateOf: async () => 'active', canRead: () => true } });
+    const result = await app.handle({ method: 'POST', path: '/list', body: { offset: 1, limit: 1 }, actorId: 'alice' }, invocation);
+    expect(result).toMatchObject({ status: 200, body: { total: 2, artifacts: [{ artifactId: ids[2] }] } });
+  });
+  it('should quarantine legacy successes through the actual app without dispatching a replacement', async () => {
+    const keys: string[] = [];
+    const app = boundary(profile, {
+      derivation: createRadarKeyDerivation({ storageScopeId: 'scope-1', actorIds: ['alice'] }),
+      legacyRecords: { get: async (key) => {
+      keys.push(key);
+      return '{"params_hash":"legacy","result":{"artifactId":"old"}}';
+    } } });
+    const outcome = await app.execute({ method: 'POST', path: '/ensure', actorId: 'alice',
+      body: { bindingName: 'site', idempotencyKey: 'original-key' } }, invocation);
+    expect(outcome).toMatchObject({ ok: false, failure: {
+      httpStatus: 503, variant: 'legacy_quarantine', retriable: false, commitState: 'not_committed',
+    } });
+    expect(keys).toHaveLength(1);
+  });
+  it('should reject actor and scope disagreement before provider dispatch', async () => {
+    const app = boundary();
+    for (const extra of [{ actorId: 'mallory' }, { storageScopeId: 'foreign' }]) {
+      expect(await app.handle({ method: 'POST', path: '/ensure', actorId: 'alice',
+        body: { bindingName: 'site', idempotencyKey: 'key' }, ...extra }, invocation))
+        .toEqual({ status: 400, body: { error: 'invalid_request' } });
+    }
   });
 });

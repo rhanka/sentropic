@@ -11,6 +11,11 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "imports": {
+    "#artifacts-frozen-commit": {
+      "types": "./l0-freeze/commit-contract.ts"
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -44,6 +49,18 @@
     "./server/authorization": {
       "types": "./dist/server/authorization.d.ts",
       "import": "./dist/server/authorization.js"
+    },
+    "./server/commit-contract": {
+      "types": "./dist/server/commit-contract.d.ts",
+      "import": "./dist/server/commit-contract.js"
+    },
+    "./server/outcome-contract": {
+      "types": "./dist/server/outcome-contract.d.ts",
+      "import": "./dist/server/outcome-contract.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     },
     "./server/bindings": {
       "types": "./dist/server/bindings.d.ts",
@@ -144,7 +161,9 @@
   },
   "files": [
     "dist",
+    "l0-freeze",
     "migrations",
+    "docs/migration-l6.md",
     "README.md",
     "LICENSE"
   ],
