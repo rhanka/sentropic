@@ -1,7 +1,7 @@
 # Feature: Live STT L1 provider-neutral speech contract
 
 ## Objective
-- [ ] Deliver approved r3 L1: speech identities, media/transcript contract, capability negotiation and public exports.
+- [x] Deliver approved r3 L1: speech identities, media/transcript contract, capability negotiation and public exports.
 - [x] Read L0 PR #753 at `008d66b5fd6ff04d1c44f69cf52892c4c3587980`; its docs/evidence remain the prerequisite inventory.
 
 ## Scope / Guardrails
@@ -66,25 +66,26 @@
 - [x] **L1a — Baseline and constraints**
   - [x] Read lock/rules/template/spec/owner answers and all eight L0 deliverables; mechanical branch check passes.
   - [x] Write `.tmp/live-stt/l1/baseline.md`: pinned L0 gates, dedicated capacity, releases and placements.
-- [ ] **L1b — Tests first**
+- [x] **L1b — Tests first**
   - [x] Add `packages/llm-mesh/tests/speech-contract.test.ts`; red: missing speech/contracts.js before implementation.
   - [x] Targeted green: 23 tests for negotiation, binary metadata, refusal, partial revisions and existing text compatibility.
-- [ ] **L1c — Implementation**
+- [x] **L1c — Implementation**
   - [x] Define exact engine/configuration/target identities and binary media headers with frame-local validation.
   - [x] Add per-tuple four-state capabilities and fail-closed ordered media negotiation.
   - [x] Define revisioned transcripts, admitted session receipt and independent duplex adapter port.
   - [x] Add `speech/{contracts,capabilities,index}.ts`, catalogue lookup and exports.
   - [x] Registry latest 0.27.1 checked before bump; prepare 0.28.0 and update root workspace lock version.
-- [ ] **L1d — Docs consolidation**
+- [x] **L1d — Docs consolidation**
   - [x] Document all public exports and provider/coordinator ownership boundaries in package README.
-  - [ ] Document public surface and evidence in README and `.tmp/live-stt/l1/validation.md`.
+  - [x] Document public surface and evidence in README and `.tmp/live-stt/l1/validation.md`.
 - [ ] **L1e — Final validation and draft handoff**
+  - [x] Cluster compatibility green: 73 module tests + 54 integration tests; packed imports/types and workspace npm ci dry-run pass.
   - [x] BRLIVE-L1-EX1 red: topology rejects 0.28.0; add its admission regression before range alignment.
   - [x] Align peer/module range and installed-version fixtures; prepare cluster 0.22.2 above refreshed published 0.22.1.
   - [x] Mesh regression: 47 files / 847 tests pass; source and speech-test typecheck and changed-source lint pass.
-  - [ ] Scoped red/green, full mesh tests, typecheck, lint, build and packed-export checks.
-  - [ ] Scope check before every commit, whitespace/line-count/trailer checks and ENV cleanup.
-  - [ ] Record independent review availability without claiming consensus.
+  - [x] Scoped red/green, full mesh tests, typecheck, lint, build and packed-export checks.
+  - [x] Scope check before every commit, whitespace/line-count/trailer checks and ENV cleanup.
+  - [x] Review selection failed: no entitled/current-day complementary reviewer allocation; `.tmp/live-stt/l1/review.md`, G-REVIEW open.
   - [ ] Push draft PR with plan as body; inspect exact-head CI metadata.
 
 ## Deferred to later live-speech lots
