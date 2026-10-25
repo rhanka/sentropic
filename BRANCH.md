@@ -1,79 +1,72 @@
-# Feature: #861 L4 publication and collection
+# Feature: Artifacts transport wiring and migration (#861 L6)
 
 ## Objective
-Wire publication finalization through the L3 coordinator ports: guard after waits with a lifecycle/ACL predicate, no split success, shared-blob cleanup and purge deletion claims.
+- [ ] Bind HTTP and MCP to the selected immutable profile and authorized atomic finalizers.
 
 ## Scope / Guardrails
-- Scope limited to the L4 exclusive write set below; never edit L0/L1/L2/L3/L5-L9 files.
-- r2 spec is binding (S2/L4 row, §§3.1 A4-A6); L0/L1/L2/L3 shapes are read-only inputs.
-- L3 coordinator implementation changes are out of scope and returned to its owner.
-- Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree `tmp/worktrees/861-L4`, branch `feat/artifacts-861-L4`, base `origin/feat/artifacts-861-L3` plus L1+L2 merges (no rebase).
-- Automated test campaigns on `ENV=test-861-l4` (lowercase, last argument); never `ENV=dev`.
-- 0 Python, one Docker build at a time machine-wide, disk tight.
-- Atomic commits via `make commit MSG="..."` only, <150 lines, `git add` specific files, no AI attribution trailers.
-- All new text in English.
+- [x] Spec r2: `.tmp/immo-861-artifacts/spec-plan.md`, S3/L6, C1–C7, A1–A8 and E1–E3.
+- [x] Worktree: `tmp/worktrees/861-L6`; branch: `feat/artifacts-861-L6`.
+- [x] Merge L5 into L4; merge subsequent upstream changes without rebasing.
+- [x] ENV: `test-861-l6`; API_PORT=13336, UI_PORT=9536, MAILDEV_UI_PORT=5436.
+- [x] Shared Docker flock; existing Make targets only; tear down after each step; no Python.
+- [x] Specific-file staging; `make commit`; fewer than 150 authored changed lines per commit.
+- [x] Manifest/version changes belong to the integration owner per r2 section 6.1.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/src/server/publication.ts`
-  - `packages/artifacts/src/server/object-intents.ts`
-  - `packages/artifacts/src/server/lifecycle.ts`
-  - `packages/artifacts/src/server/gc.ts`
-  - `packages/artifacts/tests/publication-authorization.integration.test.ts`
-  - `packages/artifacts/tests/publication.test.ts`
-  - `packages/artifacts/tests/crash-recovery.test.ts`
-  - `packages/artifacts/tests/gc-races.test.ts`
+  - `packages/artifacts/src/http.ts`
+  - `packages/artifacts/src/mcp-core.ts`
+  - `packages/artifacts/src/mcp.ts`
+  - `packages/artifacts/src/adapters/s3.ts`
+  - `packages/artifacts/src/adapters/postgres.ts`
+  - `packages/artifacts/src/server/idempotency.ts`
+  - `packages/artifacts/src/index.ts`
+  - `packages/artifacts/src/server/commit-contract.ts`
+  - `packages/artifacts/src/server/outcome-contract.ts`
+  - `packages/artifacts/tests/http-mcp-service-parity.test.ts`
+  - `packages/artifacts/tests/http-security.test.ts`
+  - `packages/artifacts/tests/http-routes.test.ts`
+  - `packages/artifacts/tests/mcp.test.ts`
+  - `packages/artifacts/tests/publication-security.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/artifacts/src/server/commit/**`
-  - `packages/artifacts/src/adapters/postgres-commit.ts`
-  - `packages/artifacts/src/testing.ts`
-  - `packages/artifacts/src/profile/**`
-  - `packages/artifacts/src/server/command-identity.ts`
-  - `packages/artifacts/src/server/failures.ts`
-  - `packages/artifacts/src/server/outcome-projection.ts`
-  - `packages/artifacts/src/server/service.ts`
-  - `packages/artifacts/src/server/authorized-replay.ts`
-  - `packages/artifacts/src/server/http.ts`
-  - `packages/artifacts/src/server/mcp*.ts`
-  - `packages/artifacts/src/server/idempotency.ts`
-  - `packages/artifacts/src/adapters/postgres.ts`
-  - `packages/artifacts/src/adapters/s3.ts`
-  - `packages/artifacts/src/index.ts`
-  - `packages/artifacts/l0-freeze/**`
-  - `packages/artifacts/package.json`
-  - `package-lock.json`
-  - `packages/cluster-mesh/**`
-  - `.github/workflows/**`
+  - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**`
+  - `packages/artifacts/package.json`
+- [x] Inherited L5 changes are merge ancestry; authored edits stay within L6 scope.
+
+## Feedback Loop
+- [ ] Docker package targets use standalone containers; awaiting a compliant runner or explicit owner direction.
+- [x] L6 composes provider and request guards on a request-local coordinator binding; publication.ts stays L4-owned.
+- [ ] Integration owner: expose commit-contract, outcome-contract and testing subpaths; reserve the topic version.
+- [ ] Integration owner: migrate out-of-scope HTTP upload/template and content/pilot e2e fixtures to required host composition.
+
+## AI Flaky tests
+- [x] No AI-dependent tests or timeout changes.
+
+## Orchestration Mode (AI-selected)
+- [x] **Multi-branch**: L6 consumes L4/L5 and remains independent of L7.
+
+## UAT Management (in orchestration context)
+- [x] Package-only transport change; integrated consumer qualification belongs to L8.
 
 ## Plan / Todo (lot-based)
-- [x] R1 P1-1/P1-2: retain unknown-COMMIT references; pin active preparations (publication regressions red then green).
-- [x] R1 P2-7: acquire all purge claims before terminal states; release acquired claims on contention (regression red then green).
-- [x] R1 P2-4: write source provenance through the transaction-scoped unit writer (PostgreSQL rollback regression red then green).
-- [x] R1 P2-5: read guard lifecycle/owner through the finalization client, including replay (single-connection PostgreSQL regression red then green).
-- [x] R1 P1-3: serialize claim acquisition with reference/pin insertion; provide durable PostgreSQL claim and preparation retention ports.
-- [x] R1 P2-6/P1-3 PostgreSQL: consume frozen L1 identity and check durable claims in the unit writer; identity, provenance-conflict and PostgreSQL races pass.
-- [x] **Lot 0 — Worktree, base merges, scope**
-  - [x] Worktree `tmp/worktrees/861-L4` from `origin/feat/artifacts-861-L3`, branch `feat/artifacts-861-L4`
-  - [x] Merge `origin/feat/artifacts-861-L1` and `origin/feat/artifacts-861-L2` (no rebase)
-  - [x] Lot-exclusive BRANCH.md, scope-check green
-- [ ] **Lot 1 — Guarded publication through L3 ports**
-  - [ ] Tests first: `tests/publication-authorization.integration.test.ts` (guard after waits, lifecycle/ACL predicate, revocation race, no split success, same-key replay)
-  - [ ] `publication.ts`: finalized publish via injected L3 coordinator (caller locks, provisional release+CAS+refs, guard with lifecycle/ACL predicate, intent completion)
-  - [ ] Lot gate: typecheck, lint, unit, `publication-authorization` + `publication` suites green
-- [ ] **Lot 2 — Shared-blob cleanup and purge claims**
-  - [ ] Tests first: `gc-races.test.ts` extensions (shared digest retained, unreferenced deleted, pinned retained, claimed blocks new refs) + purge end-to-end
-  - [ ] `gc.ts`/`lifecycle.ts`: durable exclusive deletion claims, claim-aware collect, purge dereference flow
-  - [ ] `crash-recovery.test.ts`: pending intent reconcile without promotion, denied-attempt cleanup keeps committed refs
-  - [ ] Lot gate: full L4 suites green
-- [ ] **Lot 3 — Push, draft PR on feat/artifacts-861-L3, report**
-  - [ ] Push branch, open DRAFT PR targeting `feat/artifacts-861-L3` (do not merge)
-  - [ ] Report PR number and head SHA
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read Docker lock, rules, template and r2 contracts; mechanical branch check passed.
+  - [x] Create isolated L6 worktree and merge L5.
+- [ ] **Lot 1 — Transport regressions first**
+  - [x] `http-routes.test.ts`: selected routes, missing configuration, trusted invocation.
+  - [x] `mcp.test.ts`: discovery, direct dispatch, profile digest and typed projection.
+  - [ ] `http-security.test.ts`, `publication-security.test.ts`: closed inputs and sanitized failures.
+  - [x] `http-mcp-service-parity.test.ts`: shared command identity, authorized retry and replay; first 18 L6 cases passed under Compose.
+- [ ] **Lot 2 — Wire and migrate**
+  - [ ] Required compiled profile/coordinator/context; one execute path and typed projections.
+  - [ ] Remove split transport writes; guarded ensure/publish and legacy quarantine.
+  - [ ] Export host contracts and selected MCP registry bindings.
+- [ ] **Lot 3 — Final validation**
+  - [ ] Package typecheck, lint, unit tests and build green under shared flock.
+  - [ ] `make scope-check` before each commit; update branch plan with evidence.
+  - [ ] Refresh L4/L5 and merge moved heads; push draft PR targeting L4.
