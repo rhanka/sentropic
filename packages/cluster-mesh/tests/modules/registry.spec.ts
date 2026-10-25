@@ -22,6 +22,16 @@ const registry = (disabled: readonly string[] = []) =>
   createModuleRegistry({ disabled: disabled as never }, { anchorDir });
 
 describe('module registry', () => {
+  it('should load Radar 0.19.2 mesh, facade and a gateway sharing that mesh', async () => {
+    tree.install('app', fakeMesh('radar', '0.19.2'));
+    tree.install('app', fakeGateway('gw'));
+    const modules = registry();
+    for (const entry of ['llm-mesh', 'llm-mesh/facade', 'gateway'] as const) {
+      await expect(modules.load(entry)).resolves.toBeDefined();
+    }
+    expect(evaluations()).toEqual(['radar', 'radar/facade', 'gw']);
+  });
+
   it('should accept the current comments leaf version and still require its optional peer', async () => {
     const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
     tree.install('app', { name: '@sentropic/cluster-mesh', version, exports: {
@@ -69,7 +79,7 @@ describe('module registry', () => {
     const modules = registry();
     const failure = modules.load('llm-mesh/facade');
     await expect(failure).rejects.toThrow(
-      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.28.0" and restart.',
+      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@"0.19.2 || >=0.22.0 <0.28.0" and restart.',
     );
     const error = await failure.catch((caught: unknown) => caught);
     expect(isClusterMeshModuleUnavailableError(error)).toBe(true);
