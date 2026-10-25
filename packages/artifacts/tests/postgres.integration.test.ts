@@ -5,6 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { createPostgresArtifactStore } from '../src/adapters/postgres.js';
+import { createPostgresCommitExecutor } from '../src/adapters/postgres-commit.js';
 
 const DATABASE_URL = process.env['DATABASE_URL'];
 if (DATABASE_URL === undefined || DATABASE_URL.length === 0) {
@@ -19,6 +20,10 @@ const SQL_LIFECYCLE = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0002_lifecycle.sql'),
   'utf8',
 );
+const SQL_COORDINATOR = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0003_coordinator.sql'),
+  'utf8',
+);
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const store = createPostgresArtifactStore(pool);
@@ -28,6 +33,7 @@ beforeAll(async () => {
   await setup.query('DROP SCHEMA IF EXISTS artifacts CASCADE');
   await setup.query(SQL);
   await setup.query(SQL_LIFECYCLE);
+  await setup.query(SQL_COORDINATOR);
   await setup.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-1', 'org-1')`);
   await setup.end();
 });
@@ -236,5 +242,18 @@ describe('postgres artifact store', () => {
     const blobs = await store.listRegisteredBlobs('scope-1');
     expect(blobs).toContain('sha256:aa');
     expect(blobs).toContain('sha256:bb');
+  });
+
+  it('converges concurrent coordination rows on one key row', async () => {
+    const executor = createPostgresCommitExecutor(pool);
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => executor.ensureCoordinationRow('scope-1', 'race-key')),
+    );
+    expect(results.every((result) => result === undefined)).toBe(true);
+    const { rows } = await pool.query<{ n: string }>(
+      `SELECT COUNT(*) AS n FROM artifacts.operation_keys
+       WHERE storage_scope_id = 'scope-1' AND internal_key = 'race-key'`,
+    );
+    expect(Number(rows[0]?.n ?? 0)).toBe(1);
   });
 });
