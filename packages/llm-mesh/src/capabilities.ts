@@ -3,6 +3,7 @@ import type {
   TokenAuthSourceType,
 } from './auth.js';
 import type { ReasoningTier } from './providers.js';
+import type { SpeechCapabilities } from './speech/capabilities.js';
 
 export type CapabilitySupport = 'supported' | 'unsupported' | 'partial' | 'unknown';
 
@@ -55,7 +56,7 @@ export interface ReasoningCapabilities {
 
 export interface ModalityCapabilities {
   input: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
-  output: readonly ('text' | 'json' | 'tool-call')[];
+  output: readonly ('text' | 'json' | 'tool-call' | 'audio')[];
 }
 
 export interface AuthCapabilities {
@@ -64,6 +65,8 @@ export interface AuthCapabilities {
 }
 
 export interface ProviderCapabilities {
+  /** Absent means unqualified; audio input alone does not imply live speech. */
+  speech?: SpeechCapabilities;
   tools: ToolUseCapabilities;
   streaming: StreamingCapabilities;
   structuredOutput: StructuredOutputCapabilities;
