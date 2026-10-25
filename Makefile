@@ -698,6 +698,7 @@ check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every
 # BRCI-EX1 — publishable manifest guard (spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md).
 # Every npm pack/publish lane inspects the real archive; tools are pinned in ephemeral dirs.
 MANIFEST_GUARD_IMAGE ?= $(LLM_MESH_NODE_IMAGE)
+MANIFEST_GUARD_RUN_IMAGE = $(if $(filter test-861-int test-861-gaps test-llm-judge,$(ENV)),qualification,$(MANIFEST_GUARD_IMAGE))
 MANIFEST_REPORT_DIR ?= tmp/ci-manifest-guard/manifests
 MANIFEST_CONTEXT_FILE ?=
 MANIFEST_SEVERITY ?=
@@ -719,7 +720,7 @@ define manifest_guard_pack
 	@mkdir -p "$(MANIFEST_REPORT_DIR)" $(if $(PACK_DESTINATION),"$(PACK_DESTINATION)")
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
 		$(if $(PACK_DESTINATION),-v "$(abspath $(PACK_DESTINATION)):/pack-out" -e PACK_DESTINATION_HOST="$(abspath $(PACK_DESTINATION))") \
-		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace/packages/$(1) $(ARTIFACTS_RUN_IMAGE) \
+		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace/packages/$(1) $(MANIFEST_GUARD_RUN_IMAGE) \
 		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); $(2) node /workspace/scripts/ci/publishable-manifests.mjs pack --slug $(1) --report-dir /reports $(if $(PACK_DESTINATION),--destination /pack-out)'
 	@if [ -n "$(PACK_OUTPUT_FILE)" ]; then cat "$(MANIFEST_REPORT_DIR)/$(1).github-output" >> "$(PACK_OUTPUT_FILE)"; fi
 endef
@@ -791,14 +792,14 @@ publishable-sibling-plan: ## Internal: list BLOCK packages in the dependency clo
 	@case '$(PACKAGE)' in ''|-*|*[!a-z0-9-]*) echo "ERROR: invalid PACKAGE"; exit 1 ;; esac
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
 		-e PACKAGE="$(PACKAGE)" -e SIBLING_DIR="$(SIBLING_DIR)" \
-		-v "$(CURDIR):/workspace" -v "$(abspath $(SIBLING_DIR)):/siblings" -w /workspace $(ARTIFACTS_RUN_IMAGE) \
+		-v "$(CURDIR):/workspace" -v "$(abspath $(SIBLING_DIR)):/siblings" -w /workspace $(MANIFEST_GUARD_RUN_IMAGE) \
 		sh -lc 'set -eu; case "$$PACKAGE" in ""|-*|*[!a-z0-9-]*) echo "ERROR: invalid PACKAGE"; exit 1 ;; esac; \
 			[ "$$SIBLING_DIR" = "tmp/ci-manifest-guard/siblings/$$PACKAGE" ] || { echo "ERROR: invalid SIBLING_DIR"; exit 1; }; \
 			$(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs sibling-plan --slug "$$PACKAGE" --out /siblings/plan.txt'
 
 publishable-sibling-collect: ## Internal: verify sibling pack receipts and write SIBLING_DIR/receipts.json
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)/scripts/ci/publishable-manifests.mjs:/probe/publishable-manifests.mjs:ro" \
-		-v "$(abspath $(SIBLING_DIR)):/siblings" $(ARTIFACTS_RUN_IMAGE) node /probe/publishable-manifests.mjs sibling-collect --dir /siblings
+		-v "$(abspath $(SIBLING_DIR)):/siblings" $(MANIFEST_GUARD_RUN_IMAGE) node /probe/publishable-manifests.mjs sibling-collect --dir /siblings
 
 .PHONY: publishable-manifests-inventory
 publishable-manifests-inventory: ## Internal step of check-publishable-manifests: classify packages, audit WARN snapshots
