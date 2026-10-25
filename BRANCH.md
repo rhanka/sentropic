@@ -55,6 +55,8 @@
 - [x] Lot 1 — rebuilt and packed candidate; strict full-Radar install, archive runtime and declaration compilation pass; normal lane 19/19, zero TODOs/skips.
 - [x] Lot 2 — invoked eight Radar suites with gate 1; required cases 73 passed / 72 failed / 5 setup skips. Full host workspace 157 passed / 1 failed.
 - [x] Lot 3 — receipt and shard validation reject qualification; evidence updated, scope checked, atomic commits pushed; draft PR #749 carries the delta after merged #746.
+- [x] Final 0.2.0 — exact tuple installed strictly, packed smoke and 19 runner tests pass; Q1 0/31, Q2 0/31, acceptance 0/6; final receipt records 71 Radar failures, 2 explicit H3 gaps and 5 Radar setup skips across all invoked tests.
+- [x] Final receipt and four-shard aggregate correctly reject missing image/shard evidence; NO-GO is retained; no publication or main merge.
 
 ## Deferred to L9
 - [x] Published bytes, provenance and activation require separate release gates.
