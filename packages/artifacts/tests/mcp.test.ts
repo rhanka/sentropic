@@ -35,6 +35,25 @@ import type { StpConnectorContext } from '@sentropic/mcp-platform';
 import { createProviderRegistry } from '@sentropic/mcp-platform/registry';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
+import { createTransportWorld } from './fixtures/transport-world.js';
+
+it('should publish accented UTF-8 text through MCP and reject ambiguous or binary text', async () => {
+  const world = createTransportWorld();
+  const ensured = await world.http('/ensure', { bindingName: 'site', idempotencyKey: 'utf8-ensure' });
+  if (!ensured.ok) throw new Error('ensure failed');
+  const artifactId = (ensured.result.body as { artifactId: string }).artifactId;
+  const text = '<h1>Été à Montréal 🏠</h1>';
+  const file = { path: 'index.html', mimeType: 'text/html', text };
+  let attempt = 0;
+  const publish = (files: unknown[]) => world.mcp.invoke({ tool: 'artifacts_publish',
+    invocation: world.invocation(), args: { artifactId, files, idempotencyKey: `utf8-${attempt++}` } });
+  expect((await publish([file])).status).toBe(201);
+  const [blobKey] = await world.blobs.listKeys('artifacts/scope-l6/blobs/');
+  expect(new TextDecoder().decode(await world.blobs.getBlob(blobKey))).toBe(text);
+  expect((await publish([{ ...file, bytes: [65] }])).status).toBe(400);
+  expect((await publish([{ ...file, mimeType: 'image/png' }])).status).toBe(400);
+  expect(world.releases.size).toBe(1);
+});
 
 describe('L6 compiled MCP profile', () => {
   const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
