@@ -1,7 +1,7 @@
 # Feature: #861 L8b ensure and recovery qualification
 
 ## Objective
-- [ ] Qualify ensure waits, quota atomicity, restart, crash, uncertain COMMIT and legacy quarantine.
+- [x] Qualify ensure waits, quota atomicity, restart, crash, uncertain COMMIT and legacy quarantine.
 
 ## Scope / Guardrails
 - [x] Worktree: tmp/worktrees/861-L8b; branch: feat/artifacts-861-L8b.
@@ -33,6 +33,16 @@
 - [x] Radar H3 quota/admission interface absent: consumer integration not covered; real-PG upstream participant required.
 - [x] Q1 draft SHA256: 49babf7b8a592da4159d0a1904f7716724bff2345886f14835789d3af46ce4e2; no valid pinned checkout metadata.
 - [x] Q1/Q2/Q3/Q4 and all eight Radar acceptance suites remain consumer gates; no packed/published receipt claimed here.
+- [x] L8b receipt: 2026-10-25 10:07 UTC, 19/19 tests passed, zero skips; no product defects found.
+- [x] Test source SHA256: 5c13d2379149c3d1b5689c06829202a532cbb9df4813bbf2d544d69d143e7c24.
+- [x] Command: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f /tmp/861-l8b.make test-artifacts-integration SCOPE=tests/commit-ensure-recovery.integration.test.ts API_PORT=18922 UI_PORT=15922 MAILDEV_UI_PORT=11922 ENV=test-861-l8b`.
+- [x] Temporary runner SHA256: e63fe43b8564e0e55c708f824adf5d51266af5c4dbca06e4dcc1c0903dff8b01; copied Makefile with only ENV condition/build guard expanded to this lane; no tracked runner edits.
+- [x] Runner reproduction: `sed 's/ifeq ($(ENV),test-861-int)/ifneq ($(filter test-861-int test-861-l8b,$(ENV)),)/;s/@test "$(ENV)" = test-861-int/@test "$(ENV)" = test-861-l8b/' Makefile > /tmp/861-l8b.make`.
+- [x] Node image: node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6; PostgreSQL 17 and MinIO use docker-compose.immo-861.yml (SHA256 b4e609883e1f77eaf64672f34661df4058054177a652c376c8dbffde04412e95).
+- [x] Source qualification only: no archive/lock installation; provider restart persists across processes, not a PostgreSQL storage restart. Packed/published tuple and actual Radar H3 remain not covered by this shard.
+- [x] Initial fixture run failed on an omitted storage-scope seed; corrected locally. The next attempt stopped at the runner ENV guard; the recorded final run passes.
+- [x] Shared-lock cleanup after the passing test removed only test-861-l8b containers/network; no owner environment touched.
+- [ ] Lint and final remote-head verification pending; draft PR https://github.com/rhanka/sentropic/pull/742.
 
 ## AI Flaky tests
 - [x] None accepted.
@@ -47,8 +57,8 @@
 - [x] Lot 0 — read lock, spec r2 S4/L8b, section 6.3, Q1-Q4 and Radar pins; check branch mechanically.
 - [x] Lot 1 — create real-PG participant and host fixture in commit-ensure-recovery.integration.test.ts.
 - [x] Lot 2 — exercise connection/key/binding/replay waits and denied retry without residue.
-- [ ] Lot 3 — race the last quota unit; recreate pool/service and replay without recharging.
-- [ ] Lot 4 — terminate an in-flight backend; inject lost COMMIT acknowledgment before/after durability.
-- [ ] Lot 5 — quarantine legacy receipts and historical keys through actual transport wiring.
-- [ ] Lot gate — run scoped make test-artifacts-integration; record known failures with source locations.
+- [x] Lot 3 — race the last quota unit; recreate pool/service and replay without recharging.
+- [x] Lot 4 — SIGKILL provider before COMMIT; inject lost COMMIT acknowledgment before/after durability.
+- [x] Lot 5 — quarantine legacy receipts and historical keys through actual transport wiring.
+- [x] Lot gate — scoped integration suite: 19 passed; build passed; no known product failures.
 - [ ] Handoff — merge refreshed integration, scope-check each atomic commit, push and open draft PR.
