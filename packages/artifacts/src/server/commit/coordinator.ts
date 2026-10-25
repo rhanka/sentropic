@@ -17,6 +17,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   COMMAND_CODEC_VERSION,
+  COMMIT_PROTOCOL_VERSION,
   COORDINATOR_TEST_POINTS,
   PARTICIPANT_LOCK_ORDER,
   CommitQuarantineError,
@@ -24,8 +25,8 @@ import {
   type ArtifactAuthorizationDecision,
   type ArtifactAuthorizationFence,
   type ArtifactCommitContext,
-  type CommitPolicyParticipant,
-  type FinalizationCoordinator,
+  type ArtifactCommitParticipant,
+  type ArtifactCommitCoordinator,
   type ArtifactCommitTransaction,
   type ArtifactFailure,
   type CommitCoordinatorOptions,
@@ -37,6 +38,7 @@ import {
   type ParticipantLockClass,
   type StoredCommitReceipt,
 } from './types.js';
+import { commitFenceBrand, commitTransactionBrand } from './brands.js';
 
 function failure(
   category: FailureCategory,
@@ -179,7 +181,7 @@ const PRE_QUOTA_LOCK_CLASSES: readonly ParticipantLockClass[] = PARTICIPANT_LOCK
   (entry) => entry !== 'quota' && entry !== 'blob-reference-deletion-claim',
 );
 
-export function createArtifactCommitCoordinator(options: CommitCoordinatorOptions): FinalizationCoordinator {
+export function createArtifactCommitCoordinator(options: CommitCoordinatorOptions): ArtifactCommitCoordinator {
   const nowMs = options.nowMs ?? (() => Date.now());
   for (const point of options.testPoints ?? []) {
     if (!COORDINATOR_TEST_POINTS.includes(point)) {
@@ -207,7 +209,6 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     invocationId: request.invocationId,
     actorId: request.actorId,
     storageScopeId: request.scopeId,
-    authorizeCommit: request.guard,
     operation: request.operation,
     artifactId: request.artifactId ?? '',
     bindingId: request.bindingName ?? '',
@@ -385,18 +386,28 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
   ): { transaction: ArtifactCommitTransaction; minted: Set<ArtifactAuthorizationFence> } => {
     const minted = new Set<ArtifactAuthorizationFence>();
     const raw = options.policy.createParticipant(connection, transactionToken);
-    const participant: CommitPolicyParticipant = {
+    const participant: ArtifactCommitParticipant = {
+      policyRevision: request.policyRevision,
+      async readAdmission(input) {
+        const revision = await raw.readRevision();
+        if (revision !== input.policyRevision) return { allowed: false, reason: 'revoked' };
+        const decision = await raw.checkApproval({ actorId: input.actorId, operation: input.operation });
+        return { allowed: decision.approved, reason: decision.reason ?? 'denied' };
+      },
       readRevision: () => raw.readRevision(),
       checkApproval: (input) => raw.checkApproval(input),
-      reserveQuota: (input) => raw.reserveQuota(input),
+      reserveQuota: (input) => raw.reserveQuota({ actorId: request.actorId, operation: input.operation }),
       mintFence: (revision, invocationId) => {
-        const fence = raw.mintFence(revision, invocationId);
+        const fence: ArtifactAuthorizationFence = Object.freeze({
+          ...raw.mintFence(revision, invocationId), [commitFenceBrand]: true as const,
+        });
         minted.add(fence);
         return fence;
       },
     };
     return {
       transaction: {
+        [commitTransactionBrand]: true,
         transactionId: transactionToken,
         invocationId: request.invocationId,
         policyRevision: request.policyRevision,
@@ -523,7 +534,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           }, { variant: 'key_contention' }),
         };
       }
-      return coordinator.replayGuarded(request);
+      return coordinator.replayPrepared(request);
     } catch (error) {
       if (error instanceof CommitQuarantineError) {
         return settleAndPropagateQuarantine(request, settle, error);
@@ -540,8 +551,46 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     }
   };
 
-  const coordinator: FinalizationCoordinator = {
-    async finalize(request: FinalizeRequest): Promise<FinalizeResult> {
+  const coordinator: ArtifactCommitCoordinator = {
+    protocolVersion: COMMIT_PROTOCOL_VERSION,
+    guardedOperations: Object.freeze([...(options.operations?.guardedOperations ?? ['ensure', 'publish'])]),
+    ...(options.testObserver === undefined ? {} : { testObserver: {
+      arrive(point, invocationId) {
+        const observer = options.testObserver!;
+        return typeof observer === 'function' ? observer(point, invocationId) : observer.arrive(point, invocationId);
+      },
+    } }),
+    async finalizeOperation(input) {
+      if (!options.operations) throw new Error('coordinator requires a trusted operation binding');
+      const request = await options.operations.finalize(input);
+      if (request.scopeId !== input.invocation.storageScopeId ||
+        request.actorId !== input.invocation.actorId || request.invocationId !== input.invocation.invocationId ||
+        request.internalKey !== input.command.identity.internalKey ||
+        request.commandHash !== input.command.identity.commandHash ||
+        request.codecVersion !== input.command.identity.codecVersion ||
+        request.operation !== input.command.operation || input.command.scopeBinding !== request.scopeId) {
+        throw new Error('operation binding identity mismatch');
+      }
+      const outcome = await coordinator.finalizePrepared({ ...request, guard: input.invocation.authorizeCommit });
+      return outcome.ok ? { ...outcome, result: {
+        internalKey: request.internalKey, commandHash: request.commandHash,
+        codecVersion: COMMAND_CODEC_VERSION, replayed: outcome.replayed,
+      } } : outcome;
+    },
+    async replayOperation(input) {
+      if (!options.operations) throw new Error('coordinator requires a trusted operation binding');
+      const request = await options.operations.replay(input);
+      if (request.scopeId !== input.invocation.storageScopeId || request.actorId !== input.invocation.actorId ||
+        request.invocationId !== input.invocation.invocationId || request.internalKey !== input.internalKey) {
+        throw new Error('replay binding identity mismatch');
+      }
+      const outcome = await coordinator.replayPrepared({ ...request, guard: input.invocation.authorizeCommit });
+      return outcome.ok ? { ...outcome, result: {
+        internalKey: request.internalKey, commandHash: request.commandHash,
+        codecVersion: COMMAND_CODEC_VERSION, replayed: outcome.replayed,
+      } } : outcome;
+    },
+    async finalizePrepared(request: FinalizeRequest): Promise<FinalizeResult> {
       validateRequest(request, 'finalize');
       await observeAt('before_connection_acquire', request.invocationId);
       let phase: UnitPhase = 'acquire';
@@ -582,7 +631,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
             );
           }
           if (existing.commandHash === request.commandHash) {
-            return coordinator.replayGuarded(request);
+            return coordinator.replayPrepared(request);
           }
           await abandon(request);
           return {
@@ -699,7 +748,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       }
     },
 
-    async replayGuarded(request: FinalizeRequest): Promise<FinalizeResult> {
+    async replayPrepared(request: FinalizeRequest): Promise<FinalizeResult> {
       validateRequest(request, 'replay');
       await observeAt('before_connection_acquire', request.invocationId);
       let phase: UnitPhase = 'acquire';
@@ -773,6 +822,9 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         // Run deferred constraint work inside the unit, before the decision:
         // locks it acquires must not land during COMMIT.
         await active.query('SET CONSTRAINTS ALL IMMEDIATE', []);
+        if (request.validateReplayReceipt && !request.validateReplayReceipt(existing)) {
+          return abortWith(request, phase, settle, invalidFence(request, 'replay_target_mismatch'));
+        }
         const decision = await request.guard(commitContext(request, 'replay'), transaction);
         if (!decision.allowed) {
           return abortWith(request, phase, settle, deny(request, decision));

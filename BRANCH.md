@@ -69,6 +69,7 @@
 - [x] Host `harness check scope` on the exact authored path set returned `PASS C2 (sentropic)`.
 - [x] Make scope-check uses the installed host harness through a temporary overlay, excluding inherited merge changes only during merges.
 - [ ] Carry-over: converge operational coordinator/participant onto frozen L0 shapes and compile the maintained fixture.
+- [x] Canonical coordinator operation methods and transaction-bound admission participant implemented against the extended fixture.
 - [ ] Carry-over: receipt identity, missing binding, replay authority, late barrier and transaction-held GC exclusion.
 - [x] L6 composes provider and request guards on a request-local coordinator binding; publication.ts stays L4-owned.
 - [ ] Integration owner: expose commit-contract, outcome-contract and testing subpaths; reserve the topic version.
