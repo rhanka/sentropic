@@ -16,6 +16,7 @@ import type {
 } from './command-identity-contract.js';
 import type { ArtifactFailure, ArtifactOutcome, OrdinaryFailure } from './failure-contract.js';
 import type { CompiledArtifactsProfile, CompiledValidators } from './profile-contract.js';
+import type { commitFenceBrand, commitTransactionBrand } from '../src/server/commit/brands.js';
 
 /** Version of the frozen commit-coordinator protocol. */
 export const COMMIT_PROTOCOL_VERSION = 'artifacts-commit/v1' as const;
@@ -73,7 +74,6 @@ export interface ArtifactCommitContext {
   readonly purpose: CommitPurpose;
 }
 
-declare const commitFenceBrand: unique symbol;
 
 /** Opaque fence minted by the transaction-bound policy participant. */
 export interface ArtifactAuthorizationFence {
@@ -104,7 +104,6 @@ export type ArtifactAuthorizationDecision =
     readonly retriable: boolean;
   };
 
-declare const commitTransactionBrand: unique symbol;
 
 /**
  * Opaque transaction identity plus the host's registered
