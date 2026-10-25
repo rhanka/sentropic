@@ -10,6 +10,7 @@ ARTIFACTS_RUN = docker run --rm
 ARTIFACTS_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 ARTIFACTS_NETWORK = --network "$$net"
+ARTIFACTS_PLATFORM_BUILD = build-mcp-platform
 CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
 CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
 ifeq ($(ENV),test-861-int)
@@ -17,6 +18,7 @@ ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
 ARTIFACTS_NETWORK =
+ARTIFACTS_PLATFORM_BUILD = immo-861-build-mcp-platform
 CM_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 CM_RUN_IMAGE = qualification
 endif
@@ -1408,14 +1410,22 @@ build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform d
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
+.PHONY: immo-861-build-mcp-platform freeze-types
+immo-861-build-mcp-platform: install-internal-packages
+	@test "$(ENV)" = test-861-int
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf dist node_modules; tool_dir="$$(mktemp -d)"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+
+freeze-types:
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 >/dev/null; PATH="$$tool_dir/node_modules/.bin:$$PATH" npm run freeze-types'
+
 .PHONY: build-artifacts
-build-artifacts: build-mcp-platform ## Build @sentropic/artifacts dist package
+build-artifacts: $(ARTIFACTS_PLATFORM_BUILD) ## Build @sentropic/artifacts dist package
 	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf dist node_modules'
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: typecheck-artifacts
-typecheck-artifacts: build-mcp-platform ## Run @sentropic/artifacts type checks
+typecheck-artifacts: $(ARTIFACTS_PLATFORM_BUILD) ## Run @sentropic/artifacts type checks
 	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
