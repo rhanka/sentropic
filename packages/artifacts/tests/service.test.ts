@@ -437,11 +437,12 @@ describe('guarded ensure', () => {
     const replayed = await harness.service.replay(harness.invoke('alice'), {
       internalKey: effective.identity.internalKey,
       commandHash: effective.identity.commandHash,
+      binding: { ownerId: 'alice', storageScopeId: ENSURE_SCOPE, bindingName: 'direct', attemptId: 'replay-direct' },
     });
     expect(replayed.ok).toBe(true);
     if (!replayed.ok || !ensured.ok) return;
     expect(replayed.result).toEqual({ ...ensured.result, replayed: true });
-    expect(harness.state.resolveBindingCalls).toBe(1);
+    expect(harness.state.resolveBindingCalls).toBe(2);
     expect(harness.state.reserveQuotaCalls).toBe(1);
   });
 
