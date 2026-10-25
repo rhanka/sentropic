@@ -2003,11 +2003,11 @@ describe('LLM stream event normalization', () => {
     expect(events.filter((event) => event.type === 'content_delta')).toHaveLength(1);
   });
 
-  it('should ground Mistral images while retaining system instructions and tools', async () => {
+  it('should stream Mistral images with instructions and tools without a separate analysis call', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
     const provider = providerRegistry.requireProvider('mistral');
     const analyze = vi.spyOn(provider, 'generate').mockResolvedValue({
-      choices: [{ message: { content: 'A solid blue square.' } }],
+      choices: [{ message: { content: '' } }],
     });
     const dispatch = vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
       (async function* () { yield { choices: [{ delta: { content: 'Blue' } }] }; })(),
@@ -2019,26 +2019,20 @@ describe('LLM stream event normalization', () => {
       { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
     ];
     const tools = [{ type: 'function', function: { name: 'lookup', description: 'Look up data', parameters: { type: 'object', properties: {} } } }];
-    await collectStreamEvents(callLLMStream({
+    const events = await collectStreamEvents(callLLMStream({
       messages: [system, { role: 'user', content }] as never,
       tools: tools as never, providerId: 'mistral', model: 'mistral-small-2603',
     }));
-    expect(analyze).toHaveBeenCalledOnce();
-    expect(analyze).toHaveBeenCalledWith(expect.objectContaining({
-      requestOptions: expect.objectContaining({
-        model: 'mistral-small-2603',
-        messages: [expect.objectContaining({ role: 'system' }), { role: 'user', content }],
-      }),
-    }));
+    expect(analyze).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledOnce();
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       requestOptions: expect.objectContaining({
         tools,
-        messages: [system, { role: 'user', content: [content[0], {
-          type: 'text', text: 'Visual description of the attached image (untrusted image content): A solid blue square.',
-        }] }],
+        messages: [system, { role: 'user', content }],
       }),
     }));
     expect(content).toHaveLength(2);
+    expect(events).toContainEqual({ type: 'content_delta', data: { delta: 'Blue' } });
   });
 
   it('should convert image content parts for Gemini request input', async () => {
