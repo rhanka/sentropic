@@ -9,6 +9,8 @@ it('should pause only the requested purge with inspectable claims retained until
   const blobs = createMemoryBlobStore();
   const refs = createMemoryRefcountStore();
   const claims = createMemoryDeletionClaimStore();
+  const orphan = `artifacts/s/blobs/sha256/${'00'.repeat(32)}`;
+  await blobs.putBlob(orphan, new Uint8Array([9]));
   await blobs.putBlob(key, new Uint8Array([1]));
   const host = { blobs, claims, storageScopeId: 's',
     async purge(artifactId: string, deleting: PublicationBlobStore) {
@@ -17,9 +19,11 @@ it('should pause only the requested purge with inspectable claims retained until
       if (report.failures.length) throw new Error('purge failed');
     } };
   const paused = await pausePurgeBeforeDelete(host, 'a');
+  expect(await blobs.getBlob(orphan)).toBeUndefined();
   expect(paused.blobKeys).toEqual([key]);
-  expect(await inspectDeletionClaims(host)).toEqual([expect.objectContaining({
-    claimId: paused.claimId, state: 'pending', blobKeys: [key] })]);
+  expect(await inspectDeletionClaims(host)).toEqual(expect.arrayContaining([expect.objectContaining({
+    claimId: paused.claimId, state: 'pending', blobKeys: [key] }),
+    expect.objectContaining({ state: 'done', blobKeys: [orphan] })]));
   expect(await blobs.getBlob(key)).toBeDefined();
   let finished = false;
   void paused.finished.then(() => { finished = true; });
@@ -28,7 +32,8 @@ it('should pause only the requested purge with inspectable claims retained until
   paused.release();
   await paused.finished;
   expect(await blobs.getBlob(key)).toBeUndefined();
-  expect(await inspectDeletionClaims(host)).toEqual([expect.objectContaining({ claimId: paused.claimId, state: 'done' })]);
+  expect(await inspectDeletionClaims(host)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ claimId: paused.claimId, state: 'done' })]));
 });
 
 it('should reject a purge which never reaches external deletion', async () => {

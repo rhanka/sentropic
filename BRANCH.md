@@ -31,6 +31,7 @@
   - [x] BR861-GAPS-EX1: Makefile only admits test-861-gaps to the existing isolated Compose runner/build/scope/down guards; rollback removes that environment from those guards.
 
 ## Feedback Loop
+- [x] Opus r1 P2-2: orphan-first purge regression failed before the fix; uncorrelated DELETE now forwards without pausing (A4).
 - [x] Tests preceded implementation: packed example missing; preparation/purge exports missing; delayed PUT recovery reproduced and corrected.
 - [x] Preparation metadata uses existing intent JSON; cleanup cannot complete an expired preparation, delete shared bytes, or erase attempt history.
 - [x] npm TLS resets blocked normal installation; isolated cached qualification passed with recorded tool versions, without sibling package sources or relaxed assertions.
