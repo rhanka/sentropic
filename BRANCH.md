@@ -43,6 +43,7 @@
 - [ ] GAPS-1: public executor/types and packed typed example; test packed installation and compilation.
 - [x] GAPS-RED: packed example missing; three preparation regression cases fail on missing exports. Regression tests committed before implementation.
 - [ ] GAPS-2: correlated preparation inventory/deadlines and bounded safe cleanup; test denial, expiry, shared blobs and retry after cleanup failure.
+- [x] GAPS-2a: memory and PostgreSQL stores retain preparation history and atomically invalidate expired attempts before cleanup; metadata uses existing JSON intents without schema or L3 port changes.
 - [ ] GAPS-3: correlated purge pause and claim inspection; test both race orders on PostgreSQL.
 - [ ] GAPS-4: full artifacts unit/integration, lint, freeze, packed example, digests, push and draft PR against feat/immo-861-integration.
 - [x] INT-17: preserved owner merges #747/#748 at fbda4c3ed without rebasing: typed coordinator/abort fixes, exact Radar 0.19.2 runtime admission, packaged declaration dependency and qualification regressions. Only BRANCH.md conflicted; retain this integration plan and all incoming source/test bytes. L0 freeze and Track remain unchanged.
