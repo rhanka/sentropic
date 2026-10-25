@@ -9,8 +9,7 @@ mkdirSync(consumer, { recursive: true });
 const { tuple } = JSON.parse(readFileSync(`${out}/tuple.json`));
 const dependencies = Object.fromEntries(tuple.map((p) => [p.name, `file:${p.path}`]));
 const overrides = { ...dependencies };
-Object.assign(dependencies, { '@sentropic/llm-mesh': '0.19.2',
-  '@sentropic/oauth-verify': '0.1.0', hono: '4.13.13', jose: '5.10.0',
+Object.assign(dependencies, { '@sentropic/oauth-verify': '0.1.0', hono: '4.13.13', jose: '5.10.0',
   typescript: '5.4.5', '@types/node': '24.0.0' });
 writeFileSync(`${consumer}/package.json`, JSON.stringify({ private: true,
   type: 'module', dependencies, overrides }));

@@ -10,6 +10,7 @@ mkdirSync(`${out}/results`, { recursive: true });
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const json = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const { tuple, tupleDigest } = json(`${out}/tuple.json`);
+const install = json(`${out}/install.json`);
 for (const archive of tuple) {
   if (digest(readFileSync(archive.path)) !== archive.sha256) throw new Error(`altered ${archive.name}`);
 }
@@ -22,7 +23,9 @@ for (const scope of [...suites.slice(0, 5), 'host']) {
   const cwd = host ? `${radar}/packages/artifacts-host` : `${radar}/api`;
   const args = ['run', 'test', '--', ...(host ? [] : [scope.replace(/^api\//, '')]),
     '--reporter=default', '--reporter=json', `--outputFile.json=${reportPath}`];
-  const result = spawnSync('npm', args, { cwd, encoding: 'utf8', env: {
+  const result = install.status !== 'passed'
+    ? { status: 1, stderr: '[blocked] strict full-Radar installation failed; suite not executed' }
+    : spawnSync('npm', args, { cwd, encoding: 'utf8', env: {
     ...process.env, NODE_ENV: 'test', ARTIFACTS_PROVIDER_ACCEPTANCE: '1',
     POSTGRES_HOST: 'postgres', POSTGRES_PORT: '5432', POSTGRES_USER: 'app',
     POSTGRES_PASSWORD: 'app', POSTGRES_DB: 'app', S3_ENDPOINT: 'http://minio:9000',
@@ -36,7 +39,10 @@ for (const scope of [...suites.slice(0, 5), 'host']) {
       command: `npm ${args.join(' ')} (inside make radar ENV=test-861-l8d)`,
       exitCode: result.status ?? 1, log, logSha256: digest(log), report, status: 'passed' };
     try { item.executed = validateSuite(item); }
-    catch (error) { item.status = 'known_failure'; item.reason = error.message; }
+    catch (error) {
+      item.status = install.status === 'passed' ? 'known_failure' : 'not_covered';
+      item.reason = install.status === 'passed' ? error.message : result.stderr;
+    }
     evidence.push(item);
     console.log(item.status, path, item.reason ?? `${item.executed} cases`);
   }
@@ -52,7 +58,7 @@ const receipt = { kind: 'packed-candidate', sourceCommit, tuple, tupleDigest,
   image: 'node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6',
   radarPins: { integration: 'b2b802b5', A1: 'f2b6c25cc9458ec285d6d4f620a55dad8c30f909',
     A2: 'b104ae90a28a5581e8eabd15f12acb58558d3396', acceptance: 'e2e9515ea41baebf5539743f0cfa0dea750d072c' },
-  install: json(`${out}/install.json`), suites: evidence, shards: [...shards, own] };
+  install, suites: evidence, shards: [...shards, own] };
 receipt.smoke = existsSync(`${out}/smoke.json`) ? json(`${out}/smoke.json`)
   : { status: 'not_covered', reason: 'packed smoke not run' };
 receipt.imageSmoke = { status: 'not_covered',
