@@ -9,6 +9,8 @@
  * Postgres adapter serves the L-5b integration proof.
  */
 import type { JsonValue } from '../contracts.js';
+export { inspectPreparations, scheduleBoundedPreparationCleanup } from './preparation-cleanup.js';
+export type { PreparationCleanupHost, PreparationAttempt } from './preparation-cleanup.js';
 
 export type IntentKind = 'commit-release' | 'delete-blob' | 'promote-release';
 export type IntentState = 'pending' | 'done' | 'failed';
