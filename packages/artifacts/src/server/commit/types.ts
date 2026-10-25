@@ -8,9 +8,8 @@
  * request/receipt types. Outcome shapes mirror the fixed success
  * correlation fields (invocationId, commitState, replayed travel on every
  * success). The export-map promotion of these modules is integration-owner
- * work qualified in L6/L8; the operational coordinator interface is named
- * ArtifactCommitCoordinator here to leave the fixed coordinator-role
- * descriptor untouched.
+ * work qualified in L6/L8. The public coordinator and participant satisfy
+ * the frozen L0 ABI; prepared-unit methods bind the L4/L5 domain adapters.
  */
 import type { CommitArrivalObserver, CommitBarrierObserver, CommitBarrierPoint } from '../../testing.js';
 import type { commitFenceBrand, commitTransactionBrand } from './brands.js';
@@ -271,8 +270,9 @@ export interface FinalizeRequest {
   readonly artifactId?: string | null;
   readonly bindingName?: string | null;
   readonly policyRevision: string;
-  /** Fixed class order; stable bytewise order within each class is the caller's obligation. */
+  /** Decoded command bytes covered by the provisional quota reservation. */
   readonly quotaBytes?: number;
+  /** Fixed class order; stable bytewise order within each class is the caller's obligation. */
   readonly locks?: Partial<Record<ParticipantLockClass, CommitLockFn[]>>;
   /** Provisional writes before the guard decision. */
   readonly provisional?: (client: FinalizeTxClient) => Promise<void>;
@@ -413,12 +413,8 @@ export interface CommitCoordinatorOptions {
 /**
  * The atomic finalization coordinator mechanism. It implements the unit
  * owned by the frozen `ArtifactCommitCoordinator` role
- * (`l0-freeze/commit-contract.ts`): `finalize`/`replayGuarded` are the
- * mechanism behind `finalizeOperation`/`replayOperation`. The frozen role
- * binds `HttpRequest`/invocation/effective-command at the app layer (L5/L6
- * composition); this interface operates on internal keys below that
- * binding. The two layers share the fence/transaction/phase semantics, not
- * the input types; no wrapper or private-type cast bridges them.
+ * (`l0-freeze/commit-contract.ts`). Trusted operation bindings translate
+ * public frozen inputs to prepared domain units on this same coordinator.
  */
 export const COMMIT_PROTOCOL_VERSION = 'artifacts-commit/v1' as const;
 export interface FinalizationRecord {
