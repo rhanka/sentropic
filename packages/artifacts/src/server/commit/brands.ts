@@ -1,3 +1,8 @@
-/** Shared nominal identities for the frozen ABI and coordinator-issued credentials. */
-export const commitFenceBrand: unique symbol = Symbol('artifact-authorization-fence');
-export const commitTransactionBrand: unique symbol = Symbol('artifact-commit-transaction');
+import type { ArtifactAuthorizationFence, ArtifactCommitTransaction } from '#artifacts-frozen-commit';
+
+type CommitFenceBrand = Extract<keyof ArtifactAuthorizationFence, symbol>;
+type CommitTransactionBrand = Extract<keyof ArtifactCommitTransaction, symbol>;
+
+/** Runtime credentials implement the frozen brands without changing the freeze. */
+export const commitFenceBrand: CommitFenceBrand = Symbol('artifact-authorization-fence') as CommitFenceBrand;
+export const commitTransactionBrand: CommitTransactionBrand = Symbol('artifact-commit-transaction') as CommitTransactionBrand;
