@@ -1504,7 +1504,7 @@ publish-artifacts-token: build-artifacts ## Publish @sentropic/artifacts using N
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,artifacts,--access public --provenance=false)'
 
 .PHONY: probe-artifacts-packed-consumer
-probe-artifacts-packed-consumer: ## Second-host packed-consumer proof of the @sentropic/artifacts tarball (L-5e proof)
+probe-artifacts-packed-consumer: probe-artifacts-packed-example ## Second-host packed-consumer proof of the @sentropic/artifacts tarball (L-5e proof)
 	@rm -f tmp/artifacts-pack/*.tgz tmp/artifacts-platform-pack/*.tgz
 	@$(MAKE) pack-mcp-platform PACK_DESTINATION=tmp/artifacts-platform-pack ENV=$(ENV)
 	@$(MAKE) pack-artifacts PACK_DESTINATION=tmp/artifacts-pack ENV=$(ENV)
