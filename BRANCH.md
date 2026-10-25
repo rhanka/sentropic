@@ -39,7 +39,7 @@
 - [x] Preparation metadata uses existing intent JSON; cleanup cannot complete an expired preparation, delete shared bytes, or erase attempt history.
 - [x] npm TLS resets blocked normal installation; isolated cached qualification passed with recorded tool versions, without sibling package sources or relaxed assertions.
 - [x] Receipt: packages/artifacts/probe/CONTRACT-GAPS-RECEIPT.md contains exact commands, toolchain differences, SHA-256 and integrity.
-- [ ] Delivery blocked by external access: GitHub HTTPS TLS handshake fails, the GitHub connector transport is unavailable, and existing SSH authentication is refused; push/draft PR/CI inspection remain pending.
+- [x] Implementation pushed to origin at 62dc8de0fefcd59ceb833472379535f035550e85; draft PR https://github.com/rhanka/sentropic/pull/750 targets feat/immo-861-integration.
 
 ## AI Flaky tests
 - [x] No flaky acceptance, timeout increase or skipped required case.
@@ -55,8 +55,9 @@
 - [x] Lot 2: preparation inventory/deadlines and bounded cleanup; preparation-cleanup.test.ts covers shared/active protection, failure retry, batches and delayed PUT.
 - [x] Lot 3: purge pause/claim inspection; purge-testing.test.ts and publication-authorization.integration.test.ts cover correlated pause, both PG race orders and expired finalization.
 - [x] Build/freeze: platform/artifacts build and frozen contract fixture compilation passed; byte comparison with base passed.
-- [x] Unit: all 437 tests / 35 files passed, including the two new unit files.
-- [x] Integration/E2E: all 171 tests / 12 files passed, including radar-commit-setup.integration.test.ts and the extended PostgreSQL authorization tests.
+- [x] Unit: all 440 tests / 35 files passed, including Opus r1 cleanup and purge regressions.
+- [x] Integration/E2E: all 172 tests / 12 files passed, including bounded PostgreSQL reads and the existing authorization/race proofs.
 - [x] Packed example: packed-example.test.mjs installed the exact archive into an isolated consumer and compiled the shipped example/public API fixture.
 - [x] Lint: recommended TypeScript ESLint rules passed; cached version differences documented in receipt.
-- [ ] Push and open a draft PR against feat/immo-861-integration; inspect its CI status.
+- [x] Push and draft PR #750 against feat/immo-861-integration verified at implementation SHA 62dc8de0fefcd59ceb833472379535f035550e85; this final documentation revision follows it.
+- [x] CI trigger inspection: workflow runs automatically only against main; final delivery uses workflow_dispatch on the PR branch and reports the head-specific Actions URL.
