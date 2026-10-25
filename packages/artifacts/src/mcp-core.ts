@@ -74,118 +74,39 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
   assertArtifactsTransportProfile(deps.profile);
   const profile = deps.profile;
   if (deps.app.profileDigest !== profile.profileDigest ||
+    JSON.stringify(deps.app.selectedCapabilities) !== JSON.stringify(profile.selectedCapabilities)) {
+    throw new Error('artifacts app/profile mismatch');
   }
-
-  return {
-    async invoke(input: ArtifactsInvokeInput): Promise<HttpResponse> {
-      const { actorId, args } = input;
+  async function execute(input: ArtifactsInvokeInput): Promise<ArtifactOutcome<HttpResponse>> {
+    try {
+      const args = profile.validate(input.tool, input.args, input.idempotencyKey);
+      let request: Pick<HttpRequest, 'method' | 'path' | 'body'>;
       switch (input.tool) {
-        case 'artifacts_get_template':
-          return call(actorId, 'GET', `/templates/${needString(args, 'templateId')}`);
-        case 'artifacts_get_api_guide': {
-          const version = optString(args, 'version');
-          return call(actorId, 'GET', version === undefined ? '/api-guide' : `/api-guide/${version}`);
-        }
-        case 'artifacts_ensure':
-          return call(actorId, 'POST', '/ensure', {
-            bindingName: needString(args, 'bindingName'),
-            idempotencyKey: needString(args, 'idempotencyKey'),
-            paramsHash: optString(args, 'paramsHash') ?? '',
-            parameters: args['parameters'] ?? {},
-          }, input.storageScopeId);
-        case 'artifacts_publish':
-          return call(actorId, 'POST', '/publish', {
-            artifactId: needString(args, 'artifactId'),
-            files: args['files'],
-            profile: args['profile'] ?? {},
-            source: args['source'],
-            idempotencyKey: optString(args, 'idempotencyKey'),
-            paramsHash: optString(args, 'paramsHash'),
-          });
-        case 'artifacts_create_upload':
-          return call(actorId, 'POST', '/uploads', {
-            artifactId: needString(args, 'artifactId'),
-            mimeType: needString(args, 'mimeType'),
-            maxSize: args['maxSize'],
-          });
-        case 'artifacts_commit_upload':
-          return call(actorId, 'POST', '/uploads/commit', {
-            artifactId: needString(args, 'artifactId'),
-            uploadId: needString(args, 'uploadId'),
-            path: needString(args, 'path'),
-            mimeType: needString(args, 'mimeType'),
-            digest: needString(args, 'digest'),
-            size: args['size'],
-            profile: args['profile'] ?? {},
-            idempotencyKey: optString(args, 'idempotencyKey'),
-            paramsHash: optString(args, 'paramsHash'),
-          });
-        case 'artifacts_list':
-          return call(actorId, 'POST', '/list', { limit: args['limit'], offset: args['offset'] });
-        case 'artifacts_get':
-          return call(actorId, 'GET', `/meta/${needString(args, 'artifactId')}`);
-        case 'artifacts_get_source':
-          return call(actorId, 'GET', `/source/${needString(args, 'artifactId')}`);
-        case 'artifacts_fork':
-          return call(actorId, 'POST', '/fork', { artifactId: needString(args, 'artifactId') });
-        case 'artifacts_set_access':
-          return setAccess(actorId, args);
-        case 'artifacts_promote':
-          return call(actorId, 'POST', '/promote', {
-            artifactId: needString(args, 'artifactId'),
-            releaseId: needString(args, 'releaseId'),
-            expectedCurrent: needString(args, 'expectedCurrent'),
-          });
-        case 'artifacts_renew':
-          return call(actorId, 'POST', '/renew', { artifactId: needString(args, 'artifactId') });
-        case 'artifacts_delete':
-          return call(actorId, 'POST', '/delete', { artifactId: needString(args, 'artifactId') });
-        case 'artifacts_restore':
-          return call(actorId, 'POST', '/restore', { artifactId: needString(args, 'artifactId') });
-        default:
-          throw new Error(`unknown artifacts tool: ${input.tool}`);
+        case 'artifacts_ensure': request = { method: 'POST', path: '/ensure', body: args }; break;
+        case 'artifacts_publish': request = { method: 'POST', path: '/publish', body: args }; break;
+        case 'artifacts_list': request = { method: 'POST', path: '/list', body: args }; break;
+        case 'artifacts_get': request = { method: 'GET', path: `/meta/${args.artifactId}`, body: undefined }; break;
+        default: throw new ArtifactProfileInputError(true);
       }
-    },
-  };
+      return await deps.app.execute({ ...request, actorId: input.invocation.actorId,
+        storageScopeId: input.invocation.storageScopeId, idempotencyKey: input.idempotencyKey }, input.invocation);
+    } catch (cause) { return rejected(cause, input.invocation?.invocationId ?? '', input.tool); }
+  }
+  return { execute, async invoke(input: ArtifactsInvokeInput): Promise<HttpResponse> {
+    return projectArtifactHttpOutcome(await execute(input));
+  } };
 }
-
-// ---------------------------------------------------------------------------
-// Part 3 — platform adapter + kernel registry definition (§3). Identity
-// comes from the verified connector context (principal.sub), never from
-// tool arguments. Errors surface as stable codes only; executor throws
-// (unknown tool, malformed arguments) become invalid_request with no raw
-// message leakage. Registration goes through the one mcp-platform kernel;
-// no connector-host registry is added.
-// ---------------------------------------------------------------------------
 
 export interface ArtifactsAdapterOptions extends ArtifactsManifestOptions {
   app: ArtifactsApp;
-  defaultStorageScopeId?: string;
+  /** Bind verified principal/scope and request authorization in trusted host code. */
+  createInvocation(request: AppToolInvocation): ArtifactInvocationContext | Promise<ArtifactInvocationContext>;
 }
-
-function errorCodeOf(body: unknown): string {
-  if (typeof body === 'object' && body !== null) {
-    const code = (body as Record<string, unknown>)['error'];
-    if (typeof code === 'string' && code.length !== 0) return code;
-  }
-  return 'internal_error';
-}
-
-/** Create the platform adapter driving the 15 tools over the shared app. */
-export function createArtifactsAdapter(
-  options: ArtifactsAdapterOptions,
-): AppConnectorProviderAdapter {
+export function createArtifactsAdapter(options: ArtifactsAdapterOptions): AppConnectorProviderAdapter {
   const manifest = createArtifactsManifest(options);
-  const executor = createArtifactsToolExecutor({
-    app: options.app,
-    defaultStorageScopeId: options.defaultStorageScopeId,
-  });
+  if (typeof options.createInvocation !== 'function') throw new Error('artifacts requires a trusted invocation factory');
+  const executor = createArtifactsToolExecutor(options);
   return {
-    appId: ARTIFACTS_APP_ID,
-    connectorId: ARTIFACTS_PROVIDER_ID,
-    manifest,
-    resolveTenant: (input) => Promise.resolve({
-      principalRef: input.principalSub,
       tenantRef: input.tenantRef,
       connectorInstanceId: input.connectorInstanceId,
       ...(input.workspaceRef === undefined ? {} : { workspaceRef: input.workspaceRef }),
