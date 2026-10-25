@@ -59,8 +59,8 @@
   - [x] Write `.tmp/live-stt/l0/dependencies.md`; inventory SDKs, installers, binary hashes, licenses and blocked qualification.
 - [x] **L0d — Placement and release scope**
   - [x] Write `.tmp/live-stt/l0/placements.md` and `scope-release.md`; retain every owner-selected configuration.
-- [ ] **L0e — Capacity feasibility**
-  - [ ] Write `.tmp/live-stt/l0/capacity-study.md`; entitlement, allocation source, costs, limits, daily shares/dates and reservation outcome.
+- [x] **L0e — Capacity feasibility**
+  - [x] Write `.tmp/live-stt/l0/capacity-study.md`; entitlement, allocation source, costs, limits, daily shares/dates and reservation outcome.
 - [ ] **L0f — Documentation validation and draft handoff**
   - [ ] Check all gate IDs, local links, arithmetic, approved hashes and complete cumulative docs-only diff.
   - [ ] Run `make scope-check` before each commit through the host harness recipe; check each staged diff under 150 lines.
