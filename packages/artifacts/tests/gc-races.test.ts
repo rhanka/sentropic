@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  createPostgresGcService,
   createGcService,
   createMemoryRefcountStore,
   createMemoryDeletionClaimStore,
@@ -33,6 +34,39 @@ function digestOf(key: string): string {
 }
 
 describe('garbage collection', () => {
+  it('should keep the PostgreSQL transaction open through exclusion and blob deletion', async () => {
+    const events: string[] = [];
+    let open = false;
+    const refs = createMemoryRefcountStore();
+    const blobs = createMemoryBlobStore();
+    await blobs.putBlob(KEY_A, owe([1]));
+    const gc = createPostgresGcService({
+      ensureCoordinationRow: async () => {},
+      beginFinalization: async () => {
+        open = true;
+        events.push('begin');
+        return {
+          query: async (sql: string) => {
+            expect(open).toBe(true);
+            if (sql.includes('pg_advisory_xact_lock')) events.push('lock');
+            return { rows: [], rowCount: 1 };
+          },
+          beginReadCommitted: async () => {}, lockOperationKey: async () => {},
+          readReceipt: async () => undefined, insertReceipt: async () => {},
+          commit: async () => { events.push('commit'); open = false; },
+          rollback: async () => { open = false; }, release: () => { events.push('release'); },
+        };
+      },
+    }, () => refs);
+    const report = await gc.collect({ ...blobs, deleteBlob: async (key) => {
+      expect(open).toBe(true);
+      events.push('delete');
+      await blobs.deleteBlob(key);
+    } }, 'artifacts/');
+    expect(report.deleted).toEqual([KEY_A]);
+    expect(events).toEqual(['begin', 'lock', 'delete', 'commit', 'release']);
+  });
+
   it('collects unreferenced blobs and reports the report', async () => {
     const blobs = createMemoryBlobStore();
     const refs = createMemoryRefcountStore();

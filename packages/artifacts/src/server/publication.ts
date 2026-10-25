@@ -25,7 +25,7 @@ import type { CommandIdentity } from './command-identity.js';
 import type {
   AuthorizeCommit,
   CommitLockFn,
-  FinalizationCoordinator,
+  ArtifactCommitCoordinator,
   FinalizeRequest,
   FinalizeResult,
   FinalizeTxClient,
@@ -393,7 +393,7 @@ export interface GuardedPublishInput extends PublishInput {
 }
 
 export interface GuardedPublicationDeps {
-  readonly coordinator: FinalizationCoordinator;
+  readonly coordinator: ArtifactCommitCoordinator;
   readonly blobs: PublicationBlobStore;
   readonly intents: IntentStore;
   readonly createUnitWriter: (client: FinalizeTxClient) => PublicationUnitWriter;
@@ -496,6 +496,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         artifactId: input.artifactId,
         bindingName: null,
         policyRevision: input.policyRevision,
+        quotaBytes: prepared.entries.reduce((total, entry) => total + entry.bytes.byteLength, 0),
         locks: { ...deps.locks, 'artifact-lifecycle': [
           async (client) => { finalizationClient = client; },
           ...(deps.locks?.['artifact-lifecycle'] ?? []),
@@ -535,7 +536,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         receiptData: { releaseId, manifest: prepared.manifest },
       };
       preservePins = true;
-      const outcome = await deps.coordinator.finalize(request);
+      const outcome = await deps.coordinator.finalizePrepared(request);
       preservePins = !outcome.ok && outcome.failure.commitState === 'unknown';
       if (!outcome.ok && outcome.failure.commitState === 'not_committed') {
         // Best-effort compensation for ref stores outside the unit transaction.

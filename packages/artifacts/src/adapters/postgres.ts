@@ -15,6 +15,19 @@ import type { SourceRef, SourceStore } from '../server/sources.js';
 import type { IntentKind, IntentStore, ObjectIntent } from '../server/object-intents.js';
 import type { IdempotencyStore, IdempotentResult } from '../server/idempotency.js';
 import type { PublicationStateStore, ReleaseRecord } from '../server/publication.js';
+import type { KvPort } from '../server/ports.js';
+
+/** Read-only migration inventory. Never promotes a legacy success into an authorized receipt. */
+export function createPostgresLegacyArtifactRecords(pool: Pool): Pick<KvPort, 'get'> {
+  return {
+    async get(key) {
+      const { rows } = await pool.query<{ params_hash: string; result: unknown }>(
+        'SELECT params_hash, result FROM artifacts.idempotency_keys WHERE key = $1', [key],
+      );
+      return rows[0] === undefined ? undefined : JSON.stringify(rows[0]);
+    },
+  };
+}
 
 export interface ArtifactBindingInput {
   storageScopeId: string;
