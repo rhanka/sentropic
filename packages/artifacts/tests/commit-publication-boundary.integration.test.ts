@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { S3Client, CreateBucketCommand, DeleteBucketCommand } from '@aws-sdk/client-s3';
@@ -242,4 +244,92 @@ describe('publication serializes real PostgreSQL writers', () => {
       }
       expect((await pool.query('SELECT used FROM l8a_quota')).rows[0].used).toBe(1);
     });
+});
+
+// A real second Node process owns its pool, coordinator and S3 client.
+const workerSource = `
+import { Pool } from 'pg';
+import { S3Client } from '@aws-sdk/client-s3';
+import { createS3BlobStore } from './dist/adapters/s3.js';
+import { createPostgresArtifactStore } from './dist/adapters/postgres.js';
+import { createPostgresCommitExecutor } from './dist/adapters/postgres-commit.js';
+import { createArtifactCommitCoordinator } from './dist/server/commit/coordinator.js';
+import { createGuardedPublicationService, createPostgresPublicationUnitWriter } from './dist/server/publication.js';
+import { createPostgresClaimGuardedRefs } from './dist/server/gc.js';
+const pool = new Pool({connectionString:process.env.DATABASE_URL});
+const s3 = new S3Client({endpoint:process.env.ARTIFACTS_S3_ENDPOINT,forcePathStyle:true,
+ region:process.env.ARTIFACTS_S3_REGION,credentials:{accessKeyId:process.env.ARTIFACTS_S3_ACCESS_KEY_ID,
+ secretAccessKey:process.env.ARTIFACTS_S3_SECRET_ACCESS_KEY}});
+let resume;
+process.on('message', async message => {
+ if(message.go){resume();return;}
+ try {
+ const input=message.input; input.files=input.files.map(f=>({...f,bytes:new Uint8Array(f.bytes)}));
+ const raw=createS3BlobStore({client:s3,bucket:message.bucket});
+ const ready=new Promise(resolve=>{resume=resolve});
+ const blobs={...raw,putBlob:async(key,bytes)=>{await raw.putBlob(key,bytes);process.send({prepared:true,pid:process.pid});await ready;}};
+ const executor=createPostgresCommitExecutor(pool); const pg=createPostgresArtifactStore(pool);
+ const coordinator=createArtifactCommitCoordinator({executor,policy:{createParticipant:(client,token)=>({
+  readRevision:async()=> (await client.query('SELECT revision FROM l8a_policy WHERE id=1 FOR SHARE',[])).rows[0].revision,
+  checkApproval:async()=>({approved:(await client.query('SELECT approved FROM l8a_policy WHERE id=1',[])).rows[0].approved}),
+  reserveQuota:async()=>({reserved:(await client.query('UPDATE l8a_quota SET used=used+1 WHERE used<total',[])).rowCount===1}),
+  mintFence:(policyRevision,invocationId)=>({fenceId:token,transactionId:token,policyRevision,invocationId})
+ })}});
+ const service=createGuardedPublicationService({coordinator,blobs,intents:pg,
+ refs:createPostgresClaimGuardedRefs(pg,executor),createUnitWriter:createPostgresPublicationUnitWriter,
+ locks:{'artifact-lifecycle':[async client=>{await client.query('SELECT id FROM artifacts.artifacts WHERE id=$1 FOR UPDATE',[input.artifactId]);}]}});
+ process.send({result:await service.publishFinalized(input)});
+ }catch(error){process.send({error:String(error)});}
+ finally{await pool.end();s3.destroy();process.disconnect();}
+});`;
+
+describe('same-key S3 preparation across two processes', () => {
+  it.each([false, true])('should keep one success and one charge when the second command changes: %s', async (changed) => {
+    const input = inputFor(await artifact());
+    const other = { ...input, invocationId: randomUUID(), attemptId: randomUUID(),
+      files: input.files.map((file) => ({ ...file, path: changed ? 'changed.html' : file.path })) };
+    const command = createArtifactCommand(profile, 'artifacts_publish', {
+      artifactId: other.artifactId, idempotencyKey: other.callerKey, profile: other.profile,
+      files: other.files.map((file) => ({ ...file, bytes: [...file.bytes] })),
+    }, other, createRadarKeyDerivation({ storageScopeId: other.storageScopeId, actorIds: [other.actorId] }));
+    const beforeCount = Number((await pool.query('SELECT count(*) FROM artifacts.releases')).rows[0].count);
+    const barrier = createArtifactCommitBarrier({ points: ['before_key_lock'] });
+    const pending = publish(world(pool, blobs, barrier.observer), input);
+    await barrier.waitUntilReached('before_key_lock', input.invocationId);
+    const child = spawn(process.execPath, ['--input-type=module', '-e', workerSource], {
+      cwd: new URL('..', import.meta.url), stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    });
+    let stderr = '';
+    child.stderr?.on('data', (data) => { stderr += String(data); });
+    const prepared = once(child, 'message');
+    const result = new Promise<unknown>((resolve, reject) => {
+      child.on('message', (message: { result?: unknown; error?: string }) => {
+        if (message.error) reject(new Error(message.error));
+        if (message.result) resolve(message.result);
+      });
+      child.once('exit', (code) => { if (code) reject(new Error(`worker exit ${code}: ${stderr}`)); });
+    });
+    void result.catch(() => {});
+    try {
+      child.send({ bucket, input: { ...other, identity: command.identity,
+        files: other.files.map((file) => ({ ...file, bytes: [...file.bytes] })) } });
+      expect((await prepared)[0]).toMatchObject({ prepared: true, pid: child.pid });
+      expect(child.pid).not.toBe(process.pid);
+      barrier.release('before_key_lock', input.invocationId);
+      const winner = await pending;
+      expect(winner).toMatchObject({ ok: true, replayed: false });
+      child.send({ go: true });
+      const loser = await result;
+      if (changed) expect(loser).toMatchObject({ ok: false, failure: { category: 'conflict' } });
+      else {
+        expect(loser).toMatchObject({ ok: true, replayed: true });
+        if (winner.ok) expect(loser).toMatchObject({ result: winner.result });
+      }
+      expect(Number((await pool.query('SELECT count(*) FROM artifacts.releases')).rows[0].count)).toBe(beforeCount + 1);
+      expect((await pool.query('SELECT used FROM l8a_quota')).rows[0].used).toBe(1);
+    } finally {
+      child.kill();
+      await pending;
+    }
+  });
 });

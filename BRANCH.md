@@ -47,7 +47,7 @@
 - [ ] **Lot 1 — Publication boundary matrix**
   - [x] Add `packages/artifacts/tests/commit-publication-boundary.integration.test.ts` with real PG/S3 fixture.
   - [x] Add expiry denial/retry/replay matrix at eight publication waits with independent DB/S3 reads.
-  - [ ] Exercise same-key two-process S3 races for identical and changed commands.
+  - [x] Add same-key two-process S3 races for identical and changed commands; one receipt and quota charge.
   - [ ] Exercise policy/lifecycle serialization, purge claims and bounded shared-blob cleanup.
   - [x] Add real PG key/quota/policy/ACL/lifecycle lock waits and both writer orders.
   - [ ] Keep demonstrated product defects as known-failure tests with file:line evidence.
