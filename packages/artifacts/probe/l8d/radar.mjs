@@ -35,8 +35,13 @@ for (const scope of [...suites.slice(0, 5), 'host']) {
   writeFileSync(`${out}/results/${name}.log`, log);
   const report = existsSync(reportPath) ? json(reportPath) : { testResults: [] };
   for (const path of host ? suites.slice(5) : [scope]) {
+    const cases = report.testResults.filter((t) => t.name.endsWith(`/${path}`))
+      .flatMap((t) => t.assertionResults);
     const item = { path, sourceSha256: digest(readFileSync(`${radar}/${path}`)), gate: 1,
-      command: `npm ${args.join(' ')} (inside make radar ENV=test-861-l8d)`,
+      counts: { passed: cases.filter((t) => t.status === 'passed').length,
+        failed: cases.filter((t) => t.status === 'failed').length,
+        skipped: cases.filter((t) => !['passed', 'failed'].includes(t.status)).length },
+      command: `npm ${args.join(' ')} (inside make radar ENV=test-861-int)`,
       exitCode: result.status ?? 1, log, logSha256: digest(log), report, status: 'passed' };
     try { item.executed = validateSuite(item); }
     catch (error) {
@@ -56,8 +61,10 @@ const shards = ['L8a', 'L8b', 'L8c'].map((lane) => {
 });
 const receipt = { kind: 'packed-candidate', sourceCommit, tuple, tupleDigest,
   image: 'node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6',
-  radarPins: { integration: 'b2b802b5', A1: 'f2b6c25cc9458ec285d6d4f620a55dad8c30f909',
-    A2: 'b104ae90a28a5581e8eabd15f12acb58558d3396', acceptance: 'e2e9515ea41baebf5539743f0cfa0dea750d072c' },
+  candidate: json(`${out}/candidate.json`),
+  radarPins: { head: readFileSync(`${out}/radar-source-commit`, 'utf8').trim(),
+    frozenProfile: 'dde9f4c85f2ddaef5a394234299a0ab24dfa1343',
+    listKeys: '8d6aabb0aea835a45d992d4f379c6fe16d57658c' },
   install, suites: evidence, shards: [...shards, own] };
 receipt.smoke = existsSync(`${out}/smoke.json`) ? json(`${out}/smoke.json`)
   : { status: 'not_covered', reason: 'packed smoke not run' };
