@@ -46,7 +46,7 @@
   - [x] Create worktree from integration and merge L6.
 - [ ] **Lot 1 — Publication boundary matrix**
   - [x] Add `packages/artifacts/tests/commit-publication-boundary.integration.test.ts` with real PG/S3 fixture.
-  - [ ] Exercise applicable preparation/finalization/replay waits and denied effects using independent DB/S3 reads.
+  - [x] Add expiry denial/retry/replay matrix at eight publication waits with independent DB/S3 reads.
   - [ ] Exercise same-key two-process S3 races for identical and changed commands.
   - [ ] Exercise policy/lifecycle serialization, purge claims and bounded shared-blob cleanup.
   - [ ] Keep demonstrated product defects as known-failure tests with file:line evidence.
