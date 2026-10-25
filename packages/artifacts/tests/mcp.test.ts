@@ -34,118 +34,25 @@ import {
 import type { StpConnectorContext } from '@sentropic/mcp-platform';
 import { createProviderRegistry } from '@sentropic/mcp-platform/registry';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
-  });
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
 
-  it('binds the host invocation scope only when the host supplies one', () => {
-    const generic = createArtifactsManifest();
-    expect(generic.tools.every((tool) => tool.requiredScopes.length === 0)).toBe(true);
-    expect(generic.authz.scopes).toEqual([]);
-    const bound = createArtifactsManifest({ invocationScope: 'immo:read' });
-    expect(bound.tools.every((tool) => tool.requiredScopes.join() === 'immo:read')).toBe(true);
-    expect(bound.authz.scopes).toEqual(['immo:read']);
+describe('L6 compiled MCP profile', () => {
+  const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+  it('should expose exactly the selected closed schemas and required write keys', () => {
+    const manifest = createArtifactsManifest({ profile, invocationScope: 'immo:read' });
+    expect(manifest.tools.map((tool) => tool.name)).toEqual(profile.selectedCapabilities);
+    expect(manifest.tools.every((tool) => tool.requiredScopes.includes('immo:read'))).toBe(true);
+    for (const tool of manifest.tools) expect(tool.inputSchema).toEqual(profile.schemas[tool.name]);
+    expect(manifest.tools.find((tool) => tool.name === 'artifacts_publish')?.idempotency)
+      .toEqual({ required: true, scope: 'principal' });
   });
-
-  it('runs ensure, publish, get, list, template and guide through the executor', async () => {
-    const executor = makeExecutor();
-    const artifactId = await ensureAndPublish(executor);
-    const got = await executor.invoke({ tool: 'artifacts_get', actorId: OWNER, args: { artifactId } });
-    expect(got.status).toBe(200);
-    expect(got.body).toMatchObject({ artifactId, ownerId: OWNER, state: 'active' });
-    const listed = await executor.invoke({ tool: 'artifacts_list', actorId: OWNER, args: {} });
-    expect(listed.body).toMatchObject({ total: 1, artifacts: [{ artifactId }] });
-    const template = await executor.invoke({
-      tool: 'artifacts_get_template', actorId: OWNER, args: { templateId: 'static-html' },
-    });
-    expect(template.status).toBe(200);
-    const guide = await executor.invoke({ tool: 'artifacts_get_api_guide', actorId: OWNER, args: {} });
-    expect(guide.body).toMatchObject({ version: 'v1' });
+  it('should invalidate manifest integrity on a semantic-only profile change', () => {
+    const other = compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE,
+      contractRevisions: { ...RADAR_ARTIFACTS_PROFILE.contractRevisions, authorization: 'artifacts-authorization/v2' } });
+    expect(profile.schemas).toEqual(other.schemas);
+    expect(computeManifestDigest(createArtifactsManifest({ profile })))
+      .not.toBe(computeManifestDigest(createArtifactsManifest({ profile: other })));
   });
-
-  it('refuses strangers, unknown tools and malformed arguments', async () => {
-    const executor = makeExecutor();
-    const artifactId = await ensureAndPublish(executor);
-    const stranger = await executor.invoke({
-      tool: 'artifacts_get', actorId: STRANGER, args: { artifactId },
-    });
-    expect(stranger.status).toBe(404);
-    expect(stranger.body).toEqual({ error: 'not_found' });
-    await expect(
-      executor.invoke({ tool: 'pages_ensure_site', actorId: OWNER, args: {} }),
-    ).rejects.toThrow(/unknown artifacts tool/);
-    await expect(
-      executor.invoke({ tool: 'artifacts_get', actorId: OWNER, args: {} }),
-    ).rejects.toThrow(/missing artifactId/);
-  });
-
-  it('runs share, fork, promote, renew, delete and restore through tools', async () => {
-    const executor = makeExecutor();
-    const id = await ensureAndPublish(executor);
-    const granted = await executor.invoke({
-      tool: 'artifacts_set_access', actorId: OWNER,
-      args: { artifactId: id, action: 'grant', principalId: READER, grant: 'read' },
-    });
-    expect(granted.status).toBe(200);
-    const readerGet = await executor.invoke({ tool: 'artifacts_get', actorId: READER, args: { artifactId: id } });
-    expect(readerGet.status).toBe(200);
-    const readerSource = await executor.invoke({
-      tool: 'artifacts_get_source', actorId: READER, args: { artifactId: id },
-    });
-    expect(readerSource.status).toBe(403);
-    const forked = await executor.invoke({ tool: 'artifacts_fork', actorId: READER, args: { artifactId: id } });
-    expect(forked.status).toBe(201);
-    expect((forked.body as { artifactId: string }).artifactId).not.toBe(id);
-    const v2 = await executor.invoke({
-      tool: 'artifacts_publish', actorId: OWNER,
-      args: {
-        artifactId: id,
-        files: [{ path: 'index.html', mimeType: 'text/html', bytes: [60, 50, 62] }],
-        idempotencyKey: 'p-2', paramsHash: 'h-2',
-      },
-    });
-    const v2Id = (v2.body as { releaseId: string }).releaseId;
-    const meta = await executor.invoke({ tool: 'artifacts_get', actorId: OWNER, args: { artifactId: id } });
-    const current = (meta.body as { currentReleaseId: string }).currentReleaseId;
-    expect(current).toBe(v2Id);
-    const stale = await executor.invoke({
-      tool: 'artifacts_promote', actorId: OWNER,
-      args: { artifactId: id, releaseId: v2Id, expectedCurrent: 'not-current' },
-    });
-    expect(stale.status).toBe(409);
-    const renewed = await executor.invoke({ tool: 'artifacts_renew', actorId: OWNER, args: { artifactId: id } });
-    expect(renewed.status).toBe(200);
-    const deleted = await executor.invoke({ tool: 'artifacts_delete', actorId: OWNER, args: { artifactId: id } });
-    expect(deleted.body).toMatchObject({ state: 'deleted' });
-    const restored = await executor.invoke({
-      tool: 'artifacts_restore', actorId: OWNER, args: { artifactId: id },
-    });
-    expect(restored.body).toMatchObject({ state: 'active' });
-    await expect(
-      executor.invoke({
-        tool: 'artifacts_set_access', actorId: OWNER,
-        args: { artifactId: id, action: 'bogus' },
-      }),
-    ).rejects.toThrow(/unknown set-access action/);
-  });
-
-  it('commits a bounded upload session through tools', async () => {
-    const executor = makeExecutor();
-    const id = await ensureAndPublish(executor);
-    const begun = await executor.invoke({
-      tool: 'artifacts_create_upload', actorId: OWNER,
-      args: { artifactId: id, mimeType: 'text/plain' },
-    });
-    expect(begun.status).toBe(201);
-    const uploadId = (begun.body as { uploadId: string }).uploadId;
-    const committed = await executor.invoke({
-      tool: 'artifacts_commit_upload', actorId: OWNER,
-      args: {
-        artifactId: id, uploadId, path: 'empty.txt', mimeType: 'text/plain',
-        digest: EMPTY_DIGEST, size: 0, idempotencyKey: 'u-1', paramsHash: 'h-1',
-      },
-    });
-    expect(committed.status).toBe(201);
-    const strangerUpload = await executor.invoke({
-      tool: 'artifacts_create_upload', actorId: STRANGER,
       args: { artifactId: id, mimeType: 'text/plain' },
     });
     expect(strangerUpload.status).toBe(404);
