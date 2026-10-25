@@ -406,4 +406,51 @@ describe('bounded cleanup and purge exclusion', () => {
     expect(attempts).toHaveLength(1);
     expect(attempts[0].payload).toMatchObject({ invocationId: input.invocationId, attemptId: input.attemptId });
   });
+
+  it('should forward all preparation barriers through the provider observer', async () => {
+    const input = inputFor(await artifact());
+    const observed: string[] = [];
+    const outcome = await publish(world(pool, blobs, async (point, invocationId) => {
+      expect(invocationId).toBe(input.invocationId);
+      observed.push(point);
+    }), input);
+    expect(outcome).toMatchObject({ ok: true });
+    expect(observed).toEqual(expect.arrayContaining([
+      'before_blob_put', 'after_blob_put_before_verify', 'before_blob_readback',
+    ]));
+  });
+});
+
+describe('connection and guarded replay waits', () => {
+  it('should refuse expired authority after waiting for an actual pooled connection', async () => {
+    const input = inputFor(await artifact());
+    const before = await snapshot();
+    const single = new Pool({ connectionString: process.env['DATABASE_URL'], max: 1 });
+    const holder = await single.connect();
+    const authority = { expired: false };
+    const pending = publish(world(single, blobs, undefined, authority), input);
+    try {
+      await expect.poll(() => single.waitingCount).toBe(1);
+      authority.expired = true;
+    } finally { holder.release(); }
+    try {
+      expect(await pending).toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit' } });
+      expect(await snapshot()).toEqual(before);
+    } finally { await single.end(); }
+  });
+
+  it('should deny an expired replay after lookup without changing the committed result or quota', async () => {
+    const input = inputFor(await artifact());
+    expect(await publish(world(pool, blobs), input)).toMatchObject({ ok: true });
+    const before = await snapshot();
+    const authority = { expired: false };
+    const barrier = createArtifactCommitBarrier({ points: ['after_replay_lookup_before_guard'] });
+    const replay = { ...input, invocationId: randomUUID(), attemptId: randomUUID() };
+    const pending = publish(world(pool, blobs, barrier.observer, authority), replay);
+    await barrier.waitUntilReached('after_replay_lookup_before_guard', replay.invocationId);
+    authority.expired = true;
+    barrier.release('after_replay_lookup_before_guard', replay.invocationId);
+    expect(await pending).toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit' } });
+    expect(await snapshot()).toEqual(before);
+  });
 });
