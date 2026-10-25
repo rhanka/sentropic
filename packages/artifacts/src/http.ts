@@ -105,108 +105,39 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       let commitState: 'not_committed' | 'committed' | 'unknown' = 'not_committed';
       let invocation = supplied;
       try {
-          const acl = await requireVisible(artifactId, request.actorId);
-          const state = await deps.lifecycle.stateOf(artifactId);
-          if (state === 'deleted' || state === 'purged') {
-            throw new Error(`cannot fork ${state} artifact: ${artifactId}`);
+        const capability = profile.capabilityForRoute(request.method, request.path) ??
+          (request.method === 'GET' && /^\/meta\/[^/]*$/.test(request.path) &&
+            profile.selectedCapabilities.includes('artifacts_get') ? 'artifacts_get' : undefined);
+        if (!capability) throw new ArtifactProfileInputError(true);
+        operation = capability.slice('artifacts_'.length);
+        phase = 'entry';
+        if (!supplied || !supplied.invocationId || typeof supplied.authorizeCommit !== 'function') {
+          throw new ArtifactProfileInputError();
+        }
+        invocation = Object.freeze({ ...supplied });
+        if (!invocation.actorId) throw new ArtifactOperationError('anonymous');
+        if (request.actorId !== invocation.actorId || !invocation.storageScopeId ||
+          (request.storageScopeId !== undefined && request.storageScopeId !== invocation.storageScopeId)) {
+          throw new ArtifactProfileInputError();
+        }
+        let args: Record<string, unknown>;
+        if (capability === 'artifacts_get') {
+          if (request.body !== undefined && Object.keys(object(request.body)).length) throw new ArtifactProfileInputError();
+          args = { artifactId: request.path.slice('/meta/'.length) };
+        } else {
+          args = { ...object(request.body ?? {}) };
+          if (Object.hasOwn(args, 'storageScopeId')) {
+            if (args.storageScopeId !== invocation.storageScopeId) throw new ArtifactProfileInputError();
+            delete args.storageScopeId;
           }
-          const current = await deps.publication.getCurrent(artifactId);
-          if (current === undefined) throw new Error(`no release to fork for ${artifactId}`);
-          const manifest = JSON.parse(current.manifest) as { files?: { digest?: unknown }[] };
-          const parent: ForkRecord = {
-            artifactId,
-            ownerId: acl.ownerId,
-            releaseId: current.releaseId,
-            manifest: current.manifest,
-            state,
-            readerIds: acl.grants.map((grant) => grant.principalId),
-            blobDigests: (manifest.files ?? []).flatMap((file) =>
-              typeof file.digest === 'string' ? [file.digest] : [],
-            ),
-          };
-          await deps.forks.track(parent);
-          const forked = await deps.forks.fork({ actorId: request.actorId, artifactId });
-          return { status: 201, body: forked };
         }
-
-        if (request.method === 'POST' && request.path === '/access/grant') {
-          const artifactId = needString(body['artifactId'], 'artifactId');
-          const acl = await requireVisible(artifactId, request.actorId);
-          const grant = body['grant'];
-          if (grant !== 'read' && grant !== 'source') throw new Error('invalid grant: must be read or source');
-          const updated = grantAccess(acl, request.actorId, {
-            principalId: needString(body['principalId'], 'principalId'),
-            grant,
-          });
-          await deps.acls.putArtifactAcl(artifactId, updated);
-          return { status: 200, body: { grants: updated.grants } };
+        const normalized = profile.validate(capability, args, request.idempotencyKey);
+        const command = capability === 'artifacts_ensure' || capability === 'artifacts_publish'
+          ? createArtifactCommand(profile, capability, args, invocation, deps.derivation, request.idempotencyKey) : undefined;
+        if (command) {
+          phase = 'migration';
+          await assertArtifactReplayMigration(deps.legacyRecords, command, invocation, normalized.idempotencyKey as string);
         }
-
-        if (request.method === 'POST' && request.path === '/access/revoke') {
-          const artifactId = needString(body['artifactId'], 'artifactId');
-          const acl = await requireVisible(artifactId, request.actorId);
-          const updated = revokeAccess(acl, request.actorId, needString(body['principalId'], 'principalId'));
-          await deps.acls.putArtifactAcl(artifactId, updated);
-          return { status: 200, body: { grants: updated.grants } };
-        }
-
-        if (request.method === 'POST' && request.path === '/sources') {
-          const artifactId = needString(body['artifactId'], 'artifactId');
-          const acl = await requireVisible(artifactId, request.actorId);
-          assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
-          const attached = parseSourceRef(body['source'] ?? {});
-          await deps.sources.putSource(artifactId, attached);
-          return { status: 200, body: attached };
-        }
-
-        if (request.method === 'GET' && request.path.startsWith('/content/')) {
-          const rest = request.path.slice('/content/'.length).split('/');
-          if (rest.length !== 2 || (rest[0]?.length ?? 0) === 0 || (rest[1]?.length ?? 0) === 0) {
-            return { status: 404, body: errorBody(404) };
-          }
-          await requireVisible(rest[0] as string, request.actorId);
-          const served = await runtime.serveFile({
-            artifactId: rest[0] as string,
-            digest: rest[1] as string,
-            actorId: request.actorId,
-            isApproved,
-          });
-          return {
-            status: 200,
-            body: {
-              digest: served.digest,
-              mimeType: served.mimeType,
-              size: served.size,
-              bytes: Array.from(served.bytes),
-            },
-          };
-        }
-
-        if (request.method === 'GET' && request.path.startsWith('/source/')) {
-          const artifactId = request.path.slice('/source/'.length);
-          if (artifactId.length === 0) return { status: 404, body: errorBody(404) };
-          const acl = await requireVisible(artifactId, request.actorId);
-          if (!evaluateAccess(acl, request.actorId, 'source', isApproved)) {
-            throw new Error('access denied: source export requires a source grant');
-          }
-          const source = await deps.sources.getSource(artifactId);
-          if (source === undefined) return { status: 404, body: errorBody(404) };
-          return { status: 200, body: source };
-        }
-
-        if (request.method === 'POST' && request.path === '/list') {
-          const limit = body['limit'] === undefined ? 20 : body['limit'];
-          const offset = body['offset'] === undefined ? 0 : body['offset'];
-          if (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > 100) {
-            throw new Error('invalid request: limit must be an integer in 1..100');
-          }
-          if (!Number.isInteger(offset) || (offset as number) < 0) {
-            throw new Error('invalid request: offset must be a non-negative integer');
-          }
-          // ACL filtering precedes pagination: invisible artifacts neither
-          // appear nor shift the page window (spec-v8 5c).
-          const visible: Array<{ artifactId: string; ownerId: string; state: string; isPublic: boolean }> = [];
-          for (const artifactId of await deps.acls.listArtifactIds()) {
             const acl = await deps.acls.getArtifactAcl(artifactId);
             if (acl === undefined) continue;
             const state = await deps.lifecycle.stateOf(artifactId);
