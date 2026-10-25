@@ -9,10 +9,11 @@
  * correlation fields (invocationId, commitState, replayed travel on every
  * success). The export-map promotion of these modules is integration-owner
  * work qualified in L6/L8; the operational coordinator interface is named
- * FinalizationCoordinator here to leave the fixed coordinator-role
+ * ArtifactCommitCoordinator here to leave the fixed coordinator-role
  * descriptor untouched.
  */
 import type { CommitArrivalObserver, CommitBarrierObserver, CommitBarrierPoint } from '../../testing.js';
+import type { commitFenceBrand, commitTransactionBrand } from './brands.js';
 
 /** Version of the frozen command-codec shape (r2 C6). */
 export const COMMAND_CODEC_VERSION = 'artifacts-command/v1' as const;
@@ -61,7 +62,10 @@ export interface ArtifactInvocationContext {
 }
 
 /** Commit context: invocation plus operation, identities, revision, purpose. */
-export interface ArtifactCommitContext extends ArtifactInvocationContext {
+export interface ArtifactCommitContext {
+  readonly invocationId: string;
+  readonly actorId: string;
+  readonly storageScopeId: string;
   readonly operation: string;
   readonly artifactId: string;
   readonly bindingId: string;
@@ -85,6 +89,7 @@ export interface ArtifactCommitContext extends ArtifactInvocationContext {
  * freshly re-read policy revision (`invalid_object`).
  */
 export interface ArtifactAuthorizationFence {
+  readonly [commitFenceBrand]: true;
   readonly fenceId: string;
   readonly transactionId: string;
   readonly invocationId: string;
@@ -130,10 +135,11 @@ export type AuthorizeCommit = (
  * fixed-typed guards still accept this object structurally.
  */
 export interface ArtifactCommitTransaction {
+  readonly [commitTransactionBrand]: true;
   readonly transactionId: string;
   readonly invocationId: string;
   readonly policyRevision: string;
-  readonly participant: CommitPolicyParticipant;
+  readonly participant: ArtifactCommitParticipant;
 }
 
 /**
@@ -144,7 +150,7 @@ export interface ArtifactCommitTransaction {
  * exist so the coordinator can order the authority lock before the quota
  * wait (A4.4) and re-read both after post-guard waits (A4.6).
  */
-export interface CommitPolicyParticipant {
+export interface ArtifactPolicyDriver {
   /** Read the current policy revision row (shared lock) on this transaction. */
   readRevision(): Promise<string>;
   /** Check account/cohort/activation approval under the current revision. */
@@ -161,12 +167,36 @@ export interface CommitPolicyParticipant {
     operation: string;
   }): Promise<{ reserved: boolean }>;
   /** Mint the opaque fence for an allowed decision. */
+  mintFence(revision: string, invocationId: string): Omit<ArtifactAuthorizationFence, typeof commitFenceBrand>;
+}
+
+/** Frozen participant ABI plus coordinator-internal policy reads and fence minting. */
+export interface ArtifactCommitParticipant extends Omit<ArtifactPolicyDriver, 'reserveQuota' | 'mintFence'> {
+  readonly policyRevision: string;
+  readAdmission(input: AdmissionReadInput): Promise<AdmissionReadResult>;
+  reserveQuota(input: QuotaReserveInput | { actorId: string; operation: string }): Promise<{ reserved: boolean }>;
   mintFence(revision: string, invocationId: string): ArtifactAuthorizationFence;
+}
+export interface AdmissionReadInput {
+  readonly operation: string;
+  readonly artifactId: string;
+  readonly bindingId: string;
+  readonly actorId: string;
+  readonly policyRevision: string;
+}
+export interface AdmissionReadResult {
+  readonly allowed: boolean;
+  readonly reason: AuthorizationDenialReason;
+}
+export interface QuotaReserveInput {
+  readonly storageScopeId: string;
+  readonly operation: string;
+  readonly bytes: number;
 }
 
 /** Factory binding a participant to one finalization connection. */
 export interface CommitPolicyParticipantFactory {
-  createParticipant(client: FinalizeTxClient, transactionToken: string): CommitPolicyParticipant;
+  createParticipant(client: FinalizeTxClient, transactionToken: string): ArtifactPolicyDriver;
 }
 
 /** Constrained transaction handle for provider-internal provisional work. */
@@ -250,6 +280,8 @@ export interface FinalizeRequest {
   readonly attemptId?: string;
   readonly guard: AuthorizeCommit;
   readonly receiptData: unknown;
+  /** Domain identity must still match the winner under the replay locks. */
+  readonly validateReplayReceipt?: (receipt: StoredCommitReceipt) => boolean;
 }
 
 /** Internal failure categories (r2 E2). */
@@ -353,6 +385,12 @@ export type FinalizeResult = ArtifactOutcome<StoredCommitReceipt>;
 export interface CommitCoordinatorOptions {
   readonly executor: CommitExecutor;
   readonly policy: CommitPolicyParticipantFactory;
+  /** Trusted domain adapters; every call resolves fresh state, including replay. */
+  readonly operations?: {
+    readonly guardedOperations: readonly string[];
+    finalize(input: FinalizationInput): Promise<FinalizeRequest>;
+    replay(input: ReplayInput): Promise<FinalizeRequest>;
+  };
   /** Defined clock for activation-expiry evaluation; defaults to Date.now. */
   readonly nowMs?: () => number;
   readonly testObserver?: CommitBarrierObserver | CommitArrivalObserver;
@@ -379,9 +417,39 @@ export interface CommitCoordinatorOptions {
  * binding. The two layers share the fence/transaction/phase semantics, not
  * the input types; no wrapper or private-type cast bridges them.
  */
-export interface FinalizationCoordinator {
-  finalize(request: FinalizeRequest): Promise<FinalizeResult>;
-  replayGuarded(request: FinalizeRequest): Promise<FinalizeResult>;
+export const COMMIT_PROTOCOL_VERSION = 'artifacts-commit/v1' as const;
+export interface FinalizationRecord {
+  readonly internalKey: InternalIdempotencyKey;
+  readonly commandHash: string;
+  readonly codecVersion: typeof COMMAND_CODEC_VERSION;
+  readonly replayed: boolean;
+}
+export interface FinalizationInput {
+  readonly request: {
+    readonly method: string; readonly path: string;
+    readonly headers: Record<string, string>; readonly body: unknown;
+  };
+  readonly invocation: ArtifactInvocationContext;
+  readonly command: {
+    readonly operation: string; readonly scopeBinding: string;
+    readonly payload: Record<string, unknown>;
+    readonly provenance: { readonly kind: 'inline-original' };
+    readonly identity: CommandIdentity;
+  };
+}
+export interface ReplayInput {
+  readonly invocation: ArtifactInvocationContext;
+  readonly internalKey: InternalIdempotencyKey;
+}
+export interface ArtifactCommitCoordinator {
+  readonly protocolVersion: typeof COMMIT_PROTOCOL_VERSION;
+  readonly guardedOperations: readonly string[];
+  readonly testObserver?: CommitArrivalObserver;
+  finalizeOperation(input: FinalizationInput): Promise<ArtifactOutcome<FinalizationRecord>>;
+  replayOperation(input: ReplayInput): Promise<ArtifactOutcome<FinalizationRecord>>;
+  /** Provider-internal prepared units; domain effects remain inside the same transaction. */
+  finalizePrepared(request: FinalizeRequest): Promise<FinalizeResult>;
+  replayPrepared(request: FinalizeRequest): Promise<FinalizeResult>;
 }
 
 /** Unknown legacy codec on a found success row: L6 projects the migration condition. */
