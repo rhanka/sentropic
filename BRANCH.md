@@ -47,6 +47,7 @@
 - [x] GAPS-2b: public preparation inspection and deterministic batch-bounded cleanup retain shared references/pins, serialize deletion with claims, and surface retryable cleanup debt.
 - [x] GAPS-2c: added the real PostgreSQL regression for cleanup winning before a paused finalization; publication must roll back release, pointer and success.
 - [ ] GAPS-3: correlated purge pause and claim inspection; test both race orders on PostgreSQL.
+- [x] GAPS-3a: added durable claim history inspection and a call-scoped purge deletion adapter with release/finished; no global monkey patch or authority shortcut.
 - [ ] GAPS-4: full artifacts unit/integration, lint, freeze, packed example, digests, push and draft PR against feat/immo-861-integration.
 - [x] INT-17: preserved owner merges #747/#748 at fbda4c3ed without rebasing: typed coordinator/abort fixes, exact Radar 0.19.2 runtime admission, packaged declaration dependency and qualification regressions. Only BRANCH.md conflicted; retain this integration plan and all incoming source/test bytes. L0 freeze and Track remain unchanged.
 - [x] INT-16: CI passed all 92 packaging tests, then the generic candidate-install qualifier rejected the stale artifacts 0.1.3 pin. Candidate, post-publication and bootstrap qualification now use 0.2.0; all 22 wiring tests and the full clean-consumer qualification passed with the guarded artifacts receipt, including every runtime entry point.
