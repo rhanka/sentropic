@@ -35,7 +35,12 @@ for (const scope of [...suites.slice(0, 5), 'host']) {
   writeFileSync(`${out}/results/${name}.log`, log);
   const report = existsSync(reportPath) ? json(reportPath) : { testResults: [] };
   for (const path of host ? suites.slice(5) : [scope]) {
+    const cases = report.testResults.filter((t) => t.name.endsWith(`/${path}`))
+      .flatMap((t) => t.assertionResults);
     const item = { path, sourceSha256: digest(readFileSync(`${radar}/${path}`)), gate: 1,
+      counts: { passed: cases.filter((t) => t.status === 'passed').length,
+        failed: cases.filter((t) => t.status === 'failed').length,
+        skipped: cases.filter((t) => !['passed', 'failed'].includes(t.status)).length },
       command: `npm ${args.join(' ')} (inside make radar ENV=test-861-l8d)`,
       exitCode: result.status ?? 1, log, logSha256: digest(log), report, status: 'passed' };
     try { item.executed = validateSuite(item); }
