@@ -121,11 +121,13 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
   - [x] Lot gate: `make typecheck-auth-hono ENV=test-sec-zod4` PASS, `make test-auth-hono ENV=test-sec-zod4` PASS (239/239); `@hono/zod-validator@0.7.5` peer range already allows v4 (no bump); no UAT (no UI change).
   - [x] `make lock-root` deferred to Lot 4 (evidence: ERESOLVE — hoisted zod stays 3.25.76 while api pins `^3.22.4`; single hoist anchor left; lock refreshes once api moves to `^4.6.6`).
 
-- [ ] **Lot 4 — api zod v4 (PAUSED WIP, committed unverified)**
+- [ ] **Lot 4 — api zod v4 (resumed)**
   - [x] Bump `zod` to `^4.6.6` in `api/package.json`; refresh `api/package-lock.json` via make lock target (deferred to resume: `make lock-api` needs running api service, blocked by body-parser gate — see Feedback Loop).
   - [x] Replace `error.errors` with `error.issues` (magic-link, config-product-ai, session-device x3, session-lifecycle; live-declarations + queue-manager verified custom `string[]` interfaces, untouched).
   - [x] Replace single-arg `z.record(value)` with two-arg form (config-product-settings, product-docx, bids, products, proposals, solutions, view-templates, product-workspaces).
   - [ ] Adapt `api/src/services/object-registry/json-schema-to-zod.ts` only if typecheck requires (pending `make typecheck-api` on resume).
+  - [x] Refresh standalone API lock through the Compose qualification service; root and API resolve only Zod 4.6.7. Remove an unnecessary generic from `resources.ts` after reproducing Zod 4 output inference errors; existing resource endpoint tests cover target validation.
+  - [x] Resume gates via Compose `make sh-api`: API typecheck PASS; auth-hono 239/239, comments 102/102, skills 136/136 tests PASS on the merged base.
   - [x] Root `overrides` pin `"zod": "^4.6.6"` added (single hoisted 4.6.7, zero v3) — `make lock-root` green.
   - [ ] Lot gate: `make typecheck-api`, `make test-api`, `make test-ui` — all blocked on body-parser gate (PR #734), rerun on resume; no UAT (no UI change).
 
