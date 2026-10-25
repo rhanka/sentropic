@@ -63,7 +63,7 @@ export function nodeContent(data) {
 // Frame headings share the cards' SVG-unit scale and content flow.
 export function frameHeaderContent(group, width) {
   const product = { h2a: 'H2A', 'cluster-mesh': 'SENTROPIC', engram: 'ENGRAM', 'design-system': 'DESIGN SYSTEM' }[group.id];
-  const kicker = product ?? (group.id === 'surfaces'
+  const kicker = group.kicker ?? product ?? (group.id === 'surfaces'
     ? (group.title === 'Access surfaces' ? 'SENTROPIC & 3RD PARTIES' : 'SENTROPIC & TIERS')
     : /h2a/i.test(group.title) ? 'H2A' : /engram/i.test(group.title) ? 'ENGRAM'
       : /\bDS\b|design system/i.test(group.title) ? 'DESIGN SYSTEM' : 'SENTROPIC');
