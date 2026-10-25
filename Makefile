@@ -698,6 +698,7 @@ check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every
 # BRCI-EX1 — publishable manifest guard (spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md).
 # Every npm pack/publish lane inspects the real archive; tools are pinned in ephemeral dirs.
 MANIFEST_GUARD_IMAGE ?= $(LLM_MESH_NODE_IMAGE)
+MANIFEST_GUARD_RUN ?= docker run --rm
 MANIFEST_REPORT_DIR ?= tmp/ci-manifest-guard/manifests
 MANIFEST_CONTEXT_FILE ?=
 MANIFEST_SEVERITY ?=
@@ -717,7 +718,7 @@ manifest_guard_publish = $(MANIFEST_GUARD_TOOLS); node /workspace/scripts/ci/pub
 # $(1)=package slug; $(2)=optional in-container pre-pack commands.
 define manifest_guard_pack
 	@mkdir -p "$(MANIFEST_REPORT_DIR)" $(if $(PACK_DESTINATION),"$(PACK_DESTINATION)")
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+	@$(MANIFEST_GUARD_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
 		$(if $(PACK_DESTINATION),-v "$(abspath $(PACK_DESTINATION)):/pack-out" -e PACK_DESTINATION_HOST="$(abspath $(PACK_DESTINATION))") \
 		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace/packages/$(1) $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); $(2) node /workspace/scripts/ci/publishable-manifests.mjs pack --slug $(1) --report-dir /reports $(if $(PACK_DESTINATION),--destination /pack-out)'
@@ -945,6 +946,18 @@ audit-llm-routing-package-versions: ## Compare local LLM routing package version
 .PHONY: typecheck-skills
 typecheck-skills: ## Run @sentropic/skills type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+
+.PHONY: build-skills pack-skills
+build-skills: ## Build @sentropic/skills in an isolated Compose tool directory
+	@$(DOCKER_COMPOSE) -f docker-compose.immo-861.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -w /workspace/packages/skills qualification sh -ec 'set -eu; \
+		build_dir="$$(mktemp -d)"; trap '\''rm -rf "$$build_dir"'\'' EXIT; \
+		cp package.json tsconfig.json "$$build_dir/"; cp -R src "$$build_dir/src"; \
+		npm install --prefix "$$build_dir" --ignore-scripts --no-audit --no-fund >/dev/null; \
+		"$$build_dir/node_modules/.bin/tsc" -p "$$build_dir/tsconfig.json"; \
+		rm -rf dist; cp -R "$$build_dir/dist" dist'
+
+pack-skills: build-skills ## Validate the real @sentropic/skills candidate archive
+	$(call manifest_guard_pack,skills)
 
 .PHONY: build-llm-mesh
 build-llm-mesh: ## Build @sentropic/llm-mesh dist package

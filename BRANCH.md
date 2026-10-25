@@ -32,13 +32,16 @@
   - `.security/audit-allowlist.json`
   - `BRANCH.md`
   - `Makefile` (BR01-EX1, BR01-EX2: Zod pins and Compose-safe verification)
+  - `scripts/ci/publishable-manifests.mjs`
+  - `scripts/ci/publishable-classification.test.mjs`
+  - `.github/workflows/ci.yml` (BR01-EX4: skills validation lane)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**`
+  - `.github/workflows/**` (except the allowed ci.yml exception)
   - `ui/**`
   - `e2e/**`
 - **Exception process**:
@@ -55,6 +58,8 @@
 - [x] Transitive inspection: Ollama 1.2.0 (latest published) declares a v3 peer but its runtime validation uses safeParse and the record parses successfully with 4.6.7. No application shim or v3 import introduced.
 - [x] CI run 40243669602 reproduces a second independent consumer: comments-deps.package.json installs published comments 0.3.0 into scratch space and resolves vulnerable Zod 3. Pin Zod 4 for this audit/oracle tree and the installed-comments consumer; keep the frozen published peer identity.
 - [x] Historical memory qualification lock-snapshots are content-addressed archived evidence, not active workspace install locks; preserve their bytes and hashes.
+- [x] BR01-EX3: add the missing guarded skills build/pack lane and register it in the manifest inventory. CI 40243669602 fails because the changed, unpublished skills package has no pack-skills target. Impact: build/pack verification only, no publisher; rollback: remove this lane and its inventory entry. Make the existing pack runner overridable for Compose-only local verification.
+- [x] BR01-EX4: wire the skills pack lane into CI and its final gates. Reason: the existing wiring regression requires one validation pack step per registered lane. Impact: additive validation only; rollback: remove the skills filter/job and gate dependencies with its pack registration.
 - [ ] BR01-EX1 (`acknowledge` self): touch `Makefile` (Forbidden Path), pin-only changes of `zod@3.25.76`/`zod@3.23.8` install pins to the v4 line in package typecheck/test targets (skills, auth-hono, llm-gateway, auth-client, cluster-mesh peer tools). Reason: targets hardcode the exact zod version under test; without the pin update the gates keep validating against v3. Impact: version strings in ephemeral `npm install` commands only, no target logic change. Rollback: revert pin strings to v3.
 - [x] `acknowledge`: `make scope-check` available (harness CLI installed); run before every commit.
 - [x] Previous pause lifted by owner resume on 2026-10-25; merged the main fixes and refreshed the API lock. Current root audit reports zero HIGH/CRITICAL.
@@ -104,6 +109,7 @@
     - [x] No API/UI/E2E test changes needed; integrated API/E2E suites are final CI gates in Lot 5.
     - [x] UI regression suite after SvelteKit sync: 83 files, 489 tests PASS via Compose qualification.
     - [x] No UAT (no UI change).
+  - [x] Skills Compose build and strict guarded pack PASS; 56 classification, wiring and expected-result regression tests PASS with the new CI lane.
 
 - [x] **Lot 2 — packages/comments zod v4**
   - [x] Bump `zod` to `^4.6.6` in `packages/comments/package.json`.
