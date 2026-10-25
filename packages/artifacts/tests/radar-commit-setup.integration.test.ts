@@ -49,7 +49,7 @@ afterAll(async () => {
 describe('radar commit setup example', () => {
   it('finalizes through the example construction', async () => {
     const setup = createRadarCommitSetup({ pool, clock });
-    const outcome = await setup.finalize({
+    const outcome = await setup.finalizePrepared({
       scopeId: 'example-scope',
       internalKey: 'example-key-1',
       commandHash: 'h-example-1',
@@ -74,7 +74,7 @@ describe('radar commit setup example', () => {
       "UPDATE radar_commit_example.approvals SET approved = false WHERE actor_id = 'radar-actor'",
     );
     try {
-      const denied = await setup.finalize({
+      const denied = await setup.finalizePrepared({
         scopeId: 'example-scope',
         internalKey: 'example-key-2',
         commandHash: 'h-example-2',
@@ -122,7 +122,7 @@ describe('radar commit setup example', () => {
 
   it('replays without an extra quota charge and sweeps on an interval', async () => {
     const setup = createRadarCommitSetup({ pool, clock });
-    const first = await setup.finalize({
+    const first = await setup.finalizePrepared({
       scopeId: 'example-scope',
       internalKey: 'example-key-3',
       commandHash: 'h-example-3',
@@ -134,7 +134,7 @@ describe('radar commit setup example', () => {
     const { rows: before } = await pool.query<{ used: number }>(
       "SELECT used FROM radar_commit_example.quotas WHERE quota_key = 'radar-quota'",
     );
-    const replayed = await setup.replayGuarded({
+    const replayed = await setup.replayPrepared({
       scopeId: 'example-scope',
       internalKey: 'example-key-3',
       commandHash: 'h-example-3',
@@ -289,7 +289,7 @@ describe('radar commit setup example', () => {
       testObserver: barrier.observer,
       testPoints: ['before_commit'],
     });
-    const pending = setup.finalize({
+    const pending = setup.finalizePrepared({
       scopeId: 'example-scope',
       internalKey: 'example-key-obs',
       commandHash: 'h-example-obs',
