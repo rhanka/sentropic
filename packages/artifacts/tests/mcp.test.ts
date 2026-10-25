@@ -53,73 +53,46 @@ describe('L6 compiled MCP profile', () => {
     expect(computeManifestDigest(createArtifactsManifest({ profile })))
       .not.toBe(computeManifestDigest(createArtifactsManifest({ profile: other })));
   });
-      args: { artifactId: id, mimeType: 'text/plain' },
-    });
-    expect(strangerUpload.status).toBe(404);
+  it('should require a compiled profile rather than implicitly selecting all tools', () => {
+    expect(() => createArtifactsManifest()).toThrow();
   });
+  it('should reject direct unselected dispatch before calling the app', async () => {
+    let calls = 0;
+    const app = { profileDigest: profile.profileDigest, selectedCapabilities: profile.selectedCapabilities,
+      execute: async () => { calls += 1; throw new Error('unexpected app call'); } };
+    const executor = createArtifactsToolExecutor({ app, profile });
+    const outcome = await executor.execute({ tool: 'artifacts_delete', args: { artifactId: 'x' },
+      invocation: { invocationId: 'mcp-1', actorId: 'alice', storageScopeId: 'scope-1',
+        authorizeCommit: async () => { throw new Error('unexpected guard'); } } });
+    expect(outcome).toMatchObject({ ok: false, failure: { category: 'capability_unselected', retriable: false } });
+    expect(calls).toBe(0);
+  });
+});
 
-  it('registers and compiles through the platform kernel (section 3)', () => {
-    const definition = createArtifactsRegistryDefinition({ app: makeApp() });
-    const registry = createProviderRegistry();
-    registry.register(definition);
-    expect(() => registry.register(definition)).toThrow(/duplicate provider/);
-    registry.select(['sentropic.artifacts']);
-    registry.configure('sentropic.artifacts', { defaultStorageScopeId: 'scope-1' });
-    const missing = registry.compile({ bindings: {}, compatibility: {} });
-    expect(missing.ok).toBe(false);
-    const compiled = registry.compile({
-      bindings: {},
-      compatibility: {
-        'sentropic.artifacts': { manifestDigest: computeManifestDigest(definition.manifest) },
-      },
-    });
-    if (!compiled.ok) throw new Error(`compile refused: ${JSON.stringify(compiled.diagnostics)}`);
-    for (const name of SPEC_TOOLS) {
-      expect(compiled.registry.resolveTool(name)?.providerId, name).toBe(ARTIFACTS_PROVIDER_ID);
-    }
-    expect(compiled.registry.resolveTool('pages_ensure_site')).toBeUndefined();
-    const catalog = registry.catalog();
-    expect(catalog).toHaveLength(1);
-    expect(catalog[0]).toMatchObject({ providerId: ARTIFACTS_PROVIDER_ID, availability: 'available' });
+it('should align registry handlers and configured bindings with the selected manifest', () => {
+  const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+  const definition = createArtifactsRegistryDefinition({ profile,
+    app: { profileDigest: profile.profileDigest, selectedCapabilities: profile.selectedCapabilities,
+      execute: async () => { throw new Error('unexpected dispatch'); } },
+    createInvocation: () => { throw new Error('unexpected binding'); },
   });
+  expect(Object.keys(definition.toolValues).sort()).toEqual([...profile.selectedCapabilities].sort());
+  expect(Object.values(definition.handlers).map((handler) => handler.capabilityRef).sort())
+    .toEqual([...profile.selectedCapabilities].sort());
+});
 
-  it('refuses the previous provider ID as unknown for selection and configuration', () => {
-    const registry = createProviderRegistry();
-    registry.register(createArtifactsRegistryDefinition({ app: makeApp() }));
-    expect(() => registry.select(['sentropic.web-pages'])).toThrow(/unknown provider/);
-    expect(() => registry.configure('sentropic.web-pages', {})).toThrow(/unknown provider/);
+it.each([
+  { capabilityRef: 'artifacts_delete', input: {}, code: 'capability_unavailable' },
+  { capabilityRef: 'artifacts_ensure', input: { bindingName: 'x' }, code: 'invalid_request' },
+  { capabilityRef: 'artifacts_ensure', input: { bindingName: 'x', idempotencyKey: 'a' }, idempotencyKey: 'b', code: 'invalid_request' },
+])('should refuse %j without binding or dispatching a host invocation', async ({ code, ...input }) => {
+  const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+  const adapter = createArtifactsAdapter({ profile,
+    app: { profileDigest: profile.profileDigest, selectedCapabilities: profile.selectedCapabilities,
+      execute: async () => { throw new Error('unexpected dispatch'); } },
+    createInvocation: () => { throw new Error('unexpected binding'); },
   });
-
-  it('invokes through the platform adapter with verified-principal identity', async () => {
-    const adapter = createArtifactsAdapter({ app: makeApp(), defaultStorageScopeId: 'scope-1' });
-    expect(adapter.connectorId).toBe(ARTIFACTS_PROVIDER_ID);
-    const tenant = await adapter.resolveTenant({
-      principalSub: OWNER, tenantRef: 'tenant-1', connectorInstanceId: 'inst-1',
-      selectorHints: { tenantRef: 'forged' },
-    });
-    expect(tenant.tenantRef).toBe('tenant-1');
-    expect(await adapter.validateSecrets(tenant)).toEqual([]);
-    expect(await adapter.listCapabilities(tenant)).toHaveLength(15);
-    const ensured = await adapter.invokeTool({
-      capabilityRef: 'artifacts_ensure',
-      input: { bindingName: 'site', idempotencyKey: 'k-1', paramsHash: 'h-1', parameters: { title: 'Hi' } },
-      ctx: fakeCtx(OWNER),
-      idempotencyKey: 'k-1',
-    });
-    if (typeof ensured === 'string' || !ensured.ok) throw new Error('ensure must succeed inline');
-    const artifactId = (ensured.output as { artifactId: string }).artifactId;
-    const stranger = await adapter.invokeTool({
-      capabilityRef: 'artifacts_get', input: { artifactId }, ctx: fakeCtx(STRANGER),
-    });
-    if (typeof stranger === 'string') throw new Error('stranger read must not defer');
-    expect(stranger.ok).toBe(false);
-    expect(stranger.error?.code).toBe('not_found');
-    const unknown = await adapter.invokeTool({
-      capabilityRef: 'pages_ensure_site', input: {}, ctx: fakeCtx(OWNER),
-    });
-    if (typeof unknown === 'string') throw new Error('unknown tool must not defer');
-    expect(unknown.ok).toBe(false);
-    expect(unknown.error?.code).toBe('invalid_request');
-    expect(unknown.error?.message).toBe('invalid_request');
-  });
+  const ctx = { requestId: 'request-1', auditId: 'audit-1', principal: { sub: 'alice' } } as StpConnectorContext;
+  expect(await adapter.invokeTool({ ...input, ctx })).toMatchObject({ ok: false,
+    error: { code, retriable: false } });
 });
