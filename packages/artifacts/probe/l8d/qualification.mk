@@ -15,9 +15,9 @@ pin-radar: guard
 	@git -C "$(RADAR_REPO)" archive b2b802b5 | tar -x -C $(OUT)/radar
 	@for file in artifacts-provider-acceptance.spec.ts artifacts-provider-contract.helpers.ts; do git -C "$(RADAR_REPO)" show e2e9515ea41baebf5539743f0cfa0dea750d072c:api/tests/integration/$$file > $(OUT)/radar/api/tests/integration/$$file; done
 
-.PHONY: guard test pack install radar receipts down scope-check
+.PHONY: guard test pack install radar receipts down scope-check mesh-0192
 guard:
-	@test "$(ENV)" = test-861-l8d
+	@case "$(ENV)" in test-861-l8d|test-861-pack-l8dfix) ;; *) exit 1 ;; esac
 
 test: guard
 	@$(COMPOSE) run --rm --no-deps qualification node --test $(PROBE)/receipt.test.mjs
@@ -33,6 +33,9 @@ smoke: guard
 
 known-failures: guard
 	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node --test $(PROBE)/known-failures.test.mjs
+
+mesh-0192: guard
+	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" qualification node --test $(PROBE)/mesh-0192.mjs
 
 radar: guard
 	@mkdir -p $(OUT)

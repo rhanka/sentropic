@@ -5,9 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
-test('should strictly install the packed mesh with Radar llm-mesh 0.19.2', {
-  todo: 'L8D-1 / L7 owner: cluster-mesh peer range excludes required Radar 0.19.2',
-}, () => {
+test('should strictly install the packed mesh with Radar llm-mesh 0.19.2', () => {
   const { tuple } = JSON.parse(readFileSync(resolve('tmp/l8d/tuple.json')));
   const consumer = mkdtempSync(join(tmpdir(), 'l8d-peer-'));
   try {
@@ -21,9 +19,7 @@ test('should strictly install the packed mesh with Radar llm-mesh 0.19.2', {
   } finally { rmSync(consumer, { recursive: true, force: true }); }
 });
 
-test('should compile public commit and outcome declarations from the packed archive', {
-  todo: 'L8D-2 / L6 owner: packed l0-freeze/profile-contract.ts imports omitted src/contracts.js',
-}, () => {
+test('should compile public commit and outcome declarations from the packed archive', () => {
   const consumer = resolve('tmp/l8d/consumer');
   const result = spawnSync('node', ['node_modules/typescript/bin/tsc', '--noEmit', '--strict',
     '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--target', 'ES2022', 'types.mts'],
