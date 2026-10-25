@@ -45,7 +45,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — merge d41f47092 (contracts).
 - [x] Lot 1 — merge 0c71291a2 (profile); only the topic plan conflicted.
-- [ ] Lot 2 — merge origin/feat/artifacts-861-L2 (failures).
+- [x] Lot 2 — merge b29b6a334 (failures); only the topic plan conflicted.
 - [ ] Lot 3 — merge 157f231d5 (coordinator).
 - [ ] Lot 4 — merge a8df25634 (publication/collection).
 - [ ] Lot 5 — merge c703afc68 (MCP/HTTP).
