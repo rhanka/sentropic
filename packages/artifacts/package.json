@@ -37,6 +37,10 @@
       "types": "./dist/adapters/postgres.d.ts",
       "import": "./dist/adapters/postgres.js"
     },
+    "./adapters/postgres-commit": {
+      "types": "./dist/adapters/postgres-commit.d.ts",
+      "import": "./dist/adapters/postgres-commit.js"
+    },
     "./migrations/*": "./migrations/*",
     "./server/ports": {
       "types": "./dist/server/ports.d.ts",
@@ -165,6 +169,7 @@
     "src/contracts.ts",
     "migrations",
     "docs/migration-l6.md",
+    "examples/radar-commit-setup.ts",
     "README.md",
     "LICENSE"
   ],

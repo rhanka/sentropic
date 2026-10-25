@@ -100,6 +100,16 @@ export interface DeletionClaimStore {
 
 type DeletionClaimAccess = Pick<DeletionClaimStore, 'claim' | 'releaseClaim' | 'isClaimed'>;
 
+export interface DeletionClaimRecord {
+  readonly claimId: string;
+  readonly digest: string;
+  readonly holder: string;
+  readonly state: 'pending' | 'done';
+}
+export interface InspectableDeletionClaimStore extends DeletionClaimStore {
+  listClaims(): Promise<DeletionClaimRecord[]>;
+}
+
 /** GC keeps the advisory lock's transaction open through deletion and claim completion. */
 export function createPostgresGcService(
   executor: CommitExecutor,
@@ -146,7 +156,7 @@ export function createPostgresClaimGuardedRefs(refs: RefcountStore, executor: Co
 }
 
 /** Transaction-scoped claims; callers commit the claim before external deletion. */
-export function createPostgresDeletionClaimStore(client: FinalizeTxClient): DeletionClaimStore {
+export function createPostgresDeletionClaimStore(client: FinalizeTxClient): InspectableDeletionClaimStore {
   const predicate = `kind = 'delete-blob' AND state = 'pending'
     AND payload->>'deletionClaim' = 'true' AND payload->>'digest' = $1`;
   const access: DeletionClaimAccess = {
@@ -172,21 +182,32 @@ export function createPostgresDeletionClaimStore(client: FinalizeTxClient): Dele
     return action(access);
   };
   return { ...access, withDigestLock,
+    async listClaims() {
+      const { rows } = await client.query<{ id: string; state: 'pending' | 'done'; digest: string; holder: string }>(
+        `SELECT id, state, payload->>'digest' AS digest, payload->>'holder' AS holder
+         FROM artifacts.object_intents WHERE kind = 'delete-blob'
+         AND payload->>'deletionClaim' = 'true' ORDER BY created_at, id`, []);
+      return rows.map((row) => ({ claimId: row.id, digest: row.digest, holder: row.holder, state: row.state }));
+    },
     claim: (digest, holder) => withDigestLock(digest, (locked) => locked.claim(digest, holder)),
     releaseClaim: (digest) => withDigestLock(digest, (locked) => locked.releaseClaim(digest)) };
 }
 
-export function createMemoryDeletionClaimStore(): DeletionClaimStore {
+export function createMemoryDeletionClaimStore(): InspectableDeletionClaimStore {
   const holders = new Map<string, string>();
+  const history: Array<DeletionClaimRecord & { state: 'pending' | 'done' }> = [];
   const mutex = createKeyMutex();
   const access: DeletionClaimAccess = {
     async claim(digest: string, holder: string): Promise<void> {
       if (holders.has(digest)) throw new Error(`deletion already claimed: ${digest}`);
       holders.set(digest, holder);
+      history.push({ claimId: crypto.randomUUID(), digest, holder, state: 'pending' });
     },
     async releaseClaim(digest: string): Promise<void> {
       if (!holders.has(digest)) throw new Error(`deletion not claimed: ${digest}`);
       holders.delete(digest);
+      const claim = history.find((entry) => entry.digest === digest && entry.state === 'pending');
+      if (claim !== undefined) claim.state = 'done';
     },
     async isClaimed(digest: string): Promise<boolean> {
       return holders.has(digest);
@@ -194,6 +215,7 @@ export function createMemoryDeletionClaimStore(): DeletionClaimStore {
   };
   return {
     ...access,
+    listClaims: async () => structuredClone(history),
     claim: (digest, holder) => mutex.runSerialized(digest, () => access.claim(digest, holder)),
     releaseClaim: (digest) => mutex.runSerialized(digest, () => access.releaseClaim(digest)),
     withDigestLock: (digest, action) => mutex.runSerialized(digest, () => action(access)),

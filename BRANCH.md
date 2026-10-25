@@ -5,9 +5,10 @@
 
 ## Scope / Guardrails
 - [x] Worktree tmp/worktrees/861-L8d; branch feat/artifacts-861-L8d; no rebase.
-- [x] ENV=test-861-l8d last; ports API 18924, UI 15924, Maildev 11924.
+- [x] ENV=test-861-int last for final requalification; Compose-only services expose no host ports.
 - [x] Shared Docker lock and matching Compose down after every step; no publication.
 - [x] Merge 895e67f97 preserves integration 082fe4c60 and #744/#747/#748; Track unchanged.
+- [x] Final requalification merges 464581fb8 (#750); preserve this lane plan and all incoming product bytes; Track unchanged.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:

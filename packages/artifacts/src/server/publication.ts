@@ -374,10 +374,13 @@ export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): P
       });
     },
     async completeIntent(intentId: string): Promise<void> {
-      await client.query(
-        `UPDATE artifacts.object_intents SET state = 'done', updated_at = now() WHERE id = $1`,
+      const { rowCount } = await client.query(
+        `UPDATE artifacts.object_intents SET state = 'done', updated_at = now() WHERE id = $1
+         AND state = 'pending' AND (NOT (payload ? 'cleanupDeadlineMs')
+           OR (payload->>'cleanupDeadlineMs')::numeric > EXTRACT(EPOCH FROM clock_timestamp()) * 1000)`,
         [intentId],
       );
+      if (rowCount === 0) throw new Error('preparation expired or abandoned; explicit retry required');
     },
   };
 }
@@ -415,6 +418,8 @@ const DEFAULT_CLEANUP_WINDOW_MS = 15 * 60 * 1000;
 /** Create a publication service whose commits finalize through L3 ports. */
 export function createGuardedPublicationService(deps: GuardedPublicationDeps): GuardedPublicationService {
   const limits = publicationLimits(deps.limits);
+  const cleanupWindowMs = deps.cleanupWindowMs ?? DEFAULT_CLEANUP_WINDOW_MS;
+  if (!Number.isSafeInteger(cleanupWindowMs) || cleanupWindowMs < 1) throw new Error('invalid preparation lifetime');
   const guard = (client: () => FinalizeTxClient): AuthorizeCommit => async (context, transaction) => {
     const { state, acl } = await deps.createUnitWriter(client()).readAuthorization(context.artifactId);
     const verdict = decidePublishAuthorization({ lifecycleState: state, acl, actorId: context.actorId });
@@ -461,16 +466,18 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
       const callerKey = input.callerKey ?? internalKey;
       const releaseId = crypto.randomUUID();
       const invocationId = input.invocationId ?? crypto.randomUUID();
+      const attemptId = input.attemptId ?? releaseId;
       const nowMs = Date.now();
       const intent = await deps.intents.record('commit-release', {
         artifactId: input.artifactId,
         releaseId,
         manifestDigest: prepared.digest,
         blobKeys: prepared.entries.map((e) => e.key),
-        attemptId: input.attemptId ?? callerKey,
+        attemptId,
         invocationId,
         operation: 'publish',
-        cleanupDeadlineMs: nowMs + (deps.cleanupWindowMs ?? DEFAULT_CLEANUP_WINDOW_MS),
+        preparedAtMs: nowMs,
+        cleanupDeadlineMs: nowMs + cleanupWindowMs,
       });
       const pinned: string[] = [];
       const pinReason = `preparation:${releaseId}`;
@@ -482,6 +489,9 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
       }
       await deps.coordinator.testObserver?.arrive('before_blob_put', invocationId);
       for (const { key, bytes } of prepared.entries) {
+        if ((await deps.intents.get(intent.intentId))?.state !== 'pending') {
+          throw new Error('preparation abandoned before blob PUT');
+        }
         await deps.blobs.putBlob(key, bytes);
       }
       await deps.coordinator.testObserver?.arrive('after_blob_put_before_verify', invocationId);
@@ -537,7 +547,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
             : async (attemptId: string) => {
                 await deps.noteAbandoned?.(attemptId);
               },
-        attemptId: input.attemptId ?? callerKey,
+        attemptId,
         receiptData: { releaseId, manifest: prepared.manifest },
       };
       preservePins = true;
@@ -556,7 +566,10 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
       return outcome;
       } finally {
         if (!preservePins) {
-          for (const digest of pinned) await deps.refs.unpin(digest, pinReason);
+          for (const digest of pinned) {
+            try { await deps.refs.unpin(digest, pinReason); }
+            catch (error) { if (!(error instanceof Error) || !/not pinned/.test(error.message)) throw error; }
+          }
         }
       }
     },
