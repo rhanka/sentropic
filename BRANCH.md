@@ -21,14 +21,21 @@
   - `.track/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `.cursor/rules/**`
-  - `api/**`
   - `ui/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/ci.yml`
+  - `.security/**`
+  - `api/**`
+  - `e2e/**`
+  - `docker-compose.test.yml`
+  - `package-lock.json`
+  - `packages/llm-mesh/**`
 - **Exception process**:
   - [x] BR861-EX1: qualification runner only; purpose: exact-tuple tests under mandatory Compose lock; impact: disposable test services and host harness scope check; rollback: remove qualification wiring. Main-only publishing stays unchanged.
+  - [x] BR861-EX2: owner-requested origin/main merge only; preserve #734 and main changes in conditional paths; no integration edits there; rollback: revert the merge.
 
 ## Feedback Loop
+- [x] INT-2: origin/main merge conflicts only in BRANCH.md; retain this integration plan. Track journal is byte-identical to the pre-merge integration head.
 - [x] L0: owner accepts external CI failure tracked in #734.
 - [x] L3: owner accepts 157f231d5; type convergence belongs to L6, excluded from this train.
 - [x] Merge policy: retain integration BRANCH.md; report each source conflict separately.

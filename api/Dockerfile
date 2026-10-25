@@ -11,13 +11,13 @@ RUN mkdir -p /tmp/brace-expansion-update && \
     tar -xzf /tmp/brace-expansion-update/brace-expansion-5.0.12.tgz && \
     mv package brace-expansion && \
     rm -rf /tmp/brace-expansion-update
-# Security: Patch npm's bundled undici for CVE-2026-19534
+# Security: Patch npm's bundled undici for CVE-2026-19534 and CVE-2026-109869 (DoS via content-encodings, fixed in 6.29.1)
 RUN mkdir -p /tmp/undici-update && \
     cd /tmp/undici-update && \
-    npm pack undici@6.28.1 && \
+    npm pack undici@6.29.1 && \
     cd /usr/local/lib/node_modules/npm/node_modules && \
     rm -rf undici && \
-    tar -xzf /tmp/undici-update/undici-6.28.1.tgz && \
+    tar -xzf /tmp/undici-update/undici-6.29.1.tgz && \
     mv package undici && \
     rm -rf /tmp/undici-update
 # Security: Patch npm's bundled http-cache-semantics for CVE-2026-93748
