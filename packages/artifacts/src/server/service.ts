@@ -288,19 +288,36 @@ export function createGuardedEnsureService(deps: GuardedEnsureDeps): GuardedEnsu
       if (invocation.actorId.length === 0 || invocation.storageScopeId.length === 0) {
         return { ok: false, failure: anonymousFailure(invocation) };
       }
+      try {
+        deps.profile.assertSelected('artifacts_ensure');
+      } catch (error) {
+        if (error instanceof ArtifactProfileInputError) {
+          return { ok: false, failure: profileEntryFailure(error, invocation.invocationId) };
+        }
+        return { ok: false, failure: internalFailure(invocation.invocationId, 'entry', error) };
+      }
       let policyRevision: string;
       try {
         policyRevision = await deps.host.readPolicyRevision();
       } catch (error) {
         return { ok: false, failure: unavailableFailure(invocation.invocationId, 'acquire', error) };
       }
+      let artifactId: string | undefined;
+      const binding = args.binding;
       const outcome = await replayEnsureGuarded(deps.coordinator, {
         invocation,
         internalKey: args.internalKey,
         commandHash: args.commandHash,
         policyRevision,
-        locks: args.binding === undefined ? undefined : {
-          'binding-identity': [async (client) => { await deps.host.lockBinding(client, args.binding as EnsureBindingInput); }],
+        get artifactId() { return artifactId; },
+        bindingName: binding?.bindingName,
+        locks: binding === undefined ? undefined : {
+          'binding-identity': [async (client) => {
+            await deps.host.lockBinding(client, binding);
+            const target = await deps.host.resolveBinding(client, binding);
+            if (target.created) throw new Error('replay target missing');
+            artifactId = target.artifactId;
+          }],
         },
       });
       if (!outcome.ok) return { ok: false, failure: coordinatorFailure(outcome.failure) };
