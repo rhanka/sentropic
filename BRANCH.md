@@ -136,8 +136,8 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
 
 - [ ] **Lot 5 — Register cleanup + final validation**
   - [x] Root npm audit after migration: zero HIGH/CRITICAL, no Zod finding. Remove npm-audit/SCA-api dated exceptions and the GHSA allowlist first; remove remaining scanner aliases in the next atomic commit.
-  - [ ] Re-check `.security/vulnerability-register.yaml` for any zod entry (GHSA-mrhx-c7xc-m3w5); remove it if present, else record absence.
-  - [ ] Verify `.security/audit-allowlist.json` carries no zod entry.
+  - [x] Removed all Zod dated exceptions, including SCA UI and API/toolbox container aliases for both 3.25.76 and 3.23.8.
+  - [x] `.security/audit-allowlist.json` has no Zod entry.
   - [ ] Typecheck & Lint
   - [ ] Retest UI (cf Lot1, copy checklist)
   - [ ] Retest API (cf Lot1, copy checklist)
