@@ -39,7 +39,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — read Docker lock, spec r2 L8d/6.3/Q1–Q4 and pins; mechanical branch check; L6 already included.
-- [ ] Lot 1 — fail-closed archive, suite and four-shard receipt validation; negative runner tests.
+- [x] Lot 1 — fail-closed suite/four-shard validation; 15 runner regressions pass, zero skips.
 - [ ] Lot 2 — strict full-Radar install; runtime/declaration/container smokes; archive/lock/image/test hashes.
 - [ ] Lot 3 — five API suites and all three host suites with gate 1; retain failures and missing interfaces.
 - [ ] Lot 4 — aggregate shards, final scope check, atomic commits, push and draft PR targeting integration.
