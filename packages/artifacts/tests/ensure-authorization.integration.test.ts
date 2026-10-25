@@ -15,6 +15,8 @@ import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile
 import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { CommitQuarantineError } from '../src/server/commit/types.js';
 import { createGuardedEnsureService, type GuardedEnsureHost } from '../src/server/service.js';
+import { createHttpArtifactApp, type HttpAppDeps } from '../src/http.js';
+import { createArtifactsToolExecutor } from '../src/mcp-core.js';
 
 const DATABASE_URL = process.env['DATABASE_URL'];
 if (DATABASE_URL === undefined || DATABASE_URL.length === 0) throw new Error('needs DATABASE_URL (make test-artifacts-integration)');
@@ -222,6 +224,44 @@ describe('ensure authorization', () => {
     expect(second.result.replayed).toBe(false);
     expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', [keyFor('alice', 'site-shared', 'k-shared')])).toBe(1);
     expect(await countRows('artifacts.operation_receipts', ' WHERE internal_key = $1', [keyFor('bob', 'site-shared', 'k-shared')])).toBe(1);
+  });
+
+  it('should converge HTTP and MCP instances on one authorized PostgreSQL receipt', async () => {
+    const other = new Pool({ connectionString: DATABASE_URL });
+    const profile = compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE,
+      selectedCapabilities: ['artifacts_ensure'] });
+    const compose = (connectionPool: Pool) => createHttpArtifactApp({
+      profile, coordinator: createArtifactCommitCoordinator({
+        executor: createPostgresCommitExecutor(connectionPool), policy: makeParticipantFactory('q-main'),
+      }),
+      derivation: createRadarKeyDerivation({ storageScopeId: SCOPE, actorIds: ['alice', 'bob'] }),
+      legacyRecords: { get: async () => undefined }, ensureHost: pgHost(),
+      acls: {}, lifecycle: {}, publication: {},
+    } as unknown as HttpAppDeps);
+    const args = { bindingName: 'transport-race', idempotencyKey: ' cross-transport ' };
+    const before = await countRows('artifacts.operation_receipts');
+    const used = await quotaUsed('q-main');
+    try {
+      const http = compose(pool);
+      const mcp = createArtifactsToolExecutor({ app: compose(other), profile });
+      const [first, second] = await Promise.all([
+        http.handle({ method: 'POST', path: '/ensure', actorId: 'alice', body: args }, invoke('alice')),
+        mcp.invoke({ tool: 'artifacts_ensure', args, invocation: invoke('alice') }),
+      ]);
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect((first.body as { artifactId: string }).artifactId)
+        .toBe((second.body as { artifactId: string }).artifactId);
+      expect(await countRows('artifacts.operation_receipts')).toBe(before + 1);
+      expect(await quotaUsed('q-main')).toBe(used + 1);
+      await pool.query("UPDATE ensure_test.approvals SET approved = false WHERE actor_id = 'alice'");
+      expect(await mcp.invoke({ tool: 'artifacts_ensure', args, invocation: invoke('alice') }))
+        .toMatchObject({ status: 403, body: { error: 'access_denied' } });
+      expect(await countRows('artifacts.operation_receipts')).toBe(before + 1);
+    } finally {
+      await pool.query("UPDATE ensure_test.approvals SET approved = true WHERE actor_id = 'alice'");
+      await other.end();
+    }
   });
 
   it('quarantines unknown legacy codecs instead of replaying them', async () => {
