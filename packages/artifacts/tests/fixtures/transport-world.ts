@@ -29,6 +29,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const lifecycle = createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00Z', state);
   let allowed = true;
   let guardCalls = 0;
+  const quotaReservations: number[] = [];
   const executor: CommitExecutor = {
     async ensureCoordinationRow() {},
     async beginFinalization() {
@@ -48,7 +49,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const coordinator = createArtifactCommitCoordinator({ executor, policy: {
     createParticipant: (_client, transactionId) => ({
       async readRevision() { return 'rev-1'; }, async checkApproval() { return { approved: true }; },
-      async reserveQuota() { return { reserved: true }; },
+      async reserveQuota({ bytes }) { quotaReservations.push(bytes); return { reserved: true }; },
       mintFence: (policyRevision, invocationId) => ({ fenceId: randomUUID(), transactionId, invocationId, policyRevision }),
     }),
   } });
@@ -108,6 +109,6 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const http = (path: string, body: unknown, context = invocation()) => app.execute({
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
-  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, blobs, legacyRecords,
+  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, blobs, legacyRecords, quotaReservations,
     deny: () => { allowed = false; }, allow: () => { allowed = true; }, guardCalls: () => guardCalls };
 }
