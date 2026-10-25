@@ -45,6 +45,7 @@
 - [ ] GAPS-2: correlated preparation inventory/deadlines and bounded safe cleanup; test denial, expiry, shared blobs and retry after cleanup failure.
 - [x] GAPS-2a: memory and PostgreSQL stores retain preparation history and atomically invalidate expired attempts before cleanup; metadata uses existing JSON intents without schema or L3 port changes.
 - [x] GAPS-2b: public preparation inspection and deterministic batch-bounded cleanup retain shared references/pins, serialize deletion with claims, and surface retryable cleanup debt.
+- [x] GAPS-2c: added the real PostgreSQL regression for cleanup winning before a paused finalization; publication must roll back release, pointer and success.
 - [ ] GAPS-3: correlated purge pause and claim inspection; test both race orders on PostgreSQL.
 - [ ] GAPS-4: full artifacts unit/integration, lint, freeze, packed example, digests, push and draft PR against feat/immo-861-integration.
 - [x] INT-17: preserved owner merges #747/#748 at fbda4c3ed without rebasing: typed coordinator/abort fixes, exact Radar 0.19.2 runtime admission, packaged declaration dependency and qualification regressions. Only BRANCH.md conflicted; retain this integration plan and all incoming source/test bytes. L0 freeze and Track remain unchanged.
