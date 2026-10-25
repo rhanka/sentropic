@@ -15,8 +15,8 @@ packed-example: guard
 down: guard
 	@$(COMPOSE) down --volumes --remove-orphans
 
-.PHONY: offline-build offline-unit offline-integration offline-packed
-offline-build offline-unit offline-packed: guard
+.PHONY: offline-build offline-unit offline-integration offline-packed offline-lint
+offline-build offline-unit offline-packed offline-lint: guard
 	@$(COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" $(OFFLINE_MOUNTS) qualification node packages/artifacts/probe/offline-qualification.mjs $@ "$(SCOPE)"
 
 offline-integration: guard
