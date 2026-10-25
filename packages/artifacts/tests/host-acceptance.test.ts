@@ -34,7 +34,7 @@ describe('Radar 0.2.1 acceptance regressions', () => {
     expect(projected).toMatchObject({ ok: false, error: { code: 'capability_unavailable', retriable: true } });
     expect(JSON.stringify(projected)).not.toContain(cause.message);
   });
-  it('should call host authorization after suspension at the finalization barrier', async () => {
+  it.each(['http', 'mcp'] as const)('should call host authorization after suspension at the %s finalization barrier', async (transport) => {
     const barrier = createArtifactCommitBarrier({ points: ['before_finalization_row_lock'] });
     const host = createTransportWorld(undefined, undefined, { testObserver: barrier.observer });
     const initial = host.invocation();
@@ -52,7 +52,8 @@ describe('Radar 0.2.1 acceptance regressions', () => {
         publicCode: 'account_not_approved', retriable: false };
     });
     const invocation = { ...host.invocation(), authorizeCommit };
-    const pending = host.http('/publish', args, invocation);
+    const pending = transport === 'http' ? host.http('/publish', args, invocation)
+      : host.mcp.execute({ tool: 'artifacts_publish', args, invocation });
     await barrier.waitUntilReached('before_finalization_row_lock', invocation.invocationId);
     host.suspend();
     barrier.release('before_finalization_row_lock', invocation.invocationId);

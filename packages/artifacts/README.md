@@ -4,6 +4,10 @@ Version 0.2.1 fixes host commit authorization being masked by the built-in
 publication guard and wires the optional trusted `mapHostError` dependency.
 Publication retains its lifecycle, ACL and policy revision checks; the host
 `authorizeCommit` binding decides account approval and its sanitized refusal code.
+Custom services using `createGuardedPublicationService` may pass the request-bound
+`authorizeCommit` in `publishFinalized(input)`. It runs after
+lifecycle, ACL and policy revision checks. When omitted, publication keeps the
+default `participant.checkApproval` check and denies unapproved or expired commits.
 
 Bind the same mapper on `createHttpArtifactApp`, `createArtifactsToolExecutor`
 (or `createArtifactsAdapter`) and `createArtifactCommitCoordinator` so host wrapper
