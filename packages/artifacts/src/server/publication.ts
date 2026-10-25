@@ -496,6 +496,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         artifactId: input.artifactId,
         bindingName: null,
         policyRevision: input.policyRevision,
+        quotaBytes: prepared.entries.reduce((total, entry) => total + entry.bytes.byteLength, 0),
         locks: { ...deps.locks, 'artifact-lifecycle': [
           async (client) => { finalizationClient = client; },
           ...(deps.locks?.['artifact-lifecycle'] ?? []),
