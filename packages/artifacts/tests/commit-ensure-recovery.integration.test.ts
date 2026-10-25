@@ -249,7 +249,8 @@ describe('L8b ensure recovery on PostgreSQL', () => {
     const world = createTransportWorld();
     const oldKey = 'old-caller-key';
     const key = version === '0.1.2' ? oldKey : JSON.stringify(['ensure', 'alice', oldKey]);
-    await world.legacyRecords.set(key, { paramsHash: 'old-hash', result: { artifactId: 'old-artifact', created: true } });
+    await world.legacyRecords.putIfAbsent(`idempotency:${key}`,
+      JSON.stringify({ paramsHash: 'old-hash', result: { artifactId: 'old-artifact', created: true } }));
     const input = { bindingName: 'legacy', idempotencyKey: oldKey };
     expect(await world.http('/ensure', input)).toMatchObject({ ok: false, failure: { httpStatus: 503, retriable: false } });
     expect(await world.mcp.invoke({ tool: 'artifacts_ensure', args: input, invocation: world.invocation() }))
