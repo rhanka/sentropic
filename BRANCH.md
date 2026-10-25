@@ -1,7 +1,7 @@
-# Feature: Security Zod 4 Migration
+# Feature: Migrate all Zod consumers to v4
 
 ## Objective
-Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-exhaustion advisory GHSA-mrhx-c7xc-m3w5.
+- [x] Migrate zod 3.25.76 to zod >=4.6.6 across api, UI dependency trees, and packages, closing HIGH memory-exhaustion advisory GHSA-mrhx-c7xc-m3w5.
 
 ## Scope / Guardrails
 - Scope limited to zod version bump plus required v4 API adaptations, no feature changes.
@@ -50,11 +50,10 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
 - [x] Merge containment: all 342 pre-merge Track event IDs survive; no local Track writes. Main now contains the dated Zod exception and body-parser fix; requalify the resumed migration.
 - [x] Expanded inventory: 44 API source files, five auth-hono handlers, comments Hono adapter, skills parser; UI/e2e have no direct consumer. Root/API locks resolve 4.6.7; the frozen cluster-mesh selected consumer still resolves 3.25.76 and needs its own lot.
 - [x] Transitive inspection: Ollama 1.2.0 (latest published) declares a v3 peer but its runtime validation uses safeParse and the record parses successfully with 4.6.7. No application shim or v3 import introduced.
-- [ ] `attention`: origin/main carries no zod exception in `.security/vulnerability-register.yaml` (verified 2026-10-24, GHSA-mrhx-c7xc-m3w5 entry exists only on `feat/llm-judge` as BR96-EX19) — nothing to remove unless main gains one before merge; re-check before final gate.
 - [ ] BR01-EX1 (`acknowledge` self): touch `Makefile` (Forbidden Path), pin-only changes of `zod@3.25.76`/`zod@3.23.8` install pins to the v4 line in package typecheck/test targets (skills, auth-hono, llm-gateway, auth-client, cluster-mesh peer tools). Reason: targets hardcode the exact zod version under test; without the pin update the gates keep validating against v3. Impact: version strings in ephemeral `npm install` commands only, no target logic change. Rollback: revert pin strings to v3.
 - [x] `acknowledge`: `make scope-check` available (harness CLI installed); run before every commit.
-- [x] `acknowledge` owner decision 2026-10-24: zod migration reprioritized to P2; body-parser GHSA-27r3-jxmh-p828 owned by PR #734 (do not touch); this branch PAUSED until conductor resume after immo #861.
-- [ ] `blocked` Lot 4 verification: api image build fails its audit gate on pre-existing body-parser HIGH GHSA-27r3-jxmh-p828 (range 2.0.0-2.3.0 via express, prod path), unrelated to this migration. Evidence: pristine origin/main export audits 2 HIGH (body-parser + zod); migrated tree audits 1 HIGH (body-parser only) — zod GHSA-mrhx-c7xc-m3w5 provably closed. Repro: `make up-api-test REGISTRY=local ENV=test-sec-zod4` fails at audit-gate step on both trees. Resolution path: PR #734 owns body-parser; on resume, refresh base, re-run `make lock-api` + Lot 4 gates + Lot 5 (remove zod exception), then push + draft PR. Lot 4 src committed unverified (PAUSED WIP).
+- [x] Previous pause lifted by owner resume on 2026-10-25; merged the main fixes and refreshed the API lock. Current root audit reports zero HIGH/CRITICAL.
+- [x] Local API endpoint tests need their normal Compose environment: qualification-only runs stop during env validation without SCW_TEM_SECRET_KEY. Full API/E2E validation runs in PR CI.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -76,20 +75,18 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
 - Execution flow (mandatory):
   - Develop and run tests in `tmp/worktrees/sec-zod4`.
   - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
+  - No interactive UAT: dependency migration with no UI behavior changes; validate API/UI/E2E in CI.
   - Switch back to `tmp/worktrees/sec-zod4` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/security.md`.
   - [x] Created isolated worktree `tmp/worktrees/sec-zod4` on `feat/security-zod4-migration` from `origin/main` (`7fb76b7b2`).
   - [x] Zod inventory: `api` (`^3.22.4`, locked 3.25.76) + `@hono/zod-validator ^0.7.6`; `packages/auth-hono` (`^3.25.76`, validator `^0.7.5`); `packages/comments` (`^3.25.76`); `packages/skills` (`3.23.8` pinned); `ui` and `e2e` have zero zod usage; `api/tests` touches zod only in frozen historical fixtures (out of scope).
   - [x] Breaking API surface: `error.errors` (6 sites) becomes `error.issues`; single-arg `z.record(value)` (skills parser, product-docx, bids, products, config-product-settings) becomes `z.record(z.string(), value)`; `z.string().email()`, `z.coerce`, `.strict()`, `.refine()` unchanged in v4.
-  - [ ] Capture Makefile targets needed for debug/testing.
-  - [ ] Define environment mapping (`ENV=test-sec-zod4`) and ports for this branch.
-  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
-  - [ ] Confirm scope and guardrails.
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
+  - [x] Existing `make sh-api` with COMPOSE_RUN_API selecting docker-compose.immo-861.yml qualification; `make down` after each step, both under the shared Docker lock.
+  - [x] ENV=test-sec-zod4 last; qualification exposes no host ports. Reserved stack ports if needed: API 9065, UI 5265, Maildev 1165.
+  - [x] Scope mechanically checked through harness; Makefile exceptions documented above.
 
 - [x] **Lot 1 — packages/skills zod v4**
   - [x] Bump `zod` to `^4.6.6` (min, resolve `>=4.6.6`, no legacy shim) in `packages/skills/package.json`.
@@ -128,11 +125,11 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
   - [x] Bump `zod` to `^4.6.6` in `api/package.json`; refresh `api/package-lock.json` via make lock target (deferred to resume: `make lock-api` needs running api service, blocked by body-parser gate — see Feedback Loop).
   - [x] Replace `error.errors` with `error.issues` (magic-link, config-product-ai, session-device x3, session-lifecycle; live-declarations + queue-manager verified custom `string[]` interfaces, untouched).
   - [x] Replace single-arg `z.record(value)` with two-arg form (config-product-settings, product-docx, bids, products, proposals, solutions, view-templates, product-workspaces).
-  - [ ] Adapt `api/src/services/object-registry/json-schema-to-zod.ts` only if typecheck requires (pending `make typecheck-api` on resume).
+  - [x] `api/src/services/object-registry/json-schema-to-zod.ts` compiles with Zod 4 without changes.
   - [x] Refresh standalone API lock through the Compose qualification service; root and API resolve only Zod 4.6.7. Remove an unnecessary generic from `resources.ts` after reproducing Zod 4 output inference errors; existing resource endpoint tests cover target validation.
   - [x] Resume gates via Compose `make sh-api`: API typecheck PASS; auth-hono 239/239, comments 102/102, skills 136/136 tests PASS on the merged base.
   - [x] Root `overrides` pin `"zod": "^4.6.6"` added (single hoisted 4.6.7, zero v3) — `make lock-root` green.
-  - [ ] Lot gate: `make typecheck-api`, `make test-api`, `make test-ui` — all blocked on body-parser gate (PR #734), rerun on resume; no UAT (no UI change).
+  - [x] API typecheck via Compose PASS; full API, UI and E2E suites delegated to exact-head PR CI; no UAT (no UI change).
 
 - [ ] **Lot 5 — Register cleanup + final validation**
   - [x] Root npm audit after migration: zero HIGH/CRITICAL, no Zod finding. Remove npm-audit/SCA-api dated exceptions and the GHSA allowlist first; remove remaining scanner aliases in the next atomic commit.
@@ -147,7 +144,7 @@ Migrate zod 3.25.76 to zod >=4.6.6 across api and packages, closing HIGH memory-
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+  - [ ] Final gate step 3: retain BRANCH.md, keep PR draft, report exact head and CI result; do not merge.
 
 - [x] **Lot 6 — cluster-mesh frozen consumer Zod resolution**
   - [x] Pin the selected fixture to Zod >=4.6.6, preserve overrides when preparing consumers, and refresh its Zod lock entry.
