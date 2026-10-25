@@ -1,7 +1,7 @@
 # Feature: Live STT L0 baseline and dedicated capacity study
 
 ## Objective
-- [x] Execute only L0 of approved live-speech r3; freeze evidence and scopes for subsequent lots.
+- [x] Deliver L0 evidence and frozen scopes for subsequent lots, with explicit L0-D01/L0-D02 deferrals below; their approved-spec obligations remain incomplete.
 - [x] Deliver baseline, entry gates, dependencies, placement/release matrix and capacity feasibility study.
 
 ## Scope / Guardrails
@@ -35,6 +35,7 @@
 
 ## Feedback Loop
 - [x] PR753-P2-1 — Cost shared native-campaign CI displacement and custody serialization; present priced dedicated-seat candidate A/B/C without selecting or admitting capacity.
+- [x] PR753-P2-2 — Record L0-D01/L0-D02 reasons, owners, target lots and blocking entry receipts in scope-release.md/gates.md; preserve the unfulfilled spec obligations.
 - [x] Preserve concurrent root/h2a changes; no shared Track writer is assigned, so do not import or append `.track`.
 - [x] Existing `scope-check` builds/runs raw Docker containers incompatible with the lock's compose-only rule; use its host harness checker through an external Make recipe and skip `build-harness`.
 - [x] Record open entry gates with accountable owner, evidence and bounded closure criteria.
@@ -71,4 +72,6 @@
   - [x] Run locked `make down ENV=test-live-stt-l0`; initial cleanup exits zero; recheck worktree/final head after handoff commit.
 
 ## Deferred to later live-speech lots
+- [x] L0-D01 / spec §11 — Sol/Muse create template-derived executable plans at L1 and each later branch-init before source edits; L0 scope forbids `plan/**`; scope-release.md specifies exact path/exception/test receipts.
+- [x] L0-D02 / spec §8.1 — Muse/build-security L3 preparation must pin the complete permitted toolchain and prove Koffi/ONNX offline paths before L3/L4 implementation (G-NATIVE); L0 has no approved native bundle and performs no install/build.
 - [x] L1 onward, runtime qualification, account/capacity changes, package publication and deployment are outside this PR.
