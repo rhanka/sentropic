@@ -64,9 +64,11 @@ describe.skipIf(!pgEnabled)('consumed-counter migration application', () => {
       const bound = await root.bindNew(grant);
       await bound.commitAtomic({ guards: [], records: [{ key: 'upgrade', contentHash: 'h', bytes: { format: 'utf8', data: 'retained' } }], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [] });
       await bound.journalFence();
+      await bound.journalRead(0, 1, 'legacy');
       await fixture.tx.run(false, async (session) => {
         await session.execute({ text: `UPDATE "${fixture.name}".scopes SET version=$1::bigint,sequence=$1::bigint`, values: [before] });
         await session.execute({ text: `UPDATE "${fixture.name}".fences SET epoch=$1::bigint`, values: [before] });
+        await session.execute({ text: `UPDATE "${fixture.name}".consumers SET state=state || '{"cursor":0,"scanned":1}'::jsonb`, values: [] });
         await session.execute({ text: `UPDATE "${fixture.name}".journal SET sequence=$1::bigint,event=jsonb_set(jsonb_set(event,'{seq}',to_jsonb($1::text)),'{rootVersion}',to_jsonb($1::text))`, values: [before] });
         await session.execute({ text: `INSERT INTO "${fixture.name}".boundaries SELECT key,'retained',$1,root,version,sequence,jsonb_build_object('incarnation',incarnation) FROM "${fixture.name}".scopes`, values: [grant.principalId] });
       });
@@ -75,6 +77,7 @@ describe.skipIf(!pgEnabled)('consumed-counter migration application', () => {
       fixture.options.assets = assets;
       const rebound = await (await fixture.open()).bind(grant);
       expect(await readCounters(fixture)).toEqual({ version: before, sequence: before });
+      expect(await rebound.journalInspect('legacy')).toMatchObject({ cursor: '0', lag: before });
       expect(await rebound.readRecord('upgrade')).toMatchObject({ bytes: { format: 'utf8', data: 'retained' } });
       expect((await rebound.journalRead((BigInt(before) - 1n).toString(), 10)).events[0]!.seq).toBe(before);
       const preserved = await fixture.tx.run(true, (session) => session.execute({ text: `SELECT epoch::text,version::text,sequence::text FROM "${fixture.name}".fences CROSS JOIN "${fixture.name}".boundaries`, values: [] }));
