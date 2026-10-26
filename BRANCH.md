@@ -53,6 +53,9 @@
 - [x] First real PG pass: 6 pass/2 fail/0 skips; duplicate `event_id` accepted within one unit reproduced. Add per-unit identity set; correct fixture moduleResult to the existing EncodedValue wire type.
 - [x] E2 qualification succeeded at `6ba0cb0d576c8fe454537202583aecded86613f5` (run 40353153064); E0/E1/E2 remain open PRs. E6 is drafted on E0 and depends on E2 landing before integration.
 - [x] Declare E0 paths inherited in the diff against integration; E6 does not author or alter those freeze assets.
+- [x] PG memory corpus PASS: 10/10, zero skips; regression PASS: 61 tests, with only two separate-phase `postgres-crashes.spec.ts` cases skipped. Typecheck PASS; build/lint/mechanical/wiring PASS with cleanup=0.
+- [ ] Blocker: #768 is CONFLICTING/DIRTY and has no CI run. Integration `d22fc3f24` carries P2 `f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642`; E6 still carries required `2b85ff28...`. No base merge attempted; owner disposition requested before any action affecting this freeze.
+- [x] Retain local logs/checksums under `tmp/engram-e6-receipts/` and official lane receipts under `tmp/engram-e2-receipts/`.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky waiver applies.
@@ -72,13 +75,14 @@
   - [x] Author `tests/engram-memory/queries.spec.ts`: all five queries, foreign scope, paging, retained boundaries and resync.
   - [x] Author `tests/engram-memory/projection.spec.ts`: live K7/K8, completion, P3 replay and rollback.
   - [ ] Rerun existing `first-proof.spec.ts` and `completion.spec.ts`.
-- [ ] **Lot 2 — Implementation**
+- [x] **Lot 2 — Implementation**
   - [x] Author memory-only SQL assets and shared schema-role loader hooks; E2 does not edit migrations.ts; independent module chain avoids core numbering collision.
   - [x] Author transactional projection and backend-backed validation; reuse #709 transition functions; qualification pending.
   - [x] Author five root-bound memory queries and scope-chain-index enumeration; qualification pending.
 - [ ] **Lot 3 — Final validation and draft handoff**
-  - [ ] Existing PG module-migration, migration, registration, query and policy regressions pass.
+  - [x] Existing PG module-migration, migration, registration, query and policy regressions pass (61 PG tests including E6).
   - [ ] Build, typecheck, lint, memory/common/grants and real PG qualification lanes pass except the two owner-listed failures.
-  - [ ] Scope-check before every commit; P2 unchanged and Engram exactly 0.21.1.
+  - [x] Scope-check before every commit; P2 unchanged and Engram exactly 0.21.1.
   - [x] Unique pack-only 0.23.0-dev.5 manifest/root-lock version commit; E2 registry baseline is 0.22.1; no peer or Engram change.
-  - [ ] Push draft PR to `feat/engram-e2-integration`; record head/CI/migration; do not merge.
+  - [x] Push draft PR #768 to `feat/engram-e2-integration`; no merge; independent memory migration 001 (receipt slot 008 after E2 core 007).
+  - [ ] CI run URL and green qualification pending resolution of the conflicting integration base/P2 freeze.
