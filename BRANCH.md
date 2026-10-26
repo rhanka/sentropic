@@ -68,6 +68,7 @@
   - [x] Preserve full context and cancellation; compile policy uses verified claims/source; mesh 0.22.5 retains the platform >=0.4.0 floor.
   - [x] HTTP SDK proof: strict client reproduced missing root object type; full rerun passes with the complete frozen oneOf preserved (136 platform/28 mesh).
 - [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
+  - [x] Review r1: produce npm view/download receipts, recompute SHA-512 and compare registry metadata plus a real npm-generated observation lock; retain both with source reports.
   - [x] New runner/tests: tools/memory-mcp-l5/lot3-source.mjs and tests/lot3-source.test.mjs; exact P09 file set bound to the unchanged P3 catalog.
   - [x] First exact run: platform 132 passed; mesh 24 passed/3 skipped, rejected by the reporter. Existing packaging fixtures now prepare those three required cases.
 - [ ] Lot 4: review, push draft PR to main, final-head CI green; list manifest-blocked proofs and Lot 4 estimate.
