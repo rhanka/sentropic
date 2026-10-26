@@ -22,6 +22,7 @@ train_version() {
 MESH="$(train_version llm-mesh)"
 GATEWAY="$(train_version llm-gateway)"
 AHONO="$(train_version auth-hono)"
+COMMENTS="$(train_version comments)"
 MPLATFORM="$(train_version mcp-platform)"
 ARTIFACTS="$(train_version artifacts)"
 rm -rf "$work"
@@ -163,6 +164,7 @@ if [ "${REFRESH_LOCK:-}" = 1 ]; then artifacts_spec="$(src @sentropic/artifacts 
 consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
   "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" \
   "@sentropic/auth-hono=$(src @sentropic/auth-hono "$AHONO")" \
+  "@sentropic/comments=$(src @sentropic/comments "$COMMENTS")" \
   "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")" \
   "@sentropic/artifacts=$artifacts_spec"
 sources "$work/selected"
@@ -236,7 +238,7 @@ node -e 'const fs = require("fs"); const cm = JSON.parse(fs.readFileSync(process
   pkg.dependencies = { "@sentropic/cluster-mesh": "file:" + process.argv[3], ...cm.peerDependencies, hono: cm.dependencies.hono };
   fs.writeFileSync(dir + "/package.json", JSON.stringify(pkg, null, 2));' "$(pwd)" "$work/latest" "$tgz"
 latest_overrides=""
-for sib in llm-mesh llm-gateway auth-hono mcp-platform mcp-auth oauth-verify contracts events artifacts; do
+for sib in llm-mesh llm-gateway auth-hono comments mcp-platform mcp-auth oauth-verify contracts events artifacts; do
   sib_ver="$(train_version "$sib")"
   sib_spec="$(src @sentropic/"$sib" "$sib_ver")"
   case "$sib_spec" in file:*) latest_overrides="$latest_overrides @sentropic/$sib=$sib_spec" ;; esac
