@@ -168,17 +168,21 @@ scope), so finite-capacity and contention acceptance remains open.
 
 The 2026-10-26 execution packet assigns BR-77 to
 `plan/71-BRANCH_chore-ci-capacity-policy.md`, continuing the Lot 2/3 split
-from #705. Its bounded DAG retains two package-validation lanes, one
-ordinary-publisher lane and API/E2E widths 2/2. Full PR/main demand is at
-most 15 execution slots against the observed lower bound of 17 and a
-two-slot release allowance. Account quota and billed cost remain unknown;
-this allowance is not a hosted-runner reservation. PR-only cancellation,
-main serialization and all existing completeness/publication gates remain.
+from #705. Review r1 removes the 13/10-deep package validation chains:
+23 independent validators share six queued execution mutexes. All common
+jobs share 15 repository-wide mutexes, with two existing release groups
+outside that pool; PR/main demand is bounded by 15/17. API/E2E return to
+reference widths 15/5. Timing acceptance requires completed PR and main
+runs of the final policy, each <=2288s; static width alone never qualifies.
+Account quota and billed cost remain unknown. PR-only cancellation and
+all existing completeness/publication barriers remain. Ordinary publishers
+regain independence; explicit branch dry-run mode exercises their real packs.
 
 [Capacity receipts](ci-cd-ten-minutes/capacity.md) identify the current-base
 baseline, concurrent main rerun, obsolete PR and live conservative rollback.
-The rollback uses one validation lane and widths 1/1 without deleting
-expected-result or metrics checks; the bounded policy is then restored.
+The old rollback used one validation lane and widths 1/1 without deleting
+expected-result or metrics checks, but run 40353670942 was cancelled:
+the rollback drill remains unticked until a completed receipt exists.
 Classification and verdict breaches remain visible. Completed concurrent
 delivery and the 60-second aggregate scheduling budget require post-run
 captures, not an inference from green fixtures or a maximum queue sample.
