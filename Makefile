@@ -13,7 +13,7 @@ ARTIFACTS_NETWORK = --network "$$net"
 ARTIFACTS_PLATFORM_BUILD = build-mcp-platform
 CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
 CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
-ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int),)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
@@ -1802,7 +1802,7 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
-ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1)
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
@@ -2619,7 +2619,7 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
