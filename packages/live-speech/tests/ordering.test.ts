@@ -4,6 +4,53 @@ import { createSession, SessionJournal } from '../src/core/session.js';
 import type { JournalSnapshot } from '../src/core/session.js';
 
 describe('submission, tool history and effect barrier', () => {
+  it('should retain new call approvals while accepted old effects receive terminal evidence', async () => {
+    const f = fixture();
+    const old = await commit(f.core);
+    await f.core.send(old);
+    await f.core.admitTool(old, mutation('old'));
+    await f.core.interrupt(old, 'stop');
+    const prompt = await f.core.riskPrompt(['effect:old']);
+    await f.core.acceptRisk({ ...prompt, requestId: 'accept-old', proof: 'proof' });
+    const next = await commit(f.core, 'next');
+    await f.core.send(next);
+    let release!: () => void;
+    const waiting = new Promise<void>(r => { release = r; });
+    vi.mocked(f.authority.verifyMutation).mockClear().mockImplementation(async request => {
+      await waiting;
+      return { ...request, authorizationId: `auth:${request.callId}`,
+        principalId: scope.principalId, tenantId: scope.tenantId };
+    });
+    const a = f.core.admitTool(next, mutation('a'));
+    const b = f.core.admitTool(next, mutation('b'));
+    await vi.waitFor(() => expect(f.authority.verifyMutation).toHaveBeenCalledTimes(2));
+    await f.core.complete(old, 'interrupted');
+    await f.core.resolveEffect('effect:old', 'completed-before-cancel', 'late receipt');
+    release();
+    expect(await a).toMatchObject({ admitted: true });
+    expect(await b).toMatchObject({ admitted: true });
+  });
+
+  it('should preserve a new call approval when Stop arrives for an already completed old turn', async () => {
+    const f = fixture();
+    const old = await commit(f.core);
+    await f.core.send(old);
+    await f.core.complete(old, 'completed');
+    const next = await commit(f.core, 'next');
+    await f.core.send(next);
+    let release!: () => void;
+    const waiting = new Promise<void>(r => { release = r; });
+    vi.mocked(f.authority.verifyMutation).mockImplementationOnce(async request => {
+      await waiting;
+      return { ...request, authorizationId: 'new-call', principalId: scope.principalId, tenantId: scope.tenantId };
+    });
+    const admitting = f.core.admitTool(next, mutation());
+    await vi.waitFor(() => expect(f.authority.verifyMutation).toHaveBeenCalledOnce());
+    await f.core.interrupt(old, 'late-stop');
+    release();
+    expect(await admitting).toMatchObject({ admitted: true });
+  });
+
   it('should admit separately approved parallel calls when a sibling resolves during approval', async () => {
     const f = fixture();
     const turn = await commit(f.core);
