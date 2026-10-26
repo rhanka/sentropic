@@ -414,3 +414,84 @@ whose platform peer range is widened to `>=0.3.0 <0.5.0`, and exposes all 27 too
 through Mesh exports.
 The installed consumer lane is
 `make cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=test-cm-wrap`.
+# Speech configuration (0.23)
+
+`resolveClusterMeshConfig` accepts optional `speechProfiles`. The root exports
+the schema and `resolveSpeechProfiles` without loading a provider peer. Import
+`projectSpeechProfile` / `rebindSpeechProfile` from `@sentropic/cluster-mesh/speech`
+when using the L1 `@sentropic/llm-mesh` speech contract (0.28). Existing capacity-only
+configuration keeps its previous shape.
+
+Every profile pins `schemaVersion: 1`, profile/configuration identity, trusted
+tenant/workspace scope, pipeline, coordinator placement, microphone mode and
+policy/egress/budget references. Each stage independently selects provider, model,
+model revision, adapter/revision, placement, language/voice/region and opaque
+account/resource references. There is no provider/model allowlist or default
+engine. Credentials belong to gateway custody; account/resource references grant
+no admission themselves. The existing agent route still selects the target/model.
+
+```ts
+import { resolveClusterMeshConfig } from '@sentropic/cluster-mesh';
+import { projectSpeechProfile } from '@sentropic/cluster-mesh/speech';
+
+const config = resolveClusterMeshConfig({
+  capacity: { poolSize: 1 },
+  speechProfiles: [{
+    schemaVersion: 1, profileId: 'headset', configRevision: 'revision:1',
+    tenantId: 'tenant:one', workspaceId: 'workspace:one',
+    pipeline: 'chained', placement: 'endpoint-native', micMode: 'key',
+    bindings: {
+      stt: { providerId: 'local', modelId: 'tiny', modelRevision: 'sha256:PIN_MODEL',
+        adapterId: 'faster-whisper-ts', adapterRevision: '1.2.1',
+        placement: 'endpoint-native', language: 'fr', resourceRef: 'resource:endpoint' },
+      tts: { providerId: 'local', modelId: 'espeak-fr', modelRevision: 'sha256:PIN_VOICE',
+        adapterId: 'espeak-ng', adapterRevision: 'PIN_ADAPTER',
+        placement: 'endpoint-native', language: 'fr', resourceRef: 'resource:endpoint' },
+    },
+    policyRef: 'policy:voice', egressPolicyRef: 'egress:device', budgetRef: 'budget:voice',
+    allowedPlacements: ['endpoint-native'], allowedEgress: ['device'],
+    requiredCapabilities: { stt: ['partialTranscript'] },
+    inputFormats: [{ codec: 'pcm16-le', sampleRateHz: 16000, channels: 1 }],
+    outputFormats: [{ codec: 'pcm16-le', sampleRateHz: 16000, channels: 1 }],
+    maxDurationMs: 60000, maxCostUsd: 0, fallbacks: [],
+  }],
+});
+// trustedContext comes from the existing authenticated host, catalogue and route inventory.
+const projected = projectSpeechProfile(config.speechProfiles!, {
+  profileId: 'headset', configRevision: 'revision:1',
+}, trustedContext);
+```
+
+Replace illustrative artifact pins with qualified immutable identities. These
+names do not register an engine or certify its license, device, transport or
+latency. A missing tuple is unavailable; configuration never downloads a model.
+
+`chained` requires STT and TTS; `native-duplex` requires only a duplex binding.
+Supported placement identifiers are `endpoint-native`, `browser-wasm`,
+`local-companion`, `cluster-hosted` and `cloud-relay`. Coordinator and individual
+stage placements can differ, including cloud STT with local TTS. Key and open-mic
+are both selectable; neither configuration nor projection activates the mic.
+Web-online, browser-local, h2a-style companion and hosted workers use this same
+surface. Remote target attachment remains independent of engine placement.
+
+Projection consumes the existing multi-tuple speech catalogue and negotiates
+each exact identity, selectors, required capabilities and media. Trusted tenant,
+workspace, policy, placement, egress and route evidence must agree. An offline
+local snapshot works without an online app; network-dependent stages are refused
+offline. Unknown/partial/unsupported required capabilities, ambiguous or absent
+catalogue entries and unavailable routes return a reason and stage. Projection
+does not allocate resources, select accounts or replace gateway admission.
+
+Snapshots are cloned and frozen. Unknown fields, credentials/activation fields,
+malformed media, duplicate identities, missing stages and unpinned `latest`
+revisions are refused. `fallbacks` is an ordered list of explicit profile/revision
+references in the same scope, empty by default. Projection never switches to one
+automatically; the client must request it and obtain fresh admission/consent.
+
+Edits apply to new sessions. Explicit rebind requires the current revision,
+authoritative quiescence/cancellation/reconciliation/drained-playback evidence
+and a new consent revision bound to the selected profile/configuration/egress
+policy. A changed profile cannot reuse its old revision. Every successful
+projection still reports `micEnabled: false` and `requiresSessionAdmission: true`.
+It is a configuration receipt, not proof that native work was cancelled.
+
