@@ -24,6 +24,12 @@ export function durationSeconds(startedAt, completedAt) {
   return (end - start) / 1000;
 }
 
+// Cancelled queue entries can have positive API intervals but runner_id=0.
+// Retain raw stamps while refusing execution/cost credit without dispatch.
+export function executionSeconds(record) {
+  return record?.dispatched === false ? null : durationSeconds(record?.startedAt, record?.completedAt);
+}
+
 // True when a record cannot yield a duration: exactly one timestamp missing,
 // both missing with a non-skipped conclusion, or completion before start.
 export function isTimestampGap(record) {
@@ -44,6 +50,7 @@ export function captureRecords(captured) {
   return captured.jobs.map((row) => ({
     runId: row.run_id, attempt: row.run_attempt, jobId: row.id, name: row.name,
     conclusion: row.conclusion, status: row.status, queuedAt: row.created_at,
+    dispatched: Object.hasOwn(row, 'runner_id') ? Boolean(row.runner_id) : null,
     startedAt: row.started_at, completedAt: row.completed_at, labels: row.labels,
     headSha: row.head_sha ?? captured.run.head_sha ?? null,
     headBranch: row.head_branch ?? captured.run.head_branch ?? null,
@@ -84,6 +91,7 @@ export function dedupeJobs(records) {
 // readiness substitute. Skipped rows have no runner queue measurement.
 export function queueSeconds(record) {
   if (record?.conclusion === 'skipped') return null;
+  if (record?.dispatched === false) return null;
   if (['queued', 'waiting', 'pending', 'requested'].includes(record?.status)) return null;
   const queued = toMs(record?.queuedAt ?? record?.createdAt);
   const start = toMs(record?.startedAt);
@@ -125,7 +133,7 @@ export function criticalPathScheduling(records, dependencies = {}, endpoints = {
     if (rows.length && parents.every(Boolean)) {
       const parent = parents.sort((a, b) => b.end - a.end)[0] ?? { end: 0, jobs: [] };
       if (!executed.length) result = parent;
-      else if (executed.every(row => durationSeconds(row.startedAt, row.completedAt) !== null)) {
+      else if (executed.every(row => executionSeconds(row) !== null)) {
         const last = executed.sort((a, b) => toMs(b.completedAt) - toMs(a.completedAt))[0];
         const queue = queueSeconds(last);
         const handoff = parent.end > 0 ? durationSeconds(parent.end, last.startedAt) : queue;
@@ -169,7 +177,7 @@ export function runnerMinutes(records) {
   const byRunner = {};
   for (const record of records ?? []) {
     if (record?.conclusion === 'skipped') continue;
-    const span = durationSeconds(record?.startedAt, record?.completedAt);
+    const span = executionSeconds(record);
     if (span === null) continue;
     totalSeconds += span;
     const runner = record?.runnerName ?? record?.runner
@@ -200,7 +208,7 @@ export function deliveryElapsed(records, runCreatedAt, endpoints = {}) {
     for (const pattern of patterns) {
       const ends = (records ?? [])
         .filter((record) => matches(record, pattern))
-        .map((record) => (durationSeconds(record?.startedAt, record?.completedAt) === null
+        .map((record) => (executionSeconds(record) === null
           ? null
           : toMs(record?.completedAt)))
         .filter((end) => end !== null);
@@ -242,6 +250,7 @@ export function overlappingSeconds(aRecords, bRecords) {
     const ends = [];
     for (const record of records ?? []) {
       if (record?.conclusion === 'skipped') continue;
+      if (record?.dispatched === false) continue;
       const start = toMs(record?.startedAt);
       const end = toMs(record?.completedAt);
       if (start === null || end === null || end < start) continue;
@@ -267,6 +276,7 @@ export function concurrencyPeak(records) {
   const events = [];
   for (const record of records ?? []) {
     if (record?.conclusion === 'skipped') continue;
+    if (record?.dispatched === false) continue;
     const start = toMs(record?.startedAt);
     const end = toMs(record?.completedAt);
     if (start === null || end === null || end <= start) continue;
@@ -423,7 +433,7 @@ export function contentionReceipt(captures) {
     let witness = null;
     for (const a of sets[left]) for (const b of sets[right]) {
       if (a.conclusion === 'skipped' || b.conclusion === 'skipped') continue;
-      if (durationSeconds(a.startedAt, a.completedAt) === null || durationSeconds(b.startedAt, b.completedAt) === null) continue;
+      if (executionSeconds(a) === null || executionSeconds(b) === null) continue;
       const seconds = (Math.min(toMs(a.completedAt), toMs(b.completedAt)) - Math.max(toMs(a.startedAt), toMs(b.startedAt))) / 1000;
       if (seconds > (witness?.seconds ?? 0)) witness = { seconds, left: jobKey(a), right: jobKey(b) };
     }
@@ -454,7 +464,7 @@ export function summarizeRun(records, { expectedJobCount = null } = {}) {
       skipped += 1;
       continue;
     }
-    const span = durationSeconds(job?.startedAt, job?.completedAt);
+    const span = executionSeconds(job);
     if (span === null) {
       unmeasured += 1;
       if (isTimestampGap(job)) gaps += 1;
@@ -510,7 +520,7 @@ export function endpointReadiness(records, endpoints = {}) {
     }
     const withDuration = matched.filter(
       (record) => record?.conclusion !== 'skipped'
-        && durationSeconds(record?.startedAt, record?.completedAt) !== null,
+        && executionSeconds(record) !== null,
     );
     result[endpoint] = {
       status: withDuration.length === matched.length ? 'measured' : 'partial',
@@ -570,7 +580,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     name: record.name, conclusion: record.conclusion,
     headSha: record.headSha ?? null, headBranch: record.headBranch ?? null,
     startedAt: record.startedAt ?? null, completedAt: record.completedAt ?? null,
-    seconds: record.conclusion === 'skipped' ? null : durationSeconds(record.startedAt, record.completedAt),
+    seconds: record.conclusion === 'skipped' ? null : executionSeconds(record),
     queueSeconds: queueSeconds(record), steps: stepSpans(record),
   }));
   console.log(JSON.stringify({ file, identity, summary, readiness, queue, runnerMinutes: minutes, delivery, cache,
