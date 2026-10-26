@@ -36,8 +36,9 @@ export class SpeechConfigurationError extends Error {
   constructor() { super('Invalid speech configuration'); this.name = 'SpeechConfigurationError'; }
 }
 
-const placements = ['endpoint-native', 'browser-wasm', 'local-companion', 'cluster-hosted', 'cloud-relay']
-  as const satisfies readonly SpeechPlacement[];
+const placements = [
+  'endpoint-native', 'browser-wasm', 'local-companion', 'cluster-hosted', 'cloud-relay',
+] as const satisfies readonly SpeechPlacement[];
 const features = ['streamingStt', 'partialTranscript', 'nativeDuplex', 'tts', 'serverVad', 'clientVad',
   'manualCommit', 'playoutTruncate', 'toolCancellation', 'resume'] as const satisfies readonly SpeechCapabilityName[];
 const fail = (): never => { throw new SpeechConfigurationError(); };
