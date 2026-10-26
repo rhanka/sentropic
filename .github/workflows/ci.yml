@@ -111,7 +111,8 @@ jobs:
 
   qualify-engram-e2:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && (github.base_ref == 'feat/engram-e2-integration' || github.head_ref == 'feat/engram-e2-integration')
+    needs: [changes]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.engram_e2 == 'true'
     permissions:
       contents: read
       actions: read
@@ -160,6 +161,7 @@ jobs:
       ai: ${{ steps.filter.outputs.ai }}
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
       cluster_mesh: ${{ steps.filter.outputs.cluster_mesh }}
+      engram_e2: ${{ steps.filter.outputs.engram_e2 }}
       cluster_mesh_publish: ${{ steps.filter.outputs.cluster_mesh_publish }}
       llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
@@ -234,6 +236,10 @@ jobs:
         id: filter
         with:
           filters: |
+            engram_e2:
+              - 'packages/cluster-mesh/**'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
             idp_sync:
               - 'deploy/**'
               - 'packages/auth-hono/src/**'
@@ -2440,6 +2446,7 @@ jobs:
       contents: read
     needs:
       - enforce-package-bump
+      - qualify-engram-e2
       - changes
       - validate-publishable-manifests
       - build-e2e
