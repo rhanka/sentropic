@@ -71,6 +71,7 @@
   - [x] Red at `ac7134bfd`: both suites fail on missing speech/config.js before source implementation.
   - [ ] Red run before implementation; green after config/projection and existing seam integration.
 - [ ] **L1c-c — Implementation**
+  - [x] Strict profile decoder, immutable snapshots and existing cluster config seam implemented; catalogue projection follows.
   - [ ] `packages/cluster-mesh/src/speech/{config,projection}.ts`: one revisioned schema and local projection consuming llm-mesh catalogue/negotiation.
   - [ ] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
   - [ ] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.
