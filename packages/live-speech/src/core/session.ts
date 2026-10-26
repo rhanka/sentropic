@@ -83,7 +83,7 @@ export interface ControlPort {
   query(turn: TurnRef): Promise<{ status: 'unknown' | 'running' | 'completed' | 'interrupted' | 'failed'; nativeTurnId?: string }>;
 }
 export interface MutationRequest {
-  scope: Scope; turnEpoch: number; submitKey: string; toolClass: string; toolName: string;
+  scope: Scope; turnEpoch: number; submitKey: string; callId: string; toolClass: string; toolName: string;
   actionId: string; argumentsDigest: string; barrierRevision: number; proof: unknown;
 }
 export interface TrustedAuthority {

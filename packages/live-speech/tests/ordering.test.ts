@@ -4,6 +4,44 @@ import { createSession, SessionJournal } from '../src/core/session.js';
 import type { JournalSnapshot } from '../src/core/session.js';
 
 describe('submission, tool history and effect barrier', () => {
+  it('should admit separately approved parallel calls when a sibling resolves during approval', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    await f.core.send(turn);
+    let release!: () => void;
+    const waiting = new Promise<void>(r => { release = r; });
+    vi.mocked(f.authority.verifyMutation).mockImplementation(async request => {
+      if (request.callId === 'b') await waiting;
+      return { ...request, authorizationId: `auth:${request.callId}`,
+        principalId: scope.principalId, tenantId: scope.tenantId };
+    });
+    const a = f.core.admitTool(turn, mutation('a'));
+    const b = f.core.admitTool(turn, mutation('b'));
+    expect(await a).toMatchObject({ admitted: true });
+    await f.core.resolveTool(turn, 'a', 'completed-before-cancel', 'receipt:a');
+    release();
+    expect(await b).toMatchObject({ admitted: true });
+    expect(f.authority.verifyMutation).toHaveBeenCalledWith(expect.objectContaining({ turnEpoch: turn.turnEpoch, callId: 'b' }));
+  });
+
+  it('should revoke an in-flight call approval when Stop installs a fence', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    await f.core.send(turn);
+    let release!: () => void;
+    const waiting = new Promise<void>(r => { release = r; });
+    vi.mocked(f.authority.verifyMutation).mockImplementationOnce(async request => {
+      await waiting;
+      return { ...request, authorizationId: 'pending', principalId: scope.principalId, tenantId: scope.tenantId };
+    });
+    const admitting = f.core.admitTool(turn, mutation());
+    await vi.waitFor(() => expect(f.authority.verifyMutation).toHaveBeenCalledOnce());
+    await f.core.interrupt(turn, 'stop');
+    release();
+    await expect(admitting).rejects.toThrow('fenced');
+    expect(Object.keys(f.journal.state.effects)).toHaveLength(0);
+  });
+
   it('should carry effect barriers, fences and consumed approvals into a new controller generation', async () => {
     let bytes: string | undefined;
     const storage = {
@@ -139,7 +177,7 @@ describe('submission, tool history and effect barrier', () => {
       argumentsDigest: 'other-arguments', authorizationId: 'fresh', principalId: scope.principalId, tenantId: scope.tenantId }));
     await expect(f.core.admitTool(turn, mutation('b'))).rejects.toThrow('authorization');
     vi.mocked(f.authority.verifyMutation).mockImplementationOnce(async request => ({ ...request,
-      barrierRevision: 0, authorizationId: 'old-unused-approval', principalId: scope.principalId, tenantId: scope.tenantId }));
+      callId: 'a', authorizationId: 'wrong-call-approval', principalId: scope.principalId, tenantId: scope.tenantId }));
     await expect(f.core.admitTool(turn, mutation('b'))).rejects.toThrow('authorization');
   });
 
