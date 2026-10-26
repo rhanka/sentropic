@@ -71,6 +71,47 @@ describe('artifact host recovery', () => {
     expect((await pool.query('SELECT count(*)::int AS count FROM artifacts.releases')).rows[0].count).toBe(0);
   });
 
+  it.each(['invalid', 'claimed', 'unavailable'])('should advance past a %s preparation and persist its debt', async kind => {
+    const { jobs, blobs, page, authorize, store } = fixture();
+    const now = Date.now();
+    const intents = [];
+    for (const [index, hex] of ['a', 'b', 'c'].entries()) {
+      await blobs.putBlob(key(hex), new Uint8Array([1]));
+      await store.pin(blobDigestOfKey(key(hex)), `preparation:release-${hex}`);
+      intents.push(await store.record('commit-release', { attemptId: hex, invocationId: hex,
+        releaseId: `release-${hex}`, blobKeys: [key(hex)], preparedAtMs: now - 30000,
+        cleanupDeadlineMs: kind === 'invalid' && index === 0 ? 'broken' : now - 20000 + index }));
+    }
+    if (kind === 'claimed') await store.record('delete-blob', {
+      deletionClaim: true, digest: blobDigestOfKey(key('a')), holder: 'purge' });
+    const remove = blobs.deleteBlob;
+    blobs.deleteBlob = vi.fn(async value => {
+      if (kind === 'unavailable' && value === key('a')) throw new Error('object unavailable');
+      await remove(value);
+    });
+    await expect(jobs.cleanup()).rejects.toThrow(/cleanup/);
+    expect((await store.get(intents[1]!.intentId))?.payload.cleanupState).toBe('failed-cleaned');
+    expect(await blobs.getBlob(key('b'))).toBeUndefined();
+    const debt = await store.get(intents[0]!.intentId);
+    expect(debt?.state).toBe('failed');
+    expect(debt?.payload.hostCleanupRetries).toBe(1);
+    expect(debt?.error).toMatch(/invalid preparation metadata|deletion claim|object unavailable/);
+    // A fresh host skips persisted debt and reaches the next page without retrying it immediately.
+    await createArtifactHostJobs({ pool, blobs, page, authorize, batchSize: 2 }).cleanup();
+    expect((await store.get(intents[2]!.intentId))?.payload.cleanupState).toBe('failed-cleaned');
+    expect((await store.get(intents[0]!.intentId))?.payload.hostCleanupRetries).toBe(1);
+    expect(await blobs.getBlob(key('a'))).toBeDefined();
+    expect(await blobs.getBlob(key('c'))).toBeUndefined();
+    if (kind === 'unavailable') {
+      blobs.deleteBlob = remove;
+      await pool.query(`UPDATE artifacts.object_intents SET payload = jsonb_set(payload, '{cleanupDeadlineMs}',
+        payload->'hostCleanupOriginalDeadlineMs') WHERE id = $1`, [intents[0]!.intentId]);
+      await jobs.cleanup();
+      expect((await store.get(intents[0]!.intentId))?.payload.cleanupState).toBe('failed-cleaned');
+      expect(await blobs.getBlob(key('a'))).toBeUndefined();
+    }
+  });
+
   it('should retain shared references and pins while collecting only a bounded page', async () => {
     const { jobs, blobs, page, store } = fixture();
     for (const hex of ['a', 'b', 'c']) await blobs.putBlob(key(hex), new Uint8Array([1]));
