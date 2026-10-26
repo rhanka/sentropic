@@ -1,0 +1,51 @@
+{
+  "status": "source-only",
+  "qualificationAccepted": false,
+  "sourceHead": "82641829615d3b264da07cc97e7a46e3b0112add",
+  "preCandidateSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
+  "catalogSha256": "9bf377b774dda54a3b37189eea57cb845acca7b27b8b55b399f23c20215a1211",
+  "reports": [
+    {"kind":"mcp-platform","path":"spec/evidence/memory-mcp-l5/lot3/reports/b51ad17a381c53648725b192ef60e6bf9fb401ec3f3d0fac895f30a25688b3e7.json.gz","sha256":"b51ad17a381c53648725b192ef60e6bf9fb401ec3f3d0fac895f30a25688b3e7","uncompressedSha256":"006b1501c4a7cf78e39ff74bbb0203a678e0f8aa05c7a045afd580feebf7a0bc","passed":136},
+    {"kind":"cluster-mesh","path":"spec/evidence/memory-mcp-l5/lot3/reports/8b5a4ed387f040b34af7f3a9e300fb1e204c2d0abdbcd565e7f5129baaca7157.json.gz","sha256":"8b5a4ed387f040b34af7f3a9e300fb1e204c2d0abdbcd565e7f5129baaca7157","uncompressedSha256":"3ce9d350b751464911c8b2f793ea4ce0df23f171961ceb07ca0f6dfec4058b54","passed":31},
+    {"kind":"summary","path":"spec/evidence/memory-mcp-l5/lot3/reports/dc5a32b21780ad3825c2795c8c1bd10ef60e54d400765d9e65338b0670e74649.json.gz","sha256":"dc5a32b21780ad3825c2795c8c1bd10ef60e54d400765d9e65338b0670e74649","uncompressedSha256":"ed9969f37a67cfafcf8b9c4fadaf39f5ece8adb06605f955edd5202f375116fd","passed":null},
+    {"kind":"publication-observations","path":"spec/evidence/memory-mcp-l5/lot3/reports/b5d33cc78ac4851be5f8515cdc3ff53656780e2ef9f547232dc0654f5bd2c455.json.gz","sha256":"b5d33cc78ac4851be5f8515cdc3ff53656780e2ef9f547232dc0654f5bd2c455","uncompressedSha256":"116c555315ad4e39417dd0631c5aca7df507cc0f57b9f3ca610f924d279a1794","passed":null},
+    {"kind":"publication-lock","path":"spec/evidence/memory-mcp-l5/lot3/reports/cccbc543c0bcfd70b84180cee2dcd04b7eec405c3e2ea691cc65108776ae516b.json.gz","sha256":"cccbc543c0bcfd70b84180cee2dcd04b7eec405c3e2ea691cc65108776ae516b","uncompressedSha256":"aeddefeee7372936e8db5e2563a283469c4d8005b8f5e43272f2558e1a947485","passed":null}
+  ],
+  "registry": [
+    {"name":"@sentropic/mcp-platform","version":"0.4.0","integrity":"sha512-65FIZAJIzWTb1t3/IBQhwgLovjDFkbOm/s+LLy9hZGjmV7yLbCjd45XcAAbp1DDlUsX8xBEKvVMRFOOstel/jA==","archiveSha256":"67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5","tarball":"https://registry.npmjs.org/@sentropic/mcp-platform/-/mcp-platform-0.4.0.tgz","observedAt":"2026-10-26T22:14:06.063Z"},
+    {"name":"@sentropic/cluster-mesh","version":"0.22.4","integrity":"sha512-4BC8D9wXkG1CYRpW0I6p1MmZ+Tp/y9i9fOD8BGn1acQI4GYR+7Ld7F7t9D91JaDxyUhcsFjfLVdnAgWp+SZ9RA==","archiveSha256":"c483e033f8bdc48a1504b3bf0f135564dbd1a727ba0f7519ff762c496c2f4cf0","tarball":"https://registry.npmjs.org/@sentropic/cluster-mesh/-/cluster-mesh-0.22.4.tgz","observedAt":"2026-10-26T22:14:06.877Z"},
+    {"name":"@sentropic/llm-gateway","version":"0.21.3","integrity":"sha512-LMway0kmftMX74zOlqb1J5ELqd3aTxnhkAg1geOR6RnquNGgPZucGf4sISbAJGHKF6yvYjb7clBm54scVDMu1g==","archiveSha256":"2ca56c61c0d341e7d2bfdc8b99fe5ca29342d47371fc8c60ff8d770903103c74","tarball":"https://registry.npmjs.org/@sentropic/llm-gateway/-/llm-gateway-0.21.3.tgz","observedAt":"2026-10-26T22:14:07.374Z"},
+    {"name":"@sentropic/engram","version":"0.21.2","integrity":"sha512-RtifmT4E9to98b9zW9s0cLL/yajsu5ZQ+PwzjPD4iIXjKn+2dlYyamx5j7yXeCgNKAMoXQTKstdVljwp2nri1A==","archiveSha256":"eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1","tarball":"https://registry.npmjs.org/@sentropic/engram/-/engram-0.21.2.tgz","observedAt":"2026-10-26T22:14:08.996Z"}
+  ],
+  "candidate": {
+    "archive": "spec/evidence/memory-mcp-l5/lot2/archives/26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10.tgz",
+    "sha256": "26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10",
+    "status": "input only; same frozen tuple installed qualification pending"
+  },
+  "runtime": {
+    "imageDigest": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+    "nodeVersion": "24.21.0",
+    "pythonExecutablePresent": false
+  },
+  "dispositions": {
+    "reportKind": "summary",
+    "total": 50,
+    "outOfLot": 25
+  },
+  "inventory": {
+    "reportKind": "summary",
+    "rows": 44,
+    "drift": []
+  },
+  "waitingFor": [
+    {"id":"P01.packed","owner":"gr-conductor","missing":"verified P3-bound lot2-manifest/sidecar, host context/source closure; E4 identity-source-refusal suite"},
+    {"id":"P02.packed","owner":"gr-conductor","missing":"same manifest and canonical E2 audit/literal-true verdict receipts; E4 refusal suite"},
+    {"id":"P03","owner":"gr-conductor","missing":"manifest-bound neutral declarations, profile and lock closure for installed schema/digest qualification"},
+    {"id":"P04.packed","owner":"gr-conductor","missing":"manifest-bound transport tuple; E4 sdk-discovery-call suite"},
+    {"id":"P05","owner":"gr-conductor","missing":"verified backend/PG-driver/configuration and canonical fenced-store original/replay report"},
+    {"id":"P06","owner":"gr-conductor","missing":"same-tuple restart, crash/lost-ack and recovery evidence on E4"},
+    {"id":"P07","owner":"gr-conductor","missing":"same-tuple assurance/confirmation continuation receipts and E4 step-up suite"},
+    {"id":"P08","owner":"gr-conductor","missing":"complete installed lock/archive closure; E4 exports and disabled-install suites"},
+    {"id":"P10","owner":"gr-conductor","missing":"verified manifest/sidecar, G1-G4/C9 dispositions; final tuple-bound receipts, owner UAT and co-acceptances"}
+  ]
+}
