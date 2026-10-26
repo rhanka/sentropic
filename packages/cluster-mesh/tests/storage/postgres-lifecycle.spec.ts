@@ -24,9 +24,13 @@ describe.skipIf(!pgEnabled)('actual Postgres lifecycle corpus', () => {
       } };
       const root = await createPostgresKernel({ ...fixture.options, driver });
       const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
-      const client = (bound: PgScoped) => {
+      // E4 supersede: after a reopen only the surviving kernel may flush.
+      // Flush entry points follow the live bound; purge and hold ops stay on
+      // the bound that owns their state (they never reach the commit guard).
+      let live = await root.bindNew(grant);
+      const client = (get: () => PgScoped) => {
         const collect = async (kind: 'jobs' | 'outcomes' | 'notifications') => {
-          const rows = []; let cursor: string | null = null;
+          const bound = get(); const rows = []; let cursor: string | null = null;
           do { const page = await bound.purgeRead(kind, { cursor, limit: 20 }); rows.push(...page.records); cursor = page.nextCursor; } while (cursor);
           return rows;
         };
@@ -34,13 +38,23 @@ describe.skipIf(!pgEnabled)('actual Postgres lifecycle corpus', () => {
           armPurgeFailure: async () => { before = true; }, armPurgeResponseFailure: async () => { after = true; },
           purgeJobIds: async () => (await collect('jobs')).map((row) => row.key),
           purgeEvidence: async () => ({ outcomes: (await collect('outcomes')).map((row) => row.value), notifications: (await collect('notifications')).map((row) => row.value) }),
-          releaseHold: (target: string) => bound.holdTarget(target, null), releaseBlob: (id: string, owner: string) => bound.shareBlob(id, owner),
+          releaseHold: (target: string) => get().holdTarget(target, null), releaseBlob: (id: string, owner: string) => get().shareBlob(id, owner),
+          commitAtomic: (...args: Parameters<PgScoped['commitAtomic']>) => get().commitAtomic(...args),
+          appendChain: (...args: Parameters<PgScoped['appendChain']>) => get().appendChain(...args),
         };
-        return new Proxy(bound, { get(target, property) { if (Object.hasOwn(extra, property)) return extra[property as keyof typeof extra]; const value = Reflect.get(target, property, target) as unknown; return typeof value === 'function' ? value.bind(target) : value; } }) as unknown as LifecycleCorpusStore;
+        return new Proxy({} as Record<string | symbol, unknown>, { get: (_target, property) => {
+          if (Object.hasOwn(extra, property)) return (extra as Record<string | symbol, unknown>)[property];
+          const bound = get();
+          const value = Reflect.get(bound, property, bound) as unknown;
+          return typeof value === 'function' ? (value as (...args: never[]) => unknown).bind(bound) : value;
+        } }) as unknown as LifecycleCorpusStore;
       };
-      await runLifecycleCorpus(client(await root.bindNew(grant)), {
-        expectedRecordDisposition: 'erased', rebind: async () => client(await (await createPostgresKernel({ ...fixture.options, driver })).bind(grant)),
-        bindWithoutMaintain: async () => client(await root.bindNew(grantFor({ token: 'weak', operations: ['read', 'write'] }))),
+      await runLifecycleCorpus(client(() => live), {
+        expectedRecordDisposition: 'erased', rebind: async () => {
+          live = await (await createPostgresKernel({ ...fixture.options, driver })).bind(grant);
+          return client(() => live);
+        },
+        bindWithoutMaintain: async () => { const bound = await root.bindNew(grantFor({ token: 'weak', operations: ['read', 'write'] })); return client(() => bound); },
       });
       await fixture.tx.run(true, async (session) => {
         const rows = await session.execute({ text: `SELECT target,bytes,erased FROM "${fixture.name}".payloads WHERE target=ANY($1::text[])`, values: [['rec-purge-1', 'agg-purge-1', 'response-target', 'interrupt-target']] });
