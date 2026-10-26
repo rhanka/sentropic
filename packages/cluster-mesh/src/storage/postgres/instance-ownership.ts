@@ -36,7 +36,7 @@ const missingOwnershipTable = (error: unknown): boolean => {
 };
 
 const readPair = async (session: PgSession, schema: string, moduleId: string): Promise<DurablePair | null> => {
-  let rows: readonly Record<string, unknown>[];
+  let rows: readonly Readonly<Record<string, unknown>>[];
   try {
     const result = await session.execute({
       text: `SELECT instance, epoch FROM ${schema}.instance_ownership WHERE module=$1 FOR UPDATE`,
