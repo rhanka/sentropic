@@ -8,16 +8,24 @@ const sealed = {
   candidate_id: 'candidate-1', envelope_ref: 'envelope-1', envelope_digest: digest,
   key_ref: 'key-1', ciphertext: 'opaque sealed bytes',
 };
-const pending = {
+const event: Parameters<CanonicalMemoryStorePort['commitPending']>[0]['capture_event'] = {
+  schema_version: 2, event_id: 'capture-event-1', cursor: '0', recorded_at: '2026-10-26T12:00:00.000Z',
+  operation: 'capture', candidate_id: 'candidate-1', to_state: 'pending',
+  authorization_receipt_digest: digest, previous_event_digest: digest, event_digest: digest,
+};
+const pending: Parameters<CanonicalMemoryStorePort['commitPending']>[0] = {
   control: { candidate_id: 'candidate-1', envelope_digest: digest, state: 'pending' as const,
     created_cursor: '0', policy_id: 'policy-1', policy_version: '1' },
   sealed,
-  capture_event: { candidate_id: 'candidate-1' },
-} as Parameters<CanonicalMemoryStorePort['commitPending']>[0];
-const lifecycle = {
-  command: { candidate_id: 'candidate-1', operation: 'reject' },
-  event: { candidate_id: 'candidate-1' }, projection_batch: {},
-} as Parameters<CanonicalMemoryStorePort['applyLifecycle']>[0];
+  capture_event: event,
+};
+const lifecycle: Parameters<CanonicalMemoryStorePort['applyLifecycle']>[0] = {
+  command: { candidate_id: 'candidate-1', operation: 'reject', event_id: 'reject-event-1', reason_ref: 'reason-1',
+    authorization: { credential: 'host-credential' }, deadline_at: '2026-10-26T13:00:00.000Z',
+    event_anchor: { occurred_at: event.recorded_at, kind_ref: 'kind-1', provenance_ref: 'provenance-1', provenance_digest: digest } },
+  event: { ...event, event_id: 'reject-event-1', operation: 'reject', to_state: 'rejected' },
+  projection_batch: { from_cursor_exclusive: '0', through_cursor_inclusive: '1', records: [], removals: [], batch_digest: digest },
+};
 
 const host = (binding = g1ScopeBinding()) => {
   const original: HostInvocation = Object.freeze({ invocationId: 'invocation-1', storeId: G1_STORE_ID, scopeRef: G1_STORE_ID });
@@ -145,5 +153,53 @@ describe('C7 host candidate authority', () => {
     expect(stranger.commit).not.toHaveBeenCalled();
     expect(stranger.complete).not.toHaveBeenCalled();
     expect(stranger.read).not.toHaveBeenCalled();
+  });
+
+  it('should refuse admission effects for unknown, foreign, mismatched and spent candidates', async () => {
+    const h = host();
+    const input: Parameters<CanonicalMemoryStorePort['applyAdmission']>[0] = {
+      outcome: 'reject', candidate_id: 'candidate-1', scope_ref: G1_STORE_ID,
+      decision: { policy_id: 'policy-1', policy_version: '1', record_digest: digest,
+        decision: 'reject', issued_at: event.recorded_at, receipt_digest: digest },
+      event: { ...event, operation: 'reject', to_state: 'rejected' },
+    };
+    expect((await h.store.applyAdmission(input)).ok).toBe(false);
+    await h.capture();
+    await h.store.commitPending(pending);
+    h.enter({ ...h.original });
+    expect((await h.store.applyAdmission(input)).ok).toBe(false);
+    expect((await h.store.readPending({ candidate_id: 'candidate-1', authorization_receipt_digest: digest })).ok).toBe(false);
+    expect((await h.store.recordCaptureIdempotency!({ candidate_id: 'candidate-1', record_digest: digest })).ok).toBe(false);
+    h.enter(h.original);
+    expect((await h.store.applyAdmission({ ...input, scope_ref: 'foreign' })).ok).toBe(false);
+    expect((await h.store.applyAdmission({ ...input, event: { ...input.event, candidate_id: 'foreign' } })).ok).toBe(false);
+    expect(h.admission).not.toHaveBeenCalled();
+    expect(h.read).not.toHaveBeenCalled();
+    expect(h.complete).not.toHaveBeenCalled();
+    const results = await Promise.all([h.store.applyAdmission(input), h.store.applyAdmission(input)]);
+    expect(results.map((result) => result.ok)).toEqual([true, false]);
+    expect((await h.store.applyLifecycle(lifecycle)).ok).toBe(false);
+    expect(h.admission).toHaveBeenCalledExactlyOnceWith(input);
+    expect(h.transition).not.toHaveBeenCalled();
+  });
+
+  it('should refuse authority changed while sealing and reserve failed commits against reuse', async () => {
+    const h = host();
+    h.seal.mockImplementationOnce(async () => {
+      h.enter({ ...h.original });
+      return { ok: true, value: sealed };
+    });
+    expect((await h.capture()).ok).toBe(false);
+    h.enter(h.original);
+    expect((await h.store.commitPending(pending)).ok).toBe(false);
+    expect(h.commit).not.toHaveBeenCalled();
+    const failed = host();
+    await failed.capture();
+    failed.commit.mockRejectedValueOnce(new Error('ambiguous commit'));
+    await expect(failed.store.commitPending(pending)).rejects.toThrow('ambiguous commit');
+    expect((await failed.store.commitPending(pending)).ok).toBe(false);
+    expect((await failed.store.applyLifecycle(lifecycle)).ok).toBe(false);
+    expect(failed.commit).toHaveBeenCalledTimes(1);
+    expect(failed.transition).not.toHaveBeenCalled();
   });
 });
