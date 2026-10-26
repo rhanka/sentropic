@@ -9,11 +9,16 @@
 // and there.
 export const RESERVED_NEXT = '0.23.0';
 export const LATEST_PUBLISHED_CLUSTER_MESH = '0.22.4';
+export const PACK_ONLY_PACKAGE = '@sentropic/cluster-mesh';
 
 const devBumpPattern = (reservedNext) =>
   new RegExp(`^${reservedNext.replace(/\./g, '\\.')}-dev\\.\\d+$`);
 
-export const isPackOnlyDevBump = (workspaceVersion, publishedPin, reservedNext) =>
+// The tolerance applies to the exact package and version pair only: the
+// installed package must be cluster-mesh itself at a `<reservedNext>-dev.N`
+// prerelease while the frozen pin is still the latest published release.
+export const isPackOnlyDevBump = (packageName, workspaceVersion, publishedPin, reservedNext) =>
+  packageName === PACK_ONLY_PACKAGE &&
   devBumpPattern(reservedNext).test(workspaceVersion) &&
   publishedPin === LATEST_PUBLISHED_CLUSTER_MESH;
 
@@ -21,8 +26,8 @@ export const isPackOnlyDevBump = (workspaceVersion, publishedPin, reservedNext) 
 // refuse with `not_installed`; a pack-only `<reservedNext>-dev.N` candidate
 // whose leaf sits outside the frozen Comments range refuses with
 // `incompatible_version` instead, which the gate accepts.
-export const acceptsCommentsRefusal = ({ installedVersion, publishedPin, reservedNext, reason, code }) => {
+export const acceptsCommentsRefusal = ({ packageName, installedVersion, publishedPin, reservedNext, reason, code }) => {
   if (reason === 'not_installed' || code === 'not_installed') return true;
   return reason === 'incompatible_version'
-    && isPackOnlyDevBump(installedVersion, publishedPin, reservedNext);
+    && isPackOnlyDevBump(packageName, installedVersion, publishedPin, reservedNext);
 };
