@@ -24,14 +24,6 @@
   - `packages/cluster-mesh/CHANGELOG.md`
   - `packages/cluster-mesh/tests/speech-*.spec.ts`
   - `packages/cluster-mesh/tests/speech-fixtures.ts`
-  - `packages/llm-mesh/src/speech/**`
-  - `packages/llm-mesh/src/capabilities.ts`
-  - `packages/llm-mesh/src/catalog.ts`
-  - `packages/llm-mesh/src/index.ts`
-  - `packages/llm-mesh/tests/speech-contract.test.ts`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-mesh/README.md`
-  - `packages/llm-mesh/CHANGELOG.md`
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
@@ -39,16 +31,13 @@
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `api/tests/unit/gateway-package-version.test.ts`
   - `package-lock.json`
-  - `.tmp/live-stt/l1/**`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/src/modules/catalog.ts`
   - `packages/cluster-mesh/tests/modules/registry.spec.ts`
   - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
   - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
   - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
-  - `packages/llm-gateway/package.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -61,7 +50,7 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `scripts/**` (none planned).
 - **Exception process**:
-  - [x] Declare BRLIVE-L1-EXn with reason, impact and rollback before extending scope; none planned.
+  - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
 
 ## Feedback Loop
 - [x] origin/feat/live-stt-l1c absent; created from origin/main and merged approved L1 head `01d784be8` by fast-forward, no rebase.
@@ -69,4 +58,38 @@
 
 ## Plan / Todo (lot-based)
 - [x] L1c baseline: Docker lock first, rules/spec/owner answers and L0 evidence read; mechanical branch check passes.
-- [ ] Replace inherited scope/plan with L1c file-level gates before source edits.
+- [x] Replace inherited scope/plan with L1c file-level gates before source edits.
+- [ ] **L1c-a — Reconcile L0**
+  - [ ] Preserve eight L0 files under `.tmp/live-stt/l0/`; refresh heads, gate register, SDK/provenance/license/ledger/release and placement evidence in `.tmp/live-stt/l1c/baseline.md`.
+  - [ ] Carry dedicated capacity study and explicit zero allocation; no native inference or quota exception.
+- [ ] **L1c-b — Tests first**
+  - [ ] `packages/cluster-mesh/tests/speech-fixtures.ts`: five primary tuples, whisper.cpp and synthetic future/native-duplex/placement entries.
+  - [ ] `packages/cluster-mesh/tests/speech-config.spec.ts`: bindings/selectors, invalid shapes, all placements, both mic modes, empty/explicit fallback, unsupported capability refusal, no secrets.
+  - [ ] `packages/cluster-mesh/tests/speech-projection.spec.ts`: offline snapshot, tenant/policy/egress refusal, unavailable catalogue, safe rebind, immutable revision, consent and no fallback.
+  - [ ] Red run before implementation; green after config/projection and existing seam integration.
+- [ ] **L1c-c — Implementation**
+  - [ ] `packages/cluster-mesh/src/speech/{config,projection}.ts`: one revisioned schema and local projection consuming llm-mesh catalogue/negotiation.
+  - [ ] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
+  - [ ] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.
+- [ ] **L1c-d — Documentation and validation**
+  - [ ] README/CHANGELOG: configuration example, selectors, placements, fallback/rebind/consent boundaries and unavailable reasons.
+  - [ ] Scoped speech tests; full cluster tests; cold typecheck; changed-source lint; build/public export checks.
+  - [ ] `make scope-check` before each commit; staged whitespace and under-150-line checks; no attribution trailers.
+  - [ ] Locked ENV cleanup between Docker steps; no services or published ports outside ENV.
+- [ ] **L1c-e — Draft handoff**
+  - [ ] Record independent-review eligibility/evidence; retain open G-REVIEW if no admitted reviewer capacity.
+  - [ ] Push draft PR using this plan as body; inspect exact-head CI; report PR/head and surface.
+
+## AI Flaky tests
+- [x] Deterministic fixtures only; no flaky waiver.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch, sequential; no inferred reviewer/native capacity.
+- [ ] Multi-branch not required for this single lot.
+
+## UAT Management (in orchestration context)
+- [x] Export/configuration review through draft PR; no microphone/UI activation or device acceptance.
+- [ ] Reproduce all fixture gates on the delivered source tuple.
+
+## Deferred to later live-speech lots
+- [x] Engines, controllers/fences, accounting, native/cloud/device qualification, release/adoption and deployment retain their §11.2 owner gates.
