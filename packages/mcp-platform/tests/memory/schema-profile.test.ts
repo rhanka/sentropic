@@ -16,7 +16,7 @@ describe('P03.platform.schema-profile-2020-12', () => {
   });
   it('should refuse unknown dialects, open objects and arbitrary patterns', () => {
     for (const schema of [{ $schema: 'draft-07', type: 'string' }, { type: 'object' },
-      { type: 'string', pattern: '(a+)+' }]) expect(() => admitMemorySchema(schema)).toThrow();
+      { type: 'string', pattern: '(a+)+' }, { enum: ['a', 'a'] }]) expect(() => admitMemorySchema(schema)).toThrow();
   });
   it('should enforce nested union branches, UTF-8 bounds and unsigned u64', () => {
     const schema = { type: 'object', additionalProperties: false, required: ['value'], properties: {
@@ -28,5 +28,22 @@ describe('P03.platform.schema-profile-2020-12', () => {
       { value: 1, cursor: '18446744073709551616' }, { value: '\ud800' }]) {
       expect(validateMemoryArguments(schema, value).length).toBeGreaterThan(0);
     }
+  });
+  it('should validate null, Unicode character counts, u64 epochs and calendar instants independently of field names', () => {
+    expect(validateMemoryArguments({ type: 'null' }, true).length).toBeGreaterThan(0);
+    expect(validateMemoryArguments({ type: 'string', minLength: 2 }, 'é').length).toBeGreaterThan(0);
+    const schema = { type: 'object', additionalProperties: false, properties: {
+      epoch: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
+      instant: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$' },
+    } };
+    expect(validateMemoryArguments(schema, { epoch: '18446744073709551616' }).length).toBeGreaterThan(0);
+    expect(validateMemoryArguments(schema, { instant: '2026-02-31T00:00:00.000Z' }).length).toBeGreaterThan(0);
+  });
+  it('should evaluate union branches and JSON object equality by value', () => {
+    expect(validateMemoryArguments({ oneOf: [{ type: 'null' }, { type: 'string' }] }, 'value')).toEqual([]);
+    expect(validateMemoryArguments({ const: { a: 1, b: 2 } }, { b: 2, a: 1 })).toEqual([]);
+    expect(validateMemoryArguments({ type: 'array', uniqueItems: true, items: { type: 'object',
+      additionalProperties: false, properties: { a: { type: 'integer' }, b: { type: 'integer' } } } },
+    [{ a: 1, b: 2 }, { b: 2, a: 1 }]).length).toBeGreaterThan(0);
   });
 });

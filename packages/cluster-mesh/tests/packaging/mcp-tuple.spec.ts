@@ -29,7 +29,7 @@ describe.skipIf(!enabled)('mcp tuple', () => {
 
   it('installs the embedded platform dependency inside the candidate range', () => {
     const pkg = JSON.parse(read(new URL('../../package.json', import.meta.url), 'utf8'));
-    expect(pkg.dependencies['@sentropic/mcp-platform']).toBe('>=0.4.0 <0.5.0');
+    expect(pkg.dependencies['@sentropic/mcp-platform']).toBe('>=0.4.1 <0.5.0');
     expect(pkg.peerDependencies['@sentropic/mcp-platform']).toBeUndefined();
     expect(pkg.peerDependencies['@modelcontextprotocol/sdk']).toBe('^1.31.0');
     expect(installed('mcp-consumer', '@sentropic/mcp-platform')).toBe(trainVersion('mcp-platform'));

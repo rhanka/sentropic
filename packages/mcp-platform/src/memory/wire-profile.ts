@@ -5,7 +5,7 @@ import { encodeMemoryEnvelope } from '../transport/result-codec.js';
 import { isPublicMemoryErrorCode, isValidOpaqueRef, type MemoryToolEnvelopeV1 } from './contracts.js';
 import { MemoryTrustedContextError } from './invocation-context.js';
 import { projectMemoryContext, requireTrustedInvocationContext } from './invocation-context.js';
-import { isMutatingMemoryToolName } from './contracts.js';
+import { isMutatingMemoryToolName, isValidIdempotencyKey } from './contracts.js';
 import { validateMemoryArguments } from './schema-profile.js';
 import type { BridgeTool, BridgeRunner, BridgeOptions } from '../transport/bridge.js';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
@@ -53,10 +53,16 @@ export async function callMemoryBridge(tool: BridgeTool, args: Record<string, un
     context = requireTrustedInvocationContext(await options?.memoryContext?.(tool.name, signal));
     if (typeof context.audit?.emit !== 'function') throw new MemoryTrustedContextError();
     projectMemoryContext(context, typeof args.purpose_ref === 'string' ? args.purpose_ref : context.memory!.binding.purpose_ref);
+    if (isMutatingMemoryToolName(tool.name) && !isValidIdempotencyKey(context.memory!.binding.idempotency_key)) {
+      throw new MemoryTrustedContextError('mutation idempotency binding required');
+    }
+    if (['engram_memory_withdraw', 'engram_memory_forget'].includes(tool.name) &&
+      !isValidOpaqueRef(context.memory!.binding.elicitation_ref)) throw new MemoryTrustedContextError('confirmation binding required');
   } catch { throw safeMcpProtocolError(new McpError(-32603, '')); }
   signal = AbortSignal.any([signal, AbortSignal.timeout(
     Date.parse(context.memory!.binding.deadline_at) - Date.parse(context.memory!.now))]);
-  const budget = typeof args.max_packet_bytes === 'number' ? args.max_packet_bytes : tool.maxPacketBytes ?? 65536;
+  const requestedBudget = typeof args.max_packet_bytes === 'number' ? args.max_packet_bytes : 65536;
+  const budget = Math.min(requestedBudget, tool.maxPacketBytes ?? 1048576);
   const failure = (code: 'INVALID_SCHEMA' | 'RESULT_TOO_LARGE' | 'MUTATION_OUTCOME_UNKNOWN' | 'CAPABILITY_UNAVAILABLE', message: string) =>
     encodeBoundedMemoryEnvelope({ ok: false, auditId: context.auditId, redactionClass: 'high',
       error: { code, message, retriable: false } }, tool.maxPacketBytes ?? 65536);

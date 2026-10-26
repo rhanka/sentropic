@@ -1,5 +1,7 @@
 import { assertMcpJson } from '../transport/tool-json.js';
 import { validateSchema } from './schema-validation.js';
+import { isValidCursor, isValidInstant } from './contracts.js';
+import { canonicalJsonText } from '../registry-canonical.js';
 
 const keywords = new Set(['$schema', '$id', 'title', 'description', 'default', 'type', 'const', 'enum',
   'properties', 'required', 'additionalProperties', 'items', 'minimum', 'maximum', 'minLength',
@@ -26,6 +28,7 @@ export function admitMemorySchema(schema: unknown): void {
         (/Length|Items/.test(key) && (!Number.isSafeInteger(value) || value < 0)))) invalid();
     }
     if (s.enum !== undefined && (!Array.isArray(s.enum) || s.enum.length === 0)) invalid();
+    if (Array.isArray(s.enum) && new Set(s.enum.map(canonicalJsonText)).size !== s.enum.length) invalid();
     if (s.uniqueItems !== undefined && typeof s.uniqueItems !== 'boolean') invalid();
     if (s.additionalProperties !== undefined && s.additionalProperties !== false) invalid();
     if (s.type === 'object' && (s.additionalProperties !== false || !record(s.properties))) invalid();
@@ -35,6 +38,7 @@ export function admitMemorySchema(schema: unknown): void {
     }
     if (s.required !== undefined && (!Array.isArray(s.required) || s.required.some(key =>
       typeof key !== 'string' || !record(s.properties) || !Object.hasOwn(s.properties, key)))) invalid();
+    if (Array.isArray(s.required) && new Set(s.required).size !== s.required.length) invalid();
     if (s.type === 'array' && s.items === undefined) invalid();
     if (s.items !== undefined) visit(s.items);
     if (s.oneOf !== undefined) {
@@ -49,6 +53,32 @@ export function admitMemorySchema(schema: unknown): void {
 export function validateMemoryArguments(schema: unknown, value: unknown): string[] {
   try {
     assertMcpJson(value, 1048576, 64);
-    return validateSchema(value, schema);
+    return evaluateMemorySchema(value, schema);
   } catch { return ['$: invalid memory JSON']; }
+}
+
+function evaluateMemorySchema(value: unknown, schema: any, path = '$'): string[] {
+  const { oneOf, const: constant, enum: choices, uniqueItems, properties, items, ...scalars } = schema;
+  const shallow = { ...scalars,
+    ...(properties ? { properties: Object.fromEntries(Object.keys(properties).map(key => [key, {}])) } : {}),
+    ...(items ? { items: {} } : {}) };
+  const failures = validateSchema(value, shallow, path);
+  const equal = (a: unknown, b: unknown) => canonicalJsonText(a) === canonicalJsonText(b);
+  if (constant !== undefined && !equal(value, constant)) failures.push('const mismatch');
+  if (choices && !choices.some((choice: unknown) => equal(value, choice))) failures.push('enum mismatch');
+  if (oneOf && oneOf.filter((branch: unknown) => !evaluateMemorySchema(value, branch, path).length).length !== 1) failures.push('oneOf mismatch');
+  if (schema.type === 'null' && value !== null) failures.push('null required');
+  if (typeof value === 'string') {
+    if ([...value].length < (schema.minLength ?? 0) || [...value].length > (schema.maxLength ?? Infinity)) failures.push('character bounds');
+    if (schema.pattern === '^(0|[1-9][0-9]*)$' && !isValidCursor(value)) failures.push('unsigned u64 required');
+    if (schema.pattern === '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$' && !isValidInstant(value)) failures.push('canonical instant required');
+  }
+  if (record(value) && properties) for (const [key, child] of Object.entries(properties)) {
+    if (Object.hasOwn(value, key)) failures.push(...evaluateMemorySchema(value[key], child, `${path}.${key}`));
+  }
+  if (Array.isArray(value)) {
+    if (uniqueItems && new Set(value.map(canonicalJsonText)).size !== value.length) failures.push('duplicate items');
+    if (items) value.forEach((item, index) => failures.push(...evaluateMemorySchema(item, items, `${path}[${index}]`)));
+  }
+  return failures;
 }

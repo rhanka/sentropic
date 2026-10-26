@@ -109,10 +109,13 @@ export function isMemoryProfileTool(tool: BridgeTool): boolean {
 
 /** Preflight is also available to compositions before they acquire provider resources. */
 export function admitBridgeTools(tools: readonly BridgeTool[]): void {
+  const memoryNames = new Set<string>();
   for (const tool of tools) {
     if ((tool.profile !== undefined || tool.schemaProfile !== undefined || isMemoryToolName(tool.name)) && !isMemoryProfileTool(tool)) throw new TypeError('Unsupported wire profile');
     if (!isMemoryProfileTool(tool)) continue;
     if (!isMemoryToolName(tool.name)) throw new TypeError('Unsupported memory tool');
+    if (memoryNames.has(tool.name)) throw new TypeError('Duplicate memory tool');
+    memoryNames.add(tool.name);
     if (tool.maxPacketBytes !== undefined && (!Number.isSafeInteger(tool.maxPacketBytes) ||
       tool.maxPacketBytes < 4096 || tool.maxPacketBytes > 1048576)) throw new TypeError('Invalid memory packet budget');
     if (tool.schemaProfile !== 'sentropic.engram.memory-tools/2020-12-v1') throw new TypeError('Unsupported memory schema profile');
