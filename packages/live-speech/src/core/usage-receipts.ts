@@ -30,6 +30,7 @@ export class UsageReceipts {
     const refs = [entry.operationId, entry.attemptId, entry.submitKey, entry.routeRef, entry.seatRef,
       entry.allocatorReceiptRef, entry.configurationRef, entry.engineRef, entry.placement, entry.signature];
     if (refs.some(v => typeof v !== 'string' || !v)
+      || (entry.nativeTurnId !== undefined && (typeof entry.nativeTurnId !== 'string' || !entry.nativeTurnId))
       || scopeFields.some(k => !(k in entry.scope))
       || Object.values(entry.scope).some(v => typeof v === 'number' ? !Number.isSafeInteger(v) || v < 1 : typeof v !== 'string' || !v)
       || !Number.isSafeInteger(entry.turnEpoch) || entry.turnEpoch < 1
@@ -43,7 +44,7 @@ export class UsageReceipts {
     }
     if (!Number.isSafeInteger(entry.countedUnitDelta) || entry.countedUnitDelta < 0
       || (entry.kind === 'adjustment' && entry.countedUnitDelta !== 0)) throw new Error('Invalid counted-unit delta');
-    if (!await this.verifySignature(entry)) throw new Error('Invalid receipt signature');
+    if (!await this.verifySignature(structuredClone(entry))) throw new Error('Invalid receipt signature');
     return this.journal.transact(entries => {
       const previous = entries.find(e => e.operationId === entry.operationId && e.revision === entry.revision);
       if (previous) {

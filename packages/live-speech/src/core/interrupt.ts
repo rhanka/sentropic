@@ -75,7 +75,7 @@ export class InterruptAuthority {
       if (turn.fence || isTerminal(turn) || !state.connected) throw new Error('Turn fenced');
       if (turn.phase !== 'starting' && turn.phase !== 'running') throw new Error('Turn not submitted');
       const classification = state.enabledClasses[call.toolClass];
-      if (!classification) throw new Error('Tool class lacks fence coverage');
+      if (!Object.hasOwn(state.enabledClasses, call.toolClass) || !classification) throw new Error('Tool class lacks fence coverage');
       return { mutating: classification !== 'read-only', barrierRevision: state.barrierRevision };
     });
     const request = { ...ref, toolClass: call.toolClass, toolName: call.toolName,
@@ -181,8 +181,13 @@ export class InterruptAuthority {
       return { ...ref, inputRef: turn.inputRef };
     });
     if (!input) return false;
-    const result = await this.control.start(input);
-    await this.bindNative(ref, result.nativeTurnId);
+    try {
+      const result = await this.control.start(input);
+      await this.bindNative(ref, result.nativeTurnId);
+    } catch (error) {
+      await this.interrupt(ref, `uncertain-start:${ref.submitKey}`);
+      throw error;
+    }
     return true;
   }
 
