@@ -5,7 +5,6 @@ import {
   type ProviderCapabilities,
 } from './capabilities.js';
 import type { AccountTransportProviderId, TokenAuthSourceType } from './auth.js';
-import type { SpeechCapabilities } from './speech/capabilities.js';
 import {
   type KnownModelId,
   type ModelId,
@@ -666,8 +665,4 @@ export const getModelProfile = (
   );
 };
 
-/** Only model-specific evidence can advertise speech; never inherit provider claims. */
-export const getModelSpeechCapabilities = (
-  providerId: ProviderId,
-  modelId: ModelId,
-): SpeechCapabilities | undefined => getModelProfile(providerId, modelId)?.capabilities.speech;
+export { getModelSpeechCapabilities } from './speech/catalog.js';
