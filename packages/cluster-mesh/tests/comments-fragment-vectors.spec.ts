@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, createAnnotationRevision } from '@sentropic/comments';
 import { createCommentsFragment, validateCommentsFragment, commentsUnitPayloadDigest } from '../src/comments/fragment-codec.js';
+import { isDecimalCounter, parseDecimalCounter } from '../src/storage/contracts.js';
 import { conformanceCapacity, conformanceScope, conformanceTarget, conformanceResource, conformanceBody, conformanceProvenance } from '../assets/storage/comments/oracle/conformance.mjs';
 describe('comments transport-v1 fragment framing', () => {
   it('matches the shipped literal multibyte/escaping and terminal vectors', () => {
@@ -32,5 +33,14 @@ describe('comments transport-v1 fragment framing', () => {
     const large = { kind: 'unit-receipt', scope, unitId: 'unit', manifestHash: 'm', issuedAt: 1, hash: 'h', extra: '🦊'.repeat(140000) };
     expect(() => createCommentsFragment(manifest, [large])).toThrow(/payload/i);
     expect(() => createCommentsFragment({ ...manifest, operationId: 'x'.repeat(70000) }, [])).toThrow();
+  });
+  it('keeps the original safe-only counter domain and encoded bytes', () => {
+    expect(isDecimalCounter('9007199254740991')).toBe(true);
+    expect(isDecimalCounter('9007199254740992')).toBe(false);
+    expect(parseDecimalCounter('9007199254740991')).toBe(9007199254740991);
+    expect(parseDecimalCounter('9007199254740992')).toBe(null);
+    const scope = conformanceScope();
+    const manifest = { scope, operationId: 'operation', bindingDigest: 'a'.repeat(64), unitId: 'unit', ordinal: '9007199254740992', predecessorHash: null, terminal: null };
+    expect(() => validateCommentsFragment({ version: 'transport-v1', manifest, payload: [], digest: '0'.repeat(64) })).toThrow();
   });
 });
