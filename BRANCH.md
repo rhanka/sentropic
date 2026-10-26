@@ -16,7 +16,6 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `**` (BR142-EX3 only: inherited main merge; removed immediately after commit)
   - `BRANCH.md`
   - `docs/baselines/app-cm-w0/**`
   - `.h2a/owner-questions-w0.md`
@@ -59,6 +58,7 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline and evidence boundaries**
+  - [x] W0-close.a/B01: 26 October endpoint-to-Service/Pod routing, public HTTPS body hashes, live ConfigMap/template/environment hashes and refreshed image identities recorded; BR142-EX3 temporary merge allowance removed.
   - [x] Read MASTER/workflow, README/TODO/PLAN, branch template and approved owner request/plan.
   - [x] Mechanical `harness check branch` passes; branch is clean and starts at pinned main.
   - [x] Follow-up: branch verified, remote pulled with fast-forward only, main integrated under BR142-EX2; identical Track blobs and all 342 event IDs preserved. Track acceptance refresh stays with the designated root writer.
