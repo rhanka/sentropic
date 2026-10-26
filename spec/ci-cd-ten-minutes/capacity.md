@@ -27,6 +27,57 @@ actual workflow dependencies (matrix weights respect `max-parallel`). It
 fails above 15 slots. The expected manifest also retains those dependencies
 so queue waits can be summed along identified observed critical paths.
 
+## BR-77 policy and live qualification
+
+The active policy staggers package validation in two dependency lanes,
+ordinary npm publication in one lane, and API/E2E matrices at widths 2/2.
+The existing mesh → gateway → cluster train, bootstrap, publication guards,
+Mistral routing and E2 integration qualification are preserved. Chained
+validators override automatic dependency-skip propagation; publishers also
+refuse upstream failure/cancellation. Complete selected-result enforcement
+remains mandatory. The PR and main full-selection DAG bounds both read 15.
+
+| Receipt | Identified observation | Acceptance |
+| --- | --- | --- |
+| New-base baseline | Main `40341027258`, attempt 1, source `440599d04e91bb33e3874588f067c6a90bffd1b3`: 89 rows, 68 measured, 21 skipped; peak 15; 211.15 runner-minutes; execution queue p50 111s, max 882s. | Jobs API baseline, not the bounded policy's result. |
+| Baseline endpoints | Qualification 2288s; selected images 2128s; preproduction 2254s; cluster publication 1879s from workflow creation. Classification job `121635441567` 18s; gate `121657161589` 14s. | Classification/verdict budgets breached; no fresh npm-publication claim. |
+| Superseded PR | `40352448337`, attempt 1, head `0a1eb32ea873a48b71833d163537719dae1e2bb1`, automatically cancelled when rollback head was pushed; 57 identified cancelled rows. Gate `121681630885` failed as required. Classification `121675860608` 21s; gate 19s. | Cancellation observed; 15s/5s budgets breached. |
+| Conservative rollback | Head `474e023163fd1be0b2f0ac7f33442c2d97dc561c`, run `40353670942`, attempt 1: one package validation lane, API/E2E 1/1; static bounds PR 13 / main 14. Classification `121682062979` 20s. | Live dispatch observed; classification breached. Restore the qualified bounded policy afterwards. |
+| Concurrent release | Main `40341027258`, attempt 2, same source: classification `121676338012` 19s; still executing through the rollback transition. | No cancellation observed; complete release continuity and aggregate scheduling await the completed capture. |
+
+The cancelled Jobs API rows include `runner_id: 0` with positive intervals
+(for example job `121676271575`, 15:46:09–15:52:57 UTC). These never received
+a runner: they retain cancellation identity and raw stamps but contribute
+no execution, runner cost, queue sample or peak. Missing/inverted stamps and
+pending timestamps likewise receive no invented measurement.
+
+Reproduce a completed receipt through
+`make ci-capacity-capture CI_RUN_ID=<id> CI_RUN_ATTEMPT=<attempt> ENV=test-ci-capacity`.
+Use `CI_EXPECTED_ATTEMPT` when a rerun carries the original classifier forward.
+The target fetches every Jobs API page, the source workflow and retained
+pre-dispatch manifest; absent artifacts/identity mismatches fail closed.
+It writes BR-76-format `capture.json` and `metrics.json` below
+`tmp/ci-capacity/<run>-<attempt>/`. The actual workflow revision remains null
+when unavailable; the separately identified source workflow is retained.
+
+Combine current PR, main and obsolete captures with `make ci-run-metrics`
+using `RUN_FILE=<current>/capture.json` and
+`CI_COMPETING_FILES='<main>/capture.json <obsolete>/capture.json'`.
+The combined receipt includes execution-overlap witnesses, measured peak,
+admission, superseded cancellation ownership and release continuity.
+Main's slots are already counted in that peak, so its reserve is not
+subtracted twice. Incomplete runs remain to-measure. Critical-path scheduling
+includes dependency-to-dispatch handoff and queue waits; it is not the
+maximum single-job queue sample.
+
+Remaining branch-author acceptance: final-head complete CI/security verdict,
+completed concurrent-main selected images/preproduction/packages and expected
+membership, combined admission and aggregate scheduling. Quota/billed cost
+remain unavailable through the inventoried token. Unmet 15s/5s/60s budgets
+remain open; a green correctness verdict does not satisfy them.
+
+## BR-76 retained measurements
+
 Status: measurement record with reconciled receipts (metrics +
 expected-results + docs only, per owner split decision 2026-10-19);
 account quota, registry cost, contention budgets, and the rollback drill

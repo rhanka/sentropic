@@ -163,3 +163,29 @@ unconditional validators with fresh attempt receipts; carried-forward
 classification retains its original expected-manifest attempt. Account
 inventory access remains unavailable (billing HTTP 404, missing `user`
 scope), so finite-capacity and contention acceptance remains open.
+
+## 10. BR-77 capacity-policy implementation
+
+The 2026-10-26 execution packet assigns BR-77 to
+`plan/71-BRANCH_chore-ci-capacity-policy.md`, continuing the Lot 2/3 split
+from #705. Its bounded DAG retains two package-validation lanes, one
+ordinary-publisher lane and API/E2E widths 2/2. Full PR/main demand is at
+most 15 execution slots against the observed lower bound of 17 and a
+two-slot release allowance. Account quota and billed cost remain unknown;
+this allowance is not a hosted-runner reservation. PR-only cancellation,
+main serialization and all existing completeness/publication gates remain.
+
+[Capacity receipts](ci-cd-ten-minutes/capacity.md) identify the current-base
+baseline, concurrent main rerun, obsolete PR and live conservative rollback.
+The rollback uses one validation lane and widths 1/1 without deleting
+expected-result or metrics checks; the bounded policy is then restored.
+Classification and verdict breaches remain visible. Completed concurrent
+delivery and the 60-second aggregate scheduling budget require post-run
+captures, not an inference from green fixtures or a maximum queue sample.
+
+The next branch consumes the retained dependency manifest, bounded DAG,
+Make capture/combined-traffic entry points and unresolved timing receipts.
+The train index above preserves the original #701 allocation: plan/63 still
+calls native checks BR-77 while the owner packet names capacity BR-77 and
+the next branch BR-78. The conductor must reconcile that allocation before
+launching the successor; this branch does not edit the other branch plans.
