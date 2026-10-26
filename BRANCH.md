@@ -62,4 +62,6 @@
   - [x] Canonical report guard rejects source-only/cross-tuple results; all five real E2 cases are mandatory before Lot 2 can close.
   - [x] Malformed host configuration/driver digests refuse; receiving-harness suite passed 112 tests; retained report refreshed.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
-  - [ ] Merge current main ab981b16d, preserve identical Track blobs and frozen P3 bytes, then rerun the source gate; P3 #769 remains open.
+  - [x] Merge main ab981b16d (#756); preserve this Lot 2 plan, identical Track blobs and frozen P3 bytes; no authored restore-tooling changes. P3 #769 remains open.
+  - [x] Rerun the full source gate after main integration: tooling 112 and Lot 1/platform/broker 193 passed; no qualification acceptance.
+  - [ ] Final-head CI and independent peer review remain pending; installed acceptance is blocked on the real host tuple.
