@@ -35,6 +35,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] Require the authenticated workspace in the durable scope and operational receipts, alongside tenant/principal/target/source/controller/consent; missing scope fields fail admission.
 - [x] Include validate-live-speech in both final CI aggregation dependencies so result capture cannot race this newly selected job.
 - [x] Add lost-start-ACK fail-closed admission, inherited class-key refusal and optional native-ID metadata type checks before final quality gates.
 - [x] Add concrete CAS-backed SessionJournal tests: persisted-byte restart, transaction rollback and contention retry. Storage durability remains an explicit host primitive; no production in-memory sink is supplied.

@@ -3,7 +3,7 @@ import { SpeechCoordinator, createSession } from '../src/core/session.js';
 import type { Journal, SessionState, ControlPort, TrustedAuthority } from '../src/core/session.js';
 
 export const scope = {
-  speechSessionId: 'speech-1', tenantId: 'tenant-1', principalId: 'owner-1',
+  speechSessionId: 'speech-1', tenantId: 'tenant-1', workspaceId: 'workspace-1', principalId: 'owner-1',
   targetSessionId: 'agent-1', sourceGeneration: 'source-1', controllerEpoch: 1, consentRevision: 'consent-1',
 };
 
