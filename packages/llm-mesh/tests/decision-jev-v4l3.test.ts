@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decodeJevVerdict } from '../src/decision/jev-verdict.js';
+import { decodeJevResponse } from '../src/decision/jev-response.js';
 import { jevDescriptor } from '../src/decision/descriptor.js';
 import { decisionRequest, qualifiedDescriptor } from './decision-fixtures.js';
 
@@ -33,5 +34,13 @@ describe('P25 JEV 1.13.0 documented answer discriminator', () => {
     expect(jevDescriptor.wireModel).toBe('jev-1.13.0');
     expect(jevDescriptor.acceptedServedModelIds).toEqual([]);
     expect(jevDescriptor.qualification).toMatchObject({ servedIdentity: 'unqualified', billingBound: 'unqualified' });
+  });
+  it.each(fixtures)('should require the versioned discriminator at the provider boundary for $answer.type', ({ criterion, answer }) => {
+    const request = decisionRequest({ criterion });
+    const body = { model: 'synthetic-served-model', answers: { verdict: answer }, usage: { input_tokens: 1000, output_tokens: 0 } };
+    expect(decodeJevResponse(body, request, qualifiedDescriptor()).ok).toBe(true);
+    const { type: _discriminator, ...primitive } = answer;
+    expect(decodeJevResponse({ ...body, answers: { verdict: primitive } }, request, qualifiedDescriptor()))
+      .toMatchObject({ ok: false, error: { code: 'VERDICT_INVALID' }, usage: { tokens: { input: { value: 1000 } } } });
   });
 });

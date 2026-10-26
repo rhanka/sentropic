@@ -20,7 +20,9 @@ export const decisionRequest = (overrides: Partial<DecisionRequest> = {}): Decis
   ...overrides,
 });
 export const jevResponse = (answer: unknown = { noul: 0.25 }) => ({
-  model: 'synthetic-served-model', answers: { verdict: answer }, usage: { input_tokens: 1000, output_tokens: 0 },
+  model: 'synthetic-served-model', answers: { verdict: answer !== null && typeof answer === 'object'
+    ? { type: 'noul' in answer ? 'noul' : 'score' in answer ? 'score' : 'choice', ...answer } : answer },
+  usage: { input_tokens: 1000, output_tokens: 0 },
 });
 export const trustedNativeContext = (request: DecisionRequest) => {
   const kind = request.criterion.kind;

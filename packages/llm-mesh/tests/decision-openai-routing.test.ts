@@ -25,6 +25,16 @@ const setup = () => {
 };
 
 describe('Decisions dedicated transport, tariff and route registration', () => {
+  it('should reject declarations that do not describe the implemented native compiler', () => {
+    const f = setup();
+    for (const changed of [
+      { compilation: { ...f.descriptor.compilation, templateDigest: '0'.repeat(64) } },
+      { compilation: { ...f.descriptor.compilation, schemaDigest: '0'.repeat(64) } },
+      { definition: { ...f.descriptor.definition, validationProfile: { profile: 'scalar-label-v1', version: 'v1' } } },
+    ]) expect(() => createOpenAiDecisionsAdapter({ descriptor: { ...f.descriptor, ...changed },
+      transport: createOpenAiDecisionsTransport({ fetch: f.fetch }) })).toThrow('Invalid OpenAI Decisions descriptor.');
+    expect(f.fetch).not.toHaveBeenCalled();
+  });
   it('should serve through the mesh once with the Decisions tariff and awaited settlement', async () => {
     const f = setup();
     const result = await createDecisionService(f.options).decide(f.request);
@@ -75,6 +85,16 @@ describe('Decisions dedicated transport, tariff and route registration', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'PROVIDER_REJECTED' }, receipt: { attempts: 1,
       usage: { tokens: { input: { value: 1000 } } }, cost: { amountMicroUsd: '100' } } });
     expect(f.fetch).toHaveBeenCalledTimes(1);
+  });
+  it('should retain the reserve for a foreign served identity without substituting a route', async () => {
+    const f = setup();
+    f.body.model = 'foreign-model';
+    const result = await createDecisionService(f.options).decide(f.request);
+    expect(result).toMatchObject({ ok: false, error: { code: 'SERVED_IDENTITY_MISMATCH' }, receipt: { attempts: 1,
+      servedEvaluator: null, usage: { tokens: { input: { value: 1000 } } },
+      cost: { amountMicroUsd: '205', source: 'reserved-liability' }, budget: { state: 'pending-reconciliation' } } });
+    expect(f.fetch).toHaveBeenCalledTimes(1);
+    expect(f.budget.settle).toHaveBeenCalledTimes(1);
   });
   it('should reject a wrong credential source before admission', async () => {
     const f = setup();
