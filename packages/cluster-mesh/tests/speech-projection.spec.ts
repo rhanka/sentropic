@@ -16,9 +16,9 @@ describe('speech projection', () => {
     expect(projectSpeechProfile(config(), select('C'), offline)).toMatchObject({ available: false, reason: 'offline' });
   });
   it('should never choose a fallback even when an ordered one is configured', () => {
-    const profiles = resolveSpeechProfiles([{ ...primary[0], fallbacks: [select('B')] }, primary[1]]);
+    const profiles = resolveSpeechProfiles([{ ...primary[0], fallbacks: [{ profileId: 'B', configRevision: 'r1' }] }, primary[1]]);
     const ctx = { ...context(), catalogue: catalogue.filter((c) => c.binding.modelId !== 'tiny') };
-    expect(projectSpeechProfile(profiles, select(), ctx)).toMatchObject({ available: false, reason: 'unavailable' });
+    expect(projectSpeechProfile(profiles, profiles[0], ctx)).toMatchObject({ available: false, reason: 'unavailable' });
     expect(projectSpeechProfile(profiles, select('B'), ctx).available).toBe(true);
     expect(projectSpeechProfile(profiles, select('A', 'stale'), ctx)).toMatchObject({ available: false, reason: 'profile' });
   });
@@ -38,7 +38,10 @@ describe('speech projection', () => {
         ...catalogue.filter((c) => c.binding.modelId !== 'tiny')] };
       expect(projectSpeechProfile(config(), select(), ctx)).toMatchObject({ available: false, reason: 'capability' });
     }
-    const check = (changed: object) => projectSpeechProfile(resolveSpeechProfiles([{ ...p, ...changed }]), select(), context());
+    const check = (changed: object) => {
+      const profiles = resolveSpeechProfiles([{ ...p, ...changed }]);
+      return projectSpeechProfile(profiles, profiles[0], context());
+    };
     expect(check({ bindings: { ...p.bindings, stt: { ...p.bindings.stt, language: 'unqualified' } } }))
       .toMatchObject({ available: false, reason: 'selector' });
     expect(check({ inputFormats: [{ codec: 'opus', sampleRateHz: 48000, channels: 1 }] }))
@@ -51,7 +54,8 @@ describe('speech projection', () => {
       const duplex = engine('native-model', 'future', placement, 'native-adapter');
       const p = { ...profile(), placement, pipeline: 'native-duplex', micMode: 'open-mic',
         bindings: { duplex }, requiredCapabilities: {} };
-      expect(projectSpeechProfile(resolveSpeechProfiles([p]), select(), {
+      const profiles = resolveSpeechProfiles([p]);
+      expect(projectSpeechProfile(profiles, profiles[0], {
         ...context(), catalogue: [capabilities(duplex)],
       })).toMatchObject({ available: true, micEnabled: false, profile: { pipeline: 'native-duplex', placement } });
     }
@@ -97,8 +101,8 @@ describe('speech projection', () => {
     expect(rebindSpeechProfile(current, config(), select('B'), { ...context(), tenantId: 'other' }, barrier))
       .toMatchObject({ available: false, reason: 'tenant' });
     const revised = resolveSpeechProfiles([{ ...primary[0], configRevision: 'r2', micMode: 'open-mic' }]);
-    expect(rebindSpeechProfile(current, revised, select('A', 'r2'), context(), {
-      ...barrier, consent: consent('A', 'r2'),
+    expect(rebindSpeechProfile(current, revised, revised[0], context(), {
+      ...barrier, consent: { ...consent('A', 'r2'), contentDigest: revised[0].contentDigest },
     })).toMatchObject({ available: true, micEnabled: false, profile: { configRevision: 'r2', micMode: 'open-mic' } });
   });
 });

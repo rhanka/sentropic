@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { canonicalJson } from '../messaging/canonical-json.js';
+
 // The root configuration declaration graph must not require an optional provider peer.
 // Structural compatibility with the L1 contract is checked at the projection boundary.
 type SpeechPlacement = (typeof placements)[number];
@@ -25,11 +28,14 @@ interface SpeechAudioFormat {
 }
 
 export type SpeechEgress = 'device' | 'cluster' | 'provider';
-export interface SpeechProfileSelection {
+export interface SpeechProfileReference {
   readonly profileId: string;
   readonly configRevision: string;
 }
-export interface SpeechProfileInput extends SpeechProfileSelection {
+export interface SpeechProfileSelection extends SpeechProfileReference {
+  readonly contentDigest: string;
+}
+export interface SpeechProfileInput extends SpeechProfileReference {
   readonly schemaVersion: 1;
   readonly tenantId: string;
   readonly workspaceId: string;
@@ -47,10 +53,10 @@ export interface SpeechProfileInput extends SpeechProfileSelection {
   readonly outputFormats: readonly SpeechAudioFormat[];
   readonly maxDurationMs: number;
   readonly maxCostUsd: number;
-  readonly fallbacks?: readonly SpeechProfileSelection[];
+  readonly fallbacks?: readonly SpeechProfileReference[];
 }
-export interface SpeechProfile extends SpeechProfileInput {
-  readonly fallbacks: readonly SpeechProfileSelection[];
+export interface SpeechProfile extends SpeechProfileInput, SpeechProfileSelection {
+  readonly fallbacks: readonly SpeechProfileReference[];
 }
 export class SpeechConfigurationError extends Error {
   readonly code = 'invalid_speech_configuration';
@@ -82,7 +88,7 @@ const format = (value: unknown): SpeechAudioFormat => {
   return { codec: choice(f.codec, ['pcm16-le', 'opus']), channels: 1,
     sampleRateHz: f.sampleRateHz as SpeechAudioFormat['sampleRateHz'] };
 };
-const selection = (value: unknown): SpeechProfileSelection => {
+const selection = (value: unknown): SpeechProfileReference => {
   const s = object(value); keys(s, ['profileId', 'configRevision']);
   return { profileId: text(s.profileId), configRevision: text(s.configRevision) };
 };
@@ -108,7 +114,7 @@ export function freezeSpeechSnapshot<T>(value: T): T {
   return value;
 }
 
-function parseProfile(value: unknown): SpeechProfile {
+function parseProfile(value: unknown): Omit<SpeechProfile, 'contentDigest'> {
   const p = object(value);
   keys(p, ['schemaVersion', 'profileId', 'configRevision', 'tenantId', 'workspaceId', 'pipeline',
     'placement', 'bindings', 'micMode', 'policyRef', 'egressPolicyRef', 'budgetRef', 'allowedPlacements',
@@ -141,11 +147,14 @@ function parseProfile(value: unknown): SpeechProfile {
 }
 
 /** Configuration is descriptive. Runtime availability and admission are separately projected. */
-export function resolveSpeechProfiles(input: unknown): readonly SpeechProfile[] {
-  const profiles = list(input, parseProfile);
+export function resolveSpeechProfiles(input: unknown, knownRevisions: readonly SpeechProfile[] = []): readonly SpeechProfile[] {
+  const profiles = list(input, parseProfile).map((profile): SpeechProfile => ({ ...profile,
+    contentDigest: `sha256:${createHash('sha256').update(canonicalJson(profile)).digest('hex')}`,
+  }));
   const identity = (p: SpeechProfile) => JSON.stringify([p.tenantId, p.workspaceId, p.profileId, p.configRevision]);
   if (new Set(profiles.map(identity)).size !== profiles.length) fail();
   for (const p of profiles) {
+    if (knownRevisions.some((known) => identity(known) === identity(p) && known.contentDigest !== p.contentDigest)) fail();
     const seen = new Set<string>();
     for (const fallback of p.fallbacks) {
       const key = JSON.stringify([fallback.profileId, fallback.configRevision]);
