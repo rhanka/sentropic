@@ -76,7 +76,7 @@ export const sessionLifecycleHandlers: SessionRouteHandlers = {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return c.json({ error: 'Invalid request data', details: error.errors }, 400);
+        return c.json({ error: 'Invalid request data', details: error.issues }, 400);
       }
       logger.error({ err: error }, 'Error issuing extension session token');
       return c.json({ error: 'Failed to issue extension session token' }, 500);
