@@ -1,0 +1,19 @@
+{
+  "status": "pending-owner-authorization",
+  "l0FreezeSha256": "0541b15ba4d5e49ba3b30d92da1c5e3c2fd668e40937e4f942103a678e849bfb",
+  "preCandidateManifestSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
+  "ownerAuthorization": {
+    "actorRef": "owner:antoinefa",
+    "status": "pending",
+    "detachedSignature": null
+  },
+  "roleDispositions": [
+    { "role": "l4", "status": "pending", "actorRef": null, "detachedSignature": null },
+    { "role": "platform", "status": "pending", "actorRef": null, "detachedSignature": null },
+    { "role": "broker", "status": "pending", "actorRef": null, "detachedSignature": null },
+    { "role": "transport", "status": "pending", "actorRef": null, "detachedSignature": null }
+  ],
+  "authority": "spec/evidence/memory-mcp-l5/l0-freeze.json#authorizedOwners",
+  "qualificationAccepted": false,
+  "note": "L0 reissue awaits owner authorization. These slots are not signed dispositions or passed UAT/co-acceptance receipts."
+}
