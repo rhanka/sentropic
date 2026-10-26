@@ -69,10 +69,18 @@ describe('P01.mesh.memory-context', () => {
     await expect(policy.authorize({ tool: 'engram_memory_search', principal, context })).resolves.toMatchObject({
       allowed: false, reason: 'source_binding_mismatch' });
   });
-  it('should carry authoritative context through HTTP discovery and a real compiled registry', async () => {
+  it.each(['matching', 'wrong binding', 'missing binding', 'foreign tenant'])(
+    'should enforce %s host context through HTTP discovery and a real compiled registry', async variant => {
     const context = hostContext();
     context.workspaceRef = 'workspace-separate';
     context.memory!.binding = { ...context.memory!.binding, workspace_id: 'workspace-separate' };
+    const issuedAt = context.memory!.now;
+    if (variant === 'wrong binding') {
+      context.principal.sub = 'user-2';
+      context.principal.claims = { ...context.principal.claims, sub: 'user-2' };
+      context.memory!.binding = { ...context.memory!.binding, sub: 'user-2', principal_id: 'user-2' };
+    } else if (variant === 'missing binding') context.memory!.binding = undefined as never;
+    else if (variant === 'foreign tenant') context.tenantRef = 'foreign-tenant';
     const capability = MEMORY_TOOLS.find(t => t.name === 'engram_memory_get')!;
     const manifest = { appId: 'engram', providerId: 'sentropic.engram.memory', version: '1.0.0', displayName: 'Memory',
       resources: [], prompts: [], tools: [capability], authz: { requiredClaims: ['sub', 'tid'],
@@ -97,7 +105,7 @@ describe('P01.mesh.memory-context', () => {
     } };
     const envelope = { ok: false, auditId: context.auditId, redactionClass: 'high',
       error: { code: 'NOT_FOUND', message: 'Not found', retriable: false } } as const;
-    let calls = 0;
+    let calls = 0, authorizations = 0;
     const module = await createMcpNamespaceModule(modules as never, {
       registry: compiled.registry, generationId: '1', tools: [{ name: capability.name, schema: capability.inputSchema,
         outputSchema: capability.outputSchema as never, profile: 'sentropic.engram.memory-wire/v1',
@@ -105,7 +113,8 @@ describe('P01.mesh.memory-context', () => {
       auth: { routes: new Hono(), scopes: { discover: 'mcp:discover', invoke: 'mcp:tools:invoke', read: 'mcp:resources:read' },
         context: () => null, require: () => async (_c: unknown, next: () => Promise<void>) => next() } as never,
       contextResolver: async () => ({ sub: 'user-1', clientId: 'client-1', tid: 'workspace-separate', scopes: ['mcp:tools:invoke'] }),
-      memoryContext: async () => context, invocation: { authorize: async () => ({ allowed: true }) },
+      memoryContext: async () => context,
+      invocation: { authorize: async () => { authorizations++; return { allowed: true }; } },
       createTransport: () => new WebStandardStreamableHTTPServerTransport(),
       runner: { run: async (_tool, _args, identity, call) => {
         calls++; expect(identity?.tenantRef).toBe('tenant-1'); expect(call?.context).toBe(context); return envelope;
@@ -114,7 +123,7 @@ describe('P01.mesh.memory-context', () => {
     const router = module.createRouter({ receipts: {} as never, context: { verify: async () => ({
       invocationId: 'req-1', correlationId: 'corr-1', generationId: '1', principal: { principalId: 'user-1', kind: 'human', verifierId: 'v' },
       workspace: { workspaceId: 'workspace-separate', bindingId: 'w', revision: '1' }, scopes: ['mcp:tools:invoke'],
-      policyRevision: '2', issuedAt: context.memory!.now,
+      policyRevision: '2', issuedAt,
     }) } } as never);
     const client = new Client({ name: 'memory-context', version: '1' });
     try {
@@ -123,9 +132,17 @@ describe('P01.mesh.memory-context', () => {
         fetch: async (_url, init) => router.request('/mcp', init),
       }));
       expect((await client.listTools()).tools[0]).toMatchObject({ outputSchema: { type: 'object', ...capability.outputSchema as object }, _meta: { source: 'mcp:engram-memory' } });
-      expect(await client.callTool({ name: capability.name, arguments: { record_id: 'mem_abc', purpose_ref: 'purpose-1' } }))
-        .toEqual({ isError: true, structuredContent: envelope, content: [{ type: 'text', text: JSON.stringify(envelope) }] });
-      expect(calls).toBe(1);
+      const result = client.callTool({ name: capability.name, arguments: { record_id: 'mem_abc', purpose_ref: 'purpose-1' } });
+      if (variant === 'matching') {
+        expect(await result).toEqual({ isError: true, structuredContent: envelope,
+          content: [{ type: 'text', text: JSON.stringify(envelope) }] });
+        expect(calls).toBe(1);
+        expect(authorizations).toBe(1);
+      } else {
+        await expect(result).rejects.toMatchObject({ code: -32603 });
+        expect(calls).toBe(0);
+        expect(authorizations).toBe(0);
+      }
     } finally { await client.close(); }
   });
 });

@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { sha256 } from './precandidate.mjs';
 import { P3_SHA256 } from './lot2-manifest.mjs';
+import { verifyRetainedP3 } from './lot2-retained.mjs';
+import { catalogDispositions, WAITING_FOR } from './lot3-dispositions.mjs';
 
 /** Source/regression inventory only. It never emits an installed-consumer proof or checkpoint. */
 export function selectLot3Files(catalog) {
@@ -37,6 +39,14 @@ export function runLot3Source(root, reports, retainedRoot) {
     throw Error('Lot 3 frozen proof catalog mismatch');
   }
   const catalog = JSON.parse(catalogBytes), selected = selectLot3Files(catalog);
+  verifyRetainedP3(root, 'tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json');
+  const inventory = JSON.parse(p3).contractInventory;
+  const platform = JSON.parse(readFileSync(join(root, 'packages/mcp-platform/package.json')));
+  if (platform.version !== JSON.parse(p3).artifacts.find(a => a.role === 'platform').version) {
+    throw Error('Lot 3 packages/mcp-platform/package.json version differs from frozen P3');
+  }
+  const dispositions = catalogDispositions(catalog, file => existsSync(resolve(root, file)));
+  console.log(JSON.stringify({ dispositions, waitingFor: WAITING_FOR }));
   const immutable = {
     'packages/mcp-platform/tests/wire-parity.test.ts': '7845d6ecf60abd2886bd5efe7cb51fb6eb8d94e16692c953150a6bcdf125f0a1',
     'packages/mcp-platform/src/mock/fake-connector.ts': 'e39bf13a45a762fed758e385a908702af6c317e402a215c1e809a0bfe24ab9c5',
@@ -51,7 +61,9 @@ export function runLot3Source(root, reports, retainedRoot) {
   mkdirSync(reports, { recursive: true });
   const summary = { sourceOnly: true, qualificationAccepted: false, preCandidateSha256: P3_SHA256,
     sourceHead: process.env.MEMORY_L5_SOURCE_HEAD ?? null, node: process.version,
-    catalogSha256: sha256(catalogBytes), predecessorFiles: selected.predecessors, packages: {} };
+    catalogSha256: sha256(catalogBytes), predecessorFiles: selected.predecessors, packages: {},
+    inventory: { authority: 'frozen P3 archive closure and ancillary files', rows: inventory, drift: [] },
+    dispositions, waitingFor: WAITING_FOR };
   for (const [pkg, files] of [['mcp-platform', selected.platform], ['cluster-mesh', selected.mesh]]) {
     const packageRoot = join(root, 'packages', pkg), reportPath = join(reports, `${pkg}.json`);
     const run = spawnSync(process.execPath, [join(process.env.NODE_PATH, 'vitest/vitest.mjs'), 'run', ...files,

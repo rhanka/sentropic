@@ -50,8 +50,8 @@
   - [x] L5L3-EX3: add one Lot 3 action to the existing disposable cold workspace; reuse its installation, no additional runtime; rollback that action only.
   - [x] L5L3-EX4: prepare the existing MCP packaging fixtures in isolation with the frozen platform 0.4.0 floor; three required P09 cases otherwise skip. Rollback the preparation mode only.
 ## Feedback Loop
-- [ ] gr-conductor: verified P3-bound lot2-manifest/sidecar, E2/backend/neutral/profile/lock closure and G1–G4/C9 receipts required; stop dependent qualification.
-- [ ] Lot 4: S1 normalization, compatible frozen successor/E4, installed six-suite qualification and owner UAT remain owning-lot gates.
+- [ ] gr-conductor: P01.packed/P02.packed/P03/P04.packed need verified context/audit/schema/transport tuple; P05 canonical fenced-store; P06 restart/lost-ack; P07 assurance/continuation; P08 installed closure/disabled exports; P10 manifest/sidecar/G1-G4/C9 and tuple acceptances. Exact missing inputs: tools/memory-mcp-l5/lot3-dispositions.mjs WAITING_FOR.
+- [ ] Lot 4: S1 normalization, same frozen tuple/E4 installed six-suite qualification and owner UAT remain owning-lot gates; no successor freeze authorized.
 ## AI Flaky tests
 - [x] Deterministic transport/security tests; no waiver or timeout increase.
 ## Orchestration Mode (AI-selected)
@@ -69,6 +69,8 @@
   - [x] HTTP SDK proof: strict client reproduced missing root object type; full rerun passes with the complete frozen oneOf preserved (136 platform/28 mesh).
 - [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
   - [x] Review r1: produce npm view/download receipts, recompute SHA-512 and compare registry metadata plus a real npm-generated observation lock; retain both with source reports.
+  - [x] Review r1: every catalog file/case has an explicit run-here/out-of-lot disposition, existence observation and gate/dependency; frozen P3 archive inventory is reverified before source tests.
+  - [x] Review r1: HTTP cases cover a coherent wrong-subject binding, absent binding and foreign tenant; each must return -32603 before authorization or runner effects.
   - [x] New runner/tests: tools/memory-mcp-l5/lot3-source.mjs and tests/lot3-source.test.mjs; exact P09 file set bound to the unchanged P3 catalog.
   - [x] First exact run: platform 132 passed; mesh 24 passed/3 skipped, rejected by the reporter. Existing packaging fixtures now prepare those three required cases.
 - [ ] Lot 4: review, push draft PR to main, final-head CI green; list manifest-blocked proofs and Lot 4 estimate.

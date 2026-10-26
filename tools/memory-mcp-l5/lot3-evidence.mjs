@@ -6,6 +6,7 @@ import { P3_SHA256 } from './lot2-manifest.mjs';
 import { PINNED_IMAGE_DIGEST } from './schema-validator.mjs';
 import { validateLot3Report } from './lot3-source.mjs';
 import { PUBLICATIONS, verifyPublication } from './lot3-publications.mjs';
+import { WAITING_FOR } from './lot3-dispositions.mjs';
 
 const base = 'spec/evidence/memory-mcp-l5/lot3', input = 'tmp/memory-l5-lot3-results';
 const summary = JSON.parse(readFileSync(`${input}/summary.json`));
@@ -50,11 +51,11 @@ const archive = `spec/evidence/memory-mcp-l5/lot2/archives/${e4}.tgz`;
 if (sha256(readFileSync(archive)) !== e4) throw Error('Lot 3 retained E4 mismatch');
 const result = { status: 'source-only', qualificationAccepted: false, sourceHead: summary.sourceHead,
   preCandidateSha256: P3_SHA256, catalogSha256: summary.catalogSha256, reports, registry,
-  candidate: { archive, sha256: e4, status: 'input only; compatible successor required' },
+  candidate: { archive, sha256: e4, status: 'input only; same frozen tuple installed qualification pending' },
   runtime: { imageDigest: PINNED_IMAGE_DIGEST, nodeVersion: process.versions.node, pythonExecutablePresent: false },
-  waitingFor: ['gr-conductor verified lot2-manifest/sidecar and full host closure/G1-G4/C9 dispositions',
-    'S1 and a co-accepted successor freeze/compatible E4', 'same-tuple installed P01-P08 and durable E4 reruns',
-    'owner UAT and tuple-bound co-acceptances before L5-MEMORY-V1'] };
-const output = JSON.stringify(result, null, 2).replace(/\{\n\s+"(?:kind|name)": [^{}]+\}/g, row => JSON.stringify(JSON.parse(row)));
+  dispositions: { reportKind: 'summary', total: summary.dispositions.length,
+    outOfLot: summary.dispositions.filter(row => row.status === 'out-of-lot').length },
+  inventory: { reportKind: 'summary', rows: summary.inventory.rows.length, drift: summary.inventory.drift }, waitingFor: WAITING_FOR };
+const output = JSON.stringify(result, null, 2).replace(/\{\n\s+"(?:kind|name|id)": [^{}]+\}/g, row => JSON.stringify(JSON.parse(row)));
 writeFileSync(`${base}/source-evidence.json`, output + '\n');
 console.log(JSON.stringify({ sourceHead: result.sourceHead, reports: reports.map(r => [r.kind, r.passed]), qualificationAccepted: false }));
