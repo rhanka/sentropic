@@ -39,30 +39,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [x] Opus r1 P2-2: validate npm entry names, severities, via/range types and exact per-severity/total counters; refuse empty contradictory reports and null/malformed entries, with clean and populated positive controls.
-- [x] Opus r1 P2-3: exercise real Dockerfile stages plus a missing-stage fixture, assert required lock presence, compute seven stale candidates on the 67-row fixture and derive the current-register count; retitle metadata-only assertions.
-- [x] Review-fix final local gate: required `scripts/ci/publishable-ci-wiring.test.mjs` entrypoint passes all 119 tests after merging `365e8b313`; locked Make execution on `ENV=test-sec-s1`, no failures or skips.
-- [x] Resync after Opus r1: merge `origin/main` at `365e8b313f1c4c627c87db4f6761847a1e6a5ae7`, retain the S1 plan on the sole `BRANCH.md` conflict and preserve Track events; incoming L5 artifacts remain main's exact bytes, with the repair class disabled.
-- [x] Opus r1 P2-1: pin disabled activation, exact allow/deny scope, grouping, fail-closed kill switch, blocked L5 class and budget ceilings independently of the candidate JSON; weakened fixtures reproduce the former acceptance gap.
-- [x] Review-fix validation uses `ENV=test-sec-s1` last and the shared Docker lock; all 70 weakened-contract fixtures pass after the validator fix (the remaining failing npm-counter regression is handled separately).
-- [x] SECDAILY-S1-EX1: register S1 suites in the existing required Node test entrypoint `scripts/ci/publishable-ci-wiring.test.mjs`; restore `.github/workflows/ci.yml` to main bytes. Editing that workflow selects global CI including legacy Python SAST, outside this zero-Python lot. Existing filters and gates stay unchanged; rollback removes only the S1 suite imports, with implementation disabled.
-- [x] Integration: merge `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`; retain S1 plan and all 342 prior Track events. Scope-check includes incoming main files; the independent harness check against `origin/main` limits authored changes to S1.
-- [x] Approved-r4 alignment: tests first for exact register matching, all-severity inventory, separate own-code scope, bounded grouping, complete dated reconciliation and discovered lock/hash consumers.
-- [x] Tests-first evidence: existing 14 tests passed; expanded S1 suite reproduces nine contract/inventory failures before implementation (22 tests, 13 pass, 9 fail).
-- [x] Contract alignment: all-severity public inventory, disabled exact own-code paths, separate automatic reconciliation, exact exception joins and explicit current-main L5 compatibility blocker.
-- [x] Grouping alignment: stable lock-set/defect/image identities, visible no-upstream-fix units, severity/expiry/age order, explicit estimates and strict repository/class/size bounds.
-- [x] Reconciliation alignment: distinct consecutive UTC daily full scans, immutable source/image/database identities, fresh databases and exact unchanged registered path/platform/lineage/flags/policy; pre-merge proof remains a separate S5a guard.
-- [x] Discovery alignment: enumerate independent lockfiles with dev dependencies and tracked source/hash consumers; fail on unreadable trees, symlinks and exhausted discovery bounds rather than silently truncating coverage.
-- [x] Backlog alignment: raw all-severity findings remain queued, unresolved unmatched rows remain verification-pending, expiry is computed from current rows and malformed/missing/errored reports cannot produce clean state.
-- [x] Current-register boundary: normalize the real YAML document without inferring missing affected identities; current main has 68 unresolved rows (60 due November 20, seven expired, one due October 30), distinct from the historical 67-row fixture. Register bytes remain unchanged.
-- [x] Receipt boundary: require digest-qualified scanner/policy identities and full severity coverage for absence evidence; join GHSA/CVE aliases without relaxing the affected path/version/image match. Legacy container candidates remain pending qualification.
-- [x] Reconciliation regression: current-register integration checks preserve its actual pending rows without freezing the count in CI; a removal-only document fixture proves legitimate future reconciliation does not require test edits.
-- [x] Malformed-report regression: Trivy result rows and finding identities are validated, so a valid outer envelope cannot turn missing/partial nested findings into a clean report.
-- [x] Coverage alignment: discover package/app/script/tool source roots and workspace manifests, verify the three image stages, enumerate reviewed hash consumers and expose missing locks/unknown consumers/SAST qualification as blockers.
-- [x] Identity hardening: malformed aliases and ambiguous/empty key components fail closed; source defects may use an explicit stable defect identity. Local editor-rule symlinks are excluded from application surface discovery.
-- [ ] Independent review: Opus r1 on `d405cf7e0` returned CHANGES (0 P1, 3 P2); the three findings are corrected above, with re-review/approval pending. No consensus or merge readiness claimed.
-- [x] SECDAILY-EX6 inventory: `api/Dockerfile` (`ci-tools` and `ci-esbuild`) is the existing approved toolbox path; S1 does not modify it or introduce an image.
-- `owner-all-public` / `acknowledge`: binding owner decision (OWNER-REQUEST.md 2026-10-23 disclosure section) supersedes the spec private-scan design. No private scan repo, everything runs in the public repos, fix PRs are public and auto-merged after other-model review and green CI. S1 contract adapted accordingly.
+- [x] Retire the inherited S1 completion checklist before declaring S2a; implementation remains on hold.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -96,27 +73,6 @@
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
   - [x] Resolve existing toolbox path `api/Dockerfile` (`ci-tools`, `ci-esbuild` stages) as inventory fact for SECDAILY-EX6.
-- [x] **Lot 1 — S1 contract `.security/security-fix.json`**
-  - [x] Declare inventory surfaces (three images, root/UI/kit locks, SAST roots, derived pins).
-  - [x] Declare HIGH/CRITICAL severity contract with identical flags before/after and reconciliation.
-  - [x] Declare raw/register join with 67-row expiry split (60 due 2026-11-20, 7 expired).
-  - [x] Declare grouping into remediation units and bounded lots (3 units, 10 files, 150 lines).
-  - [x] Declare exact automatic scope from spec section 7 with exclusion list.
-  - [x] Integrate P3-1 credential naming (read-only access on the public repository, owner all-public decision).
-  - [x] Integrate P3-4 bumpGate manual class for published package dependency edits.
-  - [x] Declare N=2 reconciliation rule with reset conditions.
-  - [x] Declare kill switches and rate limits.
-  - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec-lot1`
-    - [x] `make commit MSG="..." ENV=test-sec-lot1` with selective `git add`
-- [x] **Lot 2 — S1 modules `scripts/security/daily/schema.mjs` and `inventory.mjs`**
-  - [x] Implement schema validation for contract, findings, units, lots, reconciliation evidence.
-  - [x] Implement inventory of locks, images, SAST roots, derived-pin consumers.
-  - [x] Implement raw/register join, grouping, lot batching, reconciliation streak check.
-  - [x] Implement bumpGate manual classification hook.
-  - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec-lot1`
-    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1`
 - [x] **Lot 3 — S1 tests `schema.test.mjs` and `inventory.test.mjs`**
   - [x] Cover three images, root/UI/kit locks, 67-row expiry split, seven stale-container candidates.
   - [x] Cover N=2 complete-scan fixture, severity flags, aliases, malformed data.
