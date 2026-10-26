@@ -266,3 +266,73 @@ export interface NeutralModuleStorageBinding {
 }
 
 /** Authoritative scope binding for one canonical store (binding §7.2). */
+export interface MemoryScopeBindingV1 {
+    /** The one L3a scope this store serves. */
+    readonly scope: {
+        readonly tenantId: string;
+        readonly workspaceId: string;
+    };
+    /** Durable identity of this canonical store and its journal. */
+    readonly store_id: string;
+    /**
+     * Host authority binding one opaque `scope_ref` to the tenant/workspace
+     * pair it belongs to, or null when unknown. Composition-only: never
+     * serialized into a memory DTO, a stored value, or a receipt.
+     */
+    readonly resolveScope: (scope_ref: string) => {
+        readonly tenantId: string;
+        readonly workspaceId: string;
+    } | null;
+}
+/** Composition contract of the provisional constructor (amendment §1.2, binding §6.2). */
+export interface ModuleStorageMemoryStoreOptionsV1 {
+    /**
+     * Host-provisioned neutral port for `moduleId: 'engram-memory'`: either a
+     * pre-bound flat handle or a grant binding consumed synchronously or
+     * asynchronously (binding §6.2, L3a §6.3). Engram never constructs a backend.
+     */
+    readonly handle: NeutralMemoryHandle | NeutralModuleStorageBinding;
+    /** Authoritative scope binding for this store (binding §7). */
+    readonly scope_binding: MemoryScopeBindingV1;
+    /** Host-issued grant: module `engram-memory`, the bound scope, exactly `['read', 'write']`. */
+    readonly grant: NeutralScopeGrant;
+    /** Engram clock: the single time source for `committed_at` sampling and receipts. */
+    readonly clock: { now(): string };
+    /** Acquisition deadline for construction. */
+    readonly deadline_at: string;
+    /** Optional composition work limits: may raise a qualified bound, never weaken a refusal. */
+    readonly work_limits?: MemoryWorkLimitsV1;
+}
+/** Composition work limits: upper bounds only (binding §4.3). */
+export interface MemoryWorkLimitsV1 {
+    readonly maxRecords?: number;
+    readonly maxEncodedBytes?: number;
+    /**
+     * Maintenance expiry batch bounds (binding §4.3): expiry work observed by
+     * a read commits in units of at most this many appends/records. Absent
+     * means the descriptor batch defaults below. The declared ceiling is never
+     * derived from observed work sizes.
+     */
+    readonly maintenance_max_appends?: number;
+    readonly maintenance_max_records?: number;
+}
+
+// Installed 0.21.1 consumes structural error codes, never a shared Error class.
+// Only fence failures latch the canonical instance; other errors permit retry/revalidation.
+export const MEMORY_NEUTRAL_ERROR_MAPPING = {
+  'fence-lost': { code: 'FENCE_LOST', terminal: true },
+  'fence-conflict': { code: 'FENCE_LOST', terminal: true },
+  unauthorized: { code: 'UNAUTHORIZED', terminal: false },
+  'authorization-expired': { code: 'AUTHORIZATION_EXPIRED', terminal: false },
+  'authorization-revoked': { code: 'AUTHORIZATION_REVOKED', terminal: false },
+  'capability-unavailable': { code: 'CAPABILITY_UNAVAILABLE', terminal: false },
+  'cas-conflict': { code: 'STORE_UNAVAILABLE', terminal: false },
+  'digest-conflict': { code: 'DIGEST_CONFLICT', terminal: false },
+  'limit-exceeded': { code: 'CAPABILITY_UNAVAILABLE', terminal: false },
+  'store-unavailable': { code: 'STORE_UNAVAILABLE', terminal: false },
+  'not-found': { code: 'NOT_FOUND', terminal: false },
+  'invalid-schema': { code: 'INVALID_SCHEMA', terminal: false },
+} as const;
+
+export type NeutralStorageErrorCode = keyof typeof MEMORY_NEUTRAL_ERROR_MAPPING;
+export interface NeutralStorageFailure { readonly code: NeutralStorageErrorCode }
