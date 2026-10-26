@@ -107,9 +107,10 @@ describe.each([
     ('should reject invalid prefix %j with a stable typed error', async (prefix) => {
       await store.putBlob(KEY_A, owe([1]));
       const result = Promise.resolve().then(() => store.listKeys(prefix));
-      await expect(result).rejects.toThrow(new Error(`invalid blob prefix: ${prefix}`));
       await expect(result).rejects.toBeInstanceOf(ArtifactOperationError);
-      await expect(result).rejects.toMatchObject({ kind: 'invalid_request', code: 'invalid_blob_prefix' });
+      await expect(result).rejects.toMatchObject({
+        message: `invalid blob prefix: ${prefix}`, kind: 'invalid_request', code: 'invalid_blob_prefix',
+      });
     });
 
   it.each([

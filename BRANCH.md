@@ -1,7 +1,7 @@
 # fix(artifacts): 0.2.2 listKeys prefix parity (memory = S3)
 
 ## Objective
-- [ ] Make memory and S3 listKeys reject the same invalid prefixes through one validator.
+- [x] Make memory and S3 listKeys reject the same invalid prefixes through one validator.
 - [ ] Release a compatible patch at 0.2.2; push a PR with green CI and do not merge.
 
 ## Scope / Guardrails
@@ -19,7 +19,9 @@
   - `packages/artifacts/src/server/publication.ts`
   - `packages/artifacts/src/adapters/s3.ts`
   - `packages/artifacts/tests/s3.integration.test.ts`
+  - `packages/artifacts/tests/publication-security.test.ts`
   - `packages/artifacts/package.json`
+  - `package-lock.json` (artifacts workspace version only)
 - **Forbidden Paths (must not change in this branch)**:
   - `packages/artifacts/l0-freeze/**`
   - `docker-compose*.yml`
@@ -33,6 +35,7 @@
 
 ## Feedback Loop
 - [x] BR022-EX1: acknowledge; owner: code author; 2026-10-26. Add test-artifacts-022 to existing Compose ENV selectors only. Required by the requested ENV and Docker lock; no recipe changes. Rollback: remove that ENV from the selectors.
+- [x] Review availability: no live model catalog configured for selecting two complementary reviewers; selection-failed recorded in tmp/artifacts-022-review/dossier.md. No consensus claimed; merge remains prohibited.
 
 ## AI Flaky tests
 - [x] No AI/provider tests in this package fix; no flaky acceptance requested.
@@ -53,14 +56,15 @@
   - [x] Add a shared memory/S3 case matrix in tests/s3.integration.test.ts.
   - [x] Exercise empty, embedded '..', valid matching and unmatched prefixes on real MinIO.
   - [x] Before production changes: 12 expected failures (6 memory acceptances, 6 untyped S3 errors), 15 passing tests. Command: make -o build-artifacts test-artifacts-integration SCOPE=tests/s3.integration.test.ts ENV=test-artifacts-022.
-- [ ] **Lot 2 — Shared validation and patch version**
-  - [ ] Add one shared prefix validator; both stores call it before enumeration/I/O.
-  - [ ] Reuse typed invalid_request errors, preserve message, add stable invalid_blob_prefix code.
-  - [ ] Verify published registry version and bump package.json to 0.2.2.
-  - [ ] Re-run parity, unit suite, integration suite, lint, typecheck and frozen types.
+- [x] **Lot 2 — Shared validation and patch version**
+  - [x] Add one shared prefix validator; both stores call it before enumeration/I/O.
+  - [x] Reuse typed invalid_request errors, preserve message, add stable invalid_blob_prefix code.
+  - [x] Registry latest is 0.2.1; bump package.json and workspace lock entry to 0.2.2.
+  - [x] Update four existing publication-security empty-store assertions to enumerate artifacts/.
+  - [x] Parity: 27/27; full integration/E2E suite passed; unit suite: 446/446. Typecheck, lint and freeze-types passed under the shared Docker lock on ENV=test-artifacts-022.
 - [ ] **Lot 3 — Review and delivery**
-  - [ ] Review every diff hunk; resolve blocking findings.
-  - [ ] Confirm l0-freeze unchanged and scope-check before each commit.
+  - [x] Author review of every diff hunk completed; no remaining blocking code findings.
+  - [x] Confirm l0-freeze unchanged and scope-check before each commit.
   - [ ] Push and open PR to main using this file as PR body.
   - [ ] Verify enforce-package-bump and all CI checks on exact head SHA.
   - [ ] Tear down isolated stack; report PR number, head SHA and CI URL.
