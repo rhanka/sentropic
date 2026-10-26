@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteMemoryWorkflowStoreV1 } from '../../src/memory-reference/index.js';
 import { workflowInput, confirmationFixture } from './workflow-fixture.js';
-it('should persist bound affirmative confirmation and refuse stale or substituted continuations', async () => {
+it('P07.broker.confirmation-continuation: should persist bound affirmative confirmation and refuse stale or substituted continuations', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'l5-confirm-')), path = join(dir, 'workflow.sqlite');
   let store = await SqliteMemoryWorkflowStoreV1.open(path);
   try {

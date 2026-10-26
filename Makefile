@@ -4401,7 +4401,7 @@ typecheck-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker type check
 .PHONY: test-mcp-broker
 test-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker tests (L5 Lot 1: plan-bound broker, public platform contracts)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-broker/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" -e MEMORY_L5_REPORT="$(MEMORY_L5_REPORT)" -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-broker/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; set --; if [ -n "$$MEMORY_L5_REPORT" ]; then set -- --reporter=json --outputFile="$$MEMORY_L5_REPORT"; fi; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node "$$@"; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node "$$@"; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: build-mcp-broker
@@ -4459,7 +4459,7 @@ memory-l5-lot2: memory-l5-runtime
 
 memory-l5-reference:
 	@$(MAKE) build-mcp-broker LLM_MESH_NODE_IMAGE=$(MEMORY_L5_NODE_IMAGE) ENV=$(ENV)
-	@$(MAKE) test-mcp-broker LLM_MESH_NODE_IMAGE=$(MEMORY_L5_NODE_IMAGE) SCOPE=tests/memory ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker LLM_MESH_NODE_IMAGE=$(MEMORY_L5_NODE_IMAGE) SCOPE=tests/memory MEMORY_L5_REPORT=$(MEMORY_L5_REPORT) ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
 
 .PHONY: memory-l5-packed
 memory-l5-packed: memory-l5-runtime ## L5 installed-consumer packed SDK suite, SCOPE=packed/<file> against ARTIFACT_MANIFEST (Lot 4)

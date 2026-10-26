@@ -13,6 +13,7 @@
   - `packages/mcp-broker/tests/memory/**`
   - `packages/mcp-broker/package.json`
   - `packages/mcp-broker/README.md`
+  - `package-lock.json`
   - `tools/memory-mcp-l5/lot2*.mjs`
   - `tools/memory-mcp-l5/verifier.mjs`
   - `tools/memory-mcp-l5/policies/**`
@@ -28,6 +29,7 @@
   - `.github/workflows/**`
 - **Exception process**:
   - [x] L5L2-EX1: bounded Makefile Lot 2 delegation/manifest forwarding; local/CI parity; rollback added wiring only.
+  - [x] L5L2-EX2: update only broker workspace version in package-lock.json; retain frozen P3 lock snapshot; rollback this scalar.
 ## Feedback Loop
 - [ ] gr-conductor: real P3-bound lot2-manifest/sidecar, E2/backend/neutral/profile/lock closure and G1–G4/C9 receipts pending; fixture is unverified.
 - [ ] Owner/Engram: authoritative enrollment/assurance mapping and current L0 role dispositions pending; no deployed identity acceptance.
@@ -41,5 +43,5 @@
 - [x] Lot 0: read lock/schedule/spec/template; verify mechanical branch and immutable baseline.
 - [x] Lot 1: six reference test files, signed-token corpus and manifest refusal tests specified; first store run fails on missing reference module.
 - [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
-- [ ] Lot 3: E2/E4 retained; generate explicitly unverified receiving fixture and finish reference/tooling validation.
+- [ ] Lot 3: unverified fixture retained; add pinned E2/tamper checks, case IDs and JSON reporting; final gates next.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.

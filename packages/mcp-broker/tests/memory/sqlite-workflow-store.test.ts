@@ -6,7 +6,7 @@ import { SqliteMemoryWorkflowStoreV1 } from '../../src/memory-reference/index.js
 import { workflowInput } from './workflow-fixture.js';
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
-it('should persist one principal-scoped reservation and refuse changed binding after reopen', async () => {
+it('P05.broker.sqlite-workflow-store-wal-full: should persist one principal-scoped reservation and refuse changed binding after reopen', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'l5-workflow-')); dirs.push(dir);
   const path = join(dir, 'workflow.sqlite');
   let store = await SqliteMemoryWorkflowStoreV1.open(path);

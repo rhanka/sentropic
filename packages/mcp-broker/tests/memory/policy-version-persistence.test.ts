@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteMemoryWorkflowStoreV1 } from '../../src/memory-reference/index.js';
 import { workflowInput } from './workflow-fixture.js';
-it('should retain exact historical policy/defaults and refuse missing history or projection', async () => {
+it('P05.broker.policy-version-persistence: should retain exact historical policy/defaults and refuse missing history or projection', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'l5-policy-')), path = join(dir, 'workflow.sqlite');
   let store = await SqliteMemoryWorkflowStoreV1.open(path);
   try {
