@@ -44,22 +44,25 @@ by name only; they are never printed and never stored in receipts.
 Run from the repo root, with the confirmed values exported as make variables
 (the example uses the proposed defaults plus the tenant's kubeconfig path):
 
-```sh
+```bash
 run_id="restore-$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -p "docs/runbooks/app-cm-baseline-restore/receipts"
+receipt_dir="${RESTORE_RECEIPT_DIR:-/tmp/app-cm-restore-receipts}"
+mkdir -p "${receipt_dir}"
 make k8s-pgbackup-restore \
   PG_BACKUP_KEY=pg/<timestamp>.sql.gz \
-  KUBECONFIG=<path-to-restore-namespace-kubeconfig> \
+  RESTORE_KUBECONFIG=<path-to-restore-namespace-kubeconfig> \
   RESTORE_KEEP_DB=true \
-  ENV=test-app-w0-restore 2>&1 | tee "docs/runbooks/app-cm-baseline-restore/receipts/${run_id}.log"
+  ENV=test-app-w0-restore > "${receipt_dir}/${run_id}.full.log" 2>&1
 ```
 
-Then extract the manifest block into the receipt and verify it:
+Keep only the manifest block as the receipt and delete the full log (it may
+carry pod output; receipts hold no private data and live outside the repo):
 
-```sh
+```bash
 sed -n '/MANIFEST-BEGIN/,/MANIFEST-END/p' \
-  "docs/runbooks/app-cm-baseline-restore/receipts/${run_id}.log" \
-  > "docs/runbooks/app-cm-baseline-restore/receipts/${run_id}.md"
+  "${receipt_dir}/${run_id}.full.log" \
+  > "${receipt_dir}/${run_id}.md"
+rm -f "${receipt_dir}/${run_id}.full.log"
 ```
 
 With `RESTORE_KEEP_DB=true` the restored DB stays available for the authority
