@@ -96,7 +96,7 @@ describe.skipIf(!pgEnabled)('consumed-counter migration application', () => {
       for (const row of checks.rows) expect(row.def).toContain('18446744073709551615');
       await tx.run(false, (session) => applyPgMigrations(session, layout, assets, historyFor(name), { id: 'neutral-host/007', checksum: 'b'.repeat(64) }));
       const receipts = await tx.run(true, (session) => session.execute({ text: `SELECT COUNT(*)::text AS n FROM "${name}".host_history`, values: [] }));
-      expect(receipts.rows[0]!.n).toBe('7');
+      expect(receipts.rows[0]!.n).toBe('8');
       await tx.run(true, (session) => verifyPgInstallation(session, layout, assets, historyFor(name)));
     } finally {
       await txRun(fixture, name);
