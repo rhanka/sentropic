@@ -39,6 +39,7 @@ Make the `cluster-mesh-comments-installed` bare probe accept the `incompatible_v
 - [x] Pin fed from the frozen fixture via `CM_PACK_ONLY_PIN` (make extraction + docker env); gate module copied next to the probe.
 - [x] Negative tests in `pack-only-dev-gate.spec.ts`: stale pin, wrong reserved, rc, stable, off-line and wrong-package candidates keep refusing.
 - [x] Opus r1 P2 (exact package+version pair): `isPackOnlyDevBump` requires `packageName === '@sentropic/cluster-mesh'`; probe passes the installed name; wrong-package cases tested.
+- [x] Opus r2 (refusal-authoritative pair): the pair is read from `error.packageName` / `error.installedVersion`, not the filesystem (which always carries this package); unreadable versions stay strict; cases tested.
 - [x] Opus r1 P3 (stack on #767): branch rebased onto `feat/engram-e2-pack-only-fixtures`; one BRANCH.md rewrite in the final diff.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; verify validate-cluster-mesh green without merging.
 

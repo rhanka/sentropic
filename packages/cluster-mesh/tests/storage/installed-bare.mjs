@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { acceptsCommentsRefusal, RESERVED_NEXT } from './pack-only-dev-gate.mjs';
 const resolved = [];
@@ -18,9 +17,13 @@ const disabled = await createCommentsNamespaceModule(modules, { enabled: false, 
 assert.equal(disabled.enabled, false);
 // Pack-only topic branches carry `<reservedNext>-dev.N` by plan: their leaf
 // sits outside the frozen Comments range, so the bare install refuses with
-// `incompatible_version` instead of `not_installed`.
-const installed = JSON.parse(readFileSync(new URL('./node_modules/@sentropic/cluster-mesh/package.json', import.meta.url), 'utf8'));
-const packOnly = { packageName: installed.name, installedVersion: installed.version, publishedPin: process.env.CM_PACK_ONLY_PIN ?? '', reservedNext: RESERVED_NEXT };
-await assert.rejects(modules.load('comments'), (error) => acceptsCommentsRefusal({ ...packOnly, reason: error.reason, code: error.code }));
+// `incompatible_version` instead of `not_installed`. The pair is read from the
+// refusal itself: the installed filesystem always carries this package, so it
+// cannot prove which pair the loader refused.
+const packOnly = { publishedPin: process.env.CM_PACK_ONLY_PIN ?? '', reservedNext: RESERVED_NEXT };
+await assert.rejects(modules.load('comments'), (error) => acceptsCommentsRefusal({
+  ...packOnly, packageName: error.packageName, installedVersion: error.installedVersion,
+  reason: error.reason, code: error.code,
+}));
 assert.ok(!resolved.some((url) => url.includes('/@sentropic/comments/') || url.includes('/node_modules/pg/')));
 console.log(JSON.stringify({ bareRoot: 'pass', storageLeaves: 'pass', disabledComments: 'pass', missingPeerRefusal: 'pass' }));
