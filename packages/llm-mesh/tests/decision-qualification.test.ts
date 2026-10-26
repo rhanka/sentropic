@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { discoverDecisionEvaluator, decisionExecutionDigest, decisionQualificationScope } from '../src/decision/qualification.js';
 import { createDecisionService } from '../src/decision/service.js';
 import { parseDecisionEvaluatorDescriptor } from '../src/decision/descriptor-validation.js';
-import { decisionRequest, decisionServiceFixture, qualifiedDescriptor } from './decision-fixtures.js';
+import { decisionPrice, decisionRequest, decisionServiceFixture, qualifiedDescriptor } from './decision-fixtures.js';
 
 export const operatingPolicy = () => ({ revision: 'policy-1', language: 'en', domain: 'support',
   intendedUse: 'assistance', maxInputBytes: 4096, decision: null });
@@ -25,7 +25,7 @@ describe('criterion-scoped production admission', () => {
     const descriptor = qualifiedDescriptor();
     delete descriptor.executionProfile;
     const facts = discoverDecisionEvaluator(descriptor, { contractConformance: true, transportAccessible: true,
-      policy: operatingPolicy(), assessments: [] }, decisionRequest());
+      policy: operatingPolicy(), assessments: [], price: decisionPrice() }, decisionRequest());
     expect(facts).toMatchObject({ identityQualified: true, billingQualified: true, calibrationQualified: false,
       contractConformance: true, transportAccessible: true, productionReady: false, reasons: ['calibration-missing'] });
     expect(discoverDecisionEvaluator(descriptor).productionReady).toBeUndefined();
