@@ -54,7 +54,7 @@
   - [x] Read Docker lock, rules, approved E6 and #709 view/diff; mechanically check branch.
   - [x] Record successor scope and independent memory migration reservation.
 - [ ] **Lot 1 — Tests first**
-  - [ ] `tests/engram-memory/postgres-registration.spec.ts`: real apply/verify history, reopen, idempotence and drift refusal.
+  - [x] Author `tests/engram-memory/postgres-registration.spec.ts` and `pg-host.ts`: real apply/verify history, reopen, idempotence and drift refusal; RED queued under shared lock.
   - [ ] `tests/engram-memory/queries.spec.ts`: all five queries, foreign scope, paging, retained boundaries and resync.
   - [ ] `tests/engram-memory/projection.spec.ts`: live K7/K8, completion, P3 replay and rollback.
   - [ ] Rerun existing `first-proof.spec.ts` and `completion.spec.ts`.
