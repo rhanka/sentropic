@@ -1,0 +1,18 @@
+{
+  "status": "pending",
+  "lot": "L3",
+  "createdAt": "2026-10-26T21:22:09.145Z",
+  "blocker": "engine module not loadable",
+  "evidence": {
+    "node": "v22.22.1 linux x64",
+    "engine": "faster-whisper-ts@1.2.1",
+    "pinned": {
+      "tiny": "sha256:dcb76c6586fc06cbdac6dd21f14cfd129cc4cdd9dce19bf4ffa62e59cbe6e6d1",
+      "base": "sha256:d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "engineVersion": "1.2.1"
+    },
+    "modelsDir": "/home/antoinefa/src/faster-whisper/test-models",
+    "detail": "Unable to locate native whisper bridge in /tmp/stt-bench/node_modules/faster-whisper-ts/whisper_bridge/build. Expected one of: libwhisper_bridge.so",
+    "hint": "npm install faster-whisper-ts@1.2.1 (pinned) with a working native toolchain, then rerun"
+  }
+}
