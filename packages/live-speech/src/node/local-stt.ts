@@ -37,6 +37,7 @@ export class LocalSttSession {
   private readonly tracker = new HypothesisTracker();
   private closed = false;
   private utteranceFinalEmitted = false;
+  private windowInFlight = false;
 
   constructor(options: LocalSttSessionOptions) {
     this.profile = options.profile;
@@ -66,12 +67,15 @@ export class LocalSttSession {
     }
     if (this.buffer.utteranceOpen) {
       const cadenceSamples = Math.floor(this.profile.decodeCadenceSec * rate);
-      if (this.buffer.samplesSinceDecode >= cadenceSamples) {
+      if (this.buffer.samplesSinceDecode >= cadenceSamples && this.decodeWindow()) {
         this.buffer.markDecoded();
-        void this.decodeWindow();
       }
       const hangoverSamples = Math.floor((this.profile.silenceHangoverMs / 1000) * rate);
       if (this.buffer.silenceSamples >= hangoverSamples) void this.endpointUtterance();
+      // Forced endpoint: an utterance never accumulates past maxUtteranceSec, so a
+      // noisy open mic cannot grow the buffer (and the final wait) without bound.
+      const maxSamples = Math.floor(this.profile.maxUtteranceSec * rate);
+      if (this.buffer.bufferedSamples >= maxSamples) void this.endpointUtterance();
     }
   }
 
@@ -86,27 +90,45 @@ export class LocalSttSession {
     this.tracker.reset();
   }
 
-  private async decodeWindow(): Promise<void> {
+  /**
+   * Decode one rolling window. At most one window decode is ever in flight: a
+   * cadence tick that lands while the worker is busy is skipped (the dispatch
+   * returns false and the sample counter is left running, so the next push
+   * retries immediately). The queue behind the endpoint decode is therefore
+   * bounded by one window decode, and the final never starves behind stale windows.
+   * Returns true when a decode was dispatched.
+   */
+  private decodeWindow(): boolean {
     const utterance = this.buffer.utteranceId;
-    if (utterance === null || this.closed) return;
-    const { window, endSample } = this.buffer.window(this.profile);
-    if (window.length === 0) return;
-    let transcription: SttTranscription;
+    if (utterance === null || this.closed || this.windowInFlight) return false;
+    const { window, endSample } = this.buffer.window(this.profile, this.tracker.committedEndSample);
+    if (window.length === 0) return false;
+    this.windowInFlight = true;
+    void this.runWindowDecode(utterance, window, endSample);
+    return true;
+  }
+
+  private async runWindowDecode(utterance: string, window: Float32Array, endSample: number): Promise<void> {
     try {
-      transcription = await this.port.transcribe(window, { sampleRateHz: this.profile.sampleRateHz, language: this.language });
-    } catch (error) {
+      let transcription: SttTranscription;
+      try {
+        transcription = await this.port.transcribe(window, { sampleRateHz: this.profile.sampleRateHz, language: this.language });
+      } catch (error) {
+        if (this.closed || this.buffer.utteranceId !== utterance) return;
+        this.emitEvent({ type: 'error', message: error instanceof Error ? error.message : String(error) });
+        this.abandonUtterance();
+        return;
+      }
+      // A window decode that resolves after its utterance closed or moved on (endpoint
+      // abandons accumulation synchronously) is superseded by the authoritative endpoint
+      // decode — applied at most once, never duplicated.
       if (this.closed || this.buffer.utteranceId !== utterance) return;
-      this.emitEvent({ type: 'error', message: error instanceof Error ? error.message : String(error) });
-      this.abandonUtterance();
-      return;
+      const partial = this.tracker.applyWindow(endSample, usableText(transcription));
+      if (partial === null) return;
+      this.emitEvent({ type: 'partial', utteranceId: utterance, ...partial });
+    } finally {
+      this.windowInFlight = false;
     }
-    // A window decode that resolves after its utterance closed or moved on (endpoint
-    // abandons accumulation synchronously) is superseded by the authoritative endpoint
-    // decode — applied at most once, never duplicated.
-    if (this.closed || this.buffer.utteranceId !== utterance) return;
-    const partial = this.tracker.applyWindow(endSample, usableText(transcription));
-    if (partial === null) return;
-    this.emitEvent({ type: 'partial', utteranceId: utterance, ...partial });
   }
 
   /**
