@@ -37,6 +37,10 @@
 - [x] BR02-EX1: Vitest root aliases resolve new registry leaves as index.ts/subpath (ENOTDIR). Add exact mesh/platform leaf aliases in api/vitest.config.ts; test-only impact; rollback removes those aliases.
 - [x] BR02-EX1 pins all test artifacts imports to workspace dist, matching the mesh loader and keeping HTTP/MCP on one profile instance. Root lock installs an API-private artifacts copy; its profile WeakSet refuses cross-copy profiles. Production physical resolution remains W2.b's required gate.
 - [x] W2.b owns route mounting, identity/dispatch integration and root/API lock reconciliation.
+- [ ] P2-1 / W2.b acceptance: reconcile root/API locks, then call `compileAppMcpRegistry` successfully in the production image or a strict install without aliases; owner: W2.b author. Remove the following masking lines after reconciliation.
+  - [ ] `api/vitest.config.ts:17`: `'@sentropic/artifacts': fileURLToPath(new URL('../packages/artifacts/dist', import.meta.url)),`
+  - [ ] `api/tsconfig.json:8`: `"@sentropic/artifacts": ["../packages/artifacts/dist/index.d.ts"],`
+  - [ ] `api/tsconfig.json:9`: `"@sentropic/artifacts/*": ["../packages/artifacts/dist/*"]`
 - [x] W4 consumes the returned compiled registry exact-name map without sanitization.
 - [x] Compiled order: `artifacts_ensure`, `artifacts_get`, `artifacts_list`, `artifacts_publish`.
 - [ ] Independent review and final CI receipts remain required; no inherited review approves this diff.
@@ -63,6 +67,11 @@
 - [x] Lot 5 authoring: push and draft PR #785 against `feat/app-cm-integration`; PR body is this file; no merge.
   - [ ] Exact-head remote CI receipt: workflow_dispatch required for this integration base; confirm success in the PR before acceptance.
   - [ ] Independent review dispatch awaits owner OK required by `rules/subagents.md`; no reviewer verdict or consensus claimed.
+- [x] Lot 6 / P1-1: enforce W0-close.d #702 `5dfab2cf3:docs/baselines/app-cm-w0/published-tuple-2026-10-26.json` profile pin `0de19f966eacb5b63142b525611a6210a0d4aaeefbdaad92dfb3b6227575b6ef`; require explicit compatibility receipts and refuse installed schema/policy drift.
+  - [x] Red: unchanged names plus drifted list schema compiled successfully, and a missing receipt compiled successfully; 17/19 pass, two regressions fail in `/tmp/app-w2a-r1-red3.log`.
+  - [x] artifacts 0.2.1 APP-P1 manifest with `mcp:tools:invoke` qualified as `ccf8a4ddd9365537741eb0550efa49954d86a0c2d1ee808fb18ca81ef7090e9a` in that run; freeze this literal independently of runtime definitions.
+  - [x] Green: `make test-api-unit SCOPE=tests/api/app-mcp-registry.test.ts API_PORT=8794 UI_PORT=5180 MAILDEV_UI_PORT=1087 ENV=test-app-w2a` 19/19; `make typecheck-api`, `make lint-api` (0 errors/219 warnings), scope C2 pass in `/tmp/app-w2a-r1-canonical.log`; all run under the shared Docker lock.
+  - [x] Locked `make logs-api down ps` completed; API startup logged without runtime errors and no services remain: `/tmp/app-w2a-r1-cleanup.log`.
 
 ## Inherited main qualification record
 
