@@ -20,6 +20,7 @@
   - `packages/cluster-mesh/src/engram-memory/projection.ts`
   - `packages/cluster-mesh/assets/storage/postgres/engram-memory/**`
   - `packages/cluster-mesh/tests/engram-memory/**`
+  - `packages/cluster-mesh/tests/storage/postgres-memory.spec.ts`
   - `packages/cluster-mesh/src/storage/postgres/migrations.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -40,6 +41,7 @@
 - [ ] Coordinate shared loader: E6 is sole writer of memory role/selection/fingerprint substitutions in migrations.ts after E2; peer message pending automatic approval review.
 - [x] Owner excludes Comments `incompatible_version` and selected packaging fixture 0.22.2 failures; #767 owns their one-time repair.
 - [x] K7 creation may share capture's append; the inherited zero-append guard applies to completion (revision 2), preserving the approved §5.2 distinction.
+- [x] `postgres-memory.spec.ts` enrolls memory PG tests in the existing E2 real-PG lane; standalone memory lane lacks PG and is not the durable receipt.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky waiver applies.
