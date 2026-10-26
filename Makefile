@@ -4452,6 +4452,9 @@ memory-l5-e2-pin:
 memory-l5-lot2-fixture:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-fixture.mjs
 
+memory-l5-lot2-evidence:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-evidence.mjs "$$(git rev-parse HEAD)"
+
 memory-l5-lot2: memory-l5-runtime
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo 'ERROR: Lot 2 requires a verified ARTIFACT_MANIFEST'; exit 1; }
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-manifest.mjs "$(ARTIFACT_MANIFEST)"

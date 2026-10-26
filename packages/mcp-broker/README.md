@@ -8,7 +8,32 @@ Every invocation requires a verified host `StpConnectorContext` — the
 broker never manufactures identity, and a missing or untrusted context
 throws the M2 pre-dispatch protocol error (-32603) before any provider
 contact. The pure memory contract entry ships under `./memory`; the
-durable reference store arrives under `./memory-reference` in Lot 2.
+durable reference store is available under `./memory-reference` in Lot 2.
+
+`SqliteMemoryWorkflowStoreV1.open(absolutePath)` explicitly activates built-in
+SQLite on unflagged Node 22.13+, 23.4+ or the qualified Node 24 line. Root and
+contract imports do not activate it. The file must be owned by the process;
+the reference uses WAL, FULL durability, a 1000 ms busy timeout and immediate
+transactions. Qualification assumes a local filesystem supporting SQLite WAL.
+
+The host supplies current authorization, immutable policy versions, resolved
+effective inputs and trusted audit before reservation. A claim carries a finite
+lease and monotonic workflow fence; the host must check the lease/cancellation
+boundary and independently enforce the canonical engine's fence at its commit.
+Destructive claims additionally require persisted, operation-bound confirmation
+and current assurance. No reservation or canonical proof is compacted away.
+
+`reconcile` accepts only the host's authenticated canonical proof lookup, never
+caller arguments. It records the original replay result; it cannot commit a
+canonical effect. Expired executions remain unresolved until proof is found;
+an unknown outcome cannot authorize another execution. `complete` requires
+current disclosure authorization. This reference does not implement PostgreSQL
+ownership, the Engram engine, production enrollment or an OIDC service.
+
+`make memory-l5-reference` runs source-reference tests. `make memory-l5-test LOT=2
+ARTIFACT_MANIFEST=...` first requires a verified P3/E2/host manifest and sidecar.
+The committed `lot2-manifest.unverified.json` is a refusal fixture. Real installed
+E2/host crash/replay acceptance and the final E4 rerun remain separate gates.
 
 Memory selection combines the compiled tool's human-confirmation/elicitation
 gates, the host's `ctx.memory.confirmationRequired` and mandatory destructive
