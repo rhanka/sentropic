@@ -293,23 +293,68 @@ export async function waitForVersion(registry, name, version, { attempts, delayS
   return found;
 }
 
+// Polls fresh (cache-bypassing, cache-busted) packument reads until a published
+// version satisfies the full semver range, or the budget is exhausted. An
+// unsatisfiable range stays absent for the whole budget and fails closed.
+export async function waitForRange(registry, name, range, { attempts, delaySeconds, onWait = () => {}, semver = loadSemver() } = {}) {
+  const budget = waitBudget({ attempts, delaySeconds });
+  if (semver.validRange(range, { loose: false }) === null) {
+    throw new GuardError(`invalid semver range ${JSON.stringify(range)} for ${name}`);
+  }
+  let doc = null;
+  let matched = null;
+  for (let i = 1; i <= budget.attempts; i += 1) {
+    doc = await registry.packument(name, { fresh: true });
+    const versions = doc ? Object.keys(doc.versions ?? {}) : [];
+    matched = semver.maxSatisfying(versions, range, { loose: false });
+    if (matched || i === budget.attempts) break;
+    onWait(i, budget.attempts);
+    await sleep(budget.delaySeconds * 1000);
+  }
+  if (!matched) {
+    return { status: 'absent', evidence: { registry: registry.registry, name, version: range, packageFound: doc !== null } };
+  }
+  return {
+    status: 'present',
+    version: matched,
+    meta: doc.versions[matched],
+    evidence: { registry: registry.registry, name, version: matched, range, packageFound: true, integrity: doc.versions[matched]?.dist?.integrity ?? null },
+  };
+}
+
 const splitSpec = (spec) => {
   const at = typeof spec === 'string' ? spec.lastIndexOf('@') : -1;
   if (at <= 0 || at === spec.length - 1) throw new GuardError(`expected --spec <name>@<version>, got ${JSON.stringify(spec)}`);
   return { name: spec.slice(0, at), version: spec.slice(at + 1) };
 };
 
-// `wait --spec <name>@<version> [--attempts N] [--delay S]`: registry visibility wait for Make recipes.
-export async function commandWait(opts, { registry = createRegistry(), out } = {}) {
+// `wait --spec <name>@<range> [--attempts N] [--delay S]`: registry visibility wait for Make recipes.
+// An exact version keeps the single-version lookup; any other valid range waits
+// until a published version satisfies the full range. Invalid ranges throw.
+export async function commandWait(opts, { registry = createRegistry(), out, semver } = {}) {
   const { name, version } = splitSpec(opts.spec);
   const sink = out ?? process.stdout;
   const budget = waitBudget({ attempts: opts.attempts, delaySeconds: opts.delay });
-  const found = await waitForVersion(registry, name, version, { ...budget, onWait: (i, n) => sink.write(`Waiting for ${name}@${version} (${i}/${n})\n`) });
+  const resolved = semver ?? loadSemver();
+  const range = version.trim();
+  if (resolved.validRange(range, { loose: false }) === null) {
+    throw new GuardError(`invalid semver range ${JSON.stringify(version)} for ${name}`);
+  }
+  if (resolved.valid(range, { loose: false }) !== null) {
+    const found = await waitForVersion(registry, name, range, { ...budget, onWait: (i, n) => sink.write(`Waiting for ${name}@${version} (${i}/${n})\n`) });
+    if (found.status !== 'present') {
+      sink.write(`${name}@${version} is not visible on ${registry.registry} after ${budget.attempts} x ${budget.delaySeconds}s\n`);
+      return 1;
+    }
+    sink.write(`${name}@${version} is visible on ${registry.registry}\n`);
+    return 0;
+  }
+  const found = await waitForRange(registry, name, range, { ...budget, semver: resolved, onWait: (i, n) => sink.write(`Waiting for ${name}@${range} (${i}/${n})\n`) });
   if (found.status !== 'present') {
-    sink.write(`${name}@${version} is not visible on ${registry.registry} after ${budget.attempts} x ${budget.delaySeconds}s\n`);
+    sink.write(`${name}@${range} is not visible on ${registry.registry} after ${budget.attempts} x ${budget.delaySeconds}s\n`);
     return 1;
   }
-  sink.write(`${name}@${version} is visible on ${registry.registry}\n`);
+  sink.write(`${name}@${range} is visible on ${registry.registry} (matched ${found.version})\n`);
   return 0;
 }
 
