@@ -3,6 +3,8 @@ import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } f
 import type { ModelProfile, ProviderDescriptor } from './catalog.js';
 import type { ProviderId } from './providers.js';
 import type { NormalizedProviderError } from './errors.js';
+import type { EvaluatorRef, DecisionRequest } from './decision/request.js';
+import type { DecisionAdapterResult } from './decision/adapter.js';
 
 export interface CredentialValidationResult {
   ok: boolean;
@@ -17,6 +19,8 @@ export interface ProviderRuntimeContext {
 export interface ProviderAdapter {
   readonly provider: ProviderDescriptor;
   listModels(): readonly ModelProfile[];
+  listEvaluators?(): readonly EvaluatorRef[];
+  decision?(request: DecisionRequest, context?: ProviderRuntimeContext & { signal?: AbortSignal }): Promise<DecisionAdapterResult>;
   generate(request: GenerateRequest, context?: ProviderRuntimeContext): Promise<GenerateResponse>;
   stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult>;
   validateAuth(source?: AuthInput): CredentialValidationResult;
