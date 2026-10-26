@@ -1,7 +1,7 @@
 # Feature: Security autofix S1 inventory and contract
 
 ## Objective
-Implement S1 inventory and contract for autonomous daily security fixes with seats.
+- [x] Resume #732 as approved S1 inventory and contract, integrating the binding r4 owner amendment.
 
 ## Scope / Guardrails
 - Scope limited to S1 inventory and contract only.
@@ -22,7 +22,7 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
   - `scripts/security/daily/inventory.mjs`
   - `scripts/security/daily/schema.test.mjs`
   - `scripts/security/daily/inventory.test.mjs`
-  - `api/Dockerfile`
+  - `.github/workflows/ci.yml`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -31,13 +31,14 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
   - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**`
+  - `.github/workflows/ci.yml` (SECDAILY-S1-EX1 only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] SECDAILY-S1-EX1: permit only an S1 test step in the existing manifest-validation CI job; required to exercise the new contract in public CI. No schedule, permissions, gate selection or image change. Rollback removes this test step; implementation stays disabled.
 - [x] Integration: merge `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`; retain S1 plan and all 342 prior Track events. Scope-check includes incoming main files; the independent harness check against `origin/main` limits authored changes to S1.
 - [ ] Approved-r4 alignment: tests first for exact register matching, all-severity inventory, separate own-code scope, bounded grouping, complete dated reconciliation and discovered lock/hash consumers.
 - [x] Tests-first evidence: existing 14 tests passed; expanded S1 suite reproduces nine contract/inventory failures before implementation (22 tests, 13 pass, 9 fail).
@@ -47,7 +48,7 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
 - [x] Discovery alignment: enumerate independent lockfiles with dev dependencies and tracked source/hash consumers; fail on unreadable trees, symlinks and exhausted discovery bounds rather than silently truncating coverage.
 - [x] Backlog alignment: raw all-severity findings remain queued, unresolved unmatched rows remain verification-pending, expiry is computed from current rows and malformed/missing/errored reports cannot produce clean state.
 - [x] Coverage alignment: discover package/app/script/tool source roots and workspace manifests, verify the three image stages, enumerate reviewed hash consumers and expose missing locks/unknown consumers/SAST qualification as blockers.
-- `SECDAILY-EX6-note` / `attention`: toolbox path `api/Dockerfile` is listed in Allowed Paths as read-only inventory reference only, no modification in S1. It fixes the exact existing approved toolbox path (`ci-tools` and `ci-esbuild` stages) that S2c exception SECDAILY-EX6 depends on.
+- [x] SECDAILY-EX6 inventory: `api/Dockerfile` (`ci-tools` and `ci-esbuild`) is the existing approved toolbox path; S1 does not modify it or introduce an image.
 - `owner-all-public` / `acknowledge`: binding owner decision (OWNER-REQUEST.md 2026-10-23 disclosure section) supersedes the spec private-scan design. No private scan repo, everything runs in the public repos, fix PRs are public and auto-merged after other-model review and green CI. S1 contract adapted accordingly.
 
 ## AI Flaky tests
@@ -69,7 +70,7 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
 - Execution flow (mandatory):
   - Develop and run tests in `tmp/worktrees/sec-lot1`.
   - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
+  - [x] Web app, Chrome and VSCode UAT are not applicable to pure security inventory helpers.
   - Switch back to `tmp/worktrees/sec-lot1` after UAT.
 
 ## Plan / Todo (lot-based)
@@ -112,10 +113,10 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
     - [x] `make scope-check ENV=test-sec-lot1`
     - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1`
 - [x] **Lot N-1 — Docs consolidation**
-  - [x] No spec consolidation needed for S1 contract branch.
+  - [x] Contract records r4, disabled activation and the current L5 compatibility blocker; source planning documents remain unchanged.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck and lint not applicable to plain Node security scripts.
-  - [x] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1` (14 pass).
-  - [ ] Final gate step 1: create draft PR using `BRANCH.md` text as PR body.
+  - [ ] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1` after approved-r4 corrections.
+  - [ ] Final gate step 1: update existing draft #732 using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run and verify branch CI green.
   - [ ] Final gate step 3: do not merge, report PR number, head SHA, CI URL.
