@@ -140,3 +140,129 @@ export interface NeutralFenceProof {
     readonly fenceId: string;
     readonly epoch: string;
 }
+export interface NeutralWriterFence {
+    readonly fenceId: string;
+    readonly epoch: string;
+}
+export interface NeutralCommitOptions {
+    readonly limits: NeutralWorkLimits;
+    readonly idempotencyKey?: string;
+    readonly grant: NeutralScopeGrant;
+    /** Live acquisition identity: verified at entry, after waits, and at final commit validation. */
+    readonly fence: NeutralWriterFence;
+}
+export interface NeutralCommitReceipt {
+    readonly commitId: string;
+    readonly journalCursor: string;
+}
+export interface NeutralAggregateRead {
+    readonly kind: string;
+    readonly key: string;
+    readonly version: string;
+    readonly value: NeutralEncodedValue;
+}
+export interface NeutralRecordRead {
+    readonly kind: string;
+    readonly key: string;
+    readonly value: NeutralEncodedValue;
+    readonly contentHash: string;
+}
+export interface NeutralChainRecord {
+    readonly id: string;
+    readonly hash: string;
+    readonly value: NeutralEncodedValue;
+}
+export interface NeutralChainPage {
+    readonly chain: string;
+    readonly records: ReadonlyArray<NeutralChainRecord>;
+}
+export interface NeutralIdempotencySelector {
+    readonly commitIdentity: string;
+}
+export interface NeutralIdempotencyEntry {
+    readonly key: string;
+    readonly intentHash: string;
+    readonly moduleResult: NeutralEncodedValue;
+}
+export interface NeutralModuleTransaction {
+    readAggregate(kind: string, key: string): Promise<NeutralAggregateRead | null>;
+    readRecords(kind: string, keys: ReadonlyArray<string>): Promise<ReadonlyArray<NeutralRecordRead>>;
+    readChain(input: {
+        chain: string;
+        afterAllocation?: string;
+        limit: number;
+    }): Promise<NeutralChainPage>;
+    findIdempotency(selector: NeutralIdempotencySelector): Promise<NeutralIdempotencyEntry | null>;
+    apply(unit: NeutralAtomicUnit): Promise<void>;
+}
+export interface NeutralMemoryHandle {
+    readonly moduleId: string;
+    readonly descriptor: NeutralModuleDescriptor;
+    /** Closed backend class (G5 stays blocked: no Spanner member). */
+    readonly backend: "memory" | "sqlite" | "postgres";
+    readonly profiles: ReadonlyArray<NeutralProfileClaim>;
+    transact<T>(options: NeutralCommitOptions, operation: (transaction: NeutralModuleTransaction) => Promise<T>): Promise<{
+        readonly value: T;
+        readonly receipt: NeutralCommitReceipt;
+    }>;
+    /** Registered named queries of §4.1 (JCS in, JCS out). */
+    query(name: string, input: NeutralEncodedValue, grant: NeutralScopeGrant): Promise<NeutralEncodedValue>;
+    /** Snapshot aggregate read outside a transaction (grant-checked). */
+    readAggregate(kind: string, key: string, grant: NeutralScopeGrant): Promise<NeutralAggregateRead | null>;
+    /**
+     * Scoped, authority- and ownership-checked commit-result recovery (R-G4-7).
+     * Null when absent. Optional: a port without it degrades post-restart
+     * original-receipt replay to an explicit refusal (C4 open), never to a
+     * recomputed substitute.
+     */
+    readCommitResult?(commitIdentity: string, grant: NeutralScopeGrant): Promise<NeutralEncodedValue | null>;
+    /** Canonical-instance acquisition (R-G3-1): refuses a second live holder, never queues. */
+    acquireFence(input: {
+        scope: NeutralStorageScope;
+        store_id: string;
+        grant: NeutralScopeGrant;
+    }): Promise<NeutralFenceProof>;
+    /**
+     * Freshness proof bound to the acquisition identity (binding §§9.3–9.6):
+     * throws NeutralStorageError on loss, expiry, revocation, or epoch/fence mismatch.
+     */
+    checkFence(grant: NeutralScopeGrant, fence: NeutralWriterFence): Promise<void>;
+    /** Acquisition-bound release: only the live holder clears the fence; a stale identity never clears a successor. */
+    releaseFence(fence: NeutralWriterFence): Promise<void>;
+}
+/**
+ * Grant-bound scoped surface returned by a binding `bind` call: the grant
+ * is captured at bind time, so methods carry no per-call grant.
+ */
+export interface NeutralBoundScope {
+    transact<T>(options: Omit<NeutralCommitOptions, "grant">, operation: (transaction: NeutralModuleTransaction) => Promise<T>): Promise<{
+        readonly value: T;
+        readonly receipt: NeutralCommitReceipt;
+    }>;
+    query(name: string, input: NeutralEncodedValue): Promise<NeutralEncodedValue>;
+    readAggregate(kind: string, key: string): Promise<NeutralAggregateRead | null>;
+    readCommitResult?(commitIdentity: string): Promise<NeutralEncodedValue | null>;
+    acquireFence(input: {
+        scope: NeutralStorageScope;
+        store_id: string;
+    }): Promise<NeutralFenceProof>;
+    checkFence(fence: NeutralWriterFence): Promise<void>;
+    releaseFence(fence: NeutralWriterFence): Promise<void>;
+}
+/**
+ * Specified binding interface (binding §6.2, L3a §6.3): the composition
+ * binds a grant to a scope and receives the scoped surface. The delivered
+ * generic binding is synchronous while the Postgres binding is
+ * asynchronous; the constructor awaits either shape and MUST NOT assume
+ * one. A pre-bound flat NeutralMemoryHandle stays consumable as-is.
+ */
+export interface NeutralModuleStorageBinding {
+    readonly moduleId: string;
+    readonly descriptor: NeutralModuleDescriptor;
+    /** Closed backend class (G5 stays blocked: no Spanner member). */
+    readonly backend: "memory" | "sqlite" | "postgres";
+    readonly profiles: ReadonlyArray<NeutralProfileClaim>;
+    bind(grant: NeutralScopeGrant): NeutralBoundScope | Promise<NeutralBoundScope>;
+}
+
+/** Authoritative scope binding for one canonical store (binding §7.2). */
