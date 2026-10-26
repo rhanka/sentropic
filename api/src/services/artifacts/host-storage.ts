@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { KvPort } from '@sentropic/artifacts/server/ports';
 
 const require = createRequire(import.meta.url);
@@ -27,7 +27,7 @@ export const artifactMigrationAssets = Object.freeze([
 
 /** Called only by the API migration runner, after the control stream. */
 export async function installArtifactPackageAssets(
-  pool: Pool,
+  connection: Pool | PoolClient,
   load: (id: string) => string = (id) => artifactMigrationAssets.find((asset) => asset.id === id)!.read(),
 ): Promise<void> {
   // Validate every file before acquiring a connection or executing any asset.
@@ -38,7 +38,8 @@ export async function installArtifactPackageAssets(
     }
     return { ...asset, source };
   });
-  const client = await pool.connect();
+  const ownsClient = !('release' in connection);
+  const client = 'release' in connection ? connection : await connection.connect();
   try {
     await client.query('BEGIN');
     await client.query(`SELECT pg_advisory_xact_lock(hashtext('sentropic:artifact-package-migrations'))`);
@@ -72,7 +73,7 @@ export async function installArtifactPackageAssets(
     await client.query('ROLLBACK');
     throw error;
   } finally {
-    client.release();
+    if (ownsClient) client.release();
   }
 }
 
