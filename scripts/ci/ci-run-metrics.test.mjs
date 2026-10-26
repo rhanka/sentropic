@@ -13,6 +13,7 @@ import {
   captureRecords,
   concurrencyPeak,
   criticalPathScheduling,
+  contentionReceipt,
   releaseContinuity,
   dedupeJobs,
   deliveryElapsed,
@@ -61,6 +62,26 @@ test('should never label an interrupted main release superseded by a later main 
   const rows = [job({ runId: 1, headBranch: 'main', conclusion: 'cancelled' }),
     job({ runId: 2, headBranch: 'main' })];
   assert.equal(cancellationOwnership(rows).cancelled[0].ownership, 'current');
+});
+
+test('should require identified simultaneous executions and complete runs for combined admission', () => {
+  const capture = (id, branch, conclusion = 'success') => ({
+    run: { id, status: 'completed', run_attempt: 1, head_branch: branch },
+    records: [job({ runId: id, headBranch: branch, conclusion, name: 'ci-gate' })],
+    endpoints: { qualification: ['ci-gate'] }, capacity: { availableSlots: 2, reserveSlots: 2 },
+  });
+  const main = capture(1, 'main');
+  const old = capture(2, 'chore/x', 'cancelled');
+  const current = capture(3, 'chore/x');
+  const receipt = contentionReceipt([current, main, old]);
+  assert.equal(receipt.observedPeak, 3);
+  assert.equal(receipt.admission.status, 'over-capacity');
+  assert.equal(receipt.overlaps[0].witness.seconds, 224);
+  assert.equal(receipt.cancellation.superseded, 1);
+  assert.equal(receipt.releases[0].continuity.continuous, true);
+  assert.equal(contentionReceipt([current, { ...main, run: { ...main.run, status: 'in_progress' } }]).admission.status, 'to-measure');
+  assert.equal(contentionReceipt([current, { ...main, records: main.records.map(row => ({ ...row, conclusion: 'skipped' })) }])
+    .overlaps[0].witness, null);
 });
 
 test('should retain Jobs API identities and step timestamps without inventing readiness', () => {
