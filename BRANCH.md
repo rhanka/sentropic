@@ -25,6 +25,7 @@
   - [x] Record explicit exception before extending scope; none planned.
 ## Feedback Loop
 - [x] Main has only pre-candidate Lot 1; candidate proof files are missing; standalone Docker recipes violate the mandatory lock policy.
+- [x] FAIL evidence: [qualification report](spec/evidence/memory-mcp-l5/candidate-0212/REPORT.md); no runtime qualification or receipt claimed.
 ## AI Flaky tests
 - [x] No waiver and no missing proof treated as passed.
 ## Orchestration Mode (AI-selected)
@@ -37,5 +38,5 @@
 - [x] Input snapshots: P2 archives, packed surface, all registry hashes and external publisher receipt verified.
 - [x] Execution evidence: existing gate dry run only; shared-lock make down completed; no test stack started.
 - [x] Lot 1: audit candidate/catalog; record FAIL with missing P01-P09 files and unexecuted P10; no receipt.
-- [ ] Lot 2: push evidence and open draft PR; do not merge.
+- [x] Lot 2: evidence pushed; draft PR #762 opened; no merge authorized or performed.
 - [ ] Acceptance: full candidate gate and schema-valid receipt (blocked; no receipt issued).
