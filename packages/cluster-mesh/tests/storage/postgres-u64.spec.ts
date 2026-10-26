@@ -58,7 +58,7 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
     } finally { await fixture.close(); }
   });
   it.each(['9007199254740992', '9223372036854775808', U64_MAX])('replays, checkpoints and snapshots exact journal positions at %s', async (next) => {
-    const descriptor = { contractVersion: 'v1', contractDigest: 'u64-snapshot', schemaVersions: ['1'], requiredProfiles: [], optionalProfiles: [], chainKinds: [], queryNames: ['scope-chain-index'], boundaries: [], pageLimits: { maxRecords: 10, maxEncodedBytes: 1048576 } };
+    const descriptor = { contractVersion: 'v1', contractDigest: 'u64-snapshot', schemaVersions: ['1'], requiredProfiles: [], optionalProfiles: [], chainKinds: ['test'], queryNames: ['scope-chain-index'], boundaries: ['scope'], pageLimits: { maxRecords: 10, maxEncodedBytes: 1048576 } };
     const fixture = await createPgFixture({ descriptor, queries: { 'scope-chain-index': async (_input, context) => {
       const result = await context.session.execute({ text: `SELECT "${context.layout.dataSchema}".map_get($1::bigint,$2) AS value`, values: [context.root, '["record","u64-record"]'] });
       return { records: [JSON.parse(Buffer.from(result.rows[0]!.value as Uint8Array).toString('utf8'))], nextCursor: null };
@@ -175,7 +175,8 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
     const fixture = await createPgFixture({ moduleId: 'engram-memory', validateEffects: async (unit) => validateMemoryEffects(unit) });
     try {
       const root = await fixture.open();
-      const bound = await root.bindNew(grantFor({ operations: ['read', 'write'] }));
+      const grant = grantFor({ moduleId: 'engram-memory', operations: ['read', 'write'] });
+      const bound = await root.bindNew(grant);
       const key = JSON.stringify(kind === 'memory-state-v1' ? [kind, 'candidate', 'u64'] : [kind, 'u64']);
       const value = { format: 'utf8', data: JSON.stringify({ candidateId: 'u64', outcome: 'accepted', proof: { cursor: U64_MAX } }) } as const;
       for (const version of ['9007199254740991', '9007199254740992', SIGNED_MAX, '9223372036854775808', '18446744073709551614', U64_MAX]) {
@@ -188,7 +189,7 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
       }
       await expect(bound.commitAtomic({ ...recordUnit(), updates: [{ key, version: '18446744073709551616', value }] } as unknown as AtomicUnit)).rejects.toMatchObject({ code: 'invalid-command' });
       const reopened = await fixture.open();
-      const rebound = await reopened.bindNew(grantFor({ operations: ['read', 'write'] }));
+      const rebound = await reopened.bind(grant);
       expect((await rebound.readAggregate(key))?.version).toBe(U64_MAX);
       await rebound.commitAtomic({ ...recordUnit(), guards: [{ kind: 'aggregate-version', key, version: U64_MAX }] } as unknown as AtomicUnit);
     } finally { await fixture.close(); }
