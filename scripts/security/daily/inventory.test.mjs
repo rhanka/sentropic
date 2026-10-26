@@ -138,15 +138,19 @@ test('should inventory the current register separately from its historical 67-ro
   const requireTool = createRequire(join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'));
   const document = requireTool('yaml').parse(readFileSync('.security/vulnerability-register.yaml', 'utf8'));
   const rows = normalizeRegister(document, 'rhanka/sentropic');
-  assert.equal(rows.filter((row) => row.status === 'accepted_temporary').length, 68);
+  const pending = Object.entries(document.vulnerability_register.vulnerabilities).filter(([, row]) => row.status !== 'resolved');
   const report = summarizeBacklog([], rows, { today: '2026-10-26', complete: true });
-  assert.equal(report.unresolvedRegister, 68);
-  assert.equal(report.expired, 7);
-  assert.equal(report.expiryHistogram['2026-11-20'], 60);
-  assert.equal(report.staleContainerCandidates, 7);
-  assert.equal(report.expiryHistogram['2026-10-30'], 1);
-  assert.equal(report.verificationPending.length, 68);
-  assert.equal(report.status, 'complete-with-findings');
+  assert.equal(report.unresolvedRegister, pending.length);
+  assert.deepEqual(report.verificationPending.map((row) => row.registerKey), pending.map(([key]) => key));
+  assert.equal(report.status, pending.length ? 'complete-with-findings' : 'complete-clean');
+  // Legitimate removal-only reconciliation must never require editing this test or a frozen count.
+  if (pending.length) {
+    const reconciled = structuredClone(document);
+    delete reconciled.vulnerability_register.vulnerabilities[pending[0][0]];
+    const after = summarizeBacklog([], normalizeRegister(reconciled, 'rhanka/sentropic'), { today: '2026-10-26', complete: true });
+    assert.equal(after.unresolvedRegister, report.unresolvedRegister - 1);
+    assert.equal(after.verificationPending.length, report.verificationPending.length - 1);
+  }
   assert.ok(rows.every((row) => row.registerKey));
   assert.throws(() => normalizeRegister({}), /register/);
 });
