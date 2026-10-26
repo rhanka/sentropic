@@ -101,7 +101,7 @@
       "requires": [
         "cluster-mesh-pg/007-consumed-counters@1"
       ],
-      "checksum": "7e4520bf72d95565ba06ebb593401c4d3424762adc4678497d7e75c49b798542"
+      "checksum": "d6a45b8760eaf783da6561f9b40d3bfff80807e6381cd0df3ebfe36c830c6554"
     }
   ]
 }
