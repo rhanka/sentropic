@@ -78,3 +78,4 @@
 - [x] Atomic artifact: test(decision): cover native route and tariff admission.
 - [x] Atomic artifact: test(decision): bound dedicated Decisions transport.
 - [x] Atomic artifact: feat(decision): declare native Decisions candidate and request.
+- [x] Atomic artifact: feat(decision): decode typed Decisions answers and usage.
