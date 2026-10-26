@@ -1,12 +1,11 @@
 // Local STT session tests (r3 L3): one final, teardown without
 // starvation, worker isolation, no audio in events.
 import { describe, expect, it } from 'vitest';
-import { fileURLToPath } from 'node:url';
 import { LocalSttSession, type LocalSttEvent } from '../src/node/local-stt.js';
 import { NodeWorkerClient, SessionClosedError, type WorkerPort } from '../src/node/worker-port.js';
 import type { SttTranscription } from '../src/node/engine-port.js';
 import { selectLocalSttProfile } from '../src/node/profiles.js';
-import { assertNoAudioPayload, concat, FakePort, flush, SEG, silence, tone } from './helpers.js';
+import { assertNoAudioPayload, concat, fakeClientOptions, FakePort, flush, SEG, silence, tone } from './helpers.js';
 
 const tiny = () => selectLocalSttProfile('local-tiny');
 
@@ -98,12 +97,7 @@ describe('teardown without starvation', () => {
   });
 
   it('should keep the event loop responsive while the worker is stuck, then stop it', async () => {
-    const engineModule = fileURLToPath(new URL('./fixtures/fake-engine.mjs', import.meta.url));
-    const client = await NodeWorkerClient.create({
-      engineModule,
-      engineOptions: { script: [{ hang: true }] },
-      modelPath: 'fake-model',
-    });
+    const client = await NodeWorkerClient.create(fakeClientOptions([{ hang: true }]));
     const pending = client.transcribe(new Float32Array(160), { sampleRateHz: 16000 });
     let responsive = false;
     await new Promise((resolve) => setImmediate(resolve));
@@ -115,11 +109,8 @@ describe('teardown without starvation', () => {
   });
 
   it('should reject session creation when the worker engine module is missing', async () => {
-    await expect(NodeWorkerClient.create({
-      engineModule: '/nonexistent/fake-engine.mjs',
-      modelPath: 'fake-model',
-      timeoutMs: 5000,
-    })).rejects.toThrow();
+    const options = { ...fakeClientOptions([]), engineModule: '/nonexistent/fake-engine.mjs', timeoutMs: 5000 };
+    await expect(NodeWorkerClient.create(options)).rejects.toThrow();
   });
 });
 
