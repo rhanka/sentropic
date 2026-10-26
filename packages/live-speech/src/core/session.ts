@@ -42,6 +42,37 @@ export interface SessionState {
 }
 /** Storage owns serialization, durability, rollback and isolation; callbacks must be synchronous. */
 export interface Journal { transact<T>(change: (draft: SessionState) => T): Promise<T> }
+export interface JournalSnapshot { revision: number; state: SessionState }
+/** Host storage must make read/CAS linearizable and acknowledge only durable commits. */
+export interface AtomicJournalStorage {
+  read(key: string): Promise<JournalSnapshot | undefined>;
+  compareAndSwap(key: string, expectedRevision: number | undefined, next: JournalSnapshot): Promise<boolean>;
+}
+/** Portable durable-journal coordinator; there is deliberately no memory-only production default. */
+export class SessionJournal implements Journal {
+  private readonly initial: SessionState;
+  constructor(private readonly storage: AtomicJournalStorage, private readonly key: string, initial: SessionState) {
+    if (!key) throw new Error('Trusted journal storage key required');
+    this.initial = structuredClone(initial);
+  }
+  async transact<T>(change: (draft: SessionState) => T): Promise<T> {
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const previous = await this.storage.read(this.key);
+      const draft = structuredClone(previous?.state ?? this.initial);
+      if (draft.schemaVersion !== 1 || (previous && (!Number.isSafeInteger(previous.revision) || previous.revision < 0))) {
+        throw new Error('Unsupported journal snapshot');
+      }
+      assertScope(draft, this.initial.scope);
+      const result = change(draft);
+      if (result && typeof result === 'object' && 'then' in result) throw new Error('Journal callbacks must be synchronous');
+      const isolated = structuredClone(result);
+      if (previous && same(previous.state, draft)) return isolated;
+      const next = { revision: (previous?.revision ?? -1) + 1, state: structuredClone(draft) };
+      if (await this.storage.compareAndSwap(this.key, previous?.revision, next)) return isolated;
+    }
+    throw new Error('Journal contention; no transition acknowledged');
+  }
+}
 /** This port never exposes or modifies opaque provider history. */
 export interface ControlPort {
   start(turn: TurnRef & { inputRef: string }): Promise<{ nativeTurnId: string }>;
