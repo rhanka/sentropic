@@ -44,7 +44,7 @@ test('register join keeps 67 rows with expiry state, seven stale-container candi
     { id: 'old-1', review_due: '2026-10-11' },
   ];
   const kept = joinRegister({ id: 'kept-1' }, rows);
-  assert.equal(kept.register, 'registered-exception');
+  assert.equal(kept.register, 'none'); // Missing affected identity cannot annotate a raw finding.
   assert.equal(joinRegister({ id: 'missing' }, rows).register, 'none');
   assert.equal(joinRegister({ id: 'other' }, []).queue, 'queued');
 });

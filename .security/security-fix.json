@@ -1,12 +1,14 @@
 {
   "$schema": "security-fix-contract-v1",
   "contract": "S1 inventory and contract",
-  "specRef": "spec-plan.md r3 sha256 0d7c8345",
+  "specRef": "spec-plan.md r4, binding public-operation and own-code amendment to approved r3 sha256 0d7c8345",
+  "enabled": false,
   "ownerOverride": "OWNER-REQUEST.md 2026-10-23 disclosure section, binding: no private scan repo, everything runs in the public repos, supersedes the spec private-scan design",
   "runtime": "public repositories only, no private scan repo or private storage assumed; scan workflows, reports and fix PRs are public; goal zero open vulnerability at all times",
   "severity": {
     "actionable": ["HIGH", "CRITICAL"],
     "informational": ["MEDIUM", "LOW"],
+    "inventory": ["UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"],
     "rawMeansBeforeSuppression": true,
     "identicalFlagsRequired": true
   },
@@ -18,10 +20,13 @@
     ],
     "locks": [
       "package-lock.json",
-      "ui/package-lock.json",
-      "docs/governance/kit/package-lock.json"
+      "api/package-lock.json", "ui/package-lock.json",
+      "docs/governance/kit/package-lock.json", "apps/auth-idp/web/package-lock.json",
+      "e2e/package-lock.json", "tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json"
     ],
     "sastRoots": ["api/src", "ui/src"],
+    "sourceTrees": ["api", "ui", "packages", "apps", "scripts", "tools", "docs/governance/kit"],
+    "lockExclusions": ["historical L5 lock snapshots", "test fixtures"],
     "sastBlockedUntil": "S2c native Rust ast-grep qualification",
     "toolbox": {
       "path": "api/Dockerfile",
@@ -29,6 +34,7 @@
     }
   },
   "register": {
+    "baselineNote": "Historical r3 snapshot only; derive current outstanding rows and expiry from each scanned main, never from these baseline counts",
     "baselineOutstanding": 67,
     "due2026-11-20": 60,
     "expired": { "total": 7, "due2026-02-26": 1, "due2026-10-11": 6 },
@@ -48,13 +54,20 @@
       "existing image pin digest and associated patch-version tokens in same registry/repository OS release purpose architecture family with attested patch-only delta",
       "declared deterministic derived pins such as l5-root-lock"
     ],
-    "deny": ["source", "tests", "docs", "new dependency/override", "minor/major upgrade", "Docker instruction", "runtime config", "policy", "workflow", "Makefile", "gate", "register", "allowlist", "generated source", "L5 packed-closure", "history archive"],
+    "deny": ["undeclared source/tests", "docs", "new dependency/override", "minor/major upgrade", "Docker instruction", "runtime config", "policy", "workflow", "Makefile", "gate", "new/renewed/broadened exception", "allowlist", "generated source", "L5 packed-closure", "history archive"],
+    "ownCode": {
+      "enabled": false, "sourcePaths": [], "testPaths": [], "patchVersionFields": [],
+      "admission": "Exact paths require reviewed protected-main policy before authoring; separate lot with before/after reproducer and regression proof; no dependency changes or weakened tests"
+    },
+    "reconciliation": { "removalOnly": true, "separateLot": true, "automaticMerge": true },
     "undeclaredRefuses": true,
     "branchFileAbsentFromDiff": true,
-    "registerByteIdentical": true
+    "registerByteIdenticalOnRepairs": true
   },
   "derivedPins": {
     "l5-root-lock": {
+      "enabled": false,
+      "blocker": "Current main also binds lockFingerprint, declaredLockSnapshot and toolchainSnapshots in verifyPreCandidate; qualify compatibility at S5a, never broaden the single-field rule at runtime",
       "input": "exact bytes of root package-lock.json",
       "outputs": ["tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json#source.declaredLockSha256", "tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256"],
       "algorithm": "replace only that JSON string preserving every other byte, write lowercase sha256 of manifest bytes plus LF to sidecar",
@@ -77,7 +90,7 @@
     "ref": "scripts/ci/publishable-manifests.mjs bumpGate"
   },
   "reconciliation": {
-    "kind": "removal-only, separate from automatic lots",
+    "kind": "removal-only, separate automatic-merge class",
     "scansRequired": 2,
     "exactSurfacePlatformPathFlags": true,
     "resetOn": ["missing day", "error", "recurrence", "path change", "flag change", "policy change"],

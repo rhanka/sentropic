@@ -41,6 +41,7 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
 - [x] Integration: merge `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`; retain S1 plan and all 342 prior Track events. Scope-check includes incoming main files; the independent harness check against `origin/main` limits authored changes to S1.
 - [ ] Approved-r4 alignment: tests first for exact register matching, all-severity inventory, separate own-code scope, bounded grouping, complete dated reconciliation and discovered lock/hash consumers.
 - [x] Tests-first evidence: existing 14 tests passed; expanded S1 suite reproduces nine contract/inventory failures before implementation (22 tests, 13 pass, 9 fail).
+- [x] Contract alignment: all-severity public inventory, disabled exact own-code paths, separate automatic reconciliation, exact exception joins and explicit current-main L5 compatibility blocker.
 - `SECDAILY-EX6-note` / `attention`: toolbox path `api/Dockerfile` is listed in Allowed Paths as read-only inventory reference only, no modification in S1. It fixes the exact existing approved toolbox path (`ci-tools` and `ci-esbuild` stages) that S2c exception SECDAILY-EX6 depends on.
 - `owner-all-public` / `acknowledge`: binding owner decision (OWNER-REQUEST.md 2026-10-23 disclosure section) supersedes the spec private-scan design. No private scan repo, everything runs in the public repos, fix PRs are public and auto-merged after other-model review and green CI. S1 contract adapted accordingly.
 
