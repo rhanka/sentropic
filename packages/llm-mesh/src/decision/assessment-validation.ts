@@ -38,6 +38,9 @@ function isRow(v: unknown): v is DecisionAssessmentRow {
 /** Parse detached recorded data only. A claimed report status has no authority. */
 export function parseDecisionAssessment(candidate: unknown, scope: DecisionQualificationScope,
   descriptor: DecisionEvaluatorDescriptor): DecisionAssessment | null {
+  if (!isRecord(scope) || !hasOnlyKeys(scope, ['executionDigest', 'evaluator', 'criterionDigest', 'criterionKind', 'policyDigest'])
+    || !digest(scope.executionDigest) || !digest(scope.criterionDigest) || !digest(scope.policyDigest)
+    || !['binary', 'graded', 'choice'].includes(scope.criterionKind)) return null;
   const snapshot = snapshotBoundedJson(candidate, 16 * 1024 * 1024);
   const v = snapshot.ok ? snapshot.value : null;
   if (!isRecord(v) || !hasOnlyKeys(v, ['schemaVersion', 'scope', 'executionDigest', 'criterion', 'date', 'evidenceKind', 'sourceRefs',
@@ -47,7 +50,7 @@ export function parseDecisionAssessment(candidate: unknown, scope: DecisionQuali
     || typeof v.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v.date) || !Number.isFinite(Date.parse(v.date))
     || v.evidenceKind !== 'recorded' || v.access !== 'verified' || !texts(v.sourceRefs)
     || !isText(v.authorizationRef) || v.policyFrozenBeforeAssessment !== true || v.thresholdSelectedOn !== 'tuning'
-    || digestStructuredArtifact(v.policy) !== scope.policyDigest
+    || !isRecord(v.policy) || digestStructuredArtifact(v.policy) !== scope.policyDigest
     || !count(v.attemptCap) || v.attemptCap < 1 || !isMicroUsd(v.costCapMicroUsd)
     || !isRecord(v.dataset) || !hasOnlyKeys(v.dataset, ['revision', 'splitRevision', 'samples'])
     || !isText(v.dataset.revision) || !isText(v.dataset.splitRevision)
