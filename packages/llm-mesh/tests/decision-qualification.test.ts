@@ -11,6 +11,7 @@ describe('criterion-scoped production admission', () => {
   it('should deny production before credentials or spend when calibration is missing', async () => {
     const f = decisionServiceFixture();
     delete f.descriptor.executionProfile;
+    delete f.options.executionProfile;
     f.options.registry = (await import('../src/registry.js')).createProviderRegistry([
       (await import('../src/decision/adapter.js')).createJevAdapter({ descriptor: f.descriptor, transport: f.transport }),
     ]);

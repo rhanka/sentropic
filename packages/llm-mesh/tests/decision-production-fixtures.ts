@@ -8,6 +8,7 @@ export function productionFixture() {
   const f = decisionServiceFixture();
   const a = assessmentFixture();
   delete a.descriptor.executionProfile;
+  delete f.options.executionProfile;
   f.options.registry = createProviderRegistry([createJevAdapter({ descriptor: a.descriptor, transport: f.transport })]);
   f.options.resolveEvaluator = () => a.descriptor;
   f.options.readiness = { contractConformance: true, transportAccessible: true, policy: a.policy, assessments: [a.assessment] };

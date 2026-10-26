@@ -124,6 +124,7 @@ export function createDecisionService(supplied: DecisionServiceOptions): Decisio
     supplied.budget?.admit, supplied.budget?.markDispatched, supplied.budget?.release, supplied.budget?.settle,
     supplied.receipts?.persist].every((port) => typeof port === 'function')
     || !isEvaluatorAllowlist(supplied.evaluatorAllowlist)
+    || (supplied.executionProfile !== undefined && supplied.executionProfile !== 'production' && supplied.executionProfile !== 'qualification')
     || !readiness.ok
     || !policy.ok || !isRecord(policy.value)
     || !hasOnlyKeys(policy.value, ['timeoutMs', 'maxCostMicroUsd', 'allowRaw'])
@@ -131,21 +132,24 @@ export function createDecisionService(supplied: DecisionServiceOptions): Decisio
       || typeof policy.value.timeoutMs !== 'number' || policy.value.timeoutMs < 1 || policy.value.timeoutMs > 60000))
     || (policy.value.maxCostMicroUsd !== undefined && !isMicroUsd(policy.value.maxCostMicroUsd))
     || (policy.value.allowRaw !== undefined && typeof policy.value.allowRaw !== 'boolean')) throw new Error('Invalid decision host configuration.');
-  const options = { ...supplied, policy: freezeDecisionData(policy.value as DecisionHostPolicy),
+  const options = { ...supplied, executionProfile: supplied.executionProfile ?? 'production', policy: freezeDecisionData(policy.value as DecisionHostPolicy),
     readiness: freezeDecisionData(readiness.value as DecisionServiceOptions['readiness']),
     evaluatorAllowlist: freezeDecisionData(supplied.evaluatorAllowlist.map((entry) => ({ ...entry }))) };
   const productionReady = createDecisionReadinessCheck(options.readiness);
   return { async decide(candidate, callOptions) {
     const execution = beginDecisionExecution(candidate, { clock: options.clock, generateId: options.generateId,
       timeoutMs: options.policy.timeoutMs, signal: callOptions?.signal });
+    if (options.executionProfile === 'qualification') execution.receipt.experimental = true;
     const result = await runWithDecisionDeadline(execution, async () => {
       if (execution.idError) return persistDecisionResult(execution, options.receipts, createDecisionError('MESH_UNAVAILABLE', 'preflight'));
       const interrupted = decisionInterruption(execution, 'preflight');
       if (interrupted) return persistDecisionResult(execution, options.receipts, interrupted);
       const selection = await preflightDecisionRequest(candidate, options);
       if (!selection.ok) return persistDecisionResult(execution, options.receipts, createDecisionError(selection.code, 'preflight'));
+      if ((selection.descriptor.executionProfile ?? 'production') !== options.executionProfile) {
+        return persistDecisionResult(execution, options.receipts, createDecisionError('PROVIDER_UNAVAILABLE', 'preflight'));
+      }
       execution.receipt.evaluator = { ...selection.descriptor.evaluator };
-      if (selection.descriptor.executionProfile === 'qualification') execution.receipt.experimental = true;
       execution.receipt.retention = structuredClone(selection.descriptor.retention);
       const admitted = await admitDecision(execution, selection, options, productionReady);
       if (!admitted.ok) return persistDecisionResult(execution, options.receipts, admitted.error);
