@@ -53,7 +53,7 @@
   - [x] ordering.test.ts: one commit/submission, pairing/dedupe, stale generations, barrier, partial/stale risk acceptance and fresh authorization fixtures authored first.
   - [x] playback.test.ts: actual rendered samples, stale output, bounded queue and connection/turn epochs authored first.
   - [x] usage-receipts.test.ts: estimate/true-up dedupe, dimensions, restart and payload exclusion authored first.
-  - [ ] Record failing scoped runs before implementation.
+  - [x] Red at 4f03beab7: scoped interrupt suite fails on missing core/session.js before source implementation.
 - [ ] **Lot 2 — Implementation**
   - [ ] core/session.ts: trusted scoped authority, atomic journal, persisted epochs/tombstones, opaque control port.
   - [ ] core/interrupt.ts: all-class fence receipts, outcome pairing, effect barrier and typed authenticated risk acceptance.
