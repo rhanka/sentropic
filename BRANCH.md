@@ -50,6 +50,7 @@
 - [x] Lot 1: filenames frozen above; tests first for namespace/bindings, collisions, expiry, commit visibility and uncertainty.
   - [x] Red: scoped integration target fails on missing postgres-activation module before implementation (2026-10-26).
   - [x] Add commit acknowledgement and uncertain-commit unit vectors in postgres-activation.test.ts.
+  - [x] Correct the SQL unit double to return the ticket for a DELETE containing a flow subquery; real PG vectors pass.
 - [x] Lot 2: versioned SQL, TicketStore/flow port, atomic consume, bounded cleanup and invalidation.
   - [x] Versioned SQL: immutable rows, full binding FK, namespace generation, 60s cap and indexed expiry.
   - [x] Companion flow/authority ports and leased transaction boundary; unknown COMMIT destroys the connection.

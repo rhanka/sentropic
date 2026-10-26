@@ -21,6 +21,7 @@ function world(commit: () => Promise<unknown> = async () => ({ rows: [] })) {
   const query = vi.fn(async (sql: string) => {
     if (sql === 'COMMIT') return commit();
     if (sql.includes('SELECT generation')) return { rows: [{ generation: '1' }] };
+    if (sql.startsWith('DELETE FROM artifact_host.activation_tickets')) return { rows: [{ payload: ticket }], rowCount: 1 };
     if (sql.includes('browser_flows')) return { rows: [{ payload: flow }], rowCount: 1 };
     if (sql.includes('activation_tickets')) return { rows: [{ payload: ticket }], rowCount: 1 };
     return { rows: [] };
