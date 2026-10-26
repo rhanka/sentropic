@@ -84,23 +84,43 @@ export function createArtifactHostJobs(options: {
   return {
     async cleanup() {
       await authorize('cleanup');
-      const client = await executor.beginFinalization();
-      let failure: unknown;
-      try {
-        await authorize('cleanup');
-        const { rows } = await client.query<{ now: string }>(
-          'SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::text AS now', []);
-        const store = storeFor(client);
-        await scheduleBoundedPreparationCleanup({ intents: store, refs: store,
-          blobs: guardedBlobs('cleanup'), claims: createPostgresDeletionClaimStore(client), cleanupBatchSize: limit }, Number(rows[0]!.now));
-        await client.commit();
-      } catch (error) {
-        failure = error;
-        try { await client.rollback(); } catch (rollback) { failure = rollback; }
-        throw error;
-      } finally { client.release(failure); }
+      const { rows } = await options.pool.query<{ now: string }>(
+        'SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::text AS now');
+      const now = Number(rows[0]!.now);
+      const store = storeFor(options.pool);
+      const failures: unknown[] = [];
+      for (const candidate of await store.listPreparationIntents({ throughMs: now, limit })) {
+        const client = await executor.beginFinalization();
+        let failure: unknown;
+        try {
+          await authorize('cleanup');
+          // Intents/refs persist independently; only deletion claims share this item's transaction.
+          await scheduleBoundedPreparationCleanup({ intents: { ...store,
+            listPreparationIntents: async () => [candidate] }, refs: store,
+          blobs: guardedBlobs('cleanup'), claims: createPostgresDeletionClaimStore(client), cleanupBatchSize: 1 }, now);
+          await client.commit();
+        } catch (error) {
+          failure = error;
+          try { await client.rollback(); } catch (rollback) { failure = rollback; }
+          failures.push(error);
+        } finally { client.release(failure); }
+        if (failure !== undefined) {
+          const message = failure instanceof AggregateError ? failure.errors.map(String).join('; ') : String(failure);
+          // Retain original attribution; defer retryable debt so it cannot monopolize the next page.
+          await options.pool.query(`UPDATE artifacts.object_intents SET state = 'failed',
+            error = CASE WHEN error LIKE 'invalid preparation metadata%' THEN error ELSE $2 END,
+            payload = payload || jsonb_build_object(
+              'hostCleanupRetries', COALESCE((payload->>'hostCleanupRetries')::int, 0) + 1,
+              'hostCleanupOriginalDeadlineMs', COALESCE(payload->'hostCleanupOriginalDeadlineMs', payload->'cleanupDeadlineMs'),
+              'cleanupDeadlineMs', CASE WHEN error LIKE 'invalid preparation metadata%'
+                THEN payload->'cleanupDeadlineMs' ELSE to_jsonb($3::bigint) END), updated_at = now()
+            WHERE id = $1 AND state <> 'done'`, [candidate.intentId, message, now + 60000]);
+        }
+      }
       await authorize('cleanup');
-      return options.activation?.cleanup(limit);
+      const activation = await options.activation?.cleanup(limit);
+      if (failures.length) throw new AggregateError(failures, 'Artifact preparation cleanup failed; debt recorded');
+      return activation;
     },
     async collect(storageScopeId: string, cursor?: string) {
       await authorize('collect');
