@@ -1,5 +1,5 @@
-import { isValidScope, same, scopeFields } from './session.js';
-import type { Scope } from './session.js';
+import { getTurn, isValidScope, same, scopeFields } from './session.js';
+import type { Journal, Scope } from './session.js';
 
 export interface UsageEntry {
   operationId: string; attemptId: string; scope: Scope; turnEpoch: number; submitKey: string;
@@ -20,7 +20,7 @@ const nonnegative = (value: number) => Number.isFinite(value) && value >= 0;
 /** Operational receipts only. L8 binds reservations and settlement to the existing billing ledger. */
 export class UsageReceipts {
   constructor(private readonly journal: UsageJournal,
-    private readonly verifySignature: (entry: UsageEntry) => Promise<boolean>) {}
+    private readonly verifySignature: (entry: UsageEntry) => Promise<boolean>, private readonly turns: Journal) {}
 
   async record(input: UsageEntry): Promise<boolean> {
     if (Object.keys(input).some(k => !fields.includes(k))
@@ -40,9 +40,14 @@ export class UsageReceipts {
       || [entry.externalSpeechUsd, entry.backendSpendUsd, entry.backendTokens].some(v => v !== null && !Number.isFinite(v))) {
       throw new Error('Invalid receipt dimensions or identity');
     }
-    if (!Number.isSafeInteger(entry.countedUnitDelta) || entry.countedUnitDelta < 0
+    if (!Number.isSafeInteger(entry.countedUnitDelta) || entry.countedUnitDelta < 0 || entry.countedUnitDelta > 1
       || (entry.kind === 'adjustment' && entry.countedUnitDelta !== 0)) throw new Error('Invalid counted-unit delta');
     if (!await this.verifySignature(structuredClone(entry))) throw new Error('Invalid receipt signature');
+    await this.turns.transact(state => {
+      const turn = getTurn(state, entry);
+      if (turn.phase === 'committed' || turn.terminal === 'cancelled-before-start'
+        || entry.nativeTurnId !== turn.nativeTurnId) throw new Error('Receipt needs its admitted native turn');
+    });
     return this.journal.transact(entries => {
       const previous = entries.find(e => e.operationId === entry.operationId && e.revision === entry.revision);
       if (previous) {
@@ -52,6 +57,11 @@ export class UsageReceipts {
       const estimate = entries.find(e => e.operationId === entry.operationId && e.kind === 'estimate');
       if (entry.kind === 'estimate') {
         if (estimate || entry.revision !== 0 || entry.estimateRef) throw new Error('One initial estimate required');
+        const admissions = entries.filter(e => e.allocatorReceiptRef === entry.allocatorReceiptRef);
+        const turnIdentity = (e: UsageEntry) => ({ scope: e.scope, turnEpoch: e.turnEpoch,
+          submitKey: e.submitKey, nativeTurnId: e.nativeTurnId });
+        if (admissions.some(e => !same(turnIdentity(e), turnIdentity(entry)))) throw new Error('Allocator admission identity mismatch');
+        if (entry.countedUnitDelta && admissions.some(e => e.countedUnitDelta)) throw new Error('Allocator admission already counted');
       } else {
         if (!estimate || !entry.revision || entry.estimateRef !== `${entry.operationId}:0`) throw new Error('Adjustment needs its estimate');
         const identity = (e: UsageEntry) => ({ scope: e.scope, attemptId: e.attemptId, turnEpoch: e.turnEpoch,
