@@ -35,6 +35,7 @@
 - [x] **Exception process**: declare BR-W1A-EXn with reason, impact and rollback before scope expansion.
 
 ## Feedback Loop
+- [x] Review MIG-1/MIG-2 accepted: test future reserved-slot eligibility and concurrent first installation; install 0020 in the host asset journal without advancing Drizzle's control frontier, and retain one connection for the API migration lock.
 - [ ] UP-T: #702 host-fit records no activation adapter/SQL in frozen artifacts 0.2.0. Package integrator must deliver reviewed bytes/export/hash; W1.c consumes them. Activation readiness is not claimed.
 - [ ] W0-close.c/e remain external gates; this draft must not integrate before W0-close.e.
 
