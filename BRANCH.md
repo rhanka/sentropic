@@ -36,6 +36,7 @@ E2 = #765 core 007; E4 reserves core **008** (recorded below).
   - `packages/cluster-mesh/tests/storage/postgres-module-migrations.spec.ts` (hypothetical 008→009 only)
   - `packages/cluster-mesh/tests/storage/postgres-reattest.spec.ts` (last ordinal 7→8 only)
   - `packages/cluster-mesh/tests/storage/postgres-u64-migration.spec.ts` (length 7→8 + 008 block only)
+  - `packages/cluster-mesh/tests/storage/postgres-manifest.spec.ts` (double-open commit moved to the surviving kernel: E4 supersede turns the first kernel terminal)
   - `packages/cluster-mesh/src/storage/postgres/core.ts` (open wiring only: G-P0a acquire in the open tx, G-P0b chained hook, ownership field; no transaction rewiring)
   - `packages/cluster-mesh/src/storage/postgres/protocol.ts` (`instanceRegistry` option only)
   - `packages/cluster-mesh/src/storage/postgres/index.ts` (expose kernel ownership only)
