@@ -1,12 +1,15 @@
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
-import { db } from './client';
+import type { Pool } from 'pg';
+import { pool } from './client';
+import { installArtifactPackageAssets } from '../services/artifacts/host-storage';
 
 /**
  * Heal drifted databases where migration metadata is ahead of the actual settings schema.
  * This keeps user-scoped settings queries stable even when legacy snapshots are restored.
  */
-async function reconcileSettingsUserScopeSchema(): Promise<void> {
+async function reconcileSettingsUserScopeSchema(db: ReturnType<typeof drizzle>): Promise<void> {
   await db.execute(sql.raw('ALTER TABLE "settings" DROP CONSTRAINT IF EXISTS "settings_pkey";'));
   await db.execute(sql.raw('ALTER TABLE "settings" ADD COLUMN IF NOT EXISTS "user_id" text;'));
   await db.execute(sql.raw(`
@@ -47,7 +50,7 @@ async function reconcileSettingsUserScopeSchema(): Promise<void> {
  * Applied AFTER the public migration stream to respect boot ordering.
  * The `CREATE SCHEMA IF NOT EXISTS control` is the very first control migration.
  */
-async function runControlMigrations(): Promise<void> {
+async function runControlMigrations(db: ReturnType<typeof drizzle>): Promise<void> {
   // Drizzle's migrator tracks applied migrations in its own _drizzle table.
   // For the control stream we use a dedicated table name to avoid collisions.
   await migrate(db, {
@@ -65,8 +68,10 @@ async function runControlMigrations(): Promise<void> {
  *
  * @throws Error if migrations fail
  */
-export async function runMigrations(): Promise<void> {
+export async function runMigrations(migrationPool: Pool = pool): Promise<void> {
+  const db = drizzle(migrationPool);
   await migrate(db, { migrationsFolder: './drizzle' });
-  await reconcileSettingsUserScopeSchema();
-  await runControlMigrations();
+  await reconcileSettingsUserScopeSchema(db);
+  await runControlMigrations(db);
+  await installArtifactPackageAssets(migrationPool);
 }
