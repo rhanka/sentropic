@@ -7,30 +7,30 @@
 - [x] Worktree `tmp/worktrees/idp-token-exchange`, branch `feat/idp-token-exchange-preprod`, from `origin/main`; harness branch check passed.
 - [x] `ENV=test-idp-token-exchange` last; shared Docker flock and teardown; no Python, deployment, secret minting or production changes.
 - [x] No schema, package source or discovery change: live preprod now advertises RFC 8693 unconditionally.
-- [x] Historical plans inherited from main below are reference only and authorize no work on this branch.
+- [x] Dedicated local ports: API 9845, UI 6045, Maildev UI 1945; verified free before startup.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
-  - `BRANCH.md`
-  - `deploy/k8s/overlays/preprod/idp-identity-sync/**`
-  - `deploy/ci/idp-identity-sync/import-job.tmpl.yaml`
-  - `deploy/ci/idp-identity-sync/bundle-checks.mjs`
-  - `deploy/ci/idp-identity-sync/services-test.sh`
-  - `deploy/ci/idp-identity-sync/sql-test.sh`
-  - `deploy/ci/idp-identity-sync/CRED_CYCLE.md`
-  - `deploy/ci/idp-identity-sync/README.md`
-  - `api/src/scripts/oauth-provision-exchange-client.ts`
-  - `deploy/k8s/README.md`
-  - `api/tests/api/auth/oauth-token-exchange.test.ts`
+  - [x] `BRANCH.md`
+  - [x] `deploy/k8s/overlays/preprod/idp-identity-sync/**`
+  - [x] `deploy/ci/idp-identity-sync/import-job.tmpl.yaml`
+  - [x] `deploy/ci/idp-identity-sync/bundle-checks.mjs`
+  - [x] `deploy/ci/idp-identity-sync/services-test.sh`
+  - [x] `deploy/ci/idp-identity-sync/sql-test.sh`
+  - [x] `deploy/ci/idp-identity-sync/CRED_CYCLE.md`
+  - [x] `deploy/ci/idp-identity-sync/README.md`
+  - [x] `api/src/scripts/oauth-provision-exchange-client.ts`
+  - [x] `deploy/k8s/README.md`
+  - [x] `api/tests/api/auth/oauth-token-exchange.test.ts`
 - [x] **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `deploy/k8s/overlays/prod/**`
-  - `.track/**`
+  - [x] `Makefile`
+  - [x] `docker-compose*.yml`
+  - [x] `.cursor/rules/**`
+  - [x] `deploy/k8s/overlays/prod/**`
+  - [x] `.track/**`
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-  - `api/drizzle/*.sql`
+  - [x] `.github/workflows/**`
+  - [x] `api/drizzle/*.sql`
 - [x] **Exception process**: record reason, impact and rollback before editing a conditional or forbidden path.
 
 ## Feedback Loop
@@ -43,7 +43,7 @@
 - [x] No live AI dependency in this scope.
 
 ## Orchestration Mode (AI-selected)
-- [x] Single author; no delegated implementation.
+- [x] Mono-branch; single author, no delegated implementation or cherry-pick.
 
 ## UAT Management (in orchestration context)
 - [x] No UI change; preprod acceptance remains an owner action after rollout.
@@ -51,15 +51,21 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Read-only diagnosis**
   - [x] Read Docker lock, rules, radar aadc5291 runbook steps 3–4 and server-http.ts; inspect CI deploy and live discovery.
-- [x] **Lot 1 — Workload registration**
-  - [x] Add local Secret-backed registration and references in both preprod Job sources; preserve existing IDs and hashes.
-  - [x] Test `services-test.sh` registration, invalid secret, mismatch, rollback, idempotence and unrelated-client preservation.
-  - [x] Gate: `make test-idp-sync-selftest` (47 checks) and `make test-idp-sync-sql` passed; disposable containers removed; teardown requested.
-- [x] **Lot 2 — Policy regression**
+- [ ] **Lot 1 — Workload registration and rotation**
+  - [x] Validate 64 lowercase hex characters without a newline; hash in the importer before psql; only the hash reaches SQL.
+  - [x] Make the named-Secret sync the only preprod creation/rotation path; preserve revoked state without blocking identity sync.
+  - [x] Evolve `deploy/ci/idp-identity-sync/services-test.sh` and `sql-test.sh`: invalid inputs, registration, rollback, replay, rotation and revocation.
+  - [ ] Gate: `make test-idp-sync-selftest ENV=test-idp-token-exchange`.
+  - [ ] Gate: `make test-idp-sync-sql ENV=test-idp-token-exchange`.
+- [ ] **Lot 2 — Policy regression**
   - [x] Test preprod allowed exchange, public/unregistered denial, wrong subject/target audiences and client_credentials denial in `api/tests/api/auth/oauth-token-exchange.test.ts`.
-  - [x] Gate: 11 canonical-route tests passed using `createIdpApp()` and the verified main toolbox; `make down` completed.
-- [x] **Lot 3 — Operator handoff and draft PR**
-  - [x] Document owner secret minting, radar handoff, dry-run, rollout and acceptance in `deploy/k8s/README.md`.
-  - [x] Scope-check each atomic commit under 150 lines; push; draft PR #770 opened; CI monitored and SHA/ETA recorded in the external report. Full CI and independent review remain pending before merge.
-
-## Historical main plans (reference only)
+  - [x] Extend exact subject-audience and missing/form/dual-credential refusals; use a public synthetic 64-hex fixture.
+  - [ ] Gate: `make test-api-endpoints SCOPE=tests/api/auth/oauth-token-exchange.test.ts API_PORT=9845 UI_PORT=6045 MAILDEV_UI_PORT=1945 ENV=test-idp-token-exchange` through the CI toolbox and branch-file mounts.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Align `deploy/ci/idp-identity-sync/{README,CRED_CYCLE}.md` and `deploy/k8s/README.md`: metadata check, one preprod writer, rotation, revocation and protected owner handoff.
+  - [x] No temporary feature spec or package source/version change; no UI/e2e surface or live AI dependency.
+- [ ] **Lot N — Final validation**
+  - [ ] Scoped IdP checks and API typecheck/lint pass; tear down the dedicated stack after each step.
+  - [ ] Scope-check every atomic commit under 150 changed lines; selective staging and Make commits without attribution trailers.
+  - [ ] Push and use this complete file as draft PR #770 body; verify CI green on the head and report its SHA.
+  - [ ] Owner-only after review: merge, mint/handoff the credential, deploy, sync dry-run/commit and qualify radar. No deployment or secret creation in this author task.
