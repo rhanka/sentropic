@@ -2,6 +2,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { commit, fixture, mutation, scope } from './fixtures.js';
 
 describe('submission, tool history and effect barrier', () => {
+  it('should keep typed acceptance idempotent across restart and append late outcomes only once', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    await f.core.send(turn);
+    await f.core.admitTool(turn, mutation());
+    await f.core.interrupt(turn, 'stop');
+    await f.core.complete(turn, 'interrupted');
+    const pending = await f.core.toolResult(turn, 'call-1');
+    const prompt = await f.core.riskPrompt(['effect:call-1']);
+    const request = { ...prompt, requestId: 'typed-1', proof: 'proof' };
+    const acceptance = await f.core.acceptRisk(request);
+    const restarted = fixture(f.journal.restart());
+    expect(await restarted.core.acceptRisk(request)).toEqual(acceptance);
+    await restarted.core.resolveEffect('effect:call-1', 'completed-before-cancel', 'receipt');
+    await restarted.core.resolveEffect('effect:call-1', 'completed-before-cancel', 'receipt');
+    expect(await restarted.core.toolResult(turn, 'call-1')).toEqual(pending);
+    expect(restarted.journal.state.effects['effect:call-1'].evidence).toHaveLength(1);
+    expect(restarted.control.start).not.toHaveBeenCalled();
+  });
   it('should return a distinct non-dispatching receipt for duplicate admissions', async () => {
     const f = fixture();
     const turn = await commit(f.core);
