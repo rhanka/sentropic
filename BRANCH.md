@@ -21,6 +21,7 @@
   - `packages/artifacts/tests/s3.integration.test.ts`
   - `packages/artifacts/tests/publication-security.test.ts`
   - `packages/artifacts/package.json`
+  - `packages/artifacts/src/mcp-core.ts` (ARTIFACTS_PROVIDER_VERSION constant only, aligned on 0.2.2)
   - `package-lock.json` (artifacts workspace version only)
 - **Forbidden Paths (must not change in this branch)**:
   - `packages/artifacts/l0-freeze/**`
