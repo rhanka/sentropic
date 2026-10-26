@@ -34,10 +34,11 @@ export const artifactMigrationAssets = Object.freeze([
 /** Called only by the API migration runner, after the control stream. */
 export async function installArtifactPackageAssets(
   connection: Pool | PoolClient,
-  load: (id: string) => string = (id) => artifactMigrationAssets.find((asset) => asset.id === id)!.read(),
+  load: (id: string) => string = (id) => migrations.find((asset) => asset.id === id)!.read(),
+  migrations: readonly { id: string; sha256: string; read: () => string }[] = artifactMigrationAssets,
 ): Promise<void> {
   // Validate every file before acquiring a connection or executing any asset.
-  const assets = artifactMigrationAssets.map((asset) => {
+  const assets = migrations.map((asset) => {
     const source = load(asset.id);
     if (createHash('sha256').update(source).digest('hex') !== asset.sha256) {
       throw new Error(`Artifact migration asset hash mismatch: ${asset.id}`);
@@ -70,8 +71,9 @@ export async function installArtifactPackageAssets(
       }
     }
     const applied = new Set(rows.map((row) => row.asset_id));
-    // This frozen batch commits atomically. Partial receipts require restore reconciliation.
-    if (!fresh && assets.some((asset) => !applied.has(asset.id))) {
+    // Receipts must form a prefix: trailing assets are upgrades, interior gaps are restore damage.
+    const firstPending = assets.findIndex((asset) => !applied.has(asset.id));
+    if (firstPending !== -1 && assets.slice(firstPending).some((asset) => applied.has(asset.id))) {
       throw new Error('Missing artifact migration receipt requires migration reconciliation');
     }
     for (const asset of assets) {

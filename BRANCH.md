@@ -10,7 +10,7 @@
 - [x] Only control `0020_app_artifact_host.sql`; preserve #677 control 0012–0019. Ref/worktree rescan found no 0020 SQL collision on 26 October.
 - [x] Make-only, shared Docker flock for build/test/start and matching down after each step; `ENV=test-app-w1a` last.
 - [x] API/UI/Maildev UI ports 8791/5177/1084; verify ownership before listeners. Never test on dev.
-- [x] Workspace sources unchanged; W2.b owns manifests/locks. No package SQL copies, edits or host activation algorithm.
+- [x] Workspace sources unchanged; owner-authorized artifacts API pin is BR-W1A-EX1; W2.b retains final lock reconciliation. No package SQL copies, edits or host activation algorithm.
 - [x] Atomic commits below 150 lines; selective staging, scope-check, make commit; no attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -21,6 +21,7 @@
   - `api/drizzle/control/0020_app_artifact_host.sql`
   - `api/drizzle/control/meta/_journal.json`
   - `api/tests/api/artifacts-host-migrations.test.ts`
+  - `api/package.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -28,13 +29,18 @@
   - `packages/**`
   - `plan/**`
   - `.track/**`
-  - `api/package*.json`
+  - `api/package-lock.json`
   - `package*.json`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - [x] **Exception process**: declare BR-W1A-EXn with reason, impact and rollback before scope expansion.
 
 ## Feedback Loop
+- [x] BR-W1A-EX1, owner 26 October: add the exact published artifacts dependency to api/package.json for runtime resolution. Impact: supersedes W2.b's sole manifest-writer reservation for this one pin; W2.b still reconciles locks/physical dependency tree. Rollback: revert the dependency pin before integration.
+- [x] BR-W1A-EX2, owner 26 October: retain base 2568c25 and integration branch created there per plan-v2 instead of accepted #702 plus fbfe68f0. Reason: preserve the assigned branch train; impact: W0-close.e and final base/payload reconciliation remain merge gates; rollback: rebase onto the accepted integration base.
+- [x] BR-W1A-EX3, owner 26 October: use assigned tmp/worktrees/app-w1a and test-app-w1a 8791/5177/1084 instead of W0's app-cm-w1 / test-app-cm-w1 9711/5911/1811. Reason: isolated W1.a dispatch; impact: W1.b/c must not reuse its live slot; rollback: tear down test-app-w1a and return to the reservation.
+- [x] CI delivery: draft PR targets main solely to trigger ci.yml; actual integration remains through feat/app-cm-integration after W0-close.e. No direct main merge is authorized.
+- [x] Opus r1 P1-1: permit ordered trailing assets on installed bases; retain hash refusal and interior receipt-gap detection. Regression covers two ordered additions and DDL-free installer rerun; execution pending Lot 3.
 - [x] R3 isolation findings accepted as bounded hardening: test required-relation absence and failed unlock/rollback handling; no claim of full live schema-integrity attestation.
 - [x] Add required-relation presence checks; destroy uncertain connections, propagate unlock failure and preserve original migration/rollback failure context.
 - [x] Review ISO-1 accepted: refuse lost/partial receipts alongside existing schema rather than replaying IF NOT EXISTS DDL and inventing installation history; add both partial-restore regressions first.
