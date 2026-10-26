@@ -39,6 +39,7 @@
 - [x] E2 owns core `007-consumed-counters.sql`. E6 reserves memory chain `001-projections.sql`, next global receipt slot 008 after E2; no competing core migration.
 - [ ] Coordinate shared loader: E6 is sole writer of memory role/selection/fingerprint substitutions in migrations.ts after E2; peer message pending automatic approval review.
 - [x] Owner excludes Comments `incompatible_version` and selected packaging fixture 0.22.2 failures; #767 owns their one-time repair.
+- [x] K7 creation may share capture's append; the inherited zero-append guard applies to completion (revision 2), preserving the approved §5.2 distinction.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky waiver applies.
