@@ -103,12 +103,32 @@ export interface SpeechTranscriptPartial extends SpeechTranscriptBase {
 
 export interface SpeechTranscriptFinal extends SpeechTranscriptBase {
   readonly type: 'transcript.final';
+  readonly replaces?: never;
   readonly audioInterval: { readonly startMs: number; readonly endMs: number };
   readonly language: string;
 }
 
 /** Finals are immutable; a correction is a separate user edit, never a new submission. */
 export type SpeechTranscript = SpeechTranscriptPartial | SpeechTranscriptFinal;
+
+/** Pure display projection for one utterance. L2 owns stream ordering and durable submission. */
+export const reviseSpeechTranscript = (
+  previous: SpeechTranscript | undefined, next: SpeechTranscript,
+): SpeechTranscript | undefined => {
+  if (!Number.isSafeInteger(next.revision) || next.revision < 0
+    || (previous && (previous.type === 'transcript.final' || next.revision <= previous.revision
+      || next.utteranceId !== previous.utteranceId || next.speechSessionId !== previous.speechSessionId
+      || next.connectionEpoch !== previous.connectionEpoch))) return previous;
+  if (next.type === 'transcript.final') {
+    if ('replaces' in next) return previous;
+    return next;
+  }
+  const text = previous?.text ?? '';
+  const { start, end } = next.replaces;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)
+    || start < 0 || end < start || end > text.length) return previous;
+  return { ...next, text: text.slice(0, start) + next.text + text.slice(end) };
+};
 
 export interface SpeechSessionRequest {
   readonly protocolVersion: 1;
