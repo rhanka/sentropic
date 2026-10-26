@@ -50,8 +50,10 @@ export function validDate(value) {
 // Rows are normalized scanner identities, not the compliance verdict or register key alone.
 export function joinRegister(finding, rows = [], today = new Date().toISOString().slice(0, 10)) {
   if (!validDate(today)) throw new Error('invalid inventory date');
+  const identities = (value) => new Set([value.id?.toUpperCase(), ...canonicalAliases(value.aliases || {})].filter(Boolean));
+  const aliases = identities(finding);
   const match = rows.find((row) => row.status === 'accepted_temporary' && validDate(row.review_due) &&
-    finding.id && row.id === finding.id &&
+    [...identities(row)].some((id) => aliases.has(id)) &&
     ['component', 'path', 'version', 'scanner'].every((key) =>
       typeof finding[key] === 'string' && finding[key].length > 0 && row[key] === finding[key]) &&
     ['platform', 'imageDigest', 'repository'].every((key) =>
@@ -135,7 +137,9 @@ export function checkReconciliationStreak(scans = [], target) {
     }
     if (!validDate(scan.day) || typeof scan.scanId !== 'string' || !scan.scanId ||
         !/^[a-f0-9]{40}$/.test(scan.sourceSha || '') || !/^sha256:[a-f0-9]{64}$/.test(scan.dbIdentity || '') ||
-        !scan.scannerIdentity || !scan.policyIdentity || !Array.isArray(scan.flags) || !scan.flags.length) {
+        !/@sha256:[a-f0-9]{64}$/.test(scan.scannerIdentity || '') || !/^sha256:[a-f0-9]{64}$/.test(scan.policyIdentity || '') ||
+        !Array.isArray(scan.flags) || !scan.flags.length ||
+        !['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].every((level) => scan.severities?.includes(level))) {
       return refuse('missing immutable scan, scanner, database or policy identity');
     }
     const scanned = Date.parse(scan.scannedAt), updated = Date.parse(scan.dbUpdatedAt);
@@ -151,7 +155,7 @@ export function checkReconciliationStreak(scans = [], target) {
   if (Date.parse(last[1].day) - Date.parse(last[0].day) !== 86400000 || last[0].scanId === last[1].scanId) {
     return refuse('need distinct consecutive daily full scans');
   }
-  for (const field of ['scannerIdentity', 'policyIdentity', 'flags']) {
+  for (const field of ['scannerIdentity', 'policyIdentity', 'flags', 'severities']) {
     if (JSON.stringify(last[0][field]) !== JSON.stringify(last[1][field])) return refuse(`${field} changed; reset streak`);
   }
   return { ok: true };
