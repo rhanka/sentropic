@@ -121,6 +121,9 @@ export function admitBridgeTools(tools: readonly BridgeTool[]): void {
     if (tool.schemaProfile !== 'sentropic.engram.memory-tools/2020-12-v1') throw new TypeError('Unsupported memory schema profile');
     admitMemorySchema(tool.schema);
     admitMemorySchema(tool.outputSchema);
+    if (!isRecord(tool.schema) || tool.schema.type !== 'object') throw new TypeError('Memory input schema must describe an object');
+    const output = tool.outputSchema as Record<string, unknown>;
+    if (output.type !== undefined && output.type !== 'object') throw new TypeError('Memory output schema must describe an object');
   }
 }
 
@@ -236,7 +239,7 @@ export function registerBridgeTools(
     unknownTool: name => new McpError(ErrorCode.MethodNotFound, `Unknown tool '${name}'`),
     tools: tools.map((tool) => ({
       name: tool.name,
-      ...(isMemoryProfileTool(tool) ? { outputSchema: tool.outputSchema, annotations: tool.annotations, _meta: tool._meta } : {}),
+      ...(isMemoryProfileTool(tool) ? { outputSchema: { type: 'object' as const, ...tool.outputSchema }, annotations: tool.annotations, _meta: tool._meta } : {}),
       ...(tool.description === undefined ? {} : { description: tool.description }),
       inputSchema: {
         type: 'object' as const,

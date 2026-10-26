@@ -1,7 +1,7 @@
 # Feature: feat(memory-l5): Lot 3 transport and context integration
 
 ## Objective
-- [ ] Integrate explicit memory profiles and verified context through existing transport/mesh; preserve P3.
+- [x] Integrate explicit memory profiles and verified context through existing transport/mesh; preserve P3.
 ## Scope / Guardrails
 - [x] Worktree tmp/worktrees/mem-l5-lot3; branch feat/memory-l5-lot3; base origin/feat/memory-l5-lot2; merge only; merge main after #771 merges.
 - [x] Approved schedule supersedes R2/R7a/R3 dependency; retain 18 P09 suites and current remote-binding refusal.
@@ -60,13 +60,13 @@
 - [x] No UI/API change; SDK transport tests; final installed E4/owner UAT remain later lots.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read lock/rules/spec/schedule/template; mechanically verify isolated branch and P3.
-- [ ] Lot 1: failing wire/schema tests; profile admission, full-envelope codec, protocol refusal.
+- [x] Lot 1: failing wire/schema tests; profile admission, full-envelope codec, protocol refusal.
   - [x] Schema test reproduced missing admission module; wire SDK tests specified; finite schema admission implemented.
   - [x] Added explicit transport call context types; memory text uses the complete JSON envelope without changing the default codec.
   - [x] SDK red run: outputSchema loss and absent-audit protocol refusal reproduced; explicit memory bridge implemented; platform 0.4.1 fixes the existing declared profile within current peer intervals.
-- [ ] Lot 2: mesh context/guards/cancellation/compiled dispatch; concurrent subject/tenant/workspace tests.
+- [x] Lot 2: mesh context/guards/cancellation/compiled dispatch; concurrent subject/tenant/workspace tests.
   - [x] Preserve full context and cancellation; compile policy uses verified claims/source; mesh 0.22.5 requires corrected platform 0.4.1.
-  - [x] HTTP namespace proof: real SDK client/compiled registry, frozen get schemas, tenant distinct from workspace, forged headers and full envelope; five mesh cases passed.
+  - [x] HTTP SDK proof: strict client reproduced missing root object type; full rerun passes with the complete frozen oneOf preserved (136 platform/28 mesh).
 - [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
   - [x] New runner/tests: tools/memory-mcp-l5/lot3-source.mjs and tests/lot3-source.test.mjs; exact P09 file set bound to the unchanged P3 catalog.
   - [x] First exact run: platform 132 passed; mesh 24 passed/3 skipped, rejected by the reporter. Existing packaging fixtures now prepare those three required cases.
