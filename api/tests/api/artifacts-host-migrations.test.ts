@@ -1,6 +1,11 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { fork } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
 import { runMigrations } from '../../src/db/run-migrations';
 import {
@@ -35,6 +40,28 @@ async function journal() {
 }
 
 describe('artifact host migrations', () => {
+  it('should serialize concurrent first installations and package reruns', async () => {
+    await Promise.all([runMigrations(database), runMigrations(database)]);
+    await Promise.all([installArtifactPackageAssets(database), installArtifactPackageAssets(database)]);
+    expect(await journal()).toHaveLength(4);
+  });
+
+  it('should leave a later reserved control migration eligible for installation', async () => {
+    await runMigrations(database);
+    const folder = mkdtempSync(join(tmpdir(), 'w1a-control-'));
+    try {
+      mkdirSync(join(folder, 'meta'));
+      writeFileSync(join(folder, 'meta/_journal.json'), JSON.stringify({ version: '5', dialect: 'pg', entries: [
+        { idx: 0, version: '7', when: 1792100000000, tag: '0012_reserved_witness', breakpoints: true },
+      ] }));
+      writeFileSync(join(folder, '0012_reserved_witness.sql'), 'CREATE TABLE control.reserved_slot_witness (id text PRIMARY KEY);');
+      await migrate(drizzle(database), { migrationsFolder: folder, migrationsTable: '__drizzle_control_migrations', migrationsSchema: 'public' });
+      expect((await database.query(`SELECT to_regclass('control.reserved_slot_witness')::text AS witness`)).rows[0].witness).toBe('control.reserved_slot_witness');
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
   it('should install unchanged package schemas and durable host state on an empty database', async () => {
     await runMigrations(database);
     expect(await journal()).toEqual(artifactMigrationAssets.map(({ id, sha256 }) => ({ asset_id: id, sha256 })));
@@ -69,6 +96,19 @@ describe('artifact host migrations', () => {
     expect(await journal()).toEqual(before);
   });
 
+  it('should roll back all package DDL and receipts when the last asset fails', async () => {
+    await database.query(`CREATE FUNCTION reject_receipts() RETURNS event_trigger LANGUAGE plpgsql AS $$
+      BEGIN IF to_regclass('artifacts.operation_receipts') IS NOT NULL THEN
+        RAISE EXCEPTION 'injected asset failure'; END IF; END $$;
+      CREATE EVENT TRIGGER reject_receipts ON ddl_command_end EXECUTE FUNCTION reject_receipts();`);
+    await expect(runMigrations(database)).rejects.toThrow(/injected asset failure/);
+    expect(await journal()).toEqual([]);
+    expect((await database.query(`SELECT to_regnamespace('artifacts') AS schema`)).rows[0].schema).toBeNull();
+    await database.query('DROP EVENT TRIGGER reject_receipts');
+    await runMigrations(database);
+    expect(await journal()).toHaveLength(3);
+  });
+
   it('should keep one immutable KV value across competing writers and a fresh process', async () => {
     await runMigrations(database);
     const kv = createArtifactHostKv(database, 'scope-a');
@@ -78,18 +118,22 @@ describe('artifact host migrations', () => {
     const value = await kv.get('scope/binding');
     expect(await createArtifactHostKv(database, 'scope-b').get('scope/binding')).toBeUndefined();
     await database.end();
+    database = new Pool({ connectionString });
     // A separate OS process has no access to a process-local KV or migration cache.
     const script = `const { Pool } = require('pg'); const pool = new Pool({connectionString: process.env.DATABASE_URL});
-      pool.query('SELECT value FROM control.artifact_host_kv WHERE storage_scope_id = $1 AND key = $2', ['scope-a', 'scope/binding'])
-        .then(r => process.send(r.rows[0].value)).finally(() => pool.end());`;
+      (async () => {
+        const { runMigrations } = await import('./src/db/run-migrations.ts');
+        const { createArtifactHostKv } = await import('./src/services/artifacts/host-storage.ts');
+        await runMigrations(pool);
+        process.send(await createArtifactHostKv(pool, 'scope-a').get('scope/binding'));
+      })().finally(() => pool.end());`;
     const observed = await new Promise((resolve, reject) => {
-      const child = fork('-e', [script], { execArgv: [], env: { ...process.env, DATABASE_URL: connectionString }, silent: true });
+      const child = fork('-e', [script], { execArgv: ['--import', 'tsx'], env: { ...process.env, DATABASE_URL: connectionString }, silent: true });
       let message: unknown;
       child.on('message', (result) => { message = result; });
       child.on('error', reject);
       child.on('exit', (code) => code === 0 ? resolve(message) : reject(new Error(`restart process exited ${code}`)));
     });
-    database = new Pool({ connectionString });
     expect(observed).toBe(value);
     await runMigrations(database);
     expect(await createArtifactHostKv(database, 'scope-a').putIfAbsent('scope/binding', 'replacement')).toBe(false);
