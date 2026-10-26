@@ -108,6 +108,12 @@ describe('pack-only dev alignment', () => {
     )).toThrow();
   });
 
+  it('should keep the strict path for a stable candidate that is not the pin', () => {
+    const { fixture, lock, candidate } = files();
+    expect(() => checkCandidateAlignment(
+      { ...candidate, version: '0.22.1' }, fixture.dependencies, lock.packages,
+    )).toThrow();
+  });
 });
 
 it('should install only compatible packed artifacts and exclude an incompatible optional tuple without registry access', () => {
