@@ -94,7 +94,7 @@ export class InterruptAuthority {
       if (!Object.hasOwn(state.enabledClasses, call.toolClass) || !classification) throw new Error('Tool class lacks fence coverage');
       return { mutating: classification !== 'read-only', barrierRevision: state.barrierRevision };
     });
-    const request = { ...ref, toolClass: call.toolClass, toolName: call.toolName,
+    const request = { ...ref, callId: call.callId, toolClass: call.toolClass, toolName: call.toolName,
       actionId: call.actionId, argumentsDigest: call.argumentsDigest,
       barrierRevision: preliminary.barrierRevision, proof: call.proof };
     const grant = preliminary.mutating ? await this.authority.verifyMutation({ ...request, scope: { ...request.scope } }) : undefined;
@@ -120,14 +120,13 @@ export class InterruptAuthority {
         if (!grant || grant.actionId !== call.actionId || grant.argumentsDigest !== call.argumentsDigest
           || !same(grant.scope, state.scope) || grant.principalId !== state.scope.principalId
           || grant.tenantId !== state.scope.tenantId || !validIdentity(grant.authorizationId)
-          || grant.turnEpoch !== ref.turnEpoch || grant.submitKey !== ref.submitKey
+          || grant.turnEpoch !== ref.turnEpoch || grant.submitKey !== ref.submitKey || grant.callId !== call.callId
           || grant.barrierRevision !== state.barrierRevision
           || grant.toolClass !== call.toolClass || grant.toolName !== call.toolName
           || state.authorizations[grant.authorizationId]) throw new Error('Fresh authorization required');
         if (!call.effectId || !call.operation || state.effects[call.effectId]) throw new Error('New effect identity required');
         state.effects[call.effectId] = { effectId: call.effectId, turnEpoch: ref.turnEpoch, callId: call.callId,
           operation: call.operation, status: 'completion-pending', evidence: [] };
-        state.barrierRevision++;
         state.authorizations[grant.authorizationId] = call.actionId;
       }
       state.actions[call.actionId] = { turnEpoch: ref.turnEpoch, callId: call.callId };
@@ -185,7 +184,8 @@ export class InterruptAuthority {
         || (effect.status === 'unknown-accepted' && !['unknown', 'completion-pending'].includes(outcome))) effect.status = outcome;
       const tool = state.turns[effect.turnEpoch].tools[effect.callId];
       tool.result ??= { callId: effect.callId, effectId, outcome, evidence };
-      state.barrierRevision++;
+      const turn = state.turns[effect.turnEpoch];
+      if (turn.fence || isTerminal(turn)) state.barrierRevision++;
     });
   }
 
@@ -255,6 +255,7 @@ export class InterruptAuthority {
       if (isTerminal(turn)) return;
       turn.phase = outcome;
       turn.terminal = outcome;
+      if (Object.values(turn.tools).some(t => t.call.effectId)) state.barrierRevision++;
       for (const tool of Object.values(turn.tools)) {
         tool.result ??= { callId: tool.call.callId, effectId: tool.call.effectId,
           outcome: 'completion-pending', evidence: 'Runtime terminal; tool outcome remains unresolved' };
