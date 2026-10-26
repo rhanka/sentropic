@@ -36,6 +36,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] PR776 P2-4: deduplicate counted units by allocator admission ID across operations/restart; limit one unit per estimate and verify the admitted coordinator/native-turn link. Persisted replay and forged-link tests added.
 - [x] PR776 P2-3: bind grants to turn/call identity; admissions and active sibling results no longer invalidate parallel approvals. Stop and unresolved-effect transitions still revoke stale grants; concurrency and pending-approval Stop tests added.
 - [x] PR776 P2-2: trusted CAS generation rotation carries effects, fences, action tombstones and consumed approvals forward; persisted-byte restart tests retain the mutation barrier and query-only old-turn recovery.
 - [x] PR776 P2-1: journal queued finals while a predecessor settles; gate send by prior completion or durable fence, retaining exactly-once submission across restart/lost ACK. Covered in interrupt.test.ts.
