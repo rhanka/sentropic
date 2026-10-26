@@ -18,7 +18,8 @@ independent billing ledger.
 
 For a controller/source/consent change, the trusted host calls `rotateGeneration(expected, next)` on
 that same journal. The controller epoch must increase; authenticated session ownership stays fixed.
-Rotation atomically fences old turns and retains effects, action IDs, consumed approvals and risk history.
+Rotation atomically fences submitted old turns and retains effects, action IDs, consumed approvals and risk history.
+Unsent finals keep their epoch/submit key and bind to the new scope; reacquire their references with `commit`.
 Reopen `SessionJournal` with the new scope after restart. Old references remain queryable for settlement
 and late native-ID interruption; they cannot dispatch or become live again.
 

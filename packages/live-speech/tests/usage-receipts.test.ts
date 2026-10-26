@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { UsageReceipts } from '../src/core/usage-receipts.js';
 import type { UsageEntry } from '../src/core/usage-receipts.js';
 import { commit, fixture, scope } from './fixtures.js';
@@ -71,5 +71,23 @@ describe('operational usage journal', () => {
     expect((JSON.parse(bytes) as UsageEntry[]).reduce((sum, e) => sum + e.countedUnitDelta, 0)).toBe(1);
     await expect(restarted.record({ ...entry(), operationId: 'operation-3', submitKey: 'forged' })).rejects.toThrow('turn');
     await expect(restarted.record({ ...entry(), operationId: 'operation-3', nativeTurnId: 'other' })).rejects.toThrow('native turn');
+  });
+
+  it('should replay a receipt recorded before a lost native start ACK is recovered', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    let release!: (value: { nativeTurnId: string }) => void;
+    vi.mocked(f.control.start).mockImplementationOnce(() => new Promise(r => { release = r; }));
+    const sending = f.core.send(turn);
+    await vi.waitFor(() => expect(f.control.start).toHaveBeenCalledOnce());
+    const rows: UsageEntry[] = [];
+    const store = { transact: async <T>(change: (entries: UsageEntry[]) => T) => change(rows) };
+    const usage = new UsageReceipts(store, async () => true, f.journal);
+    const receipt = { ...entry(), nativeTurnId: undefined };
+    expect(await usage.record(receipt)).toBe(true);
+    release({ nativeTurnId: 'native-1' });
+    await sending;
+    expect(await usage.record(receipt)).toBe(false);
+    expect(rows).toHaveLength(1);
   });
 });
