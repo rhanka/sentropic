@@ -68,7 +68,10 @@ export class SessionJournal implements Journal {
       const isolated = structuredClone(result);
       if (previous && same(previous.state, draft)) return isolated;
       const next = { revision: (previous?.revision ?? -1) + 1, state: structuredClone(draft) };
-      if (await this.storage.compareAndSwap(this.key, previous?.revision, next)) return isolated;
+      if (await this.storage.compareAndSwap(this.key, previous?.revision, next)) {
+        this.initial.scope = structuredClone(draft.scope);
+        return isolated;
+      }
     }
     throw new Error('Journal contention; no transition acknowledged');
   }
@@ -105,9 +108,9 @@ export const assertScope = (state: SessionState, scope: Scope): void => {
   if (!same(state.scope, scope)) throw new Error('Stale or unauthorized scope');
 };
 export const getTurn = (state: SessionState, ref: TurnRef): Turn => {
-  assertScope(state, ref.scope);
   const turn = state.turns[ref.turnEpoch];
   if (!turn || turn.submitKey !== ref.submitKey) throw new Error('Unknown turn identity');
+  if (!same(turn.scope, ref.scope)) throw new Error('Stale or unauthorized scope');
   return turn;
 };
 export const isTerminal = (turn: Turn): boolean => ['completed', 'interrupted', 'failed'].includes(turn.phase);
