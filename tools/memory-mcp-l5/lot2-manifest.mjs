@@ -4,7 +4,7 @@ import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sha256Hex, sha512Integrity, PINNED_IMAGE_DIGEST } from './schema-validator.mjs';
 import { readArchive } from './contract-graph.mjs';
-import { checkNodeFloor, checkArtifactManifest } from './receipt.mjs';
+import { checkNodeFloor, checkArtifactManifest, isSha256Hex } from './receipt.mjs';
 import { readInside } from './precandidate.mjs';
 import { resolveLockKey } from './lock-closure.mjs';
 export const P3_SHA256 = '1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730';
@@ -86,7 +86,7 @@ export function validateLot2Provenance(m, root) {
   for (const [label, doc] of [['neutralDeclarations', neutral], ['hostProfile', profile]]) {
     if (doc?.status !== 'verified' || doc?.preCandidateManifestSha256 !== P3_SHA256 || doc?.e2Sha256 !== m.e2?.sha256 || doc?.backendSha256 !== m.backend?.sha256) errors.push(`${label}: tuple not verified`);
   }
-  if (profile?.backend !== 'postgresql' || !['16', '17'].includes(String(profile?.databaseMajor)) || !profile?.configurationSha256 || !profile?.driverBridgeSha256) errors.push('hostProfile: actual PG/driver/configuration required');
+  if (profile?.backend !== 'postgresql' || !['16', '17'].includes(String(profile?.databaseMajor)) || !isSha256Hex(profile?.configurationSha256) || !isSha256Hex(profile?.driverBridgeSha256)) errors.push('hostProfile: actual PG/driver/configuration required');
   if (!closed(m.runtime, ['imageDigest', 'nodeVersion', 'sqliteVersion', 'python', 'nativeAddonCompilation'], 'runtime') ||
       m.runtime.imageDigest !== PINNED_IMAGE_DIGEST || !/^24\./.test(m.runtime.nodeVersion) || !checkNodeFloor(m.runtime.nodeVersion, [], '') ||
       !/^\d+\.\d+\.\d+$/.test(m.runtime.sqliteVersion) || m.runtime.python !== false || m.runtime.nativeAddonCompilation !== false) errors.push('runtime: pinned zero-Python/no-addon runtime required');

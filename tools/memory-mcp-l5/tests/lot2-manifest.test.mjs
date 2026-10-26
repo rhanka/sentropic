@@ -42,3 +42,21 @@ it('should bind immutable P3 and refuse fixture acceptance even with matching di
     expect(validateLot2Provenance(manifest, root).join('\n')).toContain('sha256');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+it('should refuse malformed host configuration and driver digests in an unverified fixture', () => {
+  const { root, manifest } = fixture();
+  const profile = { status: 'verified', preCandidateManifestSha256: P3_SHA256, e2Sha256: manifest.e2.sha256,
+    backendSha256: manifest.backend.sha256, backend: 'postgresql', databaseMajor: 17,
+    configurationSha256: 'c'.repeat(64), driverBridgeSha256: 'd'.repeat(64) };
+  const check = () => {
+    const bytes = JSON.stringify(profile); writeFileSync(join(root, 'host.json'), bytes);
+    manifest.hostProfile = { path: 'host.json', sha256: sha256Hex(bytes) };
+    return validateLot2Provenance(manifest, root).filter(error => error.startsWith('hostProfile:'));
+  };
+  try {
+    expect(check()).toEqual([]);
+    for (const field of ['configurationSha256', 'driverBridgeSha256']) {
+      const original = profile[field]; profile[field] = 'invalid';
+      expect(check()).toContain('hostProfile: actual PG/driver/configuration required'); profile[field] = original;
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
