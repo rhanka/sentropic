@@ -57,15 +57,15 @@
   - [x] Evolve `deploy/ci/idp-identity-sync/services-test.sh` and `sql-test.sh`: invalid inputs, registration, rollback, replay, rotation and revocation.
   - [x] Gate: `make test-idp-sync-selftest ENV=test-idp-token-exchange` passed (47 checks).
   - [x] Gate: `make test-idp-sync-sql ENV=test-idp-token-exchange` passed, including statement-log secrecy, rotation rollback/commit and revoked-row sync.
-- [ ] **Lot 2 — Policy regression**
+- [x] **Lot 2 — Policy regression**
   - [x] Test preprod allowed exchange, public/unregistered denial, wrong subject/target audiences and client_credentials denial in `api/tests/api/auth/oauth-token-exchange.test.ts`.
   - [x] Extend exact subject-audience and missing/form/dual-credential refusals; use a public synthetic 64-hex fixture.
-  - [ ] Gate: `make test-api-endpoints SCOPE=tests/api/auth/oauth-token-exchange.test.ts API_PORT=9845 UI_PORT=6045 MAILDEV_UI_PORT=1945 ENV=test-idp-token-exchange` through the CI toolbox and branch-file mounts.
+  - [x] Gate: `make test-api-endpoints SCOPE=tests/api/auth/oauth-token-exchange.test.ts API_PORT=9845 UI_PORT=6045 MAILDEV_UI_PORT=1945 ENV=test-idp-token-exchange` passed (18 tests) through the CI toolbox and branch-file mounts.
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Align `deploy/ci/idp-identity-sync/{README,CRED_CYCLE}.md` and `deploy/k8s/README.md`: metadata check, one preprod writer, rotation, revocation and protected owner handoff.
   - [x] No temporary feature spec or package source/version change; no UI/e2e surface or live AI dependency.
 - [ ] **Lot N — Final validation**
-  - [ ] Scoped IdP checks and API typecheck/lint pass; tear down the dedicated stack after each step.
+  - [x] Scoped IdP checks and API typecheck/lint pass; generic provisioning refuses the preprod API context with a synthetic fixture; dedicated-stack teardown uses Make only.
   - [ ] Scope-check every atomic commit under 150 changed lines; selective staging and Make commits without attribution trailers.
   - [ ] Push and use this complete file as draft PR #770 body; verify CI green on the head and report its SHA.
   - [ ] Owner-only after review: merge, mint/handoff the credential, deploy, sync dry-run/commit and qualify radar. No deployment or secret creation in this author task.
