@@ -75,7 +75,25 @@ export function capacityDemand(workflow, selectedJobs = null) {
     return false;
   };
   for (let left = 0; left < slots.length; left++) augment(left, new Set());
-  return slots.length - matched.size;
+  // Mutexes constrain execution, not readiness. Matrix indices share the same
+  // repository-wide pool as single jobs; unknown expressions fail closed.
+  const groups = new Set();
+  for (const [name, job] of Object.entries(jobs)) {
+    if (selectedJobs && !selectedJobs.has(name)) continue;
+    const group = job.concurrency?.group;
+    const count = job.strategy?.matrix?.include?.length ?? 1;
+    if (group?.startsWith('ci-capacity-') || group?.startsWith('capacity-')) {
+      if (job.concurrency.queue !== 'max' || job.concurrency['cancel-in-progress'] !== false) {
+        throw new Error(`Unsafe capacity queue: ${name}`);
+      }
+    }
+    for (let index = 0; index < count; index++) {
+      const resolved = group?.replace('${{ strategy.job-index }}', String(index));
+      if (resolved?.includes('${{')) throw new Error(`Unsupported capacity group: ${name}`);
+      groups.add(resolved ?? Symbol(`${name}-${index}`));
+    }
+  }
+  return Math.min(slots.length - matched.size, groups.size);
 }
 
 export function normalizeConclusion(conclusion) {
