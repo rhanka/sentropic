@@ -465,6 +465,24 @@ const service = createDecisionService({
 });
 ```
 
+### Qualification and production readiness
+
+The default execution profile is production. The host supplies immutable `readiness` evidence
+(`contractConformance`, `transportAccessible`, an exact operating `policy`, and recorded
+`assessments`). Missing criterion calibration refuses admission before credentials or budget.
+`discoverDecisionEvaluator` reports identity, billing, protocol price, transport and calibration
+independently. `productionReady` exists only for a specific request/policy; evaluator discovery
+lists qualified scopes. A passing rubric never qualifies new arbitrary instructions.
+
+An explicitly published `executionProfile: 'qualification'` candidate remains experimental,
+even with provisional expected served IDs. It still needs qualified financial bounds, host
+credentials, one-attempt admission and validated v1 receipts. No experimental marker is added
+to the closed v1 result wire; hosts expose the candidate profile through discovery.
+
+The host exports `decisionExecutionDigest`, `decisionQualificationScope` and
+`assessDecisionCalibration` for reproducible offline records. Fixtures cannot qualify semantic
+calibration. See [the assessment contract and L6 requirements](../../spec/decision/v4l5-qualification.md).
+
 ### Native OpenAI Decisions
 
 The host subpath exports `openAiDecisionsDescriptor` and the published standard/no-cache rate projection `openAiDecisionsPrice`.

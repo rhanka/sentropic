@@ -837,6 +837,14 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
 
 ## Generic Decision Capability (BR96 Evolution)
 
+V4-L5 adds exact criterion/policy readiness, explicit experimental qualification profiles,
+protocol-bound finite pricing, and deterministic offline assessment validation. Production
+admission requires contract, identity, billing, price, accessible transport and matching
+calibration independently; receipt v1 remains unchanged. Execution changes invalidate evidence,
+while evidence-only updates can qualify the same candidate digest. The public discovery surface
+never publishes universal readiness from a single passing rubric. See the
+[record/report contract and L6 handoff](decision/v4l5-qualification.md).
+
 Generic evaluation contracts, portable client execution, and trusted JEV hosting are established under `@sentropic/llm-mesh/decision`, `@sentropic/llm-mesh/decision/host`, and `@sentropic/llm-mesh/transport/jev` (pre-V4-L2 `judge` imports, §12 migration history).
 
 V4-L3 adds the separately registered `openai-decisions` backend through the existing host subpath and cluster

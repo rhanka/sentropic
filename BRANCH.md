@@ -68,7 +68,7 @@
   - [x] Cap exhaustion and missing evidence produce incomplete/blocked reports; fixtures never establish semantic calibration.
   - [x] Scoped assessment controls pass; recording tests validate receipt projections, independent work counts and pre-dispatch cap stops.
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Public exports, README, tracked mesh spec and L6 report/run-packet needs; coherent package feature tuple.
+  - [x] Public exports, README, tracked mesh spec and L6 report/run-packet needs; feature tuple mesh 0.30.0 / gateway 0.21.5 / cluster 0.22.6.
 - [ ] **Lot N — Final validation**
   - [ ] Full mesh tests, typecheck, lint, build/pack; cluster compatibility and packed consumer gates; no product UI changes.
   - [ ] UAT: recorded production refusal and experimental qualification controls; web/Chrome/VSCode unaffected.
