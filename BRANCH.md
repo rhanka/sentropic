@@ -53,7 +53,7 @@
   - [x] Verify registry 0.22.0/0.22.1 and 0.23.0 absence; retain #709 closure bytes and ancestry evidence outside the PR.
 - [ ] **Lot 1 — BR-E2-EX1 CI qualification**
   - [ ] Add exact E2 and preserve Immo integration PR bases; compare bump gate to actual PR head/base merge-base.
-  - [ ] Wire existing build/typecheck/lint/scoped memory/storage tests and real PG through isolated Compose; retain commands, exit codes, inventory, logs and hashes.
+  - [x] Wire existing build/typecheck/lint/scoped memory/storage tests and real PG through isolated Compose; retain commands, exit codes, inventory, logs and hashes.
   - [ ] Keep every existing publish job predicate unchanged; no development version publication.
   - [ ] Run `make scope-check ENV=test-e2-int` before each atomic commit below 150 lines.
 - [ ] **Lot 2 — PRE-E0 record and final validation**
