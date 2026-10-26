@@ -8,7 +8,7 @@ import {
 import type { PgCore } from './core.js';
 import type { PgSession } from './protocol.js';
 import type { PgRoot } from './roots.js';
-import { decodePgCounter, decodePgJson, decodePgText } from './codec.js';
+import { decodePgCounter, decodePgCounterU64, decodePgJson, decodePgText } from './codec.js';
 import { ownPgValue, pgUnitDigest } from './ordinary-transactions.js';
 export interface PgBoundary extends PgRoot {
   readonly token: string;
@@ -58,8 +58,8 @@ export const readPgBoundary = async (
   return {
     token,
     root: row.root === null ? null : decodePgCounter(row.root),
-    version: decodePgCounter(row.version),
-    sequence: decodePgCounter(row.sequence),
+    version: decodePgCounterU64(row.version),
+    sequence: decodePgCounterU64(row.sequence),
     metadata,
   };
 };

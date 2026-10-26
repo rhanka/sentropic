@@ -66,6 +66,45 @@ describe('consumed-counter migration chain', () => {
 });
 
 describe.skipIf(!pgEnabled)('consumed-counter migration application', () => {
+  it.each(['9007199254740992', '9223372036854775807'])('upgrades populated 006 counters at %s, preserves rows and reopens', async (before) => {
+    const assets = await loadPgAssets();
+    const fixture = await createPgFixture({ assets: assets.slice(0, 6) });
+    try {
+      const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
+      const root = await fixture.open();
+      const bound = await root.bindNew(grant);
+      await bound.commitAtomic({ guards: [], records: [{ key: 'upgrade', contentHash: 'h', bytes: { format: 'utf8', data: 'retained' } }], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [] });
+      await bound.journalFence();
+      await bound.journalRead(0, 1, 'legacy');
+      await fixture.tx.run(false, async (session) => {
+        await session.execute({ text: `UPDATE "${fixture.name}".scopes SET version=$1::bigint,sequence=$1::bigint`, values: [before] });
+        await session.execute({ text: `UPDATE "${fixture.name}".fences SET epoch=$1::bigint`, values: [before] });
+        await session.execute({ text: `UPDATE "${fixture.name}".consumers SET state=state || '{"cursor":0,"scanned":1}'::jsonb`, values: [] });
+        await session.execute({ text: `UPDATE "${fixture.name}".journal SET sequence=$1::bigint,event=jsonb_set(jsonb_set(event,'{seq}',to_jsonb($1::text)),'{rootVersion}',to_jsonb($1::text))`, values: [before] });
+        await session.execute({ text: `INSERT INTO "${fixture.name}".boundaries SELECT key,'retained',$1,root,version,sequence,jsonb_build_object('incarnation',incarnation) FROM "${fixture.name}".scopes`, values: [grant.principalId] });
+      });
+      await fixture.tx.run(true, (session) => verifyPgInstallation(session, fixture.options.layout, assets.slice(0, 6), fixture.options.history));
+      await fixture.tx.run(false, (session) => applyPgMigrations(session, fixture.options.layout, assets, fixture.options.history, { id: 'neutral-host/007', checksum: 'b'.repeat(64) }));
+      fixture.options.assets = assets;
+      const rebound = await (await fixture.open()).bind(grant);
+      expect(await readCounters(fixture)).toEqual({ version: before, sequence: before });
+      expect(await rebound.journalInspect('legacy')).toMatchObject({ cursor: '0', lag: before });
+      expect(await rebound.readRecord('upgrade')).toMatchObject({ bytes: { format: 'utf8', data: 'retained' } });
+      expect((await rebound.journalRead((BigInt(before) - 1n).toString(), 10)).events[0]!.seq).toBe(before);
+      const preserved = await fixture.tx.run(true, (session) => session.execute({ text: `SELECT epoch::text,version::text,sequence::text FROM "${fixture.name}".fences CROSS JOIN "${fixture.name}".boundaries`, values: [] }));
+      expect(preserved.rows).toEqual([{ epoch: before, version: before, sequence: before }]);
+      for (const [table, column] of [['scopes', 'version'], ['scopes', 'sequence'], ['journal', 'sequence'], ['fences', 'epoch'], ['boundaries', 'version'], ['boundaries', 'sequence']]) {
+        for (const invalid of ['-1', '18446744073709551616']) {
+          await expect(fixture.tx.run(false, (session) => session.execute({ text: `UPDATE "${fixture.name}".${table} SET ${column}=$1::numeric`, values: [invalid] }))).rejects.toMatchObject({ sqlState: '23514' });
+        }
+      }
+      await rebound.commitAtomic({ guards: [], records: [{ key: 'post-upgrade', contentHash: 'h2', bytes: { format: 'utf8', data: 'new' } }], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [] });
+      const after = (BigInt(before) + 1n).toString();
+      expect(await readCounters(fixture)).toEqual({ version: after, sequence: after });
+      expect((await rebound.journalRead(before, 10)).events[0]!.seq).toBe(after);
+      await fixture.tx.run(true, (session) => verifyPgInstallation(session, fixture.options.layout, assets, fixture.options.history));
+    } finally { await fixture.close(); }
+  });
   const historyFor = (name: string): PgHostHistory => ({
     read: async (session) => (await session.execute({ text: `SELECT receipt FROM "${name}".host_history ORDER BY ordinal`, values: [] })).rows.map((row) => row.receipt),
     complete: async (session, receipt) => { await session.execute({ text: `INSERT INTO "${name}".host_history(ordinal,receipt) VALUES($1,$2::jsonb)`, values: [receipt.order, JSON.stringify(receipt)] }); },

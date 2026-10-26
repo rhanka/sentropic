@@ -3,12 +3,16 @@
 // u64 maximum, with reopen and rollback. A decimal string converted to
 // Number or to signed BIGINT must fail.
 import { describe, expect, it } from 'vitest';
-import { decodePgCounter, pgSafeCounter, decodePgCounterU64 } from '../../src/storage/postgres/codec.js';
+import { decodePgCounter, decodePgCounterU64 } from '../../src/storage/postgres/codec.js';
+import { pgSafeCounter } from '../../src/storage/postgres/journal.js';
 import { createPgFixture } from './pg-fixture.js';
 import { pgEnabled } from './pg-driver.js';
 import { grantFor } from './authority-corpus.js';
 import type { WriterFence } from '../../src/storage/contracts.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
+import { validateMemoryEffects } from '../../src/engram-memory/postgres.js';
+import { StorageInvalidCommandError } from '../../src/storage/errors.js';
+import type { PgSession } from '../../src/storage/postgres/protocol.js';
 
 const U64_MAX = '18446744073709551615';
 const SIGNED_MAX = '9223372036854775807';
@@ -41,6 +45,78 @@ describe('exact-u64 counter codec', () => {
 });
 
 describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
+  it.each(['9007199254740992', '9223372036854775808', U64_MAX])('records the E4/E5 commit-options epoch refusal at %s', async (epoch) => {
+    const fixture = await createPgFixture();
+    try {
+      const grant = grantFor({ operations: ['read', 'write'] });
+      const root = await fixture.open();
+      const bound = await root.bindNew(grant);
+      const fence = { fenceId: 'handoff', epoch, incarnation: root.incarnation, ownerId: grant.principalId };
+      await root.provisionFence(grant, fence);
+      await expect(bound.commitAtomic(recordUnit(), { fence })).rejects.toMatchObject({ code: 'invalid-command' });
+      expect(await bound.readRecord('u64-record')).toBeNull();
+      expect(await readCounters(fixture)).toBeUndefined();
+    } finally { await fixture.close(); }
+  });
+  it.each(['9007199254740992', '9223372036854775808', U64_MAX])('replays, checkpoints and snapshots exact journal positions at %s', async (next) => {
+    const descriptor = { contractVersion: 'v1', contractDigest: 'u64-snapshot', schemaVersions: ['1'], requiredProfiles: [], optionalProfiles: [], chainKinds: ['test'], queryNames: ['scope-chain-index'], boundaries: ['scope'], pageLimits: { maxRecords: 10, maxEncodedBytes: 1048576 } };
+    const fixture = await createPgFixture({ descriptor, queries: { 'scope-chain-index': async (_input, context) => {
+      const result = await context.session.execute({ text: `SELECT "${context.layout.dataSchema}".map_get($1::bigint,$2) AS value`, values: [context.root, '["record","u64-record"]'] });
+      return { records: [JSON.parse(Buffer.from(result.rows[0]!.value as Uint8Array).toString('utf8'))], nextCursor: null };
+    } } });
+    try {
+      const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
+      const root = await fixture.open();
+      const bound = await root.bindNew(grant);
+      const fence = await bound.journalFence();
+      await bound.commitAtomic(recordUnit());
+      const previous = (BigInt(next) - 1n).toString();
+      await seedCounters(fixture, previous);
+      const before = await bound.journalResync('u64', fence);
+      expect(before.journalSeq).toBe(previous);
+      expect((await bound.snapshotRead(before.snapshotRoot, 0, 10)).watermark).toBe(previous);
+      await bound.journalCheckpoint('u64', '0', previous, fence);
+      await bound.commitAtomic(recordUnit());
+      const delivery = await bound.journalRead(BigInt(previous), 10, 'u64');
+      expect(delivery.watermark).toBe(next);
+      expect(delivery.events.map((event) => event.seq)).toEqual([next]);
+      expect((await bound.journalInspect('fresh')).lag).toBe(next);
+      await bound.journalPoison('u64', delivery.events[0]!.eventId, 'decode failed');
+      const rebound = await (await fixture.open()).bind(grant);
+      expect(await rebound.journalInspect('u64')).toMatchObject({ cursor: previous, lag: '1', status: 'stalled' });
+      await expect(rebound.journalCheckpoint('u64', previous, next, fence)).rejects.toMatchObject({ code: 'invalid-command' });
+      await rebound.journalRetry('u64', delivery.events[0]!.eventId, fence);
+      expect((await rebound.journalRead(previous, 10, 'u64')).events).toEqual(delivery.events);
+      await rebound.journalCheckpoint('u64', previous, next, fence);
+      expect(await rebound.journalInspect('u64')).toMatchObject({ cursor: next, lag: '0', failedEvent: null });
+      await expect(rebound.journalCheckpoint('u64', previous, next, fence)).rejects.toMatchObject({ code: 'cas-conflict' });
+      const snapshot = await rebound.journalResync('snapshot', fence);
+      expect(snapshot.journalSeq).toBe(next);
+      const page = await rebound.snapshotRead(snapshot.snapshotRoot, 0, 10);
+      expect(page.watermark).toBe(next);
+      expect(page.rows).toHaveLength(1);
+      expect(page.next).toBeNull();
+      await rebound.journalCheckpoint('snapshot', 0, next, fence);
+      expect(await rebound.journalInspect('snapshot')).toMatchObject({ cursor: next, lag: '0' });
+      expect(await rebound.journalRead(next, 10)).toEqual({ events: [], watermark: next });
+      await expect(rebound.journalRead(9007199254740992, 10)).rejects.toMatchObject({ code: 'invalid-command' });
+    } finally { await fixture.close(); }
+  });
+  it.each([undefined, [1], [-1], [9007199254740992], [''], ['r', 'r'], [null], ['r', undefined]].map((resultIds) => ({ resultIds })))('refuses invalid index result ids $resultIds before persistence', async ({ resultIds }) => {
+    let effects = 0;
+    const fixture = await createPgFixture({ validateEffects: async () => { effects += 1; } });
+    try {
+      const bound = await (await fixture.open()).bindNew(grantFor({ operations: ['read', 'write'] }));
+      for (const version of [1, '9223372036854775808']) {
+        const unit = { ...recordUnit(), updates: [{ key: 'k3', version, value: { format: 'utf8', data: 'v' } }], indexWrites: [{ key: 'bad', digest: 'd', resultIds, resultHash: null }] } as unknown as AtomicUnit;
+        await expect(bound.commitAtomic(unit)).rejects.toMatchObject({ code: 'invalid-command' });
+      }
+      expect(effects).toBe(0);
+      expect(await bound.indexGet('bad')).toBeNull();
+      expect(await bound.readRecord('u64-record')).toBeNull();
+      expect(await readCounters(fixture)).toBeUndefined();
+    } finally { await fixture.close(); }
+  });
   it('refuses decimal strings converted to Number or to signed BIGINT', async () => {
     expect(() => pgSafeCounter('9007199254740992')).toThrow();
     const fixture = await createPgFixture();
@@ -96,21 +172,65 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
       expect(await readEpoch(fixture)).toBe(U64_MAX);
     } finally { await fixture.close(); }
   });
-  it('applies u64 aggregate versions and guards exactly', async () => {
-    const fixture = await createPgFixture();
+  it.each(['memory-pending-control-v1', 'memory-state-v1', 'memory-admission-outcome-v1'])('applies K3/K5/K8 versions and guards through max u64 for %s', async (kind) => {
+    const fixture = await createPgFixture({ moduleId: 'engram-memory', validateEffects: async (unit) => validateMemoryEffects(unit) });
     try {
       const root = await fixture.open();
-      const bound = await root.bindNew(grantFor({ operations: ['read', 'write'] }));
-      const value = { format: 'utf8', data: 'k3-state' } as const;
-      await bound.commitAtomic({ ...recordUnit(), updates: [{ key: 'k3', version: '9007199254740992' as unknown as number, value }] } as unknown as AtomicUnit);
-      await bound.commitAtomic({ ...recordUnit(), guards: [{ kind: 'aggregate-version', key: 'k3', version: '9007199254740992' as unknown as number }] } as unknown as AtomicUnit);
-      await expect(bound.commitAtomic({ ...recordUnit(), updates: [{ key: 'k3', version: '9007199254740992' as unknown as number, value }] } as unknown as AtomicUnit)).rejects.toMatchObject({ code: 'cas-conflict' });
-      await bound.commitAtomic({ ...recordUnit(), updates: [{ key: 'k3', version: '9007199254740993' as unknown as number, value }] } as unknown as AtomicUnit);
-      const seen = await bound.readAggregate('k3');
-      expect(seen?.version).toBe('9007199254740993');
+      const grant = grantFor({ moduleId: 'engram-memory', operations: ['read', 'write'] });
+      const bound = await root.bindNew(grant);
+      const key = JSON.stringify(kind === 'memory-state-v1' ? [kind, 'candidate', 'u64'] : [kind, 'u64']);
+      const value = { format: 'utf8', data: JSON.stringify({ candidateId: 'u64', outcome: 'accepted', proof: { cursor: U64_MAX } }) } as const;
+      for (const version of ['9007199254740991', '9007199254740992', SIGNED_MAX, '9223372036854775808', '18446744073709551614', U64_MAX]) {
+        const update = { ...recordUnit(), records: [], updates: [{ key, version, value }] } as unknown as AtomicUnit;
+        await bound.commitAtomic(update);
+        await bound.commitAtomic({ ...recordUnit(), guards: [{ kind: 'aggregate-version', key, version }] } as unknown as AtomicUnit);
+        expect((await bound.readAggregate(key))?.version).toBe(version);
+        await expect(bound.commitAtomic(update)).rejects.toMatchObject({ code: 'cas-conflict' });
+        await expect(bound.commitAtomic({ ...recordUnit(), guards: [{ kind: 'aggregate-version', key, version: (BigInt(version) - 1n).toString() }] } as unknown as AtomicUnit)).rejects.toMatchObject({ code: 'cas-conflict' });
+      }
+      await expect(bound.commitAtomic({ ...recordUnit(), updates: [{ key, version: '18446744073709551616', value }] } as unknown as AtomicUnit)).rejects.toMatchObject({ code: 'invalid-command' });
       const reopened = await fixture.open();
-      const rebound = await reopened.bindNew(grantFor({ operations: ['read', 'write'] }));
-      expect((await rebound.readAggregate('k3'))?.version).toBe('9007199254740993');
+      const rebound = await reopened.bind(grant);
+      expect((await rebound.readAggregate(key))?.version).toBe(U64_MAX);
+      await rebound.commitAtomic({ ...recordUnit(), guards: [{ kind: 'aggregate-version', key, version: U64_MAX }] } as unknown as AtomicUnit);
+    } finally { await fixture.close(); }
+  });
+  it.each(['9223372036854775808', U64_MAX])('rolls back after root publication and journal insert at %s', async (next) => {
+    let fail = false;
+    let published = 0;
+    let currentSession: PgSession;
+    const fixture = await createPgFixture({ onCommitPossession: async () => {
+      if (!fail) return;
+      const visible = await currentSession.execute({
+        text: `SELECT version::text,sequence::text,(SELECT max(sequence)::text FROM "${fixture.name}".journal) AS tail FROM "${fixture.name}".scopes`, values: [],
+      });
+      expect(visible.rows).toEqual([{ version: next, sequence: next, tail: next }]);
+      published += 1;
+      throw new StorageInvalidCommandError('injected post-publish rollback');
+    } });
+    const driver = fixture.options.driver;
+    fixture.options.driver = { transaction: (options, operation) => driver.transaction(options, (session) => {
+      currentSession = session;
+      return operation(session);
+    }) };
+    try {
+      const grant = grantFor({ operations: ['read', 'write'] });
+      const bound = await (await fixture.open()).bindNew(grant);
+      await bound.commitAtomic(recordUnit());
+      const previous = (BigInt(next) - 1n).toString();
+      await seedCounters(fixture, previous);
+      fail = true;
+      const unit = { ...recordUnit(), records: [{ ...recordUnit().records[0]!, key: 'rollback' }] };
+      await expect(bound.commitAtomic(unit)).rejects.toMatchObject({ code: 'invalid-command' });
+      expect(published).toBe(1);
+      expect(await readCounters(fixture)).toEqual({ version: previous, sequence: previous });
+      expect(await journalTail(fixture)).toBe('1');
+      const rebound = await (await fixture.open()).bind(grant);
+      expect(await rebound.readRecord('rollback')).toBeNull();
+      fail = false;
+      await rebound.commitAtomic(unit);
+      expect(await readCounters(fixture)).toEqual({ version: next, sequence: next });
+      expect((await rebound.journalRead(previous, 10)).events.map((event) => event.seq)).toEqual([next]);
     } finally { await fixture.close(); }
   });
 });
