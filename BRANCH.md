@@ -63,5 +63,6 @@
   - [x] Preserve #709 Lots 2/4/6 succession to E6/E7/E10; retain completed descriptor/Engram pin, keep SQLite qualification separate.
     - [x] Future topics declare E1–E5 generic contracts/atomic/backend/u64/ownership, PG codecs/journal/roots/readers/migrations/instance/transaction/core/scope files, assets and plan §3.2 tests before editing; this preparation changes none.
   - [x] Execute build, typecheck, lint, `tests/engram-memory` (70), common-v1 (10), grants (3), and real PostgreSQL (51) through Make; crash-phase cases stay in the existing main crash lane.
-  - [ ] Push; open PR to main using this file as body; record exact head and CI URL without merging.
+  - [x] Push; open PR #755 to main using this file as body; leave merging to conductor/owner GO.
+  - [ ] Verify final committed-head wiring and CI after correcting the expected-result fixture environment and job-level lock context.
   - [ ] After owner GO and CI landing, conduct real integration-target unchanged/corrected bump probes before admitting topics; refresh each receipt on head/base changes.
