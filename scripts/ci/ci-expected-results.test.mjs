@@ -66,6 +66,24 @@ test('should allow unrelated npm releases when another package fails', () => {
   }
 });
 
+test('should exercise the real publication DAG on a branch without running registry writers', () => {
+  const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
+  const context = { changes, ref: 'refs/heads/topic', event: 'workflow_dispatch', inputs: { capacity_publish_dry_run: true } };
+  const selected = workflowExpected(workflow, context).filter(row => row.selected && row.job.startsWith('publish-'));
+  assert.equal(selected.length, 21);
+  for (const { job: name } of selected) {
+    const steps = workflow.jobs[name].steps;
+    const dry = steps.find(step => step.name === 'Dry-run package publication');
+    assert.equal(dry.if, 'inputs.capacity_publish_dry_run == true', name);
+    assert.equal(dry.run, `make ci-capacity-publish-dry-run PACKAGE=${name.slice(8)} ENV=test-ci-capacity`);
+    for (const step of steps.filter(step => /^Publish |^Qualify published /.test(step.name ?? ''))) {
+      assert.equal(step.if, 'inputs.capacity_publish_dry_run != true', `${name}/${step.name}`);
+    }
+  }
+  const normal = workflowExpected(workflow, { ...context, inputs: { capacity_publish_dry_run: false } });
+  assert.equal(normal.some(row => row.selected && row.job.startsWith('publish-')), false);
+});
+
 test('should bound simultaneous execution slots across dependency joins and matrix caps', () => {
   assert.equal(capacityDemand({ jobs: { a: {}, b: { needs: ['a'] }, c: {} } }), 2);
   const matrix = { strategy: { 'max-parallel': 2, matrix: { include: [{ x: 1 }, { x: 2 }, { x: 3 }] } } };
