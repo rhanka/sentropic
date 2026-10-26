@@ -8,6 +8,8 @@
  */
 
 import type { CompiledMcpRegistry } from '../registry.js';
+import type { StpConnectorContext } from '../runtime.js';
+import { projectMemoryContext, requireTrustedInvocationContext } from '../memory/invocation-context.js';
 
 // ---------------------------------------------------------------------------
 // Policy
@@ -82,4 +84,20 @@ export function authorizeMemoryDispatch(input: AuthorizeMemoryDispatchInput): Me
     return { allowed: false, code: 'unverified_context' };
   }
   return authorizeDispatch(input);
+}
+
+/** Full-context transport policy; a literal verdict alone never supplies identity or source authority. */
+export function authorizeVerifiedMemoryDispatch(input: {
+  registry: CompiledMcpRegistry; toolName: string; context: StpConnectorContext;
+}): DispatchDecision | { allowed: false; code: 'source_binding_mismatch' } {
+  const ctx = requireTrustedInvocationContext(input.context);
+  projectMemoryContext(ctx, ctx.memory!.binding.purpose_ref);
+  const decision = authorizeDispatch({ registry: input.registry, toolName: input.toolName, principal: {
+    sub: ctx.principal.sub, clientId: ctx.mcpClient!.clientId,
+    scopes: [...ctx.principal.scopes], claims: Object.keys(ctx.principal.claims),
+  } });
+  if (decision.allowed && decision.providerId !== 'sentropic.engram.memory') {
+    return { allowed: false, code: 'source_binding_mismatch' };
+  }
+  return decision;
 }
