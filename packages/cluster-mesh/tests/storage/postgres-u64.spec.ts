@@ -12,6 +12,7 @@ import type { WriterFence } from '../../src/storage/contracts.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 import { validateMemoryEffects } from '../../src/engram-memory/postgres.js';
 import { StorageInvalidCommandError } from '../../src/storage/errors.js';
+import type { PgSession } from '../../src/storage/postgres/protocol.js';
 
 const U64_MAX = '18446744073709551615';
 const SIGNED_MAX = '9223372036854775807';
@@ -197,9 +198,21 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
   it.each(['9223372036854775808', U64_MAX])('rolls back after root publication and journal insert at %s', async (next) => {
     let fail = false;
     let published = 0;
-    const fixture = await createPgFixture({ onCommitPossession: () => {
-      if (fail) { published += 1; throw new StorageInvalidCommandError('injected post-publish rollback'); }
+    let currentSession: PgSession;
+    const fixture = await createPgFixture({ onCommitPossession: async () => {
+      if (!fail) return;
+      const visible = await currentSession.execute({
+        text: `SELECT version::text,sequence::text,(SELECT max(sequence)::text FROM "${fixture.name}".journal) AS tail FROM "${fixture.name}".scopes`, values: [],
+      });
+      expect(visible.rows).toEqual([{ version: next, sequence: next, tail: next }]);
+      published += 1;
+      throw new StorageInvalidCommandError('injected post-publish rollback');
     } });
+    const driver = fixture.options.driver;
+    fixture.options.driver = { transaction: (options, operation) => driver.transaction(options, (session) => {
+      currentSession = session;
+      return operation(session);
+    }) };
     try {
       const grant = grantFor({ operations: ['read', 'write'] });
       const bound = await (await fixture.open()).bindNew(grant);
