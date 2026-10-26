@@ -1,13 +1,13 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { fork } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool, type PoolClient } from 'pg';
-import { runMigrations } from '../../src/db/run-migrations';
+import { runControlMigrations, runMigrations } from '../../src/db/run-migrations';
 import {
   artifactMigrationAssets,
   createArtifactHostKv,
@@ -66,8 +66,33 @@ describe('artifact host migrations', () => {
         { idx: 0, version: '7', when: 1792100000000, tag: '0012_reserved_witness', breakpoints: true },
       ] }));
       writeFileSync(join(folder, '0012_reserved_witness.sql'), 'CREATE TABLE control.reserved_slot_witness (id text PRIMARY KEY);');
-      await migrate(drizzle(database), { migrationsFolder: folder, migrationsTable: '__drizzle_control_migrations', migrationsSchema: 'public' });
+      await runControlMigrations(drizzle(database), folder);
       expect((await database.query(`SELECT to_regclass('control.reserved_slot_witness')::text AS witness`)).rows[0].witness).toBe('control.reserved_slot_witness');
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  it('should install the host slot on a database with a later control frontier', async () => {
+    const folder = mkdtempSync(join(tmpdir(), 'w1a-frontier-'));
+    try {
+      mkdirSync(join(folder, 'meta'));
+      const metadata = JSON.parse(readFileSync('drizzle/control/meta/_journal.json', 'utf8'));
+      metadata.entries = metadata.entries.filter((entry: { tag: string }) => entry.tag !== '0020_app_artifact_host');
+      for (const entry of metadata.entries) writeFileSync(join(folder, `${entry.tag}.sql`), readFileSync(`drizzle/control/${entry.tag}.sql`));
+      metadata.entries.push({ idx: 11, version: '7', when: 1792200000000, tag: '0019_frontier_witness', breakpoints: true });
+      writeFileSync(join(folder, 'meta/_journal.json'), JSON.stringify(metadata));
+      writeFileSync(join(folder, '0019_frontier_witness.sql'), 'CREATE TABLE control.frontier_witness (id text PRIMARY KEY);');
+      await migrate(drizzle(database), { migrationsFolder: './drizzle' });
+      await migrate(drizzle(database), { migrationsFolder: folder, migrationsTable: '__drizzle_control_migrations', migrationsSchema: 'public' });
+      // Reproduce the timestamp-only runner skipping the missing earlier host slot.
+      await migrate(drizzle(database), { migrationsFolder: './drizzle/control', migrationsTable: '__drizzle_control_migrations', migrationsSchema: 'public' });
+      expect((await database.query(`SELECT to_regclass('control.artifact_host_kv') AS kv`)).rows).toEqual([{ kv: null }]);
+      await runMigrations(database);
+      expect(await journal()).toHaveLength(3);
+      expect((await database.query(`SELECT to_regclass('control.artifact_host_kv')::text AS kv`)).rows).toEqual([{ kv: 'control.artifact_host_kv' }]);
+      await database.query(`UPDATE public.__drizzle_control_migrations SET hash = repeat('0', 64) WHERE created_at = 1791860000001`);
+      await expect(runMigrations(database)).rejects.toThrow(/control migration journal hash mismatch/i);
     } finally {
       rmSync(folder, { recursive: true, force: true });
     }
@@ -80,6 +105,10 @@ describe('artifact host migrations', () => {
       to_regclass('artifacts.blob_ref_holders')::text AS refs,
       to_regclass('control.artifact_host_kv')::text AS kv`);
     expect(rows[0]).toEqual({ receipts: 'artifacts.operation_receipts', refs: 'artifacts.blob_ref_holders', kv: 'control.artifact_host_kv' });
+    const hostHash = createHash('sha256').update(readFileSync('drizzle/control/0020_app_artifact_host.sql')).digest('hex');
+    expect((await database.query(`SELECT hash FROM public.__drizzle_control_migrations
+      WHERE asset_id IS NULL AND created_at = 1791860000001`)).rows).toEqual([{ hash: hostHash }]);
+    expect((await database.query(`SELECT to_regclass('control.artifact_package_migrations') AS third`)).rows).toEqual([{ third: null }]);
   });
 
   it('should retain journal timestamps and rows on rerun', async () => {

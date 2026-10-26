@@ -1,4 +1,5 @@
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import type { Pool } from 'pg';
@@ -50,13 +51,27 @@ async function reconcileSettingsUserScopeSchema(db: NodePgDatabase): Promise<voi
  * Applied AFTER the public migration stream to respect boot ordering.
  * The `CREATE SCHEMA IF NOT EXISTS control` is the very first control migration.
  */
-async function runControlMigrations(db: NodePgDatabase): Promise<void> {
-  // Drizzle's migrator tracks applied migrations in its own _drizzle table.
-  // For the control stream we use a dedicated table name to avoid collisions.
-  await migrate(db, {
-    migrationsFolder: './drizzle/control',
-    migrationsTable: '__drizzle_control_migrations',
-    migrationsSchema: 'public',
+export async function runControlMigrations(db: NodePgDatabase, migrationsFolder = './drizzle/control'): Promise<void> {
+  const migrations = readMigrationFiles({ migrationsFolder });
+  // Reserved branches can arrive in either order. A timestamp frontier alone loses earlier slots.
+  await db.transaction(async (tx) => {
+    const journal = await tx.execute(sql`SELECT to_regclass('public.__drizzle_control_migrations') AS relation`);
+    if (journal.rows[0].relation === null) {
+      await tx.execute(sql`CREATE TABLE public.__drizzle_control_migrations (
+        id serial PRIMARY KEY, hash text NOT NULL, created_at bigint)`);
+    }
+    const { rows } = await tx.execute(sql`SELECT hash, created_at FROM public.__drizzle_control_migrations WHERE created_at >= 0`);
+    const applied = new Map(rows.map((row) => [Number(row.created_at), String(row.hash)]));
+    for (const migration of migrations) {
+      const hash = applied.get(migration.folderMillis);
+      if (hash !== undefined) {
+        if (hash !== migration.hash) throw new Error(`Control migration journal hash mismatch: ${migration.folderMillis}`);
+        continue;
+      }
+      for (const statement of migration.sql) await tx.execute(sql.raw(statement));
+      await tx.execute(sql`INSERT INTO public.__drizzle_control_migrations (hash, created_at)
+        VALUES (${migration.hash}, ${migration.folderMillis})`);
+    }
   });
 }
 
