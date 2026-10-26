@@ -2,6 +2,18 @@
 
 ## PR #754 Opus r1 corrections
 
+- Packed follow-through: CI 40289904989 exposed the frozen selected fixture's
+  old candidate filename, then full local qualification exposed stale refusal
+  message expectations. BRLIVE-L1-EX4 covers the targeted fixture/assertion changes.
+  The tuple regression failed before updating those files; **15 packaging files /
+  100 tests now pass**, including every installed fixture (no packaging skips).
+- The committed sibling SHA-512 values come from guarded archives whose SHA-256
+  matches the CI archives: mesh `be07abbd916276f524ac148b71cf28a7310dbb10c9c2d5140d9cd1fa78dfc485`,
+  gateway `7d4f6e8f6e6c8543510f0bec3593b9238f4c1547b576dcafb9c965376b9df591`.
+  Reproduce with `rtk flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f .tmp/live-stt/l1/tuple.mk test-l1-packed-tuple ENV=test-live-stt-l1`,
+  then the locked `make -f .tmp/live-stt/l1/verify.mk down ENV=test-live-stt-l1`.
+  `L1_ALIGN=1` regenerates only the three release-tuple lock entries from guarded bytes.
+
 - Tests preceded fixes in `85d194a7e`: seven catalogue/selector failures reproduced;
   the executable partial-revision scenario then failed on its missing projection function.
 - Scoped speech: **31 passed**. Full mesh: **47 files / 855 tests passed**.
