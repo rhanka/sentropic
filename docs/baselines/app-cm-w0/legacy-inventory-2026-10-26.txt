@@ -1,0 +1,102 @@
+2026-10-26T07:39:03Z
+
+NAMESPACE sentropic
+ current_database | current_setting |        clock_timestamp        
+------------------+-----------------+-------------------------------
+ app              | on              | 2026-10-26 07:39:04.511519+00
+(1 row)
+
+
+ t  |  w  | source_type  | context_type | documents | object_refs | declared_bytes | missing_scope 
+----+-----+--------------+--------------+-----------+-------------+----------------+---------------
+ T1 | W1  | local        | folder       |         1 |           1 |         479258 |             0
+ T1 | W11 | local        | folder       |         1 |           1 |         882339 |             0
+ T1 | W2  | local        | folder       |         1 |           1 |         930639 |             0
+ T1 | W7  | google_drive | chat_session |         1 |           0 |          90745 |             0
+ T1 | W7  | google_drive | organization |         1 |           0 |          34440 |             0
+ T1 | W7  | local        | folder       |         2 |           2 |         243048 |             0
+ T1 | W7  | local        | organization |         8 |           8 |       22244740 |             0
+(7 rows)
+
+ versions | missing_document | object_refs | declared_bytes 
+----------+------------------+-------------+----------------
+        0 |                0 |           0 |              0
+(1 row)
+
+ t  |  w  |           type            |  status   | jobs | object_refs | inline_base64 | invalid_json | missing_scope 
+----+-----+---------------------------+-----------+------+-------------+---------------+--------------+---------------
+ T1 | W1  | chat_message              | completed |   72 |           0 |             0 |            0 |             0
+ T1 | W1  | chat_message              | failed    |    1 |           0 |             0 |            0 |             0
+ T1 | W1  | executive_summary         | completed |    3 |           0 |             0 |            0 |             0
+ T1 | W1  | matrix_generate           | completed |    2 |           0 |             0 |            0 |             0
+ T1 | W1  | organization_enrich       | completed |    4 |           0 |             0 |            0 |             0
+ T1 | W1  | usecase_detail            | completed |   35 |           0 |             0 |            0 |             0
+ T1 | W1  | usecase_list              | completed |    3 |           0 |             0 |            0 |             0
+ T1 | W11 | chat_message              | completed |    9 |           0 |             0 |            0 |             0
+ T1 | W11 | document_summary          | completed |    2 |           0 |             0 |            0 |             0
+ T1 | W11 | docx_generate             | completed |    1 |           1 |             0 |            0 |             0
+ T1 | W11 | executive_summary         | completed |    1 |           0 |             0 |            0 |             0
+ T1 | W11 | initiative_detail         | completed |   23 |           0 |             0 |            0 |             0
+ T1 | W11 | initiative_list           | completed |    1 |           0 |             0 |            0 |             0
+ T1 | W11 | matrix_generate           | completed |    2 |           0 |             0 |            0 |             0
+ T1 | W11 | organization_enrich       | completed |    1 |           0 |             0 |            0 |             0
+ T1 | W11 | organization_targets_join | completed |    1 |           0 |             0 |            0 |             0
+ T1 | W11 | usecase_detail            | completed |   20 |           0 |             0 |            0 |             0
+ T1 | W11 | usecase_list              | completed |    1 |           0 |             0 |            0 |             0
+ T1 | W2  | chat_message              | completed |    1 |           0 |             0 |            0 |             0
+ T1 | W2  | document_summary          | completed |    1 |           0 |             0 |            0 |             0
+ T1 | W2  | executive_summary         | completed |    2 |           0 |             0 |            0 |             0
+ T1 | W2  | initiative_detail         | completed |   25 |           0 |             0 |            0 |             0
+ T1 | W2  | initiative_list           | completed |    1 |           0 |             0 |            0 |             0
+ T1 | W2  | usecase_detail            | completed |   20 |           0 |             0 |            0 |             0
+ T1 | W2  | usecase_list              | completed |    1 |           0 |             0 |            0 |             0
+ T1 | W7  | chat_message              | completed |    8 |           0 |             0 |            0 |             0
+ T1 | W7  | chat_message              | failed    |    2 |           0 |             0 |            0 |             0
+ T1 | W7  | document_summary          | completed |   14 |           0 |             0 |            0 |             0
+ T1 | W7  | organization_enrich       | completed |    1 |           0 |             0 |            0 |             0
+(29 rows)
+
+ messages | with_attachments | content_storage_marker | tool_storage_marker | tool_results 
+----------+------------------+------------------------+---------------------+--------------
+      141 |                0 |                      0 |                   0 |            0
+(1 row)
+
+ workspaces | missing_tenant | missing_owner 
+------------+----------------+---------------
+         16 |              0 |             0
+(1 row)
+
+
+
+NAMESPACE sentropic-preprod
+ current_database | current_setting |        clock_timestamp        
+------------------+-----------------+-------------------------------
+ app              | on              | 2026-10-26 07:39:05.600208+00
+(1 row)
+
+
+ t | w | source_type | context_type | documents | object_refs | declared_bytes | missing_scope 
+---+---+-------------+--------------+-----------+-------------+----------------+---------------
+(0 rows)
+
+ versions | missing_document | object_refs | declared_bytes 
+----------+------------------+-------------+----------------
+        0 |                0 |           0 |              0
+(1 row)
+
+ t | w | type | status | jobs | object_refs | inline_base64 | invalid_json | missing_scope 
+---+---+------+--------+------+-------------+---------------+--------------+---------------
+(0 rows)
+
+ messages | with_attachments | content_storage_marker | tool_storage_marker | tool_results 
+----------+------------------+------------------------+---------------------+--------------
+        0 |                0 |                      0 |                   0 |            0
+(1 row)
+
+ workspaces | missing_tenant | missing_owner 
+------------+----------------+---------------
+          3 |              0 |             0
+(1 row)
+
+
+2026-10-26T07:39:05Z
