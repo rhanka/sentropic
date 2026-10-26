@@ -37,6 +37,8 @@
 - [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
+- [ ] CI-LIVE — attention: standard API/E2E/VSCode/restore jobs receive provider secrets. Owner choice pending for the tested draft-only fixture CI proposal; do not open an auto-running PR before resolving the no-paid/live-inference constraint.
+- [ ] REVIEW — attention: exact complementary reviewers not selected; no independent code-review consensus is claimed. Author handoff is ready for the conductor.
 - [x] P24 dated GA schema: two additional missing-usage-details controls failed before correction; require cache/reasoning objects while preserving independently reported counters.
 - [x] BR93-EX2: mesh 0.29.0 is rejected by cluster's current <0.29.0 bound. Extend only mesh compatibility to <0.30.0, gateway mesh dependency and exact fixture/CI tuple; patch-bump the affected metadata/source packages. Impact: admits the tested native Decisions minor via the existing loader. Rollback: revert tuple/range cells together. Conditional `.github/workflows/ci.yml` changes are limited to its three exact PEERS tuples.
 - [x] BR93-EX1: synchronize only the llm-mesh workspace version in `package-lock.json` after the mandatory feature bump. Impact: one workspace metadata cell, no dependency resolution changes. Rollback: revert that cell with the package version.
@@ -61,16 +63,17 @@
 - [x] **Lot 2 — P24 separate Decisions codec**
   - [x] Add failing native controls and independent name/count/type/refusal/usage/identity mutations in decision-openai-v4l3.test.ts.
   - [x] Implement one-question predicate/choice/score protocol with independent usage evidence.
-- [ ] **Lot 3 — Transport, registration and tariff**
+- [x] **Lot 3 — Transport, registration and tariff**
   - [x] Add fixed HTTPS Decisions transport and adapter with explicit descriptor registration.
   - [x] Test endpoint, credentials, one attempt, no CLI route, protocol tariff collision and unqualified refusal.
   - [x] Keep JEV baseline and OpenAI candidate report packets with source evidence and outstanding qualification.
-  - [ ] Test mesh 0.29 admission, update cluster/gateway compatibility metadata and verify packed tuple.
+  - [x] Test mesh 0.29 admission, update cluster/gateway compatibility metadata and verify packed tuple (107 packed tests passed).
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Update mesh README and tracked specification; registry baseline mesh 0.28.1/gateway 0.21.3/cluster 0.22.4; candidates 0.29.0/0.21.4/0.22.5.
 - [ ] **Lot N — Final validation**
-  - [x] Full mesh tests: 1440 passed across 80 files; mesh typecheck/lint passed on ENV=test-decision-v4l3.
-  - [ ] Full cluster tests and typecheck/lint; packed consumer qualification.
+  - [x] Full mesh tests: 1442 passed across 80 files; mesh typecheck/lint passed on ENV=test-decision-v4l3.
+  - [x] Full cluster: 1144 passed/129 conventionally skipped; cluster typecheck/lint passed; packed consumer 107/15 passed; train lock integrity passed for published baselines, native candidates remain unpublished.
+  - [x] Source qualification head 1f4ed952d: verified sibling receipts; mesh archive SHA256 fd8a63feae824e3dc0800aa926ff64749681e4191b43391f906ac0da2dea342e. Preserve the published artifacts 0.1.4 lock baseline.
   - [x] CI wiring tests: 24 passed; memory-l5-verify: 30 files/54 edges, unchanged retained manifest.
   - [ ] Independent harness review; reconcile findings with tests.
   - [ ] Scope-check before every selective atomic commit under 150 lines.
