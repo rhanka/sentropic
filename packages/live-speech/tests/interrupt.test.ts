@@ -98,7 +98,7 @@ describe('durable interruption', () => {
   it('should bind a late native ID only to the tombstone and interrupt it', async () => {
     const f = fixture();
     let resolve!: (value: { nativeTurnId: string }) => void;
-    vi.mocked(f.control.start).mockImplementation(() => new Promise(r => { resolve = r; }));
+    vi.mocked(f.control.start).mockImplementationOnce(() => new Promise(r => { resolve = r; }));
     const turn = await commit(f.core);
     const sending = f.core.send(turn);
     await vi.waitFor(() => expect(f.control.start).toHaveBeenCalledOnce());
