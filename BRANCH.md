@@ -89,6 +89,7 @@
   - [x] Consolidate findings into the bounded downstream branch handoffs, including W3/T3 EX1 and P/TG EX2.
 - [ ] **Lot 3 — Final validation and draft delivery**
   - [x] W0-close.a/d: baseline/authorization/catalogue/README consolidated around dated current receipts; B03/B08 remain open, UP-T W1.c dependency explicit, no restore or PR merge.
+  - [x] W0-close.a/d verification: strict published fit and original vector/source/link checks pass; payload asset comparisons, JSON/diff hygiene, mechanical C1/C2 and matching locked Compose cleanup recorded in verification-2026-10-26.md; exact pushed-head CI checked at delivery.
   - [x] Check JSON, source citations, secret hygiene, reservations, prototype/verifier evidence and every diff hunk; run `make scope-check` before each commit.
   - [x] Reproducible committed `probe.mk`: `w0-host-fit` and `w0-record-check` pass on the pinned Node image, exact selectors and frozen public vectors; no product services/credentials.
   - [x] Follow-up validation: w0-record-check passes; 34 local record/dossier links and retained CI JSON checked; COPY fixture passes; live digests and independent acceptance stay pending.

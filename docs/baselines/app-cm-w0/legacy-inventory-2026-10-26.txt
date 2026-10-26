@@ -1,13 +1,13 @@
 2026-10-26T07:39:03Z
 
 NAMESPACE sentropic
- current_database | current_setting |        clock_timestamp        
+ current_database | current_setting |        clock_timestamp
 ------------------+-----------------+-------------------------------
  app              | on              | 2026-10-26 07:39:04.511519+00
 (1 row)
 
 
- t  |  w  | source_type  | context_type | documents | object_refs | declared_bytes | missing_scope 
+ t  |  w  | source_type  | context_type | documents | object_refs | declared_bytes | missing_scope
 ----+-----+--------------+--------------+-----------+-------------+----------------+---------------
  T1 | W1  | local        | folder       |         1 |           1 |         479258 |             0
  T1 | W11 | local        | folder       |         1 |           1 |         882339 |             0
@@ -18,12 +18,12 @@ NAMESPACE sentropic
  T1 | W7  | local        | organization |         8 |           8 |       22244740 |             0
 (7 rows)
 
- versions | missing_document | object_refs | declared_bytes 
+ versions | missing_document | object_refs | declared_bytes
 ----------+------------------+-------------+----------------
         0 |                0 |           0 |              0
 (1 row)
 
- t  |  w  |           type            |  status   | jobs | object_refs | inline_base64 | invalid_json | missing_scope 
+ t  |  w  |           type            |  status   | jobs | object_refs | inline_base64 | invalid_json | missing_scope
 ----+-----+---------------------------+-----------+------+-------------+---------------+--------------+---------------
  T1 | W1  | chat_message              | completed |   72 |           0 |             0 |            0 |             0
  T1 | W1  | chat_message              | failed    |    1 |           0 |             0 |            0 |             0
@@ -56,12 +56,12 @@ NAMESPACE sentropic
  T1 | W7  | organization_enrich       | completed |    1 |           0 |             0 |            0 |             0
 (29 rows)
 
- messages | with_attachments | content_storage_marker | tool_storage_marker | tool_results 
+ messages | with_attachments | content_storage_marker | tool_storage_marker | tool_results
 ----------+------------------+------------------------+---------------------+--------------
       141 |                0 |                      0 |                   0 |            0
 (1 row)
 
- workspaces | missing_tenant | missing_owner 
+ workspaces | missing_tenant | missing_owner
 ------------+----------------+---------------
          16 |              0 |             0
 (1 row)
@@ -69,31 +69,31 @@ NAMESPACE sentropic
 
 
 NAMESPACE sentropic-preprod
- current_database | current_setting |        clock_timestamp        
+ current_database | current_setting |        clock_timestamp
 ------------------+-----------------+-------------------------------
  app              | on              | 2026-10-26 07:39:05.600208+00
 (1 row)
 
 
- t | w | source_type | context_type | documents | object_refs | declared_bytes | missing_scope 
+ t | w | source_type | context_type | documents | object_refs | declared_bytes | missing_scope
 ---+---+-------------+--------------+-----------+-------------+----------------+---------------
 (0 rows)
 
- versions | missing_document | object_refs | declared_bytes 
+ versions | missing_document | object_refs | declared_bytes
 ----------+------------------+-------------+----------------
         0 |                0 |           0 |              0
 (1 row)
 
- t | w | type | status | jobs | object_refs | inline_base64 | invalid_json | missing_scope 
+ t | w | type | status | jobs | object_refs | inline_base64 | invalid_json | missing_scope
 ---+---+------+--------+------+-------------+---------------+--------------+---------------
 (0 rows)
 
- messages | with_attachments | content_storage_marker | tool_storage_marker | tool_results 
+ messages | with_attachments | content_storage_marker | tool_storage_marker | tool_results
 ----------+------------------+------------------------+---------------------+--------------
         0 |                0 |                      0 |                   0 |            0
 (1 row)
 
- workspaces | missing_tenant | missing_owner 
+ workspaces | missing_tenant | missing_owner
 ------------+----------------+---------------
           3 |              0 |             0
 (1 row)
