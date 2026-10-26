@@ -3640,35 +3640,98 @@ k8s-pgbackup-now: ## Trigger an immediate Postgres backup Job from the CronJob a
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) logs "job/$$job" -c upload --tail=10 ; \
 	echo "==> Backup Job $$job complete."
 
-k8s-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verification (PG_BACKUP_KEY=pg/<ts>.sql.gz)
-	@test -n "$(PG_BACKUP_KEY)" || { echo "ERROR: set PG_BACKUP_KEY=pg/<timestamp>.sql.gz (see: make k8s-pgbackup-list)" >&2; exit 1; }
-	@set -eu ; pod="pgbackup-restore-$$(date -u +%Y%m%d%H%M%S)" ; \
-	echo "==> Restoring $(PG_BACKUP_KEY) into scratch DB restore_check on postgres (non-destructive to app DB)" ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) run "$$pod" --rm -i --restart=Never --image=postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 \
+# --- Isolated pgbackup restore (W0-close.b, W0-EX1 lease; operator-side) ----
+# Restores ONE backup object into the ISOLATED namespace/PG/DB only and prints
+# the B03 backup/object manifest (key, bytes, sha256, row counts). It refuses
+# the prod/preprod namespaces, PG hosts, DB names and buckets, an absent
+# identity and unsafe defaults, ALL BEFORE any kubectl write. The source
+# bucket is intentionally the live backup bucket (read-only credential); the
+# optional scratch bucket must be a bare name different from it.
+# `k8s-db-restore-preprod` (which overwrites preprod) is excluded/untouched.
+# Provisioned by k8s before W0-close.c; the tenant confirms the actual
+# allocated names/credentials (referenced by name only, never printed) first.
+RESTORE_NAMESPACE ?= sentropic-restore-app-cm
+RESTORE_PGHOST ?= postgres-restore
+RESTORE_PGPORT ?= 5432
+RESTORE_PGUSER ?= app
+RESTORE_PGDB ?= app_cm_restore
+RESTORE_PG_SECRET ?= postgres-restore
+RESTORE_READ_SECRET ?= sentropic-pgbackup
+RESTORE_KEEP_DB ?= false
+RESTORE_SCRATCH_BUCKET ?=
+
+k8s-pgbackup-restore: ## Restore a dump from S3 into the ISOLATED restore PG/DB and print the B03 manifest [PG_BACKUP_KEY=pg/<ts>.sql.gz]
+	@test -n "$(PG_BACKUP_KEY)" || { echo "ERROR: set PG_BACKUP_KEY=pg/<timestamp>.sql.gz (pick from the B03 readings or a fresh k8s-pgbackup-now job)" >&2; exit 1; }
+	@case "$(PG_BACKUP_KEY)" in pg/*.sql.gz) ;; *) echo "ERROR: PG_BACKUP_KEY must look like pg/<timestamp>.sql.gz, got '$(PG_BACKUP_KEY)'" >&2; exit 1 ;; esac
+	@case "$(PG_BACKUP_KEY)" in *..*|*/*/*) echo "ERROR: PG_BACKUP_KEY must not contain '..' or sub-paths" >&2; exit 1 ;; esac
+	@test -n "$(KUBECONFIG)" || { echo "ERROR: KUBECONFIG must be set to the dedicated restore-namespace kubeconfig (credential referenced by name only, never printed)" >&2; exit 1; }
+	@test -f "$(KUBECONFIG)" || { echo "ERROR: KUBECONFIG file not found: $(KUBECONFIG)" >&2; exit 1; }
+	@test -n "$(RESTORE_NAMESPACE)" || { echo "ERROR: RESTORE_NAMESPACE is required (proposed: sentropic-restore-app-cm)" >&2; exit 1; }
+	@test "$(RESTORE_NAMESPACE)" != "$(K8S_NAMESPACE)" || { echo "ERROR: refusing production namespace '$(RESTORE_NAMESPACE)'" >&2; exit 1; }
+	@test "$(RESTORE_NAMESPACE)" != "$(K8S_PREPROD_NAMESPACE)" || { echo "ERROR: refusing preprod namespace '$(RESTORE_NAMESPACE)'" >&2; exit 1; }
+	@case "$(RESTORE_NAMESPACE)" in sentropic|sentropic-preprod) echo "ERROR: refusing reserved live namespace '$(RESTORE_NAMESPACE)'" >&2; exit 1 ;; esac
+	@test -n "$(RESTORE_PGHOST)" || { echo "ERROR: RESTORE_PGHOST is required (proposed: postgres-restore)" >&2; exit 1; }
+	@case "$(RESTORE_PGHOST)" in postgres|postgres.sentropic*|postgres.sentropic-preprod*) echo "ERROR: refusing live Postgres host '$(RESTORE_PGHOST)' (proposed: postgres-restore)" >&2; exit 1 ;; esac
+	@test -n "$(RESTORE_PGDB)" || { echo "ERROR: RESTORE_PGDB is required (proposed: app_cm_restore)" >&2; exit 1; }
+	@case "$(RESTORE_PGDB)" in app|postgres|template0|template1) echo "ERROR: refusing live database name '$(RESTORE_PGDB)' (proposed: app_cm_restore)" >&2; exit 1 ;; esac
+	@if [ -n "$(RESTORE_SCRATCH_BUCKET)" ]; then case "$(RESTORE_SCRATCH_BUCKET)" in s3://*|*/*) echo "ERROR: RESTORE_SCRATCH_BUCKET must be a bare bucket name, got '$(RESTORE_SCRATCH_BUCKET)'" >&2; exit 1 ;; esac; fi
+	@set -eu ; \
+	echo "==> Isolated restore of $(PG_BACKUP_KEY) into $(RESTORE_NAMESPACE) / $(RESTORE_PGHOST):$(RESTORE_PGDB)" ; \
+	can_i="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n "$(RESTORE_NAMESPACE)" auth can-i create pods --request-timeout=15s)" || { echo "ERROR: cannot check identity for namespace '$(RESTORE_NAMESPACE)'" >&2; exit 1; } ; \
+	test "$$can_i" = "yes" || { echo "ERROR: this identity cannot create pods in namespace '$(RESTORE_NAMESPACE)' (got: $$can_i)" >&2; exit 1; } ; \
+	src_b64="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n "$(RESTORE_NAMESPACE)" get secret "$(RESTORE_READ_SECRET)" -o jsonpath='{.data.S3_BUCKET}')" || { echo "ERROR: cannot read backup credential '$(RESTORE_READ_SECRET)' in namespace '$(RESTORE_NAMESPACE)'" >&2; exit 1; } ; \
+	src_bucket="$$(printf '%s' "$$src_b64" | base64 -d)" ; \
+	test -n "$$src_bucket" || { echo "ERROR: backup credential '$(RESTORE_READ_SECRET)' exposes no S3_BUCKET in namespace '$(RESTORE_NAMESPACE)'" >&2; exit 1; } ; \
+	if [ -n "$(RESTORE_SCRATCH_BUCKET)" ]; then \
+	  test "$(RESTORE_SCRATCH_BUCKET)" != "$$src_bucket" || { echo "ERROR: refusing scratch bucket equal to the backup source bucket '$$src_bucket'" >&2; exit 1; } ; \
+	fi ; \
+	pod="pgbackup-restore-$$(date -u +%Y%m%d%H%M%S)" ; \
+	echo "==> Running restore pod $$pod in namespace $(RESTORE_NAMESPACE)" ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n "$(RESTORE_NAMESPACE)" run "$$pod" --rm -i --restart=Never --image=postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 \
 	  --labels="app.kubernetes.io/name=sentropic,app.kubernetes.io/component=pgbackup" \
-	  --env PGHOST=postgres --env PGPORT=5432 --env PGUSER=app --env PGDATABASE=app \
+	  --env PGHOST=$(RESTORE_PGHOST) --env PGPORT=$(RESTORE_PGPORT) --env PGUSER=$(RESTORE_PGUSER) --env PGDATABASE=$(RESTORE_PGDB) \
+	  --env PG_BACKUP_KEY="$(PG_BACKUP_KEY)" --env SRC_BUCKET="$$src_bucket" --env SCRATCH_BUCKET="$(RESTORE_SCRATCH_BUCKET)" --env KEEP_DB="$(RESTORE_KEEP_DB)" --env RESTORE_NAMESPACE="$(RESTORE_NAMESPACE)" \
 	  --override-type=strategic --overrides="$$(printf '%s' \
 	    '{"spec":{' \
 	    '"volumes":[{"name":"work","emptyDir":{}}],' \
 	    '"initContainers":[{"name":"download",' \
 	      '"image":"peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a",' \
 	      '"resources":{"requests":{"cpu":"20m","memory":"32Mi"},"limits":{"cpu":"200m","memory":"128Mi"}},' \
-	      '"args":["--endpoint-url","$$(S3_ENDPOINT)","cp","s3://$$(S3_BUCKET)/$(PG_BACKUP_KEY)","/work/d.sql.gz"],' \
+	      '"args":["--endpoint-url","$$(S3_ENDPOINT)","cp","s3://$$(S3_BUCKET)/$$(PG_BACKUP_KEY)","/work/d.sql.gz"],' \
 	      '"env":[' \
-	        '{"name":"AWS_ACCESS_KEY_ID","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_ACCESS_KEY"}}},' \
-	        '{"name":"AWS_SECRET_ACCESS_KEY","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_SECRET_KEY"}}},' \
-	        '{"name":"AWS_REGION","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_REGION"}}},' \
-	        '{"name":"S3_BUCKET","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_BUCKET"}}},' \
-	        '{"name":"S3_ENDPOINT","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_ENDPOINT"}}}],' \
+	        '{"name":"AWS_ACCESS_KEY_ID","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_ACCESS_KEY"}}},' \
+	        '{"name":"AWS_SECRET_ACCESS_KEY","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_SECRET_KEY"}}},' \
+	        '{"name":"AWS_REGION","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_REGION"}}},' \
+	        '{"name":"S3_BUCKET","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_BUCKET"}}},' \
+	        '{"name":"S3_ENDPOINT","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_ENDPOINT"}}},' \
+	        '{"name":"PG_BACKUP_KEY","value":"$(PG_BACKUP_KEY)"}],' \
 	      '"volumeMounts":[{"name":"work","mountPath":"/work"}]}],' \
 	    '"containers":[{"name":"'"$$pod"'",' \
-	      '"env":[{"name":"PGPASSWORD","valueFrom":{"secretKeyRef":{"name":"sentropic-postgres","key":"POSTGRES_PASSWORD"}}}],' \
+	      '"env":[' \
+	        '{"name":"PGPASSWORD","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_PG_SECRET)","key":"POSTGRES_PASSWORD"}}},' \
+	        '{"name":"S3_BUCKET","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_BUCKET"}}},' \
+	        '{"name":"S3_ENDPOINT","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_ENDPOINT"}}},' \
+	        '{"name":"PG_BACKUP_KEY","value":"$(PG_BACKUP_KEY)"}],' \
 	      '"volumeMounts":[{"name":"work","mountPath":"/work"}]}]}}')" \
 	  --command -- sh -c 'set -e; \
-	    psql -c "DROP DATABASE IF EXISTS restore_check;" -c "CREATE DATABASE restore_check;"; \
-	    gunzip -c /work/d.sql.gz | psql -d restore_check; \
-	    psql -d restore_check -c "SELECT count(*) AS organizations FROM organizations;" || true; \
-	    psql -c "DROP DATABASE restore_check;"; echo "restore verification OK"'
+	    test -n "$$SRC_BUCKET"; \
+	    if [ -n "$$SCRATCH_BUCKET" ]; then test "$$SCRATCH_BUCKET" != "$$SRC_BUCKET" || { echo "ERROR: scratch bucket equals backup source bucket" >&2; exit 1; }; fi; \
+	    if [ -n "$$SCRATCH_BUCKET" ]; then test "$$SCRATCH_BUCKET" != "$$S3_BUCKET" || { echo "ERROR: scratch bucket equals live backup bucket" >&2; exit 1; }; fi; \
+	    s5cmd --endpoint-url "$$S3_ENDPOINT" cp "s3://$$S3_BUCKET/$$PG_BACKUP_KEY" /work/d.sql.gz; \
+	    test -s /work/d.sql.gz; \
+	    bytes=$$(stat -c%s /work/d.sql.gz); \
+	    sha=$$(sha256sum /work/d.sql.gz | cut -d" " -f1); \
+	    test -n "$$sha"; \
+	    psql -d postgres -c "DROP DATABASE IF EXISTS \"$$PGDATABASE\";" -c "CREATE DATABASE \"$$PGDATABASE\";"; \
+	    gunzip -c /work/d.sql.gz | psql -d "$$PGDATABASE"; \
+	    orgs=$$(psql -d "$$PGDATABASE" -tA -c "SELECT count(*) FROM organizations;"); \
+	    ls_line=$$(s5cmd --endpoint-url "$$S3_ENDPOINT" ls "s3://$$S3_BUCKET/$$PG_BACKUP_KEY" | tr -d "\n" | sed "s/\"/\\\\\"/g"); \
+	    at=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+	    echo "MANIFEST-BEGIN"; \
+	    printf "{\"manifest\":\"b03-backup-object\",\"key\":\"%s\",\"bucket\":\"%s\",\"bytes\":%s,\"sha256\":\"%s\",\"listing\":\"%s\",\"restore_namespace\":\"%s\",\"pg_host\":\"%s\",\"pg_db\":\"%s\",\"organizations\":%s,\"pod\":\"%s\",\"at\":\"%s\"}\n" "$$PG_BACKUP_KEY" "$$S3_BUCKET" "$$bytes" "$$sha" "$$ls_line" "$$RESTORE_NAMESPACE" "$$PGHOST" "$$PGDATABASE" "$$orgs" "$$HOSTNAME" "$$at"; \
+	    echo "MANIFEST-END"; \
+	    if [ "$$KEEP_DB" != "true" ]; then psql -d postgres -c "DROP DATABASE \"$$PGDATABASE\";"; fi; \
+	    echo "restore verification OK"'
 
 # --- Public DNS/TLS smoke (BR37c-EX1, append-only; operator-side) --------------
 # Verify the public host reaches the cluster through the shared Traefik LB with a
