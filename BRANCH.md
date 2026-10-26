@@ -81,3 +81,4 @@
 - [x] Atomic artifact: feat(decision): decode typed Decisions answers and usage.
 - [x] Atomic artifact: feat(decision): add fixed bounded Decisions HTTP transport.
 - [x] Atomic artifact: feat(decision): register native OpenAI adapter and credentials.
+- [x] Atomic artifact: feat(decision): bind native host validation and service tariff.

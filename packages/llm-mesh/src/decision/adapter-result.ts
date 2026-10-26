@@ -11,6 +11,9 @@ import { parseJevProviderRaw } from './raw.js';
 import { deriveDecision } from './verdict.js';
 import type { DecisionVerdict } from './verdict.js';
 import { STRUCTURED_SCORE_MEANING } from './structured.js';
+import { encodeOpenAiDecisionsRequest } from './openai-request.js';
+import { openAiDecisionsContext } from './openai-verdict.js';
+import { isValidDecisionVerdict } from './client.js';
 
 /** Closed structured envelope at the host boundary (V-K1/V-K2). Undeclared
  * carriers, substituted score meaning/scale/direction and provider raw data
@@ -83,6 +86,15 @@ export function parseDecisionAdapterResult(candidate: unknown, request: Decision
   if (!matched) return failed('SERVED_IDENTITY_MISMATCH');
   if (usage.tokens.input.source !== 'provider' || usage.tokens.output.source !== 'provider'
     || usage.evaluatorCalls !== 1 || usage.explanations !== 0) return failed('USAGE_INVALID');
+  if (descriptor.protocol === 'openai-decisions') {
+    const encoded = encodeOpenAiDecisionsRequest(request, descriptor);
+    if (!encoded.ok || !isValidDecisionVerdict(value.verdict, encoded.request,
+      openAiDecisionsContext(encoded.request, encoded.criterion, descriptor)) || value.verdict.providerRaw !== undefined) return failed('VERDICT_INVALID');
+    const verdict = value.verdict;
+    return { ok: true, verdict: { criterionKind: verdict.criterionKind, resolvedCriterionKind: verdict.resolvedCriterionKind,
+      score: structuredClone(verdict.score), decision: structuredClone(verdict.decision), label: structuredClone(verdict.label),
+      rationale: null, confidence: structuredClone(verdict.confidence), distribution: structuredClone(verdict.distribution) }, ...evidence };
+  }
   if ((descriptor.protocol ?? 'jev-native') !== 'jev-native') {
     const closed = parseStructuredHostVerdict(value.verdict, request, descriptor);
     if (!closed) return failed('VERDICT_INVALID');
