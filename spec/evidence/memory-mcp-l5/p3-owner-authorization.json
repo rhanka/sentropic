@@ -1,11 +1,19 @@
 {
-  "status": "pending-owner-authorization",
+  "status": "owner-text-authorized-signature-pending",
   "freezingCommit": "c919b638686fb93c8c90a2634d3c004fd25348b3",
   "l0FreezeSha256": "0541b15ba4d5e49ba3b30d92da1c5e3c2fd668e40937e4f942103a678e849bfb",
   "preCandidateManifestSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
   "ownerAuthorization": {
     "actorRef": "owner:antoinefa",
-    "status": "pending",
+    "authorizedBy": "owner:antoinefa",
+    "at": "2026-10-26T16:59:54Z",
+    "verbatim": "Je dirai pas ca ma vas y",
+    "source": ".tmp/owner-deliverables/OWNER-DELIVERABLES-2026-10-23.md",
+    "context": "Reply to the L0 freeze re-issue request (P09 rescoped, P2 to P3); conductor log line at the recorded timestamp.",
+    "l0FreezeSha256": "0541b15ba4d5e49ba3b30d92da1c5e3c2fd668e40937e4f942103a678e849bfb",
+    "preCandidateManifestSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
+    "status": "owner-text-recorded",
+    "signatureStatus": "pending",
     "detachedSignature": null
   },
   "roleDispositions": [
@@ -16,5 +24,5 @@
   ],
   "authority": "spec/evidence/memory-mcp-l5/l0-freeze.json#authorizedOwners",
   "qualificationAccepted": false,
-  "note": "L0 reissue awaits owner authorization. These slots are not signed dispositions or passed UAT/co-acceptance receipts."
+  "note": "L0 reissue: owner authorization recorded (text); detached signature pending. These slots are not signed dispositions or passed UAT/co-acceptance receipts; fail-closed behavior is unchanged."
 }

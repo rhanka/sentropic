@@ -23,8 +23,15 @@ P3 manifest SHA-256: `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b
 The L0 also corrects its stale artifact-manifest schema pin to the unchanged live schema `c0f968512d7b7bea14b0502eed95fae207e3ea09aba6524d77518631e69a6d36`.
 All remaining inventory bytes, versions, spec identity, fixtures, source heads, archives and toolchain/lock snapshots are preserved. The checkout lock is not substituted for the retained closure.
 
-L0 reissue awaits owner authorization. Detached signature slots are explicitly pending in [p3-owner-authorization.json](p3-owner-authorization.json); the frozen JSON contains no new signature or authority claim.
-`owner:antoinefa` must authorize the exact amended freeze digest. One allowed actor per L4/platform/broker/transport role must provide detached signed dispositions covering it, with each role explicit, before handoff/qualification. One authorized owner may cover multiple roles.
+L0 reissue: owner authorization recorded (text); detached signature pending.
+
+- `authorizedBy`: `owner:antoinefa`; `at`: `2026-10-26T16:59:54Z`.
+- `verbatim`: « Je dirai pas ca ma vas y », in reply to the L0 freeze re-issue request (P09 rescoped, P2 to P3).
+- `source`: `.tmp/owner-deliverables/OWNER-DELIVERABLES-2026-10-23.md`, conductor's log line at that timestamp.
+- Covered digests: amended L0 `0541b15ba4d5e49ba3b30d92da1c5e3c2fd668e40937e4f942103a678e849bfb`; P3 `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`.
+- `detachedSignature`: `null` (pending), as recorded in [p3-owner-authorization.json](p3-owner-authorization.json); text authorization is not a signature or signed disposition. Frozen bytes and fail-closed behavior are unchanged.
+
+`owner:antoinefa` must still supply the detached signature for the exact amended freeze digest. One allowed actor per L4/platform/broker/transport role must provide detached signed dispositions covering it, with each role explicit, before handoff/qualification. One authorized owner may cover multiple roles.
 Gr-conductor must acknowledge both the `f2b094ae…` change and exact P3 digest/freezing commit before handoff. No prior ACK is reused and no notification/ACK is claimed here.
 Amendment/freezing commit: `c919b638686fb93c8c90a2634d3c004fd25348b3`. It is recorded separately in the root BINDING.md P3 section and the draft PR, preserving manifest producer heads.
 After those approvals, downstream owners rebuild E4 from unchanged source against P3 and reissue candidate/E2/host/contract/proof/checkpoint receipts, including new `authoritySourceSha256`, actual CI and qualification. This draft supplies neither those receipts nor publication/registration acceptance.

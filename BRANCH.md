@@ -2,7 +2,10 @@
 
 ## Objective
 - [x] Remove P09 references to four later-lot suites so L5 qualifies its 18 existing suites; retain remote coverage as unchecked R2/R7a obligations.
-- [ ] L0 reissue awaits owner authorization.
+- [x] L0 reissue: owner authorization recorded (text); detached signature pending.
+- [x] `authorizedBy`: `owner:antoinefa`; `at`: `2026-10-26T16:59:54Z`; `verbatim`: « Je dirai pas ca ma vas y », replying to the L0 freeze re-issue request (P09 rescoped, P2 to P3).
+- [x] `source`: `.tmp/owner-deliverables/OWNER-DELIVERABLES-2026-10-23.md`, conductor's log line at that timestamp; covered L0/P3 digests are recorded below and in `p3-owner-authorization.json`.
+- [x] `detachedSignature`: `null` (pending); text is not a signature or signed disposition; fail-closed behavior and `qualificationAccepted: false` remain unchanged.
 
 ## Scope / Guardrails
 - [x] Base: origin/main `22d8a9e68b1abae2665fedb528526d2a84c6bc4d`.
@@ -45,7 +48,7 @@
   - [x] No scope exception requested; no conditional path needed.
 
 ## Feedback Loop
-- [ ] Owner: `owner:antoinefa`; status: attention; authorize exact amended L0 digest with a detached signature.
+- [ ] Owner: `owner:antoinefa`; status: owner authorization recorded (text); detached signature pending for the exact amended L0 digest.
 - [ ] Authorized L4/platform/broker/transport role dispositions must bind the new L0 and P3 tuple; no prior signatures reused.
 - [ ] Gr-conductor: acknowledge predecessor and P3 identities before downstream E4 rebuild/handoff.
 
@@ -78,5 +81,6 @@
   - [x] Run Lot 1: platform `tests/memory/*.test.ts`, `request-identity.test.ts`, `wire-parity.test.ts`, `registry-dispatch.test.ts`; broker `tests/**/*.test.ts`: 183 passed before and after the correction.
   - [x] Verify P3 retained inventory/archives using `make memory-l5-verify`: 30 files, 54 edges, exact P3 digest.
   - [x] Record pending authority and the five retained checkpoint obligations in `spec/evidence/memory-mcp-l5/p3-validation.md`; metadata checks do not authorize owner signatures.
+  - [x] Resolve Opus r1 P1-1: record dated verbatim owner text authorization in all five requested files; preserve frozen bytes, pending detached signatures and fail-closed behavior.
   - [x] Run `make scope-check` before each commit; inspect exact diff and hashes.
   - [ ] Push, open draft PR to main using this plan as body, inspect CI and leave unmerged.

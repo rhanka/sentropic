@@ -19,7 +19,14 @@ All 18 retained P09 suite paths exist at base `22d8a9e68b1abae2665fedb528526d2a8
 
 The targeted regression calls `verifyOnDiskEvidence` in `schema-validator.mjs`, including its real live catalog/schema hash guard at lines 202–204. It isolates L0 metadata results from other checkpoint prerequisites and checks rejection of each stale hash independently. It does not assert full checkpoint acceptance.
 
-L0 reissue awaits owner authorization. Signature slots remain null/pending in [p3-owner-authorization.json](p3-owner-authorization.json). The metadata guard itself does not verify detached owner signatures; passing it cannot authorize the freeze.
+L0 reissue: owner authorization recorded (text); detached signature pending.
+
+- `authorizedBy`: `owner:antoinefa`; `at`: `2026-10-26T16:59:54Z`.
+- `verbatim`: « Je dirai pas ca ma vas y », in reply to the L0 freeze re-issue request (P09 rescoped, P2 to P3).
+- `source`: `.tmp/owner-deliverables/OWNER-DELIVERABLES-2026-10-23.md`, conductor's log line at that timestamp; the authorization covers the amended L0 and P3 digests measured above.
+- `detachedSignature`: `null` (pending). Owner and four role signature slots remain null/pending in [p3-owner-authorization.json](p3-owner-authorization.json), with `qualificationAccepted: false`.
+
+Text authorization is not a signature or signed disposition; fail-closed behavior is unchanged. The metadata guard itself does not verify detached owner signatures; passing it cannot supply the missing detached signature.
 The existing receipt-contract tests keep the checkpoint CLI fail-closed even for a complete synthetic bundle, with exactly these five outstanding Lot 1 obligations:
 
 - `provenance.predecessors: pendingPredecessorMappings remain unresolved (BR3/L5-F1)`
