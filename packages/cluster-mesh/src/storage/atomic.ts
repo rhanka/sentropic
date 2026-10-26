@@ -1,20 +1,28 @@
 // K1 atomic units, CAS/allocation and replay rules (L3a v4.1 frozen §5).
 // Types plus data-pure validators; no transaction machinery (K3).
+// E1 additive: exact-u64 comparison/allocation paths are opt-in; legacy
+// safe-integer guards and versions keep their frozen behavior.
 
 import {
+  compareU64Counter,
   errResult,
   isDecimalCounter,
   isHexDigest,
   isNonEmptyString,
   isPositiveSafeInteger,
   isSafeInteger,
+  isU64Counter,
+  nextU64Counter,
   okResult,
   validateEncodedValue,
   validateWorkLimits,
   validateWriterFence,
+  type ConsumedCounter,
+  type ConsumedVersion,
   type DecimalCounter,
   type EncodedValue,
   type StorageScope,
+  type U64Counter,
   type ValidationResult,
   type WorkLimits,
   type WriterFence,
@@ -236,5 +244,84 @@ export const classifyIndexWrite = (
 export const isRecordHash = (value: unknown): value is string => isNonEmptyString(value);
 
 export const isDigestHex = (value: unknown): value is string => isHexDigest(value, 32);
+
+// E1 opt-in exact-u64 atomic paths: allocation comparison/increment and
+// u64 chain expectations/versions. Legacy numeric guards above unchanged.
+export type U64ChainExpectation =
+  | { readonly kind: 'absent'; readonly allocation: U64Counter }
+  | { readonly kind: 'head'; readonly hash: string };
+
+export const isU64Allocation = (value: unknown): value is U64Counter => isU64Counter(value);
+
+export const compareU64Allocation = (left: string, right: string): -1 | 0 | 1 => compareU64Counter(left, right);
+
+export const nextU64Allocation = (value: string): U64Counter | undefined => nextU64Counter(value);
+
+export const validateU64ChainExpectation = (expectation: unknown): ValidationResult => {
+  if (typeof expectation !== 'object' || expectation === null) return errResult('expectation must be an object');
+  const candidate = expectation as Record<string, unknown>;
+  if (candidate['kind'] === 'absent') {
+    if (!isU64Counter(candidate['allocation'])) return errResult('absent expectation requires a decimal allocation');
+    return okResult();
+  }
+  if (candidate['kind'] === 'head') {
+    if (!isNonEmptyString(candidate['hash'])) return errResult('head expectation requires a hash');
+    return okResult();
+  }
+  return errResult('expectation kind must be absent or head');
+};
+
+export type U64AggregateVersion = ConsumedVersion;
+
+export const isU64Version = (value: unknown): value is U64AggregateVersion => isU64Counter(value);
+
+export const compareU64Version = (left: string, right: string): -1 | 0 | 1 => compareU64Counter(left, right);
+
+export const nextU64Version = (value: string): U64AggregateVersion | undefined => nextU64Counter(value);
+
+export interface U64AggregateUpdate {
+  readonly key: string;
+  readonly version: U64Counter;
+  readonly value: EncodedValue;
+}
+
+export const validateU64AggregateUpdate = (update: unknown): ValidationResult => {
+  if (typeof update !== 'object' || update === null) return errResult('update must be an object');
+  const candidate = update as Record<string, unknown>;
+  if (!isNonEmptyString(candidate['key'])) return errResult('update requires a key');
+  if (!isU64Counter(candidate['version'])) return errResult('update requires a u64 version');
+  if (!validateEncodedValue(candidate['value']).ok) return errResult('update requires an encoded value');
+  return okResult();
+};
+
+export type U64RegisteredGuard =
+  | { readonly kind: 'head'; readonly chainId: string; readonly hash: string }
+  | { readonly kind: 'absent'; readonly chainId: string }
+  | { readonly kind: 'aggregate-version'; readonly key: string; readonly version: U64Counter }
+  | { readonly kind: 'predicate'; readonly predicateId: string; readonly dependency: string };
+
+export const validateU64RegisteredGuard = (guard: unknown): ValidationResult => {
+  if (typeof guard !== 'object' || guard === null) return errResult('guard must be an object');
+  const candidate = guard as Record<string, unknown>;
+  if (candidate['kind'] === 'aggregate-version') {
+    if (!isNonEmptyString(candidate['key']) || !isU64Counter(candidate['version'])) return errResult('invalid aggregate guard');
+    return okResult();
+  }
+  if (candidate['kind'] === 'head') {
+    if (!isNonEmptyString(candidate['chainId']) || !isNonEmptyString(candidate['hash'])) return errResult('invalid head guard');
+    return okResult();
+  }
+  if (candidate['kind'] === 'absent') {
+    if (!isNonEmptyString(candidate['chainId'])) return errResult('invalid absent guard');
+    return okResult();
+  }
+  if (candidate['kind'] === 'predicate') {
+    if (!isNonEmptyString(candidate['predicateId']) || !isNonEmptyString(candidate['dependency'])) return errResult('invalid predicate guard');
+    return okResult();
+  }
+  return errResult('unknown guard kind');
+};
+
+export type { ConsumedCounter, ConsumedVersion };
 
 export { isPositiveSafeInteger };
