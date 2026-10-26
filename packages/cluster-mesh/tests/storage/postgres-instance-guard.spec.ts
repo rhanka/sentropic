@@ -35,8 +35,8 @@ describe('pg installed asset guard', () => {
     const assets = await loadPgAssets();
     assertNoDeprecatedAssetNames(assets);
     const ghost = {
-      id: 'cluster-mesh-pg/008-future@1',
-      file: '008-future.sql',
+      id: 'cluster-mesh-pg/008-legacy@1',
+      file: '008-legacy.sql',
       order: 8,
       dialect: 'postgresql',
       mode: 'transactional',

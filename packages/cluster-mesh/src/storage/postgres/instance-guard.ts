@@ -8,7 +8,7 @@ import { decodePgText } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import type { PgSession } from './protocol.js';
 
-const DEPRECATED_ASSET_NAME = /(?:future|legacy|deprecated|backup|tmp|temp|old|bak|copy)(?:[^a-z]|$)/i;
+const DEPRECATED_ASSET_NAME = /(?:legacy|deprecated|backup|tmp|temp|old|bak|copy)(?:[^a-z]|$)/i;
 
 export const assertNoDeprecatedAssetNames = (assets: readonly { readonly file: string }[]): void => {
   for (const asset of assets) {
