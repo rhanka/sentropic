@@ -34,12 +34,15 @@ export function capacityCapture(workflow, run, jobs, manifest) {
   if (String(manifest.identity?.runId) !== String(run.id) || manifest.identity?.headSha !== run.head_sha) {
     throw new Error('Capacity capture identity mismatch');
   }
+  if (manifest.policyDigest !== undefined && manifest.policyDigest !== policyDigest(workflow)) {
+    throw new Error('Capacity capture policy mismatch');
+  }
   const selected = manifest.expected.filter(row => row.selected).map(row => row.job);
   const span = name => {
     const row = jobs.find(job => job.name === name);
     return row ? executionSeconds(captureRecords({ run, jobs: [row] })[0]) : null;
   };
-  return { run, jobs, sourceSha: run.head_sha, workflowSha: null, policyDigest: policyDigest(workflow),
+  return { run, jobs, sourceSha: run.head_sha, workflowSha: null, policyDigest: manifest.policyDigest ?? null,
     dependencies: Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
       [name, typeof job.needs === 'string' ? [job.needs] : job.needs ?? []])),
     endpoints: { qualification: ['ci-gate'], images: selected.filter(name => /^publish-.*-image$/.test(name)),
@@ -374,7 +377,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
         && (row.job === job || row.job.startsWith(`${job} (`))) }));
     const dependencies = Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
       [name, typeof job.needs === 'string' ? [job.needs] : job.needs ?? []]));
-    const manifest = { identity: context.identity, expected, gateExpected, dependencies };
+    const manifest = { identity: context.identity, policyDigest: policyDigest(workflow), expected, gateExpected, dependencies };
     fs.writeFileSync(args[args.indexOf('--manifest-file') + 1], JSON.stringify(manifest, null, 2));
     process.exit(0);
   }
