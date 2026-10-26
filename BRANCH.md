@@ -61,6 +61,7 @@
   - [x] usage-receipts.test.ts: estimate/true-up dedupe, dimensions, restart and payload exclusion authored first.
   - [x] Red at 4f03beab7: scoped interrupt suite fails on missing core/session.js before source implementation.
 - [ ] **Lot 2 — Implementation**
+  - [x] Expose stopping/pending/terminal separately from fence receipts; retain paired read-only outcomes and suppress Stop RPCs for completed old epochs.
   - [x] All-class admission returns explicit dispatch/dedupe receipts with authority ordering; consumed approval IDs and exact tool/arguments bindings persist across restart.
   - [x] core/session.ts: trusted scoped authority, atomic journal, persisted epochs/tombstones, opaque control port implemented.
   - [x] core/interrupt.ts: all-class fence receipts, outcome pairing, effect barrier and typed authenticated risk acceptance implemented.
