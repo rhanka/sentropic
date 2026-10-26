@@ -120,7 +120,7 @@ jobs:
       E2_BASE_SHA: ${{ github.event.pull_request.base.sha }}
       E2_HEAD_REF: ${{ github.head_ref }}
       E2_PR_URL: ${{ github.event.pull_request.html_url }}
-      E2_LOCK: ${{ runner.temp }}/sentropic-docker.lock
+      E2_LOCK: /tmp/sentropic-docker.lock
     steps:
       - uses: actions/checkout@v6
         with:
