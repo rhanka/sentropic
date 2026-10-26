@@ -62,6 +62,7 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Resync #755: preserve all BR-E2-EX1 Make targets, integration triggers, exact-head bump receipts and qualification predicates from main; union the host scope environments. No source, version or Track conflict.
 - [x] BR-E2-EX1 resync: owner authorized merge of PR #752; merged main #751 with both Compose packaging runners and all qualification environments preserved. Added test-resync-752 to the existing host scope lane; rollback removes that environment. Reviewed migration code is unchanged.
 - [x] CI 40288664433: gateway archive integrity differed because workspace and cold builds emitted different request-receipts.d.ts bytes. Rebuilt all gateway prerequisites in isolated storage with the CI recipe's pinned tools/dependencies; resulting archive SHA-256 3b0ad59cbdf3578a2160181c3f2ffa8bdb7a7106ae1a7f3552b955ee9570573f exactly matches CI. Pin the selected lock to that verified archive's SHA-512.
 - [x] CI 40287324395: aligned Cluster Mesh runtime auth-hono preflight with 0.17 support and both API/Cluster Mesh gateway version assertions with 0.21.1. Focused Cluster Mesh boundary/surface tests 55/55 PASS and package build PASS; API version evidence 22/22 PASS. All four endpoint CI shards PASS, including autosave regressions.
