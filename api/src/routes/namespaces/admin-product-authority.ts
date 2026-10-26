@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../utils/zod-validator';
 import { db } from '../../db/client';
 import { folders, organizations, initiatives, userSessions, users, workspaces } from '../../db/schema';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
