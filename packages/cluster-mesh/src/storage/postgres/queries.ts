@@ -25,8 +25,8 @@ export const retainPgBoundary = async (
   const token = knownToken ?? core.id('boundary');
   if (token.length > 256) throw new StorageInvalidCommandError('opaque identifier exceeds boundary budget');
   await session.execute({
-    text: `INSERT INTO ${core.roots.schema}.boundaries(scope_key, token, owner, root, version, sequence, metadata) VALUES($1, $2, $3, $4::bigint, $5::bigint,
-        $6::bigint, $7::jsonb)${knownToken ? ' ON CONFLICT(scope_key,token) DO NOTHING' : ''}`,
+    text: `INSERT INTO ${core.roots.schema}.boundaries(scope_key, token, owner, root, version, sequence, metadata) VALUES($1, $2, $3, $4::bigint, $5::numeric,
+        $6::numeric, $7::jsonb)${knownToken ? ' ON CONFLICT(scope_key,token) DO NOTHING' : ''}`,
     values: [
       core.roots.key(grant.scope),
       token,

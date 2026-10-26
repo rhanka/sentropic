@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { StorageScope } from '../contracts.js';
 import type { CommitReceipt } from '../atomic.js';
-import { StorageCasConflictError, StorageInvalidCommandError } from '../errors.js';
-import { decodePgBytes, decodePgCounter, decodePgJson, decodePgText, decodePgUtf8 } from './codec.js';
+import { StorageCapacityExceededError, StorageCasConflictError, StorageInvalidCommandError } from '../errors.js';
+import { decodePgBytes, decodePgCounter, decodePgCounterU64, decodePgJson, decodePgText, decodePgUtf8 } from './codec.js';
+// Exact-u64 ceiling: publication refuses past the maximum instead of wrapping.
+const MAX_U64 = 18446744073709551615n;
 import { PostgresStorageError } from './errors.js';
 import { quotePgIdentifier, validatePgLayout, type PgSession, type PostgresStorageOptions } from './protocol.js';
 
@@ -52,8 +54,8 @@ export class PgRoots {
     if (decodePgText(row.incarnation) !== this.incarnation) throw new PostgresStorageError('corruption');
     return {
       root: row.root === null ? null : decodePgCounter(row.root),
-      version: decodePgCounter(row.version),
-      sequence: decodePgCounter(row.sequence),
+      version: decodePgCounterU64(row.version),
+      sequence: decodePgCounterU64(row.sequence),
     };
   }
   async get<T>(session: PgSession, root: string | null, kind: string, id: string): Promise<T | null> {
@@ -121,10 +123,12 @@ export class PgRoots {
     operationKey?: string,
     sealedSegment = false,
   ): Promise<void> {
+    if (BigInt(base.version) >= MAX_U64 || BigInt(base.sequence) >= MAX_U64)
+      throw new StorageCapacityExceededError('u64 publication counter exhausted');
     const next = (BigInt(base.version) + 1n).toString();
     const sequence = (BigInt(base.sequence) + 1n).toString();
     const changed = await session.execute({
-      text: `UPDATE ${this.schema}.scopes SET root=$1::bigint, version=version+1, sequence=sequence+1 WHERE key=$2 AND version=$3::bigint AND incarnation=$4
+      text: `UPDATE ${this.schema}.scopes SET root=$1::bigint, version=version+1, sequence=sequence+1 WHERE key=$2 AND version=$3::numeric AND incarnation=$4
         RETURNING version::text`,
       values: [root, this.key(scope), base.version, this.incarnation],
     });
@@ -145,7 +149,7 @@ export class PgRoots {
       );
     } else {
       await session.execute({
-        text: `INSERT INTO ${this.schema}.journal(scope_key, sequence, event_id, event) VALUES($1, $2::bigint, $3, $4::jsonb)`,
+        text: `INSERT INTO ${this.schema}.journal(scope_key, sequence, event_id, event) VALUES($1, $2::numeric, $3, $4::jsonb)`,
         values: [this.key(scope), sequence, event.eventId, JSON.stringify(event)],
       });
     }

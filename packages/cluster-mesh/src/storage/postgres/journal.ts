@@ -4,7 +4,7 @@ import type { RootConsumer, RootJournalEvent } from '../staged-state.js';
 import { StorageCapacityExceededError, StorageCasConflictError, StorageInvalidCommandError } from '../errors.js';
 import type { PgCore } from './core.js';
 import type { PgJournalDraft, PgSession } from './protocol.js';
-import { decodePgCounter, decodePgJson, decodePgText } from './codec.js';
+import { decodePgCounter, decodePgCounterU64, decodePgJson, decodePgText } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { createHash } from 'node:crypto';
 export const currentPgJournalFence = async (core: PgCore, grant: ScopeGrant<unknown>): Promise<JournalFence> =>
@@ -22,7 +22,7 @@ export const currentPgJournalFence = async (core: PgCore, grant: ScopeGrant<unkn
     });
     const fence = {
       fenceId: lane,
-      epoch: decodePgCounter(result.rows[0]?.epoch),
+      epoch: decodePgCounterU64(result.rows[0]?.epoch),
       incarnation: core.incarnation,
       ownerId: grant.principalId,
     };
