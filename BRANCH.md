@@ -35,6 +35,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] Full final package tests pass 27/27 across the four required suites; source includes durable CAS restart and immutable typed-risk verification.
 - [x] Add asynchronous authentication input-mutation regression: selected risk/evidence must remain bound to the exact request verified before the await boundary.
 - [x] Require the authenticated workspace in the durable scope and operational receipts, alongside tenant/principal/target/source/controller/consent; missing scope fields fail admission.
 - [x] Include validate-live-speech in both final CI aggregation dependencies so result capture cannot race this newly selected job.
