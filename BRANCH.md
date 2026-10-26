@@ -73,3 +73,4 @@
   - [ ] Verify CI green at final head; do not merge.
 - [x] Atomic artifact: test(decision): pin JEV discriminator conformance.
 - [x] Atomic artifact: test(decision): specify native Decisions wire refusals.
+- [x] Atomic artifact: test(decision): cover native route and tariff admission.
