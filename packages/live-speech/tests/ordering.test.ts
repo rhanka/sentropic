@@ -60,6 +60,7 @@ describe('submission, tool history and effect barrier', () => {
     await f.core.admitTool(old, mutation('a'));
     await f.core.interrupt(old, 'stop');
     const prior = await f.core.riskPrompt(['effect:a']);
+    const queued = await commit(f.core, 'next');
     const nextScope = { ...scope, controllerEpoch: 2, sourceGeneration: 'source-2', consentRevision: 'consent-2' };
     await expect(f.core.rotateGeneration(scope, { ...nextScope, tenantId: 'other' })).rejects.toThrow('rotation');
     await f.core.rotateGeneration(scope, nextScope);
@@ -68,6 +69,8 @@ describe('submission, tool history and effect barrier', () => {
     const restarted = fixture(new SessionJournal(storage, 'session', { ...seed, scope: nextScope }));
     await expect(restarted.core.acceptRisk({ ...prior, requestId: 'stale', proof: 'proof' })).rejects.toThrow('scope');
     const next = await restarted.core.commit({ scope: nextScope, utteranceId: 'next', inputRef: 'final:next' });
+    expect(next).toEqual({ ...queued, scope: nextScope });
+    await expect(restarted.core.send(queued)).rejects.toThrow('scope');
     await restarted.core.send(next);
     await expect(restarted.core.admitTool(next, mutation('b'))).rejects.toThrow('barrier');
     await expect(restarted.core.admitTool(old, mutation('late'))).rejects.toThrow('fenced');
