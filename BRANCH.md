@@ -49,7 +49,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline**: read Docker lock, E8 row, E0 ACK, rules/template; mechanical branch check; P2 pinned.
-- [ ] **Lot 1 — Tests first**: extend `scope.spec.ts`; add `candidate-scope.spec.ts`; record the intended failing invariant.
+- [ ] **Lot 1 — Tests first**: candidate probe reproduced 5 failures/1 pass before liaison: unknown/foreign/copied/reused candidates reached delegates; extend `scope.spec.ts` next.
 - [ ] **Lot 2 — Host liaison**: host-owned fixture; private authoritative issuance and pre-effect guards; no caller assertion mints a mapping.
 - [ ] **Lot 3 — Validation**: focused tests, memory suite, typecheck/lint/build, dev.4 manifest commit, scope checks, unchanged P2.
 - [ ] **Lot 4 — Handoff**: push; draft PR from this file; green E2 qualification; report PR/head/CI and producer questions; do not merge.
