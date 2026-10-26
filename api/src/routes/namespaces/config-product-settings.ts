@@ -1,4 +1,4 @@
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../utils/zod-validator';
 import { sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -6,9 +6,9 @@ import { z } from 'zod';
 import { db } from '../../db/client';
 
 const settingsSchema = z.object({
-  openaiModels: z.record(z.string()).default({}),
-  prompts: z.record(z.any()).default({}),
-  generationLimits: z.record(z.any()).default({}),
+  openaiModels: z.record(z.string(), z.string()).default({}),
+  prompts: z.record(z.string(), z.any()).default({}),
+  generationLimits: z.record(z.string(), z.any()).default({}),
 });
 
 export const createProductSettingsConfigRouter = (): Hono => {

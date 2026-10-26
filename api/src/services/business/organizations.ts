@@ -1,6 +1,6 @@
 // Canonical product adapter for the injected Cluster Mesh business transport.
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../utils/zod-validator';
 import { z } from 'zod';
 import { db, pool } from '../../db/client';
 import { folders, organizations, initiatives } from '../../db/schema';
@@ -130,7 +130,11 @@ const organizationInput = z.object({
   challenges: z.string().optional(),
   objectives: z.string().optional(),
   technologies: z.string().optional(),
-  status: z.enum(['draft', 'enriching', 'completed']).default('completed'),
+  status: z.enum(['draft', 'enriching', 'completed']),
+});
+
+const organizationCreateInput = organizationInput.extend({
+  status: organizationInput.shape.status.default('completed'),
 });
 
 export const organizationsRouter = new Hono();
@@ -189,7 +193,7 @@ organizationsRouter.get('/', async (c) => {
   return c.json({ items: rows.map(hydrateOrganization) });
 });
 
-organizationsRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', organizationInput), async (c) => {
+organizationsRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', organizationCreateInput), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
   const id = createId();
@@ -374,7 +378,7 @@ const aiEnrichInput = z.object({
 
 organizationsRouter.post('/ai-enrich', requireEditor, requireWorkspaceEditorRole(), zValidator('json', aiEnrichInput), async (c) => {
   const { name, model } = c.req.valid('json');
-  const selectedModel = model || 'gpt-4.1-nano';
+  const selectedModel = model || 'gpt-5.4-nano';
   const enrichedData = await enrichOrganization(name, selectedModel, undefined, undefined, {
     organizationId: undefined,
     workspaceId: undefined,
