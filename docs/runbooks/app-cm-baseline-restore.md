@@ -31,8 +31,7 @@ plan-v2 handoff and must never resolve to prod/preprod.
 | PG service | `postgres-restore` | |
 | PG database | `app_cm_restore` | |
 | Restore PG role credential | secret `postgres-restore`, key `POSTGRES_PASSWORD` | |
-| Backup-object read-only credential | secret `sentropic-pgbackup` (`S3_*` keys) | |
-| Scratch bucket (optional) | `sentropic-app-cm-restore` | |
+| Backup-object read-only credential | secret `app-cm-restore-backup-ro` (`S3_*` keys) | |
 | Dedicated namespace kubeconfig | path on the tenant machine | |
 | NetworkPolicy/RBAC denying prod/preprod DB writes | applied | |
 
@@ -50,10 +49,16 @@ receipt_dir="${RESTORE_RECEIPT_DIR:-/tmp/app-cm-restore-receipts}"
 mkdir -p "${receipt_dir}"
 make k8s-pgbackup-restore \
   PG_BACKUP_KEY=pg/<timestamp>.sql.gz \
+  PG_BACKUP_SHA256=<64-hex-digest-of-the-object> \
   RESTORE_KUBECONFIG=<path-to-restore-namespace-kubeconfig> \
   RESTORE_KEEP_DB=true \
   ENV=test-app-w0-restore > "${receipt_dir}/${run_id}.full.log" 2>&1
 ```
+
+`PG_BACKUP_SHA256` is required: take the digest from the B03 handoff
+(W0-close.a manifest). Without it the target refuses to run; with it the
+restored bytes are compared fail-closed and the receipt records
+`sha256_checked:true`.
 
 Keep only the manifest block as the receipt and delete the full log (it may
 carry pod output; receipts hold no private data and live outside the repo):
@@ -90,21 +95,21 @@ into `#702`; no Lane B edit under `docs/baselines/app-cm-w0/**`.
 | Guard | Rejected value | Stage |
 | --- | --- | --- |
 | `PG_BACKUP_KEY` empty | unset | before any write |
-| `PG_BACKUP_KEY` shape | not `pg/*.sql.gz`, `..`, sub-paths | before any write |
-| `KUBECONFIG` absent | unset or not a file | before any write |
-| Identity capability | `auth can-i create pods` is not `yes` | read-only check |
-| `RESTORE_NAMESPACE` | empty, `sentropic`, `sentropic-preprod` | before any write |
-| `RESTORE_PGHOST` | empty, `postgres`, `postgres.sentropic*`, `postgres.sentropic-preprod*` | before any write |
-| `RESTORE_PGDB` | empty, `app`, `postgres`, `template0`, `template1` | before any write |
-| `RESTORE_SCRATCH_BUCKET` | `s3://` form, slashes, equal to source bucket | before any write |
-| Backup credential | unreadable secret or empty `S3_BUCKET` | read-only check |
-| In-pod re-check | scratch equal to source or live bucket | before restore write |
-| Verification queries | any `psql`/`s5cmd` failure aborts | strict, nothing swallowed |
+| `PG_BACKUP_KEY` shape | not `pg/<ts>.sql.gz`, `..`, sub-paths, JSON injection | before any write |
+| `PG_BACKUP_SHA256` missing or malformed | unset or not 64-char hex; mismatch aborts the restore | before any write + in-pod compare |
+| `RESTORE_KUBECONFIG` missing | unset | before any write |
+| `RESTORE_KUBECONFIG` not isolated | not an absolute path, not a file, `$HOME/.kube/poc.yaml` | before any write |
+| Identity capability | negative `auth can-i create pods\|get secrets` in `sentropic` and `sentropic-preprod` (literals plus overrides) answers `yes` | read-only checks |
+| `RESTORE_NAMESPACE` | empty, `default`, `sentropic`, `sentropic-preprod`, not `sentropic-restore-*` | before any write |
+| `RESTORE_PGHOST` | empty, live hosts, dotted or hex IP literals, illegal chars, FQDN outside the restore namespace | before any write |
+| `RESTORE_PGDB` | empty, `app`, `postgres`, `template0`, `template1`, missing `_restore` suffix | before any write |
+| Backup credential | unreadable secret or empty/invalid `S3_BUCKET` | read-only check |
+| Verification queries | any `psql` failure aborts (`ON_ERROR_STOP`, `pipefail`, `gzip -t`) | strict, nothing swallowed |
 
 ## 5. Local verification (no cluster)
 
-```sh
-sh scripts/test-pgbackup-restore-isolation.sh
+```bash
+bash scripts/test-pgbackup-restore-isolation.sh
 ```
 
 The script drives the target with a fake `kubectl` shim: every guard case
