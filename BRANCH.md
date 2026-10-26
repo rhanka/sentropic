@@ -59,7 +59,7 @@
   - [x] Author `tests/engram-memory/projection.spec.ts`: live K7/K8, completion, P3 replay and rollback.
   - [ ] Rerun existing `first-proof.spec.ts` and `completion.spec.ts`.
 - [ ] **Lot 2 — Implementation**
-  - [ ] Memory-only SQL assets and shared schema-role loader hooks.
+  - [x] Author memory-only SQL assets and shared schema-role loader hooks; E2 does not edit migrations.ts; independent module chain avoids core numbering collision.
   - [x] Author transactional projection and backend-backed validation; reuse #709 transition functions; qualification pending.
   - [x] Author five root-bound memory queries and scope-chain-index enumeration; qualification pending.
 - [ ] **Lot 3 — Final validation and draft handoff**
