@@ -85,12 +85,12 @@
   - [x] core/interrupt.ts: all-class fence receipts, outcome pairing, effect barrier and typed authenticated risk acceptance implemented.
   - [x] core/playback.ts: L1-compatible session/stream headers, monotonic rendered samples, bounded transient queue and stale epoch refusal implemented.
   - [x] core/usage-receipts.ts: canonical operation identity, strict metadata fields and signed revision-deduplicated adjustments implemented.
-- [ ] **Lot 3 — Documentation and validation**
+- [x] **Lot 3 — Documentation and local validation**
   - [x] README: control/journal integration, authority and runtime qualification boundaries, L3 integration seam documented.
-  - [ ] Strict source/test types, lint, build/exports and full package tests through locked Make targets.
+  - [x] Strict source/test types, lint, build/exports and all 27 package tests pass through locked Make targets; each gate cleans its ENV on exit.
   - [x] make scope-check before every commit; repeatable first-parent atomic-size, whitespace and attribution-trailer audit provided.
   - [x] Review dossier records exact author/source and selection failure without inferred reviewer allocation or consensus; G-REVIEW remains open for merge.
 - [ ] **Lot 4 — Draft handoff**
-  - [x] Push branch and create draft PR776 to main using this plan as body; plan comment follows final validation.
+  - [x] Push branch and create draft PR776 to main using this plan as body; implementation plan posted as its first comment.
   - [ ] Obtain green exact-head CI; report PR, head SHA, CI URL and L3 readiness.
   - [x] Keep BRANCH.md and draft; no merge/publication/deployment performed.
