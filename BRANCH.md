@@ -24,11 +24,15 @@
   - `api/src/**`
   - `api/tests/api/organizations.test.ts` (PR #752 autosave status regression)
   - `api/tests/unit/zod-validator.test.ts` (PR #752 validation response contract)
+  - `api/tests/unit/gateway-package-version.test.ts` (candidate gateway version evidence)
   - `api/tests/unit/google-drive-oauth.test.ts` (deterministic tamper test blocking CI)
   - `packages/auth-hono/**`
   - `packages/auth-ui/package.json` (auth-hono 0.17 peer support)
   - `packages/llm-gateway/package.json` (auth-hono 0.17 peer support)
   - `packages/cluster-mesh/package.json` (auth-hono 0.17 peer support)
+  - `packages/cluster-mesh/src/modules/catalog.ts` (auth-hono 0.17 runtime preflight support)
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (candidate version assertions)
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts` (auth-hono runtime version boundary)
   - `packages/comments/**`
   - `packages/skills/**`
   - `packages/cluster-mesh/tests/packaging/**` (Zod resolution in the frozen consumer)
@@ -58,6 +62,7 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] CI 40287324395: aligned Cluster Mesh runtime auth-hono preflight with 0.17 support and both API/Cluster Mesh gateway version assertions with 0.21.1. Focused Cluster Mesh boundary/surface tests 55/55 PASS and package build PASS; API version evidence 22/22 PASS. All four endpoint CI shards PASS, including autosave regressions.
 - [x] Opus r1 P1: reproduced default injection under Zod 4.6.7; reserve defaults for POST. Added autosave PUT/GET regressions for draft/enriching/completed and explicit status updates in api/tests/api/organizations.test.ts (endpoint CI gate). Only folders/initiatives also use partial schemas; neither contains defaults. No wrapped defaults found in other migrated consumers.
 - [x] Opus r1 P2-1: all 25 API router modules use one shared validator hook restoring the exact 400 envelope (success/error/issues/name, no message); JSON/query/success contract tests 3/3 PASS and API typecheck PASS via Compose. Zod 4 issue contents remain the native validation output.
 - [x] Opus r1 P2-2: auth-hono 0.17.0 documents the breaking Zod peer change. auth-ui 0.7.7, llm-gateway 0.21.1 and cluster-mesh 0.22.2 widen their peer support; registry predecessors verified (0.7.6/0.21.0/0.22.1). Root/API locks refreshed; standalone API uses the local gateway candidate to avoid its published predecessor's incompatible peer. Three backend package builds PASS. Frozen selected versions/peer metadata and SHA-512 integrities refreshed from guarded auth-hono/gateway archives; exact-head CI validates the installed consumers.
