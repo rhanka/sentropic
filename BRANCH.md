@@ -35,6 +35,8 @@
 - [x] BR01-EX1: `/tmp/app-w1d-recovery-race-red.log` proves a concurrent W1.b publication returns 201 but loses bytes to GC. Wire preparation refs to unchanged upstream `createPostgresClaimGuardedRefs` in `composition.ts`; impact limited to pin/reference exclusion with maintenance; rollback reverts this wiring and keeps jobs disabled. No package algorithm change.
 - [ ] W1.c-dependent post-restore activation invalidation is drafted against UP-T PR #782 import path `@sentropic/artifacts/adapters/postgres-activation`, `PostgresActivationStore.cleanup/invalidate`; finalize host wiring and real adapter recovery proof when artifacts 0.2.3 publishes and W1.c lands. No copied PG algorithm or runtime import of an unpublished module.
 - [ ] W3/W5 must fence all writers/readers, retire pre-restore grant signing authority and reconcile current denials before reopening; W1.d supplies composition only.
+- [ ] W3 storage wiring must supply `createPrivateArtifactStorage` with bucket-scoped GetPublicAccessBlock permission and a qualified private S3 endpoint; unsupported privacy checks refuse, with no runtime fallback.
+- [x] PR base `feat/app-cm-integration` is outside this inherited workflow's PR triggers; use CI workflow_dispatch on the pushed exact head with bootstrap publication disabled.
 
 ## AI Flaky tests
 - [x] No AI tests, accepted flakes or increased timeouts.
@@ -53,7 +55,7 @@
 - [x] Lot 3: recovery fence orders activation invalidation and grant-key retirement before reopening; failure remains closed; expiry independent of cleanup, using upstream grant verifier.
   - [x] Recovery/race tests first: 7 passed, 6 expected failures (missing recovery port and published bytes erased), `/tmp/app-w1d-recovery-race-red.log`.
   - [x] All 16 recovery cases pass; API typecheck passes; lint has 0 errors/219 warnings, `/tmp/app-w1d-recovery-green.log`.
-- [ ] Lot 4: focused recovery/publication/migration suites, API typecheck/lint, healthy runtime logs, down and scope checks.
+- [x] Lot 4: 48/48 recovery/publication/migration tests, API typecheck/lint, healthy HTTP 200 runtime logs, down, empty Compose ps and PASS C2; `/tmp/app-w1d-final.log`.
 - [ ] Lot 5: draft PR against `feat/app-cm-integration`, exact BRANCH.md body, independent review, push and exact-head green CI; report W1.c remainder; do not merge.
 
 ## Inherited main qualification record
