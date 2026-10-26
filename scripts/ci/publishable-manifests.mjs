@@ -80,6 +80,14 @@ export function classifyDependencyValue(input, semver = loadSemver()) {
   return { ok: true };
 }
 
+export function dependencyFloor(requirement, semver = loadSemver()) {
+  const check = classifyDependencyValue(requirement, semver);
+  if (!check.ok) throw new GuardError(`Invalid dependency range: ${check.reason}`);
+  const floor = semver.minVersion(requirement)?.version;
+  if (!floor) throw new GuardError('Dependency range has no satisfiable version');
+  return floor;
+}
+
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 // Returns { isPublic, violations[], structural[] } for one manifest object.

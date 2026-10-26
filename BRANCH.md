@@ -21,6 +21,7 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
+  - [x] `scripts/ci/publishable-manifests.mjs` (BR96-EX32: dependency-floor parsing only)
   - [x] `.tmp/live-stt/l1/**`, `packages/llm-mesh/src/speech/**`, `packages/llm-mesh/src/index.ts`, `packages/llm-mesh/tests/speech-contract.test.ts`, `packages/llm-mesh/CHANGELOG.md` (BR96-EX31: incoming #754 history only)
   - [x] `Makefile`, `docker-compose*.yml`, `api/**`, `e2e/**`, `docs/governance/**`, `packages/artifacts/**`, `packages/cluster-mesh/**`, `packages/llm-mesh/tests/facade.test.ts`, `scripts/ci/immo-861-*` (BR96-EX25: incoming origin/main history only; no new implementation scope)
   - [x] `BRANCH.md`, `.h2a/build/**`
@@ -76,6 +77,8 @@
 - [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13, BR96-EX14, BR96-EX15, BR96-EX16, BR96-EX17, BR96-EX18, BR96-EX19, BR96-EX20, BR96-EX21, BR96-EX22, BR96-EX23, BR96-EX24.
 
 ## Feedback Loop
+- [x] EX32 regression validation: wiring suite 24/24 passed, including the real Make version-selector command, caret/union/comparator ranges and malformed/unsatisfiable refusal. The actual wait-llm-gateway-mesh-dependency target passed with one cache-bypassing registry read of mesh 0.27.0; cleanup completed.
+- [x] BR96-EX32: CI 40315291563 cannot install gateway 0.21.1 (registry HTTP 404). Main run 40313611927 proves its publisher passes the literal string `0.27.0 || ^0.28.0` to the exact-version registry wait after stripping one caret. Parse the dependency floor with the existing pinned semver helper, preserve the wait budget and registry cache bypass, and add a regression. Advance the unpublished gateway candidate to 0.21.2 so PR sibling qualification carries its exact archive; align workspace lock, independent train, API version assertion, CI peers and selected fixture. Scope: bounded Make/guard helper and existing tuple/test paths; no Decision source change. Rollback: revert this correction and its tuple metadata together.
 - [x] Lifecycle refresh at merge 8935888eb: Track CLI re-anchored two eligible done items; report reread leaves the same 15 done items NOT consolidated - to treat (acceptance unknown). Journal integrity and containment remain valid after the four generated events.
 - [x] EX31 validation: full LLM Mesh 1381/1381, real guarded packed Cluster Mesh qualification 100/100 (15 files), and CI wiring/expected-results 38/38 passed under the shared lock with per-step teardown. Frozen lock mesh/gateway integrity matches the exact guarded archives. Decision implementation remains byte-identical to 46df280cc. Track needs no conflict repair: 362 valid events contain both parent journals (362 branch, 346 main).
 - [x] EX31 verification: admit test-llm-judge in the incoming speech verification adapter ENV guard so its existing mesh and guarded packed-tuple targets can verify the merge under the required isolated project. Same recipes, Docker lock and cleanup; rollback removes this ENV from the adapter guard.

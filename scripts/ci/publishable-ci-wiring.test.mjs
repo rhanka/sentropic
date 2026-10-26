@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, publishFilter, waitForVersion } from './publishable-manifests.mjs';
+import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFloor, publishFilter, waitForVersion } from './publishable-manifests.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -491,6 +491,19 @@ test('Cluster Mesh publication tolerates registry visibility beyond the old 18-r
     assert.equal(found.status, visibleAt === Infinity ? 'absent' : 'present');
     assert.equal(reads, Math.min(visibleAt, attempts));
   }
+});
+
+test('gateway mesh wait resolves a union range to an exact dependency floor', () => {
+  for (const [range, expected] of [['^0.27.0', '0.27.0'], ['^0.27.0 || ^0.28.0', '0.27.0'],
+    ['>=0.28.1 <0.29.0', '0.28.1']]) assert.equal(dependencyFloor(range), expected);
+  for (const range of ['', 'latest', 'file:../llm-mesh', '>2.0.0 <1.0.0']) {
+    assert.throws(() => dependencyFloor(range));
+  }
+  const command = recipe('wait-llm-gateway-mesh-dependency').match(/version="\$\$\((.*?)\)"; node /)?.[1];
+  assert.ok(command, 'execute the real Make version selector without polling the registry');
+  const result = spawnSync('sh', ['-ec', command], { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '0.27.0');
 });
 
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {
