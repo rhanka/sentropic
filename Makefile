@@ -4434,12 +4434,25 @@ memory-l5-tooling: memory-l5-runtime ## L5 tooling contract tests via Vitest JSO
 .PHONY: memory-l5-test
 memory-l5-test: memory-l5-runtime ## L5 lot-scoped package tests, LOT=<n> enumerates the exact lot file set (L5-EX1)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-test requires ENV=<env> last" >&2; exit 1; }
+ifeq ($(LOT),2)
+	@$(MAKE) memory-l5-lot2 ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
+else
 	@test "$(LOT)" = "1" || { echo "ERROR: memory-l5-test LOT=$(LOT) is owned by a later lot (only LOT=1 exists)" >&2; exit 1; }
 	@$(MAKE) test-mcp-platform SCOPE=tests/memory API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) test-mcp-platform SCOPE=tests/request-identity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) test-mcp-platform SCOPE=tests/wire-parity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) test-mcp-platform SCOPE=tests/registry-dispatch.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 	@$(MAKE) test-mcp-broker SCOPE=tests API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+endif
+
+.PHONY: memory-l5-lot2 memory-l5-reference
+memory-l5-lot2: memory-l5-runtime
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo 'ERROR: Lot 2 requires a verified ARTIFACT_MANIFEST'; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-manifest.mjs "$(ARTIFACT_MANIFEST)"
+	@$(MAKE) memory-l5-reference ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
+
+memory-l5-reference: build-mcp-broker
+	@$(MAKE) test-mcp-broker SCOPE=tests/memory ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
 
 .PHONY: memory-l5-packed
 memory-l5-packed: memory-l5-runtime ## L5 installed-consumer packed SDK suite, SCOPE=packed/<file> against ARTIFACT_MANIFEST (Lot 4)

@@ -35,7 +35,8 @@ it('should bind immutable P3 and refuse fixture acceptance even with matching di
       m => { m.e2.sha256 = '0'.repeat(64); }, m => { delete m.backend; }, m => { m.closure = []; },
       m => { m.lock.path = '../escape'; }, m => { m.runtime.python = true; }, m => { m.extra = true; }]) {
       const changed = structuredClone(manifest); mutate(changed);
-      expect(validateLot2Manifest(changed, root).length).toBeGreaterThan(validateLot2Manifest(manifest, root).length);
+      const baseline = validateLot2Manifest(manifest, root);
+      expect(validateLot2Manifest(changed, root).some(error => !baseline.includes(error))).toBe(true);
     }
     writeFileSync(join(root, manifest.e2.path), 'tampered');
     expect(validateLot2Manifest(manifest, root).join('\n')).toContain('sha256');
