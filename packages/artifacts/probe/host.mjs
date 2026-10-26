@@ -10,7 +10,7 @@ import { createMemoryKv } from '@sentropic/artifacts/server/ports';
 import { createMemoryBlobStore, createMemoryStateStore } from '@sentropic/artifacts/server/publication';
 import { createMemoryRefcountStore } from '@sentropic/artifacts/server/gc';
 
-export function createProbeHost() {
+export function createProbeHost({ mapHostError } = {}) {
   const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
   const receipts = new Map(), bindings = new Map(), writes = new Map();
   const state = createMemoryStateStore(), blobs = createMemoryBlobStore(), acls = createMemoryAclStore();
@@ -20,7 +20,7 @@ export function createProbeHost() {
     const releaseId = await state.getCurrentReleaseId(id);
     return releaseId === undefined ? undefined : state.getRelease(releaseId);
   };
-  const coordinator = createArtifactCommitCoordinator({ executor: {
+  const coordinator = createArtifactCommitCoordinator({ mapHostError, executor: {
     async ensureCoordinationRow() {},
     async beginFinalization() {
       const pending = [];
@@ -47,7 +47,7 @@ export function createProbeHost() {
       return { allowed: true, fence: tx.participant.mintFence(context.policyRevision, context.invocationId) };
     },
   });
-  const app = createHttpArtifactApp({ profile, coordinator, acls, lifecycle,
+  const app = createHttpArtifactApp({ mapHostError, profile, coordinator, acls, lifecycle,
     derivation: createRadarKeyDerivation({ storageScopeId: 'scope-1', actorIds: ['owner-1'] }),
     legacyRecords: createMemoryKv(),
     ensureHost: {
