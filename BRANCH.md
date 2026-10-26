@@ -26,6 +26,7 @@
   - [x] `packages/cluster-mesh/tests/**`
   - [x] `packages/llm-gateway/package.json`
   - [x] `scripts/ci/publishable-ci-wiring.test.mjs`
+  - [x] `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
   - [x] `docker-compose*.yml`
@@ -76,3 +77,4 @@
 - [x] Atomic artifact: test(decision): specify native Decisions wire refusals.
 - [x] Atomic artifact: test(decision): cover native route and tariff admission.
 - [x] Atomic artifact: test(decision): bound dedicated Decisions transport.
+- [x] Atomic artifact: feat(decision): declare native Decisions candidate and request.
