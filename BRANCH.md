@@ -22,6 +22,11 @@
   - `packages/cluster-mesh/tests/engram-memory/**`
   - `packages/cluster-mesh/tests/storage/postgres-memory.spec.ts`
   - `packages/cluster-mesh/src/storage/postgres/migrations.ts`
+  - `PLAN.md` (inherited E0 only)
+  - `packages/cluster-mesh/src/engram-memory/neutral-contract.ts` (inherited E0 only)
+  - `packages/cluster-mesh/assets/storage/engram-memory/C6-FREEZE.md` (inherited E0 only)
+  - `packages/cluster-mesh/assets/storage/engram-memory/neutral-asset-inventory.json` (inherited E0 only)
+  - `packages/cluster-mesh/assets/storage/engram-memory/neutral-equivalence.json` (inherited E0 only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -46,6 +51,8 @@
 - [x] Add adversarial same-unit duplicate event/proof tests; projection must refuse before publishing any canonical root.
 - [x] Query tests cover exact unsigned cursor ordering through max u64 and current grant revocation on retained continuation.
 - [x] First real PG pass: 6 pass/2 fail/0 skips; duplicate `event_id` accepted within one unit reproduced. Add per-unit identity set; correct fixture moduleResult to the existing EncodedValue wire type.
+- [x] E2 qualification succeeded at `6ba0cb0d576c8fe454537202583aecded86613f5` (run 40353153064); E0/E1/E2 remain open PRs. E6 is drafted on E0 and depends on E2 landing before integration.
+- [x] Declare E0 paths inherited in the diff against integration; E6 does not author or alter those freeze assets.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky waiver applies.
