@@ -80,4 +80,70 @@ export class SqliteMemoryWorkflowStoreV1 {
     if (!prior) return refuse('POLICY_UNAVAILABLE');
     return JSON.parse(String(prior['value']));
   }
+  private require(key: string): WorkflowRecord { return this.get(key) ?? refuse('NOT_FOUND'); }
+  private checkConfirmation(row: WorkflowRecord, c: MemoryConfirmationContinuationV1,
+    e: ExpectedConfirmationContinuationBindingV1): void {
+    const p = row.input.preimage, target = p.target;
+    const targetRef = target.kind === 'candidate' ? target.candidate_id : target.kind === 'record' ? target.record_id : '';
+    if (c.operation_digest !== row.input.digest || c.reservation_ref !== p.reservation_ref || c.capability !== p.tool_name ||
+        c.initiating_principal_namespace !== p.principal_namespace || c.initiating_principal_id !== p.principal_id ||
+        c.tenant_id !== p.tenant_id || c.store_id !== p.store_id || c.scope_ref !== p.scope_ref ||
+        c.connector_instance_ref !== p.connector_instance_ref || c.target_ref !== targetRef ||
+        !verifyMemoryConfirmationContinuationV1(c, e).ok) refuse('gate_failed');
+  }
+  confirm(key: string, continuation: MemoryConfirmationContinuationV1, expected: ExpectedConfirmationContinuationBindingV1): void {
+    this.transaction(() => {
+      const row = this.require(key);
+      if (row.state !== 'reserved' || expected.reservation_state !== 'uncommitted') refuse('gate_failed');
+      this.checkConfirmation(row, continuation, expected);
+      row.confirmation = structuredClone(continuation); this.save(row);
+    });
+  }
+  claim(key: string, owner: string, now: number, leaseMs: number, currentlyAuthorized: unknown,
+    expected?: ExpectedConfirmationContinuationBindingV1): WorkflowRecord {
+    if (currentlyAuthorized !== true) return refuse('UNAUTHORIZED');
+    if (!owner || !Number.isSafeInteger(now) || !Number.isSafeInteger(leaseMs) || leaseMs <= 0 || leaseMs > 30000) return refuse('gate_failed');
+    return this.transaction(() => {
+      const row = this.require(key);
+      if (row.state === 'committed') return refuse('ALREADY_TERMINAL');
+      if (row.state === 'unknown' || (row.state === 'executing' && now >= row.leaseUntil!)) return refuse('MUTATION_OUTCOME_UNKNOWN');
+      if (row.state === 'executing') return refuse('FENCE_LOST');
+      if (['engram_memory_withdraw', 'engram_memory_forget'].includes(row.input.preimage.tool_name)) {
+        if (!row.confirmation || !expected || expected.reservation_state !== 'uncommitted') return refuse('gate_failed');
+        this.checkConfirmation(row, row.confirmation, { ...expected, now: new Date(now).toISOString(),
+          execution_deadline_at: new Date(Math.min(now + leaseMs, Date.parse(expected.execution_deadline_at))).toISOString() });
+      }
+      row.state = 'executing'; row.owner = owner; row.leaseUntil = now + leaseMs; row.fence += 1;
+      return this.save(row);
+    });
+  }
+  assertEffectAllowed(key: string, fence: number, now: number, currentlyAuthorized: unknown): void {
+    if (currentlyAuthorized !== true) return refuse('UNAUTHORIZED');
+    const row = this.require(key);
+    if (row.state !== 'executing' || row.fence !== fence || !Number.isSafeInteger(now) || now >= row.leaseUntil!) refuse('FENCE_LOST');
+    if (row.confirmation && now >= Date.parse(row.confirmation.expires_at)) refuse('gate_failed');
+  }
+  markUnknown(key: string, fence: number): void {
+    this.transaction(() => {
+      const row = this.require(key);
+      if (row.state !== 'executing' || row.fence !== fence) refuse('FENCE_LOST');
+      row.state = 'unknown'; this.save(row);
+    });
+  }
+  /** Only the host's canonical proof lookup may supply this record; never tool arguments. */
+  reconcile(key: string, proof: CanonicalProof, currentlyAuthorized: unknown): void {
+    if (currentlyAuthorized !== true) return refuse('UNAUTHORIZED');
+    this.transaction(() => {
+      const row = this.require(key);
+      if (proof?.status !== 'committed' || proof.operationDigest !== row.input.digest || !proof.replayRef || proof.result === undefined) refuse('MUTATION_OUTCOME_UNKNOWN');
+      if (row.canonical && JSON.stringify(row.canonical) !== JSON.stringify(proof)) refuse('DIGEST_CONFLICT');
+      row.state = 'committed'; row.canonical = structuredClone(proof); this.save(row);
+    });
+  }
+  complete(key: string, fence: number, _result: unknown): unknown {
+    const row = this.require(key);
+    if (row.fence !== fence) return refuse('FENCE_LOST');
+    if (row.state !== 'committed' || !row.canonical) return refuse('MUTATION_OUTCOME_UNKNOWN');
+    return structuredClone(row.canonical.result);
+  }
 }
