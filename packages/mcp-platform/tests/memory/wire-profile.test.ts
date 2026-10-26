@@ -6,6 +6,7 @@ import { registerBridgeTools, type BridgeOptions, type BridgeTool } from '../../
 import { encodeMemoryEnvelope } from '../../src/transport/result-codec.js';
 import { encodeBoundedMemoryEnvelope } from '../../src/memory/wire-profile.js';
 import { hostContext } from './host-fixture.js';
+import { MemoryTrustedContextError } from '../../src/memory/invocation-context.js';
 
 const tool: BridgeTool = { name: 'engram_memory_search', profile: 'sentropic.engram.memory-wire/v1',
   schemaProfile: 'sentropic.engram.memory-tools/2020-12-v1',
@@ -69,5 +70,26 @@ describe('P04.platform.wire-profile-v1', () => {
   it('should refuse unknown profiles before installing SDK handlers', () => {
     const server = new Server({ name: 'bad', version: '1' });
     expect(() => registerBridgeTools(server, [{ ...tool, profile: 'unknown' }], { run: async () => envelope })).toThrow();
+  });
+  it('should admit the exact escaped 2 MiB ceiling and refuse ceiling + 1', () => {
+    const make = (target: number) => {
+      const e = { ...envelope, output: { schema_version: 1 as const, value: '' } };
+      const remaining = target - Buffer.byteLength(JSON.stringify(encodeMemoryEnvelope(e)));
+      let controls = Math.floor(remaining / 13);
+      if ((remaining - controls * 13) % 2) controls--;
+      e.output.value = '\u0000'.repeat(controls) + 'a'.repeat((remaining - controls * 13) / 2);
+      expect(Buffer.byteLength(JSON.stringify(e))).toBeLessThan(1048576);
+      expect(Buffer.byteLength(JSON.stringify(encodeMemoryEnvelope(e)))).toBe(target);
+      return e;
+    };
+    expect(() => encodeBoundedMemoryEnvelope(make(2097152), 1048576)).not.toThrow();
+    expect(() => encodeBoundedMemoryEnvelope(make(2097153), 1048576)).toThrow();
+  });
+  it('should preserve a broker audit refusal as sanitized protocol -32603', async () => {
+    const client = await linked(async () => { throw new MemoryTrustedContextError('private-detail'); },
+      { memoryContext: async () => hostContext() });
+    try {
+      await expect(client.callTool({ name: tool.name, arguments: {} })).rejects.toMatchObject({ code: -32603 });
+    } finally { await client.close(); }
   });
 });

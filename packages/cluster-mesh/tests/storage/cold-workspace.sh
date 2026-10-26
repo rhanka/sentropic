@@ -33,6 +33,8 @@ if [ -f /source/.h2a/pg-crash-witness.json ]; then
   cp /source/.h2a/pg-crash-witness.json ../../.h2a/
 fi
 case "$CM_ACTION" in
+  memory-lot3)
+    node ../../tools/memory-mcp-l5/lot3-source.mjs "$workspace" /source/tmp/memory-l5-lot3-results /source ;;
   platform-test)
     cd ../mcp-platform
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" --environment node --maxWorkers=1 ;;
