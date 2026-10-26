@@ -73,12 +73,29 @@ const collectM1CorpusPins = (): Readonly<Record<string, string>> => {
 
 export const EXPECTED_M1_CORPUS_COUNT = 29;
 
+// The frozen contract excludes package delivery/dependency closure. Accept only
+// the digest-bound Zod migration whose two exact edits recover the original bytes.
+const verifyPackageMigration = (text: string, expectedHash: string): boolean => {
+  const receipt = JSON.parse(readFileSync(resolve(REPO_ROOT,
+    'docs/comments-annotations/contract/package-zod4-migration.json'), 'utf8'));
+  const hash = (value: string): string => createHash('sha256').update(value).digest('hex');
+  if (receipt.baselineSha256 !== expectedHash || receipt.migratedSha256 !== hash(text)) return false;
+  const baseline = text
+    .replace('"version": "0.3.1"', '"version": "0.3.0"')
+    .replace('"zod": "^4.6.6"', '"zod": "^3.25.76"');
+  return hash(baseline) === expectedHash;
+};
+
 /** Real verification function: returns the rel paths whose bytes miss their pin. */
 export const verifyHashPins = (pins: Readonly<Record<string, string>>): readonly string[] => {
   const mismatches: string[] = [];
   for (const [relPath, expectedHash] of Object.entries(pins)) {
     const absPath = resolve(REPO_ROOT, relPath);
-    if (!existsSync(absPath) || sha256File(relPath) !== expectedHash) mismatches.push(relPath);
+    if (!existsSync(absPath)) { mismatches.push(relPath); continue; }
+    if (sha256File(relPath) === expectedHash) continue;
+    if (relPath === 'packages/comments/package.json'
+      && verifyPackageMigration(readFileSync(absPath, 'utf8'), expectedHash)) continue;
+    mismatches.push(relPath);
   }
   return mismatches;
 };
@@ -165,6 +182,15 @@ const readManifest = (): Record<string, unknown> =>
   JSON.parse(readFileSync(resolve(REPO_ROOT, MANIFEST_PATH), 'utf8')) as Record<string, unknown>;
 
 describe('C0 exit proof: Frozen-M1 preservation', () => {
+  it('accepts only the pinned dependency migration and rejects export drift or downgrade', () => {
+    const text = readFileSync(resolve(REPO_ROOT, 'packages/comments/package.json'), 'utf8');
+    const baseline = collectM1CorpusPins()['packages/comments/package.json'];
+    expect(verifyPackageMigration(text, baseline)).toBe(true);
+    expect(verifyPackageMigration(text.replace('./dist/index.js', './dist/other.js'), baseline)).toBe(false);
+    expect(verifyPackageMigration(text.replace('^4.6.6', '^3.25.76'), baseline)).toBe(false);
+    expect(verifyPackageMigration(text, '0'.repeat(64))).toBe(false);
+  });
+
   it('pins the complete frozen M1 corpus derived from contract-v1.json', () => {
     const pins = collectM1CorpusPins();
     expect(Object.keys(pins)).toHaveLength(EXPECTED_M1_CORPUS_COUNT);

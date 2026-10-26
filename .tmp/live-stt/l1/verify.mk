@@ -1,7 +1,7 @@
 include Makefile
 
-ifneq ($(ENV),test-live-stt-l1)
-$(error This verification adapter requires ENV=test-live-stt-l1)
+ifeq ($(filter $(ENV),test-live-stt-l1 test-llm-judge),)
+$(error This verification adapter requires ENV=test-live-stt-l1 or ENV=test-llm-judge)
 endif
 
 L1_COMPOSE = docker compose -p $(ENV) -f docker-compose.immo-861.yml

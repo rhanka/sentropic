@@ -2,6 +2,12 @@
 
 Reusable Hono authentication route factories, contracts, and server-side auth helpers for Sentropic-compatible apps.
 
+## 0.17.0 migration
+
+This release requires Zod `^4.6.6` instead of Zod 3. Upgrade the host application's
+Zod dependency together with auth-hono. Validation details use Zod 4 issue codes
+and messages; the route response envelopes are unchanged.
+
 ## Boundary
 
 `@sentropic/auth-hono` owns backend auth route composition and reusable ceremony logic for:

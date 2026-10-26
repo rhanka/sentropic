@@ -1,0 +1,13 @@
+{
+  "kind": "package-dependency-security-migration",
+  "date": "2026-10-25",
+  "trackItem": "01M5PMR6AG9QDZG9H3N57TB3FS",
+  "packageManifest": "packages/comments/package.json",
+  "baselineSha256": "821786727350ec56d333b6c8a6199f278c3a72cf1d642c44aaaac25b4f419d08",
+  "migratedSha256": "076f6e5ca7ee1a5791bd9d435263be1ceeaacdeaadd28033f9a80d3540d79bab",
+  "changes": {
+    "version": { "from": "0.3.0", "to": "0.3.1" },
+    "dependencies.zod": { "from": "^3.25.76", "to": "^4.6.6" }
+  },
+  "contractImpact": "Package version and dependency closure only; the frozen contract, source modules, exports, conformance corpus and wire/hash rules retain their original pins."
+}

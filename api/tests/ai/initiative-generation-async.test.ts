@@ -448,7 +448,8 @@ describe('AI Workflow - Complete Integration Test', () => {
     // Cleanup stream events
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, folderStreamId));
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, initiativeStreamId));
-  }, 120000);
+    // Budget includes sequential live enrichment, generation, detail and summary calls.
+  }, 180000);
 
   it('should accept the org-aware list schema with explicit org_ids', async () => {
     const orgAlphaResponse = await authenticatedRequest(
