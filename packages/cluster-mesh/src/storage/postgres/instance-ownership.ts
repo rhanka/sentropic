@@ -45,7 +45,10 @@ const missingOwnershipTable = (error: unknown): boolean => {
   return fields.code === '42P01' || fields.sqlState === '42P01';
 };
 
-const acquisitionRaced = (error: unknown): boolean => {
+/** A lock-wait, serialization or deadlock race against a concurrent opener.
+ * Used on the lock/claim statements and at the open boundary (a race lost
+ * at COMMIT time still means a concurrent acquisition is in progress). */
+export const acquisitionRaced = (error: unknown): boolean => {
   if (typeof error !== 'object' || error === null) return false;
   const fields = error as Record<string, unknown>;
   const state = fields.sqlState ?? fields.code;
