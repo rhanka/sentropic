@@ -6,10 +6,24 @@ No staffed windows or temporal slot reservations are required for W0 acceptance 
 
 ## Migration and storage boundaries
 
-- **W1 sole host migration: `api/drizzle/control/0017_app_artifact_host.sql`**, plus generator-required control metadata and bounded schema/runner integration. No product migration reserved for this train. Package artifacts migration assets are consumed unchanged through W1's single executor/journal; do not renumber upstream assets into duplicate host migrations.
-- `0012`–`0016` belong to D2, despite main ending at `0011`: `tmp/worktrees/session-content-consent/BRANCH.md:59,101` records conductor ratification on 17 October. Its files cover consent, epoch pins, purge and object reservations. Cowork's `0009` reservation is also retained. W0's sibling scan found no control `0017` file; SC must reconcile any nonlocal unpublished reservation before W1 allocates it.
+- **W1 sole host migration: `api/drizzle/control/0020_app_artifact_host.sql`**, plus generator-required control metadata and bounded schema/runner integration. The previous `0017_app_artifact_host.sql` reservation is **withdrawn**, not renamed on disk: W0 has authored no migration. No product migration is reserved. Consume package SQL unchanged through W1's single executor/journal; do not renumber upstream assets into host migrations.
+- D2/#677 owns **0012–0019**, including the newer `0017_session_content_safety.sql`, `0018_session_content_denial_floor.sql`, `0019_session_content_capture_floor.sql` at remote head `ac020db2c3382fe42356114631c3729ee9d39833`. This supersedes the older 0012–0016-only scan. Cowork's 0009 is retained; Radar's separate ≥0024 prefix does not allocate an app control number.
 - Product source maximum `0043`, control source maximum `0011` are not applied production frontiers. B02 supplies live checksums and both migration journals (`drizzle.__drizzle_migrations`, `public.__drizzle_control_migrations`); W5 compares them before any approved additive migration.
 - API remains the sole migration authority. IdP/content start neither migrations nor other listeners. Additive host tables and private artifact blobs stay separate from legacy document/chat/comments stores and D2 buckets/credentials.
+
+## B06 nonlocal reservation reconciliation — 26 October
+
+Owner's W0-close.d packet authorizes the app's replacement allocation. After refreshing all remote heads with `git fetch origin '+refs/heads/*:refs/remotes/origin/*'`, scan **07:39:17–24Z** inspected **747 local/remote refs** and **263 registered worktrees**. The [frozen scan inputs/result](migration-reservation-scan-2026-10-26.json) retain refs and worktree paths. For each ref, `git ls-tree -r --name-only <sha> -- api/drizzle/control` searched control SQL numbers ≥0020; `git grep -n -I -E '0020|0021|0022|0023|0024' <sha> -- BRANCH.md 'docs/baselines/*/reservations.md' 'plan/*BRANCH*'` checked declarations. Each worktree's control files (including untracked files) and BRANCH.md were also scanned with `rg --files`/`rg`.
+
+Result: **0 control SQL files ≥0020 and 0 0020 reservation declarations**; numeric matches in old product-migration plans/hashes are not control allocations. #677's remote and local 0017–0019 files exist; main's source maximum is still 0011. Reserve **0020 solely for app W1.a**. This closes B06's W0 nonlocal-number check across the inspected branch/worktree universe; it does not claim knowledge of unadvertised private work or apply SQL. W1 must rescan before writing and stop on a new collision; no independent renumbering or modification of #677 assets.
+
+Ref-list SHA-256: `7172baa23068452a7c73bd01f06a473a0be01e7796a3c4a849cb65f0f05d399a`; worktree-list SHA-256: `03172f29fa4a2f1aedda0dd1e5c2949d8eb551969f5baec54d53e2c750c0cd53`. Read-only tenant discovery additionally found no artifacts package schema/journal; deployed frontier is a separate B02 fact, not a number reservation.
+
+## Current source mode and serialized integration turn
+
+W0-close.d freezes **workspace-source mode**, main base `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`, W0 merge `79a4f2703ffd34ad2b66999d3daf8b7516e90735`, upstream integration #739 head `2568c25cd6f03d706356fd0be5bd9e0c601a0bcf` merged at `e9f82d14a1a62b95050a91c36b4a01a1aed153c0`, and common-v1 #729 head `8a69cfb02277888926a7313a203f63b880fe00ab` merged at the selected main base. The old proposed 0.21.3 repair is actually delivered as **0.22.1**. [Current tuple](published-tuple-2026-10-26.json) and [host fit](host-fit.md) distinguish published bytes, source/lock metadata and deployment.
+
+Downstream branches start from the **accepted exact #702 head**, still pending B03/B08. Proposed `feat/app-cm-integration` consumes that head plus this pinned main and retains upstream ancestry; no downstream branch is created here. **W2.b/Sol is sole writer of `api/package.json`, root/API locks and final package-resolution reconciliation**, after W1 storage handoff, before W3's packaging qualification; W1 requests any dependency change through that turn. No competing package/barrel/export writer is granted. W2 rechecks current main and full strict install/physical image tree; base movement requires a refreshed equivalence/acceptance receipt, not a silent pin update. The old calendar below is historical and superseded by plan-v2; no date or build slot is reserved by this record.
 
 ## Ports and worktrees
 
@@ -17,7 +31,7 @@ Ports are listed as API/UI/Maildev UI. The test block follows branch-number 142 
 
 | Lot / sole runtime slot owner | Reserved worktree | Test environment : ports | E2E environment : ports |
 |---|---|---|---|
-| W0 / C-W0 | `tmp/worktrees/app-cm-w0` | `test-app-cm-w0`: 9710/5910/1810 | `e2e-app-cm-w0`: 9720/5920/1820 |
+| W0 / C-W0 | `tmp/worktrees/app-cm-w0` | `test-app-w0`: 9710/5910/1810 (probe has no listeners) | `e2e-app-cm-w0`: 9720/5920/1820 |
 | W1 / C-W1 | `tmp/worktrees/app-cm-w1` | `test-app-cm-w1`: 9711/5911/1811 | `e2e-app-cm-w1`: 9721/5921/1821 |
 | W2 / C-W2 | `tmp/worktrees/app-cm-w2` | `test-app-cm-w2`: 9712/5912/1812 | `e2e-app-cm-w2`: 9722/5922/1822 |
 | W3 / C-W3 | `tmp/worktrees/app-cm-w3` | `test-app-cm-w3`: 9713/5913/1813 | `e2e-app-cm-w3`: 9723/5923/1823 |
@@ -33,8 +47,8 @@ At approximately 23:34 UTC, `ss -H -ltn`, read-only Docker port inventory and si
 
 | Slot / sole integration owner | Bounded concern / shared ownership transfer |
 |---|---|
-| T1 / C-W1, SC serializes | W1 host services, `api/src/db/run-migrations.ts`, reserved `0017`/metadata; `api/package.json`, root/API locks. Release locks to T2 only after integration |
-| T2 / C-W2 | W2 registry, `api/src/app.ts`, MCP module and verified adapter seam; existing resources factory where required. Release resources seam to T3 |
+| T1 / C-W1, SC serializes | W1 host services, `api/src/db/run-migrations.ts`, reserved `0020`/metadata; no independent package/lock write. Release storage composition to T2 |
+| T2 / C-W2 | W2 registry, `api/src/app.ts`, MCP module/adapter/resources seam; sole API manifest/root/API-lock reconciliation turn. Release locks/resources seam to T3 after qualification |
 | T3 / C-W3 | W3 activation/content entrypoint, API Dockerfile, **Makefile/CI**, all I app manifests/base+overlays; KO provisions external DNS/IAM/TLS/bucket resources and supplies receipts |
 | T4 / C-W4 | W4 context/source/callers, catalogue composition and UI. No parallel writer to catalogue/executor; integrate W3 at exit |
 | TG / C-P, SC accountable | P workflow/verifier/trust/promote/scripts; **Makefile/CI only after T3**, deployment documentation; tenant operator configures Environment/RBAC |

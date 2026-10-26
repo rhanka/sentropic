@@ -16,7 +16,7 @@ assert.equal(topology.instances.length, 1);
 assert.equal(topology.llmMesh.path, topology.gateway.llmMesh.path);
 const selected = ['artifacts_ensure','artifacts_publish','artifacts_list','artifacts_get'];
 const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
-const manifest = createArtifactsManifest({ selectedCapabilities:selected,effectiveProfile:profile });
+const manifest = createArtifactsManifest({ profile });
 assert.deepEqual(manifest.tools.map(tool=>tool.name).sort(), [...selected].sort());
 assert.throws(()=>createArtifactsManifest({selectedCapabilities:selected}));
 const lock=JSON.parse(readFileSync('package-lock.json','utf8'));
