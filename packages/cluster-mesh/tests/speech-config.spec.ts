@@ -28,7 +28,7 @@ describe('speech configuration', () => {
   });
   it('should clone and freeze configuration instead of enabling microphone capture', () => {
     const p = profile(); const resolved = resolveSpeechProfiles([p]);
-    p.bindings.stt!.modelId = 'changed';
+    Reflect.set(p.bindings.stt!, 'modelId', 'changed');
     expect(resolved[0].bindings.stt?.modelId).toBe('tiny');
     expect(Object.isFrozen(resolved[0].bindings.stt)).toBe(true);
     expect(JSON.stringify(resolved)).not.toContain('micEnabled');
