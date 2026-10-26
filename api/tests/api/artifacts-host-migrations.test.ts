@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { fork } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { runMigrations } from '../../src/db/run-migrations';
 import {
   artifactMigrationAssets,
@@ -37,6 +37,17 @@ afterAll(() => admin.end());
 
 async function journal() {
   return (await database.query(`SELECT asset_id, sha256 FROM control.artifact_package_migrations ORDER BY asset_id`)).rows;
+}
+
+function rejectQueries(client: PoolClient, failures: Map<string, Error>) {
+  const query = client.query.bind(client);
+  vi.spyOn(client, 'query').mockImplementation(((...args: unknown[]) => {
+    const statement = typeof args[0] === 'string' ? args[0] : (args[0] as { text: string }).text;
+    for (const [fragment, error] of failures) {
+      if (statement.includes(fragment)) return Promise.reject(error);
+    }
+    return (query as (...values: unknown[]) => unknown)(...args);
+  }) as typeof client.query);
 }
 
 describe('artifact host migrations', () => {
@@ -124,6 +135,45 @@ describe('artifact host migrations', () => {
     await database.query('ALTER TABLE artifacts.operation_receipts DROP COLUMN receipt');
     await expect(installArtifactPackageAssets(database)).rejects.toThrow(/untracked artifact schema/i);
     expect((await database.query(`SELECT to_regclass('control.artifact_package_migrations') AS journal`)).rows[0].journal).toBeNull();
+  });
+
+  it('should refuse a missing required table even when every receipt survives', async () => {
+    await runMigrations(database);
+    await database.query('DROP TABLE artifacts.operation_receipts, control.artifact_host_kv');
+    const before = await journal();
+    await expect(installArtifactPackageAssets(database)).rejects.toThrow(/missing artifact relation/i);
+    expect(await journal()).toEqual(before);
+  });
+
+  it('should fail startup and discard its client when unlocking fails', async () => {
+    const client = await database.connect();
+    const unlockFailure = new Error('injected unlock failure');
+    rejectQueries(client, new Map([['pg_advisory_unlock', unlockFailure]]));
+    const release = vi.spyOn(client, 'release');
+    await expect(runMigrations({ connect: async () => client } as unknown as Pool)).rejects.toBe(unlockFailure);
+    expect(release).toHaveBeenCalledWith(unlockFailure);
+  });
+
+  it('should preserve the migration error when its unlock also fails', async () => {
+    const client = await database.connect();
+    const migrationFailure = new Error('injected migration failure');
+    const unlockFailure = new Error('injected unlock failure');
+    rejectQueries(client, new Map([['CREATE SCHEMA IF NOT EXISTS "drizzle"', migrationFailure], ['pg_advisory_unlock', unlockFailure]]));
+    await expect(runMigrations({ connect: async () => client } as unknown as Pool)).rejects.toMatchObject({ cause: migrationFailure });
+  });
+
+  it('should discard a standalone installer client and preserve both failures when rollback fails', async () => {
+    const primary = new Error('injected query failure');
+    const rollback = new Error('injected rollback failure');
+    const release = vi.fn();
+    const client = { release, query: vi.fn(async (statement: string) => {
+      if (statement === 'ROLLBACK') throw rollback;
+      if (statement.includes('to_regclass')) throw primary;
+      return { rows: [] };
+    }) };
+    await expect(installArtifactPackageAssets({ connect: async () => client } as unknown as Pool))
+      .rejects.toMatchObject({ errors: [primary, rollback] });
+    expect(release).toHaveBeenCalledWith(rollback);
   });
 
   it('should keep one immutable KV value across competing writers and a fresh process', async () => {
