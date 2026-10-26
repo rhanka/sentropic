@@ -510,14 +510,13 @@ jobs:
         id: ci_expected
         env:
           ENGRAM_E2_SELECTED: ${{ steps.engram_e2_scope.outputs.selected }}
-          DECISION_FIXTURE_ONLY: ${{ github.event_name == 'pull_request' && github.head_ref == 'feat/decision-v4-l5' && 'true' || 'false' }}
           CI_SELECTION_CONTEXT: >-
             {"changes": ${{ toJSON(steps.filter.outputs) }}, "event": "${{ github.event_name }}",
             "ref": "${{ github.ref }}", "inputs": {"bootstrap_publish_target": "${{ inputs.bootstrap_publish_target || 'none' }}"},
             "identity": {"runId": "${{ github.run_id }}", "attempt": "${{ github.run_attempt }}",
             "headSha": "${{ github.event.pull_request.head.sha || github.sha }}"}}
         run: |
-          export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; context.changes.decision_fixture_only = process.env.DECISION_FIXTURE_ONLY; process.stdout.write(JSON.stringify(context));')"
+          export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; process.stdout.write(JSON.stringify(context));')"
           make ci-expected-manifest ENV=test-ci-62
       - uses: actions/upload-artifact@v4
         with:
