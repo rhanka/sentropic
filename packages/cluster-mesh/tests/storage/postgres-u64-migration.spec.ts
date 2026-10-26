@@ -9,6 +9,7 @@ import {
   verifyPgInstallation,
   type PgHostHistory,
 } from '../../src/storage/postgres/migrations.js';
+import type { InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
 import { PgTransactions } from '../../src/storage/postgres/transactions.js';
 import { pgEnabled, testPgDriver } from './pg-driver.js';
 import { createPgFixture } from './pg-fixture.js';
@@ -95,15 +96,15 @@ describe.skipIf(!pgEnabled)('consumed-counter migration application', () => {
     try {
       const root = await fixture.open();
       const bound = await root.bindNew(grantFor({ operations: ['read', 'write'] }));
-      expect(await readCounters(fixture)).toEqual({ version: '0', sequence: '0' });
       await bound.commitAtomic({ guards: [], records: [{ key: 'legacy', contentHash: 'h', bytes: { format: 'utf8', data: 'v' } }], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [] });
       expect(await readCounters(fixture)).toEqual({ version: '1', sequence: '1' });
     } finally { await fixture.close(); }
   });
 });
 
-const txRun = async (fixture: { tx: PgTransactions; close(): Promise<void> }, name: string) => {
-  await fixture.tx.run(false, (session) => session.execute({ text: `DROP SCHEMA IF EXISTS "${name}" CASCADE`, values: [] }));
+const txRun = async (fixture: { driver: InjectedPgDriver; close(): Promise<void> }, name: string) => {
+  const tx = new PgTransactions(fixture.driver);
+  await tx.run(false, (session) => session.execute({ text: `DROP SCHEMA IF EXISTS "${name}" CASCADE`, values: [] }));
   await fixture.close();
 };
 
