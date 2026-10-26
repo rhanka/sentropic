@@ -36,6 +36,7 @@
 ## Feedback Loop
 - [ ] Report producer questions to gr-conductor; C7 is not accepted by this branch alone.
 - [ ] Integrate after E7; durable E9 and installed E10 acceptance remain separate.
+- [x] Host fixture keeps the factory-stamped store object; invocation and crypto dependencies are host/engine-private; a fresh ledger refuses until host authority is restored.
 - [x] Known llm-gateway 404 is outside E8 scope per owner.
 
 ## AI Flaky tests
