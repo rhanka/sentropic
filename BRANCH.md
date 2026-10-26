@@ -68,5 +68,5 @@ Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only,
   - [x] Run the isolation test green with `ENV=test-app-w0-restore` last.
   - [x] Prove no kubectl write precedes a guard failure.
 - [ ] **Lot 4 — Final validation**
-  - [ ] `make scope-check` before each commit; atomic `make commit` per file group, each under 150 lines.
-  - [ ] Push, open a draft PR against `feat/app-cm-w0-baseline`, CI green; do not merge.
+  - [x] `make scope-check` before each commit; atomic `make commit` per file group, each under 150 lines.
+  - [ ] Push, open draft PR #756 (base `main`: repo CI triggers only for main-targeted PRs; retarget to `feat/app-cm-w0-baseline` at W0-close.e integration), CI green; do not merge.
