@@ -47,6 +47,7 @@
 - [x] Lot 0: read lock, plan, MASTER/workflow/testing/API rules, README/TODO/template; create worktree and mechanically check branch.
 - [x] Lot 1: `api/tests/api/artifacts-host-recovery.test.ts` first; red run on missing lifecycle composition, `/tmp/app-w1d-red.log`.
 - [ ] Lot 2: `lifecycle.ts` private S3 and bounded preparation cleanup/collection; PG references, pins, failure retries and maintenance denial tested in the recovery file.
+  - [x] Initial seven recovery cases pass, `/tmp/app-w1d-green-2.log`; fixtures use upstream `sha256:` digest codec.
 - [ ] Lot 3: recovery fence orders activation invalidation and grant-key retirement before reopening; failure remains closed; expiry independent of cleanup, using upstream grant verifier.
 - [ ] Lot 4: focused recovery/publication/migration suites, API typecheck/lint, healthy runtime logs, down and scope checks.
 - [ ] Lot 5: draft PR against `feat/app-cm-integration`, exact BRANCH.md body, independent review, push and exact-head green CI; report W1.c remainder; do not merge.
