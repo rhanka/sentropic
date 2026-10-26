@@ -1,5 +1,7 @@
 SHELL := /bin/bash
 
+-include packages/live-speech/verify.mk
+
 -include .env
 
 ENV ?= dev

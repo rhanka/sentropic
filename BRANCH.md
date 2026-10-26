@@ -28,10 +28,10 @@
   - `Makefile`
   - `.github/workflows/ci.yml`
 - **Exception process**:
-  - [x] BRLIVE-L2-EX1 below permits only package Make include and dedicated CI gate.
+  - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
-- [x] BRLIVE-L2-EX1: new package has no build/test entrypoint. Add package-local Make recipes using existing qualification Compose service, one root include and CI job. Impact: deterministic isolated package gate; rollback: remove include/job and package recipes. No new containers or ports outside ENV.
+- [x] BR757-EX1: new package has no build/test entrypoint. Add package-local Make recipes using existing qualification Compose service, one root include and CI job. Impact: deterministic isolated package gate; rollback: remove include/job and package recipes. No new containers or ports outside ENV.
 
 ## AI Flaky tests
 - [x] Deterministic unit fixtures only; no flaky waiver.
@@ -47,7 +47,7 @@
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read Docker lock first, project rules, approved spec, owner answers and PR757 base.
   - [x] Mechanical harness branch check passes; no service ports required.
-  - [ ] Add package manifest, strict TS build, Make and CI entrypoints.
+  - [x] Add package manifest, strict TS build, Make and CI entrypoints using the existing isolated qualification service.
 - [ ] **Lot 1 — Tests first**
   - [ ] interrupt.test.ts: pre-start Stop, double Stop, late native ID, completion race, all-class fence and restart.
   - [ ] ordering.test.ts: one commit/submission, pairing/dedupe, stale generations, barrier, partial/stale risk acceptance and fresh authorization.
