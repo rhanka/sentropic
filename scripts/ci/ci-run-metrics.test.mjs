@@ -370,6 +370,8 @@ test('delivery elapsed needs every endpoint member measured', () => {
   const base = '2026-10-18T10:00:00.000Z';
   const full = deliveryElapsed(records, base, { images: ['publish-api-image'] });
   assert.equal(full.images.elapsedSeconds, 224);
+  const carried = deliveryElapsed(records, '2026-10-18T10:10:00.000Z', { images: ['publish-api-image'] });
+  assert.equal(carried.images.elapsedSeconds, null, 'carried endpoints completed before this attempt are not a new elapsed sample');
   const incomplete = deliveryElapsed(records, base, { images: ['publish-api-image', 'publish-ui-image'] });
   assert.equal(incomplete.images.elapsedSeconds, null);
   const unmeasured = deliveryElapsed(
