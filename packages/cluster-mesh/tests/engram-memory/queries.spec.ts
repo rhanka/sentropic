@@ -70,4 +70,29 @@ describe.skipIf(!pgEnabled)('scoped memory PostgreSQL queries', () => {
       expect((await bound.query('memory-accepted-snapshot', { ...input, system_as_of: '3' }, { limit: 1 })).records).toHaveLength(1);
     } finally { await host.close(); }
   });
+
+  it('should order full-u64 outbox cursors exactly and refuse unavailable retained data', async () => {
+    const host = await memoryPgHost();
+    try {
+      const root = await host.open();
+      const grant = memoryGrant();
+      const bound = await root.bindNew(grant);
+      const cursors = ['9007199254740992', '9223372036854775808', '18446744073709551615'];
+      await bound.commitAtomic(memoryUnit({ records: cursors.map((cursor) => ({
+        key: JSON.stringify(['memory-outbox-v1', cursor, 'digest']), contentHash: cursor,
+        bytes: { format: 'utf8', data: JSON.stringify({ through_cursor_inclusive: cursor }) },
+      })) }));
+      const first = await bound.query('memory-outbox-page', { after: '0', limit: 1 }, { limit: 1 });
+      expect(first.records).toEqual([{ through_cursor_inclusive: cursors[0] }]);
+      const second = await bound.query('memory-outbox-page', { after: '0', limit: 1 }, { limit: 1, cursor: first.nextCursor });
+      expect(second.records).toEqual([{ through_cursor_inclusive: cursors[1] }]);
+      expect((await bound.query('memory-outbox-page', { after: cursors[1], limit: 10 }, { limit: 10 })).records)
+        .toEqual([{ through_cursor_inclusive: cursors[2] }]);
+      await expect(bound.query('memory-outbox-page', { after: '18446744073709551616', limit: 1 }, { limit: 1 }))
+        .rejects.toMatchObject({ code: 'invalid-command' });
+      await root.revoke(grant.token);
+      await expect(bound.query('memory-outbox-page', { after: '0', limit: 1 }, { limit: 1, cursor: first.nextCursor }))
+        .rejects.toMatchObject({ code: 'denied' });
+    } finally { await host.close(); }
+  });
 });
