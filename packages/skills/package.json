@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/skills",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Skill catalog, SKILL.md parser, sandbox runtime, and description-based discovery for Sentropic agents.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
@@ -40,7 +40,7 @@
     "gray-matter": "4.0.3",
     "isolated-vm": "6.1.2",
     "pptxgenjs": "^4.0.1",
-    "zod": "3.23.8"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/node": "20.11.30",
