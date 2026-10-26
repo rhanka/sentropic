@@ -1,91 +1,88 @@
-# Feature: Security autofix S1 inventory and contract
+# Feature: Security autofix S2a Make scan adapter
 
 ## Objective
-- [x] Resume #732 as approved S1 inventory and contract, integrating the binding r4 owner amendment.
+- [ ] Deliver the credential-free `security-daily-scan` Make adapter and raw scan orchestration from approved spec r4 section 9; estimate 3–5 h, dependency S1 approval.
 
 ## Scope / Guardrails
-- Scope limited to S1 inventory and contract only.
-- No service, schedule, credential or merge activation.
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/sentropic` is reserved for user dev (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/sec-lot1`.
-- Automated test campaigns run on dedicated environments (`ENV=test-sec-lot1`), never on root `dev`.
-- UAT qualification worktree must be commit-identical to the branch under qualification (same HEAD SHA).
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
-- Zero Python in automation.
+- [x] Preparation only: create this plan from `feat/security-autofix-s1`; implementation waits for the owner's next instruction.
+- [x] Base: corrected S1 head `76c745d5a89eaa8362a914d07604d563489b9f67`, including the merge of main `365e8b313`; S2a changes only this plan before approval.
+- [ ] Work only in `tmp/worktrees/sec-s2a` on `feat/security-autofix-s2a`.
+- [ ] Use Make targets only, zero Python, no AI commit trailers, selective staging and `make commit`; each new commit stays below 150 changed lines.
+- [ ] Use the shared Docker lock for every image build, container start and test; release it between steps and clean with locked `make down ENV=test-sec-s1` after each step.
+- [ ] Pass `ENV=test-sec-s1` last; run fixture targets without application services or host port bindings.
+- [ ] Preserve the public-repository model, required PR gates, vulnerability register, disabled auto-fix and L5 class.
+- [ ] No scheduler, credentials, collector, publication, repair, merge actor or runtime activation.
+- [ ] Keep image/DB qualification in S2b and native Rust SAST qualification in S2c; unqualified surfaces remain explicit blockers.
+- [ ] Keep the root worktree and all other sessions' containers, volumes and environments untouched.
+- [ ] Use English for repository text and keep all implementation changes within the paths below.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `.security/security-fix.json`
-  - `scripts/security/daily/schema.mjs`
-  - `scripts/security/daily/inventory.mjs`
-  - `scripts/security/daily/schema.test.mjs`
-  - `scripts/security/daily/inventory.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `.github/workflows/ci.yml`
   - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
+  - `scripts/security/daily/scan.mjs`
+  - `scripts/security/daily/scan.test.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `Makefile`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
+  - `.github/workflows/**`
   - `.cursor/rules/**`
+  - `.security/**`
+  - `api/Dockerfile`
+  - `ui/Dockerfile`
+  - `packages/**`
+  - `tools/**`
   - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/ci.yml` (SECDAILY-S1-EX1 only)
+  - `Makefile` (SECDAILY-EX1, only the two adapter recipes below)
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop`.
+  - [ ] Declare any additional exception with rationale, impact and rollback in this feedback loop before editing.
 
 ## Feedback Loop
-- [x] Retire the inherited S1 completion checklist before declaring S2a; implementation remains on hold.
+- [x] SECDAILY-EX1 predeclared by approved r4 for S2a: edit only `security-daily-scan` and `test-security-daily` recipes in `Makefile`; reuse the existing pinned credential-free Node test lane. Impact: explicit raw scanner orchestration and its regression target; existing gates and deploy recipes remain unchanged. Rollback: revert these adapter recipes and scan files, keeping activation disabled.
+- [ ] S1 dependency: obtain approval of the corrected #732 head before implementing S2a; this plan creates no additional approval requirement.
+- [ ] Track import belongs to the designated writer; this worktree updates only the mergeable `BRANCH.md` source.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [ ] Expect deterministic fixture tests only; treat any failure as blocking and do not increase timeouts or accept AI flakiness.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: S1 is a single isolated contract and inventory unit with no orthogonal sub-branches.
+- [x] **Mono-branch**: one bounded adapter lot with serial tests under the shared Docker lock.
+- [ ] **Multi-branch**: not needed for this scope.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/sec-lot1`.
-  - Push branch before UAT.
-  - [x] Web app, Chrome and VSCode UAT are not applicable to pure security inventory helpers.
-  - Switch back to `tmp/worktrees/sec-lot1` after UAT.
+- [ ] Web app UAT: not applicable; no user-facing or application runtime change.
+- [ ] Chrome plugin UAT: not applicable; no extension change.
+- [ ] VSCode plugin UAT: not applicable; no extension change.
+- [ ] Operator UAT: inspect a fixture scan receipt for source SHA, all severities, explicit gaps, public backlog and unchanged source/register bytes.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
-  - [x] Create isolated worktree `tmp/worktrees/sec-lot1` from `origin/main` on branch `feat/security-autofix-s1`.
-  - [x] Capture Makefile targets needed for debug/testing.
-  - [x] Define environment mapping (`ENV=test-sec-lot1`) for this branch.
-  - [x] Confirm command style: `make ... ENV=test-sec-lot1` with `ENV` last.
-  - [x] Confirm scope and guardrails.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
-  - [x] Resolve existing toolbox path `api/Dockerfile` (`ci-tools`, `ci-esbuild` stages) as inventory fact for SECDAILY-EX6.
-- [x] **Lot 3 — S1 tests `schema.test.mjs` and `inventory.test.mjs`**
-  - [x] Cover three images, root/UI/kit locks, 67-row expiry split, seven stale-container candidates.
-  - [x] Cover N=2 complete-scan fixture, severity flags, aliases, malformed data.
-  - [x] Cover P3-1 credential fields and P3-4 manual class.
-  - [x] Cover owner all-public decision (no private scan repo or storage).
-  - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec-lot1`
-    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1`
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] Contract records r4, disabled activation and the current L5 compatibility blocker; source planning documents remain unchanged.
+- [ ] **Lot 0 — Admission and baseline**
+  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `rules/security.md`, the Docker lock and approved spec r4 sections 3/4/9.
+  - [ ] Verify the S1 dependency head, `harness check branch`, scope boundaries and SECDAILY-EX1 before editing.
+  - [ ] Inventory existing Make scan/parser entrypoints; reuse S1 schema/inventory helpers without changing their safety contract.
+  - [ ] Capture source/register byte identities and the source SHA for unchanged-main assertions.
+- [ ] **Lot 1 — Raw scan orchestration, `scan.mjs` and `scan.test.mjs`**
+  - [ ] Enumerate three images explicitly, root/workspace and independent UI/kit lockfiles including dev dependencies, and discovered source/hash consumers.
+  - [ ] Capture raw output before compliance; run audit/scan commands without repair or publication and preserve accepted exceptions in the public queue.
+  - [ ] Validate reports with S1 fail-closed checks; keep command errors, missing reports, unsupported formats, missing images and unqualified SAST as coverage gaps.
+  - [ ] Record exact source, scanner/database identities, component/path, all severity flags and coverage; retain identical flags between comparable scans.
+  - [ ] In `scan.test.mjs`, assert source/register bytes remain unchanged, registered findings remain queued, explicit toolbox/locks coverage and independent locks include dev dependencies.
+  - [ ] In `scan.test.mjs`, reject empty/malformed/partial/error reports and verify missing surfaces or SAST qualification prevent complete-clean receipts.
+  - [ ] In `scan.test.mjs`, assert identical scan flags and bounded credential-free command invocation through injected fixture runners.
+  - [ ] Register the suite in the existing required `scripts/ci/publishable-ci-wiring.test.mjs` entrypoint without editing workflow filters or permissions.
+  - [ ] Lot gate: scoped scan regression tests through the existing `make test-publishable-manifests SCOPE=scripts/security/daily/scan.test.mjs ENV=test-sec-s1`, locked, followed by scoped teardown.
+- [ ] **Lot 2 — Make adapter and parser compatibility**
+  - [ ] Add only the thin `security-daily-scan` and `test-security-daily` targets under SECDAILY-EX1; use existing removable container tooling.
+  - [ ] Keep scanner/DB/provenance qualification explicitly pending S2b and native SAST pending S2c; do not reuse Python SAST in the daily lane.
+  - [ ] In `scan.test.mjs`, assert Make recipe wiring, fail-closed exit behavior and explicit coverage; do not start live scan stacks as fixture assertions.
+  - [ ] Run locked `make test-security-daily ENV=test-sec-s1` and existing `make test-security-parser ENV=test-sec-s1`, with locked teardown after each.
+  - [ ] API/UI/E2E tests: not applicable to this adapter-only change; no app service stack required.
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Record commands, result counts, immutable head, coverage blockers and operator fixture receipt in this plan; keep the approved spec unchanged.
+  - [ ] Confirm every diff hunk serves S2a and S2b/S2c/S3 work remains deferred.
 - [ ] **Lot N — Final validation**
-  - [x] Typecheck and lint not applicable to plain Node security scripts.
-  - [x] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1` after approved-r4 corrections: 24 pass, no failures or skips; official existing pinned Node image, shared Docker lock and scoped teardown.
-  - [x] Final gate step 1: update existing draft #732 using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: run and verify branch CI green.
-  - [ ] Final gate step 3: do not merge, report PR number, head SHA, CI URL.
+  - [ ] Run S1 plus scan and required wiring suites through the existing pinned Node Make target, locked, then clean the scoped environment.
+  - [ ] Verify `harness check branch`, `make scope-check ENV=test-sec-s1`, clean diff formatting and each new commit below 150 changed lines with no AI trailer.
+  - [ ] Update the S2a PR from this plan, push only when implementation is requested, and verify CI on its exact head.
+  - [ ] Report head SHA, CI URL and remaining S2b/S2c blockers; do not activate scanners or merge as part of plan preparation.
