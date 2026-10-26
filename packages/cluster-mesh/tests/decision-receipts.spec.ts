@@ -69,6 +69,7 @@ describe('decision receipt correlation and generation-policy refusal via public 
     const emitter = createInvocationReceiptEmitter({ generationId: 'gen-2026-10', port });
     const desc = {
       ...rInput.decisionHost!.jevDescriptor,
+      executionProfile: 'qualification' as const,
       evaluator: { ...rInput.decisionHost!.jevDescriptor.evaluator, revision: 'syn-v1' },
       acceptedServedModelIds: ['syn-model'],
       qualification: { servedIdentity: 'qualified' as const, billingBound: 'qualified' as const, evidenceRefs: ['fixture:syn'] },

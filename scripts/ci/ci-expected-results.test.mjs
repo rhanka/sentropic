@@ -13,6 +13,15 @@ const ran = (job, conclusion) => ({ job, conclusion });
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
 
+test('should retain fixture gates while excluding provider-backed jobs for Decision L5', () => {
+  const expected = workflowExpected(workflow, { changes: { global: 'true', decision_fixture_only: 'true' }, event: 'pull_request' });
+  for (const job of ['test-api-unit-integration', 'test-e2e', 'e2e-vscode']) {
+    assert.ok(expected.filter((row) => row.job.startsWith(job)).every((row) => row.selected === false));
+  }
+  assert.equal(expected.find((row) => row.job === 'validate-llm-mesh').selected, true);
+  assert.equal(expected.find((row) => row.job === 'validate-cluster-mesh').selected, true);
+});
+
 test('should capture every page of the current attempt at the actual gate and fail on API errors', async () => {
   const script = workflow.jobs['ci-gate'].steps.find((step) => step.name === 'Capture the current attempt for the final verdict').with.script;
   const execute = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'context', 'fetch', 'process', script);

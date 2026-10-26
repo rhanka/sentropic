@@ -42,6 +42,7 @@
 - [x] BR95-EX1: synchronize package-lock workspace metadata and cluster/gateway compatibility with the L5 feature version; rollback the tuple together; no resolved dependency changes.
 - [x] BR95-EX2: conditional CI edits limited to exact release tuple and preventing provider calls for this fixture-only branch; rollback these cells together.
 - [x] P22: test reproduced two rounded micro-USD for combined sub-micro input/output work; round the per-receipt sum once, preserving v1 accounting sources and conservative unknown-usage reserves.
+- [x] Final mesh: 1485 tests / 86 files, typecheck and lint passed; CI selection/wiring: 40 tests passed. Cluster fixtures explicitly use the experimental profile; next-minor refusal assertions follow the new compatibility bound.
 - [ ] REVIEW: independent complementary review availability must be recorded; no consensus without two completed eligible legs.
 
 ## AI Flaky tests
