@@ -4413,7 +4413,7 @@ build-mcp-broker: build-mcp-platform ## Build @sentropic/mcp-broker dist package
 
 MEMORY_L5_NODE_IMAGE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
 MEMORY_L5_TOOLCHAIN := typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9
-memory-l5-lint memory-l5-tooling memory-l5-test memory-l5-packed memory-l5-pack memory-l5-receipt memory-l5-verify memory-l5-gate: export LLM_MESH_NODE_IMAGE = $(MEMORY_L5_NODE_IMAGE)
+memory-l5-lint memory-l5-tooling memory-l5-test memory-l5-packed memory-l5-pack memory-l5-receipt memory-l5-verify memory-l5-gate memory-l5-lot2 memory-l5-reference: export LLM_MESH_NODE_IMAGE = $(MEMORY_L5_NODE_IMAGE)
 
 .PHONY: memory-l5-runtime
 memory-l5-runtime: ## Verify the frozen Node image, version floor and unflagged execution
@@ -4446,6 +4446,9 @@ else
 endif
 
 .PHONY: memory-l5-lot2 memory-l5-reference
+memory-l5-e2-pin:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-pin.mjs
+
 memory-l5-lot2: memory-l5-runtime
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo 'ERROR: Lot 2 requires a verified ARTIFACT_MANIFEST'; exit 1; }
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-manifest.mjs "$(ARTIFACT_MANIFEST)"

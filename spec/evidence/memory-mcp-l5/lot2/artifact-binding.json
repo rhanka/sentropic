@@ -1,0 +1,23 @@
+{
+  "status": "unverified",
+  "purpose": "artifact retention only; host-bound lot2-manifest pending",
+  "preCandidateManifestSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
+  "e2": {
+    "name": "@sentropic/engram",
+    "version": "0.21.2",
+    "path": "spec/evidence/memory-mcp-l5/lot2/archives/eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1.tgz",
+    "sha256": "eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1",
+    "integrity": "sha512-RtifmT4E9to98b9zW9s0cLL/yajsu5ZQ+PwzjPD4iIXjKn+2dlYyamx5j7yXeCgNKAMoXQTKstdVljwp2nri1A==",
+    "registryTarball": "https://registry.npmjs.org/@sentropic/engram/-/engram-0.21.2.tgz"
+  },
+  "e4": {
+    "name": "@sentropic/engram",
+    "version": "0.22.0",
+    "path": "spec/evidence/memory-mcp-l5/lot2/archives/26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10.tgz",
+    "sha256": "26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10",
+    "integrity": "sha512-/TV03olHbzG+3haTC5j5YJ282egCrXak1yQE0I8DHF1kAQDwsKUe1QlMwibvBCEmPGdWeTgSHT4fF8lZJTH8cw==",
+    "builtAgainstPreCandidateSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
+    "repository": "rhanka/engram",
+    "sourceHead": "dec7c55d5"
+  }
+}

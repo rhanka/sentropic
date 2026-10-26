@@ -63,6 +63,9 @@ export class SqliteMemoryWorkflowStoreV1 {
         if (prior.input.digest !== digest) return refuse('DIGEST_CONFLICT');
         return prior;
       }
+      const effective = input.preimage.effective_input;
+      if (effective.tool_name === 'engram_memory_capture') this.policy('capture', effective.capture_policy_version);
+      if (effective.tool_name === 'engram_memory_request_admission') this.policy('admission', effective.admission_policy_version);
       return this.save({ key, input: structuredClone(input), state: 'reserved', fence: 0 });
     });
   }
@@ -108,17 +111,21 @@ export class SqliteMemoryWorkflowStoreV1 {
       if (row.state === 'committed') return refuse('ALREADY_TERMINAL');
       if (row.state === 'unknown' || (row.state === 'executing' && now >= row.leaseUntil!)) return refuse('MUTATION_OUTCOME_UNKNOWN');
       if (row.state === 'executing') return refuse('FENCE_LOST');
+      let leaseUntil = now + leaseMs;
       if (['engram_memory_withdraw', 'engram_memory_forget'].includes(row.input.preimage.tool_name)) {
         if (!row.confirmation || !expected || expected.reservation_state !== 'uncommitted') return refuse('gate_failed');
         this.checkConfirmation(row, row.confirmation, { ...expected, now: new Date(now).toISOString(),
           execution_deadline_at: new Date(Math.min(now + leaseMs, Date.parse(expected.execution_deadline_at))).toISOString() });
+        leaseUntil = Math.min(leaseUntil, Date.parse(expected.execution_deadline_at), Date.parse(row.confirmation.expires_at));
+        if (leaseUntil <= now) return refuse('gate_failed');
       }
-      row.state = 'executing'; row.owner = owner; row.leaseUntil = now + leaseMs; row.fence += 1;
+      row.state = 'executing'; row.owner = owner; row.leaseUntil = leaseUntil; row.fence += 1;
       return this.save(row);
     });
   }
-  assertEffectAllowed(key: string, fence: number, now: number, currentlyAuthorized: unknown): void {
+  assertEffectAllowed(key: string, fence: number, now: number, currentlyAuthorized: unknown, signal?: AbortSignal): void {
     if (currentlyAuthorized !== true) return refuse('UNAUTHORIZED');
+    if (signal?.aborted) return refuse('gate_failed');
     const row = this.require(key);
     if (row.state !== 'executing' || row.fence !== fence || !Number.isSafeInteger(now) || now >= row.leaseUntil!) refuse('FENCE_LOST');
     if (row.confirmation && now >= Date.parse(row.confirmation.expires_at)) refuse('gate_failed');
@@ -140,7 +147,8 @@ export class SqliteMemoryWorkflowStoreV1 {
       row.state = 'committed'; row.canonical = structuredClone(proof); this.save(row);
     });
   }
-  complete(key: string, fence: number, _result: unknown): unknown {
+  complete(key: string, fence: number, currentlyAuthorized: unknown): unknown {
+    if (currentlyAuthorized !== true) return refuse('UNAUTHORIZED');
     const row = this.require(key);
     if (row.fence !== fence) return refuse('FENCE_LOST');
     if (row.state !== 'committed' || !row.canonical) return refuse('MUTATION_OUTCOME_UNKNOWN');

@@ -10,6 +10,7 @@ it('should persist one principal-scoped reservation and refuse changed binding a
   const dir = mkdtempSync(join(tmpdir(), 'l5-workflow-')); dirs.push(dir);
   const path = join(dir, 'workflow.sqlite');
   let store = await SqliteMemoryWorkflowStoreV1.open(path);
+  store.putPolicy('admission', 'v1', { retention: 'original' });
   const input = workflowInput();
   const original = store.reserve(input, true);
   expect(store.settings()).toMatchObject({ journalMode: 'wal', synchronous: 2, busyTimeout: 1000 });
@@ -17,7 +18,8 @@ it('should persist one principal-scoped reservation and refuse changed binding a
   try {
     expect(store.reserve(input, true)).toEqual(original);
     expect(() => store.reserve(input, 'true')).toThrow('UNAUTHORIZED');
-    const changed = workflowInput({ effective_input: { ...input.preimage.effective_input, admission_policy_version: 'v2' } });
+    const changed = workflowInput({ target: { kind: 'candidate', candidate_id: 'candidate-2' },
+      effective_input: { tool_name: 'engram_memory_request_admission', candidate_id: 'candidate-2', admission_policy_version: 'v1' } });
     expect(() => store.reserve(changed, true)).toThrow('DIGEST_CONFLICT');
     const other = workflowInput({ principal_id: 'another-human' });
     expect(store.reserve(other, true).key).not.toBe(original.key);

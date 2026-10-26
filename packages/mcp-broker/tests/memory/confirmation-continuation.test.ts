@@ -25,5 +25,9 @@ it('should persist bound affirmative confirmation and refuse stale or substitute
     expect(() => store.claim(row.key, 'worker', Date.parse('2026-10-26T00:05:00.000Z'), 1, true, expected)).toThrow('gate_failed');
     expect(() => store.confirm(row.key, continuation, { ...expected, logical_session_ref: 'new-session' })).toThrow('gate_failed');
     expect(() => store.confirm(row.key, continuation, { ...expected, caller_currently_authorized: false })).toThrow('gate_failed');
+    const now = Date.parse('2026-10-26T00:04:59.999Z');
+    const claim = store.claim(row.key, 'worker', now, 1, true, { ...expected, execution_deadline_at: continuation.expires_at });
+    expect(() => store.assertEffectAllowed(row.key, claim.fence, now, true)).not.toThrow();
+    expect(() => store.assertEffectAllowed(row.key, claim.fence, now + 1, true)).toThrow('FENCE_LOST');
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
