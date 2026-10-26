@@ -36,6 +36,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] PR776 P2-3: bind grants to turn/call identity; admissions and active sibling results no longer invalidate parallel approvals. Stop and unresolved-effect transitions still revoke stale grants; concurrency and pending-approval Stop tests added.
 - [x] PR776 P2-2: trusted CAS generation rotation carries effects, fences, action tombstones and consumed approvals forward; persisted-byte restart tests retain the mutation barrier and query-only old-turn recovery.
 - [x] PR776 P2-1: journal queued finals while a predecessor settles; gate send by prior completion or durable fence, retaining exactly-once submission across restart/lost ACK. Covered in interrupt.test.ts.
 - [x] BR757-EX4: default CI selects credentialed live-AI API/E2E suites for Makefile changes, conflicting with zero paid API calls. Cancel only this PR's broad runs before tests start; move deterministic core qualification to a dedicated read-only workflow without provider secrets. Existing global gates stay unchanged. Rollback removes the dedicated workflow; global CI remains explicitly unqualified for this draft.
