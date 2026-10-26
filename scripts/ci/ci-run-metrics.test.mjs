@@ -48,20 +48,24 @@ test('should sum queue waits along the elapsed critical path without summing par
     job({ name: 'ci-gate', jobId: 4, queuedAt: '2026-10-18T10:01:30Z', startedAt: '2026-10-18T10:02:05Z', completedAt: '2026-10-18T10:02:10Z' }),
   ];
   const graph = { changes: [], test: ['changes'], 'ci-gate': ['test'] };
-  const receipt = criticalPathScheduling(rows, graph, { qualification: ['ci-gate'] });
+  const createdAt = '2026-10-18T09:59:50Z';
+  const receipt = criticalPathScheduling(rows, graph, { qualification: ['ci-gate'] }, createdAt);
   assert.equal(receipt.qualification.seconds, 65);
+  assert.equal(criticalPathScheduling(rows, graph, { qualification: ['ci-gate'] }, '2026-10-18T09:59:40Z')
+    .qualification.seconds, 75, 'include workflow admission before root job creation');
+  assert.equal(criticalPathScheduling(rows, graph, { qualification: ['ci-gate'] }, null).qualification.seconds, null);
   assert.equal(criticalPathScheduling(rows.map(row => row.name === 'ci-gate' ? { ...row, queuedAt: '2026-10-18T10:02:00Z' } : row),
-    graph, { qualification: ['ci-gate'] }).qualification.seconds, 65, 'retain dependency-to-dispatch handoff delay');
+    graph, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, 65, 'retain dependency-to-dispatch handoff delay');
   assert.deepEqual(receipt.qualification.jobs.map(row => row.jobId), [1, 2, 4]);
   assert.equal(budgetVerdict({ schedulingSeconds: receipt.qualification.seconds }).budgets.schedulingSeconds.status, 'breach');
   assert.equal(criticalPathScheduling(rows.map(row => row.jobId === 2 ? { ...row, queuedAt: null } : row),
-    graph, { qualification: ['ci-gate'] }).qualification.seconds, null);
-  assert.equal(criticalPathScheduling(rows, {}, { qualification: ['ci-gate'] }).qualification.seconds, null);
+    graph, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, null);
+  assert.equal(criticalPathScheduling(rows, {}, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, null);
   assert.equal(criticalPathScheduling(rows, graph, { images: [] }).images.seconds, null);
   assert.equal(criticalPathScheduling(rows.map(row => row.name === 'ci-gate' ? { ...row, conclusion: 'skipped' } : row),
-    graph, { qualification: ['ci-gate'] }).qualification.seconds, null);
+    graph, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, null);
   assert.equal(criticalPathScheduling(rows.map(row => row.name === 'ci-gate' ? { ...row, completedAt: row.queuedAt } : row),
-    graph, { qualification: ['ci-gate'] }).qualification.seconds, null);
+    graph, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, null);
 });
 
 test('should never label an interrupted main release superseded by a later main run', () => {

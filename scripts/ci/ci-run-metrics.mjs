@@ -117,9 +117,9 @@ export function queueWaits(records) {
 }
 
 // Follow the last-finishing dependency at each join in the observed DAG.
-// The receipt sums readiness waits on that path, retaining every execution ID.
+// Sum admission, readiness and handoff waits, retaining every execution ID.
 // A maximum single-job wait is not an aggregate scheduling measurement.
-export function criticalPathScheduling(records, dependencies = {}, endpoints = {}) {
+export function criticalPathScheduling(records, dependencies = {}, endpoints = {}, runCreatedAt = null) {
   const memo = new Map();
   const visiting = new Set();
   const visit = (name) => {
@@ -137,8 +137,13 @@ export function criticalPathScheduling(records, dependencies = {}, endpoints = {
         const last = executed.sort((a, b) => toMs(b.completedAt) - toMs(a.completedAt))[0];
         const queue = queueSeconds(last);
         const handoff = parent.end > 0 ? durationSeconds(parent.end, last.startedAt) : queue;
-        const schedulingSeconds = queue === null || handoff === null ? null : Math.max(queue, handoff);
-        result = { end: toMs(last.completedAt), jobs: [...parent.jobs, { ...last, schedulingSeconds }] };
+        // This is a separately identified admission interval. Never use run
+        // creation as a replacement for an absent job-readiness timestamp.
+        const admissionSeconds = !parent.jobs.length
+          ? durationSeconds(runCreatedAt, last.queuedAt ?? last.createdAt) : 0;
+        const schedulingSeconds = queue === null || handoff === null || admissionSeconds === null
+          ? null : Math.max(queue, handoff) + admissionSeconds;
+        result = { end: toMs(last.completedAt), jobs: [...parent.jobs, { ...last, admissionSeconds, schedulingSeconds }] };
       }
     }
     visiting.delete(name);
@@ -152,7 +157,7 @@ export function criticalPathScheduling(records, dependencies = {}, endpoints = {
     const path = executed && paths.length && paths.every(Boolean) ? paths.sort((a, b) => b.end - a.end)[0] : null;
     const jobs = path?.jobs.map(row => ({ key: jobKey(row), runId: row.runId,
       attempt: row.attempt, jobId: row.jobId, name: row.name, queueSeconds: queueSeconds(row),
-      schedulingSeconds: row.schedulingSeconds })) ?? [];
+      admissionSeconds: row.admissionSeconds, schedulingSeconds: row.schedulingSeconds })) ?? [];
     const measured = jobs.length > 0 && jobs.every(row => row.schedulingSeconds !== null);
     return [endpoint, { seconds: measured ? jobs.reduce((sum, row) => sum + row.schedulingSeconds, 0) : null, jobs }];
   }));
@@ -567,7 +572,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     availableSlots: capacity.availableSlots ?? null, reserveSlots: capacity.reserveSlots ?? 0 });
   const timings = captured.timings ?? {};
   const jobDuration = name => executionSeconds(jobs.find(row => row.name === name));
-  const scheduling = criticalPathScheduling(jobs, captured.dependencies, captured.endpoints);
+  const scheduling = criticalPathScheduling(jobs, captured.dependencies, captured.endpoints, runCreatedAt);
   const waits = Object.entries(scheduling).filter(([name]) => captured.endpoints[name].length > 0).map(([, row]) => row.seconds);
   const budgets = budgetVerdict({ classificationSeconds: timings.classificationSeconds ?? jobDuration('changes'),
     verdictSeconds: timings.verdictSeconds ?? jobDuration('ci-gate'),
