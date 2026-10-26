@@ -108,14 +108,14 @@
   - [x] Read Docker lock, mandatory rules, approved E3 plan and neutral recovery contract.
   - [x] Create `tmp/worktrees/mem-e3` on E2 and pass mechanical harness branch check.
   - [x] Use existing Compose qualification targets with shared Docker lock and cleanup after each step; ENV last.
-- [ ] **Lot 1 — Tests first**
+- [x] **Lot 1 — Tests first**
   - [x] Add `tests/storage/commit-result-corpus.ts`: exact opaque result/time/epoch, absence, copy isolation, conflicting intent.
   - [x] Add `tests/storage/postgres-result-recovery.spec.ts`: lost ACK, process restart, new epoch, current grant/fence, foreign scopes, transient failure.
   - [x] Add `tests/storage/commit-result-process.ts` for independent writer crash and recovery.
-  - [ ] Observe the focused red run before implementing recovery.
+  - [x] Focused red run: missing `commit-result-recovery.js` before implementation (2026-10-26).
 - [ ] **Lot 2 — Implementation**
-  - [ ] Add scoped lookup over existing immutable commit receipts; reuse stored moduleResult exclusively.
-  - [ ] Add and export neutral recovery bridge with required current fence provider; keep memory factory closed until E7.
+  - [x] Add scoped lookup over existing immutable commit receipts; reuse stored moduleResult exclusively.
+  - [x] Add and export neutral recovery bridge with required current fence provider; keep memory factory closed until E7.
   - [ ] Preserve frozen manifests, SQL, neutral contract and Engram version.
 - [ ] **Lot 3 — Final validation**
   - [ ] `make scope-check` before each commit; commits under 150 lines via `make commit`.
