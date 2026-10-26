@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { validateScopeGrant, type ScopeGrant } from '../authority.js';
 import {
   DEFAULT_WORK_LIMITS,
+  isU64Counter,
   validateWorkLimits,
   validateWriterFence,
   type EncodedValue,
@@ -11,6 +12,20 @@ import {
   type WorkLimits,
   type WriterFence,
 } from '../contracts.js';
+// Exact-u64 fence epochs (E2): the neutral WriterFence stays safe-only, but
+// the PG fence/provision paths additionally accept canonical u64 epochs so
+// ownership epochs persist exactly through the signed-64 crossing.
+const isU64Fence = (fence: WriterFence): boolean => {
+  if (typeof fence !== 'object' || fence === null) return false;
+  const candidate = fence as unknown as Record<string, unknown>;
+  return (
+    typeof candidate['fenceId'] === 'string' &&
+    (candidate['fenceId'] as string).length > 0 &&
+    (candidate['fenceId'] as string).length <= 256 &&
+    !(candidate['fenceId'] as string).includes('\0') &&
+    isU64Counter(candidate['epoch'])
+  );
+};
 import type { CommitReceipt } from '../atomic.js';
 import { StorageDeniedError, StorageInvalidCommandError } from '../errors.js';
 import { createStaticAuthorityPort } from '../kernel.js';
@@ -171,21 +186,21 @@ export class PgCore {
     return { ...limits };
   }
   async fence(session: PgSession, grant: ScopeGrant<unknown>, fence: WriterFence): Promise<void> {
-    if (!validateWriterFence(fence).ok) throw new StorageInvalidCommandError('invalid writer fence');
+    if (!validateWriterFence(fence).ok && !isU64Fence(fence)) throw new StorageInvalidCommandError('invalid writer fence');
     const result = await session.execute({
-      text: `SELECT epoch::text FROM ${this.roots.schema}.fences WHERE scope_key=$1 AND lane=$2 AND owner=$3 AND incarnation=$4 AND epoch=$5::bigint AND
+      text: `SELECT epoch::text FROM ${this.roots.schema}.fences WHERE scope_key=$1 AND lane=$2 AND owner=$3 AND incarnation=$4 AND epoch=$5::numeric AND
         (lease_until IS NULL OR lease_until>clock_timestamp()) FOR SHARE`,
       values: [this.roots.key(grant.scope), fence.fenceId, grant.principalId, this.incarnation, fence.epoch],
     });
     if (result.rows.length !== 1) throw new StorageInvalidCommandError('stale writer ownership or expired lease');
   }
   async provision(grant: ScopeGrant<unknown>, fence: WriterFence, leaseUntil: string | null = null): Promise<void> {
-    if (!validateWriterFence(fence).ok) throw new StorageInvalidCommandError('invalid writer fence');
+    if (!validateWriterFence(fence).ok && !isU64Fence(fence)) throw new StorageInvalidCommandError('invalid writer fence');
     await this.tx.run(false, async (session) => {
       await this.check(session, grant, 'write', true);
       const result = await session.execute({
         text: `INSERT INTO ${this.roots.schema}.fences(scope_key, lane, owner, incarnation, epoch, lease_until)
-        VALUES($1, $2, $3, $4, $5::bigint, $6::timestamptz)
+        VALUES($1, $2, $3, $4, $5::numeric, $6::timestamptz)
         ON CONFLICT(scope_key, lane) DO UPDATE SET owner=excluded.owner, epoch=excluded.epoch, lease_until=excluded.lease_until WHERE
         ${this.roots.schema}.fences.epoch<excluded.epoch OR
         (${this.roots.schema}.fences.epoch=excluded.epoch AND ${this.roots.schema}.fences.owner=excluded.owner

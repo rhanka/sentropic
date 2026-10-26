@@ -6,7 +6,7 @@ import { isUnknownCursorBoundary } from '../tokens.js';
 import type { PgCore, PgTx } from './core.js';
 import type { PgSession } from './protocol.js';
 import { chainRecordKey, type PgChain, type PgChainRef, type PgRecordRef } from './effects.js';
-import { decodePgJson, decodePgUtf8 } from './codec.js';
+import { decodePgCounterU64, decodePgJson, decodePgUtf8 } from './codec.js';
 const pageSize = (page: ReadPage): number => Buffer.byteLength(JSON.stringify(page), 'utf8');
 export const readPgPage = async (
   core: PgCore,
@@ -38,7 +38,7 @@ export const readPgPage = async (
   const allocation = verified?.allocation ?? chain?.allocation;
   if (head === undefined || allocation === undefined) return { outcome: 'page', records: [], nextCursor: null };
   const terminal = await core.roots.get<PgChainRef>(session, root, 'chain-record', chainRecordKey(chainId, seq));
-  if (!terminal || terminal.hash !== head || (chain && BigInt(chain.allocation) < BigInt(allocation))) {
+  if (!terminal || terminal.hash !== head || (chain && BigInt(decodePgCounterU64(chain.allocation)) < BigInt(decodePgCounterU64(allocation)))) {
     const page: ReadPage = {
       outcome: 'incomplete',
       records: [],
