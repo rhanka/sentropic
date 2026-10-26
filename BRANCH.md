@@ -85,6 +85,7 @@
 - [ ] **Lot 5 — Final validation**
   - [ ] Review r1: tests first for queued capacity groups, independent validators/publishers; require completed final-policy PR/main receipts <=2288s; no receipt, no acceptance.
   - [ ] Review r1 publication qualification: dispatch `capacity_publish_dry_run=true` on this branch; 21 real publisher jobs run guarded packs and log identified receipts; their registry writers and post-publication checks are disabled only for that explicit mode.
+  - [ ] Use `ci-capacity-dispatch`, `ci-capacity-runs`, `ci-capacity-status` and `ci-capacity-capture` Make entry points for remote qualification; do not cancel receipt runs with intermediate pushes.
   - [x] Review r1: wall-clock proof rejects cancelled/incomplete/old-policy receipts, branch dispatches labelled as main, duplicate PRs, missing gates and 2289s regressions.
   - [ ] Acceptance command: `make ci-capacity-policy CI_REQUIRE_CAPACITY_PROOF=1 CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json' ENV=test-ci-capacity`; static admission alone never qualifies timing.
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
