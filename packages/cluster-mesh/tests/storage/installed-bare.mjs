@@ -20,7 +20,7 @@ assert.equal(disabled.enabled, false);
 // sits outside the frozen Comments range, so the bare install refuses with
 // `incompatible_version` instead of `not_installed`.
 const installed = JSON.parse(readFileSync(new URL('./node_modules/@sentropic/cluster-mesh/package.json', import.meta.url), 'utf8'));
-const packOnly = { installedVersion: installed.version, publishedPin: process.env.CM_PACK_ONLY_PIN ?? '', reservedNext: RESERVED_NEXT };
+const packOnly = { packageName: installed.name, installedVersion: installed.version, publishedPin: process.env.CM_PACK_ONLY_PIN ?? '', reservedNext: RESERVED_NEXT };
 await assert.rejects(modules.load('comments'), (error) => acceptsCommentsRefusal({ ...packOnly, reason: error.reason, code: error.code }));
 assert.ok(!resolved.some((url) => url.includes('/@sentropic/comments/') || url.includes('/node_modules/pg/')));
 console.log(JSON.stringify({ bareRoot: 'pass', storageLeaves: 'pass', disabledComments: 'pass', missingPeerRefusal: 'pass' }));
