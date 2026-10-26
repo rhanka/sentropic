@@ -50,7 +50,8 @@
   - [x] L5L3-EX3: add one Lot 3 action to the existing disposable cold workspace; reuse its installation, no additional runtime; rollback that action only.
   - [x] L5L3-EX4: prepare the existing MCP packaging fixtures in isolation with the frozen platform 0.4.0 floor; three required P09 cases otherwise skip. Rollback the preparation mode only.
 ## Feedback Loop
-- [ ] conductor with gr-conductor: enforce-package-bump requires packages/mcp-platform/package.json version to differ from main 0.4.0; P3 requires 0.4.0 unchanged. No bump, exemption or gate bypass authorized; final-head CI remains required.
+- [x] Owner direction: withdraw all platform source changes; propose 0.4.1 separately, draft and pack only; no freeze or Engram repack.
+- [x] Schema admission removed here; P03.platform.schema-profile-2020-12 remains blocked: platform-admitBridgeTools.
 - [ ] gr-conductor: P01.packed/P02.packed/P03/P04.packed need verified context/audit/schema/transport tuple; P05 canonical fenced-store; P06 restart/lost-ack; P07 assurance/continuation; P08 installed closure/disabled exports; P10 manifest/sidecar/G1-G4/C9 and tuple acceptances. Exact missing inputs: tools/memory-mcp-l5/lot3-dispositions.mjs WAITING_FOR.
 - [ ] Lot 4: S1 normalization, same frozen tuple/E4 installed six-suite qualification and owner UAT remain owning-lot gates; no successor freeze authorized.
 ## AI Flaky tests
