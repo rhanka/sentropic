@@ -63,7 +63,7 @@
   - [ ] Preserve eight L0 files under `.tmp/live-stt/l0/`; refresh heads, gate register, SDK/provenance/license/ledger/release and placement evidence in `.tmp/live-stt/l1c/baseline.md`.
   - [ ] Carry dedicated capacity study and explicit zero allocation; no native inference or quota exception.
 - [ ] **L1c-b — Tests first**
-  - [ ] `packages/cluster-mesh/tests/speech-fixtures.ts`: five primary tuples, whisper.cpp and synthetic future/native-duplex/placement entries.
+  - [x] `packages/cluster-mesh/tests/speech-fixtures.ts`: five primary tuples, whisper.cpp and synthetic future/native-duplex/placement entries.
   - [ ] `packages/cluster-mesh/tests/speech-config.spec.ts`: bindings/selectors, invalid shapes, all placements, both mic modes, empty/explicit fallback, unsupported capability refusal, no secrets.
   - [ ] `packages/cluster-mesh/tests/speech-projection.spec.ts`: offline snapshot, tenant/policy/egress refusal, unavailable catalogue, safe rebind, immutable revision, consent and no fallback.
   - [ ] Red run before implementation; green after config/projection and existing seam integration.
