@@ -56,4 +56,5 @@
   - [x] Recovery/race tests first: 7 passed, 6 expected failures (missing recovery port and published bytes erased), `/tmp/app-w1d-recovery-race-red.log`.
   - [x] All 16 recovery cases pass; API typecheck passes; lint has 0 errors/219 warnings, `/tmp/app-w1d-recovery-green.log`.
 - [x] Lot 4: 48/48 recovery/publication/migration tests, API typecheck/lint, healthy HTTP 200 runtime logs, down, empty Compose ps and PASS C2; `/tmp/app-w1d-final.log`.
+- [x] Review R1 P1: pool-bound intents/refs, per-item claim transactions, durable retry count and 60-second deferral; invalid metadata remains poisoned by the package. Regression cases cover invalid metadata, purge claims, unavailable storage, restart progress and subsequent retry (`api/tests/api/artifacts-host-recovery.test.ts`); red `/tmp/app-w1d-r1-red.log`, 19/19 green `/tmp/app-w1d-r1-p1.log`.
 - [ ] Lot 5: draft PR against `feat/app-cm-integration`, exact BRANCH.md body, independent review, push and exact-head green CI; report W1.c remainder; do not merge.
