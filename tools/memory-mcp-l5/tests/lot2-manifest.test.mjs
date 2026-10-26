@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sha256Hex, sha512Integrity, PINNED_IMAGE_DIGEST } from '../schema-validator.mjs';
@@ -7,7 +8,12 @@ import { validateLot2Manifest, P3_SHA256 } from '../lot2-manifest.mjs';
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'l5-manifest-'));
   const ref = (path, bytes) => { writeFileSync(join(root, path), bytes); return { path, sha256: sha256Hex(bytes) }; };
-  const archive = (name, version) => { const bytes = Buffer.from(name + version); return { ...ref(name.split('/').pop() + '.tgz', bytes), name, version, integrity: sha512Integrity(bytes) }; };
+  const archive = (name, version) => {
+    const stage = join(root, name.split('/').pop()); mkdirSync(join(stage, 'package'), { recursive: true });
+    writeFileSync(join(stage, 'package/package.json'), JSON.stringify({ name, version }));
+    const bytes = execFileSync('tar', ['--format=ustar', '-czf', '-', '-C', stage, 'package/package.json']);
+    return { ...ref(name.split('/').pop() + '.tgz', bytes), name, version, integrity: sha512Integrity(bytes) };
+  };
   const e2 = archive('@sentropic/engram', '0.21.2'), backend = archive('@sentropic/cluster-mesh', '0.22.4');
   const preCandidate = ref('p3.json', readFileSync('tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json'));
   const closure = [e2, backend];
