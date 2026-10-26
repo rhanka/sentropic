@@ -15,6 +15,14 @@ describe('speech projection', () => {
     expect(projectSpeechProfile(config(), select(), offline).available).toBe(true);
     expect(projectSpeechProfile(config(), select('C'), offline)).toMatchObject({ available: false, reason: 'offline' });
   });
+  it.each(['key', 'open-mic'] as const)('should project only active stages in %s mode', (micMode) => {
+    for (const bindings of [{ stt: engine() }, { tts: profile().bindings.tts }]) {
+      const profiles = resolveSpeechProfiles([{ ...profile(), bindings, micMode, requiredCapabilities: {} }]);
+      const result = projectSpeechProfile(profiles, profiles[0], context());
+      expect(result).toMatchObject({ available: true, micEnabled: false });
+      if (result.available) expect(Object.keys(result.stages)).toEqual(Object.keys(bindings));
+    }
+  });
   it('should never choose a fallback even when an ordered one is configured', () => {
     const profiles = resolveSpeechProfiles([{ ...primary[0], fallbacks: [{ profileId: 'B', configRevision: 'r1' }] }, primary[1]]);
     const ctx = { ...context(), catalogue: catalogue.filter((c) => c.binding.modelId !== 'tiny') };
@@ -72,6 +80,7 @@ describe('speech projection', () => {
         .toMatchObject({ available: false, reason: 'busy' });
     }
     for (const c of [undefined, consent('A'), consent('B', 'old'), { ...consent(), egressPolicyRef: 'old' },
+      { ...consent(), contentDigest: 'sha256:stale' },
       { ...consent(), consentRevision: 'consent:original' }]) {
       expect(rebindSpeechProfile(current, config(), select('B'), context(), {
         ...barrier, previousConsentRevision: 'consent:original', consent: c,
