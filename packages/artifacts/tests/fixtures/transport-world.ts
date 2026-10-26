@@ -5,6 +5,8 @@ import { createArtifactsToolExecutor } from '../../src/mcp-core.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../../src/profile/index.js';
 import { createRadarKeyDerivation } from '../../src/server/command-identity.js';
 import { createArtifactCommitCoordinator } from '../../src/server/commit/coordinator.js';
+import type { ArtifactHostFailureMapper } from '../../src/server/failures.js';
+import type { CommitBarrierObserver } from '../../src/testing.js';
 import type { ArtifactInvocationContext, CommitExecutor, FinalizeConnection,
   FinalizeTxClient, StoredCommitReceipt } from '../../src/server/commit/types.js';
 import { createMemoryAclStore } from '../../src/server/access.js';
@@ -15,7 +17,8 @@ import { createMemoryKv } from '../../src/server/ports.js';
 import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
   type PublicationService } from '../../src/server/publication.js';
 
-export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], scope = 'scope-l6') {
+export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], scope = 'scope-l6',
+  options: { mapHostError?: ArtifactHostFailureMapper; testObserver?: CommitBarrierObserver } = {}) {
   const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
   const receipts = new Map<string, StoredCommitReceipt>();
   const bindings = new Map<string, string>();
@@ -28,6 +31,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const intents = createMemoryIntentStore();
   const lifecycle = createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00Z', state);
   let allowed = true;
+  let approved = true;
   let guardCalls = 0;
   const quotaReservations: number[] = [];
   const executor: CommitExecutor = {
@@ -46,9 +50,9 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       return connection;
     },
   };
-  const coordinator = createArtifactCommitCoordinator({ executor, policy: {
+  const coordinator = createArtifactCommitCoordinator({ ...options, executor, policy: {
     createParticipant: (_client, transactionId) => ({
-      async readRevision() { return 'rev-1'; }, async checkApproval() { return { approved: true }; },
+      async readRevision() { return 'rev-1'; }, async checkApproval() { return { approved }; },
       async reserveQuota({ bytes }) { quotaReservations.push(bytes); return { reserved: true }; },
       mintFence: (policyRevision, invocationId) => ({ fenceId: randomUUID(), transactionId, invocationId, policyRevision }),
     }),
@@ -69,7 +73,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       return releaseId === undefined ? undefined : state.getRelease(releaseId);
     },
   };
-  const app = createHttpArtifactApp({ profile, coordinator,
+  const app = createHttpArtifactApp({ ...options, profile, coordinator,
     publicationUrls: (artifactId, releaseId) => ({ stableUrl: `https://artifacts.test/a/${artifactId}`,
       pinnedUrl: `https://artifacts.test/a/${artifactId}/r/${releaseId}` }),
     derivation: createRadarKeyDerivation({ storageScopeId: scope, actorIds: actors }),
@@ -105,10 +109,11 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       }),
     },
   });
-  const mcp = createArtifactsToolExecutor({ app, profile });
+  const mcp = createArtifactsToolExecutor({ ...options, app, profile });
   const http = (path: string, body: unknown, context = invocation()) => app.execute({
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
   return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, blobs, legacyRecords, quotaReservations,
+    executor, suspend: () => { approved = false; },
     deny: () => { allowed = false; }, allow: () => { allowed = true; }, guardCalls: () => guardCalls };
 }

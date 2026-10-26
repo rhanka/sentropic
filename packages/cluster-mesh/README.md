@@ -414,3 +414,27 @@ whose platform peer range is widened to `>=0.3.0 <0.5.0`, and exposes all 27 too
 through Mesh exports.
 The installed consumer lane is
 `make cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=test-cm-wrap`.
+
+## LLM Mesh Composition with Decision Support
+
+`createLlmMeshNamespaceModule` supports optional decision hosting via `{ decision: true }`. When `decision` is omitted or false, decision subpaths are not acquired.
+
+```ts
+import { Hono } from 'hono';
+import { createClusterMeshModules } from '@sentropic/cluster-mesh';
+import { createLlmMeshNamespaceModule } from '@sentropic/cluster-mesh/compose/llm-mesh';
+
+const module = await createLlmMeshNamespaceModule(createClusterMeshModules(), {
+  enabled: true,
+  decision: true,
+  createRouter: ({ llmMesh, decisionHost, context, receipts }) => {
+    const router = new Hono();
+    // Route handlers use loaded llmMesh and host decision capability (decisionHost) when decision: true
+    return router;
+  },
+});
+```
+
+### Correlation & Receipt Neutrality
+
+In test environments (such as lot 1.23 integration tests), the registration gate validates generation policy (`generationId`). Refusals produce stage `verified` with `decision: 'refused'` and code-derived `reason: 'generation_mismatch'` without emitting an `acted` stage. Invocation receipts correlate via `effectRef` convention (`receipt:${callId}:metadata`), strictly preserving verdict privacy without exposing `pass`, `score`, or `noul` values (production routing and effectRef derivation remain assigned to future host lot 2.08).

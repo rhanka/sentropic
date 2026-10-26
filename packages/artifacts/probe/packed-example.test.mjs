@@ -42,6 +42,17 @@ import type { CommitExecutor, CommitCoordinatorOptions, ArtifactPolicyDriver,
   CoordinatorTestPoint } from '@sentropic/artifacts/server/commit-contract';
 import { inspectPreparations, scheduleBoundedPreparationCleanup } from '@sentropic/artifacts/server/object-intents';
 import { pausePurgeBeforeDelete, inspectDeletionClaims } from '@sentropic/artifacts/testing';
+import { ArtifactOperationError, type ArtifactHostFailureMapper } from '@sentropic/artifacts/server/outcome-contract';
+import type { HttpAppDeps } from '@sentropic/artifacts/http';
+import { createArtifactsToolExecutor, type ArtifactsAdapterOptions } from '@sentropic/artifacts/mcp-core';
+const mapHostError: ArtifactHostFailureMapper = cause =>
+  new ArtifactOperationError('provider_unavailable', { cause });
+const httpMapper: Pick<HttpAppDeps, 'mapHostError'> = { mapHostError };
+const mcpMapper: Pick<ArtifactsAdapterOptions, 'mapHostError'> = { mapHostError };
+const coordinatorMapper: Pick<CommitCoordinatorOptions, 'mapHostError'> = { mapHostError };
+declare const deps: Parameters<typeof createArtifactsToolExecutor>[0];
+createArtifactsToolExecutor({ ...deps, mapHostError });
+export { httpMapper, mcpMapper, coordinatorMapper };
 const executor: (pool: Parameters<typeof createPostgresCommitExecutor>[0]) => CommitExecutor = createPostgresCommitExecutor;
 export { executor, inspectPreparations, scheduleBoundedPreparationCleanup, pausePurgeBeforeDelete, inspectDeletionClaims };
 export type { CommitCoordinatorOptions, ArtifactPolicyDriver, CoordinatorTestPoint };
