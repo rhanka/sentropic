@@ -7,7 +7,7 @@ export function zValidator<Schema extends z.ZodType, Target extends keyof Valida
   target: Target,
   schema: Schema,
 ) {
-  return honoZValidator(target, schema, (result, c) => {
+  return honoZValidator(target, schema, (result, c): Response | undefined => {
     if (!result.success) {
       return c.json({ success: false, error: { issues: result.error.issues, name: 'ZodError' } }, 400);
     }
