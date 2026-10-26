@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pgEnabled } from '../storage/pg-driver.js';
-import { memoryAppend, memoryGrant, memoryPgHost, memoryUnit } from './pg-host.js';
+import { memoryAppend, memoryGrant, memoryPgHost, memoryUnit, memoryUpdate } from './pg-host.js';
 
 describe.skipIf(!pgEnabled)('scoped memory PostgreSQL queries', () => {
   it('should return all five scoped projections, stable pages and the retained resync chain head', async () => {
@@ -42,6 +42,32 @@ describe.skipIf(!pgEnabled)('scoped memory PostgreSQL queries', () => {
         ['scope-chain-index', {}],
       ] as const) expect((await foreign.query(name, input, { limit: 10 })).records).toEqual([]);
       await expect(foreign.query('memory-journal-page', { after: '0', limit: 1 }, { limit: 1, cursor: first.nextCursor })).rejects.toThrow();
+    } finally { await host.close(); }
+  });
+
+  it('should apply scope filtering before candidate limits and retain historical accepted state', async () => {
+    const host = await memoryPgHost();
+    try {
+      const bound = await (await host.open()).bindNew(memoryGrant());
+      const record = (id: string, scope: string) => ({ record_id: id, scope_ref: scope, record_digest: `digest-${id}`,
+        components: [{ component_id: 'primary', kind: 'decision', text: id }], primary_component_id: 'primary',
+        citations: [{ source_ref: 'source' }], valid_time: { from: '2026-01-01' }, trust: { class: 'earned' } });
+      const records = [record('a', 'foreign'), record('z', 'wanted')];
+      await bound.commitAtomic(memoryUnit({
+        records: records.map((value) => ({ key: JSON.stringify(['memory-record-v1', value.record_id]),
+          contentHash: value.record_digest, bytes: { format: 'utf8', data: JSON.stringify(value) } })),
+        updates: records.map((value) => memoryUpdate(['memory-state-v1', 'record', value.record_id], { state: 'accepted_current' })),
+      }));
+      const input = { system_as_of: '1', scope_ref: 'wanted', max_candidates: 1 };
+      expect((await bound.query('memory-accepted-snapshot', input, { limit: 1 })).records).toEqual([{
+        record_id: 'z', record_digest: 'digest-z', trust_class: 'earned', valid_time: { from: '2026-01-01' },
+        fields: { primary: 'z', decision: 'z', context: '', evidence: '', citations: 'source' },
+      }]);
+      await bound.commitAtomic(memoryUnit({ updates: [memoryUpdate(['memory-state-v1', 'record', 'z'], { state: 'historical' }, 2)] }));
+      expect((await bound.query('memory-accepted-snapshot', { ...input, system_as_of: '2' }, { limit: 1 })).records).toEqual([]);
+      expect((await bound.query('memory-accepted-snapshot', input, { limit: 1 })).records).toHaveLength(1);
+      await bound.commitAtomic(memoryUnit({ updates: [memoryUpdate(['memory-state-v1', 'record', 'z'], { state: 'accepted_current' }, 3)] }));
+      expect((await bound.query('memory-accepted-snapshot', { ...input, system_as_of: '3' }, { limit: 1 })).records).toHaveLength(1);
     } finally { await host.close(); }
   });
 });
