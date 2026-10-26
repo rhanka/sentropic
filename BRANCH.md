@@ -117,6 +117,7 @@
   - [x] Add scoped lookup over existing immutable commit receipts; reuse stored moduleResult exclusively.
   - [x] Add and export neutral recovery bridge with required current fence provider; keep memory factory closed until E7.
   - [x] Preserve frozen manifests, SQL, neutral contract and Engram version; pack-only mesh bump is `0.23.0-dev.6`.
+  - [x] Crash injection targets the transaction returning a receipt, after the idempotency preflight; expired fences refuse reads.
 - [ ] **Lot 3 — Final validation**
   - [ ] `make scope-check` before each commit; commits under 150 lines via `make commit`.
   - [ ] Run build, typecheck, lint, memory, common, grants and real PG lanes with `ENV=test-e2-int` last.
