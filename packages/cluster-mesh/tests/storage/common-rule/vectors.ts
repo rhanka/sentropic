@@ -42,3 +42,9 @@ export const COMMON_RULE_VECTORS: readonly CommonRuleVector[] = [
 export const COMMON_RULE_VECTORS_BY_ID: Readonly<Record<string, CommonRuleVector>> = Object.fromEntries(
   COMMON_RULE_VECTORS.map((vector) => [vector.id, vector]),
 );
+
+// E1 counter-guard vector (invalid by construction, no digest): an otherwise
+// valid v1 body carrying the above-safe terminal count. The common v1
+// validator must refuse it with exactly 'terminal count must be a decimal
+// counter'. Existing frozen vectors above stay byte-identical.
+export const COMMON_RULE_ABOVE_SAFE_TERMINAL_COUNT = '9007199254740992';
