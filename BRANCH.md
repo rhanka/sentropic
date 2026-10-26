@@ -18,6 +18,7 @@
   - `packages/mcp-platform/src/tool-configuration.ts`
   - `packages/mcp-platform/tests/memory/schema-profile.test.ts`
   - `packages/mcp-platform/tests/memory/wire-profile.test.ts`
+  - `packages/mcp-platform/tests/tool-configuration.test.ts`
   - `packages/mcp-platform/package.json`
   - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
@@ -46,5 +47,6 @@
 - [x] Transfer bounded wire implementation and schema-profile test coverage from c83189032.
 - [x] Transfer additive bridge admission, verified dispatch and complete-envelope codec.
 - [x] Align the version constant and workspace lock with 0.4.1 after strict-version regression tests identified the mismatch.
+- [x] Reseal the synthetic version-bound configuration receipt for 0.4.1; preserve frozen L5 files.
 - [ ] Lot 2: run platform tests and pack-mcp-platform; inspect additive package exports.
 - [ ] Lot 3: create draft PR against main; retain conductor decision pending; no merge.
