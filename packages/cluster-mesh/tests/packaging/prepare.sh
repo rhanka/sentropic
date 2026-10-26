@@ -71,6 +71,33 @@ echo "[artifacts candidate] sha256 $(sha256sum "$artifacts_tgz" | cut -d' ' -f1)
 platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
 receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/mcp-platform "$MPLATFORM")"
 if [ -n "$receipt" ]; then cp "$receipt" "$platform_tgz"; fi
+
+# Workspace llm-gateway for the release-train gate: pack it exactly as published (dist built by
+# the packaging.mk prerequisite), then resolve its spec through the verified sibling mechanism
+# with a registry-presence probe. A verified sibling receipt wins; otherwise the registry version
+# when published, else this local tarball when the workspace version is not yet on the registry
+# (pre-publication gate, e.g. before its publish job runs). A registry lookup failure that is not
+# a definitive 404 fails the gate instead of silently substituting.
+(cd ../llm-gateway && npm pack --silent --pack-destination "$work/src" >/dev/null)
+gateway_tgz="$(ls "$work"/src/sentropic-llm-gateway-*.tgz)"
+gateway_published=0
+gateway_probe_err="$(mktemp)"
+for probe_attempt in 1 2 3; do
+  if npm view --registry=https://registry.npmjs.org "@sentropic/llm-gateway@${GATEWAY}" version >/dev/null 2>"$gateway_probe_err"; then
+    gateway_published=1
+    break
+  elif grep -q -E "E404|404 Not Found" "$gateway_probe_err"; then
+    break
+  elif [ "$probe_attempt" = 3 ]; then
+    echo "registry lookup for @sentropic/llm-gateway@${GATEWAY} failed without a definitive 404:" >&2
+    cat "$gateway_probe_err" >&2
+    exit 1
+  fi
+  sleep 2
+done
+rm -f "$gateway_probe_err"
+gateway_spec="$(node "$here/siblings.mjs" train-spec "$siblings" @sentropic/llm-gateway "$GATEWAY" "$gateway_tgz" "$gateway_published")"
+echo "[llm-gateway] spec $gateway_spec (published=$gateway_published)"
 node "$here/candidate-platform-registry.mjs" ../mcp-platform/package.json "$platform_tgz" > "$work/registry-url" &
 registry_pid=$!
 trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
@@ -137,7 +164,7 @@ stage() {
   cp -R "$fixtures/$1/." "$dst/"
   if [ -f "$dst/package.json.in" ]; then
     sed -e "s#__CANDIDATE__#$tgz#g" -e "s#__LLM_MESH__#$(src @sentropic/llm-mesh "$MESH")#g" \
-      -e "s#__LLM_GATEWAY__#$(src @sentropic/llm-gateway "$GATEWAY")#g" "$dst/package.json.in" > "$dst/package.json"
+      -e "s#__LLM_GATEWAY__#$gateway_spec#g" "$dst/package.json.in" > "$dst/package.json"
     rm "$dst/package.json.in"
     consumer "$dst"
     sources "$dst"
@@ -162,7 +189,7 @@ artifacts_spec="file:$artifacts_tgz"
 # Lock refresh retains the registry/verified-sibling contract of check-lock-integrity.mjs.
 if [ "${REFRESH_LOCK:-}" = 1 ]; then artifacts_spec="$(src @sentropic/artifacts "$ARTIFACTS")"; fi
 consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
-  "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" \
+  "@sentropic/llm-gateway=$gateway_spec" \
   "@sentropic/auth-hono=$(src @sentropic/auth-hono "$AHONO")" \
   "@sentropic/comments=$(src @sentropic/comments "$COMMENTS")" \
   "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")" \
@@ -188,7 +215,7 @@ tuple selected
 # Session mode: the public auth-hono tarball at llm-gateway's declared peer range.
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 consumer "$work/selected-session" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
-  "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" "@sentropic/auth-hono=0.15.0" "hono=4.10.7"
+  "@sentropic/llm-gateway=$gateway_spec" "@sentropic/auth-hono=0.15.0" "hono=4.10.7"
 sources "$work/selected-session"
 (cd "$work/selected-session" && npm install $quiet >/dev/null)
 tuple selected-session
@@ -240,7 +267,8 @@ node -e 'const fs = require("fs"); const cm = JSON.parse(fs.readFileSync(process
 latest_overrides=""
 for sib in llm-mesh llm-gateway auth-hono comments mcp-platform mcp-auth oauth-verify contracts events artifacts; do
   sib_ver="$(train_version "$sib")"
-  sib_spec="$(src @sentropic/"$sib" "$sib_ver")"
+  if [ "$sib" = llm-gateway ]; then sib_spec="$gateway_spec";
+  else sib_spec="$(src @sentropic/"$sib" "$sib_ver")"; fi
   case "$sib_spec" in file:*) latest_overrides="$latest_overrides @sentropic/$sib=$sib_spec" ;; esac
 done
 consumer "$work/latest" $latest_overrides "@sentropic/artifacts=file:$artifacts_tgz"
