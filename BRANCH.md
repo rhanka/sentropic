@@ -55,6 +55,7 @@
 - [x] Lot 2: `authorization.ts`: current tenant/workspace/account/credential participants, post-wait rechecks and transactional quota; `composition.ts`: scoped PG store/KV/coordinator and shared transports.
   - [x] Implement transaction-bound current authority, explicit read/write credential permissions, provisional cumulative byte quota and request fences in `authorization.ts`.
 - [x] Lot 3: same test file covers revocation after lock waits, DB-time expiry after quota/receipt waits, quota contention/rollback, guarded replay, version witness and no new durable success on denial; first full run 10/10 passed.
+  - [x] Add independent read/write credential permissions, viewer downgrade, disabled/forged identity, foreign artifact metadata denial and frozen APP-P1 digest/file-limit cases.
 - [ ] Lot 4: typecheck-api, lint-api, focused publication/migration/tenancy regressions; runtime logs and stack cleanup; inspect each authored hunk.
 - [ ] Lot 5: independent review/reconciliation, exact BRANCH.md draft PR body, push, green exact-head CI and W1.d/W2 handoff; do not merge.
 
