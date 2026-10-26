@@ -2026,10 +2026,6 @@ jobs:
   # own trigger filter and `global` are false), serialized across runs by one concurrency group.
   publish-llm-mesh:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-12
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh]
     if: >-
       !cancelled() &&
@@ -2064,10 +2060,6 @@ jobs:
 
   publish-llm-gateway:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-13
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh]
     if: >-
       !cancelled() &&
@@ -2462,10 +2454,6 @@ jobs:
   # publisher counts as skipped only when its own `*_publish` filter is false.
   publish-cluster-mesh:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-14
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts, publish-mcp-platform, publish-artifacts]
     if: >-
       !cancelled() &&
