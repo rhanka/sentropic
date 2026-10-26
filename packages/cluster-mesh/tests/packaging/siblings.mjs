@@ -8,6 +8,11 @@
 //   candidate <dest-dir> <name> <version>
 //                                       print the verified archive of the candidate itself, nothing without a
 //                                       receipt for <name>; a receipt for another version fails
+//   train-spec <dest-dir> <name> <version> <local-tgz> <published>
+//                                       pre-publication train resolution for one workspace package: a verified
+//                                       sibling receipt wins; otherwise the registry version when published
+//                                       ("1"), else the locally packed tarball ("0"). A receipt for another
+//                                       version, a missing local tarball, or a bad published flag fails.
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -65,10 +70,38 @@ function candidate(dest, name, version) {
   if (hits.length) console.log(hits[0].file);
 }
 
+// Pre-publication train resolution for one workspace package (release-train gate before
+// publication): a verified sibling receipt for exactly name@version wins; otherwise the plain
+// registry version when published is "1", else the locally packed tarball when "0". A receipt
+// for another version, a missing local tarball, or anything but "0"/"1" fails closed.
+function trainSpec(dest, name, version, localTgz, published) {
+  const hits = readIndex(dest).filter((entry) => entry.name === name);
+  const other = hits.find((entry) => entry.version !== version);
+  if (other) fail(`receipt carries ${name}@${other.version}, the workspace version is ${version}`);
+  const hit = hits.find((entry) => entry.version === version);
+  if (hit) {
+    console.log(`file:${hit.file}`);
+    return;
+  }
+  if (published === '1') {
+    console.log(version);
+    return;
+  }
+  if (published === '0') {
+    if (!localTgz || !fs.existsSync(localTgz) || !fs.statSync(localTgz).isFile()) {
+      fail(`no verified sibling for ${name}@${version} and no local tarball at ${localTgz}`);
+    }
+    console.log(`file:${localTgz}`);
+    return;
+  }
+  fail(`published flag for ${name}@${version} must be "0" or "1", got ${JSON.stringify(published)}`);
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [command, ...args] = process.argv.slice(2);
   if (command === 'verify' && args.length === 2) verify(args[0], args[1]);
   else if (command === 'spec' && args.length === 3) spec(args[0], args[1], args[2]);
   else if (command === 'candidate' && args.length === 3) candidate(args[0], args[1], args[2]);
-  else fail('usage: siblings.mjs verify <receipts.json> <dest-dir> | spec|candidate <dest-dir> <name> <version>');
+  else if (command === 'train-spec' && args.length === 5) trainSpec(args[0], args[1], args[2], args[3], args[4]);
+  else fail('usage: siblings.mjs verify <receipts.json> <dest-dir> | spec|candidate <dest-dir> <name> <version> | train-spec <dest-dir> <name> <version> <local-tgz> <published>');
 }
