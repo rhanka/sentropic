@@ -28,11 +28,11 @@ describe.skipIf(!pgEnabled)('real publication races and uncertain responses', ()
       armed = true;
       await expect(uncertain.commitAtomic(input, { idempotencyKey: 'uncertain-operation' })).rejects.toMatchObject({ condition: 'outcome_unknown' });
       expect((await a.readRecord('durable'))?.bytes.data).toBe('committed');
-      const recovered = await a.commitAtomic(input, { idempotencyKey: 'uncertain-operation' });
+      const recovered = await b.commitAtomic(input, { idempotencyKey: 'uncertain-operation' });
       expect(recovered.moduleResult).toEqual(input.moduleResult);
       expect(await b.commitAtomic(input, { idempotencyKey: 'uncertain-operation' })).toEqual(recovered);
       expect((await a.journalRead(0, 10)).events.filter((event) => event.commitId === recovered.commitId)).toHaveLength(1);
-      const keyed = await a.commitAtomic({ ...emptyEffects(), indexWrites: [{ key: 'recovered', digest: 'd', resultIds: ['durable'], resultHash: 'h' }], moduleResult: input.moduleResult }, { idempotencyKey: 'recover' });
+      const keyed = await uncertain.commitAtomic({ ...emptyEffects(), indexWrites: [{ key: 'recovered', digest: 'd', resultIds: ['durable'], resultHash: 'h' }], moduleResult: input.moduleResult }, { idempotencyKey: 'recover' });
       expect(await b.commitAtomic({ ...emptyEffects(), indexWrites: [{ key: 'recovered', digest: 'd', resultIds: ['durable'], resultHash: 'h' }], moduleResult: input.moduleResult }, { idempotencyKey: 'recover' })).toEqual(keyed);
     } finally { await fixture.close(); }
   });
