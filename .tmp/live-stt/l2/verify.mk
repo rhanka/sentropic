@@ -10,3 +10,7 @@ integration-containment:
 	@track events-contains --base /tmp/stt-l2-branch-events.jsonl --candidate .track/events.jsonl
 	@track events-contains --base /tmp/stt-l2-main-events.jsonl --candidate .track/events.jsonl
 down: live-speech-down
+commit-audit:
+	@git log --first-parent --no-merges --format='COMMIT %h' --numstat 581d6262a3d15e0cedde24b3debe3e3c6413e96b..HEAD | awk '/^COMMIT/ { if (count && lines >= 150) exit 1; count++; lines = 0; next } NF == 3 { lines += $$1 + $$2; if (lines > largest) largest = lines } END { if (lines >= 150) exit 1; print count " authored non-merge commits checked; largest " largest " changed lines" }'
+	@if git log --first-parent --format='%B' 581d6262a3d15e0cedde24b3debe3e3c6413e96b..HEAD | grep -Ei '^(co-authored-by|generated-by):'; then exit 1; fi
+	@git diff --check
