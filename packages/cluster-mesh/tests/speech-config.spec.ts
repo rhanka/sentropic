@@ -33,9 +33,24 @@ describe('speech configuration', () => {
     expect(Object.isFrozen(resolved[0].bindings.stt)).toBe(true);
     expect(JSON.stringify(resolved)).not.toContain('micEnabled');
   });
+  it.each(['key', 'open-mic'] as const)('should allow dictation only in %s mode', (micMode) => {
+    const p = { ...profile(), micMode, bindings: { stt: engine() } };
+    expect(resolveSpeechProfiles([p])[0]).toMatchObject(p);
+  });
+  it('should allow synthesis only and independently selected stages alongside duplex', () => {
+    const tts = { ...profile(), bindings: { tts: engine() }, requiredCapabilities: {} };
+    expect(resolveSpeechProfiles([tts])[0]).toMatchObject(tts);
+    for (const extra of [{}, { stt: engine() }, { tts: engine() }, profile().bindings]) {
+      const p = { ...profile(), pipeline: 'native-duplex',
+        bindings: { duplex: engine(), ...extra }, requiredCapabilities: {} };
+      expect(resolveSpeechProfiles([p])[0]).toMatchObject(p);
+    }
+  });
   it.each([
     null, {}, { ...profile(), schemaVersion: 2 }, { ...profile(), micMode: 'always' },
-    { ...profile(), placement: 'remote-unknown' }, { ...profile(), bindings: { stt: engine() } },
+    { ...profile(), placement: 'remote-unknown' }, { ...profile(), bindings: {} },
+    { ...profile(), pipeline: 'native-duplex' },
+    { ...profile(), bindings: { tts: engine() } },
     { ...profile(), bindings: { ...profile().bindings, duplex: engine() } },
     { ...profile(), maxDurationMs: 0 }, { ...profile(), maxCostUsd: Number.NaN },
     { ...profile(), bindings: { ...profile().bindings, stt: { ...engine(), modelRevision: 'latest' } } },

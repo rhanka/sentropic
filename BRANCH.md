@@ -29,6 +29,8 @@
   - `package-lock.json`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/src/modules/contracts.ts`
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/modules/registry.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -45,6 +47,8 @@
   - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
 
 ## Feedback Loop
+- [x] BRLIVE-L1C-EX3: register speech with the existing guarded module catalogue and extend the packed skew probe. Scope adds only module IDs and tuple-skew assertions; rollback removes that entry and probe. Required by PR757-P2-1; broad text-peer compatibility is retained.
+- [x] PR757-P1: tests first reproduced three refusals; chained profiles now allow STT-only or TTS-only, and native duplex permits independently selected companion stages. Empty profiles and requirements on absent stages remain refused.
 - [x] Draft #757 targets feat/live-stt-l1 to isolate this lot. Existing CI triggers only for main PRs, so exact-head workflow query returns no runs. Owner/integrator must merge #754 then retarget #757 to main and obtain its CI result before merge; no workflow gate changed.
 - [x] Cold source typecheck found TS2322 on the already validated cost field; explicitly type its normalized numeric output, retaining NaN/negative refusal tests. Quality adapter also compiles existing type fixtures.
 - [x] Existing packaging gate requires a root declaration graph free of optional peers; make the profile schema self-contained and check structural compatibility at the L1 negotiation boundary. No provider/router implementation is copied.
