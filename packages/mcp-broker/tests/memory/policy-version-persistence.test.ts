@@ -18,5 +18,9 @@ it('should retain exact historical policy/defaults and refuse missing history or
     expect(() => store.putPolicy('admission', 'v1', { retention: 'rewritten' })).toThrow('POLICY_STALE');
     expect(() => store.reserve({ ...input, policyVersions: {} as never }, true)).toThrow('POLICY_STALE');
     expect(() => store.reserve({ ...input, digest: 'sha256:' + '0'.repeat(64) }, true)).toThrow('INVALID_DIGEST');
+    const missing = workflowInput({ idempotency_key: 'another-key-12345', effective_input: {
+      tool_name: 'engram_memory_request_admission', candidate_id: 'candidate-1', admission_policy_version: 'missing' } });
+    missing.policyVersions.admission_policy_version = 'missing';
+    expect(() => store.reserve(missing, true)).toThrow('POLICY_UNAVAILABLE');
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
