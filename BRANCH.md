@@ -71,3 +71,4 @@
   - [ ] Tear down isolated stack; report PR number, head SHA and CI URL.
   - [x] Owner GO « Go 0.2.2 » received 2026-10-26: merge authorized via gh pr merge --merge --match-head-commit, then remove BRANCH.md for merge preparation.
 - [x] BR022-EX2: merge origin/main 2026-10-26; resolved BRANCH.md (kept branch file) and Makefile (union of ENV selectors, kept main recipes); package-lock auto-merged with artifacts 0.2.2 intact. Rollback: git reset --hard 01499d513.
+- [x] BR022-EX3: merge origin/main 22d8a9e68 (post-#760) 2026-10-26; BRANCH.md conflict resolved by keeping branch file; rest auto-merged. Rollback: git reset --hard 90c1d414a.
