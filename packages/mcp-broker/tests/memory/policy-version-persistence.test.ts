@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteMemoryWorkflowStoreV1 } from '../../src/memory-reference/index.js';
 import { workflowInput } from './workflow-fixture.js';
+import { reservationLookupKey } from '@sentropic/mcp-platform/memory';
 it('P05.broker.policy-version-persistence: should retain exact historical policy/defaults and refuse missing history or projection', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'l5-policy-')), path = join(dir, 'workflow.sqlite');
   let store = await SqliteMemoryWorkflowStoreV1.open(path);
@@ -13,6 +14,11 @@ it('P05.broker.policy-version-persistence: should retain exact historical policy
     store.putPolicy('admission', 'v2', { retention: 'changed' });
     store.close(); store = await SqliteMemoryWorkflowStoreV1.open(path);
     expect(store.read(reserved.key, true)?.input).toEqual(input);
+    const namespace = reservationLookupKey(input.preimage);
+    const reordered = Object.fromEntries(Object.entries(namespace).reverse());
+    expect(store.lookup(reordered as typeof namespace, true)?.input).toEqual(input);
+    expect(store.lookup(namespace, false)).toBeUndefined();
+    expect(store.lookup({ ...namespace, principal_id: 'another' }, true)).toBeUndefined();
     expect(store.reserve({ ...input, resolved: { retention: 'changed' } }, true).input.resolved).toEqual(input.resolved);
     expect(store.policy('admission', 'v1')).toEqual({ retention: 'original' });
     expect(() => store.policy('admission', 'missing')).toThrow('POLICY_UNAVAILABLE');

@@ -53,4 +53,5 @@
   - [x] `tools/memory-mcp-l5/tests/lot2-{assurance,manifest,retained-inputs,envelope}.test.mjs`
 - [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
 - [x] Lot 3: reference 66/tooling 109 passed; full source gate passed; reference archive and complete hashed reports retained; absent/unverified manifest refusals passed; Node 24.21.0/SQLite 3.53.4 WAL/FULL, no Python executable.
+  - [ ] Namespace-only recovery lookup regression reproduced and implemented; refresh its test result, archive and source hash bindings.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.

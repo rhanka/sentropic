@@ -22,6 +22,9 @@ lease and monotonic workflow fence; the host must check the lease/cancellation
 boundary and independently enforce the canonical engine's fence at its commit.
 Destructive claims additionally require persisted, operation-bound confirmation
 and current assurance. No reservation or canonical proof is compacted away.
+Before retry default/policy resolution, the host uses `lookup(namespace, currentAuthorization)`
+to recover the stored preimage, reservation reference and once-resolved values.
+Namespace property order does not change the lookup key.
 
 `reconcile` accepts only the host's authenticated canonical proof lookup, never
 caller arguments. It records the original replay result; it cannot commit a

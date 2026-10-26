@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { computeMutationDigest, reservationLookupKey, validatePolicyVersionsProjection,
-  verifyMemoryConfirmationContinuationV1 } from '@sentropic/mcp-platform/memory';
-import type { MemoryConfirmationContinuationV1, ExpectedConfirmationContinuationBindingV1 } from '@sentropic/mcp-platform/memory';
+  verifyMemoryConfirmationContinuationV1, isValidOpaqueRef, isValidIdempotencyKey } from '@sentropic/mcp-platform/memory';
+import type { MemoryConfirmationContinuationV1, ExpectedConfirmationContinuationBindingV1, MemoryReservationLookupKeyV1 } from '@sentropic/mcp-platform/memory';
 import { openDriver, refuse, supportsRuntime } from './driver.js';
 import { SCHEMA_V1 } from './schema.js';
 import type { WorkflowInput, WorkflowRecord, CanonicalProof } from './schema.js';
@@ -48,6 +48,19 @@ export class SqliteMemoryWorkflowStoreV1 {
   read(key: string, currentlyAuthorized: unknown): WorkflowRecord | undefined {
     return currentlyAuthorized === true ? this.get(key) : undefined;
   }
+  private namespaceKey(n: MemoryReservationLookupKeyV1): string {
+    return createHash('sha256').update(JSON.stringify([n.principal_namespace, n.principal_id, n.tenant_id,
+      n.store_id, n.provider_id, n.connector_id, n.connector_instance_ref, n.scope_ref, n.idempotency_key])).digest('hex');
+  }
+  /** Host-private lookup before resolving effective defaults or choosing a reservation reference. */
+  lookup(namespace: MemoryReservationLookupKeyV1, currentlyAuthorized: unknown): WorkflowRecord | undefined {
+    if (currentlyAuthorized !== true || !namespace || Object.keys(namespace).length !== 9 ||
+        namespace.provider_id !== 'sentropic.engram.memory' || namespace.connector_id !== 'engram-memory' ||
+        !isValidIdempotencyKey(namespace.idempotency_key) ||
+        ![namespace.principal_namespace, namespace.principal_id, namespace.tenant_id, namespace.store_id,
+          namespace.connector_instance_ref, namespace.scope_ref].every(isValidOpaqueRef)) return undefined;
+    return this.get(this.namespaceKey(namespace));
+  }
   reserve(input: WorkflowInput, currentlyAuthorized: unknown): WorkflowRecord {
     if (currentlyAuthorized !== true) return refuse('UNAUTHORIZED');
     let digest: string;
@@ -55,8 +68,7 @@ export class SqliteMemoryWorkflowStoreV1 {
     if (digest !== input.digest) return refuse('INVALID_DIGEST');
     if (validatePolicyVersionsProjection(input.preimage.effective_input, input.policyVersions).length) return refuse('POLICY_STALE');
     if (!input.audit?.auditId || !input.audit.correlationId || !input.resolved || Array.isArray(input.resolved)) return refuse('gate_failed');
-    const lookup = reservationLookupKey(input.preimage);
-    const key = createHash('sha256').update(JSON.stringify(Object.values(lookup))).digest('hex');
+    const key = this.namespaceKey(reservationLookupKey(input.preimage));
     return this.transaction(() => {
       const prior = this.get(key);
       if (prior) {
