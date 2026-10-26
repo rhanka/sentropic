@@ -44,6 +44,7 @@
 - [x] Close constructor-option declarations locally (scope, clock, deadline, work limits); inventory installed structural error codes and terminal fence failures.
 - [x] Reconcile the 0.21.0 handoff with exact 0.21.1 tarball/declaration hashes; add six additive mappings and complete surface inventory; preserve historical manifest/profile assets byte for byte.
 - [x] Installed constructor/full-handle type fixture and standalone declaration emission/strict compilation pass; sync/async typed fence refusals pass (binding suite 12/12).
+- [x] Contract vectors check additive identity/mapping, exact installed three-file declaration closure and unchanged semantic digest; local memory suite 76/76 across 11 files, zero skips/todos.
 - [x] Negative probe: https://github.com/rhanka/sentropic/actions/runs/40314176780 at `6ff00cfff`; enforce-package-bump job `121542495040` failed on unchanged cluster-mesh 0.22.2.
 - [x] Allocation: registry latest 0.22.1; 0.23.0 and 0.23.0-dev.1 return 404; no other E2 topic ref, 2026-10-26. 0.23.0-dev.1 exceeds registry/base and is reserved for E0 only.
 - [x] Register E0 dependencies, worktree/BRANCH and environment ownership in PLAN.md within this PR.
