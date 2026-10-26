@@ -15,6 +15,7 @@
   - `packages/mcp-platform/src/transport/bridge.ts`
   - `packages/mcp-platform/src/transport/dispatch.ts`
   - `packages/mcp-platform/src/transport/result-codec.ts`
+  - `packages/mcp-platform/src/tool-configuration.ts`
   - `packages/mcp-platform/tests/memory/schema-profile.test.ts`
   - `packages/mcp-platform/tests/memory/wire-profile.test.ts`
   - `packages/mcp-platform/package.json`
@@ -44,5 +45,6 @@
 - [x] Lot 1: transfer schema admission and wire/context bridge with both profile suites.
 - [x] Transfer bounded wire implementation and schema-profile test coverage from c83189032.
 - [x] Transfer additive bridge admission, verified dispatch and complete-envelope codec.
+- [x] Align the version constant and workspace lock with 0.4.1 after strict-version regression tests identified the mismatch.
 - [ ] Lot 2: run platform tests and pack-mcp-platform; inspect additive package exports.
 - [ ] Lot 3: create draft PR against main; retain conductor decision pending; no merge.
