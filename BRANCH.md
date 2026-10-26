@@ -21,6 +21,11 @@
   - [x] `packages/llm-mesh/README.md`
   - [x] `spec/SPEC_EVOL_LLM_MESH.md`
   - [x] `spec/decision/**`
+  - [x] `packages/cluster-mesh/src/modules/catalog.ts`
+  - [x] `packages/cluster-mesh/package.json`
+  - [x] `packages/cluster-mesh/tests/**`
+  - [x] `packages/llm-gateway/package.json`
+  - [x] `scripts/ci/publishable-ci-wiring.test.mjs`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
   - [x] `docker-compose*.yml`
@@ -31,6 +36,7 @@
 - [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
+- [x] BR93-EX2: mesh 0.29.0 is rejected by cluster's current <0.29.0 bound. Extend only mesh compatibility to <0.30.0, gateway mesh dependency and exact fixture/CI tuple; patch-bump the affected metadata/source packages. Impact: admits the tested native Decisions minor via the existing loader. Rollback: revert tuple/range cells together. Conditional `.github/workflows/ci.yml` changes are limited to its three exact PEERS tuples.
 - [x] BR93-EX1: synchronize only the llm-mesh workspace version in `package-lock.json` after the mandatory feature bump. Impact: one workspace metadata cell, no dependency resolution changes. Rollback: revert that cell with the package version.
 - [x] OD-5 remains open; live identity, billing and calibration belong to L5/L6.
 
@@ -66,3 +72,4 @@
   - [ ] Push and open draft PR with this plan as body and requested title.
   - [ ] Verify CI green at final head; do not merge.
 - [x] Atomic artifact: test(decision): pin JEV discriminator conformance.
+- [x] Atomic artifact: test(decision): specify native Decisions wire refusals.
