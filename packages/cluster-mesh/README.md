@@ -494,4 +494,3 @@ and a new consent revision bound to the selected profile/configuration/egress
 policy. A changed profile cannot reuse its old revision. Every successful
 projection still reports `micEnabled: false` and `requiresSessionAdmission: true`.
 It is a configuration receipt, not proof that native work was cancelled.
-
