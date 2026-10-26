@@ -62,6 +62,7 @@
 - [ ] **L1c-a — Reconcile L0**
   - [x] Preserve L0 baseline and complete §11.2 gate register from source head `c0bd543689`.
   - [x] Preserve SDK/native provenance/toolchain/license inventory and all required placements; artifacts remain unadmitted.
+  - [x] Preserve L0 release-owner/ledger scope and validation receipts; all eight historical deliverables retained byte-for-byte.
   - [ ] Preserve eight L0 files under `.tmp/live-stt/l0/`; refresh heads, gate register, SDK/provenance/license/ledger/release and placement evidence in `.tmp/live-stt/l1c/baseline.md`.
   - [x] Carry dedicated capacity study and explicit zero allocation; no native inference or quota exception.
 - [ ] **L1c-b — Tests first**
