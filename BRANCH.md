@@ -1,7 +1,7 @@
 # Feature: W1.d artifact host jobs and recovery composition
 
 ## Objective
-- [ ] Compose bounded private-artifact maintenance and closed-serving recovery through unchanged #861 ports.
+- [x] Compose bounded private-artifact maintenance and closed-serving recovery through unchanged #861 ports.
 
 ## Scope / Guardrails
 - [x] Owner dispatch W1.d, plan-v2 read in full; tests first, draft PR, green CI, no merge or deployment.
@@ -48,9 +48,10 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read lock, plan, MASTER/workflow/testing/API rules, README/TODO/template; create worktree and mechanically check branch.
 - [x] Lot 1: `api/tests/api/artifacts-host-recovery.test.ts` first; red run on missing lifecycle composition, `/tmp/app-w1d-red.log`.
-- [ ] Lot 2: `lifecycle.ts` private S3 and bounded preparation cleanup/collection; PG references, pins, failure retries and maintenance denial tested in the recovery file.
+- [x] Lot 2: `lifecycle.ts` private S3 and bounded preparation cleanup/collection; PG references, pins, failure retries and maintenance denial tested in the recovery file.
   - [x] Initial seven recovery cases pass, `/tmp/app-w1d-green-2.log`; fixtures use upstream `sha256:` digest codec.
-- [ ] Lot 3: recovery fence orders activation invalidation and grant-key retirement before reopening; failure remains closed; expiry independent of cleanup, using upstream grant verifier.
+- [x] Lot 3: recovery fence orders activation invalidation and grant-key retirement before reopening; failure remains closed; expiry independent of cleanup, using upstream grant verifier.
   - [x] Recovery/race tests first: 7 passed, 6 expected failures (missing recovery port and published bytes erased), `/tmp/app-w1d-recovery-race-red.log`.
+  - [x] All 16 recovery cases pass; API typecheck passes; lint has 0 errors/219 warnings, `/tmp/app-w1d-recovery-green.log`.
 - [ ] Lot 4: focused recovery/publication/migration suites, API typecheck/lint, healthy runtime logs, down and scope checks.
 - [ ] Lot 5: draft PR against `feat/app-cm-integration`, exact BRANCH.md body, independent review, push and exact-head green CI; report W1.c remainder; do not merge.
