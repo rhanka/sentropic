@@ -17,10 +17,15 @@ evidence and a passing recorded assessment before resolving credentials or reser
 An explicit descriptor `executionProfile: 'qualification'` permits provisional expected served
 IDs with unqualified identity. It always advertises `experimental: true`, never production
 readiness. Empty expected IDs or an unqualified financial bound permit fixture work only.
+The service and descriptor must both explicitly select `executionProfile: 'qualification'`;
+the default production composition refuses qualification descriptors before admission. Even
+preflight failures and unresolved descriptor deadlines in the qualification service are experimental.
 The profile is host composition, never a request-selected bypass. Qualification success uses
 `kind: 'experimental-verdict'` and every selected qualification result/receipt has `experimental: true`.
 Its served evaluator carries `provisional: true`; it never supplies production identity evidence.
 The closed production v1 validator rejects these envelopes and receipts, including experimental errors.
+The host assessment recorder validates experimental evidence through its private recording path
+and retains the original experimental receipt hash; it emits an assessment row, never a production verdict.
 
 ## Recorded assessment contract
 

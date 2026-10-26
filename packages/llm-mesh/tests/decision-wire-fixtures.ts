@@ -12,7 +12,7 @@ export async function decisionWireFixture(request: DecisionRequest, nativeAnswer
   const result = await f.adapter.decision(request, { auth });
   const quoted = quoteDecision(request, f.descriptor, decisionPrice());
   if (!result.ok || !quoted.ok) throw new Error('Invalid codec fixture.');
-  const execution = beginDecisionExecution(request);
+  const execution = beginDecisionExecution(request, {});
   const priced = priceDecisionUsage(result.usage, quoted.quote);
   Object.assign(execution.receipt, { attempts: 1, dispatch: 'completed', usage: result.usage,
     servedEvaluator: result.servedEvaluator, servedModelId: result.servedModelId,
