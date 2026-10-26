@@ -30,6 +30,9 @@ export function executionSeconds(record) {
   return record?.dispatched === false ? null : durationSeconds(record?.startedAt, record?.completedAt);
 }
 
+const completeExecutions = records => records.length > 0 && records.every(record => record.conclusion
+  && (record.conclusion === 'skipped' || record.dispatched === false || executionSeconds(record) !== null));
+
 // True when a record cannot yield a duration: exactly one timestamp missing,
 // both missing with a non-skipped conclusion, or completion before start.
 export function isTimestampGap(record) {
@@ -422,7 +425,7 @@ export function releaseContinuity(records, endpoints = {}) {
     const successful = matched.length > 0 && matched.every((record) => record?.conclusion === 'success');
     perEndpoint[endpoint] = { status: state.status, continuous: state.status === 'measured' && successful };
   }
-  return { continuous: Object.values(perEndpoint).every((entry) => entry.continuous),
+  return { continuous: Object.keys(perEndpoint).length > 0 && Object.values(perEndpoint).every((entry) => entry.continuous),
     endpoints: perEndpoint };
 }
 
@@ -432,7 +435,7 @@ export function releaseContinuity(records, endpoints = {}) {
 export function contentionReceipt(captures) {
   const sets = captures.map(capture => dedupeJobs(captureRecords(capture)).jobs);
   const jobs = dedupeJobs(sets.flat()).jobs;
-  const complete = captures.every(capture => capture.run?.status === 'completed');
+  const complete = captures.every(capture => capture.run?.status === 'completed') && sets.every(completeExecutions);
   const overlaps = [];
   for (let left = 0; left < sets.length; left++) for (let right = left + 1; right < sets.length; right++) {
     let witness = null;
@@ -568,7 +571,9 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const delivery = deliveryElapsed(jobs, runCreatedAt, captured.endpoints ?? {});
   const cache = cacheIdentities(jobs);
   const capacity = captured.capacity ?? {};
-  const admission = admissionDecision({ peak: summary.concurrencyPeak,
+  const measuredDemand = summary.measured > 0 && completeExecutions(jobs)
+    && (!captured.run || captured.run.status === 'completed') ? summary.concurrencyPeak : null;
+  const admission = admissionDecision({ peak: measuredDemand,
     availableSlots: capacity.availableSlots ?? null, reserveSlots: capacity.reserveSlots ?? 0 });
   const timings = captured.timings ?? {};
   const jobDuration = name => executionSeconds(jobs.find(row => row.name === name));

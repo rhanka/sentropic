@@ -89,6 +89,10 @@ test('should require identified simultaneous executions and complete runs for co
   assert.equal(receipt.overlaps[0].witness.seconds, 224);
   assert.equal(receipt.cancellation.superseded, 1);
   assert.equal(receipt.releases[0].continuity.continuous, true);
+  assert.equal(releaseContinuity([]).continuous, false);
+  assert.equal(contentionReceipt([current, { ...main, records: [] }]).admission.status, 'to-measure');
+  assert.equal(contentionReceipt([current, { ...main, records: main.records.map(row => ({ ...row, completedAt: null })) }])
+    .admission.status, 'to-measure');
   assert.equal(contentionReceipt([current, { ...main, run: { ...main.run, status: 'in_progress' } }]).admission.status, 'to-measure');
   assert.equal(contentionReceipt([current, { ...main, records: main.records.map(row => ({ ...row, conclusion: 'skipped' })) }])
     .overlaps[0].witness, null);
@@ -336,6 +340,13 @@ test('should emit capacity receipts through the delivered CLI when inputs exist'
     assert.equal(out.budgets.budgets.verdictSeconds.status, 'breach');
     assert.equal(out.cancellation.cancelledCount, 0);
     assert.equal(out.continuity.continuous, true);
+    const captured = JSON.parse(fs.readFileSync(file));
+    for (const incomplete of [{ ...captured, run: { status: 'in_progress' } }, { ...captured, records: [] }]) {
+      fs.writeFileSync(file, JSON.stringify(incomplete));
+      const pending = spawnSync(process.execPath, ['scripts/ci/ci-run-metrics.mjs', '--run-file', file], { encoding: 'utf8' });
+      assert.equal(pending.status, 0, pending.stderr);
+      assert.equal(JSON.parse(pending.stdout).admission.status, 'to-measure');
+    }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
