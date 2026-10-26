@@ -18,6 +18,7 @@ describe('isPackOnlyDevBump', () => {
     ['@sentropic/cluster-mesh', '0.23.0-dev.1', '0.23.0', '0.23.0', false],
     ['@sentropic/cluster-mesh', '0.23.0-rc.1', '0.22.4', '0.23.0', false],
     ['@sentropic/other', '0.23.0-dev.1', '0.22.4', '0.23.0', false],
+    ['@sentropic/cluster-mesh', undefined, '0.22.4', '0.23.0', false],
   ])('isPackOnlyDevBump(%s, %s, %s, %s) === %s', (packageName, workspaceVersion, publishedPin, reservedNext, expected) => {
     expect(isPackOnlyDevBump(packageName, workspaceVersion, publishedPin, reservedNext)).toBe(expected);
   });
@@ -49,6 +50,7 @@ describe('acceptsCommentsRefusal', () => {
       { packageName: PACK_ONLY_PACKAGE, installedVersion: '0.23.0-dev.1', publishedPin: '0.22.1' },
       { packageName: PACK_ONLY_PACKAGE, installedVersion: '0.23.0-rc.1', publishedPin: '0.22.4' },
       { packageName: '@sentropic/other', installedVersion: '0.23.0-dev.1', publishedPin: '0.22.4' },
+      { packageName: PACK_ONLY_PACKAGE, installedVersion: undefined, publishedPin: '0.22.4' },
     ];
     for (const { packageName, installedVersion, publishedPin } of cases) {
       expect(acceptsCommentsRefusal({
