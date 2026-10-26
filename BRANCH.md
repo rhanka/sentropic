@@ -60,6 +60,7 @@
 - [x] L1c baseline: Docker lock first, rules/spec/owner answers and L0 evidence read; mechanical branch check passes.
 - [x] Replace inherited scope/plan with L1c file-level gates before source edits.
 - [ ] **L1c-a — Reconcile L0**
+  - [x] Preserve L0 baseline and complete §11.2 gate register from source head `c0bd543689`.
   - [ ] Preserve eight L0 files under `.tmp/live-stt/l0/`; refresh heads, gate register, SDK/provenance/license/ledger/release and placement evidence in `.tmp/live-stt/l1c/baseline.md`.
   - [ ] Carry dedicated capacity study and explicit zero allocation; no native inference or quota exception.
 - [ ] **L1c-b — Tests first**
