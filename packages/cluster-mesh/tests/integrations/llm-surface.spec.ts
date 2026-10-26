@@ -4,17 +4,27 @@ import * as facadeProvider from '@sentropic/llm-mesh/facade';
 import * as enrollmentProvider from '@sentropic/llm-mesh/enrollment';
 import * as nodeProvider from '@sentropic/llm-mesh/node';
 import * as cloudCodeProvider from '@sentropic/llm-mesh/transport/cloud-code';
+import * as jevTransportProvider from '@sentropic/llm-mesh/transport/jev';
+import * as decisionProvider from '@sentropic/llm-mesh/decision';
+import * as decisionHostProvider from '@sentropic/llm-mesh/decision/host';
 import * as meshLeaf from '../../src/integrations/llm-mesh/index.js';
 import * as facadeLeaf from '../../src/integrations/llm-mesh/facade.js';
 import * as enrollmentLeaf from '../../src/integrations/llm-mesh/enrollment.js';
 import * as nodeLeaf from '../../src/integrations/llm-mesh/node.js';
 import * as cloudCodeLeaf from '../../src/integrations/llm-mesh/transport/cloud-code.js';
+import * as jevTransportLeaf from '../../src/integrations/llm-mesh/transport/jev.js';
+import * as decisionLeaf from '../../src/integrations/llm-mesh/decision.js';
+import * as decisionHostLeaf from '../../src/integrations/llm-mesh/decision/host.js';
 import { createClusterMeshModules, verifyClusterMeshTopology } from '../../src/index.js';
+import { TRAIN_LLM_MESH_VERSION } from '../fixtures/train.js';
 import { loadLlmMesh } from '../../src/loaders/llm-mesh/index.js';
 import { loadLlmMeshFacade } from '../../src/loaders/llm-mesh/facade.js';
 import { loadLlmMeshEnrollment } from '../../src/loaders/llm-mesh/enrollment.js';
 import { loadLlmMeshNode } from '../../src/loaders/llm-mesh/node.js';
 import { loadCloudCodeTransport } from '../../src/loaders/llm-mesh/transport/cloud-code.js';
+import { loadLlmMeshJevTransport } from '../../src/loaders/llm-mesh/transport/jev.js';
+import { loadLlmMeshDecision } from '../../src/loaders/llm-mesh/decision.js';
+import { loadLlmMeshDecisionHost } from '../../src/loaders/llm-mesh/decision/host.js';
 
 const pairs = [
   ['llm-mesh', meshLeaf, meshProvider],
@@ -22,6 +32,9 @@ const pairs = [
   ['llm-mesh/enrollment', enrollmentLeaf, enrollmentProvider],
   ['llm-mesh/node', nodeLeaf, nodeProvider],
   ['llm-mesh/transport/cloud-code', cloudCodeLeaf, cloudCodeProvider],
+  ['llm-mesh/transport/jev', jevTransportLeaf, jevTransportProvider],
+  ['llm-mesh/decision', decisionLeaf, decisionProvider],
+  ['llm-mesh/decision/host', decisionHostLeaf, decisionHostProvider],
 ] as const;
 
 describe('llm-mesh static leaves', () => {
@@ -50,16 +63,25 @@ describe('llm-mesh static leaves', () => {
 
   it('should return the original provider namespaces from the typed loaders', async () => {
     const modules = createClusterMeshModules();
-    const [mesh, facade, enrollment, node, cloudCode] = await Promise.all([
+    const [mesh, facade, enrollment, node, cloudCode, decision, decisionHost, jevTransport] = await Promise.all([
       loadLlmMesh(modules), loadLlmMeshFacade(modules), loadLlmMeshEnrollment(modules),
-      loadLlmMeshNode(modules), loadCloudCodeTransport(modules),
+      loadLlmMeshNode(modules), loadCloudCodeTransport(modules), loadLlmMeshDecision(modules),
+      loadLlmMeshDecisionHost(modules), loadLlmMeshJevTransport(modules),
     ]);
     expect(mesh.createLlmMesh).toBe(meshProvider.createLlmMesh);
     expect(facade.createLlmMeshFacade).toBe(facadeProvider.createLlmMeshFacade);
     expect(Object.keys(enrollment)).toEqual(Object.keys(enrollmentProvider));
     expect(node.InMemoryKeyring).toBe(nodeProvider.InMemoryKeyring);
     expect(cloudCode.CloudCodeProviderAdapter).toBe(cloudCodeProvider.CloudCodeProviderAdapter);
-    expect(modules.snapshot()['llm-mesh']).toMatchObject({ state: 'loaded', installedVersion: '0.28.0' });
+    expect(decision.createRemoteDecisionClient).toBe(decisionProvider.createRemoteDecisionClient);
+    expect(decisionHost.createDecisionService).toBe(decisionHostProvider.createDecisionService);
+    expect(decisionHost.createJevAdapter).toBe(decisionHostProvider.createJevAdapter);
+    expect(decisionHost.jevDescriptor).toBe(decisionHostProvider.jevDescriptor);
+    expect(jevTransport.createJevTransport).toBe(jevTransportProvider.createJevTransport);
+    expect(modules.snapshot()['llm-mesh']).toMatchObject({ state: 'loaded', installedVersion: TRAIN_LLM_MESH_VERSION });
+    expect(modules.snapshot()['llm-mesh/decision']).toMatchObject({ state: 'loaded' });
+    expect(modules.snapshot()['llm-mesh/decision/host']).toMatchObject({ state: 'loaded' });
+    expect(modules.snapshot()['llm-mesh/transport/jev']).toMatchObject({ state: 'loaded' });
   });
 
   it('should pass the explicit topology preflight for the workspace tree', () => {

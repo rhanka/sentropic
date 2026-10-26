@@ -35,7 +35,7 @@ export const BOOTSTRAP_TARGETS = [
 export const PACK_TARGETS = [
   'cluster-mesh', 'llm-mesh', 'llm-gateway', 'chat-ui', 'cited-source-viewer', 'auth-hono', 'auth-client',
   'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-ui', 'cowork-bridge', 'cowork-desktop',
-  'harness', 'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'artifacts',
+  'harness', 'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'artifacts', 'skills',
 ];
 export const publishFilter = (slug) => `${slug.replace(/-/g, '_')}_publish`;
 
@@ -78,6 +78,14 @@ export function classifyDependencyValue(input, semver = loadSemver()) {
     return { ok: false, reason: 'not a plain semver range (tags, aliases, git shorthand are rejected)' };
   }
   return { ok: true };
+}
+
+export function dependencyFloor(requirement, semver = loadSemver()) {
+  const check = classifyDependencyValue(requirement, semver);
+  if (!check.ok) throw new GuardError(`Invalid dependency range: ${check.reason}`);
+  const floor = semver.minVersion(requirement)?.version;
+  if (!floor) throw new GuardError('Dependency range has no satisfiable version');
+  return floor;
 }
 
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
