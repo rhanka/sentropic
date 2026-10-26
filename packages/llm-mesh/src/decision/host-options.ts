@@ -14,6 +14,8 @@ export interface DecisionPriceLookupKey {
 }
 
 export interface DecisionServiceOptions extends DecisionSelectionOptions {
+  /** Isolated host composition; production is the default and refuses qualification descriptors. */
+  executionProfile?: 'production' | 'qualification';
   /** Host-owned evidence; caller JSON cannot select an experimental profile or a policy. */
   readiness?: Omit<DecisionReadinessEvidence, 'price'>;
   resolveAuth: AuthResolver;

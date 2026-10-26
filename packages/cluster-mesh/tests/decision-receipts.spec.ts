@@ -79,6 +79,7 @@ describe('decision receipt correlation and generation-policy refusal via public 
       ? (decisionState.now = 10001, { ok: false as const, error: { code: 'CANCELLED' as const, phase: 'dispatch' as const, message: 'timeout' } })
       : { ok: true as const, body: { model: 'syn-model', answers: { verdict: { type: 'noul', noul: opts.pass === false ? 0.05 : 0.95 } }, usage: { input_tokens: 10, output_tokens: 0 } } });
     const service = rInput.decisionHost!.createDecisionService({
+      executionProfile: 'qualification',
       registry: rInput.llmMesh.createProviderRegistry([rInput.decisionHost!.createJevAdapter({ descriptor: desc, transport: { send: transportSend } })]),
       resolveEvaluator: () => desc, evaluatorAllowlist: [{ ...desc.evaluator }],
       resolvePrice: () => ({ providerId: 'typesafe' as const, modelId: 'jev-1.13.0', authority: 'fixture:synthetic-tariff', protocol: 'jev-native' as const, priceRevision: 'fixture-price-v1', inputMicroUsdPerMtok: '1000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0', identityMismatchPricing: 'requested-model' as const }),

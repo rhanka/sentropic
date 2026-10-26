@@ -10,6 +10,24 @@ import { validateDecisionResult } from '../src/decision/validate-result.js';
 import { trustedNativeContext } from './decision-fixtures.js';
 
 describe('production prerequisites and isolated qualification', () => {
+  it('should refuse a qualification descriptor in the default production service', async () => {
+    const f = decisionServiceFixture();
+    delete f.options.executionProfile;
+    expect(await createDecisionService(f.options).decide((await import('./decision-fixtures.js')).decisionRequest()))
+      .toMatchObject({ kind: 'error', error: { code: 'PROVIDER_UNAVAILABLE' }, receipt: { attempts: 0 } });
+    expect(f.transport.send).not.toHaveBeenCalled();
+    expect(f.options.resolveAuth).not.toHaveBeenCalled();
+  });
+  it('should mark even preflight refusals and unresolved descriptor deadlines experimental', async () => {
+    const f = decisionServiceFixture();
+    expect(await createDecisionService({ ...f.options, evaluatorAllowlist: [] })
+      .decide((await import('./decision-fixtures.js')).decisionRequest()))
+      .toMatchObject({ experimental: true, receipt: { experimental: true, attempts: 0 } });
+    f.options.resolveEvaluator = () => new Promise(() => {});
+    expect(await createDecisionService({ ...f.options, policy: { timeoutMs: 5 } })
+      .decide((await import('./decision-fixtures.js')).decisionRequest()))
+      .toMatchObject({ experimental: true, error: { code: 'TIMEOUT' }, receipt: { experimental: true, attempts: 0 } });
+  });
   it('should admit the exact fully qualified recorded scope', async () => {
     const f = productionFixture();
     const result = await createDecisionService(f.options).decide(f.request);
