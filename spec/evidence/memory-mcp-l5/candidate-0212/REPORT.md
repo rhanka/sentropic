@@ -4,13 +4,21 @@ The candidate is **not accepted** as L5-MEMORY-V1. No acceptance receipt or
 receipt digest was issued. L4's exit condition remains unmet.
 
 This is a blocked qualification, not an observed six-tool runtime failure.
-The full gate was **not executed**: its first prerequisite starts a standalone
-Docker container, forbidden by the mandatory machine-wide DOCKER-LOCK.md.
-Only the existing gate's dry run and read-only inspections were performed.
+Attempt 2 supersedes attempt 1's interpretation of the Docker rule: the owner
+explicitly permits existing official targets using `docker run --rm`, under
+the shared flock. The official CI gate has been submitted; its execution is
+currently waiting for that lock. See `attempt-2-lock.txt` for the captured
+holder and nested waiter in `tmp/worktrees/mem-e1`; no L5 container has started.
+
+The [producer audit](PRODUCERS.md) traces the absent proof files to unimplemented
+harness lots and predecessor integrations. They are source suites, not outputs
+of an omitted pack/receipt/catalog-generation command. In addition, the receipt
+verifier explicitly rejects unresolved provenance even for a complete bundle.
 
 ## Exact input and passing inspections
 
-- Harness baseline: origin/main `6c3f9f04a01bca460977428f0632e0a38b74ab13`.
+- Harness baseline: origin/main `7815a2a8569f44f220fd4daa5e41dae992618e30`;
+  existing PR #762 rebased from its attempt 1 baseline `6c3f9f04a`.
 - Candidate SHA-256: `a295eef8a1733fd8c00f72ccd6938a5ea11678fdf33848f8849c4d531bd43af8`.
 - SHA-512 integrity matches the supplied value; see `inspection.log`.
 - P2: `2b85ff28b6fe06bda0abcdc19255f61a1ed1e4b7cfbb40c2e881c98dd234424b`, unchanged;
@@ -45,10 +53,21 @@ All ten proofs remain unverified against this candidate; none is recorded as pas
 | P09 predecessor-regressions | 4 | Remote dispatch/adapter and host bridge regressions |
 | P10 checkpoint-tooling | 0 | An executed, candidate-bound Vitest result |
 
-Main's Makefile accepts only `memory-l5-test LOT=1` (line 4119), packs only
-`STAGE=pre-candidate` (4144), and explicitly says the absent packed suite arrives
-in Lot 4 (4130). CI `memory-l5-qualification` invokes Lot 1 with P2, not an E4
+Main's Makefile accepts only `memory-l5-test LOT=1`, packs only
+`STAGE=pre-candidate`, and explicitly says the absent packed suite arrives
+in Lot 4. CI `memory-l5-qualification` invokes Lot 1 with P2, not an E4
 candidate. There is no implemented candidate-qualification lot to select.
+
+P05's catalog producer is Lot 2; P09's is Lot 3. Both are rejected by the
+current runner. The installed P01/P02/P04/P06/P07/P08 sources belong to Lot 4;
+the checkpoint input is scheduled for Lot 5+. The exact missing P09 sources
+belong to R2 and R7a/BR3 predecessor integrations. No existing official step
+generates them. P10's contract tests do not require their source files to exist.
+
+`schema-validator.mjs:351-354` also fails pending predecessor mappings, the
+absent Lot 2 assurance verifier, and three unconditional provenance obligations:
+`ci.provenance`, `ownerUat.provenance`, `acceptances.provenance`. These prevent
+local acceptance independently of test results; they were not removed or waived.
 
 The L4 handoff is not the harness's aggregate candidate manifest: eight required
 fields are absent (`inspection.log`). Conversion/packing tooling for that stage is
@@ -69,12 +88,13 @@ no containers and produces no catalog proof. It must not be counted as acceptanc
 make -f spec/evidence/memory-mcp-l5/candidate-0212/inspection.mk memory-l5-inspect-candidate API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5
 ```
 
-`gate-dry-run.log` captures `make --dry-run memory-l5-gate LOT=1` against the copied
-L4 handoff, with the same ports/ENV and shared flock. No arbitrary later lot was run.
-No standalone container, image build, native addon, Python process or key was created.
+`gate-dry-run.log` is retained attempt 1 evidence. Attempt 2 submits the actual
+official `memory-l5-gate LOT=1` with CI's retained P2 manifest and the same ports/ENV,
+under the shared flock. It does not qualify the engram candidate by itself.
+The archive SHA-256/SHA-512, P2 binding and static inspection were rerun successfully.
 
-L5 harness owner: complete the catalog-mapped candidate lots and Compose execution
-route, preserving every proof, pinned image and receipt check. Acceptance requires
+L5 harness owner: complete the catalog-mapped candidate lots and authenticated
+provenance verification, preserving every proof, pinned image and receipt check. Acceptance requires
 actual candidate-bound results for P01-P10, installed six-tool behaviour, disabled
 0/0/0/0 and a schema-valid, evidence-backed checkpoint. L4 owner: attest the
 pre-rebase source mapping without changing the qualified tarball identity.
