@@ -1096,12 +1096,16 @@ jobs:
         run: make memory-l5-gate LOT=reference ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-mem-l5-lot2
       - name: Memory L5 transport and exact P09 source regressions
         run: make memory-l5-lot3-source API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-mem-l5-lot3
+      - name: Verify published archive bytes and retain Lot 3 evidence
+        run: make memory-l5-lot3-evidence ENV=test-mem-l5-lot3
       - name: Retain Lot 3 source reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: memory-l5-lot3-source-${{ github.run_id }}-${{ github.run_attempt }}
-          path: tmp/memory-l5-lot3-results/
+          path: |
+            tmp/memory-l5-lot3-results/
+            spec/evidence/memory-mcp-l5/lot3/
           if-no-files-found: error
       - name: Remove Lot 3 test stack
         if: always()

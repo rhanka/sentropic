@@ -1,10 +1,11 @@
-import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import { sha256 } from './precandidate.mjs';
 import { P3_SHA256 } from './lot2-manifest.mjs';
 import { PINNED_IMAGE_DIGEST } from './schema-validator.mjs';
 import { validateLot3Report } from './lot3-source.mjs';
+import { PUBLICATIONS, verifyPublication } from './lot3-publications.mjs';
 
 const base = 'spec/evidence/memory-mcp-l5/lot3', input = 'tmp/memory-l5-lot3-results';
 const summary = JSON.parse(readFileSync(`${input}/summary.json`));
@@ -28,11 +29,22 @@ for (const [pkg, expected] of Object.entries(summary.packages)) {
   reports.push(retain(pkg, bytes, report.numPassedTests));
 }
 reports.push(retain('summary', readFileSync(`${input}/summary.json`)));
-const registry = ['mcp-platform', 'cluster-mesh', 'llm-gateway', 'engram-e2'].map(slug => {
-  const path = `tmp/lot3-inputs/${slug}-registry.json`, bytes = readFileSync(path), pkg = JSON.parse(bytes);
-  return { name: pkg.name, version: pkg.version, integrity: pkg.dist.integrity, tarball: pkg.dist.tarball,
-    observedAt: statSync(path).mtime.toISOString(), metadataSha256: sha256(bytes), sourceHead: pkg.gitHead ?? null };
+const receiptBytes = readFileSync('tmp/lot3-inputs/publication-receipts.json'), observed = JSON.parse(receiptBytes);
+const lockBytes = readFileSync('tmp/lot3-inputs/registry-lock/package-lock.json'), lock = JSON.parse(lockBytes);
+if (sha256(lockBytes) !== observed.lockSha256 || observed.receipts.length !== 4) throw Error('Publication lock/receipt mismatch');
+const registry = Object.entries(PUBLICATIONS).map(([slug, version]) => {
+  const name = `@sentropic/${slug}`, receipt = observed.receipts.find(row => row.name === name);
+  if (!receipt || receipt.lockSha256 !== observed.lockSha256 ||
+      receipt.metadataSha256 !== sha256(readFileSync(`tmp/lot3-inputs/${slug === 'engram' ? 'engram-e2' : slug}-registry.json`))) {
+    throw Error(`Publication receipt absent or changed: ${name}`);
+  }
+  const bytes = readFileSync(`tmp/lot3-inputs/published-${slug}-${version}.tgz`);
+  const checked = verifyPublication(receipt.metadata, bytes, lock.packages[`node_modules/${name}`], name, version);
+  if (checked.archiveSha256 !== receipt.archiveSha256) throw Error(`Publication archive changed: ${name}`);
+  return { ...checked, observedAt: receipt.observedAt };
 });
+reports.push(retain('publication-observations', receiptBytes));
+reports.push(retain('publication-lock', lockBytes));
 const e4 = '26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10';
 const archive = `spec/evidence/memory-mcp-l5/lot2/archives/${e4}.tgz`;
 if (sha256(readFileSync(archive)) !== e4) throw Error('Lot 3 retained E4 mismatch');
@@ -43,5 +55,6 @@ const result = { status: 'source-only', qualificationAccepted: false, sourceHead
   waitingFor: ['gr-conductor verified lot2-manifest/sidecar and full host closure/G1-G4/C9 dispositions',
     'S1 and a co-accepted successor freeze/compatible E4', 'same-tuple installed P01-P08 and durable E4 reruns',
     'owner UAT and tuple-bound co-acceptances before L5-MEMORY-V1'] };
-writeFileSync(`${base}/source-evidence.json`, JSON.stringify(result, null, 2) + '\n');
+const output = JSON.stringify(result, null, 2).replace(/\{\n\s+"(?:kind|name)": [^{}]+\}/g, row => JSON.stringify(JSON.parse(row)));
+writeFileSync(`${base}/source-evidence.json`, output + '\n');
 console.log(JSON.stringify({ sourceHead: result.sourceHead, reports: reports.map(r => [r.kind, r.passed]), qualificationAccepted: false }));
