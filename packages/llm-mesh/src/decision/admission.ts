@@ -10,7 +10,7 @@ import { quoteDecision, priceDecisionUsage } from './pricing.js';
 import type { DecisionQuote } from './pricing.js';
 import { unreportedDecisionUsage } from './receipt.js';
 import { isCorrelationId } from './validation.js';
-import { discoverDecisionEvaluator } from './qualification.js';
+import type { createDecisionReadinessCheck } from './qualification.js';
 
 export type AdmittedDecision = { ok: true; holdId: string; quote: DecisionQuote; auth: AuthResolution }
   | { ok: false; error: DecisionError };
@@ -30,7 +30,7 @@ export async function releaseUnsentDecision(execution: DecisionExecution, option
 }
 
 export async function admitDecision(execution: DecisionExecution, selection: Extract<DecisionSelection, { ok: true }>,
-  options: DecisionServiceOptions): Promise<AdmittedDecision> {
+  options: DecisionServiceOptions, productionReady: ReturnType<typeof createDecisionReadinessCheck>): Promise<AdmittedDecision> {
   const failed = (error: DecisionError): AdmittedDecision => ({ ok: false, error });
   execution.phase = 'admission';
   let expired = decisionInterruption(execution, 'admission');
@@ -48,8 +48,7 @@ export async function admitDecision(execution: DecisionExecution, selection: Ext
   const quoted = quoteDecision(selection.request, selection.descriptor, candidate, options.policy?.maxCostMicroUsd);
   if (!quoted.ok) return failed(createDecisionError(quoted.code, 'admission'));
   if (selection.descriptor.executionProfile !== 'qualification'
-    && !discoverDecisionEvaluator(selection.descriptor, { ...options.readiness,
-      price: candidate } as Parameters<typeof discoverDecisionEvaluator>[1], selection.request).productionReady) {
+    && !productionReady(selection.descriptor, selection.request, candidate)) {
     return failed(createDecisionError('PROVIDER_UNAVAILABLE', 'admission'));
   }
   execution.phase = 'preflight';
