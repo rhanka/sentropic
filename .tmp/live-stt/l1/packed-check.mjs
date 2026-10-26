@@ -8,7 +8,8 @@ const [packFile, tsc] = process.argv.slice(2);
 const [pack] = JSON.parse(readFileSync(packFile, 'utf8'));
 const required = ['dist/speech/index.js', 'dist/speech/index.d.ts',
   'dist/speech/contracts.js', 'dist/speech/contracts.d.ts',
-  'dist/speech/capabilities.js', 'dist/speech/capabilities.d.ts'];
+  'dist/speech/capabilities.js', 'dist/speech/capabilities.d.ts',
+  'dist/speech/catalog.js', 'dist/speech/catalog.d.ts'];
 for (const path of required) assert(pack.files.some((file) => file.path === path), path);
 const consumer = mkdtempSync(join(tmpdir(), 'live-stt-l1-consumer-'));
 writeFileSync(join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
@@ -23,7 +24,8 @@ run(process.execPath, ['--input-type=module', '--eval', `
   import * as speech from '@sentropic/llm-mesh/speech';
   import * as root from '@sentropic/llm-mesh';
   assert.deepEqual(Object.keys(speech).sort(), [
-    'isValidSpeechAudioFrame', 'negotiateSpeech', 'speechCapabilityNames', 'speechPlacements',
+    'getModelSpeechCapabilities', 'isValidSpeechAudioFrame', 'negotiateSpeech',
+    'reviseSpeechTranscript', 'speechCapabilityNames', 'speechEngineCatalogue', 'speechPlacements',
   ]);
   for (const key of Object.keys(speech)) assert.equal(root[key], speech[key]);
   assert.equal(typeof root.getModelSpeechCapabilities, 'function');
@@ -36,7 +38,7 @@ writeFileSync(join(consumer, 'consumer.ts'), `
   declare const final: SpeechTranscriptFinal;
   const revision: string = receipt.configuration.configRevision;
   const binary: Uint8Array = frame.payload;
-  const caps: SpeechCapabilities | undefined = getModelSpeechCapabilities('openai', 'gpt-6.1-sol');
+  const caps: readonly SpeechCapabilities[] = getModelSpeechCapabilities('openai', 'gpt-6.1-sol');
   // @ts-expect-error Final projections are immutable.
   final.text = 'correction';
   void [revision, binary, caps, negotiateSpeech];
