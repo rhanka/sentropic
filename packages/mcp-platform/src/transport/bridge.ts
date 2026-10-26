@@ -21,10 +21,7 @@ import { registerBridgeKernel, safeMcpProtocolError } from './bridge-kernel.js';
 import { assertMcpJson, freezeMcpJson } from './tool-json.js';
 import type { CompiledMcpToolSchemas, McpToolDiagnostic, McpToolValidationLimits } from './tool-schemas.js';
 import { validateBoundedValue, type JSONValue } from '../registry-parameters.js';
-import type { AppToolResult, StpConnectorContext } from '../runtime.js';
-import { admitMemorySchema } from '../memory/schema-profile.js';
-import { callMemoryBridge } from '../memory/wire-profile.js';
-import { isMemoryToolName } from '../memory/contracts.js';
+import type { AppToolResult } from '../runtime.js';
 
 export type { AppToolResult } from '../runtime.js';
 
@@ -92,11 +89,6 @@ export interface BridgeTool {
    * (Immo) profile; the global/default codec never changes silently.
    */
   readonly profile?: string;
-  readonly schemaProfile?: string;
-  readonly outputSchema?: Tool['outputSchema'];
-  readonly annotations?: Tool['annotations'];
-  readonly _meta?: Tool['_meta'];
-  readonly maxPacketBytes?: number;
 }
 
 /** Memory wire-profile identifier admitted explicitly through this bridge. */
@@ -107,45 +99,17 @@ export function isMemoryProfileTool(tool: BridgeTool): boolean {
   return tool.profile === MEMORY_BRIDGE_PROFILE_ID;
 }
 
-/** Preflight is also available to compositions before they acquire provider resources. */
-export function admitBridgeTools(tools: readonly BridgeTool[]): void {
-  const memoryNames = new Set<string>();
-  for (const tool of tools) {
-    if ((tool.profile !== undefined || tool.schemaProfile !== undefined || isMemoryToolName(tool.name)) && !isMemoryProfileTool(tool)) throw new TypeError('Unsupported wire profile');
-    if (!isMemoryProfileTool(tool)) continue;
-    if (!isMemoryToolName(tool.name)) throw new TypeError('Unsupported memory tool');
-    if (memoryNames.has(tool.name)) throw new TypeError('Duplicate memory tool');
-    memoryNames.add(tool.name);
-    if (tool.maxPacketBytes !== undefined && (!Number.isSafeInteger(tool.maxPacketBytes) ||
-      tool.maxPacketBytes < 4096 || tool.maxPacketBytes > 1048576)) throw new TypeError('Invalid memory packet budget');
-    if (tool.schemaProfile !== 'sentropic.engram.memory-tools/2020-12-v1') throw new TypeError('Unsupported memory schema profile');
-    admitMemorySchema(tool.schema);
-    admitMemorySchema(tool.outputSchema);
-    if (!isRecord(tool.schema) || tool.schema.type !== 'object') throw new TypeError('Memory input schema must describe an object');
-    const output = tool.outputSchema as Record<string, unknown>;
-    if (output.type !== undefined && output.type !== 'object') throw new TypeError('Memory output schema must describe an object');
-  }
-}
-
 export interface BridgeRunner {
   run(
     tool: string,
     args: Record<string, JSONValue>,
     identity: RequestIdentity | undefined,
-    call?: BridgeInvocation,
   ): Promise<AppToolResult>;
-}
-
-export interface BridgeInvocation {
-  readonly context: StpConnectorContext;
-  readonly signal: AbortSignal;
 }
 
 export interface BridgeOptions {
   /** Boundary identity forwarded to the runner on every call (else `undefined`). */
   readonly identity?: RequestIdentity;
-  /** Per-call trusted host resolver; never sourced from SDK arguments or headers. */
-  memoryContext?(tool: string, signal: AbortSignal): Promise<StpConnectorContext>;
 }
 
 export interface RequestIdentity {
@@ -233,22 +197,18 @@ export function registerBridgeTools(
   options?: BridgeOptions,
 ): void {
   const identity = options?.identity;
-  admitBridgeTools(tools);
-  tools = tools.map(tool => isMemoryProfileTool(tool) ? freezeMcpJson(structuredClone(tool)) : tool);
   registerBridgeKernel(server, {
     unknownTool: name => new McpError(ErrorCode.MethodNotFound, `Unknown tool '${name}'`),
     tools: tools.map((tool) => ({
       name: tool.name,
-      ...(isMemoryProfileTool(tool) ? { outputSchema: { type: 'object' as const, ...tool.outputSchema }, annotations: tool.annotations, _meta: tool._meta } : {}),
       ...(tool.description === undefined ? {} : { description: tool.description }),
       inputSchema: {
         type: 'object' as const,
         ...(isRecord(tool.schema) ? tool.schema : {}),
       },
     })),
-    async call(name, rawArgs, signal) {
+    async call(name, rawArgs) {
     const tool = tools.find((candidate) => candidate.name === name)!;
-    if (isMemoryProfileTool(tool)) return callMemoryBridge(tool, rawArgs as Record<string, unknown>, runner, options, signal);
     if (!isRecord(rawArgs)) {
       return encodeToolResult(errorResult('kernel-rejection', 'invalid_parameters', 'arguments must be an object'));
     }
