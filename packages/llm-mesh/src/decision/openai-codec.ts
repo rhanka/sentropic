@@ -28,7 +28,7 @@ export function decodeOpenAiDecisionsResponse(candidate: unknown, request: Decis
   usage.evaluatorCalls = answered ? 1 : null;
   usage.explanations = answered ? 0 : null;
   const servedModelId = sanitizeJevId(body?.model);
-  const matched = servedModelId !== null && descriptor.qualification.servedIdentity === 'qualified'
+  const matched = servedModelId !== null
     && descriptor.acceptedServedModelIds.includes(servedModelId);
   const providerRequestId = sanitizeJevId(requestId);
   const evidence = { usage, servedModelId, servedEvaluator: matched ? { ...descriptor.evaluator } : null,
