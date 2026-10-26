@@ -39,9 +39,10 @@
 ## Feedback Loop
 - [x] CI-LIVE — conductor decision B-lite (2026-10-26): open the draft PR with existing provider-backed CI under the owner's current budget. Added tests use fixtures and recorded answers only; no new live-call job or offline-CI profile is introduced.
 - [ ] REVIEW — attention: exact complementary reviewers not selected; no independent code-review consensus is claimed. Author handoff is ready for the conductor.
-- [x] P24 dated GA schema: two additional missing-usage-details controls failed before correction; require cache/reasoning objects while preserving independently reported counters.
+- [x] P24 dated GA schema: require cache/reasoning objects; invalid usage counters remain non-billable pending reconciliation, while independently valid usage survives answer refusals.
 - [x] BR93-EX2: mesh 0.29.0 is rejected by cluster's current <0.29.0 bound. Extend only mesh compatibility to <0.30.0, gateway mesh dependency and exact fixture/CI tuple; patch-bump the affected metadata/source packages. Impact: admits the tested native Decisions minor via the existing loader. Rollback: revert tuple/range cells together. Conditional `.github/workflows/ci.yml` changes are limited to its three exact PEERS tuples.
-- [x] BR93-EX1: synchronize only the llm-mesh workspace version in `package-lock.json` after the mandatory feature bump. Impact: one workspace metadata cell, no dependency resolution changes. Rollback: revert that cell with the package version.
+- [x] BR93-EX1: synchronize five `package-lock.json` workspace cells: llm-mesh version 0.29.0 for the native Decisions feature; cluster-mesh version 0.22.5 for its loader compatibility change; cluster-mesh llm-mesh peer range <0.30.0 to admit that feature; llm-gateway version 0.21.4 for its compatibility metadata change; llm-gateway llm-mesh dependency range adding ^0.29.0 to consume that feature (BR93-EX2). Impact: five metadata cells, no resolved dependency/integrity changes. Rollback: revert all five cells together with the corresponding package versions/ranges and BR93-EX2 tuple.
+- [x] Opus r1 P2-1/P2-2: add service controls for contradictory cached input and paid cache writes retaining the reserve without settle/release; test the shipped unqualified descriptor through service and direct adapter before egress; correct BR93-EX1.
 - [x] OD-5 remains open; live identity, billing and calibration belong to L5/L6.
 
 ## Deferred to BR-7x
@@ -74,13 +75,13 @@
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Update mesh README and tracked specification; registry baseline mesh 0.28.1/gateway 0.21.3/cluster 0.22.4; candidates 0.29.0/0.21.4/0.22.5.
 - [ ] **Lot N — Final validation**
-  - [x] Full mesh tests: 1442 passed across 80 files; mesh typecheck/lint passed on ENV=test-decision-v4l3.
+  - [x] Opus r1 correction: both usage contradictions reproduced at cost 100/settled before the fix; 54 scoped OpenAI tests passed afterward. Full mesh: 1445 passed across 80 files; mesh typecheck/lint passed on ENV=test-decision-v4l3.
   - [x] Full cluster: 1144 passed/129 conventionally skipped; cluster typecheck/lint passed; packed consumer 107/15 passed; train lock integrity passed for published baselines, native candidates remain unpublished.
   - [x] Source qualification head 1f4ed952d: verified sibling receipts; mesh archive SHA256 fd8a63feae824e3dc0800aa926ff64749681e4191b43391f906ac0da2dea342e. Preserve the published artifacts 0.1.4 lock baseline.
   - [x] CI wiring tests: 24 passed; memory-l5-verify: 30 files/54 edges, unchanged retained manifest.
   - [ ] Independent harness review; reconcile findings with tests.
   - [x] Scope-check before every selective atomic commit under 150 lines.
-  - [ ] Push and open draft PR with this plan as body and requested title.
+  - [x] Draft PR #772 opened; retain draft status during author corrections.
   - [ ] Verify CI green at final head; do not merge.
 - [x] Atomic artifact: test(decision): pin JEV discriminator conformance.
 - [x] Atomic artifact: test(decision): specify native Decisions wire refusals.

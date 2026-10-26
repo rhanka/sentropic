@@ -33,8 +33,11 @@ export function decodeOpenAiDecisionsResponse(candidate: unknown, request: Decis
   const providerRequestId = sanitizeJevId(requestId);
   const evidence = { usage, servedModelId, servedEvaluator: matched ? { ...descriptor.evaluator } : null,
     ...(providerRequestId ? { providerRequestId } : {}) };
-  const failed = (code: Parameters<typeof createDecisionError>[0]): DecisionAdapterResult =>
-    ({ ok: false, error: createDecisionError(code, 'parse'), ...evidence });
+  const failed = (code: Parameters<typeof createDecisionError>[0]): DecisionAdapterResult => {
+    // Contradictory or unpriced details invalidate the counters as billing evidence.
+    if (code === 'USAGE_INVALID') usage.tokens = unreportedDecisionUsage('unknown').tokens;
+    return { ok: false, error: createDecisionError(code, 'parse'), ...evidence };
+  };
   if (!body || !hasOnlyKeys(body, ['model', 'answers', 'usage'])) return failed('VERDICT_INVALID');
   if (!matched) return failed('SERVED_IDENTITY_MISMATCH');
   const cache = native.input_tokens_details;
