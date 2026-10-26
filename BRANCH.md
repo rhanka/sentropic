@@ -57,6 +57,9 @@ Additive exact u64 counters for generic storage, with opt-in consumed paths and 
 - [x] Frozen guard: `isDecimalCounter` / `parseDecimalCounter` stay safe-integer only; generic `isStorageModuleId('engram-memory')` stays true while common v1 rejects that module.
 - [x] Counter guard: otherwise valid `terminal.count = '9007199254740992'` fails with exactly `terminal count must be a decimal counter`.
 - [x] Epoch domain: neutral `CanonicalInstanceOwnershipV1` keeps name/version/meaning/digest and error codes; internal epoch uses exact u64, public `storageEpoch` stays decimal string.
+- [x] `src/storage/common-contract.ts` untouched; no PG migration; no domain widening.
+- [x] Broader `test-cluster-mesh` shows 2 known pack-only fixture failures (`prepare-artifacts` selected-fixture alignment on `0.23.0-dev.2`, same category as E0 on `dev.1`); fixtures are outside this branch scope; E2 lanes are the gate.
+- [x] Lock lesson: `engram-e2-qualify` self-locks per lane; never wrap it in an outer shared-lock call (self-deadlock); run it bare with `ENV=test-e2-int` last.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; E2 qualification green; no merge.
 
 ## AI Flaky tests
@@ -73,18 +76,19 @@ Additive exact u64 counters for generic storage, with opt-in consumed paths and 
   - [x] Read Docker lock, rules, approved plan, E0 entry check and P2 binding.
   - [x] Create worktree `tmp/worktrees/mem-e1` on integration base; merge E0 without rebase.
   - [x] Write BRANCH.md from template; reserve pack-only `0.23.0-dev.2`.
-- [ ] **Lot 1 — Tests first**
-  - [ ] Add `tests/storage/u64-corpus.ts` and `u64-contract.spec.ts`.
-  - [ ] Extend `representation-contract.spec.ts`, `atomic-corpus.ts`, `chain-corpus.ts`, `read-corpus.ts`, `instance-ownership.spec.ts`.
-  - [ ] Extend `common-rule/vectors.ts` and `contract.spec.ts` with above-safe terminal vector and exact error.
-  - [ ] Extend `comments-fragment-vectors.spec.ts` for original counter domain and encoded bytes.
-  - [ ] Keep `scope-grant-modules.spec.ts` green: memory registration and read/write grant accepted.
-- [ ] **Lot 2 — Implementation**
-  - [ ] Add `src/storage/u64.ts` validator, codec and types.
-  - [ ] Add opt-in consumed counter/version and atomic comparison/allocation paths in `contracts.ts`, `atomic.ts`, `backend.ts`.
-  - [ ] Extend `instance-ownership.ts` epoch to exact u64; keep public shape and contract identity.
-  - [ ] Preserve `common-contract.ts` v1 allowlist; no PG migration; no domain widening.
+- [x] **Lot 1 — Tests first**
+  - [x] Add `tests/storage/u64-corpus.ts` and `u64-contract.spec.ts`.
+  - [x] Extend `representation-contract.spec.ts`, `atomic-corpus.ts`, `chain-corpus.ts`, `read-corpus.ts`, `instance-ownership.spec.ts`.
+  - [x] Extend `common-rule/vectors.ts` and `contract.spec.ts` with above-safe terminal vector and exact error.
+  - [x] Extend `comments-fragment-vectors.spec.ts` for original counter domain and encoded bytes.
+  - [x] Keep `scope-grant-modules.spec.ts` green: memory registration and read/write grant accepted.
+- [x] **Lot 2 — Implementation**
+  - [x] Add `src/storage/u64.ts` validator, codec and types.
+  - [x] Add opt-in consumed counter/version and atomic comparison/allocation paths in `contracts.ts`, `atomic.ts`, `backend.ts`.
+  - [x] Extend `instance-ownership.ts` epoch to exact u64; keep public shape and contract identity.
+  - [x] Preserve `common-contract.ts` v1 allowlist; no PG migration; no domain widening.
 - [ ] **Lot 3 — Final validation**
-  - [ ] `make scope-check` before each commit; commits under 150 lines via `make commit`.
-  - [ ] Run build, typecheck, lint, memory, common, grants and real PG lanes with `ENV=test-e2-int` last.
+  - [x] `make scope-check` before each commit; commits under 150 lines via `make commit`.
+  - [x] Scoped suites green: u64 (6), ownership (9+3 skip), representation (5), common-rule (11), grants (3), comments-fragment (4); build, typecheck, lint green.
+  - [ ] Run `make engram-e2-qualify ENV=test-e2-int` (self-locking; no outer lock wrapper).
   - [ ] Push and open draft PR targeting `feat/engram-e2-integration`; verify E2 qualification green without merging.
