@@ -94,7 +94,7 @@ const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(
     .filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, canonical(v)])) : value;
 export const same = (a: unknown, b: unknown): boolean => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 export const validIdentity = (id: string): boolean => typeof id === 'string' && id.length > 0 && id.length <= 512
-  && !['__proto__', 'constructor', 'prototype'].includes(id);
+  && !Object.hasOwn(Object.prototype, id) && id !== 'prototype';
 export const assertScope = (state: SessionState, scope: Scope): void => {
   if (!same(state.scope, scope)) throw new Error('Stale or unauthorized scope');
 };
