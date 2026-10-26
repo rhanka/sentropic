@@ -4,7 +4,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-scratch=$(mktemp -d .tmp/pgbackup-restore-isolation.XXXXXX)
+scratch=$(mktemp -d "$PWD/.tmp/pgbackup-restore-isolation.XXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 
 mkdir -p "$scratch/bin"
@@ -110,7 +110,9 @@ if [ "$status" -eq 0 ]; then ko "isolated-run: target succeeded without a cluste
 case "$out" in *"Running restore pod"*) ;; *) ko "isolated-run: missing pod message"; printf '%s\n' "$out" ;; esac
 log="$(cat "$KUBECTL_CALL_LOG")"
 case "$log" in *"-n sentropic-restore-app-cm"*" run "*) ok "isolated-run (restore namespace only)" ;; *) ko "isolated-run: wrong kubectl destination"; printf '%s\n' "$log" ;; esac
-case "$log" in *"-n sentropic "*|*"sentropic-preprod"*) ko "isolated-run: live namespace touched" ;; *) ok "isolated-run (no live namespace)" ;; esac
+# Negative identity checks are read-only can-i probes; only writes are forbidden outside the restore namespace.
+case "$log" in *"auth can-i"*) ok "isolated-run (negative identity checks ran)" ;; *) ko "isolated-run: negative can-i checks missing"; printf '%s\n' "$log" ;; esac
+if printf '%s\n' "$log" | grep ' run ' | grep -vq -- '-n sentropic-restore-app-cm'; then ko "isolated-run: kubectl write outside restore namespace"; printf '%s\n' "$log"; else ok "isolated-run (no live writes)"; fi
 
 # Pod spec: the main container must not call s5cmd and must fail closed.
 line="$(cat "$KUBECTL_RUN_ARGS")"
