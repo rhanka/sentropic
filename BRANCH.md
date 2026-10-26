@@ -32,8 +32,11 @@
 - [x] BR-E2-EX1 — `acknowledge`, owner: sole release integrator, 2026-10-26; bounded to `.github/workflows/ci.yml` and `Makefile`.
   - [x] Mechanical alias `BR2-EX1` names the same exception because the installed harness accepts only numbered BR identifiers.
   - [x] Rationale: topic merges otherwise bypass the required checks.
-  - [x] Impact: additional PR qualification and artifact retention only; preserve all main-only publish event/ref predicates and forbid publishing development versions.
-  - [x] Rollback: remove only the E2 branch trigger and E2-specific runner wiring, preserve Immo/main gates, and suspend E2 topic merges until equivalent checks are restored.
+  - [x] Impact: additional qualification and artifact retention only for PRs targeting `feat/engram-e2-integration` with E2-relevant paths; main and Immo PRs skip `qualify-engram-e2` and retain their existing gates. Preserve all main-only publish event/ref predicates and forbid publishing development versions.
+  - [x] Rollback: remove the E2 branch trigger, `changes.outputs.engram_e2`, its path filter, `qualify-engram-e2` and its `ci-gate` need, plus E2-specific Make runner wiring; preserve Immo/main gates and suspend E2 topic merges until equivalent checks are restored.
+  - [x] P2-1: qualify the path-filter output by the E2 PR base in `changes`; retain the existing job predicate so the expected-result evaluator and dispatch agree.
+  - [x] Selection dry-run (2026-10-26): parse the actual workflow, evaluate `changes.outputs.engram_e2`, then pass that string output to `workflowExpected` and `evaluateExpected`; with relevant paths changed, `main` and Immo yield `false`/unselected and accept a skipped job, while E2 yields `true`/selected and rejects a skipped job. With no relevant paths, all three bases yield `false`/unselected.
+  - [x] Dry-run receipt: `tmp/engram-e2-selection.test.mjs` (local probe); `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make test-publishable-manifests 'SCOPE=tmp/engram-e2-selection.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/ci-expected-results.test.mjs' ENV=test-e2-int` passed 44/44 (six selection cases plus 38 existing assertions); `make down ENV=test-e2-int` under the same lock removed the disposable project.
 - [ ] E0 admission remains blocked until this CI change reaches main, a real integration-target fail/pass bump probe passes, receiving records and Comments deployment separation are confirmed.
 
 ## AI Flaky tests
