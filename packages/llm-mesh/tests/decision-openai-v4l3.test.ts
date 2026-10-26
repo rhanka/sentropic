@@ -55,7 +55,7 @@ describe('P24 OpenAI Decisions native wire contract (synthetic documented fixtur
     const body = openAiFixtureResponse();
     delete (body.usage as Record<string, unknown>)[field];
     expect(decode(body)).toMatchObject({ ok: false, error: { code: 'USAGE_INVALID' },
-      usage: { tokens: { input: { value: 1000, source: 'provider' } } } });
+      usage: { tokens: { input: { value: null, source: 'not-reported' } } } });
   });
   it('should accept tied string choices and reject boolean values without coercion', () => {
     const req = { ...request(), criterion: { kind: 'choice' as const, instructions: 'Route.', options: [
