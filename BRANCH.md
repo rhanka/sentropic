@@ -39,6 +39,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] Resync after Opus r1: merge `origin/main` at `365e8b313f1c4c627c87db4f6761847a1e6a5ae7`, retain the S1 plan on the sole `BRANCH.md` conflict and preserve Track events; incoming L5 artifacts remain main's exact bytes, with the repair class disabled.
 - [x] Opus r1 P2-1: pin disabled activation, exact allow/deny scope, grouping, fail-closed kill switch, blocked L5 class and budget ceilings independently of the candidate JSON; weakened fixtures reproduce the former acceptance gap.
 - [x] Review-fix validation uses `ENV=test-sec-s1` last and the shared Docker lock; all 70 weakened-contract fixtures pass after the validator fix (the remaining failing npm-counter regression is handled separately).
 - [x] SECDAILY-S1-EX1: register S1 suites in the existing required Node test entrypoint `scripts/ci/publishable-ci-wiring.test.mjs`; restore `.github/workflows/ci.yml` to main bytes. Editing that workflow selects global CI including legacy Python SAST, outside this zero-Python lot. Existing filters and gates stay unchanged; rollback removes only the S1 suite imports, with implementation disabled.
