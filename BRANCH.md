@@ -27,19 +27,8 @@
   - `packages/cluster-mesh/assets/storage/engram-memory/C6-FREEZE.md` (inherited E0 only)
   - `packages/cluster-mesh/assets/storage/engram-memory/neutral-asset-inventory.json` (inherited E0 only)
   - `packages/cluster-mesh/assets/storage/engram-memory/neutral-equivalence.json` (inherited E0 only)
-  - `Makefile` (inherited integration only; BR6-EX2)
-  - `.github/workflows/ci.yml` (inherited integration only; BR6-EX2)
-  - `.security/**` (inherited integration only; BR6-EX2)
-  - `.tmp/live-stt/l1/verify.mk` (inherited integration only; BR6-EX2)
-  - `.track/**` (inherited integration only; BR6-EX2; no authored events)
-  - `api/**` (inherited integration only; BR6-EX2)
-  - `docs/comments-annotations/contract/package-zod4-migration.json` (inherited #767 only)
-  - `package.json` (inherited integration only; BR6-EX2)
-  - `packages/**` (incoming integration changes only; E6 edits restricted to explicit paths above)
-  - `scripts/ci/**` (inherited integration only; BR6-EX2)
-  - `spec/SPEC_EVOL_LLM_MESH.md` (inherited integration only; BR6-EX2)
-  - `tools/memory-mcp-l5/artifacts/**` (incoming history/snapshot only; restore current P2 manifest and sidecar unchanged)
-  - `ui/package-lock.json` (inherited integration only; BR6-EX2)
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (BR6-EX2: retain E6 P2 bytes only)
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256` (BR6-EX2: retain E6 P2 bytes only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -53,7 +42,7 @@
   - `package-lock.json`
 - **Exception process**:
   - [x] BR6-EX1: `packages/cluster-mesh/package.json` and `package-lock.json` unique pack-only 0.23.0-dev.5 version fields; never publish; rollback both fields together.
-  - [x] BR6-EX2: owner-requested integration merge, preserving incoming tuple gateway 0.21.3 / cluster 0.22.4 / mesh 0.28.1 and #767 fixture tolerance. E6 retains its 0.23.0-dev.5 pack-only version above published 0.22.4; retain E6 BRANCH.md and P2 bytes. Inherited paths above admit only upstream changes, not new implementation. Rollback: revert the merge with first-parent selection.
+  - [x] BR6-EX2: owner-requested integration merge, preserving incoming tuple gateway 0.21.3 / cluster 0.22.4 / mesh 0.28.1 and #767 fixture tolerance. E6 retains its 0.23.0-dev.5 pack-only version above published 0.22.4; retain E6 BRANCH.md and P2 bytes. Temporary incoming-only path grants passed merge-time scope-check and are now retired; no new upstream implementation is authorized. Rollback: revert the merge with first-parent selection.
 
 ## Feedback Loop
 - [x] BR6-EX1 allows `packages/cluster-mesh/package.json` and `package-lock.json` version fields for the owner's unique dev.5 reservation; impact pack-only, rollback both fields together.
@@ -69,12 +58,13 @@
 - [x] Declare E0 paths inherited in the diff against integration; E6 does not author or alter those freeze assets.
 - [x] PG memory corpus PASS: 10/10, zero skips; regression PASS: 61 tests, with only two separate-phase `postgres-crashes.spec.ts` cases skipped. Typecheck PASS; build/lint/mechanical/wiring PASS with cleanup=0.
 - [x] Resolve P1-1 by merging integration `d22fc3f2479eba5ff626f94c7cc249888a7d1f90`; retain both release metadata and E6 prerelease reservation. Integration/main P2 `f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642` is recorded as divergence, not adopted by this PR.
-- [ ] P3 re-pin after #769 merges (conductor/integrator): target P3 `1c96bada...`; update `packages/cluster-mesh/assets/storage/engram-memory/C6-FREEZE.md`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` and `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, then refresh the P2 reference in this `BRANCH.md`/PR body. Retained `tools/memory-mcp-l5/artifacts/history/2b85ff28b6fe06bda0abcdc19255f61a1ed1e4b7cfbb40c2e881c98dd234424b.json{,.sha256}` stays immutable history. No pin is changed here.
+- [ ] P3 re-pin after #769 merges (conductor/integrator): target P3 `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`; update `packages/cluster-mesh/assets/storage/engram-memory/C6-FREEZE.md`, `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` and `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`, then refresh the P2 reference in this `BRANCH.md`/PR body. Retained `tools/memory-mcp-l5/artifacts/history/2b85ff28b6fe06bda0abcdc19255f61a1ed1e4b7cfbb40c2e881c98dd234424b.json{,.sha256}` stays immutable history. No pin is changed here.
 - [x] Retain local logs/checksums under `tmp/engram-e6-receipts/` and official lane receipts under `tmp/engram-e2-receipts/`.
 - [x] Remaining local E2 lanes PASS with cleanup=0: memory 76 tests (the 10 PG cases execute separately in the real PG receipt), common 10, grants 3; no source edits after the passing code snapshot.
 - [x] Skip inventory: mechanical/wiring/build/typecheck/lint have no conditional tests; common 10 and grants 3 have zero skips. Memory: 76 pass, 10 skip because `CM_PG_URL` is absent: `postgres-registration.spec.ts` (2: apply/verify/reopen, drift/missing-role), `projection.spec.ts` (4: completion/reopen, same-transaction rollback, receipt replay/conflict, duplicate event/proof), `queries.spec.ts` (4: five queries/resync, scope/history, u64/revocation, oversized/erased payload).
 - [x] PostgreSQL lane: those same 10 E6 cases execute through `tests/storage/postgres-memory.spec.ts`, zero memory skips; 61 total passes in the retained local receipt. Only `tests/storage/postgres-crashes.spec.ts` skips its 2 cases, `seeds a partially prepared hidden unit before SIGKILL` and `reopens the recovered server and finishes from the saved prefix`: they require separate `CM_PG_CRASH_PHASE=seed/verify` runs around an actual server crash and are outside this campaign. No other test skip is waived.
 - [x] Track containment: 346 pre-merge event IDs retained in 370 merged events (`track events-contains`); no manual log edit or concurrent Track write.
+- [x] Post-merge local PostgreSQL rerun at pushed `4779c72401d941e60a461a38a2b6d2a76a27335e`: 61 pass, only the 2 declared crash skips, E6 memory 10/10; exit=0 and cleanup=0. Receipt `tmp/engram-e6-resync-receipts/postgres.log` SHA-256 `e97fdf97c0a60dc9842350ec4172b0b2a32161e29445e017c26e0db020c27990`; inventory SHA-256 `e9be37762b6cd498ef8962b5f2e7049157f8d4106f4855153b2ea298e9696db2`.
 - [ ] Independent peer launch awaits owner authorization required by rules/subagents.md; no consensus review claimed.
 
 ## AI Flaky tests
@@ -99,10 +89,11 @@
   - [x] Author memory-only SQL assets and shared schema-role loader hooks; E2 does not edit migrations.ts; independent module chain avoids core numbering collision.
   - [x] Author transactional projection and backend-backed validation; reuse #709 transition functions; qualification pending.
   - [x] Author five root-bound memory queries and scope-chain-index enumeration; qualification pending.
-- [ ] **Lot 3 — Final validation and draft handoff**
+- [x] **Lot 3 — Final validation and draft handoff**
   - [x] Existing PG module-migration, migration, registration, query and policy regressions pass (61 PG tests including E6).
   - [x] Local build, typecheck, lint, mechanical/wiring, memory/common/grants and real PG lanes pass; #767 repairs are inherited for the new-head CI campaign.
   - [x] Scope-check before every commit; P2 unchanged and Engram exactly 0.21.1.
   - [x] Unique pack-only 0.23.0-dev.5 manifest/root-lock version commit; E2 registry baseline is 0.22.1; no peer or Engram change.
   - [x] Push draft PR #768 to `feat/engram-e2-integration`; no merge; independent memory migration 001 (receipt slot 008 after E2 core 007).
-  - [ ] Retain CI URL, exact pushed head and green qualification after the integration merge; then tick Lot 3.
+  - [x] Exact pushed head `4779c72401d941e60a461a38a2b6d2a76a27335e`: [E2 qualification PASS](https://github.com/rhanka/sentropic/actions/runs/40371657186/job/121747236089), all nine lanes and their cleanup gates pass. Memory 76 pass/10 PG skips; common 10/0; grants 3/0; PostgreSQL 61 pass/2 declared crash skips (memory 10/10, zero skips).
+  - [x] Retain [CI receipts](https://github.com/rhanka/sentropic/actions/runs/40371657186/artifacts/12674222407), artifact `engram-e2-4779c72401d941e60a461a38a2b6d2a76a27335e`, ZIP SHA-256 `cdf90473b120999ba891d8f3a038d19016cca30022785d470565d9280cd0ecdf`: context/head/base, all nine lane logs/statuses/inventories/checksums and job URLs. Lot 3 closes E6 qualification; the full workflow and final documentation-head checks remain subject to their live CI results.
