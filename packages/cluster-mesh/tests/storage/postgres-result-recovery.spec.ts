@@ -67,6 +67,9 @@ describe.skipIf(!pgEnabled)('Postgres original-result recovery', () => {
       const leased = await root.bindNew(grantFor({ token: 'leased', lifetime: { kind: 'lease', expiresAt: '2026-10-24T00:00:00.000Z' } }));
       now = '2026-10-25T00:00:00.000Z';
       await expect(leased.readCommitResult(recoveryIdentity, successor)).rejects.toMatchObject({ code: 'denied' });
+      const expired = { ...fence, epoch: '3' };
+      await root.provisionFence(grant, expired, '2000-01-01T00:00:00.000Z');
+      await expect(bound.readCommitResult(recoveryIdentity, expired)).rejects.toMatchObject({ code: 'invalid-command' });
       await root.revoke(grant.token);
       await expect(bound.readCommitResult(recoveryIdentity, successor)).rejects.toMatchObject({ code: 'denied' });
     } finally { await fixture.close(); }
