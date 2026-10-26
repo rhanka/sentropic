@@ -79,3 +79,4 @@
 - [x] Atomic artifact: test(decision): bound dedicated Decisions transport.
 - [x] Atomic artifact: feat(decision): declare native Decisions candidate and request.
 - [x] Atomic artifact: feat(decision): decode typed Decisions answers and usage.
+- [x] Atomic artifact: feat(decision): add fixed bounded Decisions HTTP transport.
