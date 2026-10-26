@@ -830,6 +830,11 @@ CI_EXPECTED_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache np
 ci-capacity-policy: ## Check the per-run finite-capacity bound (quota remains separately inventoried)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --capacity-policy $(if $(filter 1,$(CI_REQUIRE_CAPACITY_PROOF)),--require-proof) $(foreach file,$(CI_POLICY_RUN_FILES),--proof-file $(file))'
 CI_RUN_ATTEMPT ?= 1
+.PHONY: ci-capacity-publish-dry-run
+ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
+	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
+	@$(MAKE) --no-print-directory pack-$(PACKAGE) MANIFEST_REPORT_DIR=tmp/ci-capacity/publish-$(PACKAGE) ENV=$(ENV)
+	@jq -n --arg package '$(PACKAGE)' --arg run "$$GITHUB_RUN_ID" --arg sha "$$GITHUB_SHA" '{package: $$package, runId: $$run, headSha: $$sha, mode: "guarded-pack-no-publication", completed: true}' > tmp/ci-capacity/publish-$(PACKAGE)/dry-run.json
 CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
 CI_CAPTURE_DIR ?= tmp/ci-capacity/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)
 .PHONY: ci-capacity-capture
