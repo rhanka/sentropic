@@ -1,51 +1,84 @@
 {
+  "createdAt": "2026-10-26T23:45:00Z",
   "kind": "l3-g-native-receipt",
   "lot": "L3",
-  "spec": "r3 §8.1",
-  "createdAt": "2026-10-26T21:25:00Z",
+  "spec": "r3 \u00a78.1",
+  "status": "pending",
+  "note": "Unit lane (tsc + vitest) runs in the pinned image via make test-live-speech; the native bench below is functional host evidence, not a \u00a78.1 pass. Unverified items stay pending until a network-denied pinned-image run closes them.",
   "toolchain": {
     "testImage": "node:24-bookworm-slim",
-    "testImageId": "sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205",
     "arch": "amd64",
-    "benchHost": "v22.22.1 linux x64",
-    "devDependencies": {
-      "vitest": "4.0.18",
-      "typescript": "5.4.5",
-      "@types/node": "^22.10.10"
+    "pythonInImage": "none (verified: no python/python3 on PATH)",
+    "nodeGyp": "never invoked in live-speech install, build, test or bench paths",
+    "benchHost": {
+      "node": "v22.22.1 linux x64",
+      "cmake": "3.31.12 user-space tarball (no sudo; system cmake absent)",
+      "cxx": "system g++",
+      "pythonUsed": "none in install, build or bench scripts (host /usr/bin/python3 exists but is never invoked)"
     }
-  },
-  "commands": {
-    "install": "npm install --prefix <tool-dir> --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node (throwaway tool dir, nothing vendored)",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run tests --environment node (SCOPE override supported)"
-  },
-  "interpreterFree": {
-    "python": "no Python in install, build, test, or bench paths (package has no build step; bench is plain node)",
-    "nodeGyp": "no node-gyp in live-speech install/build/test (vitest, tsc and @types are pure JS plus the standard esbuild platform binary all repo packages share)"
   },
   "engine": {
     "package": "faster-whisper-ts@1.2.1",
-    "integrity": "sha512-3oGN11mPfJ6duavEtNeI9FJ6fNsMCHrt+X55XRWO96rFz9e9sRxMStXLZX+Y5YYPkXlQ==",
-    "revision": "d2ee195a9a093a4e0cc81553beb2f8e6ced9ebb8",
-    "models": {
-      "tiny": "sha256:dcb76c6586fc06cbdac6dd21f14cfd129cc4cdd9dce19bf4ffa62e59cbe6e6d1",
-      "base": "sha256:d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    "registryIntegrity": "sha512-3oGN11mPfJ6duavNpEt3i/1pQ89eaE18j9FJ8fNsMCHrt+xX55XRWO96rFuz9sRxMStskXLXZX+A5YYPkXlQ0g==",
+    "license": "MIT",
+    "nativeBridge": "whisper_bridge built from vendored sources with cmake 3.31.12 (bridge.cpp + pocketfft; links vendored libctranslate2/libgomp)"
+  },
+  "vendoredBinaries": {
+    "files": [
+      "whisper_bridge/lib/libctranslate2-5a650b64.so.4.7.1",
+      "whisper_bridge/lib/libgomp-e985bcbb.so.1.0.0"
+    ],
+    "status": "unverified",
+    "blocker": "original artifact URL, digest, extraction recipe and licenses not established; admit only via pinned CMake rebuild from source or provenance record"
+  },
+  "onnxruntime": {
+    "package": "onnxruntime-node@1.24.3",
+    "registryIntegrity": "sha512-JH7+czbc8ALA819vlTgcV+Q214/+VjGeBHDjX81+ZCD0PCVCIFGFNtT0V4sXG/1JXypKPgScQcB3ij/hk3YnTg==",
+    "installPosture": "linux-x64 CPU binding ships prebuilt in the tarball; postinstall only fetches non-bundled (CUDA) artifacts",
+    "networkDeniedInstall": "pending \u2014 host provisioning ran with network available; rerun install with egress denied to close"
+  },
+  "models": {
+    "source": "profiles.ts pins (single source of truth), hash-verified at load before worker ready",
+    "tiny": {
+      "origin": "https://huggingface.co/Systran/faster-whisper-tiny",
+      "revision": "d90ca5fe260221311c53c58e660288d3deb8d356",
+      "license": "MIT"
     },
-    "vad": "sha256:914fd98ac0a73d69ba1e70c9b1d66acb740eff90500dfde08b89a961b168a6a9",
-    "note": "vad digest verified against the inspected artifact; see bench/local-stt-bench.receipt.json"
+    "base": {
+      "origin": "https://huggingface.co/Systran/faster-whisper-base",
+      "revision": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "license": "MIT"
+    },
+    "vadAsset": "assets/silero_vad_v6.onnx pinned and verified at load; L3 endpoint VAD is the frame-energy gate (documented in profiles.ts)"
+  },
+  "sbom": {
+    "status": "pending",
+    "blocker": "no SBOM generated for the provisioned native stack yet"
+  },
+  "bench": {
+    "localTiny": {
+      "status": "measured",
+      "receipt": "bench/local-stt-bench.receipt.json"
+    },
+    "localBase": {
+      "status": "measured",
+      "receipt": "bench/local-stt-bench.receipt.json"
+    },
+    "pinnedImageNative": {
+      "status": "pending",
+      "blocker": "pinned image has no cmake/C++ toolchain, so the bridge cannot build there; host functional row recorded instead"
+    }
+  },
+  "knownNativeQuirk": {
+    "sineFixtureTeardownAbort": {
+      "status": "recorded",
+      "detail": "1 s sine deterministically aborts the native binding at process teardown (koffi FATAL after valid stdout JSON, 3/3); espeak/silence children exit clean. Sine fixture excluded from the bench; silence retained as the negative case."
+    }
   },
   "networkPosture": {
     "microphone": false,
     "paidApi": false,
-    "modelDownloads": "none — local test-models artifacts only, verified by sha256 against profiles.ts pins",
-    "audioInTests": "synthetic PCM generated in-process (sine/silence/LCG); no audio payload in events or logs (asserted by event-hygiene test)"
-  },
-  "bench": {
-    "status": "pending",
-    "receipt": "bench/local-stt-bench.receipt.json",
-    "blockers": [
-      "native whisper bridge unbuilt: engine reports 'Unable to locate native whisper bridge in .../whisper_bridge/build. Expected one of: libwhisper_bridge.so' (requires CMake, absent on this machine)",
-      "onnxruntime-node@1.31.1 postinstall cannot resolve Microsoft.ML.OnnxRuntime.Gpu.Linux@1.31.1 on nuget.org (registry lists up to 1.31.0) — deterministic upstream gap, not a flake"
-    ]
+    "modelDownloads": "none at bench time \u2014 pre-provisioned test-models verified by sha256 against profiles.ts pins",
+    "audioInTests": "synthetic and eSpeak-synthesized PCM only; no audio payload in events or logs (asserted by event-hygiene test)"
   }
 }
