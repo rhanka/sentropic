@@ -115,26 +115,57 @@ export function classifyBumpGate({ alreadyPublished, dependencySectionChanged })
   return 'automatic-eligible';
 }
 
-export function checkReconciliationStreak(scans = []) {
+export function checkReconciliationStreak(scans = [], target) {
+  const refuse = (reason) => ({ ok: false, reason });
   if (scans.length < 2) return { ok: false, reason: 'need N=2 consecutive complete scans' };
+  if (!target || !['surface', 'platform', 'path', 'imageLineage'].every((key) =>
+    typeof target[key] === 'string' && target[key])) return refuse('missing exact registered coverage target');
   const last = scans.slice(-2);
   for (const scan of last) {
-    if (!scan.complete || scan.findingsMatched > 0 || scan.gaps > 0) return { ok: false, reason: 'scan incomplete or finding present' };
-    if (!scan.identicalFlags || !scan.surfaceCovered) return { ok: false, reason: 'flags or coverage changed' };
+    if (scan?.kind !== 'daily-full' || scan.complete !== true || scan.findingsMatched !== 0 || scan.gaps !== 0) {
+      return refuse('scan incomplete or finding present');
+    }
+    if (!validDate(scan.day) || typeof scan.scanId !== 'string' || !scan.scanId ||
+        !/^[a-f0-9]{40}$/.test(scan.sourceSha || '') || !/^sha256:[a-f0-9]{64}$/.test(scan.dbIdentity || '') ||
+        !scan.scannerIdentity || !scan.policyIdentity || !Array.isArray(scan.flags) || !scan.flags.length) {
+      return refuse('missing immutable scan, scanner, database or policy identity');
+    }
+    const scanned = Date.parse(scan.scannedAt), updated = Date.parse(scan.dbUpdatedAt);
+    if (!Number.isFinite(scanned) || !Number.isFinite(updated) ||
+        new Date(scanned).toISOString().slice(0, 10) !== scan.day || updated > scanned || scanned - updated > 86400000) {
+      return refuse('invalid or stale database timestamps');
+    }
+    if (!Array.isArray(scan.coverage) || !scan.coverage.some((entry) =>
+      Object.keys(target).every((key) => entry[key] === target[key]) && /^sha256:[a-f0-9]{64}$/.test(entry.imageDigest || ''))) {
+      return refuse('registered surface, lineage, platform or path not covered');
+    }
   }
-  if (last[0].dbIdentity !== last[1].dbIdentity && last[0].dbChanged !== true) return { ok: false, reason: 'db identity drift' };
+  if (Date.parse(last[1].day) - Date.parse(last[0].day) !== 86400000 || last[0].scanId === last[1].scanId) {
+    return refuse('need distinct consecutive daily full scans');
+  }
+  for (const field of ['scannerIdentity', 'policyIdentity', 'flags']) {
+    if (JSON.stringify(last[0][field]) !== JSON.stringify(last[1][field])) return refuse(`${field} changed; reset streak`);
+  }
   return { ok: true };
 }
 
 export function validateContract(config = {}) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return { ok: false, errors: ['contract object'] };
   const errors = [];
   const need = (path, ok) => { if (!ok) errors.push(path); };
-  need('severity.actionable', Array.isArray(config.severity?.actionable));
+  need('severity.actionable', JSON.stringify(config.severity?.actionable) === '["HIGH","CRITICAL"]');
+  need('severity.inventory', JSON.stringify(config.severity?.inventory) === '["UNKNOWN","LOW","MEDIUM","HIGH","CRITICAL"]');
+  need('severity.raw', config.severity?.rawMeansBeforeSuppression === true && config.severity?.identicalFlagsRequired === true);
   need('inventory.images[3]', Array.isArray(config.inventory?.images) && config.inventory.images.length === 3);
   need('inventory.locks[root/UI/kit]', ['package-lock.json', 'ui/package-lock.json', 'docs/governance/kit/package-lock.json'].every((lock) => config.inventory?.locks?.includes(lock)));
   need('inventory.toolbox', config.inventory?.toolbox?.path === 'api/Dockerfile');
   need('register.baseline67', config.register?.baselineOutstanding === 67);
   need('automaticScope.allow', Array.isArray(config.automaticScope?.allow) && config.automaticScope.allow.length >= 3);
+  need('automaticScope.ownCode', config.automaticScope?.ownCode?.enabled === false &&
+    ['sourcePaths', 'testPaths', 'patchVersionFields'].every((key) => Array.isArray(config.automaticScope?.ownCode?.[key]) && config.automaticScope.ownCode[key].length === 0));
+  need('automaticScope.reconciliation', config.automaticScope?.reconciliation?.removalOnly === true && config.automaticScope?.reconciliation?.separateLot === true);
+  need('automaticScope.register', config.automaticScope?.registerByteIdenticalOnRepairs === true);
+  need('grouping.bounds', JSON.stringify(config.grouping?.lotBounds) === '{"maxUnits":3,"maxFiles":10,"maxLines":150}');
   need('derivedPins.l5-root-lock', Boolean(config.derivedPins?.['l5-root-lock']));
   need('credentials.reader', typeof config.credentials?.reader === 'string' && config.credentials.reader.includes('Variables'));
   need('bumpGateManual', typeof config.bumpGateManual?.rule === 'string');
