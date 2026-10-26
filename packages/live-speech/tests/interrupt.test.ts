@@ -3,6 +3,36 @@ import { SpeechCoordinator, createSession } from '../src/core/session.js';
 import { commit, fixture, mutation, scope, TestJournal } from './fixtures.js';
 
 describe('durable interruption', () => {
+  it('should retain a queued final across restart and send it once after completion', async () => {
+    const f = fixture();
+    const old = await commit(f.core);
+    await f.core.send(old);
+    const next = await commit(f.core, 'next');
+    expect(await f.core.send(next)).toBe(false);
+    const restarted = fixture(f.journal.restart());
+    expect(await commit(restarted.core, 'next')).toEqual(next);
+    expect(await restarted.core.send(next)).toBe(false);
+    await restarted.core.complete(old, 'completed');
+    expect(await restarted.core.send(next)).toBe(true);
+    expect(await restarted.core.send(next)).toBe(false);
+    expect(restarted.control.start).toHaveBeenCalledOnce();
+  });
+
+  it('should release a durable queued final on a fence despite a lost start ACK', async () => {
+    const f = fixture();
+    vi.mocked(f.control.start).mockRejectedValueOnce(new Error('lost ACK'));
+    const old = await commit(f.core);
+    await expect(f.core.send(old)).rejects.toThrow('lost ACK');
+    const next = await commit(f.core, 'barge-in');
+    const restarted = fixture(f.journal.restart());
+    await restarted.core.recover(old);
+    expect(await restarted.core.send(next)).toBe(true);
+    expect(await restarted.core.send(next)).toBe(false);
+    expect(await restarted.core.send(old)).toBe(false);
+    expect(restarted.control.start).toHaveBeenCalledExactlyOnceWith({ ...next, inputRef: 'final:barge-in' });
+    expect(await restarted.core.interruptStatus(old)).toMatchObject({ state: 'stopping' });
+  });
+
   it('should return fence acceptance while native Stop is pending and expose the 2s state', async () => {
     const f = fixture();
     let now = 100;
@@ -77,7 +107,9 @@ describe('durable interruption', () => {
     await sending;
     expect(f.control.interrupt).toHaveBeenCalledWith(expect.objectContaining({ nativeTurnId: 'late-native' }));
     expect((await f.core.status(turn)).phase).toBe('cancelling');
-    await expect(commit(f.core, 'next')).rejects.toThrow('terminal');
+    const next = await commit(f.core, 'next');
+    expect(await f.core.send(next)).toBe(true);
+    expect((await f.core.status(turn)).phase).toBe('cancelling');
   });
 
   it('should isolate completion racing Stop from the next epoch', async () => {

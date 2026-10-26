@@ -132,7 +132,6 @@ export class SpeechCoordinator extends InterruptAuthority {
         return { scope: existing.scope, turnEpoch: existing.turnEpoch, submitKey: existing.submitKey };
       }
       if (!state.connected) throw new Error('Disconnected session');
-      if (Object.values(state.turns).some(t => !isTerminal(t))) throw new Error('Previous turn needs terminal acknowledgement');
       if (!input.utteranceId || !input.inputRef) throw new Error('Final input reference required');
       const turnEpoch = state.nextEpoch++;
       const ref = { scope: state.scope, turnEpoch, submitKey: `${state.scope.speechSessionId}:${state.scope.sourceGeneration}:${state.scope.controllerEpoch}:${turnEpoch}` };
