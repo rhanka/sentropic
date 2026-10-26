@@ -35,6 +35,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] Add lost-start-ACK fail-closed admission, inherited class-key refusal and optional native-ID metadata type checks before final quality gates.
 - [x] Add concrete CAS-backed SessionJournal tests: persisted-byte restart, transaction rollback and contention retry. Storage durability remains an explicit host primitive; no production in-memory sink is supplied.
 - [x] BR757-EX3: merge origin/main ab981b16d to enable PR776 CI. Preserve L1c 0.23 speech, main peer releases/Decision changes and both README sections. Authored conflict resolutions are small; imported main commits retain their original history. Scope-check at merge measures resolutions against AUTO_MERGE, excluding unchanged incoming commits. Rollback uses the pre-merge parent; never rewrite/rebase.
 - [x] Add exact barrier-revision approval binding (including previously unused approvals) and explicit paired cancellation for emitted calls denied before admission.
