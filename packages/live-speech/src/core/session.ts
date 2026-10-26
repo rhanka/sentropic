@@ -122,6 +122,7 @@ export const createSession = (scope: Scope, enabledClasses: SessionState['enable
 
 export class SpeechCoordinator extends InterruptAuthority {
   async commit(input: { scope: Scope; utteranceId: string; inputRef: string }): Promise<TurnRef> {
+    input = structuredClone(input);
     return this.journal.transact(state => {
       assertScope(state, input.scope);
       if (!validIdentity(input.utteranceId)) throw new Error('Invalid utterance identity');

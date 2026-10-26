@@ -72,6 +72,7 @@
   - [x] usage-receipts.test.ts: estimate/true-up dedupe, dimensions, restart and payload exclusion authored first.
   - [x] Red at 4f03beab7: scoped interrupt suite fails on missing core/session.js before source implementation.
 - [ ] **Lot 2 — Implementation**
+  - [x] Snapshot command identities and typed risk bodies before asynchronous admission/authentication; opaque proofs stay transient and are never journalled.
   - [x] Durable scopes and receipts require complete authenticated tenant/workspace identity; shared shape validation rejects omitted or extra fields.
   - [x] Uncertain native starts install a tombstone before rethrowing; admission rejects inherited class keys and receipts validate optional identity fields.
   - [x] SessionJournal implements durable snapshot CAS, bounded contention retry, rollback, schema/scope checks and isolated returns over host storage.
