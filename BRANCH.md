@@ -1,73 +1,66 @@
-# Feature: Fix CI gateway mesh range wait (merged with main sec-zod4 plan; both kept)
+# Feature: V4-L3 JEV and OpenAI Decisions
 
 ## Objective
-Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves before publishing llm-gateway.
-- [x] Migrate zod 3.25.76 to zod >=4.6.6 across api, UI dependency trees, and packages, closing HIGH memory-exhaustion advisory GHSA-mrhx-c7xc-m3w5.
+- [ ] Deliver separate native JEV and OpenAI Decisions protocols through the existing Decision mesh capability.
 
 ## Scope / Guardrails
-- Scope limited to registry wait for gateway mesh dependency plus the merged zod v4 migration (no feature changes).
-- One migration max in `api/drizzle/*.sql` (if applicable; none expected).
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktrees (`tmp/worktrees/ci-gateway-wait`, `tmp/worktrees/sec-zod4`).
-- Automated test campaigns run on dedicated environments (`ENV=test-ci-gateway-wait`, `ENV=test-sec-zod4`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
-- 0 Python in repos and jobs. One Docker build at a time machine-wide.
+- [x] Base: origin/main; branch: feat/decision-v4-l3; worktree: tmp/worktrees/decision-v4l3.
+- [x] Make only; Docker lock on every container/test step; ENV=test-decision-v4l3 last.
+- [x] Fixtures only; no paid calls, live qualification, prompted fallback or JEV upgrade.
+- [x] Preserve receipt v1, custody, one attempt, deadlines, settlement and unqualified discovery.
+- [x] Reserved ports if needed: API_PORT=9465 UI_PORT=5665 MAILDEV_UI_PORT=1565.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `api/package.json`
-  - `api/package-lock.json`
-  - `package-lock.json` (root workspace lock sync for packages/* bumps)
-  - `package.json` (root, `overrides` pin only — forces the single v4 line tree-wide)
-  - `api/src/**`
-  - `api/tests/api/organizations.test.ts` (PR #752 autosave status regression)
-  - `api/tests/unit/zod-validator.test.ts` (PR #752 validation response contract)
-  - `api/tests/unit/gateway-package-version.test.ts` (candidate gateway version evidence)
-  - `api/tests/unit/google-drive-oauth.test.ts` (deterministic tamper test blocking CI)
-  - `packages/auth-hono/**`
-  - `packages/auth-ui/package.json` (auth-hono 0.17 peer support)
-  - `packages/llm-gateway/package.json` (auth-hono 0.17 peer support)
-  - `packages/cluster-mesh/package.json` (auth-hono 0.17 peer support)
-  - `packages/cluster-mesh/src/modules/catalog.ts` (auth-hono 0.17 runtime preflight support)
-  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (candidate version assertions)
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts` (auth-hono runtime version boundary)
-  - `packages/comments/**`
-  - `packages/skills/**`
-  - `packages/cluster-mesh/tests/packaging/**` (Zod resolution in the frozen consumer)
-  - `packages/cluster-mesh/tests/storage/comments-deps.package.json`
-  - `packages/cluster-mesh/tests/storage/postgres.mk` (standalone consumer Zod resolution)
-  - `packages/cluster-mesh/tests/comments-contract-boundaries.spec.ts`
-  - `docs/comments-annotations/contract/package-zod4-migration.json`
-  - `.security/vulnerability-register.yaml`
-  - `.security/audit-allowlist.json`
-  - `BRANCH.md`
-  - `Makefile` (BR01-EX1, BR01-EX2: Zod pins and Compose-safe verification; gateway mesh range wait)
-  - `scripts/ci/publishable-manifests.mjs`
-  - `scripts/ci/publishable-pack.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `scripts/ci/publishable-classification.test.mjs`
-  - `.github/workflows/ci.yml` (BR01-EX4: skills validation lane)
-- **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile`
-  - `packages/cluster-mesh/packaging.mk`
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**` (except the allowed ci.yml exception)
-  - `ui/**`
-  - `e2e/**`
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+- [x] **Allowed Paths (implementation scope)**:
+  - [x] `BRANCH.md`
+  - [x] `packages/llm-mesh/src/decision/**`
+  - [x] `packages/llm-mesh/src/transport/openai-decisions.ts`
+  - [x] `packages/llm-mesh/tests/decision-*`
+  - [x] `packages/llm-mesh/tests/fixtures/decision/**`
+  - [x] `packages/llm-mesh/package.json`
+  - [x] `packages/llm-mesh/README.md`
+  - [x] `spec/SPEC_EVOL_LLM_MESH.md`
+  - [x] `spec/decision/**`
+- [x] **Forbidden Paths (must not change in this branch)**:
+  - [x] `Makefile`
+  - [x] `docker-compose*.yml`
+  - [x] `.cursor/rules/**`
+- [x] **Conditional Paths (explicit exception required)**:
+  - [x] `package-lock.json`
+  - [x] `.github/workflows/**`
+- [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
-- [x] BR02-EX1: touch conditional `packages/cluster-mesh/packaging.mk` (`test-lazy-package` only: build workspace llm-mesh/llm-gateway/comments dists before packing them for the pre-publication fallback) plus `packages/cluster-mesh/tests/packaging/{prepare.sh,siblings.mjs,siblings.spec.ts,release-matrix.spec.ts}` (already allowed). Reason: PR CI is circular — the lazy gate installs workspace train versions from the registry, which 404 while their publication is what this PR unblocks. Impact: test-only; no published archive or manifest changes. Rollback: revert the prepare.sh fallback, the `train-spec` command, the spec updates and the added build lines.
-- [x] BR01-EX1: touch conditional `Makefile` target `wait-llm-gateway-mesh-dependency` only. Merged resolution: adopt main's `dependencyFloor` recipe (union range resolves to its exact floor; main-CI-green), keep our range-aware `commandWait`/`waitForRange` machinery tested in `publishable-manifests.mjs`. Impact: one recipe line; no other target changed. Rollback: restore the single recipe line from `origin/main`.
-- [x] CI run 40322725730 for PR #760: guard gates green (`validate-publishable-manifests`, `validate-llm-gateway`, `validate-llm-mesh`, `enforce-package-bump`, typecheck/lint). One failure: `validate-cluster-mesh` step `Qualify packed Cluster Mesh (lazy surface release gate)` cannot install `@sentropic/llm-gateway@0.21.1` (registry 404, version unpublished). Root cause is the blocked publication this branch unblocks, not this diff: no shared code path (lazy test never imports the guard module; pack steps passed), reproduced locally with the exact failing target. Needs owner decision: merge with override or bootstrap-publish 0.21.1, then re-run.
-- [x] Resync #754: preserve live STT 0.28 support and Zod 4/auth-hono 0.17 support together. Main consumes gateway 0.21.1 and cluster-mesh 0.22.2; select free gateway 0.21.2 and cluster-mesh 0.22.3, refresh workspace/API/selected metadata and retain guarded archive integrities.
+- [x] OD-5 remains open; live identity, billing and calibration belong to L5/L6.
+
+## AI Flaky tests
+- [x] No live provider tests or accepted flaky failures.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch; author implementation followed by independent harness review.
+
+## UAT Management (in orchestration context)
+- [x] Library-only change; fixture API and mesh integration controls replace product UI UAT.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline and scope**
+  - [x] Read Docker lock, complete spec v4, Sol review, merged PR #693 and its branch plan.
+  - [x] Run mechanical harness branch check before work.
+- [ ] **Lot 1 — P25 JEV versioned discriminator**
+  - [ ] Add failing versioned binary/choice/graded discriminator fixtures and contradiction controls.
+  - [ ] Correct closed JEV codec and run scoped decision-jev-v4l3.test.ts.
+- [ ] **Lot 2 — P24 separate Decisions codec**
+  - [ ] Add failing native controls and independent name/count/type/refusal/usage/identity mutations in decision-openai-v4l3.test.ts.
+  - [ ] Implement one-question predicate/choice/score protocol with independent usage evidence.
+- [ ] **Lot 3 — Transport, registration and tariff**
+  - [ ] Add fixed HTTPS Decisions transport and adapter with explicit descriptor registration.
+  - [ ] Test endpoint, credentials, one attempt, no CLI route, protocol tariff collision and unqualified refusal.
+  - [ ] Keep JEV baseline and OpenAI candidate report packets with source evidence and outstanding qualification.
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Update mesh README and tracked specification; record package version check/bump.
+- [ ] **Lot N — Final validation**
+  - [ ] Full mesh tests, mesh typecheck/lint and relevant cluster Decision tests.
+  - [ ] Independent harness review; reconcile findings with tests.
+  - [ ] Scope-check before every selective atomic commit under 150 lines.
+  - [ ] Push and open draft PR with this plan as body and requested title.
+  - [ ] Verify CI green at final head; do not merge.
