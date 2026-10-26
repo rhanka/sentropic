@@ -21,8 +21,17 @@ it('P05.broker.sqlite-workflow-store-wal-full: should persist one principal-scop
     const changed = workflowInput({ target: { kind: 'candidate', candidate_id: 'candidate-2' },
       effective_input: { tool_name: 'engram_memory_request_admission', candidate_id: 'candidate-2', admission_policy_version: 'v1' } });
     expect(() => store.reserve(changed, true)).toThrow('DIGEST_CONFLICT');
+    const crossTool = workflowInput({ tool_name: 'engram_memory_withdraw', effective_input: {
+      tool_name: 'engram_memory_withdraw', candidate_id: 'candidate-1', reason_ref: 'reason-1', event_id: 'event-1',
+      event_anchor: { occurred_at: '2026-10-26T00:00:00.000Z', kind_ref: 'withdraw', provenance_ref: 'prov-1', provenance_digest: 'sha256:' + 'a'.repeat(64) },
+    } });
+    crossTool.policyVersions = { tool_name: 'engram_memory_withdraw' } as never;
+    expect(() => store.reserve(crossTool, true)).toThrow('DIGEST_CONFLICT');
     const other = workflowInput({ principal_id: 'another-human' });
     expect(store.reserve(other, true).key).not.toBe(original.key);
+    for (const field of ['tenant_id', 'scope_ref', 'store_id', 'connector_instance_ref']) {
+      expect(store.reserve(workflowInput({ [field]: 'another' }), true).key).not.toBe(original.key);
+    }
     expect(store.read(original.key, false)).toBeUndefined();
   } finally { store.close(); }
 });

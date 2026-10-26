@@ -13,6 +13,7 @@ it('P05.broker.policy-version-persistence: should retain exact historical policy
     store.putPolicy('admission', 'v2', { retention: 'changed' });
     store.close(); store = await SqliteMemoryWorkflowStoreV1.open(path);
     expect(store.read(reserved.key, true)?.input).toEqual(input);
+    expect(store.reserve({ ...input, resolved: { retention: 'changed' } }, true).input.resolved).toEqual(input.resolved);
     expect(store.policy('admission', 'v1')).toEqual({ retention: 'original' });
     expect(() => store.policy('admission', 'missing')).toThrow('POLICY_UNAVAILABLE');
     expect(() => store.putPolicy('admission', 'v1', { retention: 'rewritten' })).toThrow('POLICY_STALE');
