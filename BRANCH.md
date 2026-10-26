@@ -55,6 +55,7 @@
   - [x] Companion flow/authority ports and leased transaction boundary; unknown COMMIT destroys the connection.
   - [x] Durable TicketStore and browser-flow storage; immutable inserts, exact association and DB-time expiry.
 - [ ] Lot 3: real PG vectors: two OS processes, restart, race, pre/post-commit crash, restore; no skipped vectors.
+  - [x] Add independent OS-process witness and restart/race/crash tests; execute in the scoped PG gate.
 - [ ] Lot 4: exact imports and authority/restore obligations; merge main again after #759.
 - [ ] Lot 5: separate pack-only 0.2.3 bump; typecheck/lint/unit/integration/pack gates.
 - [ ] Lot 6: scope-check before atomic commits (<150 lines); push; draft PR body from this file; CI green; do not merge.
