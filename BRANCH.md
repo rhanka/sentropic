@@ -73,3 +73,4 @@
 - [x] BR022-EX2: merge origin/main 2026-10-26; resolved BRANCH.md (kept branch file) and Makefile (union of ENV selectors, kept main recipes); package-lock auto-merged with artifacts 0.2.2 intact. Rollback: git reset --hard 01499d513.
 - [x] BR022-EX3: merge origin/main 22d8a9e68 (post-#760) 2026-10-26; BRANCH.md conflict resolved by keeping branch file; rest auto-merged. Rollback: git reset --hard 90c1d414a.
 - [x] BR022-EX4: merge origin/main ab981b16d (post-#756) 2026-10-26; BRANCH.md kept, Makefile union intact, rest auto-merged. Rollback: git reset --hard e07add6a0.
+- [x] BR022-EX5: merge origin/main 365e8b313 (post-#769) 2026-10-26; BRANCH.md kept, Makefile union intact, rest auto-merged. Rollback: git reset --hard 3c906d8f9.
