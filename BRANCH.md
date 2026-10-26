@@ -33,5 +33,6 @@
 - [x] Deployed host bindings, native SQLite/PostgreSQL and key cleanup remain unverified.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: verify archive digests, P2 binding, mechanical branch and harness constraints.
+- [x] Evidence collector: reproducible read-only inspection; no catalog proof substituted.
 - [ ] Lot 1: audit candidate/catalog; record FAIL evidence; push draft PR without merging.
 - [ ] Acceptance: full candidate gate and schema-valid receipt (blocked; no receipt issued).
