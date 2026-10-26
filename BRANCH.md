@@ -1,84 +1,86 @@
-# Feature: isolated pgbackup restore with B03 manifest (W0-close.b)
+# Feature: fix(memory-l5): rescope P09 to existing suites and re-freeze pre-candidate P3
 
 ## Objective
-Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only, with strict pre-write guards and a B03 backup/object manifest.
+- [x] Remove P09 references to four later-lot suites so L5 qualifies its 18 existing suites; retain remote coverage as unchecked R2/R7a obligations.
+- [x] L0 reissue: owner authorization recorded (text); detached signature pending.
+- [x] `authorizedBy`: `owner:antoinefa`; `at`: `2026-10-26T16:59:54Z`; `verbatim`: « Je dirai pas ca ma vas y », replying to the L0 freeze re-issue request (P09 rescoped, P2 to P3).
+- [x] `source`: `.tmp/owner-deliverables/OWNER-DELIVERABLES-2026-10-23.md`, conductor's log line at that timestamp; covered L0/P3 digests are recorded below and in `p3-owner-authorization.json`.
+- [x] `detachedSignature`: `null` (pending); text is not a signature or signed disposition; fail-closed behavior and `qualificationAccepted: false` remain unchanged.
 
 ## Scope / Guardrails
-- [x] Scope limited to `k8s-pgbackup-restore`, its runbook and its isolation guard test.
-- [x] Make-only workflow, no direct Docker commands.
-- [x] Work in `tmp/worktrees/app-w0-restore`, `ENV=test-app-w0-restore` last, never `ENV=dev`.
-- [x] All new text in English.
-- [x] No secrets in output; credentials referenced by name only.
-- [x] 0 Python; the guard test is POSIX sh.
-- [x] `k8s-db-restore-preprod` stays excluded and untouched.
-- [x] No restore against a real cluster in this lot; W0-close.c execution is tenant-owned.
+- [x] Base: origin/main `22d8a9e68b1abae2665fedb528526d2a84c6bc4d`.
+- [x] Branch: `fix/memory-l5-p09-p3`; worktree: `tmp/worktrees/mem-l5-p3`.
+- [x] Approved correction SHA-256: `b13bcd77f4a78e20c7f6ed36561b5f2e57eeb7442ad5623d8607991a952a6ee9`.
+- [x] Catalog SHA-256: `9bf377b774dda54a3b37189eea57cb845acca7b27b8b55b399f23c20215a1211`.
+- [x] P3 manifest SHA-256: `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`.
+- [x] Reissued L0 SHA-256: `0541b15ba4d5e49ba3b30d92da1c5e3c2fd668e40937e4f942103a678e849bfb`.
+- [x] P3 freezing commit: `c919b638686fb93c8c90a2634d3c004fd25348b3`; producer heads and retained closure are unchanged.
+- [x] L0 also corrects the stale artifact-manifest schema pin; the schema bytes are unchanged.
+- [x] Make-only tests, shared Docker lock, isolated `ENV=test-mem-l5-p3` last, cleanup after each step.
+- [x] No service startup or port reservation; existing official disposable container targets only.
+- [x] No package/source/schema changes, repack, E4 rebuild, publication, registration or merge.
+- [x] Only `.tmp` write: root `.tmp/engram-l4-handoff-p2/BINDING.md`, new P3 section.
+- [x] Atomic commits below 150 changed lines, selective staging, `make commit`, no attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `docs/runbooks/app-cm-baseline-restore.md`
-  - `scripts/test-pgbackup-restore-isolation.sh`
-  - `Makefile` (`k8s-pgbackup-restore` block, its `RESTORE_*` variables and the `test-pgbackup-restore-isolation` target only, under W0-EX1)
-  - `.github/workflows/ci.yml` (`global` filter entry plus one guard-test step only, under W0-EX1)
-  - `deploy/k8s/README.md` (restore paragraph only, under W0-EX1)
+  - `tools/memory-mcp-l5/proof-catalog-v1.json`
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`
+  - `tools/memory-mcp-l5/artifacts/history/f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642.json`
+  - `tools/memory-mcp-l5/artifacts/history/f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642.json.sha256`
+  - `tools/memory-mcp-l5/tests/p3-l0-freeze.test.mjs`
+  - `tools/memory-mcp-l5/tests/receipt-contract.test.mjs`
+  - `spec/evidence/memory-mcp-l5/l0-freeze.json`
+  - `spec/evidence/memory-mcp-l5/p3-*.md`
+  - `spec/evidence/memory-mcp-l5/p3-*.json`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile` outside the leased blocks
-  - `k8s-db-restore-preprod` target block
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
+  - `packages/**`
   - `.track/**`
-  - `docs/baselines/app-cm-w0/**`
-  - `deploy/**` outside the leased README paragraph
-  - `.github/workflows/**` outside the leased hunk
-  - `plan/**`
+  - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - _(none; the Makefile lease is Allowed under W0-EX1)_
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] Declare exception ID `W0-EX1` in `## Feedback Loop` before touching the conditional path.
+  - [x] No scope exception requested; no conditional path needed.
 
 ## Feedback Loop
-- [x] `W0-EX1` — narrow Makefile lease for Lane B (plan-v2 W0-close.b row plus packet `app-W0-close-b.md`; Sol leases the edit to Lane B).
-  - [x] Reason: the repo is Make-only, so the isolation guards must live in the existing restore target.
-  - [x] Impact: `k8s-pgbackup-restore` block plus `RESTORE_*` variables only; no other target touched.
-  - [x] Rollback: revert the Makefile hunk of the Lot 1 commit.
-- [x] `W0-EX1` extension (Opus r1 review of PR #756, user-ordered 2026-10-26).
-  - [x] Reason: fix the 3 P1 + 7 P2 production-reachability findings in the leased target, wire its guard test into make/CI, and update the stale `deploy/k8s/README.md` restore paragraph that invites admin-kubeconfig use.
-  - [x] Impact: `k8s-pgbackup-restore` block rework, one new `test-pgbackup-restore-isolation` target, one `global`-filter entry plus one step in `ci.yml`, one README paragraph. No other target, job or doc touched.
-  - [x] Rollback: revert the R1 hunks commit by commit.
+- [ ] Owner: `owner:antoinefa`; status: owner authorization recorded (text); detached signature pending for the exact amended L0 digest.
+- [ ] Authorized L4/platform/broker/transport role dispositions must bind the new L0 and P3 tuple; no prior signatures reused.
+- [ ] Gr-conductor: acknowledge predecessor and P3 identities before downstream E4 rebuild/handoff.
 
 ## AI Flaky tests
-- [x] No AI-dependent tests; the isolation guard test is deterministic shell with a fake kubectl shim.
+- [x] No AI tests or flaky-test exception applies.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single focused lot, one test cycle)
-- [ ] **Multi-branch** (not applicable)
-- [x] Rationale: one target, one runbook, one test; no parallel sub-workstreams.
+- [x] Mono-branch; one author, no delegated implementation.
+- [x] Approved specification and Opus r2 review are inputs; this draft does not claim owner acceptance.
 
 ## UAT Management (in orchestration context)
-- [x] No UI surface and no cluster execution in this lot; no UAT.
-- [x] Real-cluster restore (W0-close.c) is tenant-owned and out of scope.
+- [x] No web, Chrome or VSCode surface changes; no product UAT in this correction.
+- [ ] Owner UAT and co-acceptance receipts require the actual P3 candidate tuple and CI binding later.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Reuse branch `feat/app-cm-w0-restore-isolation` at `origin/main` in `tmp/worktrees/app-w0-restore`.
-  - [x] Read packet, DOCKER-LOCK, plan-v2 W0-close.b row, Sol r2 review, MASTER rules, both skills.
-  - [x] No compose stack in this lot (fake-kubectl guard tests only); no ports allocated.
-  - [x] `harness check branch` passes on this BRANCH.md.
-- [x] **Lot 1 — Makefile guards plus manifest (W0-EX1)**
-  - [x] Reject prod/preprod PG, namespaces and buckets; refuse absent identity and unsafe defaults, all before any write.
-  - [x] Remove swallowed checksum/count failures; print the B03 manifest block.
-  - [x] `make -n` dry-run plus `scope-check` before commit.
-- [x] **Lot 2 — Runbook plus isolation test**
-  - [x] `docs/runbooks/app-cm-baseline-restore.md` with the exact tenant command for W0-close.c.
-  - [x] `scripts/test-pgbackup-restore-isolation.sh` (shell, fake kubectl, no cluster).
-- [x] **Lot 3 — Local guard verification**
-  - [x] Run the isolation test green with `ENV=test-app-w0-restore` last.
-  - [x] Prove no kubectl write precedes a guard failure.
-- [ ] **Lot 4 — Final validation**
-  - [x] `make scope-check` before each commit; atomic `make commit` per file group, each under 150 lines.
-  - [ ] Push, open draft PR #756 (base `main`: repo CI triggers only for main-targeted PRs; retarget to `feat/app-cm-w0-baseline` at W0-close.e integration), CI green; do not merge.
-- [ ] **Lot R1 — Opus r1 fixes (user-ordered 2026-10-26, PR #756 stays draft on main)**
-  - [x] Extend the guard test first (red): default/admin identity, pod-spec without s5cmd in main, strict key, allowlist probes, secret/sha validation.
-  - [ ] P1: explicit `RESTORE_KUBECONFIG` plus negative prod/preprod `can-i`; meta-collecting initContainer; pipefail/`ON_ERROR_STOP`/`gzip -t`/required sha compare.
-  - [ ] P2: case-insensitive host/IP/namespace allowlists, `^[a-z0-9-]+$` secrets, distinct defaults, ETag (+versions best-effort), receipts outside repo, `bash` runbook, make+CI wiring, README update, PR-body do-not-merge line.
-  - [ ] Test green, scope-checks, atomic commits, push, CI green; do not merge.
+- [x] **Lot 0 — Baseline and tests first**
+  - [x] Read Docker lock, repository rules, template, approved specification and Opus review; verify input hashes.
+  - [x] Create isolated worktree from exact base and pass mechanical `harness check branch`.
+  - [x] Run existing `make memory-l5-tooling` and `make memory-l5-test LOT=1` before changing frozen bytes.
+  - [x] Exercise real L0 catalog/schema validation and stale-hash refusals with the targeted regression.
+- [x] **Lot 1 — Exact frozen-byte correction**
+  - [x] Retain predecessor manifest and sidecar in history; preserve historical P2.
+  - [x] Copy approved catalog byte-for-byte; change exactly two L0 fields.
+  - [x] Derive P3 by exactly two inventory hash substitutions; emit matching sidecar.
+  - [x] Record base, seven inherited P2 deviations and detached signature slots explicitly pending.
+  - [x] Preserve both unchecked v9 R2-MEMORY/R7a-MEMORY obligations in repository evidence if v9 is outside Git.
+  - [x] Record P3 digest and freezing commit in the existing root BINDING.md under P3.
+- [ ] **Lot 2 — Validation and draft PR**
+  - [x] Run real L0 validator and existing tooling tests (`tools/memory-mcp-l5/tests/*.test.mjs`): 104 passed, including both stale-hash refusals.
+  - [x] Run Lot 1: platform `tests/memory/*.test.ts`, `request-identity.test.ts`, `wire-parity.test.ts`, `registry-dispatch.test.ts`; broker `tests/**/*.test.ts`: 183 passed before and after the correction.
+  - [x] Verify P3 retained inventory/archives using `make memory-l5-verify`: 30 files, 54 edges, exact P3 digest.
+  - [x] Record pending authority and the five retained checkpoint obligations in `spec/evidence/memory-mcp-l5/p3-validation.md`; metadata checks do not authorize owner signatures.
+  - [x] Resolve Opus r1 P1-1: record dated verbatim owner text authorization in all five requested files; preserve frozen bytes, pending detached signatures and fail-closed behavior.
+  - [x] Run `make scope-check` before each commit; inspect exact diff and hashes.
+  - [ ] Push, open draft PR to main using this plan as body, inspect CI and leave unmerged.
