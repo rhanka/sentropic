@@ -44,6 +44,7 @@
 - [x] K7 creation may share capture's append; the inherited zero-append guard applies to completion (revision 2), preserving the approved §5.2 distinction.
 - [x] `postgres-memory.spec.ts` enrolls memory PG tests in the existing E2 real-PG lane; standalone memory lane lacks PG and is not the durable receipt.
 - [x] Add adversarial same-unit duplicate event/proof tests; projection must refuse before publishing any canonical root.
+- [x] Query tests cover exact unsigned cursor ordering through max u64 and current grant revocation on retained continuation.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky waiver applies.
