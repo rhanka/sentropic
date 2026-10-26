@@ -26,6 +26,9 @@
   - `api/tests/unit/zod-validator.test.ts` (PR #752 validation response contract)
   - `api/tests/unit/google-drive-oauth.test.ts` (deterministic tamper test blocking CI)
   - `packages/auth-hono/**`
+  - `packages/auth-ui/package.json` (auth-hono 0.17 peer support)
+  - `packages/llm-gateway/package.json` (auth-hono 0.17 peer support)
+  - `packages/cluster-mesh/package.json` (auth-hono 0.17 peer support)
   - `packages/comments/**`
   - `packages/skills/**`
   - `packages/cluster-mesh/tests/packaging/**` (Zod resolution in the frozen consumer)
@@ -57,7 +60,7 @@
 ## Feedback Loop
 - [x] Opus r1 P1: reproduced default injection under Zod 4.6.7; reserve defaults for POST. Added autosave PUT/GET regressions for draft/enriching/completed and explicit status updates in api/tests/api/organizations.test.ts (endpoint CI gate). Only folders/initiatives also use partial schemas; neither contains defaults. No wrapped defaults found in other migrated consumers.
 - [x] Opus r1 P2-1: all 25 API router modules use one shared validator hook restoring the exact 400 envelope (success/error/issues/name, no message); JSON/query/success contract tests 3/3 PASS and API typecheck PASS via Compose. Zod 4 issue contents remain the native validation output.
-- [ ] Opus r1 P2-2: release auth-hono as 0.17.0 for the breaking Zod peer change; update dependent ranges, locks and packed fixtures.
+- [ ] Opus r1 P2-2: auth-hono 0.17.0 documents the breaking Zod peer change. auth-ui 0.7.7, llm-gateway 0.21.1 and cluster-mesh 0.22.2 widen their peer support; registry predecessors verified (0.7.6/0.21.0/0.22.1). Root/API locks refreshed; standalone API uses the local gateway candidate to avoid its published predecessor's incompatible peer. Three backend package builds PASS; packed fixture refresh follows.
 - [x] Resume 2026-10-25: merge origin/main without rebase; preserve the six WIP commits. Track item `01M5PMR6AG9QDZG9H3N57TB3FS`; owner decision verbatim: « Exception datée + migration ».
 - [x] BR01-EX2: allow the host scope-check lane for `test-sec-zod4` and an optional comparison base during the main merge. Reason: the default scope checker starts non-Compose containers, forbidden by the Docker packet. Impact: scope checking only; rollback: remove this environment and comparison-base parameter.
 - [x] Merge containment: all 342 pre-merge Track event IDs survive; no local Track writes. Main now contains the dated Zod exception and body-parser fix; requalify the resumed migration.
