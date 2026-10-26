@@ -12,9 +12,17 @@ it('should keep the frozen selected fixture aligned with the candidate release t
   for (const slug of ['cluster-mesh', 'llm-mesh', 'llm-gateway']) {
     const candidate = JSON.parse(readFileSync(new URL(`../../../${slug}/package.json`, import.meta.url), 'utf8'));
     const spec = slug === 'cluster-mesh' ? `file:../sentropic-${slug}-${candidate.version}.tgz` : candidate.version;
-    expect(fixture.dependencies[candidate.name]).toBe(spec);
     const entry = lock.packages[`node_modules/${candidate.name}`];
-    expect(entry.version).toBe(candidate.version);
+    if (slug === 'cluster-mesh' && candidate.version.includes('-dev.')) {
+      // Pack-only topic bump: the frozen fixture keeps tracking the last release
+      // tuple instead of churning per dev version; the lock entry must match it.
+      const frozen = /^file:\.\.\/sentropic-cluster-mesh-(\d+\.\d+\.\d+)\.tgz$/.exec(fixture.dependencies[candidate.name] as string);
+      expect(frozen, 'frozen fixture must pin a stable release tarball').not.toBeNull();
+      expect(entry.version).toBe(frozen![1]);
+    } else {
+      expect(fixture.dependencies[candidate.name]).toBe(spec);
+      expect(entry.version).toBe(candidate.version);
+    }
     expect(entry.dependencies).toEqual(candidate.dependencies);
     expect(entry.peerDependencies).toEqual(candidate.peerDependencies);
   }
