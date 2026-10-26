@@ -47,6 +47,7 @@
   - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
 
 ## Feedback Loop
+- [x] Main advanced during CI through #769 to 365e8b313f1c4c627c87db4f6761847a1e6a5ae7. Preserve the L1c plan in the BRANCH.md-only conflict; speech/cluster/mesh/lock bytes remain unchanged from 5258b9a6c. Locked speech rerun passes all 66 tests with ENV=test-stt-l1c; obtain CI on the new merge head.
 - [x] PR757-r2 post-merge default cluster suite: 142 files / 1,208 tests pass, including all 66 speech tests; 56 files / 129 environment-gated tests skipped. Ran through locked make/Compose with ENV=test-stt-l1c; exact-head CI follows the merge push while the PR remains draft.
 - [x] PR757-r2 integration: retarget draft to main and merge origin/main without rebasing; preserve cluster 0.23.0, speech exports and comments <0.24.0 with main's Decision support and selected fixture tuple. Scope checks compare the merge result to origin/main so inherited upstream changes are excluded; the adapter accepts the owner's test-stt-l1c ENV.
 - [x] PR757 verification adds native Node ESM speech imports against 0.19.2/0.22/0.27 without speech exports and 0.28 with missing/invalid/valid exports; strict types and lint now cover all four speech suites.
