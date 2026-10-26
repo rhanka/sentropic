@@ -30,8 +30,9 @@ an unknown outcome cannot authorize another execution. `complete` requires
 current disclosure authorization. This reference does not implement PostgreSQL
 ownership, the Engram engine, production enrollment or an OIDC service.
 
-`make memory-l5-reference` runs source-reference tests. `make memory-l5-test LOT=2
-ARTIFACT_MANIFEST=...` first requires a verified P3/E2/host manifest and sidecar.
+`make memory-l5-reference ENV=test-mem-l5-lot2` runs source-reference tests.
+`make memory-l5-test LOT=2 ARTIFACT_MANIFEST=... ENV=test-mem-l5-lot2`
+first requires a verified P3/E2/host manifest and sidecar.
 The committed `lot2-manifest.unverified.json` is a refusal fixture. Real installed
 E2/host crash/replay acceptance and the final E4 rerun remain separate gates.
 
