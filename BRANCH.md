@@ -94,6 +94,7 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
 - [x] PR765 r1 P1-1: journal positions, consumer progress and snapshot watermarks use decimal strings and BigInt arithmetic through max u64; legacy safe numeric inputs remain accepted.
 - [x] Frozen numeric replay corpus stays unchanged; its PG-only test adapter checks safe fixture positions while production delivers exact strings.
 - [x] PR765 r1 P1-1 regression: journal reads, poison/retry, checkpoint CAS, lag and retained snapshot completion/reopen tested at 2^53, 2^63 and max u64; unsafe numeric input refused.
+- [x] PR765 r1 P2: real memory K3/K5/K8 compound keys pass memory effects validation, updates/guards/stale refusals through signed-64 crossing and max u64; post-publish hook failure rolls back root, record and journal at crossing/max with reopen and retry.
 - [x] Commit-options fences stay safe-only (`validateCommitOptions` frozen); u64 epochs flow through `provisionFence`/`fence` direct paths.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; E2 qualification green; no merge.
 - [x] 007 consequence: the two specs pinning migration-chain ordinals move with the new version (module hypothetical 007→008, reattest last receipt 6→7); no behavior change.

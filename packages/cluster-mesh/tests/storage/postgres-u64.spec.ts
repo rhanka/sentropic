@@ -10,6 +10,8 @@ import { pgEnabled } from './pg-driver.js';
 import { grantFor } from './authority-corpus.js';
 import type { WriterFence } from '../../src/storage/contracts.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
+import { validateMemoryEffects } from '../../src/engram-memory/postgres.js';
+import { StorageInvalidCommandError } from '../../src/storage/errors.js';
 
 const U64_MAX = '18446744073709551615';
 const SIGNED_MAX = '9223372036854775807';
@@ -156,21 +158,52 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
       expect(await readEpoch(fixture)).toBe(U64_MAX);
     } finally { await fixture.close(); }
   });
-  it('applies u64 aggregate versions and guards exactly', async () => {
-    const fixture = await createPgFixture();
+  it.each(['memory-pending-control-v1', 'memory-state-v1', 'memory-admission-outcome-v1'])('applies K3/K5/K8 versions and guards through max u64 for %s', async (kind) => {
+    const fixture = await createPgFixture({ moduleId: 'engram-memory', validateEffects: async (unit) => validateMemoryEffects(unit) });
     try {
       const root = await fixture.open();
       const bound = await root.bindNew(grantFor({ operations: ['read', 'write'] }));
-      const value = { format: 'utf8', data: 'k3-state' } as const;
-      await bound.commitAtomic({ ...recordUnit(), updates: [{ key: 'k3', version: '9007199254740992' as unknown as number, value }] } as unknown as AtomicUnit);
-      await bound.commitAtomic({ ...recordUnit(), guards: [{ kind: 'aggregate-version', key: 'k3', version: '9007199254740992' as unknown as number }] } as unknown as AtomicUnit);
-      await expect(bound.commitAtomic({ ...recordUnit(), updates: [{ key: 'k3', version: '9007199254740992' as unknown as number, value }] } as unknown as AtomicUnit)).rejects.toMatchObject({ code: 'cas-conflict' });
-      await bound.commitAtomic({ ...recordUnit(), updates: [{ key: 'k3', version: '9007199254740993' as unknown as number, value }] } as unknown as AtomicUnit);
-      const seen = await bound.readAggregate('k3');
-      expect(seen?.version).toBe('9007199254740993');
+      const key = JSON.stringify(kind === 'memory-state-v1' ? [kind, 'candidate', 'u64'] : [kind, 'u64']);
+      const value = { format: 'utf8', data: JSON.stringify({ candidateId: 'u64', outcome: 'accepted', proof: { cursor: U64_MAX } }) } as const;
+      for (const version of ['9007199254740991', '9007199254740992', SIGNED_MAX, '9223372036854775808', '18446744073709551614', U64_MAX]) {
+        const update = { ...recordUnit(), records: [], updates: [{ key, version, value }] } as unknown as AtomicUnit;
+        await bound.commitAtomic(update);
+        await bound.commitAtomic({ ...recordUnit(), guards: [{ kind: 'aggregate-version', key, version }] } as unknown as AtomicUnit);
+        expect((await bound.readAggregate(key))?.version).toBe(version);
+        await expect(bound.commitAtomic(update)).rejects.toMatchObject({ code: 'cas-conflict' });
+        await expect(bound.commitAtomic({ ...recordUnit(), guards: [{ kind: 'aggregate-version', key, version: (BigInt(version) - 1n).toString() }] } as unknown as AtomicUnit)).rejects.toMatchObject({ code: 'cas-conflict' });
+      }
+      await expect(bound.commitAtomic({ ...recordUnit(), updates: [{ key, version: '18446744073709551616', value }] } as unknown as AtomicUnit)).rejects.toMatchObject({ code: 'invalid-command' });
       const reopened = await fixture.open();
       const rebound = await reopened.bindNew(grantFor({ operations: ['read', 'write'] }));
-      expect((await rebound.readAggregate('k3'))?.version).toBe('9007199254740993');
+      expect((await rebound.readAggregate(key))?.version).toBe(U64_MAX);
+      await rebound.commitAtomic({ ...recordUnit(), guards: [{ kind: 'aggregate-version', key, version: U64_MAX }] } as unknown as AtomicUnit);
+    } finally { await fixture.close(); }
+  });
+  it.each(['9223372036854775808', U64_MAX])('rolls back after root publication and journal insert at %s', async (next) => {
+    let fail = false;
+    let published = 0;
+    const fixture = await createPgFixture({ onCommitPossession: () => {
+      if (fail) { published += 1; throw new StorageInvalidCommandError('injected post-publish rollback'); }
+    } });
+    try {
+      const grant = grantFor({ operations: ['read', 'write'] });
+      const bound = await (await fixture.open()).bindNew(grant);
+      await bound.commitAtomic(recordUnit());
+      const previous = (BigInt(next) - 1n).toString();
+      await seedCounters(fixture, previous);
+      fail = true;
+      const unit = { ...recordUnit(), records: [{ ...recordUnit().records[0]!, key: 'rollback' }] };
+      await expect(bound.commitAtomic(unit)).rejects.toMatchObject({ code: 'invalid-command' });
+      expect(published).toBe(1);
+      expect(await readCounters(fixture)).toEqual({ version: previous, sequence: previous });
+      expect(await journalTail(fixture)).toBe('1');
+      const rebound = await (await fixture.open()).bind(grant);
+      expect(await rebound.readRecord('rollback')).toBeNull();
+      fail = false;
+      await rebound.commitAtomic(unit);
+      expect(await readCounters(fixture)).toEqual({ version: next, sequence: next });
+      expect((await rebound.journalRead(previous, 10)).events.map((event) => event.seq)).toEqual([next]);
     } finally { await fixture.close(); }
   });
 });
