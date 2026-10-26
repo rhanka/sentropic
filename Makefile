@@ -3678,11 +3678,12 @@ k8s-pgbackup-restore: ## Restore a dump from S3 into the ISOLATED restore PG/DB 
 	case "$$host_lc" in postgres|postgres.sentropic*|postgres.sentropic-preprod*) echo "ERROR: refusing live Postgres host (proposed: postgres-restore)" >&2; exit 1 ;; esac ; \
 	case "$$host_lc" in *[/:]*) echo "ERROR: RESTORE_PGHOST must be a bare hostname" >&2; exit 1 ;; esac ; \
 	if echo "$$host_lc" | grep -Eq '^[0-9.]+$$'; then echo "ERROR: refusing IP-literal Postgres host" >&2; exit 1; fi ; \
+	case "$$host_lc" in *0x*) echo "ERROR: refusing hex IP-literal Postgres host" >&2; exit 1 ;; esac ; \
 	if echo "$$host_lc" | grep -Eq '\.'; then \
 	  echo "$$host_lc" | grep -Eq '^[a-z0-9.-]+$$' || { echo "ERROR: RESTORE_PGHOST has illegal characters" >&2; exit 1; } ; \
 	  case "$$host_lc" in *."$(RESTORE_NAMESPACE)".svc|*."$(RESTORE_NAMESPACE)".svc.cluster.local) ;; *) echo "ERROR: FQDN restore host must end in .$(RESTORE_NAMESPACE).svc[.cluster.local]" >&2; exit 1 ;; esac ; \
 	else \
-	  echo "$$host_lc" | grep -Eq '^[a-z0-9-]+$$' || { echo "ERROR: RESTORE_PGHOST has illegal characters" >&2; exit 1; } ; \
+	  echo "$$host_lc" | grep -Eq '^[a-z][a-z0-9-]*$$' || { echo "ERROR: RESTORE_PGHOST has illegal characters" >&2; exit 1; } ; \
 	fi
 	@case '$(RESTORE_PGDB)' in app|postgres|template0|template1) echo "ERROR: refusing live database name (proposed: app_cm_restore)" >&2; exit 1 ;; esac
 	@echo '$(RESTORE_PGDB)' | grep -Eq '^[a-z_]+_restore$$' || { echo "ERROR: RESTORE_PGDB must be lowercase with a _restore suffix (proposed: app_cm_restore)" >&2; exit 1; }
@@ -3690,15 +3691,18 @@ k8s-pgbackup-restore: ## Restore a dump from S3 into the ISOLATED restore PG/DB 
 	@echo '$(RESTORE_PGUSER)' | grep -Eq '^[a-z0-9_-]+$$' || { echo "ERROR: RESTORE_PGUSER must be a valid role name" >&2; exit 1; }
 	@echo '$(RESTORE_READ_SECRET)' | grep -Eq '^[a-z0-9-]+$$' || { echo "ERROR: RESTORE_READ_SECRET must be a valid secret name" >&2; exit 1; }
 	@echo '$(RESTORE_PG_SECRET)' | grep -Eq '^[a-z0-9-]+$$' || { echo "ERROR: RESTORE_PG_SECRET must be a valid secret name" >&2; exit 1; }
-	@if [ -n '$(PG_BACKUP_SHA256)' ]; then echo '$(PG_BACKUP_SHA256)' | grep -Eq '^[0-9a-f]{64}$$' || { echo "ERROR: PG_BACKUP_SHA256 must be a 64-char hex digest" >&2; exit 1; }; fi
+	@test -n '$(PG_BACKUP_SHA256)' || { echo "ERROR: PG_BACKUP_SHA256 is required: pass the B03 object digest" >&2; exit 1; } ;
+	@echo '$(PG_BACKUP_SHA256)' | grep -Eq '^[0-9a-f]{64}$$' || { echo "ERROR: PG_BACKUP_SHA256 must be a 64-char hex digest" >&2; exit 1; } ;
 	@set -eu ; \
 	echo "==> Isolated restore of $(PG_BACKUP_KEY) into $(RESTORE_NAMESPACE) / $(RESTORE_PGHOST):$(RESTORE_PGDB)" ; \
 	KC="$(RESTORE_KUBECONFIG)" ; \
 	can_i="$$(KUBECONFIG="$$KC" kubectl -n "$(RESTORE_NAMESPACE)" auth can-i create pods --request-timeout=15s)" || { echo "ERROR: cannot check identity for the restore namespace (failing closed)" >&2; exit 1; } ; \
 	test "$$can_i" = "yes" || { echo "ERROR: this identity cannot create pods in the restore namespace" >&2; exit 1; } ; \
-	for scope in "$(K8S_NAMESPACE)" "$(K8S_PREPROD_NAMESPACE)"; do \
+	for scope in sentropic sentropic-preprod "$(K8S_NAMESPACE)" "$(K8S_PREPROD_NAMESPACE)"; do \
 	  for verb in "create pods" "get secrets"; do \
 	    ans="$$(KUBECONFIG="$$KC" kubectl -n "$$scope" auth can-i $$verb --request-timeout=15s)" || { echo "ERROR: cannot verify absence of live-cluster rights (failing closed)" >&2; exit 1; } ; \
+	    ans="$$(KUBECONFIG="$$KC" kubectl -n "$$scope" auth can-i $$verb --request-timeout=15s)" || { echo "ERROR: cannot verify absence of live-cluster rights (failing closed)" >&2; exit 1; } ; \
+	    test "$$ans" = "no" || { echo "ERROR: refusing admin-capable identity: it holds live-cluster rights" >&2; exit 1; } ; \
 	    test "$$ans" = "no" || { echo "ERROR: refusing admin-capable identity: it holds live-cluster rights" >&2; exit 1; } ; \
 	  done ; \
 	done ; \
@@ -3718,7 +3722,7 @@ k8s-pgbackup-restore: ## Restore a dump from S3 into the ISOLATED restore PG/DB 
 	    '"initContainers":[{"name":"download",' \
 	      '"image":"peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a",' \
 	      '"resources":{"requests":{"cpu":"20m","memory":"32Mi"},"limits":{"cpu":"200m","memory":"128Mi"}},' \
-	      '"command":["sh","-c","set -e; set -f; s5cmd --endpoint-url $$S3_ENDPOINT cp s3://$$S3_BUCKET/$$PG_BACKUP_KEY /work/d.sql.gz; test -s /work/d.sql.gz; s5cmd --endpoint-url $$S3_ENDPOINT ls --etag s3://$$S3_BUCKET/$$PG_BACKUP_KEY > /work/listing; test -s /work/listing; if s5cmd --endpoint-url $$S3_ENDPOINT ls --all-versions s3://$$S3_BUCKET/$$PG_BACKUP_KEY > /work/versions 2>/dev/null; then :; else echo VERSIONS_NOT_LISTED > /work/versions; fi"],' \
+	      '"command":["sh","-c","set -e; set -f; /s5cmd --endpoint-url $$S3_ENDPOINT cp s3://$$S3_BUCKET/$$PG_BACKUP_KEY /work/d.sql.gz; test -s /work/d.sql.gz; /s5cmd --endpoint-url $$S3_ENDPOINT ls --etag s3://$$S3_BUCKET/$$PG_BACKUP_KEY > /work/listing; test -s /work/listing; if /s5cmd --endpoint-url $$S3_ENDPOINT ls --all-versions s3://$$S3_BUCKET/$$PG_BACKUP_KEY > /work/versions 2>/dev/null; then :; else echo VERSIONS_NOT_LISTED > /work/versions; fi"],' \
 	      '"env":[' \
 	        '{"name":"AWS_ACCESS_KEY_ID","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_ACCESS_KEY"}}},' \
 	        '{"name":"AWS_SECRET_ACCESS_KEY","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_SECRET_KEY"}}},' \
@@ -3734,20 +3738,19 @@ k8s-pgbackup-restore: ## Restore a dump from S3 into the ISOLATED restore PG/DB 
 	  --command -- sh -c 'set -e; set -o pipefail; set -f; \
 	    test -s /work/d.sql.gz; test -s /work/listing; \
 	    stat -c%s /work/d.sql.gz > /work/bytes; sha256sum /work/d.sql.gz | cut -d" " -f1 > /work/sha256; \
-	    test -s /work/bytes; test -s /work/sha256; \
 	    bytes=$$(cat /work/bytes); sha=$$(cat /work/sha256); test -n "$$sha"; \
-	    if [ -n "$$PG_BACKUP_SHA256" ]; then test "$$PG_BACKUP_SHA256" = "$$sha" || { echo "ERROR: sha256 mismatch" >&2; exit 1; }; sha_checked=true; else sha_checked=false; fi; \
+	    test "$$PG_BACKUP_SHA256" = "$$sha" || { echo "ERROR: sha256 mismatch" >&2; exit 1; }; sha_checked=true; \
 	    gzip -t /work/d.sql.gz; \
 	    gunzip -c /work/d.sql.gz > /work/restore.sql; test -s /work/restore.sql; \
 	    psql -d postgres -c "DROP DATABASE IF EXISTS $$PGDATABASE;" -c "CREATE DATABASE $$PGDATABASE;"; \
 	    psql -v ON_ERROR_STOP=1 --single-transaction -d "$$PGDATABASE" -f /work/restore.sql; \
 	    orgs=$$(psql -d "$$PGDATABASE" -tA -c "SELECT count(*) FROM organizations;"); \
 	    set -- $$(cat /work/listing); etag="$$3"; test -n "$$etag"; \
-	    listing=$$(tr -d '\n' < /work/listing); \
-	    versions=$$(tr -d '\042\012' < /work/versions | head -c 512); test -n "$$versions"; \
+	    listing=$$(tr -d "\n" < /work/listing); \
+	    versions=$$(tr -d "\042\012" < /work/versions | head -c 512); test -n "$$versions"; \
 	    at=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
 	    echo MANIFEST-BEGIN; \
-    printf "{\\042manifest\\042:\\042b03-backup-object\\042,\\042key\\042:\\042%s\\042,\\042bucket\\042:\\042%s\\042,\\042bytes\\042:%s,\\042sha256\\042:\\042%s\\042,\\042sha256_checked\\042:%s,\\042etag\\042:\\042%s\\042,\\042versions\\042:\\042%s\\042,\\042listing\\042:\\042%s\\042,\\042restore_namespace\\042:\\042%s\\042,\\042pg_host\\042:\\042%s\\042,\\042pg_db\\042:\\042%s\\042,\\042organizations\\042:%s,\\042pod\\042:\\042%s\\042,\\042at\\042:\\042%s\\042}\\n" "$$PG_BACKUP_KEY" "$$SRC_BUCKET" "$$bytes" "$$sha" "$$sha_checked" "$$etag" "$$versions" "$$listing" "$$RESTORE_NAMESPACE" "$$PGHOST" "$$PGDATABASE" "$$orgs" "$$HOSTNAME" "$$at"; \
+    printf "{\\042manifest\\042:\\042b03-backup-object\\042,\\042key\\042:\\042%s\\042,\\042bucket\\042:\\042%s\\042,\\042bytes\\042:%s,\\042sha256\\042:\\042%s\\042,\\042sha256_checked\\042:true,\\042etag\\042:\\042%s\\042,\\042versions\\042:\\042%s\\042,\\042listing\\042:\\042%s\\042,\\042restore_namespace\\042:\\042%s\\042,\\042pg_host\\042:\\042%s\\042,\\042pg_db\\042:\\042%s\\042,\\042organizations\\042:%s,\\042pod\\042:\\042%s\\042,\\042at\\042:\\042%s\\042}\\n" "$$PG_BACKUP_KEY" "$$SRC_BUCKET" "$$bytes" "$$sha" "$$etag" "$$versions" "$$listing" "$$RESTORE_NAMESPACE" "$$PGHOST" "$$PGDATABASE" "$$orgs" "$$HOSTNAME" "$$at"; \
 	    echo MANIFEST-END; \
 	    if [ "$$KEEP_DB" != "true" ]; then psql -d postgres -c "DROP DATABASE $$PGDATABASE;"; fi; \
 	    echo \"restore verification OK\"'
