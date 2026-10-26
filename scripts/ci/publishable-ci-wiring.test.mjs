@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, publishFilter } from './publishable-manifests.mjs';
+import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, publishFilter, waitForVersion } from './publishable-manifests.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -265,7 +265,8 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     assert.match(run, /if ! curl -fsS --retry 3 --retry-all-errors -o \/dev\/null -H 'cache-control: no-cache' "https:\/\/registry\.npmjs\.org\/[^\n]*\?cachebust=\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}-\$\(date \+%s\)"; then echo "::error [^\n]*absent from the registry"; exit 1; fi\n\s*provenance_run="\$GITHUB_RUN_ID"\n/, `${slug}: cache-busted presence check, then run-scoped heal`);
     assert.ok(!run.includes('qualify-report.json'), 'no dead report existence test');
     const reportDir = slug === 'cluster-mesh' ? 'REPORT_DIR="\\$report_dir"' : `REPORT_DIR=tmp\\/ci-manifest-guard\\/qualify-${slug}`;
-    assert.match(run, new RegExp(`\\*\\) echo "::error [^\\n]*unexpected publication outcome"; exit 1 ;;\\n\\s*esac\\n\\s*make qualify-published-install PKG="\\$pkg" PEERS=\\S+ QUALIFY_MODE=post-publication ${reportDir} QUALIFY_PROVENANCE_SHA="\\$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="\\$provenance_run" ENV=test-ci-${slug}\\n?$`), `${slug}: exact qualification command`);
+    const wait = slug === 'cluster-mesh' ? ' QUALIFY_WAIT_ATTEMPTS=36' : '';
+    assert.match(run, new RegExp(`\\*\\) echo "::error [^\\n]*unexpected publication outcome"; exit 1 ;;\\n\\s*esac\\n\\s*make qualify-published-install PKG="\\$pkg" PEERS=\\S+ QUALIFY_MODE=post-publication ${reportDir}${wait} QUALIFY_PROVENANCE_SHA="\\$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="\\$provenance_run" ENV=test-ci-${slug}\\n?$`), `${slug}: exact qualification command`);
     if (slug === 'cluster-mesh') assert.match(run, /\n\s*report_dir=tmp\/ci-manifest-guard\/qualify-cluster-mesh\n/);
     assert.ok(run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'post-publication qualification imports every leaf with its optional peers');
     const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === `Qualify bootstrap-published ${slug}`);
@@ -469,6 +470,26 @@ test('steady-state OIDC post-publication qualification checks the SLSA provenanc
   assert.equal(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_RUN: '36222109704' }).status, 0);
   for (const bad of ['0', 'abc', '12;x']) {
     assert.match(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_RUN: bad }).out, /QUALIFY_PROVENANCE_RUN must be a numeric run id/, bad);
+  }
+});
+
+test('Cluster Mesh publication tolerates registry visibility beyond the old 18-read budget', async () => {
+  const step = jobs['publish-cluster-mesh'].steps.find((s) => s.name === 'Qualify published Cluster Mesh from the registry');
+  const attempts = Number(step.run.match(/QUALIFY_WAIT_ATTEMPTS=(\d+)/)?.[1]);
+  assert.equal(attempts, 36);
+  assert.match(makefile, /^QUALIFY_WAIT_SECONDS \?= 10$/m);
+  for (const visibleAt of [20, Infinity]) {
+    let reads = 0;
+    const registry = { lookup: async (name, version, opts) => {
+      assert.equal(name, '@sentropic/cluster-mesh');
+      assert.equal(version, '0.21.3');
+      assert.deepEqual(opts, { fresh: true });
+      reads += 1;
+      return { status: reads >= visibleAt ? 'present' : 'absent' };
+    } };
+    const found = await waitForVersion(registry, '@sentropic/cluster-mesh', '0.21.3', { attempts, delaySeconds: 0 });
+    assert.equal(found.status, visibleAt === Infinity ? 'absent' : 'present');
+    assert.equal(reads, Math.min(visibleAt, attempts));
   }
 });
 
