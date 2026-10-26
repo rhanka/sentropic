@@ -83,7 +83,7 @@ describe('submission, tool history and effect barrier', () => {
     await restarted.core.acceptRisk({ ...rest, requestId: 'accept-b', proof: 'typed-user-proof' });
     vi.mocked(restarted.authority.verifyMutation).mockRejectedValueOnce(new Error('fresh authorization required'));
     await expect(restarted.core.admitTool(next, mutation('c'))).rejects.toThrow('fresh authorization');
-    await expect(restarted.core.admitTool(next, mutation('a'))).rejects.toThrow('action');
+    await expect(restarted.core.admitTool(next, mutation('a'))).rejects.toThrow('Action identity');
     await restarted.core.admitTool(next, mutation('c'));
     expect(restarted.journal.state.effects['effect:a'].status).toBe('unknown-accepted');
     await expect(restarted.core.admitTool(old, mutation('late'))).rejects.toThrow('fenced');
@@ -106,7 +106,7 @@ describe('submission, tool history and effect barrier', () => {
       tenantId: scope.tenantId, method: 'speech' } as never);
     await expect(f.core.acceptRisk(req)).rejects.toThrow('typed');
     await f.core.resolveEffect('effect:a', 'completed-before-cancel', 'status query');
-    await expect(f.core.acceptRisk(req)).rejects.toThrow('stale');
+    await expect(f.core.acceptRisk(req)).rejects.toThrow('Stale barrier revision');
     expect(f.journal.state.effects['effect:b'].status).toBe('completion-pending');
     expect(Object.keys(f.journal.state.riskAcceptances)).toHaveLength(0);
   });
