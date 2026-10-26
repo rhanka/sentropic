@@ -808,7 +808,7 @@ publishable-manifests-inventory: ## Internal step of check-publishable-manifests
 		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs inventory --report-dir /reports'
 
 test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+	@$(if $(filter test-e2-int,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(if $(filter test-e2-int,$(ENV)),$(CM_RUN_IMAGE),$(MANIFEST_GUARD_IMAGE)) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/eradicated-packages.test.mjs)'
 
 .PHONY: check-eradicated-packages
@@ -897,7 +897,7 @@ engram-e2-qualify: ## Qualify an exact E2 topic head and retain per-lane receipt
 		sha256sum BRANCH.md Makefile .github/workflows/ci.yml packages/cluster-mesh/package.json package-lock.json; \
 		git ls-files '*package-lock.json' | xargs sha256sum; \
 		} > "$(E2_RECEIPTS)/context.txt"
-	@set -eu; for lane in mechanical build typecheck lint memory common grants postgres; do \
+	@set -eu; for lane in mechanical wiring build typecheck lint memory common grants postgres; do \
 		flock "$(E2_LOCK)" $(MAKE) engram-e2-lane E2_LANE="$$lane" ENV=$(ENV); \
 		done
 
@@ -908,6 +908,7 @@ engram-e2-lane: ## Run one lane under the caller's shared Docker lock
 		trap 'status=$$?; trap - EXIT; set +e; $(MAKE) down ENV=$(ENV) >> "$(E2_RECEIPTS)/$(E2_LANE).log" 2>&1; cleanup=$$?; printf "exit=%s\ncleanup=%s\n" "$$status" "$$cleanup" > "$(E2_RECEIPTS)/$(E2_LANE).status"; sha256sum "$(E2_RECEIPTS)/$(E2_LANE).log" "$(E2_RECEIPTS)/$(E2_LANE).status" "$(E2_RECEIPTS)/$(E2_LANE).inventory" > "$(E2_RECEIPTS)/$(E2_LANE).sha256"; test "$$status" -eq 0 && test "$$cleanup" -eq 0' EXIT; \
 		case "$(E2_LANE)" in \
 		mechanical) args=(engram-e2-mechanical); pattern=BRANCH.md ;; \
+		wiring) args=(test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs); pattern='scripts/ci/publishable-ci-wiring.test.mjs' ;; \
 		build|typecheck|lint) args=("$(E2_LANE)-cluster-mesh"); pattern='packages/cluster-mesh/src/*' ;; \
 		memory) args=(test-cluster-mesh SCOPE=tests/engram-memory); pattern='packages/cluster-mesh/tests/engram-memory/*.spec.ts' ;; \
 		common) args=(test-cluster-mesh SCOPE=tests/storage/common-rule); pattern='packages/cluster-mesh/tests/storage/common-rule/*.spec.ts' ;; \

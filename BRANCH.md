@@ -55,6 +55,7 @@
   - [x] Add exact E2 and preserve Immo integration PR bases; compare bump gate to actual PR head/base merge-base.
   - [x] Wire existing build/typecheck/lint/scoped memory/storage tests and real PG through isolated Compose; retain commands, exit codes, inventory, logs and hashes.
   - [x] Keep every existing publish job predicate unchanged; no development version publication.
+  - [x] Include existing `scripts/ci/publishable-ci-wiring.test.mjs` assertions through the same disposable Compose runner.
   - [ ] Run `make scope-check ENV=test-e2-int` before each atomic commit below 150 lines.
 - [ ] **Lot 2 — PRE-E0 record and final validation**
   - [ ] Write root `.tmp/engram-e2-host-tuple/pre-e0-entry.md`, with registry, ancestry, repair/receiving status, Q1 conditions and Comments route.
