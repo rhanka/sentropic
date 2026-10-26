@@ -1,0 +1,34 @@
+{
+  "name": "@sentropic/live-speech",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local speech-to-text registry adapter (r3 L3): isolated faster-whisper worker, rolling windows/VAD, independently pinned tiny/base profiles. UNPUBLISHED — npm publication deferred to Lp0/Lp1.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/live-speech"
+  },
+  "main": "./dist/node/index.js",
+  "types": "./dist/node/index.d.ts",
+  "exports": {
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "5.4.5"
+  }
+}
