@@ -1,69 +1,61 @@
-# Feature: feat(memory-l5): Lot 2 durable reference
+# Feature: feat(memory-l5): Lot 3 transport and context integration
 
 ## Objective
-- [x] Implement durable workflow reference and fail-closed P3/E2 receiving harness; retain missing host acceptance explicitly.
+- [ ] Integrate explicit memory profiles and verified context through existing transport/mesh; preserve P3.
 ## Scope / Guardrails
-- [x] Worktree tmp/worktrees/mem-l5-lot2; branch feat/memory-l5-lot2; rebased onto origin/main 2ea238790 on 2026-10-29 per COMMON-RULES.
-- [x] Preserve catalog, l0-freeze and P3 bytes; shared Docker lock; ENV=test-memory-l5 last.
-- [x] Disposable official containers only; ports 9625/5825/1725; no application services required.
+- [x] Worktree tmp/worktrees/mem-l5-lot3; branch feat/memory-l5-lot3; base origin/feat/memory-l5-lot2; merge only; merge main after #771 merges.
+- [x] Approved schedule supersedes R2/R7a/R3 dependency; retain 18 P09 suites and current remote-binding refusal.
+- [x] P3 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 immutable; frozen catalog/contracts/fixtures untouched.
+- [x] Shared Docker lock; official disposable containers; no Python; ENV=test-mem-l5-lot3 last; ports 9630/5830/1730; no application services.
+- [x] Tests first; selective staging; make commit only; under 150 lines per commit; draft PR to main; no merge.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/mcp-broker/src/memory-reference/**`
-  - `packages/mcp-broker/tests/memory/**`
-  - `packages/mcp-broker/package.json`
-  - `packages/mcp-broker/README.md`
+  - `packages/mcp-platform/src/transport/bridge.ts`
+  - `packages/mcp-platform/src/transport/dispatch.ts`
+  - `packages/mcp-platform/src/transport/result-codec.ts`
+  - `packages/mcp-platform/src/memory/wire-profile.ts`
+  - `packages/mcp-platform/src/memory/schema-profile.ts`
+  - `packages/mcp-platform/tests/memory/schema-profile.test.ts`
+  - `packages/mcp-platform/tests/memory/wire-profile.test.ts`
+  - `packages/mcp-platform/tests/request-identity.test.ts`
+  - `packages/mcp-platform/tests/registry-dispatch.test.ts`
+  - `packages/mcp-platform/package.json`
+  - `packages/cluster-mesh/src/compose/mcp.ts`
+  - `packages/cluster-mesh/tests/memory-context.spec.ts`
+  - `packages/cluster-mesh/tests/mcp-composition.spec.ts`
+  - `packages/cluster-mesh/tests/verified-invocation-context.spec.ts`
+  - `packages/cluster-mesh/package.json`
   - `package-lock.json`
-  - `tools/memory-mcp-l5/lot2*.mjs`
-  - `tools/memory-mcp-l5/verifier.mjs`
-  - `tools/memory-mcp-l5/import-graph.mjs`
-  - `tools/memory-mcp-l5/policies/**`
-  - `tools/memory-mcp-l5/tests/lot2*`
-  - `tools/memory-mcp-l5/tests/receipt-contract.test.mjs`
-  - `spec/evidence/memory-mcp-l5/lot2/**`
+  - `tools/memory-mcp-l5/lot3*.mjs`
+  - `tools/memory-mcp-l5/tests/lot3*.test.mjs`
+  - `spec/evidence/memory-mcp-l5/lot3/**`
   - `Makefile`
   - `.github/workflows/ci.yml`
-  - `deploy/k8s/README.md`
-  - `docs/runbooks/app-cm-baseline-restore.md`
-  - `scripts/test-pgbackup-restore-isolation.sh`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
+  - `tools/memory-mcp-l5/artifacts/**`
+  - `tools/memory-mcp-l5/fixtures/**`
+  - `tools/memory-mcp-l5/proof-catalog-v1.json`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
-  - [x] L5L2-EX1: bounded Makefile Lot 2 delegation/manifest forwarding; local/CI parity; rollback added wiring only.
-  - [x] L5L2-EX2: update only broker workspace version in package-lock.json; retain frozen P3 lock snapshot; rollback this scalar.
-  - [x] L5L2-EX3: CI uses explicit source/reference mode with historical P3 validation; strict qualification remains unchanged. Required after the new broker version; rollback only this CI mode/wiring.
-  - [x] L5L2-EX4: inherit origin/main ab981b16d (#756) unchanged to resolve the CI merge conflict; listed restore paths are inheritance-only. Preserve this branch's Lot 2 plan. Upstream committed lines are outside the authored atomic budget; rollback the merge only.
+  - [x] L5L3-EX1: bounded root Makefile/CI source/regression wiring; preserve frozen producing recipes; rollback Lot 3 delegation only.
+  - [x] L5L3-EX2: package version/lock scalars above published releases; retain frozen snapshots; successor pre-candidate/E4 required before installed acceptance.
 ## Feedback Loop
-- [ ] gr-conductor: real P3-bound lot2-manifest/sidecar, E2/backend/neutral/profile/lock closure and G1–G4/C9 receipts pending; fixture is unverified.
-- [ ] Owner/Engram: authoritative enrollment/assurance mapping and current L0 role dispositions pending; no deployed identity acceptance.
+- [ ] gr-conductor: verified P3-bound lot2-manifest/sidecar, E2/backend/neutral/profile/lock closure and G1–G4/C9 receipts required; stop dependent qualification.
+- [ ] Lot 4: S1 normalization, compatible frozen successor/E4, installed six-suite qualification and owner UAT remain owning-lot gates.
 ## AI Flaky tests
-- [x] Deterministic storage/security tests; no waiver.
+- [x] Deterministic transport/security tests; no waiver or timeout increase.
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; implementation by author; independent review per harness review skill.
+- [x] Mono-branch author implementation; independent review per harness review skill.
 ## UAT Management (in orchestration context)
-- [x] No UI change; reference/receiving harness only; final E4 and owner UAT remain later lots.
+- [x] No UI/API change; SDK transport tests; final installed E4/owner UAT remain later lots.
 ## Plan / Todo (lot-based)
-- [x] Lot 0: read lock/schedule/spec/template; verify mechanical branch and immutable baseline.
-- [x] Lot 1: six reference test files, signed-token corpus and manifest refusal tests specified; first store run fails on missing reference module.
-  - [x] `packages/mcp-broker/tests/memory/sqlite-workflow-store.test.ts`
-  - [x] `packages/mcp-broker/tests/memory/sqlite-workflow-crash.test.ts` and `fixtures/workflow-child.mjs`
-  - [x] `packages/mcp-broker/tests/memory/mutation-recovery.test.ts`
-  - [x] `packages/mcp-broker/tests/memory/policy-version-persistence.test.ts`
-  - [x] `packages/mcp-broker/tests/memory/confirmation-continuation.test.ts`
-  - [x] `packages/mcp-broker/tests/memory/oidc-assurance.test.ts`
-  - [x] `tools/memory-mcp-l5/tests/lot2-{assurance,manifest,retained-inputs,envelope,canonical-report}.test.mjs`
-- [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
-- [x] Lot 3: reference 66/tooling 112 passed; full source gate passed; reference archive and complete hashed reports retained; absent/unverified manifest refusals passed; Node 24.21.0/SQLite 3.53.4 WAL/FULL, no Python executable.
-  - [x] Namespace-only recovery lookup regression reproduced and fixed; reference archive and reports refreshed; import/export graph passed with 55 files/114 edges.
-  - [x] Canonical report guard rejects source-only/cross-tuple results; all five real E2 cases are mandatory before Lot 2 can close.
-  - [x] Malformed host configuration/driver digests refuse; receiving-harness suite passed 112 tests; retained report refreshed.
-- [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
-  - [x] Merge main ab981b16d (#756); preserve this Lot 2 plan, identical Track blobs and frozen P3 bytes; no authored restore-tooling changes. P3 #769 remains open.
-  - [x] Rerun the full source gate after main integration: tooling 112 and Lot 1/platform/broker 193 passed; no qualification acceptance.
-  - [ ] Final-head CI and independent peer review remain pending; installed acceptance is blocked on the real host tuple.
-  - [x] Resume #771 under the owner harness completion request; no pr771 review files exist in the shared review directory. The broker is private, so the publication version gate is inapplicable; no public package source changed.
-  - [x] Post-rebase source gate passed: memory-l5-gate LOT=reference with retained P3, typechecks, 55-file/114-edge graph and 112 tooling tests; ENV=test-memory-l5 last, shared flock.
+- [x] Lot 0: read lock/rules/spec/schedule/template; mechanically verify isolated branch and P3.
+- [ ] Lot 1: failing wire/schema tests; profile admission, full-envelope codec, protocol refusal.
+- [ ] Lot 2: mesh context/guards/cancellation/compiled dispatch; concurrent subject/tenant/workspace tests.
+- [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
+- [ ] Lot 4: review, push draft PR to main, final-head CI green; list manifest-blocked proofs and Lot 4 estimate.
