@@ -56,7 +56,7 @@ async function durable() {
     (SELECT count(*)::int FROM artifacts.releases) AS releases,
     (SELECT count(*)::int FROM artifacts.operation_receipts) AS receipts,
     (SELECT count(*)::int FROM artifacts.artifact_current) AS pointers,
-    (SELECT count(*)::int FROM artifacts.blob_ref_holders h JOIN artifacts.releases r ON h.holder = r.id::text) AS refs`);
+    (SELECT count(*)::int FROM artifacts.blob_ref_holders) AS refs`);
   return result.rows[0];
 }
 
@@ -92,6 +92,7 @@ describe('app artifact host publication', () => {
     expect((await bound.http({ method: 'POST', path: '/ensure', body: { ...ensureArgs(), actorId: 'bob' } })).status).toBe(400);
     expect(await durable()).toEqual(before);
     expect(bound.profile.selectedCapabilities).toEqual(['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get']);
+    expect(bound.profile.profileDigest).toBe('0de19f966eacb5b63142b525611a6210a0d4aaeefbdaad92dfb3b6227575b6ef');
   });
 
   it('should recheck current membership on a previously bound request and guarded replay', async () => {
@@ -238,5 +239,71 @@ describe('app artifact host publication', () => {
     expect(await durable()).toEqual(before);
     expect((await pool.query(`SELECT value::jsonb->>'usedBytes' AS used FROM control.artifact_host_kv
       WHERE storage_scope_id = $1 AND key = 'quota/v1'`, [bound.invocation.storageScopeId])).rows).toEqual([{ used: '0' }]);
+  });
+
+  it('should preserve read access after a role downgrade while denying writes and successful write replays', async () => {
+    const artifactId = await ensured();
+    const bound = await request();
+    await pool.query(`UPDATE workspace_memberships SET role = 'viewer' WHERE workspace_id = 'workspace-a' AND user_id = 'alice'`);
+    const before = await durable();
+    expect((await bound.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
+    expect((await bound.http({ method: 'GET', path: `/meta/${artifactId}`, body: undefined })).status).toBe(200);
+    expect((await bound.mcp({ tool: 'artifacts_ensure', args: ensureArgs() })).status).toBe(403);
+    expect((await bound.mcp({ tool: 'artifacts_publish', args: publishArgs(artifactId) })).status).toBe(403);
+    expect(await durable()).toEqual(before);
+  });
+
+  it('should deny disabled accounts and a substituted invocation without durable success', async () => {
+    const bound = await request();
+    const before = await durable();
+    expect((await bound.app.handle({ method: 'POST', path: '/ensure', body: ensureArgs(), actorId: 'bob' },
+      { ...bound.invocation, actorId: 'bob' })).status).toBe(403);
+    await expect(host.bind({ ...identity, clientId: 'forged-client' }, 'workspace-a')).rejects.toThrow();
+    await pool.query(`UPDATE users SET disabled_at = clock_timestamp() WHERE id = 'alice'`);
+    expect((await bound.mcp({ tool: 'artifacts_ensure', args: ensureArgs() })).status).toBe(403);
+    expect(await durable()).toEqual(before);
+  });
+
+  it('should enforce the frozen file count and decoded byte limits without publication effects', async () => {
+    const artifactId = await ensured();
+    const bound = await request();
+    const before = await durable();
+    const put = vi.spyOn(host.blobs, 'putBlob');
+    for (const files of [
+      Array.from({ length: 33 }, (_, index) => ({ path: `${index}.html`, mimeType: 'text/html', text: 'a' })),
+      [{ path: 'index.html', mimeType: 'text/html', text: 'a'.repeat(262145) }],
+      [{ path: 'a.html', mimeType: 'text/html', text: 'a'.repeat(131073) },
+        { path: 'b.html', mimeType: 'text/html', text: 'b'.repeat(131073) }],
+    ]) {
+      expect((await bound.mcp({ tool: 'artifacts_publish', args: { ...publishArgs(artifactId), files } })).status).toBe(400);
+    }
+    expect(put).not.toHaveBeenCalled();
+    expect(await durable()).toEqual(before);
+  });
+
+  it('should intersect current credential write permissions with workspace permissions', async () => {
+    const artifactId = await ensured();
+    const readOnly = createArtifactHost({ pool, blobs: host.blobs, quotaBytes: 262144,
+      async currentIdentity(client, claims) {
+        const result = await client.query(`SELECT id FROM user_sessions WHERE id = $1 AND user_id = $2
+          AND expires_at > clock_timestamp() FOR SHARE`, [claims.credentialId, claims.subject]);
+        return { readable: result.rowCount === 1, writable: false };
+      } });
+    const bound = await readOnly.bind(identity, 'workspace-a');
+    const before = await durable();
+    expect((await bound.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
+    expect((await bound.http({ method: 'POST', path: '/publish', body: publishArgs(artifactId) })).status).toBe(403);
+    expect((await bound.mcp({ tool: 'artifacts_ensure', args: ensureArgs() })).status).toBe(403);
+    expect(await durable()).toEqual(before);
+  });
+
+  it('should hide foreign artifact metadata and deny cross-scope publication for a valid second membership', async () => {
+    const artifactId = await ensured();
+    const other = await host.bind({ ...identity, tenantId: 'tenant-b' }, 'workspace-b');
+    const before = await durable();
+    expect((await other.mcp({ tool: 'artifacts_get', args: { artifactId } })).status).toBe(404);
+    expect((await other.mcp({ tool: 'artifacts_publish', args: publishArgs(artifactId) })).status).toBe(404);
+    expect((await other.mcp({ tool: 'artifacts_list', args: {} })).body).toEqual({ total: 0, artifacts: [] });
+    expect(await durable()).toEqual(before);
   });
 });
