@@ -32,6 +32,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] Admission review adds tests requiring an explicit non-dispatching duplicate receipt, single-use approvals and safe record keys; callers must never infer dispatch permission from an absent result.
 - [x] BR757-EX2: register the new dependency-free workspace in root lock metadata so existing npm-ci consumers see the package. Impact limited to its workspace/link entries; rollback removes those entries with the package.
 - [x] BR757-EX1: new package has no build/test entrypoint. Add package-local Make recipes using existing qualification Compose service, one root include and CI job. Impact: deterministic isolated package gate; rollback: remove include/job and package recipes. No new containers or ports outside ENV.
 
