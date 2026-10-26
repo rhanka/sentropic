@@ -1,5 +1,32 @@
 # CI/CD capacity — measured inventory (BR-76)
 
+## BR-77 inventory — 2026-10-26
+
+Base: `440599d04e91bb33e3874588f067c6a90bffd1b3`; BR-76 #705
+merged at `bc4a4a80a732b629da75027a9eb07c7c77cf522a`.
+API receipts collected by the branch author using the existing authenticated
+GitHub CLI (no credentials retained):
+
+| Route | Observed result | Interpretation |
+| --- | --- | --- |
+| `GET /user` | login `rhanka`, `plan: null` | Account quota unavailable. |
+| `GET /repos/rhanka/sentropic/actions/runners` | `total_count: 0`, `runners: []` | No self-hosted reservation to allocate. |
+| `GET /users/rhanka/settings/billing/usage` | HTTP 404; endpoint requires `user` scope | Billed minutes, registry and transfer costs remain to-measure. |
+| `GET /repos/rhanka/sentropic/branches/main` | base SHA above | #760 is still open at inventory time; no unmerged changes are imported. |
+
+The finite policy uses the BR-76 **observed lower bound of 17 slots**, not
+the unverified 24-worker hypothesis or an account quota. Two slots are the
+declared release allowance; the per-run DAG must demand at most 15 slots.
+This is a repository dispatch bound, not a provisioned runner reservation:
+other runs/repos can still consume shared hosted capacity. Concurrent-run
+admission must compare the combined measured peak against that lower bound;
+it cannot be accepted from this static per-run check alone.
+
+`make ci-capacity-policy` computes the maximum weighted antichain of the
+actual workflow dependencies (matrix weights respect `max-parallel`). It
+fails above 15 slots. The expected manifest also retains those dependencies
+so queue waits can be summed along identified observed critical paths.
+
 Status: measurement record with reconciled receipts (metrics +
 expected-results + docs only, per owner split decision 2026-10-19);
 account quota, registry cost, contention budgets, and the rollback drill
