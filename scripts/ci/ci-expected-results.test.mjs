@@ -13,6 +13,41 @@ const ran = (job, conclusion) => ({ job, conclusion });
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
 
+test('should bound shared queued slots without inventing validator dependencies', () => {
+  const concurrency = { group: 'capacity-0', queue: 'max', 'cancel-in-progress': false };
+  assert.equal(capacityDemand({ jobs: { a: { concurrency }, b: { concurrency } } }), 1);
+  assert.equal(capacityDemand({ jobs: { a: { concurrency }, b: {} } }), 2);
+  assert.throws(() => capacityDemand({ jobs: { a: { concurrency: { group: 'capacity-0' } } } }), /queue/);
+  const validators = Object.entries(workflow.jobs).filter(([name]) =>
+    /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
+    || name === 'memory-l5-qualification');
+  assert.equal(validators.length, 23);
+  for (const [name, job] of validators) {
+    assert.deepEqual(job.needs, ['changes'], name);
+    assert.equal(job.concurrency.queue, 'max', name);
+    assert.equal(job.concurrency['cancel-in-progress'], false, name);
+  }
+  assert.equal(new Set(validators.map(([, job]) => job.concurrency.group)).size, 6);
+  assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 15);
+  assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 5);
+});
+
+test('should allow unrelated npm releases when another package fails', () => {
+  const train = new Set(['publish-llm-mesh', 'publish-llm-gateway', 'publish-cluster-mesh']);
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (!name.startsWith('publish-') || name.endsWith('-image') || train.has(name)) continue;
+    const own = name.replace('publish-', 'validate-');
+    const required = name === 'publish-mcp-auth' ? ['changes', own, 'publish-oauth-verify'] : ['changes', own];
+    assert.deepEqual(job.needs, required, name);
+    assert.ok(!job.if.includes('failure()'), name);
+    const lookup = key => key === 'github.ref' ? 'refs/heads/main'
+      : key.startsWith('needs.changes.outputs.') ? 'true'
+      : key === 'needs.publish-oauth-verify.result' ? 'skipped' : 'success';
+    assert.equal(evaluateSelection(job.if, lookup), true, name);
+    assert.equal(evaluateSelection(job.if, key => key === `needs.${own}.result` ? 'failure' : lookup(key)), false, name);
+  }
+});
+
 test('should bound simultaneous execution slots across dependency joins and matrix caps', () => {
   assert.equal(capacityDemand({ jobs: { a: {}, b: { needs: ['a'] }, c: {} } }), 2);
   const matrix = { strategy: { 'max-parallel': 2, matrix: { include: [{ x: 1 }, { x: 2 }, { x: 3 }] } } };
