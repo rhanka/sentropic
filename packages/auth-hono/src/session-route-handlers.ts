@@ -21,7 +21,7 @@ export const createAuthSessionRouteHandlers = (
     const parsed = await parseJson(c, refreshSessionSchema);
 
     if (!parsed.ok) {
-      return errorResponse(c, 400, 'invalid_input', 'Invalid request data.', parsed.error.errors);
+      return errorResponse(c, 400, 'invalid_input', 'Invalid request data.', parsed.error.issues);
     }
 
     const tokens = await options.service.refreshSession(parsed.value.refreshToken);

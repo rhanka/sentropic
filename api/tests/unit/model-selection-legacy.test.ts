@@ -112,12 +112,31 @@ describe('model selection legacy cutovers', () => {
     expect(
       normalizeLegacyModelSelection({
         providerId: 'openai',
+        modelId: 'gpt-5.6-sol',
+      })
+    ).toEqual({
+      providerId: 'openai',
+      modelId: 'gpt-5.6-sol',
+      migrated: false,
+    });
+  });
+
+  it('migrates the retired OpenAI nano id to its registered successor', () => {
+    expect(findLegacyModelCutoverRule('gpt-4.1-nano')).toEqual({
+      providerId: 'openai',
+      fromModelId: 'gpt-4.1-nano',
+      toModelId: 'gpt-5.4-nano',
+    });
+
+    expect(
+      normalizeLegacyModelSelection({
+        providerId: 'openai',
         modelId: 'gpt-4.1-nano',
       })
     ).toEqual({
       providerId: 'openai',
-      modelId: 'gpt-4.1-nano',
-      migrated: false,
+      modelId: 'gpt-5.4-nano',
+      migrated: true,
     });
   });
 
