@@ -1,5 +1,18 @@
 // K1 shared contract primitives (L3a v4.1 frozen §2.3, §4.1). Data-pure: no I/O,
 // no clock, no crypto. All validators are total functions.
+// E1 additive: exact-u64 consumed paths are opt-in; legacy decimal
+// counters stay safe-integer only and keep their frozen behavior.
+
+import {
+  compareU64Counter as compareU64,
+  isPositiveU64Counter,
+  isU64Counter,
+  maxU64Counter,
+  nextU64Counter,
+  parsePositiveU64Counter,
+  parseU64Counter,
+  type U64Counter,
+} from './u64.js';
 
 export interface ValidationResult {
   readonly ok: boolean;
@@ -114,6 +127,31 @@ export const incrementDecimalCounter = (value: DecimalCounter): DecimalCounter |
   if (parsed === null || !Number.isSafeInteger(parsed + 1)) return null;
   return String(parsed + 1);
 };
+
+// E1 opt-in consumed counter/version: exact u64 transport for durable
+// counters and versions that must cross 2^53/2^63. Legacy DecimalCounter
+// behavior above stays frozen and safe-integer only.
+export type ConsumedCounter = U64Counter;
+export type ConsumedVersion = U64Counter;
+
+export const MAX_CONSUMED_COUNTER: ConsumedCounter = '18446744073709551615';
+
+export const isConsumedCounter = (value: unknown): value is ConsumedCounter => isU64Counter(value);
+
+export const parseConsumedCounter = (value: unknown): bigint | null => parseU64Counter(value);
+
+export const isConsumedVersion = (value: unknown): value is ConsumedVersion => isU64Counter(value);
+
+export const parseConsumedVersion = (value: unknown): bigint | null => parseU64Counter(value);
+
+export const compareConsumedCounter = (left: string, right: string): -1 | 0 | 1 => compareU64(left, right);
+
+export const nextConsumedCounter = (value: string): ConsumedCounter | undefined => nextU64Counter(value);
+
+export const maxConsumedCounter = (): ConsumedCounter => maxU64Counter();
+
+export { compareU64Counter, isPositiveU64Counter, isU64Counter, maxU64Counter, nextU64Counter, parsePositiveU64Counter, parseU64Counter };
+export type { U64Counter };
 
 export const isSafeInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value);
