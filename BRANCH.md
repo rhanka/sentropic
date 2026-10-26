@@ -85,7 +85,7 @@
   - [ ] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
   - [ ] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.
 - [ ] **L1c-d — Documentation and validation**
-  - [ ] README/CHANGELOG: configuration example, selectors, placements, fallback/rebind/consent boundaries and unavailable reasons.
+  - [x] README/CHANGELOG: configuration example, selectors, placements, fallback/rebind/consent boundaries and unavailable reasons.
   - [ ] Scoped speech tests; full cluster tests; cold typecheck; changed-source lint; build/public export checks.
   - [ ] `make scope-check` before each commit; staged whitespace and under-150-line checks; no attribution trailers.
   - [ ] Locked ENV cleanup between Docker steps; no services or published ports outside ENV.
