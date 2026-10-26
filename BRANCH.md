@@ -61,7 +61,7 @@
 - [ ] **Lot 2 — Implementation**
   - [ ] Memory-only SQL assets and shared schema-role loader hooks.
   - [x] Author transactional projection and backend-backed validation; reuse #709 transition functions; qualification pending.
-  - [ ] Root-bound memory queries and scope-chain-index enumeration.
+  - [ ] Root-bound memory queries and scope-chain-index enumeration (captured membership selectors authored).
 - [ ] **Lot 3 — Final validation and draft handoff**
   - [ ] Existing PG module-migration, migration, registration, query and policy regressions pass.
   - [ ] Build, typecheck, lint, memory/common/grants and real PG qualification lanes pass except the two owner-listed failures.
