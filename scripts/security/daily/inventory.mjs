@@ -20,7 +20,12 @@ export function failClosedReport(raw) {
     throw new Error('malformed report');
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || parsed.error) throw new Error('invalid or errored report');
-  const trivy = parsed.SchemaVersion === 2 && typeof parsed.ArtifactName === 'string' && parsed.ArtifactName.length > 0 && Array.isArray(parsed.Results);
+  const trivy = parsed.SchemaVersion === 2 && typeof parsed.ArtifactName === 'string' && parsed.ArtifactName.length > 0 && Array.isArray(parsed.Results) &&
+    parsed.Results.every((result) => result && typeof result.Target === 'string' && result.Target.length && !result.error &&
+      ['Vulnerabilities', 'Misconfigurations'].every((kind) => result[kind] === undefined || (Array.isArray(result[kind]) &&
+        result[kind].every((finding) => finding && typeof finding[kind === 'Vulnerabilities' ? 'VulnerabilityID' : 'ID'] === 'string' &&
+          ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(finding.Severity) &&
+          (kind !== 'Vulnerabilities' || (typeof finding.PkgName === 'string' && typeof finding.InstalledVersion === 'string'))))));
   const npm = parsed.auditReportVersion === 2 && parsed.vulnerabilities && !Array.isArray(parsed.vulnerabilities) &&
     typeof parsed.vulnerabilities === 'object' && parsed.metadata?.vulnerabilities &&
     ['info', 'low', 'moderate', 'high', 'critical', 'total'].every((key) => Number.isInteger(parsed.metadata.vulnerabilities[key]) && parsed.metadata.vulnerabilities[key] >= 0);

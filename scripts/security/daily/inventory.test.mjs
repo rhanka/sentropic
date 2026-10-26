@@ -75,9 +75,13 @@ test('repository inventory finds derived-pin consumers including L5 manifest', (
 });
 
 test('should reject unrelated or errored reports instead of declaring zero findings', () => {
-  for (const raw of ['{}', '[]', 'true', '{"error":{"code":"EAI_AGAIN"}}', '{"SchemaVersion":2,"Results":null}']) {
+  for (const raw of ['{}', '[]', 'true', '{"error":{"code":"EAI_AGAIN"}}', '{"SchemaVersion":2,"Results":null}',
+    '{"SchemaVersion":2,"ArtifactName":"x","Results":[null]}',
+    '{"SchemaVersion":2,"ArtifactName":"x","Results":[{}]}',
+    '{"SchemaVersion":2,"ArtifactName":"x","Results":[{"Target":"x","Vulnerabilities":[{}]}]}']) {
     assert.throws(() => failClosedReport(raw), /report/);
   }
+  assert.equal(failClosedReport({ SchemaVersion: 2, ArtifactName: 'x', Results: [{ Target: 'package-lock.json', Vulnerabilities: [] }] }).Results.length, 1);
 });
 
 test('should join register metadata only on the exact affected identity', () => {
