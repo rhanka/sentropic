@@ -104,3 +104,81 @@ async function transaction<T>(pool: Pool, namespace: string,
     throw cause;
   } finally { client.release(destroy); }
 }
+
+type Run = <T>(work: (client: PoolClient, generation: string) => Promise<T>) => Promise<T>;
+function recordStores(run: Run, namespace: string): Pick<PostgresActivationStore, 'tickets' | 'flows'> {
+  const parameters = (id: string, generation: string) => [namespace, text(id), generation];
+  async function lockTicket(client: PoolClient, id: string, generation: string) {
+    // Same lock order as consume: browser flow, then ticket (including cascades).
+    await client.query('SELECT flow_id FROM artifact_host.browser_flows WHERE namespace=$1 AND ticket_id=$2 FOR UPDATE', [namespace, id]);
+    await client.query('SELECT ticket_id FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2 AND generation=$3 FOR UPDATE',
+      parameters(id, generation));
+  }
+  const tickets: TicketStore = {
+    async put(value) {
+      const payload: TicketRecord = { ...binding(value), ticketId: text(value.ticketId), expiresAt: deadline(value.expiresAt) };
+      await run(async (client, generation) => {
+        await client.query('INSERT INTO artifact_host.activation_tickets(namespace,generation,payload) VALUES ($1,$2,$3)',
+          [namespace, generation, JSON.stringify(payload)]);
+      });
+    },
+    async peek(id) {
+      text(id);
+      return run(async (client, generation) => {
+        const { rows } = await client.query<{ payload: TicketRecord }>(
+          `SELECT payload FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2 AND generation=$3 AND expires_ms>${nowSql}`,
+          parameters(id, generation));
+        return rows[0]?.payload;
+      });
+    },
+    async take(id) {
+      text(id);
+      return run(async (client, generation) => {
+        await lockTicket(client, id, generation);
+        const { rows } = await client.query<{ payload: TicketRecord }>(
+          `DELETE FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2 AND generation=$3 AND expires_ms>${nowSql} RETURNING payload`,
+          parameters(id, generation));
+        return rows[0]?.payload;
+      });
+    },
+    async remove(id) {
+      text(id);
+      await run(async (client, generation) => {
+        await lockTicket(client, id, generation);
+        await client.query('DELETE FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2 AND generation=$3', parameters(id, generation));
+      });
+    },
+  };
+  const flows: BrowserFlowStore = {
+    async put(value) {
+      const payload: BrowserFlowRecord = { ...flowBinding(value), flowId: text(value.flowId),
+        ticketId: text(value.ticketId), expiresAt: deadline(value.expiresAt) };
+      await run(async (client, generation) => {
+        await client.query('SELECT ticket_id FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2 AND generation=$3 FOR UPDATE',
+          parameters(payload.ticketId, generation));
+        const { rowCount } = await client.query(
+          `INSERT INTO artifact_host.browser_flows(namespace,generation,payload,ticket_expires_ms)
+           SELECT namespace,generation,$4,expires_ms FROM artifact_host.activation_tickets
+           WHERE namespace=$1 AND ticket_id=$2 AND generation=$3 AND expires_ms>${nowSql} AND $5::bigint>${nowSql}`,
+          [...parameters(payload.ticketId, generation), JSON.stringify(payload), payload.expiresAt]);
+        if (rowCount !== 1) throw new Error('invalid activation ticket');
+      });
+    },
+    async peek(id) {
+      text(id);
+      return run(async (client, generation) => {
+        const { rows } = await client.query<{ payload: BrowserFlowRecord }>(
+          `SELECT payload FROM artifact_host.browser_flows WHERE namespace=$1 AND flow_id=$2 AND generation=$3 AND expires_ms>${nowSql}`,
+          parameters(id, generation));
+        return rows[0]?.payload;
+      });
+    },
+    async remove(id) {
+      text(id);
+      await run(async (client, generation) => {
+        await client.query('DELETE FROM artifact_host.browser_flows WHERE namespace=$1 AND flow_id=$2 AND generation=$3', parameters(id, generation));
+      });
+    },
+  };
+  return { tickets, flows };
+}
