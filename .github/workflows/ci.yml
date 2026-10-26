@@ -658,10 +658,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Typecheck, lint, test and pack interruption core
-        run: make typecheck-live-speech lint-live-speech test-live-speech build-live-speech ENV=test-ci-live-speech
+        run: make typecheck-live-speech lint-live-speech test-live-speech build-live-speech ENV=test-stt-l2
       - name: Remove isolated qualification resources
         if: always()
-        run: make live-speech-down ENV=test-ci-live-speech
+        run: make live-speech-down ENV=test-stt-l2
 
   validate-llm-mesh:
     runs-on: ubuntu-latest
