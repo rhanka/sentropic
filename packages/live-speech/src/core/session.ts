@@ -50,7 +50,7 @@ export interface ControlPort {
 }
 export interface MutationRequest {
   scope: Scope; turnEpoch: number; submitKey: string; toolClass: string; toolName: string;
-  actionId: string; argumentsDigest: string; proof: unknown;
+  actionId: string; argumentsDigest: string; barrierRevision: number; proof: unknown;
 }
 export interface TrustedAuthority {
   verifyRisk(request: RiskRequest): Promise<{ principalId: string; tenantId: string; method: 'typed' }>;

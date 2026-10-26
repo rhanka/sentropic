@@ -76,11 +76,12 @@ export class InterruptAuthority {
       if (turn.phase !== 'starting' && turn.phase !== 'running') throw new Error('Turn not submitted');
       const classification = state.enabledClasses[call.toolClass];
       if (!classification) throw new Error('Tool class lacks fence coverage');
-      return classification !== 'read-only';
+      return { mutating: classification !== 'read-only', barrierRevision: state.barrierRevision };
     });
     const request = { ...ref, toolClass: call.toolClass, toolName: call.toolName,
-      actionId: call.actionId, argumentsDigest: call.argumentsDigest, proof: call.proof };
-    const grant = preliminary ? await this.authority.verifyMutation(request) : undefined;
+      actionId: call.actionId, argumentsDigest: call.argumentsDigest,
+      barrierRevision: preliminary.barrierRevision, proof: call.proof };
+    const grant = preliminary.mutating ? await this.authority.verifyMutation(request) : undefined;
     return this.journal.transact(state => {
       const turn = getTurn(state, ref);
       if (turn.fence || isTerminal(turn) || !state.connected) throw new Error('Turn fenced');
@@ -104,6 +105,7 @@ export class InterruptAuthority {
           || !same(grant.scope, state.scope) || grant.principalId !== state.scope.principalId
           || grant.tenantId !== state.scope.tenantId || !validIdentity(grant.authorizationId)
           || grant.turnEpoch !== ref.turnEpoch || grant.submitKey !== ref.submitKey
+          || grant.barrierRevision !== state.barrierRevision
           || grant.toolClass !== call.toolClass || grant.toolName !== call.toolName
           || state.authorizations[grant.authorizationId]) throw new Error('Fresh authorization required');
         if (!call.effectId || !call.operation || state.effects[call.effectId]) throw new Error('New effect identity required');
@@ -121,6 +123,25 @@ export class InterruptAuthority {
 
   async toolResult(ref: TurnRef, callId: string): Promise<ToolResult | undefined> {
     return this.journal.transact(state => getTurn(state, ref).tools[callId]?.result);
+  }
+
+  /** Records a call emitted by the runtime but demonstrably never admitted by this authority. */
+  async recordRejectedCall(ref: TurnRef, call: ToolCall, evidence: string): Promise<ToolResult> {
+    if (![call.callId, call.actionId, call.toolClass].every(validIdentity) || !evidence) throw new Error('Invalid call identity');
+    return this.journal.transact(state => {
+      const turn = getTurn(state, ref);
+      const existing = turn.tools[call.callId];
+      if (existing) {
+        if (existing.call.actionId !== call.actionId || existing.admissionSequence !== 0 || !existing.result) throw new Error('Call already admitted');
+        return existing.result;
+      }
+      if (state.actions[call.actionId]) throw new Error('Action already admitted');
+      const result: ToolResult = { callId: call.callId, outcome: 'cancelled-before-start', evidence };
+      turn.tools[call.callId] = { call: { callId: call.callId, actionId: call.actionId, toolClass: call.toolClass,
+        toolName: call.toolName, argumentsDigest: call.argumentsDigest }, admissionSequence: 0, result };
+      state.actions[call.actionId] = { turnEpoch: ref.turnEpoch, callId: call.callId };
+      return result;
+    });
   }
 
   /** Native history owner consumes this one paired result; later facts belong to the journal. */
