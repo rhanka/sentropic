@@ -36,6 +36,7 @@
 
 ## Feedback Loop
 - [x] R3 isolation findings accepted as bounded hardening: test required-relation absence and failed unlock/rollback handling; no claim of full live schema-integrity attestation.
+- [x] Add required-relation presence checks; destroy uncertain connections, propagate unlock failure and preserve original migration/rollback failure context.
 - [x] Review ISO-1 accepted: refuse lost/partial receipts alongside existing schema rather than replaying IF NOT EXISTS DDL and inventing installation history; add both partial-restore regressions first.
 - [x] ISO-1 red proof: both partial-restore cases wrongly resolve, with 8/10 tests passing; add strict frozen-batch receipt refusal. Correct the static helper type to accept a leased PostgreSQL client.
 - [x] Review MIG-1/MIG-2 accepted: test future reserved-slot eligibility and concurrent first installation; install 0020 in the host asset journal without advancing Drizzle's control frontier, and retain one connection for the API migration lock.
