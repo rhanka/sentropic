@@ -27,6 +27,16 @@ export class InterruptAuthority {
 
   async status(ref: TurnRef) { return this.journal.transact(state => getTurn(state, ref)); }
 
+  async interruptStatus(ref: TurnRef) {
+    return this.journal.transact(state => {
+      const turn = getTurn(state, ref);
+      const status = isTerminal(turn) ? turn.phase === 'completed' ? 'completed' : 'stopped'
+        : !turn.fence ? 'active' : this.now() - turn.fence.installedAtMs >= 2000 ? 'pending' : 'stopping';
+      return { state: status, fence: turn.fence,
+        effectsPending: unresolved(state).map(e => e.effectId) };
+    });
+  }
+
   async riskPrompt(effectIds: string[]): Promise<RiskPrompt> {
     return this.journal.transact(state => promptFor(state, effectIds));
   }
@@ -42,7 +52,8 @@ export class InterruptAuthority {
       if (!validIdentity(request.requestId)) throw new Error('Invalid risk confirmation identity');
       const prior = state.riskAcceptances[request.requestId];
       if (prior) {
-        const { requestId: _id, principalId: _principal, timestamp: _timestamp, ...original } = prior;
+        const original: RiskPrompt = { scope: prior.scope, barrierRevision: prior.barrierRevision,
+          effectIds: prior.effectIds, displayed: prior.displayed, confirmation: prior.confirmation };
         if (!same(snapshot, original)) throw new Error('Risk confirmation identity conflict');
         return prior;
       }
@@ -112,6 +123,19 @@ export class InterruptAuthority {
     return this.journal.transact(state => getTurn(state, ref).tools[callId]?.result);
   }
 
+  /** Native history owner consumes this one paired result; later facts belong to the journal. */
+  async resolveTool(ref: TurnRef, callId: string, outcome: ToolOutcome, evidence: string): Promise<void> {
+    const effectId = await this.journal.transact(state => {
+      const tool = getTurn(state, ref).tools[callId];
+      if (!tool || !evidence || !['cancelled-before-start', 'cancelled', 'completed-before-cancel', 'completion-pending', 'unknown'].includes(outcome)) {
+        throw new Error('Invalid tool outcome');
+      }
+      if (!tool.call.effectId) tool.result ??= { callId, outcome, evidence };
+      return tool.call.effectId;
+    });
+    if (effectId) await this.resolveEffect(effectId, outcome, evidence);
+  }
+
   async resolveEffect(effectId: string, outcome: ToolOutcome, evidence: string): Promise<void> {
     await this.journal.transact(state => {
       const effect = state.effects[effectId];
@@ -156,7 +180,7 @@ export class InterruptAuthority {
   /** Retryable idempotent control only; never reissues turn/start. RPC receipt is not terminal. */
   async flushInterrupt(ref: TurnRef): Promise<void> {
     const turn = await this.status(ref);
-    if (turn.fence && turn.nativeTurnId) await this.control.interrupt({ ...ref, nativeTurnId: turn.nativeTurnId });
+    if (turn.fence && turn.nativeTurnId && !isTerminal(turn)) await this.control.interrupt({ ...ref, nativeTurnId: turn.nativeTurnId });
   }
 
   async recover(ref: TurnRef): Promise<void> {
@@ -173,12 +197,12 @@ export class InterruptAuthority {
     const receipt = await this.journal.transact(state => {
       const turn = getTurn(state, ref);
       if (!interruptId) throw new Error('Interrupt identity required');
-      if (!turn.interruptIds.includes(interruptId)) turn.interruptIds.push(interruptId);
       if (turn.fence) return turn.fence;
+      turn.interruptIds.push(interruptId);
       const sequence = ++state.sequence;
       state.barrierRevision++;
       turn.fence = { eventId: `fence:${sequence}`, sequence, turnEpoch: turn.turnEpoch,
-        submitKey: turn.submitKey, coverage: Object.keys(state.enabledClasses).sort() };
+        submitKey: turn.submitKey, coverage: Object.keys(state.enabledClasses).sort(), installedAtMs: this.now() };
       if (turn.phase === 'committed') { turn.phase = 'interrupted'; turn.terminal = 'cancelled-before-start'; }
       else if (!isTerminal(turn)) turn.phase = 'cancelling';
       return turn.fence;

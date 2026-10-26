@@ -13,7 +13,7 @@ export interface ToolCall {
   effectId?: string; operation?: string; proof?: unknown;
 }
 export interface FenceReceipt {
-  eventId: string; sequence: number; turnEpoch: number; submitKey: string; coverage: string[];
+  eventId: string; sequence: number; turnEpoch: number; submitKey: string; coverage: string[]; installedAtMs: number;
 }
 export interface Turn extends TurnRef {
   utteranceId: string; inputRef: string; nativeTurnId?: string;
