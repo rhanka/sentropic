@@ -1,4 +1,5 @@
-import { isU64Counter, type AtomicUnit } from '../atomic.js';
+import { type AtomicUnit } from '../atomic.js';
+import { isU64Counter } from '../contracts.js';
 import type { ScopeGrant } from '../authority.js';
 // Exact-u64 version comparison for aggregate updates/guards: legacy
 // number/number pairs keep strict semantics; any string side compares by
