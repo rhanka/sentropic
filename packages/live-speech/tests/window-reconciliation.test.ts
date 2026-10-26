@@ -17,6 +17,44 @@ const partials = (events: LocalSttEvent[]) => events.filter((event) => event.typ
 const finals = (events: LocalSttEvent[]) => events.filter((event) => event.type === 'final');
 const textOf = (events: LocalSttEvent[]) => events.map((event) => (event.type === 'partial' || event.type === 'final' ? event.text : ''));
 
+describe('long utterances', () => {
+  it('should stitch committed text across windows beyond windowSec without duplication', async () => {
+    // 8 s utterance at 4 s tiny window: every window decode extends the hypothesis
+    // word by word; each emission commits with its sample offset and the next
+    // window restarts at committedEnd - overlapSec.
+    const words = Array.from({ length: 16 }, (_, index) => `w${index}`);
+    const full = words.join(' ');
+    const script = words.map((_, index) => ({ segments: [SEG(words.slice(0, index + 1).join(' '))] }));
+    script.push({ segments: [SEG(full)] });
+    const events: LocalSttEvent[] = [];
+    const port = new FakePort(script);
+    const session_ = session(port, events);
+    for (let push = 0; push < 16; push++) {
+      session_.pushFrames(tone(0.5));
+      await flush();
+    }
+    session_.pushFrames(silence(0.7));
+    await flush(40);
+    const revs = partials(events);
+    expect(revs.length).toBeGreaterThanOrEqual(2);
+    // Every partial extends the previous one; the committed head is never rewritten.
+    const texts = textOf(revs);
+    for (let index = 1; index < texts.length; index++) {
+      expect(texts[index].startsWith(texts[index - 1])).toBe(true);
+      expect(revs[index]).toMatchObject({ revision: index + 1, replaces: { start: 0, end: texts[index - 1].length } });
+    }
+    expect(texts[texts.length - 1]).toBe(full);
+    const done = finals(events);
+    expect(done).toHaveLength(1);
+    expect(done[0]).toMatchObject({ utteranceId: 'u1', text: full });
+    // Each committed word appears exactly once in the final — no overlap duplication.
+    for (const word of words) {
+      expect(done[0].type === 'final' && done[0].text.split(' ').filter((part) => part === word)).toHaveLength(1);
+    }
+    session_.close();
+  });
+});
+
 describe('overlap dedupe', () => {
   it('should emit full-hypothesis revisions that replace, never duplicated overlap', async () => {
     const events: LocalSttEvent[] = [];

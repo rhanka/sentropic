@@ -7,6 +7,11 @@ export function createEngine(options = {}, modelPath = 'unknown') {
   const script = Array.isArray(options.script) ? options.script : [];
   const tag = String(modelPath).split('/').pop();
   let calls = 0;
+  // Real thread-blocking: spins the worker thread (not the session event loop).
+  function blockMs(ms) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) Math.sqrt(calls + 1);
+  }
   return {
     engineId: `fake-stt/1:${tag}`,
     async transcribe(window, { sampleRateHz } = {}) {
@@ -14,6 +19,7 @@ export function createEngine(options = {}, modelPath = 'unknown') {
       const step = script[calls - 1] ?? script[script.length - 1] ?? { segments: [] };
       if (step.error) throw new Error(step.error);
       if (step.hang === true) return new Promise(() => {});
+      if (typeof step.blockMs === 'number') blockMs(step.blockMs);
       if (step.delayMs) await new Promise((resolve) => setTimeout(resolve, step.delayMs));
       return {
         segments: (step.segments ?? []).map((segment) => ({
