@@ -84,3 +84,4 @@
 - [x] Atomic artifact: feat(decision): bind native host validation and service tariff.
 - [x] Atomic artifact: docs(decision): publish V4-L3 contracts and candidate packet.
 - [x] Atomic artifact: fix(decision): require JEV wire discriminators and retain identity liability.
+- [x] Atomic artifact: fix(cluster-mesh): admit the native Decisions feature tuple.
