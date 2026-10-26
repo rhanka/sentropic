@@ -6,6 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
 import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture, wallClockProof } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
@@ -104,6 +105,10 @@ test('should capture only selected delivery endpoints and reject cross-head rece
     { job: 'publish-ui-image', selected: false },
   ] };
   const capture = capacityCapture(workflow, run, [], manifest);
+  assert.equal(capture.policyDigest, null, 'unattested source files never prove the executed policy');
+  const policyDigest = createHash('sha256').update(JSON.stringify(workflow)).digest('hex');
+  assert.equal(capacityCapture(workflow, run, [], { ...manifest, policyDigest }).policyDigest, policyDigest);
+  assert.throws(() => capacityCapture(workflow, run, [], { ...manifest, policyDigest: 'other-workflow' }), /policy/);
   assert.deepEqual(capture.endpoints.images, ['publish-api-image']);
   assert.deepEqual(capture.endpoints.packages, ['publish-comments']);
   assert.equal(capture.timings.verdictSeconds, null);

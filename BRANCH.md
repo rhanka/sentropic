@@ -89,6 +89,7 @@
   - [x] Superseded old-policy run 40380899105 retained the PR group after automatic cancellation; verified PR 766, same-repo branch and obsolete head 773aa4283, then finished cancellation at 19:19:06 UTC. No current run or main release cancelled.
   - [ ] Dry-run run 40385085415 exposed missing CI manifest context in publisher job 121805361211 (cowork-desktop): standalone BLOCK rejected unchanged local dependencies. Regression assertion added before correction; 21 fixture tests and the real cowork-desktop guarded pack pass with the preserved CI/WARN context. Final live rerun still required.
   - [x] Review r1: wall-clock proof rejects cancelled/incomplete/old-policy receipts, branch dispatches labelled as main, duplicate PRs, missing gates and 2289s regressions.
+  - [ ] Policy provenance: retain the workflow digest before dispatch, reject mismatched captures, and leave historical captures without that attestation unqualified. Regression failed on unattested source-only credit before correction.
   - [ ] Acceptance command: `make ci-capacity-policy CI_REQUIRE_CAPACITY_PROOF=1 CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json' ENV=test-ci-capacity`; static admission alone never qualifies timing.
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [x] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity` must parse/import the changed scripts and reject invalid result sets.
