@@ -44,7 +44,10 @@ export async function installArtifactPackageAssets(
     await client.query('BEGIN');
     await client.query(`SELECT pg_advisory_xact_lock(hashtext('sentropic:artifact-package-migrations'))`);
     const journal = await client.query(`SELECT to_regclass('control.artifact_package_migrations') AS relation`);
-    if (journal.rows[0].relation === null) {
+    const fresh = journal.rows[0].relation === null;
+    if (fresh) {
+      const schema = await client.query(`SELECT to_regnamespace('artifacts') AS namespace`);
+      if (schema.rows[0].namespace !== null) throw new Error('Untracked artifact schema requires migration reconciliation');
       await client.query(assets[0].source);
       await client.query(
         'INSERT INTO control.artifact_package_migrations (asset_id, sha256) VALUES ($1, $2)',
@@ -60,6 +63,10 @@ export async function installArtifactPackageAssets(
       }
     }
     const applied = new Set(rows.map((row) => row.asset_id));
+    // This frozen batch commits atomically. Partial receipts require restore reconciliation.
+    if (!fresh && assets.some((asset) => !applied.has(asset.id))) {
+      throw new Error('Missing artifact migration receipt requires migration reconciliation');
+    }
     for (const asset of assets) {
       if (applied.has(asset.id)) continue;
       await client.query(asset.source);
