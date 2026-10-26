@@ -1,84 +1,55 @@
-# Feature: isolated pgbackup restore with B03 manifest (W0-close.b)
+# Feature: UP-T shared PostgreSQL activation adapter (0.2.3)
 
 ## Objective
-Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only, with strict pre-write guards and a B03 backup/object manifest.
+- [ ] Deliver one durable activation adapter for app W1.c/W3.a and Radar M1-P S1/A6.
 
 ## Scope / Guardrails
-- [x] Scope limited to `k8s-pgbackup-restore`, its runbook and its isolation guard test.
-- [x] Make-only workflow, no direct Docker commands.
-- [x] Work in `tmp/worktrees/app-w0-restore`, `ENV=test-app-w0-restore` last, never `ENV=dev`.
-- [x] All new text in English.
-- [x] No secrets in output; credentials referenced by name only.
-- [x] 0 Python; the guard test is POSIX sh.
-- [x] `k8s-db-restore-preprod` stays excluded and untouched.
-- [x] No restore against a real cluster in this lot; W0-close.c execution is tenant-owned.
+- [x] Branch `feat/artifacts-up-t`, worktree `tmp/worktrees/artifacts-up-t`, base `origin/main`; merge only, never rebase.
+- [x] Additive public API; L3 publication coordinator and listKeys parity remain separate.
+- [x] Docker lock for every build/test, cleanup after each step; no Python; English artifacts.
+- [x] `ENV=test-artifacts-upt` last; existing qualification compose file, without host ports.
+- [x] Pack-only 0.2.3 bump; CI publication after owner GO; draft PR, never merge.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `docs/runbooks/app-cm-baseline-restore.md`
-  - `scripts/test-pgbackup-restore-isolation.sh`
-  - `Makefile` (`k8s-pgbackup-restore` block, its `RESTORE_*` variables and the `test-pgbackup-restore-isolation` target only, under W0-EX1)
-  - `.github/workflows/ci.yml` (`global` filter entry plus one guard-test step only, under W0-EX1)
-  - `deploy/k8s/README.md` (restore paragraph only, under W0-EX1)
+  - `packages/artifacts/src/adapters/postgres-activation.ts`
+  - `packages/artifacts/sql/0001_activation.sql`
+  - `packages/artifacts/tests/postgres-activation.test.ts`
+  - `packages/artifacts/tests/postgres-activation.integration.test.ts`
+  - `packages/artifacts/tests/fixtures/activation-process.mjs`
+  - `packages/artifacts/package.json`
+  - `packages/artifacts/README.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile` outside the leased blocks
-  - `k8s-db-restore-preprod` target block
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
-  - `docs/baselines/app-cm-w0/**`
-  - `deploy/**` outside the leased README paragraph
-  - `.github/workflows/**` outside the leased hunk
+  - `api/**`
   - `plan/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - _(none; the Makefile lease is Allowed under W0-EX1)_
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] Declare exception ID `W0-EX1` in `## Feedback Loop` before touching the conditional path.
+  - [x] BR861-EX3 authorized by owner: shared adapter/SQL/tests; additive only; rollback disables activation and retains SQL.
 
 ## Feedback Loop
-- [x] `W0-EX1` — narrow Makefile lease for Lane B (plan-v2 W0-close.b row plus packet `app-W0-close-b.md`; Sol leases the edit to Lane B).
-  - [x] Reason: the repo is Make-only, so the isolation guards must live in the existing restore target.
-  - [x] Impact: `k8s-pgbackup-restore` block plus `RESTORE_*` variables only; no other target touched.
-  - [x] Rollback: revert the Makefile hunk of the Lot 1 commit.
-- [x] `W0-EX1` extension (Opus r1 review of PR #756, user-ordered 2026-10-26).
-  - [x] Reason: fix the 3 P1 + 7 P2 production-reachability findings in the leased target, wire its guard test into make/CI, and update the stale `deploy/k8s/README.md` restore paragraph that invites admin-kubeconfig use.
-  - [x] Impact: `k8s-pgbackup-restore` block rework, one new `test-pgbackup-restore-isolation` target, one `global`-filter entry plus one step in `ci.yml`, one README paragraph. No other target, job or doc touched.
-  - [x] Rollback: revert the R1 hunks commit by commit.
+- [x] BR861-EX3: existing TicketStore plus browser-flow port; namespace binding, immutable IDs, <=60s lifetime, leased transaction, database clock after waits, no grant on uncertain COMMIT.
+- [x] Hosts own authority locks, migration/journal, scheduling, rotation and serving policy; restore invalidates activation state and rotates signing keys before serving.
 
 ## AI Flaky tests
-- [x] No AI-dependent tests; the isolation guard test is deterministic shell with a fake kubectl shim.
+- [x] No AI-dependent tests or accepted flakes.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single focused lot, one test cycle)
-- [ ] **Multi-branch** (not applicable)
-- [x] Rationale: one target, one runbook, one test; no parallel sub-workstreams.
+- [x] Mono-branch; one package writer, no cherry-picks.
 
 ## UAT Management (in orchestration context)
-- [x] No UI surface and no cluster execution in this lot; no UAT.
-- [x] Real-cluster restore (W0-close.c) is tenant-owned and out of scope.
+- [x] Package conformance only; host/browser/deployment qualification stays with W3.a/A6.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Reuse branch `feat/app-cm-w0-restore-isolation` at `origin/main` in `tmp/worktrees/app-w0-restore`.
-  - [x] Read packet, DOCKER-LOCK, plan-v2 W0-close.b row, Sol r2 review, MASTER rules, both skills.
-  - [x] No compose stack in this lot (fake-kubectl guard tests only); no ports allocated.
-  - [x] `harness check branch` passes on this BRANCH.md.
-- [x] **Lot 1 — Makefile guards plus manifest (W0-EX1)**
-  - [x] Reject prod/preprod PG, namespaces and buckets; refuse absent identity and unsafe defaults, all before any write.
-  - [x] Remove swallowed checksum/count failures; print the B03 manifest block.
-  - [x] `make -n` dry-run plus `scope-check` before commit.
-- [x] **Lot 2 — Runbook plus isolation test**
-  - [x] `docs/runbooks/app-cm-baseline-restore.md` with the exact tenant command for W0-close.c.
-  - [x] `scripts/test-pgbackup-restore-isolation.sh` (shell, fake kubectl, no cluster).
-- [x] **Lot 3 — Local guard verification**
-  - [x] Run the isolation test green with `ENV=test-app-w0-restore` last.
-  - [x] Prove no kubectl write precedes a guard failure.
-- [ ] **Lot 4 — Final validation**
-  - [x] `make scope-check` before each commit; atomic `make commit` per file group, each under 150 lines.
-  - [ ] Push, open draft PR #756 (base `main`: repo CI triggers only for main-targeted PRs; retarget to `feat/app-cm-w0-baseline` at W0-close.e integration), CI green; do not merge.
-- [ ] **Lot R1 — Opus r1 fixes (user-ordered 2026-10-26, PR #756 stays draft on main)**
-  - [x] Extend the guard test first (red): default/admin identity, pod-spec without s5cmd in main, strict key, allowlist probes, secret/sha validation.
-  - [ ] P1: explicit `RESTORE_KUBECONFIG` plus negative prod/preprod `can-i`; meta-collecting initContainer; pipefail/`ON_ERROR_STOP`/`gzip -t`/required sha compare.
-  - [ ] P2: case-insensitive host/IP/namespace allowlists, `^[a-z0-9-]+$` secrets, distinct defaults, ETag (+versions best-effort), receipts outside repo, `bash` runbook, make+CI wiring, README update, PR-body do-not-merge line.
-  - [ ] Test green, scope-checks, atomic commits, push, CI green; do not merge.
+- [x] Lot 0: read lock/rules/specs/template; create isolated worktree; mechanically check branch.
+- [ ] Lot 1: filenames frozen above; tests first for namespace/bindings, collisions, expiry, commit visibility and uncertainty.
+- [ ] Lot 2: versioned SQL, TicketStore/flow port, atomic consume, bounded cleanup and invalidation.
+- [ ] Lot 3: real PG vectors: two OS processes, restart, race, pre/post-commit crash, restore; no skipped vectors.
+- [ ] Lot 4: exact imports and authority/restore obligations; merge main again after #759.
+- [ ] Lot 5: separate pack-only 0.2.3 bump; typecheck/lint/unit/integration/pack gates.
+- [ ] Lot 6: scope-check before atomic commits (<150 lines); push; draft PR body from this file; CI green; do not merge.
