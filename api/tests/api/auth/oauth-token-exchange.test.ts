@@ -17,7 +17,8 @@ import { cleanupAuthData, createTestUser } from '../../utils/auth-helper';
 
 const PUBLIC_CLIENT_ID = 'immo-mcp';
 const WORKLOAD_CLIENT_ID = 'immo-mcp-workload';
-const WORKLOAD_SECRET = 'immo-mcp-workload-secret-dev-only';
+// Public, deliberately synthetic 64-hex fixture; never an operational credential.
+const WORKLOAD_SECRET = '0000000000000000000000000000000000000000000000000000000000000000';
 const MCP_AUDIENCE = 'https://preprod.immo.sent-tech.ca/mcp';
 const RADAR_AUDIENCE = 'https://preprod.immo.sent-tech.ca';
 const EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
@@ -103,6 +104,26 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     await expect(wrongSecret.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
   });
 
+  it('accepts only the new credential after a workload rekey', async () => {
+    const body = exchangeBody(await issueSubjectToken());
+    const rotated = '1111111111111111111111111111111111111111111111111111111111111111';
+    await db.update(serviceClients).set({
+      clientSecretHash: createHash('sha256').update(rotated).digest('hex'),
+    }).where(eq(serviceClients.clientId, WORKLOAD_CLIENT_ID));
+    const oldCredential = await workloadRequest(body);
+    expect(oldCredential.status).toBe(401);
+    await expect(oldCredential.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    expect((await workloadRequest(body, rotated)).status).toBe(200);
+  });
+
+  it('denies a revoked workload even with the current credential', async () => {
+    const body = exchangeBody(await issueSubjectToken());
+    await db.update(serviceClients).set({ revokedAt: new Date() }).where(eq(serviceClients.clientId, WORKLOAD_CLIENT_ID));
+    const res = await workloadRequest(body);
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+  });
+
   it('rejects a scope outside the workload policy', async () => {
     const subject = await issueSubjectToken();
 
@@ -144,26 +165,35 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
   });
 
-  it('denies a host-issued subject for the production MCP audience', async () => {
-    const audience = 'https://immo.sent-tech.ca/mcp';
+  it.each(['https://immo.sent-tech.ca/mcp', `${MCP_AUDIENCE}/`, RADAR_AUDIENCE])('denies subject audience %s', async (audience) => {
     await db.update(oauthClients).set({ resourceIndicators: [audience] }).where(eq(oauthClients.clientId, PUBLIC_CLIENT_ID));
     const res = await workloadRequest(exchangeBody(await issueSubjectToken(audience)));
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
   });
 
-  it('denies client credentials and form-only credentials for the registered workload', async () => {
+  it('denies client credentials for the registered workload', async () => {
     const credentials = await workloadRequest(new URLSearchParams({ grant_type: 'client_credentials', scope: 'immo:search' }).toString());
     expect(credentials.status).toBe(400);
     await expect(credentials.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
+  });
+
+  it.each(['missing', 'form-only', 'basic-and-form'])('requires Basic credentials without form credentials: %s', async (mode) => {
     const body = new URLSearchParams(exchangeBody(await issueSubjectToken()));
-    body.set('client_id', WORKLOAD_CLIENT_ID);
-    body.set('client_secret', WORKLOAD_SECRET);
+    if (mode !== 'missing') {
+      body.set('client_id', WORKLOAD_CLIENT_ID);
+      body.set('client_secret', WORKLOAD_SECRET);
+    }
     const res = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
-      method: 'POST', body: body.toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      method: 'POST', body: body.toString(), headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(mode === 'basic-and-form' ? { Authorization: basicAuth(WORKLOAD_CLIENT_ID, WORKLOAD_SECRET) } : {}),
+      },
     });
-    expect(res.status).toBe(401);
-    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    expect(res.status).toBe(mode === 'basic-and-form' ? 400 : 401);
+    await expect(res.json()).resolves.toMatchObject({
+      error: { code: mode === 'basic-and-form' ? 'invalid_request' : 'invalid_client' },
+    });
   });
 
   it('refuses both grants on a corrupt workload policy (fail-closed)', async () => {
@@ -206,9 +236,9 @@ const exchangeBody = (subject: string): string =>
     subject_token_type: ACCESS_TOKEN_TYPE,
   }).toString();
 
-const workloadRequest = (body: string) => app.request('http://localhost:9197/api/v1/auth/oauth/token', {
+const workloadRequest = (body: string, secret = WORKLOAD_SECRET) => app.request('http://localhost:9197/api/v1/auth/oauth/token', {
   method: 'POST', body,
-  headers: { Authorization: basicAuth(WORKLOAD_CLIENT_ID, WORKLOAD_SECRET), 'Content-Type': 'application/x-www-form-urlencoded' },
+  headers: { Authorization: basicAuth(WORKLOAD_CLIENT_ID, secret), 'Content-Type': 'application/x-www-form-urlencoded' },
 });
 
 const issueSubjectToken = async (audience = MCP_AUDIENCE): Promise<string> => {
