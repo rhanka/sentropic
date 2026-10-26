@@ -3,7 +3,7 @@
 ## Objective
 - [ ] Accept L5-MEMORY-V1 only after all proofs pass against the exact candidate.
 ## Scope / Guardrails
-- [x] Branch `qual/memory-l5-candidate-0212`; worktree `tmp/worktrees/mem-l5`; base `6c3f9f04a01bca460977428f0632e0a38b74ab13`.
+- [x] Branch `qual/memory-l5-candidate-0212`; worktree `tmp/worktrees/mem-l5`; rebased base `7815a2a8569f44f220fd4daa5e41dae992618e30`.
 - [x] Candidate/P2 immutable; no implementation, dependency, workflow or proof changes; no Python.
 - [x] Make-only; Docker lock; commits below 150 changed lines; no attribution trailers.
 - [x] Gate: API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5 (ENV last).
@@ -24,7 +24,8 @@
 - **Exception process**:
   - [x] Record explicit exception before extending scope; none planned.
 ## Feedback Loop
-- [x] Main has only pre-candidate Lot 1; candidate proof files are missing; standalone Docker recipes violate the mandatory lock policy.
+- [x] Owner clarification: official Docker targets using `--rm` are allowed under the shared flock; no ad-hoc Docker recipe is allowed.
+- [x] Main has only pre-candidate Lot 1; [producer audit](spec/evidence/memory-mcp-l5/candidate-0212/PRODUCERS.md) identifies absent source suites, later lots and predecessor integrations.
 - [x] FAIL evidence: [qualification report](spec/evidence/memory-mcp-l5/candidate-0212/REPORT.md); no runtime qualification or receipt claimed.
 ## AI Flaky tests
 - [x] No waiver and no missing proof treated as passed.
@@ -39,4 +40,6 @@
 - [x] Execution evidence: existing gate dry run only; shared-lock make down completed; no test stack started.
 - [x] Lot 1: audit candidate/catalog; record FAIL with missing P01-P09 files and unexecuted P10; no receipt.
 - [x] Lot 2: evidence pushed; draft PR #762 opened; no merge authorized or performed.
+- [x] Attempt 2: verify archive digests and unchanged P2; rebase existing PR onto origin/main; audit every official proof producer.
+- [ ] Attempt 2 execution: official gate queued under the shared Docker flock; collect results and clean up the isolated test environment.
 - [ ] Acceptance: full candidate gate and schema-valid receipt (blocked; no receipt issued).

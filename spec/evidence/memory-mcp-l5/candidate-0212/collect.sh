@@ -79,6 +79,6 @@ done < <(jq -c '.proofs[]' tools/memory-mcp-l5/proof-catalog-v1.json)
   printf 'Disabled-install 0/0/0/0: unverified (suite absent; no observed counters)\n'
   printf 'Registry entry canonical digest: %s (PASS; sorted compact JSON matches upstream canonicalizer for these bytes)\n' "$entry_digest"
   printf 'Publisher receipt is external by design (upstream gen-mcp-memory-assets.mjs:10-14).\n'
-  printf 'Full candidate gate: NOT EXECUTED (standalone Docker forbidden; candidate lot absent)\n'
+  printf 'Candidate qualification: no candidate lot implemented; official Docker targets are allowed under the shared flock. See attempt-2 evidence for execution status.\n'
   printf 'L5-MEMORY-V1 receipt: NOT ISSUED\n'
 } > "$out/inspection.log"
