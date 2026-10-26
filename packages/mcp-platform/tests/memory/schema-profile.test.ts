@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { admitMemorySchema, validateMemoryArguments } from '../../src/memory/schema-profile.js';
-import { TOOL_SCHEMAS } from '../../src/memory/tool-schemas.js';
+import { readFileSync } from 'node:fs';
+const oracle = JSON.parse(readFileSync(new URL('../../../../tools/memory-mcp-l5/fixtures/l0/tool-schemas.json', import.meta.url), 'utf8'));
 
 describe('P03.platform.schema-profile-2020-12', () => {
   it('should admit every pinned input and output asset before acquisition', () => {
-    for (const tool of Object.values(TOOL_SCHEMAS)) {
+    for (const tool of Object.values(oracle.schemas) as Array<{ inputSchema: unknown; outputSchema: unknown }>) {
       expect(() => admitMemorySchema(tool.inputSchema)).not.toThrow();
       expect(() => admitMemorySchema(tool.outputSchema)).not.toThrow();
     }

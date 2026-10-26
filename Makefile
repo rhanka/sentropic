@@ -1005,6 +1005,7 @@ cluster-mesh-workspace:
 	@$(CM_RUN) -u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
 		-e CM_SCOPE="$(patsubst packages/cluster-mesh/%,%,$(SCOPE))" \
+		-e MEMORY_L5_SOURCE_HEAD="$(MEMORY_L5_SOURCE_HEAD)" \
 		-e CM_PG_URL="$(CM_PG_URL)" -e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
 		-v "$(CURDIR):/source" $(CM_RUN_IMAGE) \
 		sh /source/packages/cluster-mesh/tests/storage/cold-workspace.sh
@@ -4439,6 +4440,9 @@ ifeq ($(LOT),reference)
 	@$(MAKE) test-mcp-broker SCOPE=tests/memory MEMORY_L5_REPORT=$(MEMORY_L5_REPORT) ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
 else ifeq ($(LOT),2)
 	@$(MAKE) memory-l5-lot2 ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
+else ifeq ($(LOT),3)
+	@$(MAKE) memory-l5-lot2 ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
+	@$(MAKE) memory-l5-lot3-source API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 else
 	@test "$(LOT)" = "1" || { echo "ERROR: memory-l5-test LOT=$(LOT) is owned by a later lot (only LOT=1 exists)" >&2; exit 1; }
 	@$(MAKE) test-mcp-platform SCOPE=tests/memory API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
@@ -4449,6 +4453,11 @@ else
 endif
 
 .PHONY: memory-l5-lot2 memory-l5-reference
+.PHONY: memory-l5-lot3-source
+memory-l5-lot3-source: memory-l5-runtime
+	@echo 'Lot 3 source/regression evidence only; installed tuple and checkpoint remain unverified'
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=memory-lot3 MEMORY_L5_SOURCE_HEAD="$$(git rev-parse HEAD)" CM_RUN_IMAGE=$(MEMORY_L5_NODE_IMAGE) API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+
 .PHONY: memory-l5-e2-pin memory-l5-lot2-fixture memory-l5-lot2-evidence memory-l5-lot2-pack-reference memory-l5-lot2-retained
 memory-l5-e2-pin memory-l5-lot2-fixture memory-l5-lot2-evidence memory-l5-lot2-pack-reference memory-l5-lot2-retained: memory-l5-runtime
 

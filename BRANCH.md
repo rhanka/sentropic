@@ -64,5 +64,5 @@
 - [ ] Lot 2: mesh context/guards/cancellation/compiled dispatch; concurrent subject/tenant/workspace tests.
   - [x] Preserve full context and cancellation; compile policy uses verified claims/source; mesh 0.22.5 requires corrected platform 0.4.1.
 - [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
-  - [ ] New runner/tests: tools/memory-mcp-l5/lot3-source.mjs and tests/lot3-source.test.mjs; exact P09 file set from the unchanged proof catalog.
+  - [x] New runner/tests: tools/memory-mcp-l5/lot3-source.mjs and tests/lot3-source.test.mjs; exact P09 file set bound to the unchanged P3 catalog.
 - [ ] Lot 4: review, push draft PR to main, final-head CI green; list manifest-blocked proofs and Lot 4 estimate.
