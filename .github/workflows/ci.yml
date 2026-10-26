@@ -2051,6 +2051,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=llm-mesh ENV=test-ci-capacity
       - name: Publish LLM Mesh
         if: inputs.capacity_publish_dry_run != true
@@ -2090,6 +2094,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=llm-gateway ENV=test-ci-capacity
       - name: Publish LLM Gateway
         if: inputs.capacity_publish_dry_run != true
@@ -2113,6 +2121,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=chat-ui ENV=test-ci-capacity
       - name: Publish Chat UI
         if: inputs.capacity_publish_dry_run != true
@@ -2136,6 +2148,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=cited-source-viewer ENV=test-ci-capacity
       - name: Publish Cited Source Viewer
         if: inputs.capacity_publish_dry_run != true
@@ -2159,6 +2175,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=cowork-bridge ENV=test-ci-capacity
       - name: Publish Cowork Bridge
         if: inputs.capacity_publish_dry_run != true
@@ -2182,6 +2202,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=oauth-verify ENV=test-ci-capacity
       - name: Publish OAuth Verify
         if: inputs.capacity_publish_dry_run != true
@@ -2211,6 +2235,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=mcp-auth ENV=test-ci-capacity
       - name: Publish MCP Auth
         if: inputs.capacity_publish_dry_run != true
@@ -2270,6 +2298,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=mcp-platform ENV=test-ci-capacity
       - name: Publish MCP Platform
         if: inputs.capacity_publish_dry_run != true
@@ -2293,6 +2325,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=artifacts ENV=test-ci-capacity
       - name: Publish Artifacts
         if: inputs.capacity_publish_dry_run != true
@@ -2316,6 +2352,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=auth-hono ENV=test-ci-capacity
       - name: Publish Auth Hono
         if: inputs.capacity_publish_dry_run != true
@@ -2339,6 +2379,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=auth-client ENV=test-ci-capacity
       - name: Publish Auth Client
         if: inputs.capacity_publish_dry_run != true
@@ -2362,6 +2406,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=auth-ui ENV=test-ci-capacity
       - name: Publish Auth UI
         if: inputs.capacity_publish_dry_run != true
@@ -2385,6 +2433,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=cowork-desktop ENV=test-ci-capacity
       - name: Publish Cowork Desktop
         if: inputs.capacity_publish_dry_run != true
@@ -2408,6 +2460,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=contracts ENV=test-ci-capacity
       - name: Publish Contracts
         if: inputs.capacity_publish_dry_run != true
@@ -2431,6 +2487,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=events ENV=test-ci-capacity
       - name: Publish Events
         if: inputs.capacity_publish_dry_run != true
@@ -2454,6 +2514,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=chat-core ENV=test-ci-capacity
       - name: Publish Chat Core
         if: inputs.capacity_publish_dry_run != true
@@ -2477,6 +2541,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=chat-server ENV=test-ci-capacity
       - name: Publish Chat Server
         if: inputs.capacity_publish_dry_run != true
@@ -2500,6 +2568,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=comments ENV=test-ci-capacity
       - name: Publish Comments
         if: inputs.capacity_publish_dry_run != true
@@ -2523,6 +2595,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=flow ENV=test-ci-capacity
       - name: Publish Flow
         if: inputs.capacity_publish_dry_run != true
@@ -2546,6 +2622,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=harness ENV=test-ci-capacity
       - name: Publish Harness
         if: inputs.capacity_publish_dry_run != true
@@ -2583,6 +2663,10 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=cluster-mesh ENV=test-ci-capacity
       - name: Publish Cluster Mesh
         if: inputs.capacity_publish_dry_run != true
