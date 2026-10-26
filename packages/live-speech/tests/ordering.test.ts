@@ -4,6 +4,30 @@ import { createSession, SessionJournal } from '../src/core/session.js';
 import type { JournalSnapshot } from '../src/core/session.js';
 
 describe('submission, tool history and effect barrier', () => {
+  it('should bind risk verification to an immutable request while authentication awaits', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    await f.core.send(turn);
+    await f.core.admitTool(turn, mutation('a'));
+    await f.core.admitTool(turn, mutation('b'));
+    await f.core.interrupt(turn, 'stop');
+    const a = await f.core.riskPrompt(['effect:a']);
+    const b = await f.core.riskPrompt(['effect:b']);
+    let release!: () => void;
+    const wait = new Promise<void>(r => { release = r; });
+    vi.mocked(f.authority.verifyRisk).mockImplementationOnce(async request => {
+      await wait;
+      expect(request.effectIds).toEqual(['effect:a']);
+      return { principalId: scope.principalId, tenantId: scope.tenantId, method: 'typed' };
+    });
+    const request = { ...a, requestId: 'immutable', proof: 'proof' };
+    const accepting = f.core.acceptRisk(request);
+    Object.assign(request, b);
+    release();
+    await accepting;
+    expect(f.journal.state.effects['effect:a'].status).toBe('unknown-accepted');
+    expect(f.journal.state.effects['effect:b'].status).toBe('completion-pending');
+  });
   it('should atomically commit storage revisions and restore tombstones from persisted bytes', async () => {
     let bytes: string | undefined;
     const storage = {
