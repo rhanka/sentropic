@@ -19,7 +19,7 @@ const finals = (events: LocalSttEvent[]) => events.filter((event) => event.type 
 const textOf = (events: LocalSttEvent[]) => events.map((event) => (event.type === 'partial' || event.type === 'final' ? event.text : ''));
 
 describe('ordering', () => {
-  it('should ignore stale window results that resolve after newer ones', async () => {
+  it('should ignore stale window results that resolve after the endpoint', async () => {
     const events: LocalSttEvent[] = [];
     let resolveOld!: (value: SttTranscription) => void;
     const old = new Promise<SttTranscription>((resolve) => { resolveOld = resolve; });
@@ -37,16 +37,16 @@ describe('ordering', () => {
     const session_ = session(gate, events);
     session_.pushFrames(tone(0.5));
     await flush();
-    session_.pushFrames(tone(0.5));
-    await flush();
-    // Newer window resolves first.
-    expect(textOf(partials(events))).toEqual(['second']);
-    // Stale older window resolves late: ignored.
+    // While the first window is still in flight, further cadence ticks dispatch
+    // nothing; the endpoint takes priority and resolves first.
+    session_.pushFrames(silence(0.6));
+    await flush(40);
+    expect(calls).toBe(2);
+    expect(textOf(finals(events))).toEqual(['second']);
+    // Stale window resolves late, after its utterance closed: ignored.
     resolveOld({ segments: [SEG('first')] });
     await flush();
-    expect(partials(events)).toHaveLength(1);
-    session_.pushFrames(silence(0.7));
-    await flush(40);
+    expect(partials(events)).toHaveLength(0);
     expect(finals(events)).toHaveLength(1);
   });
 
@@ -65,17 +65,19 @@ describe('ordering', () => {
     await flush();
     session_.pushFrames(silence(0.6));
     await flush();
-    // u1 endpoint decode is pending; speech continues into u2 immediately.
+    // u1 window and endpoint decodes are pending; speech continues into u2
+    // immediately. u2 cadence ticks dispatch nothing while u1's window is in
+    // flight; u2's endpoint still takes priority.
     session_.pushFrames(tone(0.6));
     await flush();
     session_.pushFrames(silence(0.6));
     await flush(40);
-    // releases: [u1 window, u1 silence-window, u1 final, u2 window, u2 silence-window, u2 final].
-    expect(releases).toHaveLength(6);
+    // releases: [u1 window, u1 final, u2 final] — windows coalesced, finals prioritized.
+    expect(releases).toHaveLength(3);
     // Out-of-order arrival: u2 final first, then u1 — each exactly once.
-    releases[5]({ segments: [SEG('two')] });
+    releases[2]({ segments: [SEG('two')] });
     await flush();
-    releases[2]({ segments: [SEG('one')] });
+    releases[1]({ segments: [SEG('one')] });
     await flush();
     const done = finals(events);
     expect(done).toHaveLength(2);
