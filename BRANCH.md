@@ -22,6 +22,8 @@
   - `package-lock.json` (root workspace lock sync for packages/* bumps)
   - `package.json` (root, `overrides` pin only — forces the single v4 line tree-wide)
   - `api/src/**`
+  - `api/tests/api/organizations.test.ts` (PR #752 autosave status regression)
+  - `api/tests/unit/zod-validator.test.ts` (PR #752 validation response contract)
   - `api/tests/unit/google-drive-oauth.test.ts` (deterministic tamper test blocking CI)
   - `packages/auth-hono/**`
   - `packages/comments/**`
@@ -53,6 +55,9 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Opus r1 P1: reproduced default injection under Zod 4.6.7; reserve defaults for POST. Added autosave PUT/GET regressions for draft/enriching/completed and explicit status updates in api/tests/api/organizations.test.ts (endpoint CI gate). Only folders/initiatives also use partial schemas; neither contains defaults. No wrapped defaults found in other migrated consumers.
+- [ ] Opus r1 P2-1: restore the validation 400 envelope through one shared validator hook and contract tests.
+- [ ] Opus r1 P2-2: release auth-hono as 0.17.0 for the breaking Zod peer change; update dependent ranges, locks and packed fixtures.
 - [x] Resume 2026-10-25: merge origin/main without rebase; preserve the six WIP commits. Track item `01M5PMR6AG9QDZG9H3N57TB3FS`; owner decision verbatim: « Exception datée + migration ».
 - [x] BR01-EX2: allow the host scope-check lane for `test-sec-zod4` and an optional comparison base during the main merge. Reason: the default scope checker starts non-Compose containers, forbidden by the Docker packet. Impact: scope checking only; rollback: remove this environment and comparison-base parameter.
 - [x] Merge containment: all 342 pre-merge Track event IDs survive; no local Track writes. Main now contains the dated Zod exception and body-parser fix; requalify the resumed migration.
