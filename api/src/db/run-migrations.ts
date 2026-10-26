@@ -69,9 +69,22 @@ async function runControlMigrations(db: ReturnType<typeof drizzle>): Promise<voi
  * @throws Error if migrations fail
  */
 export async function runMigrations(migrationPool: Pool = pool): Promise<void> {
-  const db = drizzle(migrationPool);
-  await migrate(db, { migrationsFolder: './drizzle' });
-  await reconcileSettingsUserScopeSchema(db);
-  await runControlMigrations(db);
-  await installArtifactPackageAssets(migrationPool);
+  const client = await migrationPool.connect();
+  try {
+    // Retain the lock-owning connection across Drizzle's stream transactions.
+    await client.query(`SELECT pg_advisory_lock(hashtext('sentropic:api-migrations'))`);
+    const db = drizzle(client);
+    await migrate(db, { migrationsFolder: './drizzle' });
+    await reconcileSettingsUserScopeSchema(db);
+    await runControlMigrations(db);
+    await installArtifactPackageAssets(client);
+  } finally {
+    try {
+      await client.query(`SELECT pg_advisory_unlock(hashtext('sentropic:api-migrations'))`);
+      client.release();
+    } catch (error) {
+      // An uncertain unlock must never return a potentially locked session to the pool.
+      client.release(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
 }
