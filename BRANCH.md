@@ -6,7 +6,7 @@
 - [x] Worktree tmp/worktrees/mem-l5-lot3; branch feat/memory-l5-lot3; base origin/feat/memory-l5-lot2; merge only; merge main after #771 merges.
 - [x] Approved schedule supersedes R2/R7a/R3 dependency; retain 18 P09 suites and current remote-binding refusal.
 - [x] P3 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 immutable; frozen catalog/contracts/fixtures untouched.
-- [x] Shared Docker lock; official disposable containers; no Python; ENV=test-mem-l5-lot3 last; ports 9630/5830/1730; no application services.
+- [x] Shared Docker lock; official disposable containers; no Python; ENV=test-mem-l5-lot3 last; schedule ports 9625/5825/1725; no application services.
 - [x] Tests first; selective staging; make commit only; under 150 lines per commit; draft PR to main; no merge.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -57,6 +57,8 @@
 - [x] Lot 0: read lock/rules/spec/schedule/template; mechanically verify isolated branch and P3.
 - [ ] Lot 1: failing wire/schema tests; profile admission, full-envelope codec, protocol refusal.
   - [x] Schema test reproduced missing admission module; wire SDK tests specified; finite schema admission implemented.
+  - [x] Added explicit transport call context types; memory text uses the complete JSON envelope without changing the default codec.
+  - [x] SDK red run: outputSchema loss and absent-audit protocol refusal reproduced; explicit memory bridge implemented; platform 0.4.1 fixes the existing declared profile within current peer intervals.
 - [ ] Lot 2: mesh context/guards/cancellation/compiled dispatch; concurrent subject/tenant/workspace tests.
 - [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
 - [ ] Lot 4: review, push draft PR to main, final-head CI green; list manifest-blocked proofs and Lot 4 estimate.

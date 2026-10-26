@@ -21,7 +21,10 @@ import { registerBridgeKernel, safeMcpProtocolError } from './bridge-kernel.js';
 import { assertMcpJson, freezeMcpJson } from './tool-json.js';
 import type { CompiledMcpToolSchemas, McpToolDiagnostic, McpToolValidationLimits } from './tool-schemas.js';
 import { validateBoundedValue, type JSONValue } from '../registry-parameters.js';
-import type { AppToolResult } from '../runtime.js';
+import type { AppToolResult, StpConnectorContext } from '../runtime.js';
+import { admitMemorySchema } from '../memory/schema-profile.js';
+import { callMemoryBridge } from '../memory/wire-profile.js';
+import { isMemoryToolName } from '../memory/contracts.js';
 
 export type { AppToolResult } from '../runtime.js';
 
@@ -89,6 +92,11 @@ export interface BridgeTool {
    * (Immo) profile; the global/default codec never changes silently.
    */
   readonly profile?: string;
+  readonly schemaProfile?: string;
+  readonly outputSchema?: Tool['outputSchema'];
+  readonly annotations?: Tool['annotations'];
+  readonly _meta?: Tool['_meta'];
+  readonly maxPacketBytes?: number;
 }
 
 /** Memory wire-profile identifier admitted explicitly through this bridge. */
@@ -99,17 +107,37 @@ export function isMemoryProfileTool(tool: BridgeTool): boolean {
   return tool.profile === MEMORY_BRIDGE_PROFILE_ID;
 }
 
+/** Preflight is also available to compositions before they acquire provider resources. */
+export function admitBridgeTools(tools: readonly BridgeTool[]): void {
+  for (const tool of tools) {
+    if ((tool.profile !== undefined || isMemoryToolName(tool.name)) && !isMemoryProfileTool(tool)) throw new TypeError('Unsupported wire profile');
+    if (!isMemoryProfileTool(tool)) continue;
+    if (!isMemoryToolName(tool.name)) throw new TypeError('Unsupported memory tool');
+    if (tool.schemaProfile !== 'sentropic.engram.memory-tools/2020-12-v1') throw new TypeError('Unsupported memory schema profile');
+    admitMemorySchema(tool.schema);
+    admitMemorySchema(tool.outputSchema);
+  }
+}
+
 export interface BridgeRunner {
   run(
     tool: string,
     args: Record<string, JSONValue>,
     identity: RequestIdentity | undefined,
+    call?: BridgeInvocation,
   ): Promise<AppToolResult>;
+}
+
+export interface BridgeInvocation {
+  readonly context: StpConnectorContext;
+  readonly signal: AbortSignal;
 }
 
 export interface BridgeOptions {
   /** Boundary identity forwarded to the runner on every call (else `undefined`). */
   readonly identity?: RequestIdentity;
+  /** Per-call trusted host resolver; never sourced from SDK arguments or headers. */
+  memoryContext?(tool: string, signal: AbortSignal): Promise<StpConnectorContext>;
 }
 
 export interface RequestIdentity {
@@ -197,18 +225,22 @@ export function registerBridgeTools(
   options?: BridgeOptions,
 ): void {
   const identity = options?.identity;
+  admitBridgeTools(tools);
+  tools = tools.map(tool => isMemoryProfileTool(tool) ? freezeMcpJson(structuredClone(tool)) : tool);
   registerBridgeKernel(server, {
     unknownTool: name => new McpError(ErrorCode.MethodNotFound, `Unknown tool '${name}'`),
     tools: tools.map((tool) => ({
       name: tool.name,
+      ...(isMemoryProfileTool(tool) ? { outputSchema: tool.outputSchema, annotations: tool.annotations, _meta: tool._meta } : {}),
       ...(tool.description === undefined ? {} : { description: tool.description }),
       inputSchema: {
         type: 'object' as const,
         ...(isRecord(tool.schema) ? tool.schema : {}),
       },
     })),
-    async call(name, rawArgs) {
+    async call(name, rawArgs, signal) {
     const tool = tools.find((candidate) => candidate.name === name)!;
+    if (isMemoryProfileTool(tool)) return callMemoryBridge(tool, rawArgs as Record<string, unknown>, runner, options, signal);
     if (!isRecord(rawArgs)) {
       return encodeToolResult(errorResult('kernel-rejection', 'invalid_parameters', 'arguments must be an object'));
     }
