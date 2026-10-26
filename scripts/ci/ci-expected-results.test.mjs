@@ -75,6 +75,11 @@ test('should exercise the real publication DAG on a branch without running regis
     const steps = workflow.jobs[name].steps;
     const dry = steps.find(step => step.name === 'Dry-run package publication');
     assert.equal(dry.if, 'inputs.capacity_publish_dry_run == true', name);
+    assert.deepEqual(dry.env, {
+      CI_MANIFEST_CONTEXT: '${{ toJSON(needs.changes.outputs) }}',
+      CI_MANIFEST_EVENT: '${{ github.event_name }}',
+      CI_MANIFEST_BOOTSTRAP_TARGET: "${{ inputs.bootstrap_publish_target || 'none' }}",
+    }, name);
     assert.equal(dry.run, `make ci-capacity-publish-dry-run PACKAGE=${name.slice(8)} ENV=test-ci-capacity`);
     for (const step of steps.filter(step => /^Publish |^Qualify published /.test(step.name ?? ''))) {
       assert.equal(step.if, 'inputs.capacity_publish_dry_run != true', `${name}/${step.name}`);
