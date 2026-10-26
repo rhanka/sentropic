@@ -68,3 +68,16 @@ credentials, select a live agent, activate a microphone or qualify engine latenc
 Mechanical scope/branch checks, whitespace, selective staging, commit line counts
 and absence of attribution trailers are checked at handoff. Draft PR and exact-head
 CI metadata are observations reported separately, without a blanket success claim.
+
+Draft [#757](https://github.com/rhanka/sentropic/pull/757) targets `feat/live-stt-l1`
+and preserves L1's exact commits. Initial pushed head
+`8958a090d0c35c207501ebad27361775653aac52` has **no PR workflow runs**: the existing
+CI workflow filters pull requests to `main`. The integration owner must merge
+#754, retarget #757 to main and obtain exact-head CI before merging L1c. This
+draft neither changes that filter nor infers CI success from local checks.
+
+Final audit at draft creation: 24 L1c commits, maximum **134 changed lines** per
+commit; no attribution trailers, forbidden path changes or lost L1 ancestry.
+All eight retained L0 files compare byte-identical with their frozen source ref.
+Mechanical cumulative scope and branch checks pass; worktree is clean and the
+ENV Compose network was removed. Later handoff-record commits repeat the audit.
