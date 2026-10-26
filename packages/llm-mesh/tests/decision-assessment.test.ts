@@ -43,6 +43,14 @@ describe('deterministic recorded calibration assessment', () => {
     f.assessment.rows[0].attempts = 2 as never;
     expect(assessDecisionCalibration(f.assessment, f.descriptor, f.scope).status).toBe('blocked');
   });
+  it('should block malformed nested records without throwing during discovery', () => {
+    const f = assessmentFixture();
+    f.assessment.policy = null as never;
+    expect(assessDecisionCalibration(f.assessment, f.descriptor, f.scope).status).toBe('blocked');
+    f.assessment.scope = {} as never;
+    expect(() => discoverDecisionEvaluator(f.descriptor, { contractConformance: true, transportAccessible: true,
+      policy: f.policy, assessments: [f.assessment] })).not.toThrow();
+  });
   it('should never transfer passing calibration to another criterion or policy', () => {
     const f = assessmentFixture();
     delete f.descriptor.executionProfile;
