@@ -63,6 +63,7 @@
   - [ ] Add fixed HTTPS Decisions transport and adapter with explicit descriptor registration.
   - [ ] Test endpoint, credentials, one attempt, no CLI route, protocol tariff collision and unqualified refusal.
   - [ ] Keep JEV baseline and OpenAI candidate report packets with source evidence and outstanding qualification.
+  - [ ] Test mesh 0.29 admission, update cluster/gateway compatibility metadata and verify packed tuple.
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Update mesh README and tracked specification; record package version check/bump.
 - [ ] **Lot N — Final validation**
@@ -74,3 +75,4 @@
 - [x] Atomic artifact: test(decision): pin JEV discriminator conformance.
 - [x] Atomic artifact: test(decision): specify native Decisions wire refusals.
 - [x] Atomic artifact: test(decision): cover native route and tariff admission.
+- [x] Atomic artifact: test(decision): bound dedicated Decisions transport.
