@@ -29,6 +29,20 @@ export function failClosedReport(raw) {
 }
 
 // Registered acceptance annotates debt; it never removes a raw finding from this inventory.
+export function normalizeRegister(document, repository) {
+  const entries = document?.vulnerability_register?.vulnerabilities;
+  if (!entries || typeof entries !== 'object' || Array.isArray(entries) || !repository) throw new Error('invalid register document');
+  return Object.entries(entries).map(([registerKey, row]) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error(`invalid register row: ${registerKey}`);
+    // Legacy rows missing an exact scanner/version/component remain verification-pending.
+    return { ...row, registerKey, repository,
+      id: row.id || registerKey.match(/CVE-\d{4}-\d+|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/i)?.[0]?.toUpperCase() || registerKey,
+      path: row.file || row.embedded_path || null, severity: row.risk || null,
+      version: row.affected_version || null, component: row.component || null,
+      scanner: row.scanner || null, platform: row.platform || null, imageDigest: row.image_digest || null };
+  });
+}
+
 export function summarizeBacklog(findings, rows, { today = new Date().toISOString().slice(0, 10), complete = false, coverageBlocked = [] } = {}) {
   if (!validDate(today) || !Array.isArray(findings) || !Array.isArray(rows)) throw new Error('invalid backlog input');
   const unresolved = rows.filter((row) => row.status !== 'resolved');

@@ -1,6 +1,7 @@
 // S1 inventory tests (make test-publishable-manifests SCOPE=... ENV=test-sec-s1).
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -129,4 +130,21 @@ test('should keep the 67-row baseline pending and every reported severity in the
   assert.equal(summarizeBacklog([], [], { complete: false }).status, 'incomplete-scan');
   assert.equal(summarizeBacklog([], [], { complete: true, coverageBlocked: ['sast'] }).status, 'incomplete-scan');
   assert.equal(summarizeBacklog([], [], { complete: true }).status, 'complete-clean');
+});
+
+test('should inventory the current register separately from its historical 67-row baseline', async () => {
+  const { normalizeRegister, summarizeBacklog } = await import('./inventory.mjs');
+  const requireTool = createRequire(join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'));
+  const document = requireTool('yaml').parse(readFileSync('.security/vulnerability-register.yaml', 'utf8'));
+  const rows = normalizeRegister(document, 'rhanka/sentropic');
+  assert.equal(rows.filter((row) => row.status === 'accepted_temporary').length, 68);
+  const report = summarizeBacklog([], rows, { today: '2026-10-26', complete: true });
+  assert.equal(report.unresolvedRegister, 68);
+  assert.equal(report.expired, 7);
+  assert.equal(report.expiryHistogram['2026-11-20'], 60);
+  assert.equal(report.expiryHistogram['2026-10-30'], 1);
+  assert.equal(report.verificationPending.length, 68);
+  assert.equal(report.status, 'complete-with-findings');
+  assert.ok(rows.every((row) => row.registerKey));
+  assert.throws(() => normalizeRegister({}), /register/);
 });
