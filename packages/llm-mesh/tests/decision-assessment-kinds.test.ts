@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { assessDecisionCalibration } from '../src/decision/assessment.js';
 import { decisionQualificationScope } from '../src/decision/qualification.js';
 import type { DecisionCriterion, DecisionRule } from '../src/decision/request.js';
-import { assessmentFixture } from './decision-assessment-fixtures.js';
+import { assessmentFixture, freezeAssessmentFixture } from './decision-assessment-fixtures.js';
 
 describe('criterion-specific native quality gates', () => {
   it.each(['graded', 'choice'] as const)('should assess native %s evidence without borrowing a binary result', (kind) => {
@@ -27,6 +27,7 @@ describe('criterion-specific native quality gates', () => {
       const sample = samples.get(row.sampleId)!;
       row.pass = sample.gold; row.score = sample.goldScore ?? null; row.label = sample.goldLabel ?? null;
     }
+    freezeAssessmentFixture(f.assessment);
     const report = assessDecisionCalibration(f.assessment, f.descriptor, scope);
     expect(report.status).toBe('passed');
     expect(report.metrics).toMatchObject(kind === 'graded' ? { mae: 0, spearman: 1 } : { macroF1: 1, minimumRecall: 1 });

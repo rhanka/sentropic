@@ -2,6 +2,18 @@ import type { DecisionAssessment } from '../src/decision/assessment-types.js';
 import { decisionExecutionDigest, decisionQualificationScope } from '../src/decision/qualification.js';
 import { decisionRequest, qualifiedDescriptor } from './decision-fixtures.js';
 import { digestStructuredArtifact } from '../src/decision/validation.js';
+import { assessmentSplitDigest } from '../src/decision/assessment-controls.js';
+
+export function freezeAssessmentFixture(record: DecisionAssessment) {
+  record.controls = { criterionRevision: record.criterion.kind === 'registered' ? record.criterion.revision : record.scope.criterionDigest,
+    criterionDigest: record.scope.criterionDigest, policyDigest: record.scope.policyDigest,
+    splitDigest: assessmentSplitDigest(record), candidateRules: [record.policy.decision!],
+    tuningCallIds: record.rows.filter((r) => r.population === 'tuning').map((r) => r.callId), frozenAt: '2026-10-26T09:30:00Z' };
+  for (const row of record.rows) {
+    row.policyDigest = record.scope.policyDigest;
+    row.startedAt = row.population === 'tuning' ? '2026-10-26T09:00:00Z' : '2026-10-26T10:00:00Z';
+  }
+}
 
 /** Fabricated records exercise validation only; no provider or semantic qualification. */
 export function assessmentFixture() {
@@ -16,6 +28,7 @@ export function assessmentFixture() {
     source: 'recorded:domain-corpus', rights: 'owner-permission', rationale: 'Evidence spans reviewed.',
     annotators: ['domain-a', 'domain-b'], adjudication: 'agreed', slices: ['near-boundary'] }));
   const rows = samples.map((sample, i) => ({ callId: `call-${i}`, sampleId: sample.id, inputDigest: sample.inputDigest,
+    policyDigest: scope.policyDigest, startedAt: sample.split === 'tuning' ? '2026-10-26T09:00:00Z' : '2026-10-26T10:00:00Z',
     population: sample.split, attempts: 1 as const, outcome: 'verdict' as const, pass: sample.gold,
     score: sample.gold ? 1 : 0, label: null, internalWorkUnits: 1, billableUnits: 1000,
     amountMicroUsd: '42', pendingReconciliation: false, receiptRef: `recorded:receipt-${i}` }));
@@ -26,8 +39,9 @@ export function assessmentFixture() {
     executionDigest: decisionExecutionDigest(descriptor), evidenceKind: 'recorded', criterion: request.criterion,
     sourceRefs: ['recorded:source', 'license:owner-permission'], access: 'verified',
     dataset: { revision: 'corpus-1', splitRevision: 'split-1', samples },
-    policy, policyFrozenBeforeAssessment: true, thresholdSelectedOn: 'tuning',
+    policy, controls: null as never,
     authorizationRef: 'approved:run-packet', attemptCap: 720, costCapMicroUsd: '40000',
     planned: { tuning: 200, 'held-out': 400, injection: 30, invariance: 30, repeat: 60, smoke: 0 }, rows };
+  freezeAssessmentFixture(assessment);
   return { descriptor, request, policy, scope, assessment };
 }

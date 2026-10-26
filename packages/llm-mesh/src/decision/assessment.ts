@@ -14,14 +14,14 @@ export function assessDecisionCalibration(candidate: unknown, descriptor: Decisi
     totals: { calls: 0, attempts: 0, internalWorkUnits: 0, billableUnits: 0, amountMicroUsd: '0' }, populations: {},
     heldOut: { count: 0, negatives: 0, positives: 0, falsePasses: 0, falseFails: 0, coverage: 0,
       falsePassUpper95: 1, falseFailUpper95: 1 }, metrics: {}, labels: null,
-    evidence: { date: null, sourceRefs: [], datasetDigest: null, splitDigest: null }, slices: [],
+    evidence: { date: null, sourceRefs: [], datasetDigest: null, splitDigest: null, p30: 'unverified' }, slices: [],
     latency: { status: 'unverified', p50Ms: null, p95Ms: null } };
   const record = parseDecisionAssessment(candidate, scope, descriptor);
   if (!record || decisionExecutionDigest(descriptor) !== scope.executionDigest) {
     report.reasons.push('invalid-or-unbound-record'); return freezeDecisionData(report);
   }
   report.recordDigest = digestStructuredArtifact(record);
-  report.evidence = { date: record.date, sourceRefs: [...record.sourceRefs], datasetDigest: digestStructuredArtifact(record.dataset),
+  report.evidence = { date: record.date, sourceRefs: [...record.sourceRefs], datasetDigest: digestStructuredArtifact(record.dataset), p30: 'verified',
     splitDigest: digestStructuredArtifact({ revision: record.dataset.splitRevision,
       assignments: record.dataset.samples.map((s) => ({ id: s.id, family: s.family, split: s.split })) }) };
   const samples = new Map(record.dataset.samples.map((sample) => [sample.id, sample]));

@@ -46,6 +46,7 @@
 - [x] R1 P2-3: identity independently denies discovery and admission; production controls retain custody, one attempt, settlement and deadline refusal.
 - [x] R1 P2-1: snapshot readiness once per service and memoize deterministic assessments by record index and exact scope digest; price and admission remain live gates.
 - [x] R1 validation: use calibrated production fixtures for service/consumer round trips and explicit fabricated wire evidence for codec-only matrices; experimental service results never become production fixtures.
+- [x] R1 P2-2: replace P30 assertions with tuning-call selection replay, criterion revision and digest bindings, split commitment, per-call policy digest and freeze chronology; missing/corrupted evidence blocks with P30 unverified.
 - [x] P22: test reproduced two rounded micro-USD for combined sub-micro input/output work; round the per-receipt sum once, preserving v1 accounting sources and conservative unknown-usage reserves.
 - [x] Final mesh: 1485 tests / 86 files, typecheck and lint passed; CI selection/wiring: 40 tests passed. Cluster fixtures explicitly use the experimental profile; next-minor refusal assertions follow the new compatibility bound.
 - [ ] REVIEW: independent complementary review availability must be recorded; no consensus without two completed eligible legs.

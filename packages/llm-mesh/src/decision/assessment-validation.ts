@@ -3,6 +3,7 @@ import type { DecisionQualificationScope } from './qualification-scope.js';
 import { decisionQualificationScope } from './qualification-scope.js';
 import type { DecisionEvaluatorDescriptor } from './descriptor.js';
 import { digestStructuredArtifact, hasOnlyKeys, isMicroUsd, isRecord, isText, snapshotBoundedJson } from './validation.js';
+import { verifyAssessmentControls } from './assessment-controls.js';
 
 export const ASSESSMENT_POPULATIONS = ['tuning', 'held-out', 'injection', 'invariance', 'repeat', 'smoke'] as const;
 const count = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
@@ -20,7 +21,8 @@ function isSample(v: unknown, scope: DecisionQualificationScope): v is DecisionA
 }
 function isRow(v: unknown): v is DecisionAssessmentRow {
   return isRecord(v) && hasOnlyKeys(v, ['callId', 'sampleId', 'inputDigest', 'population', 'attempts', 'outcome',
-    'pass', 'score', 'label', 'internalWorkUnits', 'billableUnits', 'amountMicroUsd', 'pendingReconciliation', 'receiptRef', 'latencyMs'])
+    'pass', 'score', 'label', 'internalWorkUnits', 'billableUnits', 'amountMicroUsd', 'pendingReconciliation', 'receiptRef', 'latencyMs', 'policyDigest', 'startedAt'])
+    && digest(v.policyDigest) && typeof v.startedAt === 'string'
     && [v.callId, v.sampleId, v.receiptRef].every(isText)
     && digest(v.inputDigest)
     && ASSESSMENT_POPULATIONS.some((p) => p === v.population) && (v.attempts === 0 || v.attempts === 1)
@@ -44,12 +46,12 @@ export function parseDecisionAssessment(candidate: unknown, scope: DecisionQuali
   const snapshot = snapshotBoundedJson(candidate, 16 * 1024 * 1024);
   const v = snapshot.ok ? snapshot.value : null;
   if (!isRecord(v) || !hasOnlyKeys(v, ['schemaVersion', 'scope', 'executionDigest', 'criterion', 'date', 'evidenceKind', 'sourceRefs',
-    'access', 'dataset', 'policy', 'policyFrozenBeforeAssessment', 'thresholdSelectedOn', 'authorizationRef',
+    'access', 'dataset', 'policy', 'controls', 'authorizationRef',
     'attemptCap', 'costCapMicroUsd', 'planned', 'rows']) || v.schemaVersion !== 1
     || digestStructuredArtifact(v.scope) !== digestStructuredArtifact(scope) || v.executionDigest !== scope.executionDigest
     || typeof v.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v.date) || !Number.isFinite(Date.parse(v.date))
     || v.evidenceKind !== 'recorded' || v.access !== 'verified' || !texts(v.sourceRefs)
-    || !isText(v.authorizationRef) || v.policyFrozenBeforeAssessment !== true || v.thresholdSelectedOn !== 'tuning'
+    || !isText(v.authorizationRef)
     || !isRecord(v.policy) || digestStructuredArtifact(v.policy) !== scope.policyDigest
     || !count(v.attemptCap) || v.attemptCap < 1 || !isMicroUsd(v.costCapMicroUsd)
     || !isRecord(v.dataset) || !hasOnlyKeys(v.dataset, ['revision', 'splitRevision', 'samples'])
@@ -101,5 +103,5 @@ export function parseDecisionAssessment(candidate: unknown, scope: DecisionQuali
       base.add(row.sampleId);
     } else if (row.population !== 'smoke' && sample.split !== 'held-out') return null;
   }
-  return record;
+  return verifyAssessmentControls(record) ? record : null;
 }
