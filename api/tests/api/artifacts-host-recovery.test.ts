@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { GetPublicAccessBlockCommand, ListObjectsV2Command, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
-import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
+import { blobDigestOfKey, createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { createHmacGrantSigner } from '@sentropic/artifacts/content/grants';
 import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
 import { runMigrations } from '../../src/db/run-migrations';
@@ -29,7 +29,7 @@ afterAll(() => admin.end());
 
 function fixture(allow = true) {
   const blobs = createMemoryBlobStore();
-  const page = vi.fn(async () => ({ keys: await blobs.listKeys(`artifacts/${scope}/blobs/sha256/`) }));
+  const page = vi.fn(async (prefix: string, limit: number, _cursor?: string) => ({ keys: (await blobs.listKeys(prefix)).slice(0, limit) }));
   const authorize = vi.fn(async () => allow);
   const jobs = createArtifactHostJobs({ pool, blobs, page, authorize, batchSize: 2 });
   return { blobs, page, authorize, jobs, store: createPostgresArtifactStore(pool) };
@@ -49,12 +49,12 @@ describe('artifact host recovery', () => {
     const intents = [];
     for (const [index, hex] of ['a', 'b', 'c', 'd'].entries()) {
       await blobs.putBlob(key(hex), new Uint8Array([1]));
-      await store.pin(hex.repeat(64), `preparation:release-${hex}`);
+      await store.pin(blobDigestOfKey(key(hex)), `preparation:release-${hex}`);
       intents.push(await store.record('commit-release', { artifactId: 'artifact', attemptId: hex,
         invocationId: hex, releaseId: `release-${hex}`, blobKeys: [key(hex)],
         preparedAtMs: now - 20000, cleanupDeadlineMs: index === 3 ? now + 600000 : now - 10000 }));
     }
-    await store.addRef('a'.repeat(64), 'shared-release');
+    await store.addRef(blobDigestOfKey(key('a')), 'shared-release');
     await jobs.cleanup();
     const history = await Promise.all(intents.map(intent => store.get(intent.intentId)));
     expect(history.filter(intent => intent?.payload.cleanupState === 'failed-cleaned')).toHaveLength(2);
@@ -72,10 +72,10 @@ describe('artifact host recovery', () => {
   it('should retain shared references and pins while collecting only a bounded page', async () => {
     const { jobs, blobs, page, store } = fixture();
     for (const hex of ['a', 'b', 'c']) await blobs.putBlob(key(hex), new Uint8Array([1]));
-    await store.addRef('a'.repeat(64), 'release-one');
-    await store.addRef('a'.repeat(64), 'release-two');
-    await store.releaseRef('a'.repeat(64), 'release-one');
-    await store.pin('b'.repeat(64), 'retention');
+    await store.addRef(blobDigestOfKey(key('a')), 'release-one');
+    await store.addRef(blobDigestOfKey(key('a')), 'release-two');
+    await store.releaseRef(blobDigestOfKey(key('a')), 'release-one');
+    await store.pin(blobDigestOfKey(key('b')), 'retention');
     page.mockResolvedValueOnce({ keys: [key('a'), key('b')] });
     const report = await jobs.collect(scope);
     expect(report.retained).toEqual([key('a'), key('b')]);
