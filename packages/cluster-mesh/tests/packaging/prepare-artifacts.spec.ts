@@ -2,23 +2,47 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { artifactsCompatible } from './helpers.js';
+
+const releaseBaseOf = (version: string): string => version.split('-', 1)[0];
+// Pack-only topic bump: a `-dev.N` prerelease of the SAME release base the
+// frozen fixture pins (candidate `0.22.4-dev.1` vs frozen `0.22.4`). Anything
+// else (stable, rc, or a different base) takes the strict pin path, so the
+// tolerance never widens to an unrelated version.
+const isPackOnlyDevBump = (candidateVersion: string, frozenBase: string): boolean =>
+  candidateVersion.includes('-dev.') && releaseBaseOf(candidateVersion) === frozenBase;
+
+describe('isPackOnlyDevBump', () => {
+  it.each([
+    ['0.22.4-dev.1', '0.22.4', true],
+    ['0.22.4-dev.99', '0.22.4', true],
+    ['0.22.4', '0.22.4', false],
+    ['0.22.1', '0.22.2', false],
+    ['0.22.3-dev.1', '0.22.2', false],
+    ['0.22.2-rc.1', '0.22.2', false],
+  ])('isPackOnlyDevBump(%s vs frozen %s) === %s', (candidate, frozen, expected) => {
+    expect(isPackOnlyDevBump(candidate, frozen)).toBe(expected);
+  });
+});
 
 it('should keep the frozen selected fixture aligned with the candidate release tuple', () => {
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8'));
   expect(lock.packages[''].dependencies).toEqual(fixture.dependencies);
+  const frozen = /^file:\.\.\/sentropic-cluster-mesh-(\d+\.\d+\.\d+)\.tgz$/.exec(
+    fixture.dependencies['@sentropic/cluster-mesh'] as string,
+  );
+  expect(frozen, 'frozen fixture must pin a stable release tarball').not.toBeNull();
+  const frozenBase = frozen![1];
   for (const slug of ['cluster-mesh', 'llm-mesh', 'llm-gateway']) {
     const candidate = JSON.parse(readFileSync(new URL(`../../../${slug}/package.json`, import.meta.url), 'utf8'));
     const spec = slug === 'cluster-mesh' ? `file:../sentropic-${slug}-${candidate.version}.tgz` : candidate.version;
     const entry = lock.packages[`node_modules/${candidate.name}`];
-    if (slug === 'cluster-mesh' && candidate.version.includes('-dev.')) {
+    if (slug === 'cluster-mesh' && isPackOnlyDevBump(candidate.version as string, frozenBase)) {
       // Pack-only topic bump: the frozen fixture keeps tracking the last release
       // tuple instead of churning per dev version; the lock entry must match it.
-      const frozen = /^file:\.\.\/sentropic-cluster-mesh-(\d+\.\d+\.\d+)\.tgz$/.exec(fixture.dependencies[candidate.name] as string);
-      expect(frozen, 'frozen fixture must pin a stable release tarball').not.toBeNull();
-      expect(entry.version).toBe(frozen![1]);
+      expect(entry.version).toBe(frozenBase);
     } else {
       expect(fixture.dependencies[candidate.name]).toBe(spec);
       expect(entry.version).toBe(candidate.version);
