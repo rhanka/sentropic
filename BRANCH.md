@@ -14,6 +14,7 @@
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `packages/artifacts/src/adapters/postgres-activation.ts`
+  - `packages/artifacts/src/content/grants.ts` (BR861-EX4: optional database-time issuance port)
   - `packages/artifacts/sql/0001_activation.sql`
   - `packages/artifacts/tests/postgres-activation.test.ts`
   - `packages/artifacts/tests/postgres-activation.integration.test.ts`
@@ -36,6 +37,11 @@
   - [x] BR861-EX3 authorized by owner: shared adapter/SQL/tests; additive only; rollback disables activation and retains SQL.
 
 ## Feedback Loop
+- [x] BR861-EX4: owner-requested clock-skew fix requires passing TTL through TicketStore; additive optional issuance port, memory behavior unchanged; rollback removes the optional port and adapter implementation.
+- [x] P2-1 red: real PG rejects full 60s issuance at app skew -120s and +120s (CHECK 23514); remaining 15 integration cases pass.
+- [x] P2-2: export ACTIVATION_SQL_ASSET_SHA256 and test the raw SQL bytes; original 0001 remains byte-identical.
+- [x] R1 verification: typecheck/lint, 451 unit tests and 198 integration/E2E tests pass; includes one preserved, uncommitted cleanup/EXPLAIN vector. DB issuance rejects invalid TTLs and expired tickets deny at both app-clock skews.
+- [ ] P2-3: #759 remains open as of 2026-10-26; merge origin/main after it lands, retain 0.2.3, rerun validate-artifacts; PR stays draft.
 - [x] BR861-EX3: existing TicketStore plus browser-flow port; namespace binding, immutable IDs, <=60s lifetime, leased transaction, database clock after waits, no grant on uncertain COMMIT.
 - [x] Hosts own authority locks, migration/journal, scheduling, rotation and serving policy; restore invalidates activation state and rotates signing keys before serving.
 - [x] BR861-EX3 pack-only metadata: synchronize package/provider/workspace-lock versions; impact limited to 0.2.3 identity; rollback retains 0.2.2 metadata.

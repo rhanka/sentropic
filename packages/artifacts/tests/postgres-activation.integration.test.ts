@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fork, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { Pool } from 'pg';
-import { createPostgresActivationStore } from '../src/adapters/postgres-activation.js';
+import { ACTIVATION_MAX_TTL_SECONDS, createPostgresActivationStore } from '../src/adapters/postgres-activation.js';
+import { createTicketService } from '../src/content/grants.js';
 
 if (!process.env['DATABASE_URL']) throw new Error('Use make test-artifacts-integration');
 const pool = new Pool({ connectionString: process.env['DATABASE_URL'] });
@@ -62,6 +63,39 @@ afterAll(async () => {
 });
 
 describe('shared PostgreSQL activation conformance', () => {
+  it.each([-120_000, 120_000])('should issue and redeem a full 60s TTL with app clock skew %dms', async skew => {
+    const appNow = Date.now() + skew;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(appNow);
+    try {
+      const service = createTicketService({ store: store.tickets, ttlSeconds: ACTIVATION_MAX_TTL_SECONDS,
+        clock: () => Date.now(), ids: () => `skew-${skew}` });
+      const issued = await service.issue(binding);
+      const { rows } = await pool.query(`SELECT issued_ms, expires_ms,
+        floor(extract(epoch FROM clock_timestamp()) * 1000) AS db_now
+        FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2`,
+      ['app:test', issued.ticketId]);
+      expect(Number(rows[0].expires_ms) - Number(rows[0].issued_ms)).toBe(60_000);
+      expect(issued.expiresAt).toBe(Number(rows[0].expires_ms));
+      expect(issued.expiresAt - Number(rows[0].db_now)).toBeGreaterThan(59_000);
+      const flow = { ...expected, flowId: issued.ticketId, ...issued };
+      await store.flows.put(flow);
+      expect(await store.consume({ ...issued, flowId: flow.flowId, expected }, async () => true))
+        .toEqual({ ...binding, ...issued });
+      const next = createTicketService({ store: store.tickets, ttlSeconds: 60,
+        ids: () => `redeem-${skew}` });
+      expect(await next.redeem((await next.issue(binding)).ticketId, binding)).toMatchObject(binding);
+      const short = createTicketService({ store: store.tickets, ttlSeconds: 0.05,
+        ids: () => `expired-skew-${skew}` });
+      const expired = await short.issue(binding);
+      await pool.query('SELECT pg_sleep(0.08)');
+      await expect(short.redeem(expired.ticketId, binding)).rejects.toThrow('invalid ticket');
+    } finally { clock.mockRestore(); }
+  });
+
+  it.each([0, -1, 60_001, 1.5, NaN])('should reject an invalid database issuance TTL %s', async ttlMs => {
+    await expect(store.tickets.issue!({ ...binding, ticketId: 'invalid-ttl' }, ttlMs)).rejects.toThrow('lifetime');
+  });
+
   it('should survive two OS-process restarts, race once and deny replay', async () => {
     let a = await worker();
     let b = await worker();

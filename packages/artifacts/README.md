@@ -7,6 +7,7 @@ W1.c/W3.a and Radar S1/A6 use the same imports:
 ```ts
 import {
   createPostgresActivationStore, ACTIVATION_MAX_TTL_SECONDS, ACTIVATION_SQL_ASSET,
+  ACTIVATION_SQL_ASSET_SHA256,
 } from '@sentropic/artifacts/adapters/postgres-activation';
 import { createTicketService } from '@sentropic/artifacts/content/grants';
 import { readFile } from 'node:fs/promises';
@@ -19,7 +20,9 @@ const tickets = createTicketService({ store: activation.tickets, ttlSeconds: ACT
 
 The SQL asset is `@sentropic/artifacts/sql/0001_activation.sql`; it creates the
 independent `artifact_host` schema. The adapter never applies DDL or opens a
-connection on construction. Journal the asset hash and verify it before serving.
+connection on construction. Journal the asset hash and verify it against
+`ACTIVATION_SQL_ASSET_SHA256` before serving. A unit test pins the exact file bytes;
+future schema changes require a new numbered SQL asset.
 This store is independent of the publication coordinator.
 
 Persist a flow through `activation.flows.put`: `flowId`, `ticketId`, `subjectId`,
@@ -30,9 +33,12 @@ ticket. Both IDs must be fresh cryptographically random values, never reused on
 retry or after cleanup. Duplicate IDs reject; records cannot be updated. The
 trusted namespace comes from host configuration, never browser input.
 
-Ticket deadlines remain the service's exact millisecond values: no silent
-shortening by the adapter. PostgreSQL refuses deadlines beyond 60 seconds from
-insertion. Flow expiry must be live and no later than its ticket. The historical
+`createTicketService` uses the adapter's optional `tickets.issue(record, ttlMs)`
+port: PostgreSQL samples its clock after lock waits and adds the requested TTL
+in SQL. The returned deadline is authoritative; issuance and redemption tolerate
+application clock skew. Use that returned deadline for the browser flow, whose
+expiry must be live and no later than its ticket. Low-level `tickets.put` imports
+an absolute PostgreSQL-time deadline and enforces the same 60-second cap. The historical
 120-second default of `createTicketService` is unchanged; hosts explicitly select
 `ttlSeconds <= ACTIVATION_MAX_TTL_SECONDS` for this adapter.
 
