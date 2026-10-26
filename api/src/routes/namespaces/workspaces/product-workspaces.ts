@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../../utils/zod-validator';
 import { db } from '../../../db/client';
 import {
   chatGenerationTraces,
