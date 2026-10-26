@@ -1,5 +1,25 @@
-import type { AtomicUnit } from '../atomic.js';
+import { isU64Counter, type AtomicUnit } from '../atomic.js';
 import type { ScopeGrant } from '../authority.js';
+// Exact-u64 version comparison for aggregate updates/guards: legacy
+// number/number pairs keep strict semantics; any string side compares by
+// BigInt value, so u64 versions order exactly across 2^53/2^63.
+const toU64Value = (value: unknown): string | null => {
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
+  return typeof value === 'string' && isU64Counter(value) ? value : null;
+};
+const isSameStoredVersion = (stored: unknown, expected: number | string): boolean => {
+  if (typeof expected === 'number' && typeof stored === 'number') return stored === expected;
+  const left = toU64Value(stored);
+  const right = toU64Value(expected);
+  return left !== null && left === right;
+};
+const isStaleVersion = (incoming: number | string, stored: unknown): boolean => {
+  if (typeof incoming === 'number' && typeof stored === 'number') return incoming <= stored;
+  const next = toU64Value(incoming);
+  const current = toU64Value(stored);
+  if (next === null || current === null) return true;
+  return BigInt(next) <= BigInt(current);
+};
 import {
   StorageCasConflictError,
   StorageDeniedError,
@@ -51,8 +71,10 @@ export const applyPgEffects = async (
       const chain = await store.get<PgChain>(session, root, 'chain', guard.chainId);
       accepted = guard.kind === 'head' ? chain?.head === guard.hash : chain === null;
     } else if (guard.kind === 'aggregate-version') {
-      accepted =
-        (await store.get<{ version: number }>(session, root, 'aggregate', guard.key))?.version === guard.version;
+      accepted = isSameStoredVersion(
+        (await store.get<{ version: number }>(session, root, 'aggregate', guard.key))?.version,
+        guard.version as number | string,
+      );
     } else if (guard.kind === 'predicate') {
       const predicate = core.options.pgPredicates?.[guard.predicateId];
       if (!predicate) throw new StorageInvalidCommandError('unregistered Postgres predicate');
@@ -126,10 +148,11 @@ export const applyPgEffects = async (
     records += 1;
   }
   for (const update of unit.updates) {
-    const previous = await store.get<{ version: number }>(session, root, 'aggregate', update.key);
-    if (previous && update.version <= previous.version) throw new StorageCasConflictError('stale aggregate version');
-    const payload = await store.payload(session, scope, update.key, pgJsonBytes(update.value), String(update.version));
-    root = await store.put(session, root, 'aggregate', update.key, { version: update.version, payload });
+    const incoming = update.version as number | string;
+    const previous = await store.get<{ version: number | string }>(session, root, 'aggregate', update.key);
+    if (previous && isStaleVersion(incoming, previous.version)) throw new StorageCasConflictError('stale aggregate version');
+    const payload = await store.payload(session, scope, update.key, pgJsonBytes(update.value), String(incoming));
+    root = await store.put(session, root, 'aggregate', update.key, { version: incoming as number, payload });
     records += 1;
   }
   for (const write of unit.indexWrites) {
