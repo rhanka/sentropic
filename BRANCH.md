@@ -21,6 +21,7 @@
   - `tools/memory-mcp-l5/tests/receipt-contract.test.mjs`
   - `spec/evidence/memory-mcp-l5/lot2/**`
   - `Makefile`
+  - `.github/workflows/ci.yml`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -30,6 +31,7 @@
 - **Exception process**:
   - [x] L5L2-EX1: bounded Makefile Lot 2 delegation/manifest forwarding; local/CI parity; rollback added wiring only.
   - [x] L5L2-EX2: update only broker workspace version in package-lock.json; retain frozen P3 lock snapshot; rollback this scalar.
+  - [x] L5L2-EX3: CI uses explicit source/reference mode with historical P3 validation; strict qualification remains unchanged. Required after the new broker version; rollback only this CI mode/wiring.
 ## Feedback Loop
 - [ ] gr-conductor: real P3-bound lot2-manifest/sidecar, E2/backend/neutral/profile/lock closure and G1–G4/C9 receipts pending; fixture is unverified.
 - [ ] Owner/Engram: authoritative enrollment/assurance mapping and current L0 role dispositions pending; no deployed identity acceptance.
@@ -43,5 +45,5 @@
 - [x] Lot 0: read lock/schedule/spec/template; verify mechanical branch and immutable baseline.
 - [x] Lot 1: six reference test files, signed-token corpus and manifest refusal tests specified; first store run fails on missing reference module.
 - [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
-- [ ] Lot 3: pinned-input/case/JSON reporting complete; preserve full hashed reports and measure runtime; final gates next.
+- [ ] Lot 3: source reference run passed 66 tests; route its pinned image through the existing lot runner, preserving P3 build parsing; final tooling/static gates pending.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
