@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sha256Hex, sha512Integrity, PINNED_IMAGE_DIGEST } from '../schema-validator.mjs';
-import { validateLot2Manifest, P3_SHA256 } from '../lot2-manifest.mjs';
+import { validateLot2Provenance, P3_SHA256 } from '../lot2-manifest.mjs';
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'l5-manifest-'));
   const ref = (path, bytes) => { writeFileSync(join(root, path), bytes); return { path, sha256: sha256Hex(bytes) }; };
@@ -30,15 +30,15 @@ it('should bind immutable P3 and refuse fixture acceptance even with matching di
   const { root, manifest } = fixture();
   try {
     expect(manifest.preCandidate.sha256).toBe(P3_SHA256);
-    expect(validateLot2Manifest(manifest, root)).toContain('manifest: unverified');
+    expect(validateLot2Provenance(manifest, root)).toContain('manifest: unverified');
     for (const mutate of [m => { m.preCandidate.sha256 = '0'.repeat(64); }, m => { m.e2.version = '0.22.0'; },
       m => { m.e2.sha256 = '0'.repeat(64); }, m => { delete m.backend; }, m => { m.closure = []; },
       m => { m.lock.path = '../escape'; }, m => { m.runtime.python = true; }, m => { m.extra = true; }]) {
       const changed = structuredClone(manifest); mutate(changed);
-      const baseline = validateLot2Manifest(manifest, root);
-      expect(validateLot2Manifest(changed, root).some(error => !baseline.includes(error))).toBe(true);
+      const baseline = validateLot2Provenance(manifest, root);
+      expect(validateLot2Provenance(changed, root).some(error => !baseline.includes(error))).toBe(true);
     }
     writeFileSync(join(root, manifest.e2.path), 'tampered');
-    expect(validateLot2Manifest(manifest, root).join('\n')).toContain('sha256');
+    expect(validateLot2Provenance(manifest, root).join('\n')).toContain('sha256');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

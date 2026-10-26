@@ -52,5 +52,5 @@
   - [x] `packages/mcp-broker/tests/memory/oidc-assurance.test.ts`
   - [x] `tools/memory-mcp-l5/tests/lot2-{assurance,manifest,retained-inputs,envelope}.test.mjs`
 - [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
-- [ ] Lot 3: reference run passed 66 and tooling passed 108; receiving envelope regression added to preserve the frozen artifact-manifest schema.
+- [ ] Lot 3: frozen-envelope regression reproduced; host tuple validation now belongs to its hashed e2Provenance; regenerate the unverified fixture and rerun tooling.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
