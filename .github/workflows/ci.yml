@@ -2329,7 +2329,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-auth-client]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-client.result == 'success' && (needs.changes.outputs.auth_client_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-client.result == 'success' && (needs.changes.outputs.auth_client_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2337,7 +2337,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=auth-client ENV=test-ci-capacity
       - name: Publish Auth Client
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-auth-client
 
   publish-auth-ui:
@@ -2348,7 +2352,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-auth-ui]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-ui.result == 'success' && (needs.changes.outputs.auth_ui_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-ui.result == 'success' && (needs.changes.outputs.auth_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2356,7 +2360,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=auth-ui ENV=test-ci-capacity
       - name: Publish Auth UI
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-auth-ui
 
   publish-cowork-desktop:
@@ -2367,7 +2375,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-cowork-desktop]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-desktop.result == 'success' && (needs.changes.outputs.cowork_desktop_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-desktop.result == 'success' && (needs.changes.outputs.cowork_desktop_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2375,7 +2383,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=cowork-desktop ENV=test-ci-capacity
       - name: Publish Cowork Desktop
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-cowork-desktop
 
   publish-contracts:
@@ -2386,7 +2398,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-contracts]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-contracts.result == 'success' && (needs.changes.outputs.contracts_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-contracts.result == 'success' && (needs.changes.outputs.contracts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2394,7 +2406,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=contracts ENV=test-ci-capacity
       - name: Publish Contracts
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-contracts
 
   publish-events:
@@ -2405,7 +2421,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-events]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-events.result == 'success' && (needs.changes.outputs.events_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-events.result == 'success' && (needs.changes.outputs.events_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2413,7 +2429,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=events ENV=test-ci-capacity
       - name: Publish Events
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-events
 
   publish-chat-core:
@@ -2424,7 +2444,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-chat-core]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-core.result == 'success' && (needs.changes.outputs.chat_core_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-core.result == 'success' && (needs.changes.outputs.chat_core_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2432,7 +2452,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=chat-core ENV=test-ci-capacity
       - name: Publish Chat Core
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-chat-core
 
   publish-chat-server:
@@ -2443,7 +2467,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-chat-server]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-server.result == 'success' && (needs.changes.outputs.chat_server_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-server.result == 'success' && (needs.changes.outputs.chat_server_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2451,7 +2475,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=chat-server ENV=test-ci-capacity
       - name: Publish Chat Server
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-chat-server
 
   publish-comments:
@@ -2462,7 +2490,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-comments]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-comments.result == 'success' && (needs.changes.outputs.comments_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-comments.result == 'success' && (needs.changes.outputs.comments_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2470,7 +2498,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=comments ENV=test-ci-capacity
       - name: Publish Comments
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-comments
 
   publish-flow:
@@ -2481,7 +2513,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-flow]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-flow.result == 'success' && (needs.changes.outputs.flow_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-flow.result == 'success' && (needs.changes.outputs.flow_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2489,7 +2521,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=flow ENV=test-ci-capacity
       - name: Publish Flow
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-flow
 
   publish-harness:
@@ -2500,7 +2536,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-harness]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-harness.result == 'success' && (needs.changes.outputs.harness_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-harness.result == 'success' && (needs.changes.outputs.harness_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2508,7 +2544,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=harness ENV=test-ci-capacity
       - name: Publish Harness
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-harness
 
   # N1: cluster-mesh depends on @sentropic/events and @sentropic/contracts; wait for both.
@@ -2520,7 +2560,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
+      (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.cluster_mesh_publish == 'true' &&
       (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
@@ -2541,9 +2581,14 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=cluster-mesh ENV=test-ci-capacity
       - name: Publish Cluster Mesh
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-cluster-mesh
       - name: Qualify published Cluster Mesh from the registry
+        if: inputs.capacity_publish_dry_run != true
         run: |
           set -eu
           receipt=tmp/ci-manifest-guard/publish/cluster-mesh.publish-output
