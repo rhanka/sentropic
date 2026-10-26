@@ -1,5 +1,35 @@
 # L1c deterministic verification receipt
 
+## PR757 Opus r1 corrections
+
+Author: codex / gpt-6.1-sol / high. Corrected source/test target:
+`e436bd0a6`; input verdict: `.h2a/reviews/pr757_opus_r1.md` at `a5ee9cfe4`.
+
+- P1 red: three new single-stage assertions fail with `SpeechConfigurationError`.
+  Green: chained accepts STT-only in both mic modes and TTS-only; duplex accepts
+  independently selected companion stages. Empty bindings remain refused.
+- P2-1 red: eight registry tests fail because speech is uncatalogued. Green:
+  the speech entry loads through the registry with `>=0.28.0 <0.29.0`, checking
+  version, exports and required members before evaluating the peer. Existing
+  text compatibility stays unchanged; the packed skew probe includes speech.
+- P2-2 red: digest is absent and modified bindings at `r1` project successfully.
+  Green: canonical SHA-256 pins selection/projection/consent, and reload checks
+  against retained revision history reject changed scoped revision content.
+- Full default suite: **139 files / 1,180 tests passed**, including **66 speech
+  tests**; **56 files / 129 tests skipped** behind their environment gates.
+- Quality adapter: strict source/test types, lint, build and package-content
+  checks; six native Node ESM import probes exercise old mesh versions without
+  speech exports and 0.28 with absent, invalid and valid speech exports.
+- Registry recheck: cluster 0.22.1, mesh 0.27.1, gateway 0.21.0. The existing
+  unpublished cluster 0.23.0 bump remains above registry; no publication.
+- LOW lane uses short scoped qualification steps with a one-second lock wait,
+  releases the lock between steps and tears down only `test-live-stt-l1c`.
+  The prior 100-test installed matrix below is historical, not rerun for r1;
+  the updated import refusal is checked with six native ESM fixture trees.
+- Commits use specific-file staging and `make commit`, with fewer than 150
+  changed lines each. Review r2 is for the independent reviewer; no new
+  reviewer session, consensus verdict or main-base CI success is inferred.
+
 Author: codex / gpt-6.1-sol / high. Inputs, heads and §11.2 owners are in
 [baseline.md](baseline.md). Target source is unchanged since `5c679c80e`;
 `eb898c7d4c76db88a7e4649a44c6f23127211fa3` includes final package documentation.
