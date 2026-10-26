@@ -56,6 +56,7 @@ Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves bef
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile`
+  - `packages/cluster-mesh/packaging.mk`
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**` (except the allowed ci.yml exception)
   - `ui/**`
@@ -66,6 +67,7 @@ Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves bef
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] BR02-EX1: touch conditional `packages/cluster-mesh/packaging.mk` (`test-lazy-package` only: build the workspace llm-gateway dist before packing it for the pre-publication fallback) plus `packages/cluster-mesh/tests/packaging/{prepare.sh,siblings.mjs,siblings.spec.ts,release-matrix.spec.ts}` (already allowed). Reason: PR CI is circular — the lazy gate installs the workspace llm-gateway version from the registry, which 404s because its publication is what this PR unblocks. Impact: test-only; no published archive or manifest changes. Rollback: revert the prepare.sh fallback, the `train-spec` command, the spec updates and the added build line.
 - [x] BR01-EX1: touch conditional `Makefile` target `wait-llm-gateway-mesh-dependency` only. Reason: the target strips one leading `^` and passes a broken `@sentropic/llm-mesh@0.27.0 || ^0.28.0` spec, so `publish-llm-gateway` can never observe the range. Impact: one recipe line plus pinned `semver` tool setup; no other target changed. Rollback: restore the single recipe line from `origin/main`.
 - [x] CI run 40322725730 for PR #760: guard gates green (`validate-publishable-manifests`, `validate-llm-gateway`, `validate-llm-mesh`, `enforce-package-bump`, typecheck/lint). One failure: `validate-cluster-mesh` step `Qualify packed Cluster Mesh (lazy surface release gate)` cannot install `@sentropic/llm-gateway@0.21.1` (registry 404, version unpublished). Root cause is the blocked publication this branch unblocks, not this diff: no shared code path (lazy test never imports the guard module; pack steps passed), reproduced locally with the exact failing target. Needs owner decision: merge with override or bootstrap-publish 0.21.1, then re-run.
 - [x] Resync #754: preserve live STT 0.28 support and Zod 4/auth-hono 0.17 support together. Main consumes gateway 0.21.1 and cluster-mesh 0.22.2; select free gateway 0.21.2 and cluster-mesh 0.22.3, refresh workspace/API/selected metadata and retain guarded archive integrities.
@@ -122,6 +124,12 @@ Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves bef
   - [x] Add maintained tests: single caret, `||` range, unsatisfiable range.
   - [x] Lot gate:
     - [x] `make test-publishable-manifests ENV=test-ci-gateway-wait` (88 pass).
+- [ ] **Lot 2 — Circular lazy gate (BR02-EX1)**
+  - [ ] Pack workspace llm-gateway in `prepare.sh`; resolve via new `siblings.mjs train-spec` (receipt wins, else registry when published, else local tarball; other-version receipt, missing tarball, bad flag and non-404 registry errors fail).
+  - [ ] Build llm-gateway dist in `test-lazy-package` before packing.
+  - [ ] Regression checks: `train-spec` decision table in `siblings.spec.ts`; local-pack allowance in `release-matrix.spec.ts`.
+  - [ ] Lot gate:
+    - [ ] `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-ci-gateway-wait`
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest UI (cf Lot1, copy checklist)
