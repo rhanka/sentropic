@@ -1,6 +1,8 @@
-// Stable-prefix hypothesis reconciliation (r3 L3). Pure policy: overlapping window
-// decodes collapse into full-hypothesis revisions that replace, never duplicated
-// overlap. Transient wobble below the confirmed prefix is held, never shrunk.
+// Stable-hypothesis reconciliation (r3 L3). Every emission commits text with its
+// sample offset; the next window starts at committedEnd - overlapSec and the
+// overlap is deduped by longest suffix/prefix stitching against the commit.
+// Regressions, repeats and lost-continuity windows are held, never shrink the
+// committed text. Stale windows resolve to nothing via the end-sample guard.
 import type { SttTranscription } from './engine-port.js';
 
 /** Audible text of a transcription, or null when nothing is usable. */
@@ -20,40 +22,57 @@ export interface ReconciledPartial {
   readonly replaces: { start: number; end: number };
 }
 
+/** Longest prefix of `candidate` that matches a suffix of `committed`. */
+function overlapLength(committed: string, candidate: string): number {
+  const max = Math.min(committed.length, candidate.length);
+  for (let length = max; length > 0; length--) {
+    if (candidate.startsWith(committed.slice(committed.length - length))) return length;
+  }
+  return 0;
+}
+
 export class HypothesisTracker {
   private revision = 0;
-  private hypothesis = '';
-  private stablePrefix = '';
-  private previousDecodeText: string | null = null;
+  private committed = '';
+  private committedEnd = -1;
   private appliedWindowEnd = -1;
 
   reset(): void {
     this.revision = 0;
-    this.hypothesis = '';
-    this.stablePrefix = '';
-    this.previousDecodeText = null;
+    this.committed = '';
+    this.committedEnd = -1;
     this.appliedWindowEnd = -1;
   }
 
+  /** Sample offset the next window starts from (committed text end, unset at first). */
+  get committedEndSample(): number {
+    return this.committedEnd;
+  }
+
   /**
-   * Fold one window decode into the hypothesis. Returns the partial to emit, or
-   * null when the decode is stale, silent, identical, or below the stable prefix.
+   * Fold one window decode into the committed hypothesis. Returns the partial to
+   * emit, or null when the decode is stale, silent, already committed, regressed,
+   * or has lost continuity with the commit.
    */
   applyWindow(endSample: number, text: string | null): ReconciledPartial | null {
     if (endSample <= this.appliedWindowEnd) return null;
     this.appliedWindowEnd = endSample;
-    if (text === null) {
-      this.previousDecodeText = null;
-      return null;
+    if (text === null || text.length === 0) return null;
+    if (this.committedEnd < 0) {
+      // Head mode: nothing committed yet — the first usable decode commits the head.
+      const replaces = { start: 0, end: 0 };
+      this.committed = text;
+      this.committedEnd = endSample;
+      this.revision += 1;
+      return { text, revision: this.revision, replaces };
     }
-    if (this.previousDecodeText !== null && text === this.previousDecodeText) {
-      this.stablePrefix = text;
-    }
-    this.previousDecodeText = text;
-    if (!text.startsWith(this.stablePrefix) || text === this.hypothesis) return null;
-    const replaces = { start: 0, end: this.hypothesis.length };
-    this.hypothesis = text;
+    const strip = overlapLength(this.committed, text);
+    if (strip === text.length) return null;
+    if (strip === 0) return null;
+    const replaces = { start: 0, end: this.committed.length };
+    this.committed += text.slice(strip);
+    this.committedEnd = endSample;
     this.revision += 1;
-    return { text, revision: this.revision, replaces };
+    return { text: this.committed, revision: this.revision, replaces };
   }
 }

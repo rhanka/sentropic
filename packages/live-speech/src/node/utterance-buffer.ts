@@ -48,10 +48,23 @@ export class UtteranceBuffer {
     this.sinceDecode = 0;
   }
 
-  window(profile: LocalSttProfile): { window: Float32Array; endSample: number } {
-    const windowSamples = Math.floor(profile.windowSec * profile.sampleRateHz);
-    const total = this.samples.length;
-    const start = Math.max(0, total - windowSamples);
+  /**
+   * Rolling decode window. Before any commit it trails the utterance head by
+   * windowSec; after a commit it restarts at committedEnd - overlapSec so the
+   * overlap is re-decoded and stitched, bounding every window by uncommitted
+   * audio plus overlap instead of the whole utterance.
+   */
+  window(profile: LocalSttProfile, committedEnd: number): { window: Float32Array; endSample: number } {
+    const rate = profile.sampleRateHz;
+    let start: number;
+    if (committedEnd < 0) {
+      const windowSamples = Math.floor(profile.windowSec * rate);
+      start = Math.max(0, this.samples.length - windowSamples);
+    } else {
+      const overlapSamples = Math.floor(profile.overlapSec * rate);
+      const absoluteStart = this.buffered - this.samples.length;
+      start = Math.max(absoluteStart, committedEnd - overlapSamples) - absoluteStart;
+    }
     return { window: Float32Array.from(this.samples.slice(start)), endSample: this.buffered };
   }
 
