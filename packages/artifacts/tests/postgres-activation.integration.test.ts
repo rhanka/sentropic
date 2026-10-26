@@ -14,11 +14,11 @@ const expected = {
   ...binding, nonceDigest: 'ab'.repeat(32), sessionId: 'session',
   profileDigest: 'cd'.repeat(32), policyRevision: 'p1', targetOrigin: 'https://a.example.test',
 };
-async function issue(id: string, ttl = 55_000) {
+async function issue(id: string, ttl = 55_000, adapter = store) {
   const ticket = { ...binding, ticketId: id, expiresAt: Date.now() + ttl };
   const flow = { ...expected, ticketId: id, flowId: id, expiresAt: ticket.expiresAt };
-  await store.tickets.put(ticket);
-  await store.flows.put(flow);
+  await adapter.tickets.put(ticket);
+  await adapter.flows.put(flow);
   return { ticket, flow, input: { ticketId: id, flowId: id, expected } };
 }
 async function worker() {
@@ -155,5 +155,79 @@ describe('shared PostgreSQL activation conformance', () => {
     expect(await store.tickets.take(input.ticketId)).toBeUndefined();
     expect(await store.flows.peek(input.flowId)).toBeUndefined();
     expect(await store.consume(input, async () => true)).toBeUndefined();
+  });
+
+  it.each(['consume', 'take'])('should recheck DB-time expiry after the %s row lock wait', async operation => {
+    const { input } = await issue(`delayed-${operation}`, 300);
+    const blocker = await pool.connect();
+    const waiting = new Pool({ connectionString: process.env['DATABASE_URL'], application_name: 'upt-delayed', max: 1 });
+    const adapter = createPostgresActivationStore({ pool: waiting, namespace: 'app:test' });
+    let attempts = 0;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT 1 FROM artifact_host.browser_flows WHERE namespace=$1 AND flow_id=$2 FOR UPDATE', ['app:test', input.flowId]);
+      const pending = operation === 'consume'
+        ? adapter.consume(input, async () => { attempts++; return true; }) : adapter.tickets.take(input.ticketId);
+      let locked = false;
+      for (let i = 0; i < 30 && !locked; i++) {
+        const { rows } = await pool.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE application_name='upt-delayed' AND wait_event_type='Lock') AS locked");
+        locked = rows[0].locked;
+        if (!locked) await pool.query('SELECT pg_sleep(0.01)');
+      }
+      expect(locked).toBe(true);
+      await blocker.query('SELECT pg_sleep(0.32)');
+      await blocker.query('COMMIT');
+      expect(await pending).toBeUndefined();
+      expect(attempts).toBe(0);
+    } finally {
+      await blocker.query('ROLLBACK'); blocker.release(); await waiting.end();
+    }
+  });
+
+  it('should recheck expiry after an authority wait and preserve both expired records', async () => {
+    const { input } = await issue('authority-expiry', 150);
+    expect(await store.consume(input, async ({ client }) => {
+      await client.query('SELECT pg_sleep(0.18)');
+      return true;
+    })).toBeUndefined();
+    const { rows } = await pool.query('SELECT ticket_id FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2', ['app:test', input.ticketId]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('should issue no grant when real PG commits but its acknowledgement is lost', async () => {
+    const { input } = await issue('unknown-commit');
+    const cookie: unknown[] = [];
+    const uncertainPool = { async connect() {
+      const client = await pool.connect();
+      return {
+        async query(sql: string, params?: unknown[]) {
+          const result = await client.query(sql, params);
+          if (sql === 'COMMIT') throw new Error('injected acknowledgement loss');
+          return result;
+        },
+        release(destroy: boolean) { client.release(destroy); },
+      };
+    } } as unknown as Pool;
+    const uncertain = createPostgresActivationStore({ pool: uncertainPool, namespace: 'app:test' });
+    await expect(uncertain.consume(input, async () => true).then(result => cookie.push(result)))
+      .rejects.toThrow('activation commit outcome unknown');
+    expect(cookie).toEqual([]);
+    expect(await store.consume(input, async () => true)).toBeUndefined();
+  });
+
+  it('should bound cleanup work and leave other namespaces untouched', async () => {
+    const adapter = createPostgresActivationStore({ pool, namespace: 'cleanup:test' });
+    for (let i = 0; i < 3; i++) await issue(`cleanup-${i}`, 150, adapter);
+    const other = await issue('foreign-cleanup', 55_000, foreign);
+    await pool.query('SELECT pg_sleep(0.18)');
+    let count = 0;
+    for (let i = 0; i < 4; i++) {
+      const removed = await adapter.cleanup(2);
+      expect(removed.flows + removed.tickets).toBeLessThanOrEqual(2);
+      count += removed.flows + removed.tickets;
+    }
+    expect(count).toBe(6);
+    expect(await foreign.tickets.peek(other.ticket.ticketId)).toEqual(other.ticket);
+    await expect(adapter.cleanup(1001)).rejects.toThrow();
   });
 });
