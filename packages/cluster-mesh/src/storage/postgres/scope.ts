@@ -37,6 +37,7 @@ import { pgCapability, pgProfileClaims, type PgCapability } from './profiles.js'
 import type { ProfileClaim, ProfileId } from '../profiles.js';
 import { cleanupPgStaged, type PgCleanupRequest } from './cleanup.js';
 import { runPgInstalled } from './installed.js';
+import { readPgCommitResult } from './commit-results.js';
 const freeze = (value: unknown): void => {
   if (value && typeof value === 'object') {
     Object.values(value).forEach(freeze);
@@ -143,6 +144,9 @@ export class PgScoped {
   }
   readAggregate(key: string) {
     return this.#read((view) => view.readAggregate(key));
+  }
+  readCommitResult(commitIdentity: string, fence: WriterFence) {
+    return readPgCommitResult(this.#core, this.#grant, commitIdentity, fence);
   }
   beginStaged(input: StagedBeginInput) {
     return beginPgStaged(this.#core, this.#grant, input);
