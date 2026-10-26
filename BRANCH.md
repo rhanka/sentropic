@@ -111,7 +111,8 @@
 - [ ] **Lot 1 — Tests first**
   - [x] Add `tests/storage/commit-result-corpus.ts`: exact opaque result/time/epoch, absence, copy isolation, conflicting intent.
   - [x] Add `tests/storage/postgres-result-recovery.spec.ts`: lost ACK, process restart, new epoch, current grant/fence, foreign scopes, transient failure.
-  - [ ] Add `tests/storage/commit-result-process.ts` for independent process recovery; observe focused red run.
+  - [x] Add `tests/storage/commit-result-process.ts` for independent writer crash and recovery.
+  - [ ] Observe the focused red run before implementing recovery.
 - [ ] **Lot 2 — Implementation**
   - [ ] Add scoped lookup over existing immutable commit receipts; reuse stored moduleResult exclusively.
   - [ ] Add and export neutral recovery bridge with required current fence provider; keep memory factory closed until E7.
