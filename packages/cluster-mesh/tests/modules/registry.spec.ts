@@ -37,9 +37,18 @@ describe('module registry', () => {
     tree.install('app', { name: '@sentropic/cluster-mesh', version, exports: {
       './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
     } });
-    await expect(registry().load('comments')).rejects.toMatchObject({
-      reason: 'not_installed', packageName: '@sentropic/comments',
-    });
+    // Pack-only dev bumps sit outside the frozen Comments range by design (see
+    // the pinned 0.23.0 refusal below): any prerelease leaf is refused before
+    // peer resolution, while a released leaf must reach the peer requirement.
+    if ((version as string).includes('-')) {
+      await expect(registry().load('comments')).rejects.toMatchObject({
+        reason: 'incompatible_version', packageName: '@sentropic/cluster-mesh',
+      });
+    } else {
+      await expect(registry().load('comments')).rejects.toMatchObject({
+        reason: 'not_installed', packageName: '@sentropic/comments',
+      });
+    }
     expect(evaluations()).toEqual([]);
   });
 
