@@ -3,6 +3,7 @@ import type { TicketBinding, TicketRecord, TicketStore } from '../content/grants
 
 export const ACTIVATION_MAX_TTL_SECONDS = 60;
 export const ACTIVATION_SQL_ASSET = '@sentropic/artifacts/sql/0001_activation.sql';
+export const ACTIVATION_SQL_ASSET_SHA256 = '13767c826a62aa5f880809ca2ebc60bdc638b2e59f983e195d4351356b282d8b';
 
 export interface BrowserFlowBinding extends TicketBinding {
   nonceDigest: string;
@@ -115,6 +116,20 @@ function recordStores(run: Run, namespace: string): Pick<PostgresActivationStore
       parameters(id, generation));
   }
   const tickets: TicketStore = {
+    async issue(value, ttlMs) {
+      if (!Number.isSafeInteger(ttlMs) || ttlMs <= 0 || ttlMs > ACTIVATION_MAX_TTL_SECONDS * 1000) {
+        throw new Error('invalid activation lifetime');
+      }
+      const payload = { ...binding(value), ticketId: text(value.ticketId) };
+      return run(async (client, generation) => {
+        const { rows } = await client.query<{ payload: TicketRecord }>(
+          `WITH issued AS (SELECT ${nowSql}::bigint AS ms)
+           INSERT INTO artifact_host.activation_tickets(namespace,generation,payload,issued_ms)
+           SELECT $1,$2,jsonb_set($3::jsonb,'{expiresAt}',to_jsonb(ms+$4::bigint)),ms FROM issued
+           RETURNING payload`, [namespace, generation, JSON.stringify(payload), ttlMs]);
+        return rows[0]!.payload;
+      });
+    },
     async put(value) {
       const payload: TicketRecord = { ...binding(value), ticketId: text(value.ticketId), expiresAt: deadline(value.expiresAt) };
       await run(async (client, generation) => {

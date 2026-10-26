@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import {
-  ActivationCommitUnknownError, createPostgresActivationStore,
+  ActivationCommitUnknownError, ACTIVATION_SQL_ASSET_SHA256, createPostgresActivationStore,
 } from '../src/adapters/postgres-activation.js';
 
 const ticket = {
@@ -33,6 +35,11 @@ function world(commit: () => Promise<unknown> = async () => ({ rows: [] })) {
 }
 
 describe('PostgreSQL activation commit boundary', () => {
+  it('should preserve every byte of the versioned activation SQL asset', () => {
+    const bytes = readFileSync(new URL('../sql/0001_activation.sql', import.meta.url));
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(ACTIVATION_SQL_ASSET_SHA256);
+  });
+
   it('should perform no I/O at construction and reject an invalid namespace', () => {
     const w = world();
     expect(w.connect).not.toHaveBeenCalled();
