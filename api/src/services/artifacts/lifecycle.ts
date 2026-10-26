@@ -114,5 +114,21 @@ export function createArtifactHostJobs(options: {
       const report = await gc.collect({ ...guardedBlobs('collect'), listKeys: async () => page.keys }, prefix);
       return { ...report, cursor: page.cursor };
     },
+    async recover(steps: {
+      closeServing(): Promise<void>;
+      retireGrantAuthority(): Promise<void>;
+      reconcileDenials(): Promise<void>;
+      reopenServing(): Promise<void>;
+    }) {
+      await authorize('recover');
+      // W3/W5 supply a durable fence covering every serving process and writer.
+      await steps.closeServing();
+      if (!options.activation) throw new Error('Artifact recovery requires W1.c activation storage');
+      await options.activation.invalidate();
+      await steps.retireGrantAuthority();
+      await steps.reconcileDenials();
+      await authorize('recover');
+      await steps.reopenServing();
+    },
   };
 }
