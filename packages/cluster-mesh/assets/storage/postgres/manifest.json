@@ -89,6 +89,19 @@
         "cluster-mesh-pg/006-staged-coverage@1"
       ],
       "checksum": "ceeecbf062982ea83dfbd85e883eca9c38aac7d444c82781cf5b86346380db48"
+    },
+    {
+      "id": "cluster-mesh-pg/008-instance-ownership@1",
+      "file": "008-instance-ownership.sql",
+      "order": 8,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 7,
+      "toVersion": 8,
+      "requires": [
+        "cluster-mesh-pg/007-consumed-counters@1"
+      ],
+      "checksum": "2d69db98fa7d723b99f5f7665f3ada06577fc126ed49491ac4dff230e9b21e9a"
     }
   ]
 }
