@@ -33,15 +33,7 @@ describe.skipIf(!pgEnabled)('shared corpora on injected Postgres', () => {
       fixture.options.driver = driver; const root = await fixture.open();
       const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
       const foreign = grantFor({ token: 'foreign', scope: { tenantId: 'tenant-a', workspaceId: 'foreign' }, operations: ['read', 'write', 'maintain'] });
-      // E4 supersede: after a reopen only the surviving kernel may flush.
-      // The stable client keeps its fence map and journal paths; only the
-      // flush entry points follow the live bound (they reach the commit
-      // guard, fenced and staged ops never do).
-      const initial = await root.bindNew(grant);
-      const initialForeign = await root.bindNew(foreign);
-      let live = initial;
-      let liveForeign = initialForeign;
-      const client = (issued: typeof grant, bound: PgScoped, getLive: () => PgScoped) => {
+      const client = (issued: typeof grant, bound: PgScoped) => {
         const base = pgCorpusClient(root, issued, bound);
         // The frozen shared corpus uses small numeric positions. Keep its
         // adapter local; PostgreSQL's public transport remains exact strings.
@@ -65,19 +57,12 @@ describe.skipIf(!pgEnabled)('shared corpora on injected Postgres', () => {
           snapshotRead: async (...args: Parameters<PgScoped['snapshotRead']>) => bounded(await bound.snapshotRead(...args)),
           journalMarkPoison: bound.journalPoison.bind(bound),
           armExternalFailure: async () => { fail = true; },
-          commitAtomic: (...args: Parameters<PgScoped['commitAtomic']>) => getLive().commitAtomic(...args),
-          appendChain: (...args: Parameters<PgScoped['appendChain']>) => getLive().appendChain(...args),
         };
         return new Proxy(base, { get(target, property) { if (Object.hasOwn(extra, property)) return extra[property as keyof typeof extra]; const value = Reflect.get(target, property, target) as unknown; return typeof value === 'function' ? value.bind(target) : value; } }) as unknown as ReplayCorpusStore;
       };
-      await runReplayCorpus(client(grant, initial, () => live), client(foreign, initialForeign, () => liveForeign), {
-        rebind: async () => {
-          const kernel = await fixture.open();
-          live = await kernel.bind(grant);
-          liveForeign = await kernel.bind(foreign);
-          return client(grant, live, () => live);
-        },
-        bindWithoutMaintain: async () => { const weak = grantFor({ token: 'weak', operations: ['read', 'write'] }); const bound = await root.bindNew(weak); return client(weak, bound, () => bound); },
+      await runReplayCorpus(client(grant, await root.bindNew(grant)), client(foreign, await root.bindNew(foreign)), {
+        rebind: async () => client(grant, await (await fixture.open()).bind(grant)),
+        bindWithoutMaintain: async () => { const weak = grantFor({ token: 'weak', operations: ['read', 'write'] }); return client(weak, await root.bindNew(weak)); },
       });
     } finally { await fixture.close(); }
   });
