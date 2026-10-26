@@ -34,9 +34,10 @@
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
 - **Exception process**:
-  - [x] BRE6-EX1: unique pack-only 0.23.0-dev.5 package/root-lock version fields; never publish; rollback both fields together.
+  - [x] BR6-EX1: `packages/cluster-mesh/package.json` and `package-lock.json` unique pack-only 0.23.0-dev.5 version fields; never publish; rollback both fields together.
 
 ## Feedback Loop
+- [x] BR6-EX1 allows `packages/cluster-mesh/package.json` and `package-lock.json` version fields for the owner's unique dev.5 reservation; impact pack-only, rollback both fields together.
 - [x] E2 owns core `007-consumed-counters.sql`. E6 reserves memory chain `001-projections.sql`, next global receipt slot 008 after E2; no competing core migration.
 - [ ] Coordinate shared loader: E6 is sole writer of memory role/selection/fingerprint substitutions in migrations.ts after E2; peer message pending automatic approval review.
 - [x] Owner excludes Comments `incompatible_version` and selected packaging fixture 0.22.2 failures; #767 owns their one-time repair.
@@ -70,5 +71,5 @@
   - [ ] Existing PG module-migration, migration, registration, query and policy regressions pass.
   - [ ] Build, typecheck, lint, memory/common/grants and real PG qualification lanes pass except the two owner-listed failures.
   - [ ] Scope-check before every commit; P2 unchanged and Engram exactly 0.21.1.
-  - [ ] Unique pack-only 0.23.0-dev.5 commit.
+  - [x] Unique pack-only 0.23.0-dev.5 manifest/root-lock version commit; E2 registry baseline is 0.22.1; no peer or Engram change.
   - [ ] Push draft PR to `feat/engram-e2-integration`; record head/CI/migration; do not merge.
