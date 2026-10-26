@@ -61,12 +61,12 @@ Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only,
   - [x] Reject prod/preprod PG, namespaces and buckets; refuse absent identity and unsafe defaults, all before any write.
   - [x] Remove swallowed checksum/count failures; print the B03 manifest block.
   - [x] `make -n` dry-run plus `scope-check` before commit.
-- [ ] **Lot 2 — Runbook plus isolation test**
+- [x] **Lot 2 — Runbook plus isolation test**
   - [x] `docs/runbooks/app-cm-baseline-restore.md` with the exact tenant command for W0-close.c.
-  - [ ] `scripts/test-pgbackup-restore-isolation.sh` (shell, fake kubectl, no cluster).
-- [ ] **Lot 3 — Local guard verification**
-  - [ ] Run the isolation test green with `ENV=test-app-w0-restore` last.
-  - [ ] Prove no kubectl write precedes a guard failure.
+  - [x] `scripts/test-pgbackup-restore-isolation.sh` (shell, fake kubectl, no cluster).
+- [x] **Lot 3 — Local guard verification**
+  - [x] Run the isolation test green with `ENV=test-app-w0-restore` last.
+  - [x] Prove no kubectl write precedes a guard failure.
 - [ ] **Lot 4 — Final validation**
   - [ ] `make scope-check` before each commit; atomic `make commit` per file group, each under 150 lines.
   - [ ] Push, open a draft PR against `feat/app-cm-w0-baseline`, CI green; do not merge.
