@@ -51,7 +51,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read Docker lock, whole plan, APP-P1 freeze, MASTER/workflow/testing/API rules and template; mechanical branch check.
-- [ ] Lot 1: `api/tests/api/artifacts-host-publication.test.ts` first: HTTP/MCP identity and replay parity, ensure/publish, foreign authority, APP-P1 refusal; capture failing run.
+- [x] Lot 1: `api/tests/api/artifacts-host-publication.test.ts` first: HTTP/MCP identity and replay parity, ensure/publish, foreign authority, APP-P1 refusal. Red run failed on the missing composition module before implementation; `/tmp/app-w1b-red.log`.
 - [ ] Lot 2: `authorization.ts`: current tenant/workspace/account/credential participants, post-wait rechecks and transactional quota; `composition.ts`: scoped PG store/KV/coordinator and shared transports.
 - [ ] Lot 3: extend same test file with revocation after lock waits, expiry, quota contention/rollback, guarded replay, version witness and no new durable success on denial.
 - [ ] Lot 4: typecheck-api, lint-api, focused publication/migration/tenancy regressions; runtime logs and stack cleanup; inspect each authored hunk.
