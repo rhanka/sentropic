@@ -2,6 +2,14 @@
 
 ## PR757 Opus r2 integration
 
+- Main advanced during the first CI run: merge #769 at
+  `365e8b313f1c4c627c87db4f6761847a1e6a5ae7` adds Memory L5 evidence/tests.
+  The second integration resolves only `BRANCH.md`, retaining the L1c plan;
+  cluster/mesh sources, manifests and root lock match `5258b9a6c` byte-for-byte.
+  The locked speech rerun passes **4 files / 66 tests**, zero skips, with
+  `SCOPE=tests/speech- ENV=test-stt-l1c`. All tests/qualifications passed in
+  [the first CI run](https://github.com/rhanka/sentropic/actions/runs/40401909237)
+  at `5258b9a6c`; CI is refreshed on the second merge head.
 - Retargeted draft #757 from `feat/live-stt-l1` to `main`.
 - Integrated `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`
   with a merge commit; no history rewrite.
