@@ -9,7 +9,7 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
 - Make-only; `ENV=test-e2-int` last; 0 Python; no publication or merge.
 - Serialize Docker/test steps with the shared lock; existing Compose targets only; `make down` after each step.
 - Preserve P2 `2b85ff28b6fe06bda0abcdc19255f61a1ed1e4b7cfbb40c2e881c98dd234424b`; stop if an authored change alters it.
-- Keep old exports/signatures compatible; legacy safe-integer paths keep frozen behavior.
+- Preserve frozen common contracts and legacy safe numeric inputs; owner-authorized r1 PG journal/consumer/snapshot outputs carry exact decimal strings.
 - Specific-file staging; `make commit` only, each below 150 changed lines, without attribution trailers.
 - Unique pack-only `0.23.0-dev.3`, next free N after E1.
 - Published 001-006 and comments SQL stay byte-identical (checksums pinned in tests); only `007` is new.
@@ -97,6 +97,7 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
 - [x] PR765 r1 P1-1 regression: journal reads, poison/retry, checkpoint CAS, lag and retained snapshot completion/reopen tested at 2^53, 2^63 and max u64; unsafe numeric input refused.
 - [x] PR765 r1 P2: real memory K3/K5/K8 compound keys pass memory effects validation, updates/guards/stale refusals through signed-64 crossing and max u64; post-publish hook failure rolls back root, record and journal at crossing/max with reopen and retry.
 - [x] PR765 r1 P2 upgrade: populated 006 scopes/journal/fences/boundaries above 2^53 and at signed max survive 007, reopen, journal read and publication; all six counter columns reject negative and above-u64 writes.
+- [x] 006 numeric JSON consumer positions normalize to exact decimal strings after upgrade without changing delivery/checkpoint behavior.
 - [x] Commit-options fences stay safe-only (`validateCommitOptions` frozen); u64 epochs flow through `provisionFence`/`fence` direct paths.
 - [x] PR765 r1 P2-3 handoff to E4 (canonical PG acquisition) / E5 (neutral binding): widen commit-options epoch validation and replace strict representation comparisons in postgres/staged.ts, units.ts and seals.ts with exact u64 value comparisons. Acceptance: fenced ordinary/staged commits accept equal canonical epochs at 2^53, 2^63 and max u64, refuse stale epochs, and preserve frozen common behavior. Verification: real PG ownership/staged tests plus common-rule corpus. E2 regression explicitly proves current commitAtomic refusal before persistence; no E4/E5 implementation here.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; E2 qualification green; no merge.
