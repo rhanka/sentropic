@@ -45,8 +45,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# BR77-EX1: two package validation lanes and bounded runtime matrices.
-# Dependencies only stagger execution; every selected result remains required.
+# BR77-EX1: shared queued capacity slots; six independent package validation slots.
+# Matrix indices share the same 15 slots; the two existing release groups remain separate.
 jobs:
   enforce-package-bump:
     runs-on: ubuntu-latest
@@ -1445,7 +1445,7 @@ jobs:
       UI_PORT: '5691'
       MAILDEV_UI_PORT: '1591'
     strategy:
-      max-parallel: 2
+      max-parallel: 15
       fail-fast: false
       matrix:
         include:
@@ -1596,7 +1596,7 @@ jobs:
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     strategy:
-      max-parallel: 2
+      max-parallel: 5
       fail-fast: false
       matrix:
         include:
@@ -2026,6 +2026,10 @@ jobs:
   # own trigger filter and `global` are false), serialized across runs by one concurrency group.
   publish-llm-mesh:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-12
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh]
     if: >-
       !cancelled() &&
@@ -2060,6 +2064,10 @@ jobs:
 
   publish-llm-gateway:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-13
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh]
     if: >-
       !cancelled() &&
@@ -2085,6 +2093,10 @@ jobs:
 
   publish-chat-ui:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-14
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-chat-ui]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2099,6 +2111,10 @@ jobs:
 
   publish-cited-source-viewer:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-6
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-cited-source-viewer]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-cited-source-viewer.result == 'success' && (needs.changes.outputs.cited_source_viewer_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2113,6 +2129,10 @@ jobs:
 
   publish-cowork-bridge:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-7
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-cowork-bridge]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-bridge.result == 'success' && (needs.changes.outputs.cowork_bridge_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2127,6 +2147,10 @@ jobs:
 
   publish-oauth-verify:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-8
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-oauth-verify]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-oauth-verify.result == 'success' && (needs.changes.outputs.oauth_verify_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2143,6 +2167,10 @@ jobs:
   # only after the sibling publisher succeeded or was skipped, as gateway waits for mesh.
   publish-mcp-auth:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-9
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-mcp-auth, publish-oauth-verify]
     if: >-
       !cancelled() && needs.changes.result == 'success' &&
@@ -2197,6 +2225,10 @@ jobs:
 
   publish-mcp-platform:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-10
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-mcp-platform]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-platform.result == 'success' && (needs.changes.outputs.mcp_platform_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2211,6 +2243,10 @@ jobs:
 
   publish-artifacts:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-11
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-artifacts]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' && (needs.changes.outputs.artifacts_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2225,6 +2261,10 @@ jobs:
 
   publish-auth-hono:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-12
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-auth-hono]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-auth-hono.result == 'success' && (needs.changes.outputs.auth_hono_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2239,6 +2279,10 @@ jobs:
 
   publish-auth-client:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-13
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-auth-client]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-auth-client.result == 'success' && (needs.changes.outputs.auth_client_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2253,6 +2297,10 @@ jobs:
 
   publish-auth-ui:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-14
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-auth-ui]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-auth-ui.result == 'success' && (needs.changes.outputs.auth_ui_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2267,6 +2315,10 @@ jobs:
 
   publish-cowork-desktop:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-6
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-cowork-desktop]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-desktop.result == 'success' && (needs.changes.outputs.cowork_desktop_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2281,6 +2333,10 @@ jobs:
 
   publish-contracts:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-7
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-contracts]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-contracts.result == 'success' && (needs.changes.outputs.contracts_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2295,6 +2351,10 @@ jobs:
 
   publish-events:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-8
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-events]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-events.result == 'success' && (needs.changes.outputs.events_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2309,6 +2369,10 @@ jobs:
 
   publish-chat-core:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-9
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-chat-core]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-chat-core.result == 'success' && (needs.changes.outputs.chat_core_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2323,6 +2387,10 @@ jobs:
 
   publish-chat-server:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-10
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-chat-server]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-chat-server.result == 'success' && (needs.changes.outputs.chat_server_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2337,6 +2405,10 @@ jobs:
 
   publish-comments:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-11
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-comments]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-comments.result == 'success' && (needs.changes.outputs.comments_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2351,6 +2423,10 @@ jobs:
 
   publish-flow:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-12
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-flow]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-flow.result == 'success' && (needs.changes.outputs.flow_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2365,6 +2441,10 @@ jobs:
 
   publish-harness:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-13
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-harness]
     if: !cancelled() && needs.changes.result == 'success' && needs.validate-harness.result == 'success' && (needs.changes.outputs.harness_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
@@ -2382,6 +2462,10 @@ jobs:
   # publisher counts as skipped only when its own `*_publish` filter is false.
   publish-cluster-mesh:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-14
+      queue: max
+      cancel-in-progress: false
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts, publish-mcp-platform, publish-artifacts]
     if: >-
       !cancelled() &&
@@ -2452,6 +2536,10 @@ jobs:
   # not a publish step: a mismatch turns main red (fixture lock stale) without stopping the publish chain.
   verify-train-lock-integrity:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-6
+      queue: max
+      cancel-in-progress: false
     needs: [changes, publish-llm-mesh, publish-llm-gateway]
     # `!cancelled()` (not `always()`): a manual cancel stops the chain (deviation from design section 5).
     if: >-
@@ -2476,6 +2564,10 @@ jobs:
 
   bootstrap-publish:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-7
+      queue: max
+      cancel-in-progress: false
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_publish_target != 'none' && github.ref == 'refs/heads/main'
     steps:
       # Defense in depth for API-dispatched runs: the choice list is not enforced
@@ -2599,6 +2691,10 @@ jobs:
   # overlays/preprod before applying (kills the floating :main staleness, D-c1).
   deploy-preprod:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-8
+      queue: max
+      cancel-in-progress: false
     needs: [publish-api-image, publish-ui-image]
     # Deploy on every main merge. Run even when the publish jobs were SKIPPED (no
     # api/ui content change) so an overlay/manifest-only change still reaches preprod;
@@ -2647,6 +2743,10 @@ jobs:
   # deploy-preprod (main-only deployment); none validates a PR before merge.
   ci-gate:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-9
+      queue: max
+      cancel-in-progress: false
     if: always()
     permissions:
       contents: read
@@ -2733,6 +2833,10 @@ jobs:
   # completed result through needs. Rollback preserves expected-result checks.
   ci-capacity-receipts:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-10
+      queue: max
+      cancel-in-progress: false
     if: always()
     permissions:
       contents: read
@@ -2797,6 +2901,10 @@ jobs:
   # Rollback: delete this job and its ci-gate entry.
   validate-ci-capacity-metrics:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-11
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled()
     permissions:
