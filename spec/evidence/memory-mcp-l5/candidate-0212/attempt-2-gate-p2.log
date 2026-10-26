@@ -1,0 +1,1 @@
+[rtk] flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5: process terminated by signal 15

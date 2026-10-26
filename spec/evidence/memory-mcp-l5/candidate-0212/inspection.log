@@ -1,0 +1,28 @@
+candidate SHA-256: a295eef8a1733fd8c00f72ccd6938a5ea11678fdf33848f8849c4d531bd43af8
+candidate integrity: sha512-vzIjuznMAk9IXdzBJdJgSAe7Lf0pLxC1UGK6LrSoXcYYbFIR2BVL20e6Eej4YY4MZxZTljmnn5xdYO4l7MXBSA==
+P2 SHA-256: 2b85ff28b6fe06bda0abcdc19255f61a1ed1e4b7cfbb40c2e881c98dd234424b
+candidate checkout HEAD: 7638249ec9fe5558dde61898cb19372b9702ba1c
+L4 manifest source commit: ad96c6815e252daca31389cbe64b992d3e107a35
+L4 manifest SHA-256: 36347dfd54337d7ad9134c8d76ec0d1673909fc4f8047dc9005e68fe6438429a
+Required candidate manifest fields absent from L4 handoff:
+manifestVersion
+stage
+preCandidateManifestSha256
+e4ArtifactSha256
+l4BuildReceipt
+source
+artifacts
+contractInventory
+Frozen exports inventory entries:
+@sentropic/mcp-broker
+@sentropic/mcp-broker/memory
+@sentropic/mcp-platform/memory
+Required import graph roots absent from checkout:
+packages/mcp-broker/src/memory-reference/index.ts
+tools/memory-mcp-l5/verifier.mjs
+Installed six-tool behaviour: unverified (packed suite absent)
+Disabled-install 0/0/0/0: unverified (suite absent; no observed counters)
+Registry entry canonical digest: 29caca1059c71db403a20e49f20de9cce5489b4b4859afb6f99223338b543b03 (PASS; sorted compact JSON matches upstream canonicalizer for these bytes)
+Publisher receipt is external by design (upstream gen-mcp-memory-assets.mjs:10-14).
+Candidate qualification: no candidate lot implemented; official Docker targets are allowed under the shared flock. See attempt-2 evidence for execution status.
+L5-MEMORY-V1 receipt: NOT ISSUED
