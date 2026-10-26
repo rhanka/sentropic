@@ -14,13 +14,13 @@ export const MCP_PLATFORM_RANGE = '>=0.4.0 <0.5.0';
 export const ARTIFACTS_PACKAGE = '@sentropic/artifacts';
 /** Artifacts 0.1.3 admits the platform 0.4 family used by native wrapping. */
 export const ARTIFACTS_RANGE = '>=0.2.0 <0.3.0';
-export const LLM_MESH_RANGE = '0.19.2 || >=0.22.0 <0.28.0';
+export const LLM_MESH_RANGE = '0.19.2 || >=0.22.0 <0.29.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.22.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
-/** Follows llm-gateway 0.19.6's declared optional peer range (parity with #674: admits auth-hono 0.16.0).
+/** Follows llm-gateway's declared optional peer range, including the Zod 4 auth-hono release.
  * Spelled as a bounded interval: the minimal release-range parser has no `||`. */
-export const AUTH_HONO_RANGE = '>=0.15.0 <0.17.0';
+export const AUTH_HONO_RANGE = '>=0.15.0 <0.18.0';
 export const COMMENTS_RANGE = '^0.3.0';
 
 export interface PeerRequirement {
@@ -81,6 +81,9 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   'llm-mesh/facade': mesh('llm-mesh/facade', './facade', ['createLlmMeshFacade']),
   'llm-mesh/enrollment': mesh('llm-mesh/enrollment', './enrollment', []),
   'llm-mesh/node': mesh('llm-mesh/node', './node', ['InMemoryKeyring']),
+  'llm-mesh/decision': mesh('llm-mesh/decision', './decision', ['createRemoteDecisionClient', 'validateDecisionResult']),
+  'llm-mesh/decision/host': mesh('llm-mesh/decision/host', './decision/host', ['createDecisionService', 'createJevAdapter', 'createStructuredDecisionAdapter', 'jevDescriptor']),
+  'llm-mesh/transport/jev': mesh('llm-mesh/transport/jev', './transport/jev', ['createJevTransport']),
   'llm-mesh/transport/cloud-code': mesh('llm-mesh/transport/cloud-code', './transport/cloud-code', ['CloudCodeProviderAdapter']),
   gateway: gateway('gateway', '.', ['createGatewayRouter'], [], '/gw'),
   'gateway/auth': gateway('gateway/auth', './auth', ['ServiceAuthVerifyToken'], SERVICE_AUTH_PEERS),
