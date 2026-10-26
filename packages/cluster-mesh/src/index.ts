@@ -10,6 +10,7 @@ export * from './trust.js';
 export * from './token-exchange.js';
 export * from './trust/token-exchange-http.js';
 export * from './config.js';
+export * from './speech/config.js';
 export * from './hono/plugin.js';
 export * from './hono/health-router.js';
 export * from './hono/cli-router.js';
