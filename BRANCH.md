@@ -66,6 +66,7 @@
   - [x] Reject queued API placeholder timestamps and invalid/skipped critical-path endpoints; include dependency-to-dispatch handoff delay in aggregate scheduling (34 metrics tests).
   - [x] Real cancellation receipt exposed runner_id=0 entries with positive API intervals; preserve their identities/stamps but exclude them from execution, cost and peak credit (35 metrics tests).
   - [x] Post-run classification/verdict timing uses that same runner-dispatch evidence; absent runners never receive duration credit. New policy qualification uses ENV=test-ci-capacity.
+  - [x] Include workflow admission before root job creation (rollback 189s; completed main 1s) in critical-path scheduling. Preserve unknown admission/readiness as null; completed main aggregate is 1559s.
   - [x] Add post-run Make capture using the actual run/attempt Jobs API, exact source workflow, and retained pre-dispatch manifest. Missing artifacts fail closed; no selection reconstructed from outcomes.
   - [x] Qualify aggregate scheduling receipts on identified critical-path executions; preserve single-job queue statistics. Main cancellations remain current across newer main runs (32 metrics tests).
   - [ ] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
@@ -73,7 +74,7 @@
   - [ ] Rollback drill: restore prior scheduling policy and conservative dispatch width; keep expected-result and metrics checks; demonstrate that cancellation never stops the current release.
   - [x] Prepare live conservative rollback: one package validation lane and API/E2E widths 1/1; retain the pre-BR77 cancellation/release groups and every completeness/metrics check. Run beside main 40341027258 attempt 2.
   - [x] Rollback head 474e023163fd1be0b2f0ac7f33442c2d97dc561c started run 40353670942; prior run 40352448337 was automatically cancelled (57 cancelled rows; its complete-result gate failed). Main attempt 2 continued. Restore bounded 2/2 policy and retain dependency/capacity inputs in workflow artifacts.
-  - [x] Main 40341027258 attempt 2 completed successfully through both supersessions: all four endpoints continuous; peak 12; 210.45 runner-minutes. Classification/verdict/scheduling 19s/19s/1558s breach 15s/5s/60s; retain these failures in capacity.md. Rollback metrics job 121682975411 passed live.
+  - [x] Main 40341027258 attempt 2 completed successfully through both supersessions: all four endpoints continuous; peak 12; 210.45 runner-minutes. Classification/verdict/scheduling 19s/19s/1559s breach 15s/5s/60s; retain these failures in capacity.md. Rollback metrics job 121682975411 passed live.
 - [x] **Lot 4 — Docs consolidation**
   - [x] Update this plan, the study, and `spec/ci-cd-ten-minutes/capacity.md` with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
