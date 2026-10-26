@@ -3,11 +3,12 @@
 //   { segments: [{ startSec, endSec, text, noSpeechProb? }], language? } — resolve,
 //   { error: <message> } — reject,
 //   { hang: true } — never settle (starvation probe).
-export function createEngine(options = {}) {
+export function createEngine(options = {}, modelPath = 'unknown') {
   const script = Array.isArray(options.script) ? options.script : [];
+  const tag = String(modelPath).split('/').pop();
   let calls = 0;
   return {
-    engineId: 'fake-stt/1',
+    engineId: `fake-stt/1:${tag}`,
     async transcribe(window, { sampleRateHz } = {}) {
       calls += 1;
       const step = script[calls - 1] ?? script[script.length - 1] ?? { segments: [] };
