@@ -1,111 +1,82 @@
-# Feature: Live STT L1c cluster speech configuration
+# Feature: Live STT L3 local registry adapter
 
 ## Objective
-- [x] Deliver approved r3 L1c: versioned stage bindings, mic policy and offline projection without fixed engines.
-- [x] Preserve L0 PR #753 at `c0bd543689e31c6511150b2d26b71947bb85c455`; refresh its moving facts for L1c.
+Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated worker using the owned TS package, rolling windows/VAD, independently pinned tiny/base profiles with no fixed model in the loop.
 
 ## Scope / Guardrails
-- [x] Author: codex / gpt-6.1-sol / high; spec SHA-256 `5a666faa9e1856245ef94b19988cb08514e6e1aeac32918715c07f8ce4a24c61`.
-- [x] Branch `feat/live-stt-l1c`, worktree `tmp/worktrees/live-stt-l1c`, origin/main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`.
-- [x] Make-only, ENV last: `ENV=test-live-stt-l1c`; shared Docker flock; existing Compose qualification service, no published ports.
-- [x] No paid API, inference, microphone, model download, Python, publication or deployment.
-- [x] Specific-file staging; make commit only; commits under 150 changed lines; no attribution trailers.
-- [x] Preserve root and other worktrees; Sol serializes shared catalogue/barrel/manifest edits.
+- Scope limited to L3 local STT: adapter, isolated worker, tiny/base profiles, `local-stt` + `window-reconciliation` tests, local bench receipt, §8.1 evidence.
+- No L2 core files (`live-speech/src/core/**` belongs to the parallel L2 lane).
+- No llm-mesh/cluster-mesh source edits; L1 contract types consumed as `import type` only.
+- Make-only workflow, no direct Docker commands.
+- Branch development in isolated worktree `tmp/worktrees/stt-l3` (even for one active branch).
+- Automated test campaigns on dedicated env `ENV=test-stt-l3`, never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- No paid API call; no microphone in tests; no audio payload in logs; model use only through pinned, hashed artifacts.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `.tmp/live-stt/l1c/**`
-  - `.tmp/live-stt/l0/**`
-  - `packages/cluster-mesh/src/speech/**`
-  - `packages/cluster-mesh/src/config.ts`
-  - `packages/cluster-mesh/src/index.ts`
-  - `packages/cluster-mesh/README.md`
-  - `packages/cluster-mesh/CHANGELOG.md`
-  - `packages/cluster-mesh/tests/speech-*.spec.ts`
-  - `packages/cluster-mesh/tests/speech-fixtures.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `package-lock.json`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/src/modules/catalog.ts`
-  - `packages/cluster-mesh/src/modules/contracts.ts`
-  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/live-speech/**`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
-  - `.track/**`
-  - `api/**`
-  - `ui/**`
-  - `plan/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `scripts/**` (none planned).
+  - `Makefile`
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] PR757 verification adds native Node ESM speech imports against 0.19.2/0.22/0.27 without speech exports and 0.28 with missing/invalid/valid exports; strict types and lint now cover all four speech suites.
-- [x] PR757-P2-2: two tests first reproduce missing digest and same-revision reload acceptance. Canonical SHA-256 pins selections, projections and consent; reload accepts known revision history and refuses content changes under an existing scoped identity.
-- [x] PR757-P2-1: eight tests first fail on missing speech registration; speech now loads through the typed registry with >=0.28.0 <0.29.0 metadata/member checks before provider evaluation, retaining existing text ranges and the topology guard.
-- [x] BRLIVE-L1C-EX3: register speech with the existing guarded module catalogue and extend the packed skew probe. Scope adds only module IDs and tuple-skew assertions; rollback removes that entry and probe. Required by PR757-P2-1; broad text-peer compatibility is retained.
-- [x] PR757-P1: tests first reproduced three refusals; chained profiles now allow STT-only or TTS-only, and native duplex permits independently selected companion stages. Empty profiles and requirements on absent stages remain refused.
-- [x] Draft #757 targets feat/live-stt-l1 to isolate this lot. Existing CI triggers only for main PRs, so exact-head workflow query returns no runs. Owner/integrator must merge #754 then retarget #757 to main and obtain its CI result before merge; no workflow gate changed.
-- [x] Cold source typecheck found TS2322 on the already validated cost field; explicitly type its normalized numeric output, retaining NaN/negative refusal tests. Quality adapter also compiles existing type fixtures.
-- [x] Existing packaging gate requires a root declaration graph free of optional peers; make the profile schema self-contained and check structural compatibility at the L1 negotiation boundary. No provider/router implementation is copied.
-- [x] Scoped green attempt: 44 pass, 2 fixture failures because native-duplex cases retained chained stt requirements. Replace those fixture requirements with an empty stage map; preserve strict pipeline validation.
-- [x] BRLIVE-L1C-EX2: additive feature prepares cluster 0.23.0 above registry 0.22.1; extend only the self comments-leaf range to <0.24.0, retain next-minor refusal, and align frozen selected archive/lock. Impact: same comments API on additive speech release; rollback with the 0.23 bump. Full module/packaging checks required.
-- [x] Scoped parser failure pinpoints a line break before the type assertion; keep the assertion with its expression and rerun the same suites.
-- [x] origin/feat/live-stt-l1c absent; created from origin/main and merged approved L1 head `01d784be8` by fast-forward, no rebase.
-- [x] BRLIVE-L1C-EX1: existing cold workspace/Compose targets only; external adapter avoids inherited raw Docker scope prerequisite; no tracked build/CI change.
-
-## Plan / Todo (lot-based)
-- [x] PR757-r1: reproduce P1/P2-1/P2-2 before their fixes; deliver independent stage sets, guarded speech loading and canonical revision pins. Full cluster suite passes 1,180 tests (66 speech), with 129 environment-gated skips; native ESM guard/type/lint/build checks pass. Rechecked registry; preserve stacked base and independent-review boundary.
-- [x] L1c baseline: Docker lock first, rules/spec/owner answers and L0 evidence read; mechanical branch check passes.
-- [x] Replace inherited scope/plan with L1c file-level gates before source edits.
-- [x] **L1c-a — Reconcile L0**
-  - [x] Preserve L0 baseline and complete §11.2 gate register from source head `c0bd543689`.
-  - [x] Preserve SDK/native provenance/toolchain/license inventory and all required placements; artifacts remain unadmitted.
-  - [x] Preserve L0 release-owner/ledger scope and validation receipts; all eight historical deliverables retained byte-for-byte.
-  - [x] Preserve eight L0 files under `.tmp/live-stt/l0/`; refresh heads, gate register, SDK/provenance/license/ledger/release and placement evidence in `.tmp/live-stt/l1c/baseline.md`.
-  - [x] Carry dedicated capacity study and explicit zero allocation; no native inference or quota exception.
-- [x] **L1c-b — Tests first**
-  - [x] `packages/cluster-mesh/tests/speech-fixtures.ts`: five primary tuples, whisper.cpp and synthetic future/native-duplex/placement entries.
-  - [x] `packages/cluster-mesh/tests/speech-config.spec.ts`: bindings/selectors, invalid shapes, all placements, both mic modes, empty/explicit fallback, unsupported capability refusal, no secrets.
-  - [x] `packages/cluster-mesh/tests/speech-projection.spec.ts`: offline snapshot, tenant/policy/egress refusal, unavailable catalogue, safe rebind, immutable revision, consent and no fallback.
-  - [x] Red at `ac7134bfd`: both suites fail on missing speech/config.js before source implementation.
-  - [x] Red run before implementation; first scoped green 48 tests after config/projection and existing seam integration.
-  - [x] Add reproducible Compose-only strict speech-test types, changed-source lint/build/content and existing packed-tuple adapter; root files unchanged.
-- [x] **L1c-c — Implementation**
-  - [x] Strict profile decoder, immutable snapshots and existing cluster config seam implemented; catalogue projection follows.
-  - [x] Catalogue projection negotiates each exact stage tuple and intersects trusted tenant/policy/placement/egress evidence; no routing or credentials added.
-  - [x] Explicit rebind barrier requires cancellation/reconciliation/drained playback and renewed revision-bound consent; speech subpath preserves optional provider loading.
-  - [x] `packages/cluster-mesh/src/speech/{config,projection}.ts`: one revisioned schema and local projection consuming llm-mesh catalogue/negotiation.
-  - [x] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
-  - [x] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.
-- [x] **L1c-d — Documentation and validation**
-  - [x] Quality gate: strict source/speech-test/existing-fixture types, changed-source lint, build and packed-content exports pass.
-  - [x] Full default cluster suite passes 1,162 tests; 129 environment-gated skips recorded separately from packed qualification.
-  - [x] README/CHANGELOG: configuration example, selectors, placements, fallback/rebind/consent boundaries and unavailable reasons.
-  - [x] Scoped speech 48; full cluster 1,162 plus 129 gated skips; packed matrix 100/100; strict typecheck/lint/build/public exports pass.
-  - [x] `make scope-check` before each commit; whitespace and under-150-line/trailer audit at handoff.
-  - [x] Locked ENV cleanup between Docker steps; no services or published ports outside ENV.
-- [x] **L1c-e — Draft handoff**
-  - [x] Record independent-review eligibility/evidence; retain open G-REVIEW with no admitted complementary reviewer capacity.
-  - [x] Push draft #757 using this plan as body; exact-head CI queried, no run because base is L1; final head and surface reported at handoff.
+- [x] BR03-EX1: touch conditional `Makefile` (`test-live-speech` target only). Reason: L3 needs a runnable vitest lane mirroring `test-oauth-verify` (SCOPE support, pinned vitest/typescript). Impact: one additive target; no existing target changed. Rollback: delete the target block.
+- [ ] CI run for PR: pending.
 
 ## AI Flaky tests
-- [x] Deterministic fixtures only; no flaky waiver.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, sequential; no inferred reviewer/native capacity.
-- [ ] Multi-branch not required for this single lot.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single-package lot with one test cycle; no UI.
 
 ## UAT Management (in orchestration context)
-- [x] Export/configuration review through draft PR; no microphone/UI activation or device acceptance.
-- [x] Reproduce all fixture gates on the delivered source tuple; no native/UAT acceptance inferred.
+- [x] No UI change; no UAT required (no microphone path in this lot; bench is local-only).
 
-## Deferred to later live-speech lots
-- [x] Engines, controllers/fences, accounting, native/cloud/device qualification, release/adoption and deployment retain their §11.2 owner gates.
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read packet, `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `DOCKER-LOCK.md`, spec-plan r3 (L3 row l.420, §8.1).
+  - [x] Create worktree `tmp/worktrees/stt-l3` on `origin/feat/live-stt-l1c` as `feat/live-stt-l3`.
+  - [x] Confirm scope and declare `BR03-EX1` before touching `Makefile`.
+- [ ] **Lot 1 — Local STT adapter**
+  - [ ] `packages/live-speech/package.json` (private), `tsconfig.json`.
+  - [ ] `src/node/profiles.ts`: independently pinned tiny/base profiles, runtime selection, no fixed model.
+  - [ ] `src/node/engine-port.ts`: engine port interface (no faster-whisper import).
+  - [ ] `src/node/stt-worker.mjs`: isolated worker entry (plain JS), engine path injected, no audio in logs.
+  - [ ] `src/node/local-stt.ts`: rolling windows, VAD-gated endpointing, overlap dedupe, one final, teardown.
+  - [ ] `Makefile`: `test-live-speech` target (BR03-EX1).
+  - [ ] Lot gate:
+    - [ ] `make test-live-speech ENV=test-stt-l3`
+- [ ] **Lot 2 — Tests + bench receipts**
+  - [ ] `tests/local-stt.test.ts`: model selection, one final, teardown/no starvation.
+  - [ ] `tests/window-reconciliation.test.ts`: overlap dedupe, stable prefix, revision replace, out-of-order finals.
+  - [ ] `bench/run-local-bench.mjs` + `bench/local-stt-bench.receipt.json` (real tiny/base timings or pending with blocker).
+  - [ ] `bench/l3-g-native.receipt.json` (§8.1 evidence).
+  - [ ] Lot gate:
+    - [ ] `make test-live-speech ENV=test-stt-l3`
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint
+  - [ ] Retest package (cf Lot1/Lot2 checklists)
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`. (New private package: CI skips bump check.)
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
