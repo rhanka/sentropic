@@ -59,7 +59,7 @@
 - [ ] **Lot 2 — Bounded dispatch and concurrency**
   - [x] Admit full PR/main DAGs only at <=15 slots (17 observed minus 2 release allowance); ordinary publishers use one lane, existing mesh/gateway/cluster barriers and bootstrap remain intact. API/E2E widths settle at 2/2.
   - [x] Review r1: remove the 13/10-deep validator chains; six queued capacity groups preserve 23 independent jobs and their selected-result identities.
-  - [x] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots.
+  - [x] Review r1: ordinary publishers depend on their own validators; preserve the existing oauth-to-mcp-auth and mesh/gateway/cluster registry dependency barriers.
   - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
 - [ ] **Lot 3 — Contention budgets and rollback drill**
   - [x] Combine real run captures for observed-peak admission, execution-overlap witnesses, superseded PR ownership and per-main-release continuity; incomplete runs remain to-measure.
