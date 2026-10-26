@@ -1,64 +1,56 @@
-# Feature: #861 final artifacts 0.2.0 candidate integration
+# Feature: W1.a durable host schema and package-asset installation
 
 ## Objective
-- [ ] Build the final artifacts 0.2.0 / cluster-mesh 0.22.0 candidate, requalify L8d, and obtain green PR #739 CI.
+- [ ] Install durable artifact host KV and unchanged upstream SQL assets through the API migration authority.
 
 ## Scope / Guardrails
-- [x] Worktree tmp/worktrees/861-integration; branch feat/immo-861-integration; merge-only integration.
-- [x] ENV=test-861-int last; shared Docker lock; matching make down after each Docker step.
-- [x] No main merge or publication; the conductor owns publication.
-- [x] Selective staging, make commit, fewer than 150 changed lines per new commit, no attribution trailers.
+- [x] Owner dispatch: W1.a of `.tmp/app-switch-week/plan-v2.md`; draft PR only, no merge or deployment.
+- [x] Worktree `tmp/worktrees/app-w1a`, branch `feat/app-cm-w1a`; upstream `2568c25cd6f03d706356fd0be5bd9e0c601a0bcf`, frozen in #702 reservations.md.
+- [x] Create missing `feat/app-cm-integration` at the same SHA; integration waits for W0-close.e.
+- [x] Only control `0020_app_artifact_host.sql`; preserve #677 control 0012–0019. Ref/worktree rescan found no 0020 SQL collision on 26 October.
+- [x] Make-only, shared Docker flock for build/test/start and matching down after each step; `ENV=test-app-w1a` last.
+- [x] API/UI/Maildev UI ports 8791/5177/1084; verify ownership before listeners. Never test on dev.
+- [x] Workspace sources unchanged; W2.b owns manifests/locks. No package SQL copies, edits or host activation algorithm.
+- [x] Atomic commits below 150 lines; selective staging, scope-check, make commit; no attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/**`
-  - `packages/cluster-mesh/**`
-  - `scripts/ci/immo-861-*`
-  - `Makefile`
-  - `docker-compose.immo-861.yml`
-  - `.track/**`
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `api/src/services/artifacts/host-storage.ts`
+  - `api/src/db/run-migrations.ts`
+  - `api/drizzle/control/0020_app_artifact_host.sql`
+  - `api/drizzle/control/meta/_journal.json`
+  - `api/tests/api/artifacts-host-migrations.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `ui/**`
+  - `packages/**`
+  - `plan/**`
+  - `.track/**`
+  - `api/package*.json`
+  - `package*.json`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `package-lock.json`
-  - `packages/llm-mesh/**`
-  - `api/**`
-  - `e2e/**`
-- **Exception process**:
-  - [x] BR861-EX1: retain existing isolated Compose qualification wiring; new release targets use that same service and environment.
-  - [x] BR861-EX2: preserve approved incoming history and Track bytes without new edits outside qualification scope.
-  - [x] BR861-EX3: retain reserved candidate manifest/lock versions artifacts 0.2.0 and cluster-mesh 0.22.0.
-  - [x] BR861-EX4: retain artifacts 0.2.0 qualification pins and guarded sibling receipts.
+  - `.github/workflows/**`
+- [x] **Exception process**: declare BR-W1A-EXn with reason, impact and rollback before scope expansion.
 
 ## Feedback Loop
-- [x] INT-18: pull --no-rebase reached 464581fb813b2fbfb6b4691b250162e0dfd942e9, including #750 public executor, packed example, A6 and A4.
-- [x] INT-19: #750 replaced the integration plan with its topic plan; restore this integration scope while retaining all approved implementation bytes.
-- [x] L0 freeze and previous integration decisions remain in the retained merge history.
+- [ ] UP-T: #702 host-fit records no activation adapter/SQL in frozen artifacts 0.2.0. Package integrator must deliver reviewed bytes/export/hash; W1.c consumes them. Activation readiness is not claimed.
+- [ ] W0-close.c/e remain external gates; this draft must not integrate before W0-close.e.
 
 ## AI Flaky tests
-- [x] No flaky acceptance, timeout increase or skipped required case.
+- [x] No AI tests or accepted flakes; no timeout increases.
 
 ## Orchestration Mode (AI-selected)
-- [x] Multi-branch; one release integrator; L8d owns packed Radar qualification evidence.
+- [x] Mono-branch: one author, isolated W1.a topic on the app integration train.
 
 ## UAT Management (in orchestration context)
-- [x] Package qualification only; no production activation claim.
+- [x] Backend migration only; no UI, Chrome or VSCode changes. No root-dev UAT needed.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0 — pull integration with a merge; verify branch mechanically.
-- [x] Lot 1a — artifacts unit gate: 440 tests / 35 files passed at product source 464581fb8.
-- [x] Lot 2a — add reproducible guarded packing through the existing qualification Compose service.
-- [x] Lot 2b — guard all three sibling identities and qualify the exact packed mesh archive.
-- [x] Lot 2c — prepare ownership only on this worktree's candidate output and sibling archive directories.
-- [x] Lot 2d — retain prior sibling archives outside the guarded destination before regenerating final receipts.
-- [x] Lot 1b — real PostgreSQL/MinIO integration and E2E: 172 tests / 12 files passed.
-- [x] Lot 1 — artifacts 440/35 files, real integration/E2E 172/12, lint and freeze-types pass; mesh surface 21/1, full packaging 97/15 with no skips (artifacts tuple 7, tuple skew 15, strict tuple 3, MCP tuple 2, types/bundlers 17).
-- [x] Lot 2 — guarded pack source deca5422c; artifacts SHA-256 6122ed8d2adea53be6366918f7df83238e8a7bd0596fdd48b0be752497f2ae82; mesh d01a2c7669b7e18e1597d2407790bd64a865a6fe258b6bd61f7f6fba4a6452ab; SHA-512 integrity and toolchain recorded in packages/artifacts/probe/l8d/CANDIDATE-0.2.0.md and the requested root .tmp report.
-- [x] Lot 3 — merged candidate source into L8d; strict full-Radar install, packed smoke and 19 runner tests pass against dde9f4c85 with listKeys 8d6aabb0a. E3 local branch has the same head; no newer head at pin selection.
-- [x] Lot 3 result — L8d NO-GO: Q1 0/31, Q2 0/31, acceptance 0/6; required totals 73 pass / 72 fail / 5 setup skips; full host 152 pass / 1 fail. Per-case evidence classifies 71 Radar failures and 2 H3 coverage gaps across all invoked tests; image smoke and final matching L8a/b/c shards remain uncovered.
-- [x] Lot 4a — push L8d evidence and merge its history without product, frozen-contract or Track changes; retain this integration plan.
-- [ ] Lot 4b — push final integration head and monitor PR #739 until CI passes; final CI state belongs in the external candidate receipt to avoid a metadata-only CI loop.
+- [x] Lot 0: read lock, full plan, MASTER/workflow/testing, template and W0 a/d evidence; mechanical branch check passes.
+- [ ] Lot 1: tests first in `api/tests/api/artifacts-host-migrations.test.ts`: empty DB, rerun, asset/journal mismatch refusal, fresh-process restart, concurrent KV insert.
+- [ ] Lot 2: control SQL/metadata for host KV and one package journal; hash-checked L3/L6 installation on one leased transaction; bounded migration runner hook.
+- [ ] Lot 3: scoped PostgreSQL tests, API typecheck/lint and migration regressions; inspect every hunk and clean test stack.
+- [ ] Lot 4: independent review/reconciliation; exact BRANCH.md PR body, push and draft delivery with green exact-head CI.
+- [ ] Handoff: W1.b gets durable KV, installed asset identities/hashes and startup ordering; UP-T and W0 gates remain explicit.
