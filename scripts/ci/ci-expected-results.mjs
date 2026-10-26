@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { durationSeconds } from './ci-run-metrics.mjs';
+import { captureRecords, executionSeconds } from './ci-run-metrics.mjs';
 
 // Complete post-run capture: the pre-dispatch manifest owns selection; the
 // exact source workflow owns dependencies. Preserve null/incomplete endpoints.
@@ -19,7 +19,7 @@ export function capacityCapture(workflow, run, jobs, manifest) {
   const selected = manifest.expected.filter(row => row.selected).map(row => row.job);
   const span = name => {
     const row = jobs.find(job => job.name === name);
-    return durationSeconds(row?.started_at, row?.completed_at);
+    return row ? executionSeconds(captureRecords({ run, jobs: [row] })[0]) : null;
   };
   return { run, jobs, sourceSha: run.head_sha, workflowSha: null,
     dependencies: Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
