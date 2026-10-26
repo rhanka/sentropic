@@ -63,7 +63,7 @@
   - [x] Preserve L0 baseline and complete §11.2 gate register from source head `c0bd543689`.
   - [x] Preserve SDK/native provenance/toolchain/license inventory and all required placements; artifacts remain unadmitted.
   - [ ] Preserve eight L0 files under `.tmp/live-stt/l0/`; refresh heads, gate register, SDK/provenance/license/ledger/release and placement evidence in `.tmp/live-stt/l1c/baseline.md`.
-  - [ ] Carry dedicated capacity study and explicit zero allocation; no native inference or quota exception.
+  - [x] Carry dedicated capacity study and explicit zero allocation; no native inference or quota exception.
 - [ ] **L1c-b — Tests first**
   - [x] `packages/cluster-mesh/tests/speech-fixtures.ts`: five primary tuples, whisper.cpp and synthetic future/native-duplex/placement entries.
   - [x] `packages/cluster-mesh/tests/speech-config.spec.ts`: bindings/selectors, invalid shapes, all placements, both mic modes, empty/explicit fallback, unsupported capability refusal, no secrets.
