@@ -17,7 +17,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../utils/zod-validator';
 import { viewTemplateService } from '../../services/view-template-service';
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 import { requireEditor } from '../../middleware/rbac';
