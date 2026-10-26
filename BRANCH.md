@@ -48,5 +48,6 @@
 - [x] Transfer additive bridge admission, verified dispatch and complete-envelope codec.
 - [x] Align the version constant and workspace lock with 0.4.1 after strict-version regression tests identified the mismatch.
 - [x] Reseal the synthetic version-bound configuration receipt for 0.4.1; preserve frozen L5 files.
-- [ ] Lot 2: run platform tests and pack-mcp-platform; inspect additive package exports.
-- [ ] Lot 3: create draft PR against main; retain conductor decision pending; no merge.
+- [x] Lot 2: 363/363 tests passed via make test-mcp-platform; pack-mcp-platform passed without publishing.
+- [x] Pack archive SHA-256: 1d6b7f3f02b7f1a56374a12ac06f8dcaf64518646bacb51d5216fa1979df4191.
+- [x] Lot 3: draft PR #783 against main; conductor decision pending; no merge or publication.
