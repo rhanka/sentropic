@@ -96,6 +96,7 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
 - [x] Frozen numeric replay corpus stays unchanged; its PG-only test adapter checks safe fixture positions while production delivers exact strings.
 - [x] PR765 r1 P1-1 regression: journal reads, poison/retry, checkpoint CAS, lag and retained snapshot completion/reopen tested at 2^53, 2^63 and max u64; unsafe numeric input refused.
 - [x] PR765 r1 P2: real memory K3/K5/K8 compound keys pass memory effects validation, updates/guards/stale refusals through signed-64 crossing and max u64; post-publish hook failure rolls back root, record and journal at crossing/max with reopen and retry.
+- [x] Post-publish rollback witness queries the same transaction and observes both updated scope counters and the inserted journal tail before injecting failure.
 - [x] PR765 r1 P2 upgrade: populated 006 scopes/journal/fences/boundaries above 2^53 and at signed max survive 007, reopen, journal read and publication; all six counter columns reject negative and above-u64 writes.
 - [x] 006 numeric JSON consumer positions normalize to exact decimal strings after upgrade without changing delivery/checkpoint behavior.
 - [x] First real PG run: 75 passed, six new fixture setup refusals (empty descriptor chainKinds; comments grant on memory module). Fixed the descriptor and matching memory grant; upgrade, invalid indexes and post-publish rollback passed. Cleanup exit=0; rerun required.
