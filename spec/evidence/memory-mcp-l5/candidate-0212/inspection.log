@@ -24,5 +24,5 @@ Installed six-tool behaviour: unverified (packed suite absent)
 Disabled-install 0/0/0/0: unverified (suite absent; no observed counters)
 Registry entry canonical digest: 29caca1059c71db403a20e49f20de9cce5489b4b4859afb6f99223338b543b03 (PASS; sorted compact JSON matches upstream canonicalizer for these bytes)
 Publisher receipt is external by design (upstream gen-mcp-memory-assets.mjs:10-14).
-Full candidate gate: NOT EXECUTED (standalone Docker forbidden; candidate lot absent)
+Candidate qualification: no candidate lot implemented; official Docker targets are allowed under the shared flock. See attempt-2 evidence for execution status.
 L5-MEMORY-V1 receipt: NOT ISSUED

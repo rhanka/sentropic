@@ -1,0 +1,16 @@
+2026-10-26T12:57:02Z
+    PID COMMAND         MODE   BLOCKER PATH
+3713294 flock           WRITE* 3566201 /home/antoinefa/.cache-tmp/sentropic-docker.lock
+3619158 flock           WRITE* 3566201 /home/antoinefa/.cache-tmp/sentropic-docker.lock
+3570023 flock           WRITE* 3566201 /home/antoinefa/.cache-tmp/sentropic-docker.lock
+3566201 flock           WRITE          /home/antoinefa/.cache-tmp/sentropic-docker.lock
+    PID    PPID     ELAPSED COMMAND
+3566200 2989480       20:00 /bin/sh -c cd tmp/worktrees/mem-e1 && flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make engram-e2-qualify ENV=test-e2-int 2>&1 | tail -n 30
+3566201 3566200       20:00 flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make engram-e2-qualify ENV=test-e2-int
+3570022 3566203       19:57 /bin/bash -c set -eu; for lane in mechanical wiring build typecheck lint memory common grants postgres; do \ ?flock "/home/antoinefa/.cache-tmp/sentropic-docker.lock" make engram-e2-lane E2_LANE="$lane" ENV=test-e2-int; \ ?done
+3570023 3570022       19:57 flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make engram-e2-lane E2_LANE=mechanical ENV=test-e2-int
+/home/antoinefa/src/sentropic/tmp/worktrees/mem-e1
+/home/antoinefa/src/sentropic/tmp/worktrees/mem-e1
+892:E2_LOCK ?= /home/antoinefa/.cache-tmp/sentropic-docker.lock
+897:	@mkdir -p "$(E2_RECEIPTS)" "$$(dirname "$(E2_LOCK)")"
+906:		flock "$(E2_LOCK)" $(MAKE) engram-e2-lane E2_LANE="$$lane" ENV=$(ENV); \
