@@ -26,7 +26,7 @@ export const bindHostCandidateScope = (options: HostScopeOptions): { store: Cano
   const scope = { ...binding.scope };
   const storeId = binding.store_id;
   type Entry = { invocation: HostInvocation; identity: HostInvocation;
-    sealed?: SealedCandidateEnvelopeV1; state: 'sealing' | 'sealed' | 'pending' | 'spent' };
+    sealed?: SealedCandidateEnvelopeV1; state: 'released' | 'sealing' | 'sealed' | 'pending' | 'spent' };
   const candidates = new Map<string, Entry>();
   const denied = <T>(operation: MemoryOperation): Result<T> => ({ ok: false,
     error: { code: 'UNAUTHORIZED', operation, retryable: false, message: 'host candidate authority refused' } });
@@ -55,6 +55,7 @@ export const bindHostCandidateScope = (options: HostScopeOptions): { store: Cano
     entry.state = 'spent'; // Reserve before awaiting: no parallel or ambiguous retry.
     const result = await commit(input);
     if (result.ok) entry.state = 'pending';
+    else entry.state = 'released'; // Typed refusal: no effect; retain authority for the owner's retry.
     return result;
   };
   const lifecycle = store.applyLifecycle.bind(store);
@@ -79,7 +80,10 @@ export const bindHostCandidateScope = (options: HostScopeOptions): { store: Cano
   const read = store.readPending?.bind(store);
   if (read) store.readPending = async (input) => {
     const entry = candidates.get(input.candidate_id);
-    return owns(entry) && entry.state === 'pending' ? read(input) : denied('request_admission');
+    if (!owns(entry)) return denied('request_admission');
+    if (entry.state === 'spent') return { ok: false, error: { code: 'NOT_FOUND',
+      operation: 'request_admission', retryable: false, message: 'host candidate has no pending envelope' } };
+    return entry.state === 'pending' ? read(input) : denied('request_admission');
   };
   const complete = store.recordCaptureIdempotency?.bind(store);
   if (complete) store.recordCaptureIdempotency = async (input) => {
@@ -90,14 +94,27 @@ export const bindHostCandidateScope = (options: HostScopeOptions): { store: Cano
     ...crypto,
     version: crypto.version,
     // Preserve class-backed host crypto ports as well as plain fixture objects.
-    open: crypto.open?.bind(crypto), destroy: crypto.destroy?.bind(crypto), rotate: crypto.rotate?.bind(crypto),
+    open: crypto.open?.bind(crypto), rotate: crypto.rotate?.bind(crypto),
+    destroy: async (input) => {
+      const candidateId = input.idempotency_key.startsWith('destroy:') ? input.idempotency_key.slice(8) : '';
+      const entry = candidates.get(candidateId);
+      const result = await crypto.destroy(input);
+      // Engram destroys an uncommitted envelope when its post-seal host gate refuses.
+      // Pending or ambiguous effects must never become re-issuable through cleanup.
+      if (result.ok && entry?.state === 'sealed' && candidates.get(candidateId) === entry
+        && entry.sealed?.key_ref === input.key_ref) entry.state = 'released';
+      return result;
+    },
     seal: async (input: Parameters<CryptoPort['seal']>[0]): ReturnType<CryptoPort['seal']> => {
       const current = invocation();
-      if (!current || !input.candidate_id || candidates.has(input.candidate_id)) return denied('capture');
+      const previous = candidates.get(input.candidate_id);
+      if (!current || !input.candidate_id || (previous && (!owns(previous) || previous.state !== 'released'))) return denied('capture');
       const entry: Entry = { invocation: current, identity: { ...current }, state: 'sealing' };
       candidates.set(input.candidate_id, entry);
-      const result = await crypto.seal(input);
-      if (!result.ok) return result;
+      let result: Awaited<ReturnType<CryptoPort['seal']>>;
+      try { result = await crypto.seal(input); }
+      catch (error) { entry.state = 'released'; throw error; }
+      if (!result.ok) { entry.state = 'released'; return result; }
       if (!owns(entry) || result.value.candidate_id !== input.candidate_id) return denied('capture');
       entry.sealed = Object.freeze({ ...result.value });
       entry.state = 'sealed';

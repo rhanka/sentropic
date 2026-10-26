@@ -1,7 +1,7 @@
 # Feature: Engram E8 authoritative candidate scope liaison
 
 ## Objective
-- [ ] Exercise the frozen Engram 0.21.1 candidate-to-invocation/store/scope liaison outside sealed bytes; C7 remains pending producer co-review and E7 integration.
+- [ ] Exercise the frozen Engram 0.21.1 candidate-to-invocation/store/scope liaison outside sealed bytes; C7 acceptance remains `unverified` pending E7 integration evidence.
 
 ## Scope / Guardrails
 - [x] Approved root `.tmp/engram-e2-host-tuple/plan.md`, revision 3, E8 only; base E0 `ad4164534`.
@@ -45,7 +45,10 @@
 
 ## Feedback Loop
 - [x] BRE8-EX2: integration base `6c3f9f04a` does not yet contain E0; list inherited E0 paths for actual-base CI scope only. `git diff --exit-code ad4164534 HEAD -- <inherited paths>` passes; E8 must not edit those bytes. Impact: scope declaration only; rollback: remove inherited entries after E0 integration. Manifest/root-lock entries remain version-only under BRE8-EX1.
-- [ ] Report producer questions to gr-conductor; C7 is not accepted by this branch alone.
+- [x] Producer answers 1–5 recorded in root `.tmp/engram-e2-host-tuple/e8-report.md`; E7 inputs: durable ledger, continuation grant, proof-only recovery. Composition ACK is partial; C7 acceptance remains `unverified`.
+- [ ] **Disposition before merge (P2-1)** — owner: release integrator on `feat/engram-e2-integration`; resolve both mandated dev.N bump failures below and obtain green `validate-cluster-mesh`, or record an explicit waiver. No test/fixture patch in E8.
+- [ ] `tests/modules/registry.spec.ts` — `should accept the current comments leaf version and still require its optional peer`: Comments compatibility returns `incompatible_version` instead of `not_installed`.
+- [ ] `tests/packaging/prepare-artifacts.spec.ts` — `should keep the frozen selected fixture aligned with the candidate release tuple`: frozen `0.22.2` differs from `0.23.0-dev.4`.
 - [ ] Integrate after E7; durable E9 and installed E10 acceptance remain separate.
 - [x] Host fixture keeps the factory-stamped store object; invocation and crypto dependencies are host/engine-private; a fresh ledger refuses until host authority is restored.
 - [x] Resume: retain prior commits; type the DTO fixtures and crypto result explicitly; cover admission, asynchronous issuance revocation and ambiguous commit refusal.
@@ -67,5 +70,6 @@
 - [x] **Lot 2 — Host liaison**: host-owned fixture; private authoritative issuance and pre-effect guards; no caller DTO or copied invocation creates a mapping; no production seam needed before E7.
 - [x] **Resume qualification**: 16/16 candidate scenarios pass; full pre-extension memory run 92/92; P2 unchanged; PR #764 is draft, targets integration and remains unmerged. Actual-base inherited E0 scope is explicit.
 - [x] **Review refinement**: all three foreign identity fields also refuse candidate lifecycle after a valid pending commit; focused 16/16 rerun passes.
+- [x] **Opus r1 P2-2 / answer 4**: release definitive-failure reservations for owner retries; spent pending reads return `NOT_FOUND`; foreign/unknown and second effects refuse. Repro: 5 failures; final memory 103/103 (25 candidate), typecheck/lint pass; P2 unchanged. P2-1 remains assigned above before merge.
 - [ ] **Lot 3 — Validation**: focused tests, memory suite, typecheck/lint/build, dev.4 manifest commit, scope checks, unchanged P2.
 - [ ] **Lot 4 — Handoff**: push; draft PR from this file; green E2 qualification; report PR/head/CI and producer questions; do not merge.
