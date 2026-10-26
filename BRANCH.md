@@ -29,9 +29,9 @@
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR77-EX1 — Planned workflow exception: cap/stagger package fan-out on measured slots, serialize main releases, keep PR-only cancellation. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR77-EX2 — Planned Makefile exception: capacity-policy entry points only. Impact: named CI measurement/policy entry points only. Rollback: restore the previous recipes and rerun their qualification.
-- [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [x] BR77-EX1 — Workflow exception: cap/stagger package fan-out on measured slots, serialize main releases, keep PR-only cancellation. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [x] BR77-EX2 — Makefile exception: capacity-policy entry points only. Impact: named CI measurement/policy entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [x] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 - [ ] Inherited open acceptance from BR-76/Round-4: account quota/reservation/cost inventory; bounded dispatch policy; concurrent PR/current-main delivery; rollback drill; classification ≤15s, verdict ≤5s, aggregate scheduling ≤60s under declared concurrent traffic.
 
 ## AI Flaky tests
@@ -75,7 +75,8 @@
   - [x] Update this plan, the study, and `spec/ci-cd-ten-minutes/capacity.md` with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
-  - [ ] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity` must parse/import the changed scripts and reject invalid result sets.
+  - [x] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity` must parse/import the changed scripts and reject invalid result sets.
+  - [x] Local qualification: 35 metrics + 17 expected-results + 24 unchanged publication-wiring tests passed; finite full-selection PR/main bound 15. Final-head CI and all unmet budgets remain open until their actual receipts.
   - [ ] Build: no image/package build recipe changes; retain the final concurrent PR/main runs' existing build and artifact receipts.
   - [ ] API regression: no API source/test edits; verify every selected API result from the concurrent runs is present and successful.
   - [ ] UI regression: no UI source/test edits; verify the unchanged UI test/build results are present in the complete verdict.
