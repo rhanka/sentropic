@@ -73,6 +73,7 @@
 - [ ] **L1c-c — Implementation**
   - [x] Strict profile decoder, immutable snapshots and existing cluster config seam implemented; catalogue projection follows.
   - [x] Catalogue projection negotiates each exact stage tuple and intersects trusted tenant/policy/placement/egress evidence; no routing or credentials added.
+  - [x] Explicit rebind barrier requires cancellation/reconciliation/drained playback and renewed revision-bound consent; speech subpath preserves optional provider loading.
   - [ ] `packages/cluster-mesh/src/speech/{config,projection}.ts`: one revisioned schema and local projection consuming llm-mesh catalogue/negotiation.
   - [ ] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
   - [ ] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.

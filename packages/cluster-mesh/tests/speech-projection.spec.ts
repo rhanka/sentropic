@@ -59,7 +59,7 @@ describe('speech projection', () => {
     const current = projectSpeechProfile(config(), select(), context());
     if (!current.available) throw new Error('fixture unavailable');
     const barrier = { expectedConfigRevision: 'r1', quiescent: true, cancelled: true,
-      reconciled: true, playbackDrained: true, consent: consent() };
+      reconciled: true, playbackDrained: true, previousConsentRevision: 'consent:original', consent: consent() };
     expect(rebindSpeechProfile(current, config(), select('B'), context(), barrier))
       .toMatchObject({ available: true, micEnabled: false, profile: { profileId: 'B' } });
     for (const field of ['quiescent', 'cancelled', 'reconciled', 'playbackDrained'] as const) {

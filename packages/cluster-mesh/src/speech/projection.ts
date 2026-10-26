@@ -79,3 +79,39 @@ export function projectSpeechProfile(profiles: readonly SpeechProfile[], selecte
   return freezeSpeechSnapshot(structuredClone({ available: true, schemaVersion: 1, profile,
     micEnabled: false, requiresSessionAdmission: true, stages })) as EffectiveSpeechProjection;
 }
+
+export interface SpeechRebindBarrier {
+  readonly expectedConfigRevision: string;
+  readonly quiescent: boolean;
+  readonly cancelled: boolean;
+  readonly reconciled: boolean;
+  readonly playbackDrained: boolean;
+  readonly previousConsentRevision: string;
+  readonly consent?: SpeechProfileSelection & {
+    readonly egressPolicyRef: string;
+    readonly consentRevision: string;
+  };
+}
+
+/** Host supplies authoritative barrier/consent receipts; this pure check never cancels a turn. */
+export function rebindSpeechProfile(current: EffectiveSpeechProjection, profiles: readonly SpeechProfile[],
+  selected: SpeechProfileSelection, context: SpeechProjectionContext, barrier: SpeechRebindBarrier): SpeechProjection {
+  if (current.profile.tenantId !== context.tenantId || current.profile.workspaceId !== context.workspaceId) {
+    return refused('tenant');
+  }
+  if (barrier.expectedConfigRevision !== current.profile.configRevision) return refused('revision');
+  if (![barrier.quiescent, barrier.cancelled, barrier.reconciled, barrier.playbackDrained].every((v) => v === true)) {
+    return refused('busy');
+  }
+  const next = projectSpeechProfile(profiles, selected, context);
+  if (!next.available) return next;
+  if (current.profile.profileId === next.profile.profileId && current.profile.configRevision === next.profile.configRevision
+    && JSON.stringify(current.profile) !== JSON.stringify(next.profile)) return refused('revision');
+  const consent = barrier.consent;
+  if (!consent || consent.profileId !== next.profile.profileId || consent.configRevision !== next.profile.configRevision
+    || consent.egressPolicyRef !== next.profile.egressPolicyRef || !consent.consentRevision?.trim()
+    || !barrier.previousConsentRevision?.trim() || consent.consentRevision === barrier.previousConsentRevision) {
+    return refused('consent');
+  }
+  return next;
+}
