@@ -18,10 +18,14 @@ export function wallClockProof(captures, digest) {
     const run = capture.run ?? {};
     const wallClockSeconds = durationSeconds(run.created_at, run.updated_at);
     const gate = capture.jobs?.find(job => job.name === 'ci-gate');
-    return { runId: run.id, event: run.event, headBranch: run.head_branch, wallClockSeconds,
+    const executed = capture.jobs?.filter(job => job.conclusion !== 'skipped') ?? [];
+    const freshExecutions = executed.length > 0 && executed.every(job => job.runner_id
+      && durationSeconds(run.created_at, job.started_at) !== null
+      && durationSeconds(job.started_at, job.completed_at) !== null);
+    return { runId: run.id, event: run.event, headBranch: run.head_branch, wallClockSeconds, freshExecutions,
       accepted: Boolean(run.id && capture.policyDigest === digest && run.status === 'completed'
         && run.conclusion === 'success' && gate?.runner_id && gate.conclusion === 'success'
-        && wallClockSeconds !== null && wallClockSeconds <= 2288) };
+        && freshExecutions && wallClockSeconds !== null && wallClockSeconds <= 2288) };
   });
   const pr = runs.find(run => run.accepted && run.event === 'pull_request');
   const main = runs.find(run => run.accepted && run.event === 'push' && run.headBranch === 'main');
