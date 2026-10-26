@@ -12,6 +12,8 @@ import type { AtomicUnit } from '../storage/atomic.js';
 import { MEMORY_DESCRIPTOR } from './manifest.js';
 import { MEMORY_PG_QUERIES } from './postgres-queries.js';
 import { MEMORY_STORAGE_LIMITS } from './limits.js';
+import { projectMemoryPgEffects, validateMemoryPgEffects } from './projection.js';
+import type { PgRegisteredProjection } from '../storage/postgres/protocol.js';
 import {
   isMemoryAdmissionOutcome,
   isMemoryCaptureProof,
@@ -22,7 +24,8 @@ import {
 export interface MemoryPostgresRegistration {
   readonly assets: Awaited<ReturnType<typeof loadPgAssets>>;
   readonly descriptor: typeof MEMORY_DESCRIPTOR;
-  readonly validateEffects: (effects: AtomicUnit, context: unknown) => Promise<void>;
+  readonly validateEffects: PgRegisteredProjection;
+  readonly projection: PgRegisteredProjection;
   readonly queries: typeof MEMORY_PG_QUERIES;
   readonly limits: typeof MEMORY_STORAGE_LIMITS;
 }
@@ -130,11 +133,10 @@ export const validateMemoryEffects = async (
 
 export const createMemoryPostgresRegistration = async (): Promise<MemoryPostgresRegistration> =>
   Object.freeze({
-    assets: await loadPgAssets(),
+    assets: await loadPgAssets({ memory: true }),
     descriptor: MEMORY_DESCRIPTOR,
-    validateEffects: async (effects: AtomicUnit) => {
-      await validateMemoryEffects(effects);
-    },
+    validateEffects: validateMemoryPgEffects,
+    projection: projectMemoryPgEffects,
     queries: MEMORY_PG_QUERIES,
     limits: MEMORY_STORAGE_LIMITS,
   });
