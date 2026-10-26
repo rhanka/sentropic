@@ -85,6 +85,8 @@
   - [x] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
   - [x] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.
 - [ ] **L1c-d — Documentation and validation**
+  - [x] Quality gate: strict source/speech-test/existing-fixture types, changed-source lint, build and packed-content exports pass.
+  - [x] Full default cluster suite passes 1,162 tests; 129 environment-gated skips recorded separately from packed qualification.
   - [x] README/CHANGELOG: configuration example, selectors, placements, fallback/rebind/consent boundaries and unavailable reasons.
   - [ ] Scoped speech tests; full cluster tests; cold typecheck; changed-source lint; build/public export checks.
   - [ ] `make scope-check` before each commit; staged whitespace and under-150-line checks; no attribution trailers.
