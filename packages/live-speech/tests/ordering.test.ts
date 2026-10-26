@@ -25,8 +25,10 @@ describe('submission, tool history and effect barrier', () => {
     await expect(journal.transact(state => { state.nextEpoch = 999; throw new Error('rollback'); }))
       .rejects.toThrow('rollback');
     expect((await storage.read())?.state.nextEpoch).toBe(2);
+    const calls = storage.compareAndSwap.mock.calls.length;
     storage.compareAndSwap.mockResolvedValueOnce(false);
-    expect(await journal.transact(state => state.nextEpoch)).toBe(2);
+    expect(await journal.transact(state => ++state.sequence)).toBe(2);
+    expect(storage.compareAndSwap.mock.calls.length).toBe(calls + 2);
     expect((await storage.read())?.revision).toBeGreaterThan(1);
   });
   it('should keep typed acceptance idempotent across restart and append late outcomes only once', async () => {
