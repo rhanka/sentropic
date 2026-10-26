@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
@@ -19,6 +19,20 @@ test('should bound simultaneous execution slots across dependency joins and matr
   assert.equal(capacityDemand({ jobs: { a: matrix, b: { needs: ['a'] }, c: {} } }), 3);
   assert.throws(() => capacityDemand({ jobs: { a: { needs: ['missing'] } } }), /dependency/);
   assert.throws(() => capacityDemand({ jobs: { a: { needs: ['b'] }, b: { needs: ['a'] } } }), /cycle/);
+});
+
+test('should capture only selected delivery endpoints and reject cross-head receipts', () => {
+  const run = { id: 77, head_sha: 'abc', event: 'push' };
+  const manifest = { identity: { runId: '77', headSha: 'abc' }, expected: [
+    selected('publish-api-image'), selected('deploy-preprod'), selected('publish-comments'),
+    { job: 'publish-ui-image', selected: false },
+  ] };
+  const capture = capacityCapture(workflow, run, [], manifest);
+  assert.deepEqual(capture.endpoints.images, ['publish-api-image']);
+  assert.deepEqual(capture.endpoints.packages, ['publish-comments']);
+  assert.equal(capture.timings.verdictSeconds, null);
+  assert.deepEqual(capture.dependencies['ci-gate'], workflow.jobs['ci-gate'].needs);
+  assert.throws(() => capacityCapture(workflow, { ...run, head_sha: 'wrong' }, [], manifest), /identity/);
 });
 
 test('should capture every page of the current attempt at the actual gate and fail on API errors', async () => {

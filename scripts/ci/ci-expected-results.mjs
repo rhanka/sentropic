@@ -8,6 +8,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { durationSeconds } from './ci-run-metrics.mjs';
+
+// Complete post-run capture: the pre-dispatch manifest owns selection; the
+// exact source workflow owns dependencies. Preserve null/incomplete endpoints.
+export function capacityCapture(workflow, run, jobs, manifest) {
+  if (String(manifest.identity?.runId) !== String(run.id) || manifest.identity?.headSha !== run.head_sha) {
+    throw new Error('Capacity capture identity mismatch');
+  }
+  const selected = manifest.expected.filter(row => row.selected).map(row => row.job);
+  const span = name => {
+    const row = jobs.find(job => job.name === name);
+    return durationSeconds(row?.started_at, row?.completed_at);
+  };
+  return { run, jobs, sourceSha: run.head_sha, workflowSha: null,
+    dependencies: Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
+      [name, typeof job.needs === 'string' ? [job.needs] : job.needs ?? []])),
+    endpoints: { qualification: ['ci-gate'], images: selected.filter(name => /^publish-.*-image$/.test(name)),
+      preproduction: selected.filter(name => name === 'deploy-preprod'),
+      packages: selected.filter(name => name.startsWith('publish-') && !name.endsWith('-image')) },
+    capacity: { availableSlots: 17, reserveSlots: run.event === 'pull_request' ? 2 : 0 },
+    timings: { classificationSeconds: span('changes'), verdictSeconds: span('ci-gate') } };
+}
 
 const BLOCKING = new Set(['failed', 'cancelled', 'timed_out', 'stale']);
 
@@ -278,6 +300,13 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   if (args.includes('--workflow-file')) {
     const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
     const workflow = YAML.parse(fs.readFileSync(args[args.indexOf('--workflow-file') + 1], 'utf8'));
+    if (args.includes('--capture-dir')) {
+      const dir = args[args.indexOf('--capture-dir') + 1];
+      const read = name => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+      const capture = capacityCapture(workflow, read('run.json'), read('jobs.json'), read('expected.json'));
+      fs.writeFileSync(path.join(dir, 'capture.json'), JSON.stringify(capture, null, 2));
+      process.exit(0);
+    }
     if (args.includes('--capacity-policy')) {
       const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
       const scenarios = Object.fromEntries(['pull_request', 'push'].map(event => {
