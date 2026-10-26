@@ -1,26 +1,37 @@
-// PostgreSQL open/commit ownership guards (lot E4).
-// G-P0a: open-time retained session. G-P0b: commit-point durable possession
-// check chained before the caller hook. Installed guards: asset
-// deprecated-name scan and module-record readback.
-// Red until src/storage/postgres/instance-*.ts lands.
+// PostgreSQL open/commit ownership guards (lot E4, R1).
+// G-P0a: retained session at open + installed catalog verification (trigger
+// binding, deferral, enabled state — a fingerprint cannot see those).
+// G-P0b: commit-point guard inside the committing transaction; the caller
+// hook runs last. A 1-connection pool proves no second transaction opens.
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { CanonicalOwnershipError } from '../../src/storage/instance-ownership.js';
 import {
   assertNoDeprecatedAssetNames,
+  assertPgOwnershipCatalog,
   ensurePgModuleRecord,
 } from '../../src/storage/postgres/instance-guard.js';
-import {
-  resolvePgStoreKey,
-  type PgInstanceOwnershipSession,
-} from '../../src/storage/postgres/instance-ownership.js';
+import { resolvePgStoreKey } from '../../src/storage/postgres/instance-ownership.js';
+import type { PgInstanceOwnershipSession } from '../../src/storage/postgres/instance-ownership.js';
 import { PostgresStorageError } from '../../src/storage/postgres/errors.js';
+import type { InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
 import { loadPgAssets } from '../../src/storage/postgres/migrations.js';
 import { createPostgresKernel } from '../../src/storage/postgres/index.js';
 import { decodePgText } from '../../src/storage/postgres/codec.js';
 import { createPgFixture } from './pg-fixture.js';
 import { pgEnabled } from './pg-driver.js';
 import { grantFor } from './authority-corpus.js';
+
+type PgTestFixture = Awaited<ReturnType<typeof createPgFixture>>;
+type PgTestKernel = Awaited<ReturnType<PgTestFixture['open']>>;
+
+const owned = (kernel: PgTestKernel): PgInstanceOwnershipSession => {
+  assert.ok(kernel.ownership);
+  return kernel.ownership;
+};
+
+const withCanonical = (options: PgTestFixture['options'], leaseMs = 60000) =>
+  createPostgresKernel({ ...options, canonicalOwnership: { leaseMs } });
 
 describe('pg instance store identity', () => {
   it('derives one store key per schema and module', () => {
@@ -51,23 +62,65 @@ describe('pg installed asset guard', () => {
       (error: unknown) => error instanceof PostgresStorageError,
     );
   });
-});
 
-const owned = (kernel: { readonly ownership: PgInstanceOwnershipSession | null }): PgInstanceOwnershipSession => {
-  assert.ok(kernel.ownership);
-  return kernel.ownership;
-};
+  it('does not flag hold, old or tmp as substrings', () => {
+    for (const file of ['threshold.sql', 'hold.sql', 'scaffold.sql', '001-core.sql', '007-consumed-counters.sql']) {
+      assertNoDeprecatedAssetNames([{ file }]);
+    }
+    for (const file of ['legacy.sql', 'x-backup.sql', 'tmp.sql', 'old.sql']) {
+      assert.throws(() => assertNoDeprecatedAssetNames([{ file }]), (error: unknown) => error instanceof PostgresStorageError);
+    }
+  });
+});
 
 describe.skipIf(!pgEnabled)('postgres open/commit ownership guards', () => {
   it('retains the open-time session on the kernel (G-P0a)', async () => {
     const fixture = await createPgFixture();
     try {
-      const first = await fixture.open();
+      const first = await withCanonical(fixture.options);
       const retained = { ...owned(first).handle };
-      const second = await fixture.open();
+      assert.equal(retained.storageEpoch, '1');
+      const rows = await fixture.tx.run(true, (session) =>
+        session.execute({
+          text: `SELECT holder_until, clock_timestamp() AS now FROM "${fixture.name}".instance_ownership WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      assert.equal(rows.rows.length, 1);
+      const holderUntil = rows.rows[0]!.holder_until;
+      const now = rows.rows[0]!.now;
+      const holderMs = holderUntil instanceof Date ? holderUntil.getTime() : new Date(holderUntil as string).getTime();
+      const nowMs = now instanceof Date ? now.getTime() : new Date(now as string).getTime();
+      assert.ok(holderMs > nowMs, 'the retained lease outlives the open transaction');
+      await assert.rejects(
+        withCanonical(fixture.options),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'instance-busy',
+      );
+      await owned(first).release();
+      const second = await withCanonical(fixture.options);
       assert.equal(owned(second).handle.storageEpoch, '2');
       assert.equal(owned(second).handle.instanceId, retained.instanceId);
-      assert.deepEqual({ ...owned(first).handle }, retained);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('verifies the installed trigger catalog (G-P0a)', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const kernel = await withCanonical(fixture.options);
+      await fixture.tx.run(true, (session) => assertPgOwnershipCatalog(session, fixture.name));
+      // Release first: the reopen below must be refused for the missing
+      // trigger, not for a live lease.
+      await owned(kernel).release();
+      await fixture.tx.run(false, (session) =>
+        session.execute({ text: `DROP TRIGGER instance_ownership_lease ON "${fixture.name}".instance_ownership`, values: [] }),
+      );
+      await assert.rejects(
+        fixture.tx.run(true, (session) => assertPgOwnershipCatalog(session, fixture.name)),
+        (error: unknown) => error instanceof PostgresStorageError,
+      );
+      await assert.rejects(withCanonical(fixture.options), (error: unknown) => error instanceof PostgresStorageError);
     } finally {
       await fixture.close();
     }
@@ -75,13 +128,15 @@ describe.skipIf(!pgEnabled)('postgres open/commit ownership guards', () => {
 
   it('runs the durable guard before the caller hook and refuses terminal commits (G-P0b)', async () => {
     let calls = 0;
-    const fixture = await createPgFixture({
-      onCommitPossession: () => {
-        calls += 1;
-      },
-    });
+    const fixture = await createPgFixture();
     try {
-      const kernel = await fixture.open();
+      const kernel = await createPostgresKernel({
+        ...fixture.options,
+        canonicalOwnership: { leaseMs: 60000 },
+        onCommitPossession: () => {
+          calls += 1;
+        },
+      });
       const bound = await kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
       await bound.configureLifecycle('optional');
       const unitFor = (chainId: string) => ({
@@ -105,22 +160,84 @@ describe.skipIf(!pgEnabled)('postgres open/commit ownership guards', () => {
       const before = calls;
       await fixture.tx.run(false, (session) =>
         session.execute({
-          text: `UPDATE "${fixture.name}".instance_ownership SET epoch='777' WHERE module='comments'`,
+          text: `UPDATE "${fixture.name}".instance_ownership SET instance='intruder' WHERE module='comments'`,
           values: [],
         }),
       );
-      await assert.rejects(bound.commitAtomic(unitFor('guard-chain-2')), (error: unknown) => {
-        assert.ok(error instanceof PostgresStorageError);
-        const cause = (error as { cause?: unknown }).cause;
-        return cause instanceof CanonicalOwnershipError && cause.code === 'terminal-loss';
-      });
+      await assert.rejects(
+        bound.commitAtomic(unitFor('guard-chain-2')),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'terminal-loss',
+      );
       assert.equal(calls, before);
     } finally {
       await fixture.close();
     }
   });
 
+  it('commits through a single-connection pool without opening a second transaction', async () => {
+    const fixture = await createPgFixture();
+    try {
+      let active = 0;
+      let peak = 0;
+      const raw = fixture.options.driver;
+      const limited: InjectedPgDriver = {
+        transaction: async (options, operation) => {
+          active += 1;
+          peak = Math.max(peak, active);
+          assert.ok(active <= 1, 'the guard must reuse the committing session, not open a second transaction');
+          try {
+            return await raw.transaction(options, operation);
+          } finally {
+            active -= 1;
+          }
+        },
+      };
+      const kernel = await createPostgresKernel({ ...fixture.options, driver: limited, canonicalOwnership: { leaseMs: 60000 } });
+      const bound = await kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+      await bound.configureLifecycle('optional');
+      await bound.commitAtomic({
+        guards: [],
+        records: [],
+        appends: [
+          {
+            chainId: 'pool-chain',
+            record: { id: 'p1', bytes: '{"n":1}', hash: 'hash-p1' },
+            expectation: { kind: 'absent', allocation: '0' } as const,
+          },
+        ],
+        updates: [],
+        relationships: [],
+        barriers: [],
+        purgeIntents: [],
+        indexWrites: [],
+      });
+      assert.equal(peak, 1);
+      const check = await kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+      assert.equal(await check.readHead('pool-chain'), 'hash-p1');
+    } finally {
+      await fixture.close();
+    }
+  });
 
+  it('refuses to commit a lease that expires inside the transaction (trigger backstop)', async () => {
+    const fixture = await createPgFixture();
+    try {
+      await withCanonical(fixture.options);
+      // A raw write that kills the lease cannot commit: the deferred
+      // trigger re-checks liveness at COMMIT time, inside the transaction.
+      await assert.rejects(
+        fixture.tx.run(false, (session) =>
+          session.execute({
+            text: `UPDATE "${fixture.name}".instance_ownership SET holder_until = clock_timestamp() - make_interval(secs => 1) WHERE module='comments'`,
+            values: [],
+          }),
+        ),
+        (error: unknown) => error instanceof PostgresStorageError && error.sqlState === 'P0001',
+      );
+    } finally {
+      await fixture.close();
+    }
+  });
 
   it('refuses a module record that diverges from options (readback)', async () => {
     const fixture = await createPgFixture();
