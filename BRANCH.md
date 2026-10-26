@@ -52,6 +52,7 @@
 ## Feedback Loop
 - [x] Owner direction: withdraw all platform source changes; propose 0.4.1 separately, draft and pack only; no freeze or Engram repack.
 - [x] Schema admission removed here; P03.platform.schema-profile-2020-12 remains blocked: platform-admitBridgeTools.
+- [x] Wire and bridge source removed here; P04.platform.wire-profile-v1 remains blocked: platform-admitBridgeTools.
 - [ ] gr-conductor: P01.packed/P02.packed/P03/P04.packed need verified context/audit/schema/transport tuple; P05 canonical fenced-store; P06 restart/lost-ack; P07 assurance/continuation; P08 installed closure/disabled exports; P10 manifest/sidecar/G1-G4/C9 and tuple acceptances. Exact missing inputs: tools/memory-mcp-l5/lot3-dispositions.mjs WAITING_FOR.
 - [ ] Lot 4: S1 normalization, same frozen tuple/E4 installed six-suite qualification and owner UAT remain owning-lot gates; no successor freeze authorized.
 ## AI Flaky tests
