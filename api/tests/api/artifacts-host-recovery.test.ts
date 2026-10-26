@@ -1,11 +1,12 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { GetPublicAccessBlockCommand, ListObjectsV2Command, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
 import { blobDigestOfKey, createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { createHmacGrantSigner } from '@sentropic/artifacts/content/grants';
 import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
 import { runMigrations } from '../../src/db/run-migrations';
+import { createArtifactHost } from '../../src/services/artifacts/composition';
 import { createArtifactHostJobs, createPrivateArtifactStorage } from '../../src/services/artifacts/lifecycle';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -111,6 +112,91 @@ describe('artifact host recovery', () => {
     expect(signer.verify(token).subjectId).toBe('alice');
     now += 60000;
     expect(() => signer.verify(token)).toThrow(/expired/);
+  });
+
+  it('should invalidate restored activation and old grants before reopening', async () => {
+    const { blobs, page, authorize } = fixture();
+    const order: string[] = [];
+    const activation = { cleanup: vi.fn(async () => ({ flows: 1, tickets: 1 })),
+      invalidate: vi.fn(async () => { order.push('invalidate'); }) };
+    let signer = createHmacGrantSigner({ secret: 'before-restore' });
+    const oldGrant = signer.issue({ subjectId: 'alice', artifactId: 'artifact' });
+    const jobs = createArtifactHostJobs({ pool, blobs, page, authorize, batchSize: 2, activation });
+    await jobs.cleanup();
+    expect(activation.cleanup).toHaveBeenCalledWith(2);
+    await jobs.recover({
+      async closeServing() { order.push('closed'); },
+      async retireGrantAuthority() { order.push('retire'); signer = createHmacGrantSigner({ secret: 'after-restore' }); },
+      async reconcileDenials() { order.push('denials'); },
+      async reopenServing() {
+        expect(() => signer.verify(oldGrant)).toThrow(/signature/);
+        order.push('open');
+      },
+    });
+    expect(order).toEqual(['closed', 'invalidate', 'retire', 'denials', 'open']);
+    expect(authorize).toHaveBeenCalledWith('recover');
+  });
+
+  it.each(['invalidate', 'retire', 'denials'])('should remain closed when restore %s fails', async stage => {
+    const { blobs, page, authorize } = fixture();
+    let closed = false;
+    const step = async (name: string) => { if (stage === name) throw new Error(`failed ${stage}`); };
+    const jobs = createArtifactHostJobs({ pool, blobs, page, authorize,
+      activation: { cleanup: async () => ({ flows: 0, tickets: 0 }), invalidate: () => step('invalidate') } });
+    const reopenServing = vi.fn(async () => { closed = false; });
+    await expect(jobs.recover({ async closeServing() { closed = true; },
+      retireGrantAuthority: () => step('retire'), reconcileDenials: () => step('denials'), reopenServing }))
+      .rejects.toThrow(`failed ${stage}`);
+    expect(closed).toBe(true);
+    expect(reopenServing).not.toHaveBeenCalled();
+  });
+
+  it('should keep serving closed until the W1.c activation adapter is installed', async () => {
+    const { jobs } = fixture();
+    const closeServing = vi.fn(async () => {});
+    const reopenServing = vi.fn(async () => {});
+    await expect(jobs.recover({ closeServing, reopenServing,
+      retireGrantAuthority: async () => {}, reconcileDenials: async () => {} })).rejects.toThrow(/activation/);
+    expect(closeServing).toHaveBeenCalledOnce();
+    expect(reopenServing).not.toHaveBeenCalled();
+  });
+
+  it('should preserve a concurrent publication when collection already owns the digest', async () => {
+    const { blobs, page, authorize } = fixture();
+    await pool.query(`INSERT INTO users (id, role, account_status) VALUES ('alice', 'editor', 'active');
+      INSERT INTO tenants (id, name) VALUES ('tenant-a', 'A');
+      INSERT INTO workspaces (id, name, tenant_id) VALUES ('workspace-a', 'A', 'tenant-a');
+      INSERT INTO tenant_memberships (tenant_id, user_id, status) VALUES ('tenant-a', 'alice', 'approved');
+      INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ('workspace-a', 'alice', 'editor');`);
+    const host = createArtifactHost({ pool, blobs, quotaBytes: 262144,
+      currentIdentity: async () => ({ readable: true, writable: true }) });
+    const bound = await host.bind({ subject: 'alice', tenantId: 'tenant-a', clientId: 'app', credentialId: 'session' }, 'workspace-a');
+    const ensured = await bound.mcp({ tool: 'artifacts_ensure', args: { bindingName: 'report', idempotencyKey: 'ensure' } });
+    expect(ensured.status).toBe(201);
+    const text = '<h1>shared</h1>';
+    const digest = createHash('sha256').update(text).digest('hex');
+    const blob = `artifacts/${bound.invocation.storageScopeId}/blobs/sha256/${digest}`;
+    await blobs.putBlob(blob, new TextEncoder().encode(text));
+    let deleting!: () => void;
+    let resume!: () => void;
+    const started = new Promise<void>(resolve => { deleting = resolve; });
+    const gate = new Promise<void>(resolve => { resume = resolve; });
+    const remove = blobs.deleteBlob;
+    blobs.deleteBlob = async value => { deleting(); await gate; await remove(value); };
+    const jobs = createArtifactHostJobs({ pool, blobs, page, authorize });
+    const collecting = jobs.collect(bound.invocation.storageScopeId);
+    await started;
+    const publishing = bound.mcp({ tool: 'artifacts_publish', args: { artifactId: (ensured.body as { artifactId: string }).artifactId,
+      idempotencyKey: 'publish', files: [{ path: 'index.html', mimeType: 'text/html', text }] } });
+    try {
+      await vi.waitFor(async () => {
+        expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
+          AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`)).rowCount).toBeGreaterThan(0);
+      });
+    } finally { resume(); }
+    expect((await publishing).status).toBe(201);
+    expect((await collecting).failures).toEqual([]);
+    expect(await blobs.getBlob(blob)).toEqual(new TextEncoder().encode(text));
   });
 
   it('should require all public access blocks and write through the private upstream S3 adapter', async () => {
