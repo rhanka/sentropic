@@ -14,11 +14,13 @@ export const PACK_ONLY_PACKAGE = '@sentropic/cluster-mesh';
 const devBumpPattern = (reservedNext) =>
   new RegExp(`^${reservedNext.replace(/\./g, '\\.')}-dev\\.\\d+$`);
 
-// The tolerance applies to the exact package and version pair only: the
-// installed package must be cluster-mesh itself at a `<reservedNext>-dev.N`
-// prerelease while the frozen pin is still the latest published release.
+// The tolerance applies to the exact package and version pair only, read from
+// the refusal itself: the refused package must be cluster-mesh itself at a
+// `<reservedNext>-dev.N` prerelease while the frozen pin is still the latest
+// published release.
 export const isPackOnlyDevBump = (packageName, workspaceVersion, publishedPin, reservedNext) =>
   packageName === PACK_ONLY_PACKAGE &&
+  typeof workspaceVersion === 'string' &&
   devBumpPattern(reservedNext).test(workspaceVersion) &&
   publishedPin === LATEST_PUBLISHED_CLUSTER_MESH;
 
