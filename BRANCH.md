@@ -64,10 +64,10 @@
   - [x] Exercise real L0 catalog/schema validation and stale-hash refusals with the targeted regression.
 - [ ] **Lot 1 — Exact frozen-byte correction**
   - [x] Retain predecessor manifest and sidecar in history; preserve historical P2.
-  - [ ] Copy approved catalog byte-for-byte; change exactly two L0 fields.
-  - [ ] Derive P3 by exactly two inventory hash substitutions; emit matching sidecar.
-  - [ ] Record base, seven inherited P2 deviations and detached signature slots explicitly pending.
-  - [ ] Preserve both unchecked v9 R2-MEMORY/R7a-MEMORY obligations in repository evidence if v9 is outside Git.
+  - [x] Copy approved catalog byte-for-byte; change exactly two L0 fields.
+  - [x] Derive P3 by exactly two inventory hash substitutions; emit matching sidecar.
+  - [x] Record base, seven inherited P2 deviations and detached signature slots explicitly pending.
+  - [x] Preserve both unchecked v9 R2-MEMORY/R7a-MEMORY obligations in repository evidence if v9 is outside Git.
   - [ ] Record P3 digest and freezing commit in the existing root BINDING.md under P3.
 - [ ] **Lot 2 — Validation and draft PR**
   - [ ] Run real L0 validator and existing tooling tests (`tools/memory-mcp-l5/tests/*.test.mjs`).
