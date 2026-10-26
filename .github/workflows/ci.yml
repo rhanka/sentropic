@@ -8,6 +8,10 @@ on:
     branches: [main, feat/immo-861-integration, feat/engram-e2-integration]
   workflow_dispatch:
     inputs:
+      capacity_publish_dry_run:
+        description: 'Qualify package publication jobs on this ref using guarded pack targets; never publish'
+        type: boolean
+        default: false
       bootstrap_publish_target:
         description: 'Bootstrap-publish target: exactly one explicit package is required, there is no "all" option (uses NPM_TOKEN; first publish only before OIDC trusted publishers are attached)'
         required: true
@@ -176,14 +180,14 @@ jobs:
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
       cluster_mesh: ${{ steps.filter.outputs.cluster_mesh }}
       engram_e2: ${{ steps.engram_e2_scope.outputs.selected }}
-      cluster_mesh_publish: ${{ steps.filter.outputs.cluster_mesh_publish }}
+      cluster_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cluster_mesh_publish }}
       llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
       cited_source_viewer: ${{ steps.filter.outputs.cited_source_viewer }}
       cowork_bridge: ${{ steps.filter.outputs.cowork_bridge }}
-      cowork_bridge_publish: ${{ steps.filter.outputs.cowork_bridge_publish }}
+      cowork_bridge_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cowork_bridge_publish }}
       cowork_desktop: ${{ steps.filter.outputs.cowork_desktop }}
-      cowork_desktop_publish: ${{ steps.filter.outputs.cowork_desktop_publish }}
+      cowork_desktop_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cowork_desktop_publish }}
       oauth_verify: ${{ steps.filter.outputs.oauth_verify }}
       mcp_auth: ${{ steps.filter.outputs.mcp_auth }}
       mcp_platform: ${{ steps.filter.outputs.mcp_platform }}
@@ -199,25 +203,25 @@ jobs:
       contracts: ${{ steps.filter.outputs.contracts }}
       flow: ${{ steps.filter.outputs.flow }}
       artifacts: ${{ steps.filter.outputs.artifacts }}
-      llm_mesh_publish: ${{ steps.filter.outputs.llm_mesh_publish }}
-      llm_gateway_publish: ${{ steps.filter.outputs.llm_gateway_publish }}
-      chat_ui_publish: ${{ steps.filter.outputs.chat_ui_publish }}
-      cited_source_viewer_publish: ${{ steps.filter.outputs.cited_source_viewer_publish }}
-      oauth_verify_publish: ${{ steps.filter.outputs.oauth_verify_publish }}
-      mcp_auth_publish: ${{ steps.filter.outputs.mcp_auth_publish }}
-      mcp_platform_publish: ${{ steps.filter.outputs.mcp_platform_publish }}
-      auth_hono_publish: ${{ steps.filter.outputs.auth_hono_publish }}
-      auth_client_publish: ${{ steps.filter.outputs.auth_client_publish }}
-      auth_ui_publish: ${{ steps.filter.outputs.auth_ui_publish }}
-      chat_core_publish: ${{ steps.filter.outputs.chat_core_publish }}
-      chat_server_publish: ${{ steps.filter.outputs.chat_server_publish }}
-      comments_publish: ${{ steps.filter.outputs.comments_publish }}
-      events_publish: ${{ steps.filter.outputs.events_publish }}
-      contracts_publish: ${{ steps.filter.outputs.contracts_publish }}
-      flow_publish: ${{ steps.filter.outputs.flow_publish }}
-      artifacts_publish: ${{ steps.filter.outputs.artifacts_publish }}
+      llm_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_mesh_publish }}
+      llm_gateway_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_gateway_publish }}
+      chat_ui_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_ui_publish }}
+      cited_source_viewer_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cited_source_viewer_publish }}
+      oauth_verify_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.oauth_verify_publish }}
+      mcp_auth_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.mcp_auth_publish }}
+      mcp_platform_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.mcp_platform_publish }}
+      auth_hono_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.auth_hono_publish }}
+      auth_client_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.auth_client_publish }}
+      auth_ui_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.auth_ui_publish }}
+      chat_core_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_core_publish }}
+      chat_server_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_server_publish }}
+      comments_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.comments_publish }}
+      events_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.events_publish }}
+      contracts_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.contracts_publish }}
+      flow_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.flow_publish }}
+      artifacts_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.artifacts_publish }}
       harness: ${{ steps.filter.outputs.harness }}
-      harness_publish: ${{ steps.filter.outputs.harness_publish }}
+      harness_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.harness_publish }}
       manifest_guard: ${{ steps.filter.outputs.manifest_guard }}
       # Publishable manifest guard context (spec section 6): JSON lists, never booleans.
       package_files: ${{ steps.publishable_files.outputs.publishable_package_files_files }}
@@ -526,11 +530,11 @@ jobs:
           ENGRAM_E2_SELECTED: ${{ steps.engram_e2_scope.outputs.selected }}
           CI_SELECTION_CONTEXT: >-
             {"changes": ${{ toJSON(steps.filter.outputs) }}, "event": "${{ github.event_name }}",
-            "ref": "${{ github.ref }}", "inputs": {"bootstrap_publish_target": "${{ inputs.bootstrap_publish_target || 'none' }}"},
+            "ref": "${{ github.ref }}", "inputs": {"bootstrap_publish_target": "${{ inputs.bootstrap_publish_target || 'none' }}", "capacity_publish_dry_run": ${{ inputs.capacity_publish_dry_run || false }}},
             "identity": {"runId": "${{ github.run_id }}", "attempt": "${{ github.run_attempt }}",
             "headSha": "${{ github.event.pull_request.head.sha || github.sha }}"}}
         run: |
-          export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; process.stdout.write(JSON.stringify(context));')"
+          export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; if (context.inputs.capacity_publish_dry_run) for (const key of Object.keys(context.changes)) if (key.endsWith("_publish")) context.changes[key] = "true"; process.stdout.write(JSON.stringify(context));')"
           make ci-expected-manifest ENV=test-ci-62
       - uses: actions/upload-artifact@v4
         with:
@@ -2030,7 +2034,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
+      (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.llm_mesh_publish == 'true' &&
       (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
@@ -2045,7 +2049,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=llm-mesh ENV=test-ci-capacity
       - name: Publish LLM Mesh
+        if: inputs.capacity_publish_dry_run != true
         env:
           CLOUD_CODE_OAUTH_CLIENT_SECRET: ${{ secrets.LLM_MESH_CLOUD_CODE_OAUTH_CLIENT_SECRET }}
         run: |
@@ -2064,7 +2072,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
+      (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.llm_gateway_publish == 'true' &&
       (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
@@ -2080,7 +2088,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=llm-gateway ENV=test-ci-capacity
       - name: Publish LLM Gateway
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-llm-gateway
 
   publish-chat-ui:
@@ -2091,7 +2103,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-chat-ui]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2099,7 +2111,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=chat-ui ENV=test-ci-capacity
       - name: Publish Chat UI
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-chat-ui
 
   publish-cited-source-viewer:
@@ -2110,7 +2126,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-cited-source-viewer]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-cited-source-viewer.result == 'success' && (needs.changes.outputs.cited_source_viewer_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-cited-source-viewer.result == 'success' && (needs.changes.outputs.cited_source_viewer_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2118,7 +2134,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=cited-source-viewer ENV=test-ci-capacity
       - name: Publish Cited Source Viewer
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-cited-source-viewer
 
   publish-cowork-bridge:
@@ -2129,7 +2149,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-cowork-bridge]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-bridge.result == 'success' && (needs.changes.outputs.cowork_bridge_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-bridge.result == 'success' && (needs.changes.outputs.cowork_bridge_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2137,7 +2157,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=cowork-bridge ENV=test-ci-capacity
       - name: Publish Cowork Bridge
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-cowork-bridge
 
   publish-oauth-verify:
@@ -2148,7 +2172,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-oauth-verify]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-oauth-verify.result == 'success' && (needs.changes.outputs.oauth_verify_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-oauth-verify.result == 'success' && (needs.changes.outputs.oauth_verify_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2156,7 +2180,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=oauth-verify ENV=test-ci-capacity
       - name: Publish OAuth Verify
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-oauth-verify
 
   # N1: mcp-auth depends on @sentropic/oauth-verify; publish (and qualify from the registry)
@@ -2173,7 +2201,7 @@ jobs:
       needs.changes.outputs.mcp_auth_publish == 'true' &&
       needs.validate-mcp-auth.result == 'success' &&
       (needs.publish-oauth-verify.result == 'success' || needs.publish-oauth-verify.result == 'skipped') &&
-      github.ref == 'refs/heads/main'
+      (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true)
     permissions:
       contents: read
       id-token: write
@@ -2181,9 +2209,14 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=mcp-auth ENV=test-ci-capacity
       - name: Publish MCP Auth
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-mcp-auth
       - name: Qualify published MCP Auth from the registry
+        if: inputs.capacity_publish_dry_run != true
         run: |
           set -eu
           receipt=tmp/ci-manifest-guard/publish/mcp-auth.publish-output
@@ -2227,7 +2260,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-mcp-platform]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-platform.result == 'success' && (needs.changes.outputs.mcp_platform_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-platform.result == 'success' && (needs.changes.outputs.mcp_platform_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2235,7 +2268,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=mcp-platform ENV=test-ci-capacity
       - name: Publish MCP Platform
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-mcp-platform
 
   publish-artifacts:
@@ -2246,7 +2283,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-artifacts]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' && (needs.changes.outputs.artifacts_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' && (needs.changes.outputs.artifacts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2254,7 +2291,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=artifacts ENV=test-ci-capacity
       - name: Publish Artifacts
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-artifacts
 
   publish-auth-hono:
@@ -2265,7 +2306,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-auth-hono]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-hono.result == 'success' && (needs.changes.outputs.auth_hono_publish == 'true' && github.ref == 'refs/heads/main')
+      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-hono.result == 'success' && (needs.changes.outputs.auth_hono_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2273,7 +2314,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        run: make ci-capacity-publish-dry-run PACKAGE=auth-hono ENV=test-ci-capacity
       - name: Publish Auth Hono
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-auth-hono
 
   publish-auth-client:
