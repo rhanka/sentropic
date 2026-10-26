@@ -54,17 +54,23 @@ export function inventoryLocks(root = '.') {
   return [...new Set([...REQUIRED_LOCKS, ...found])].sort().map((path) => ({ path, present: existsSync(join(root, path)), includeDev: true }));
 }
 
-export function inventoryImages(contract) {
+export function inventoryImages(contract, root) {
   const images = contract?.inventory?.images || [];
   return REQUIRED_IMAGES.map((key) => {
     const found = images.find((image) => image.key === key);
-    return { key, present: Boolean(found), dockerfile: found?.dockerfile || null };
+    const present = Boolean(found) && (!root || (existsSync(join(root, found.dockerfile)) &&
+      new RegExp(`^FROM .+ AS ${found.stage}$`, 'im').test(readFileSync(join(root, found.dockerfile), 'utf8'))));
+    return { key, present, dockerfile: found?.dockerfile || null };
   });
 }
 
-export function inventorySastRoots(contract) {
-  const roots = contract?.inventory?.sastRoots || [];
-  return { roots, blockedUntil: contract?.inventory?.sastBlockedUntil || 'S2c', qualified: false };
+export function inventorySastRoots(contract, root) {
+  const trees = contract?.inventory?.sourceTrees || ['api', 'ui', 'packages', 'apps', 'scripts', 'tools', 'docs/governance/kit'];
+  const sourceFiles = root ? repositoryFiles(root).filter((path) => /\.[cm]?[jt]sx?$/.test(path) &&
+    trees.some((tree) => path.startsWith(`${tree}/`))) : [];
+  const discovered = sourceFiles.map((path) => path.includes('/src/') ? path.split('/src/')[0] + '/src' : path.slice(0, path.lastIndexOf('/')));
+  const roots = [...new Set([...(contract?.inventory?.sastRoots || []), ...discovered])].sort();
+  return { roots, sourceFiles, blockedUntil: contract?.inventory?.sastBlockedUntil || 'S2c', qualified: false };
 }
 
 const SKIP = new Set(['.git', '.track', '.tmp', '.remote', '.claude', '.codex', '.agents', 'tmp',
@@ -97,17 +103,36 @@ export function findDerivedPinConsumers(root = '.', maxFiles = 200) {
 
 export function inventoryRepository(root = '.', contract = loadContract(join(root, '.security/security-fix.json'))) {
   const locks = inventoryLocks(root);
-  const images = inventoryImages(contract);
-  const sast = inventorySastRoots(contract);
+  const images = inventoryImages(contract, root);
+  const sast = inventorySastRoots(contract, root);
   const consumers = findDerivedPinConsumers(root);
   const missingLocks = locks.filter((lock) => !lock.present).map((lock) => lock.path);
+  const undeclaredConsumers = consumers.filter((path) => !contract?.inventory?.derivedPinConsumers?.includes(path));
+  const blockers = ['coverage-blocked: sast', ...missingLocks.map((path) => `missing lock: ${path}`),
+    ...images.filter((image) => !image.present).map((image) => `missing image definition: ${image.key}`),
+    ...undeclaredConsumers.map((path) => `undeclared lock-hash consumer: ${path}`)];
+  const files = repositoryFiles(root);
+  const rootPackage = files.includes('package.json') ? JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) : {};
+  const workspaces = Array.isArray(rootPackage.workspaces) ? rootPackage.workspaces : rootPackage.workspaces?.packages || [];
+  const manifests = files.filter((path) => /(?:^|\/)package.json$/.test(path)).map((path) => {
+    const dir = path === 'package.json' ? '' : path.slice(0, -'/package.json'.length);
+    const workspace = !dir || workspaces.some((pattern) => pattern === dir ||
+      (pattern.endsWith('/*') && dir.startsWith(pattern.slice(0, -1)) && !dir.slice(pattern.length - 1).includes('/')));
+    const ownLock = dir ? `${dir}/package-lock.json` : 'package-lock.json';
+    const lock = files.includes(ownLock) ? ownLock : workspace && files.includes('package-lock.json') ? 'package-lock.json' : null;
+    if (!lock) blockers.push(`manifest without qualified lock: ${path}`);
+    return { path, workspace, lock, includeDev: true };
+  });
   return {
     locks,
+    manifests,
     images,
     sast,
     derivedPinConsumers: consumers,
     coverage: {
-      complete: missingLocks.length === 0 && images.every((image) => image.present),
+      complete: blockers.length === 0,
+      blockers,
+      undeclaredConsumers,
       missingLocks,
       consumerCount: consumers.length,
       undeclaredConsumerIsBlocker: Boolean(contract?.derivedPins?.undeclaredConsumerIsBlocker),
