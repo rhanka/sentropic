@@ -33,9 +33,9 @@
 
 ## Feedback Loop
 - [x] BR01-EX1: `/tmp/app-w1d-recovery-race-red.log` proves a concurrent W1.b publication returns 201 but loses bytes to GC. Wire preparation refs to unchanged upstream `createPostgresClaimGuardedRefs` in `composition.ts`; impact limited to pin/reference exclusion with maintenance; rollback reverts this wiring and keeps jobs disabled. No package algorithm change.
-- [ ] W1.c-dependent post-restore activation invalidation is drafted against UP-T PR #782 import path `@sentropic/artifacts/adapters/postgres-activation`, `PostgresActivationStore.cleanup/invalidate`; finalize host wiring and real adapter recovery proof when artifacts 0.2.3 publishes and W1.c lands. No copied PG algorithm or runtime import of an unpublished module.
+- [ ] W1.c-dependent post-restore activation invalidation is drafted against UP-T PR #782 import path `@sentropic/artifacts/adapters/postgres-activation`, `PostgresActivationStore.cleanup/invalidate`; finalize host wiring and real adapter recovery proof when artifacts 0.2.3 publishes and W1.c lands. Also prove activation flow/ticket expiry within 60 seconds under DB time without cleanup. Host credential expiry is covered here; activation expiry remains W1.c. No copied PG algorithm or runtime import of an unpublished module.
 - [ ] W3/W5 must fence all writers/readers, retire pre-restore grant signing authority and reconcile current denials before reopening; W1.d supplies composition only.
-- [ ] W3 storage wiring must supply `createPrivateArtifactStorage` with bucket-scoped GetPublicAccessBlock permission and a qualified private S3 endpoint; unsupported privacy checks refuse, with no runtime fallback.
+- [ ] W3 provider qualification gate: supply `createPrivateArtifactStorage` with bucket-scoped GetPublicAccessBlock permission and prove the target private S3 endpoint enforces all four blocks; provider support is unverified. Positive checks cache for at most 30 seconds; expired/unsupported checks refuse effects, with no runtime fallback.
 - [x] PR base `feat/app-cm-integration` is outside this inherited workflow's PR triggers; use CI workflow_dispatch on the pushed exact head with bootstrap publication disabled.
 
 ## AI Flaky tests
@@ -52,11 +52,12 @@
 - [x] Lot 1: `api/tests/api/artifacts-host-recovery.test.ts` first; red run on missing lifecycle composition, `/tmp/app-w1d-red.log`.
 - [x] Lot 2: `lifecycle.ts` private S3 and bounded preparation cleanup/collection; PG references, pins, failure retries and maintenance denial tested in the recovery file.
   - [x] Initial seven recovery cases pass, `/tmp/app-w1d-green-2.log`; fixtures use upstream `sha256:` digest codec.
-- [x] Lot 3: recovery fence orders activation invalidation and grant-key retirement before reopening; failure remains closed; expiry independent of cleanup, using upstream grant verifier.
+- [x] Lot 3: recovery fence orders activation invalidation and grant-key retirement before reopening; failure remains closed; host credential expiry uses DB time independently of cleanup (activation expiry remains W1.c).
   - [x] Recovery/race tests first: 7 passed, 6 expected failures (missing recovery port and published bytes erased), `/tmp/app-w1d-recovery-race-red.log`.
   - [x] All 16 recovery cases pass; API typecheck passes; lint has 0 errors/219 warnings, `/tmp/app-w1d-recovery-green.log`.
 - [x] Lot 4: 48/48 recovery/publication/migration tests, API typecheck/lint, healthy HTTP 200 runtime logs, down, empty Compose ps and PASS C2; `/tmp/app-w1d-final.log`.
 - [x] Review R1 P1: pool-bound intents/refs, per-item claim transactions, durable retry count and 60-second deferral; invalid metadata remains poisoned by the package. Regression cases cover invalid metadata, purge claims, unavailable storage, restart progress and subsequent retry (`api/tests/api/artifacts-host-recovery.test.ts`); red `/tmp/app-w1d-r1-red.log`, 19/19 green `/tmp/app-w1d-r1-p1.log`.
+- [x] Review R1 P2: replace the signer-only expiry probe with host HTTP/MCP credential expiry using PostgreSQL time; cache positive bucket privacy checks for 30 seconds and coalesce refreshes. Count checks across reads/writes/deletes/listing, TTL expiry and failed refreshes in `api/tests/api/artifacts-host-recovery.test.ts`. Final 52/52 recovery/publication/migration tests and API typecheck pass; lint 0 errors/219 warnings (`/tmp/app-w1d-r1-final.log`), runtime HTTP 200 (`/tmp/app-w1d-r1-runtime.log`).
 - [ ] Lot 5: draft PR against `feat/app-cm-integration`, exact BRANCH.md body, independent review, push and exact-head green CI; report W1.c remainder; do not merge.
 
 ## Inherited main qualification record
