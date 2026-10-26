@@ -18,6 +18,7 @@
   - `packages/artifacts/tests/postgres-activation.test.ts`
   - `packages/artifacts/tests/postgres-activation.integration.test.ts`
   - `packages/artifacts/tests/fixtures/activation-process.mjs`
+  - `packages/artifacts/probe/adapter-consumer.mjs`
   - `packages/artifacts/package.json`
   - `packages/artifacts/src/mcp-core.ts` (version constant only)
   - `package-lock.json` (artifacts workspace version only)
@@ -38,6 +39,7 @@
 - [x] BR861-EX3: existing TicketStore plus browser-flow port; namespace binding, immutable IDs, <=60s lifetime, leased transaction, database clock after waits, no grant on uncertain COMMIT.
 - [x] Hosts own authority locks, migration/journal, scheduling, rotation and serving policy; restore invalidates activation state and rotates signing keys before serving.
 - [x] BR861-EX3 pack-only metadata: synchronize package/provider/workspace-lock versions; impact limited to 0.2.3 identity; rollback retains 0.2.2 metadata.
+- [x] Independent review selection-failed: no live model catalog configured; tmp/artifacts-upt-review/dossier.md records evidence. No peer launched or consensus claimed.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or accepted flakes.
@@ -65,8 +67,13 @@
   - [x] Scoped gate green: 18/18 tests (4 unit, 14 real PG), 2026-10-26; cleanup completed afterward.
 - [ ] Lot 4: exact imports and authority/restore obligations; merge main again after #759.
   - [x] Export the adapter and unchanged versioned SQL; document W1.c/A6 composition and host authority/restore obligations.
-- [ ] Lot 5: separate pack-only 0.2.3 bump; typecheck/lint/unit/integration/pack gates.
+- [x] Lot 5: separate pack-only 0.2.3 bump; typecheck/lint/unit/integration/pack gates.
   - [x] Registry pre-bump check: latest 0.2.1; reserve owner-selected 0.2.3 after pending #759/0.2.2, no publication.
   - [x] Separate pack-only bump: package manifest, provider constant and workspace lock set to 0.2.3.
   - [x] Full unit gate: 450/450, 37 suites; scoped UP-T gate: 18/18, zero skips.
+  - [x] Typecheck, lint, full integration/E2E (190 tests) and real pack pass; SQL asset hash matches packed bytes.
+  - [x] Frozen installed-consumer conformance: probe/adapter-consumer.mjs passes adapter/SQL imports from installed archives (PACKED_ADAPTERS_OK adapters=3 migrations=2 activationSql=1).
+  - [x] SQL SHA-256: 13767c826a62aa5f880809ca2ebc60bdc638b2e59f983e195d4351356b282d8b; archive SHA-256: 53d6e84eee49e19fe1ef21468b93dffe6eac2451ee02c21cde539e0b2114828a.
 - [ ] Lot 6: scope-check before atomic commits (<150 lines); push; draft PR body from this file; CI green; do not merge.
+  - [x] Draft PR #782 targets main; first plan comment posted; CI requested at https://github.com/rhanka/sentropic/actions/runs/40412940723.
+  - [x] Package gates use the shared Docker lock; isolated stack removed after each step; no owner environments touched.
