@@ -271,15 +271,17 @@ The `allow-pgbackup-to-postgres` NetworkPolicy lets the job reach postgres.
 ```bash
 # Trigger an immediate backup Job and wait for completion:
 make k8s-pgbackup-now KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37c
-# Restore a chosen dump into a scratch DB (non-destructive to the app DB):
+# Restore a chosen dump into the ISOLATED restore namespace (never the live DB):
 make k8s-pgbackup-restore PG_BACKUP_KEY=pg/<ts>.sql.gz \
-  KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37c
+  RESTORE_KUBECONFIG=<path-to-restore-namespace-kubeconfig> ENV=test-feat-deploy-poc-k8s-37c
 ```
 
-`k8s-pgbackup-restore` runs a throwaway pod that reads `S3_BUCKET`/`S3_ENDPOINT`/
-`S3_REGION` + creds from the SealedSecret (no host env dependency), downloads the
-dump, restores it into a scratch `restore_check` DB, runs a sanity `SELECT`, then
-drops the scratch DB.
+Never point `RESTORE_KUBECONFIG` at an admin, prod, or preprod kubeconfig
+(e.g. `$HOME/.kube/poc.yaml`): the target refuses default kubeconfigs and any
+identity holding live-cluster rights. `k8s-pgbackup-restore` downloads the dump
+with an init container, restores it into the isolated `app_cm_restore` DB with
+pipefail/`ON_ERROR_STOP`, optionally verifies `PG_BACKUP_SHA256`, then prints
+the B03 manifest block (`MANIFEST-BEGIN` … `MANIFEST-END`).
 
 ## Public ingress / TLS
 
