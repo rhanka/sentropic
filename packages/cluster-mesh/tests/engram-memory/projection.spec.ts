@@ -53,9 +53,10 @@ describe.skipIf(!pgEnabled)('transactional memory projection', () => {
     const host = await memoryPgHost();
     try {
       const bound = await (await host.open()).bindNew(memoryGrant());
-      const unit = memoryUnit({ appends: [memoryAppend('1')], moduleResult: { first: true } });
+      const unit = memoryUnit({ appends: [memoryAppend('1')], moduleResult: { format: 'utf8', data: '{"first":true}' } });
       const receipt = await bound.commitAtomic(unit, { idempotencyKey: 'event-1' });
-      expect(await bound.commitAtomic(unit, { idempotencyKey: 'event-1' })).toEqual(receipt);
+      const reopened = await (await host.open()).bind(memoryGrant());
+      expect(await reopened.commitAtomic(unit, { idempotencyKey: 'event-1' })).toEqual(receipt);
       await expect(bound.commitAtomic(memoryUnit({ appends: [{ ...memoryAppend('2', 'hash-1'),
         record: { ...memoryAppend('2').record, id: 'event-1' },
       }] }))).rejects.toThrow();
