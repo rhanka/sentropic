@@ -21,6 +21,8 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
   - `packages/cluster-mesh/src/storage/postgres/codec.ts`
   - `packages/cluster-mesh/src/storage/postgres/effects.ts`
   - `packages/cluster-mesh/src/storage/postgres/journal.ts`
+  - `packages/cluster-mesh/src/storage/postgres/snapshots.ts`
+  - `packages/cluster-mesh/src/storage/postgres/scope.ts` (journal counter inputs only)
   - `packages/cluster-mesh/src/storage/postgres/roots.ts`
   - `packages/cluster-mesh/src/storage/postgres/readers.ts`
   - `packages/cluster-mesh/src/storage/postgres/core.ts` (fence/provision epoch only)
@@ -31,6 +33,9 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
   - `packages/cluster-mesh/tests/storage/generate-pg-manifest.mjs` (`007` file entry only)
   - `packages/cluster-mesh/tests/storage/postgres-u64.spec.ts`
   - `packages/cluster-mesh/tests/storage/postgres-u64-migration.spec.ts`
+  - `packages/cluster-mesh/tests/storage/postgres-corpus.spec.ts` (bounded legacy corpus adapter only)
+  - `packages/cluster-mesh/tests/storage/postgres-replay.spec.ts` (exact counter assertions only)
+  - `packages/cluster-mesh/tests/storage/postgres-crashes.spec.ts` (exact watermark assertion only)
   - `packages/cluster-mesh/tests/storage/postgres-module-migrations.spec.ts` (007 occupies order 7; hypothetical future asset moves 007→008)
   - `packages/cluster-mesh/tests/storage/postgres-reattest.spec.ts` (007 shifts last-receipt ordinal 6→7)
   - `PLAN.md` (inherited: E0 merge content, unauthored here)
@@ -70,7 +75,6 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
   - `packages/cluster-mesh/assets/storage/postgres/005-cleanup.sql`
   - `packages/cluster-mesh/assets/storage/postgres/006-staged-coverage.sql`
   - `packages/cluster-mesh/assets/storage/postgres/comments/**`
-  - `packages/cluster-mesh/src/storage/postgres/snapshots.ts`
   - `packages/cluster-mesh/src/storage/postgres/preparation.ts`
   - `packages/cluster-mesh/src/storage/postgres/units.ts`
   - `packages/cluster-mesh/src/engram-memory/**`
@@ -86,8 +90,8 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
 - [x] PR765 r1 P1-2: PG atomic gate requires unique non-empty string result IDs for legacy and u64 units; missing and malformed IDs refuse before effects.
 - [x] Base `origin/feat/cluster-mesh-engram-e1` at `2b741f557`; P2 unchanged (`2b85ff28...`).
 - [x] Registry check 2026-10-26: mesh latest `0.22.1`; `0.23.0` reserved, `dev.1`/`dev.2` taken; `0.23.0-dev.3` is next free N.
-- [x] Inventory: exact-u64 = scopes.version/sequence, fences.epoch, journal.sequence, boundaries.version/sequence, chain allocation strings, aggregate versions/guards. Bounded Numbers stay = chain seq/count/positions, read windows/limits/budgets, consumer cursor/scanned, staged counts, work limits. Physical bigint IDs stay = map node/root IDs, boundary root, record offsets, schema ordinals.
-- [x] Read windows and consumer positions stay bounded: `readPgJournal`/snapshots refuse above-safe journals with the existing capacity error (fail-closed; u64-scale replay is follow-on, not this lot).
+- [x] Inventory: exact-u64 = scopes.version/sequence, fences.epoch, journal.sequence/positions/segments, consumer cursor/scanned/failedSeq/lag, snapshot watermarks, boundaries.version/sequence, chain allocation strings, aggregate versions/guards. Bounded Numbers = chain seq/count/positions, page sizes/limits/budgets, snapshot page ordinals, staged counts, work limits. Physical bigint IDs = map node/root IDs, boundary root, record offsets, schema ordinals.
+- [x] PR765 r1 P1-1: journal positions, consumer progress and snapshot watermarks use decimal strings and BigInt arithmetic through max u64; legacy safe numeric inputs remain accepted.
 - [x] Commit-options fences stay safe-only (`validateCommitOptions` frozen); u64 epochs flow through `provisionFence`/`fence` direct paths.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; E2 qualification green; no merge.
 - [x] 007 consequence: the two specs pinning migration-chain ordinals move with the new version (module hypothetical 007→008, reattest last receipt 6→7); no behavior change.
