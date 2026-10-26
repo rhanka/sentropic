@@ -39,6 +39,7 @@ export function normalizeRegister(document, repository) {
       id: row.id || registerKey.match(/CVE-\d{4}-\d+|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/i)?.[0]?.toUpperCase() || registerKey,
       path: row.file || row.embedded_path || null, severity: row.risk || null,
       version: row.affected_version || null, component: row.component || null,
+      containerCandidate: Boolean(row.image_digest || row.embedded_path || /^(?:usr|lib|bin|sbin|etc|workspace)\//.test(row.file || '')),
       scanner: row.scanner || null, platform: row.platform || null, imageDigest: row.image_digest || null };
   });
 }
@@ -61,7 +62,7 @@ export function summarizeBacklog(findings, rows, { today = new Date().toISOStrin
   findings: joined, unresolvedRegister: unresolved.length, expired,
   unexpired: unresolved.length - expired - invalidRegister, invalidRegister, expiryHistogram, verificationPending,
   coverageBlocked, staleContainerCandidates: unresolved.filter((row) => validDate(row.review_due) && today > row.review_due &&
-    (row.imageDigest || /image|toolbox|production|api-tool/.test(row.component || ''))).length };
+    (row.containerCandidate || row.imageDigest || /image|toolbox|production|api-tool/.test(row.component || ''))).length };
 }
 
 export function inventoryLocks(root = '.') {
