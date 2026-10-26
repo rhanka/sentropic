@@ -17,9 +17,9 @@ const GCP_CATALOG_KEYS = [
 ] as const;
 
 describe('gcp provider package surface', () => {
-  it('adds gcp to the provider set (5 -> 6) without disturbing the existing five', () => {
+  it('keeps gcp in the ordered provider catalog including the decision-only provider', () => {
     expect(providerIds).toContain('gcp');
-    expect(providerIds).toHaveLength(8);
+    expect(providerIds).toHaveLength(9);
     expect([...providerIds]).toEqual([
       'openai',
       'gemini',
@@ -29,6 +29,7 @@ describe('gcp provider package surface', () => {
       'gcp',
       'local',
       'muse',
+      'typesafe',
     ]);
   });
 
