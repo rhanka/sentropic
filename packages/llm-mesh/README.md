@@ -475,7 +475,8 @@ independently. `productionReady` exists only for a specific request/policy; eval
 lists qualified scopes. A passing rubric never qualifies new arbitrary instructions.
 
 An explicitly published `executionProfile: 'qualification'` candidate remains experimental,
-even with provisional expected served IDs. It still needs qualified financial bounds, host
+even with provisional expected served IDs. It requires the same explicit profile on
+`createDecisionService` host options; production refuses it. It still needs qualified financial bounds, host
 credentials and one-attempt admission. Success uses `kind: 'experimental-verdict'`; results and
 receipts carry `experimental: true`, and served evaluator IDs carry `provisional: true`.
 Production consumer validation rejects these envelopes and receipts, including errors.

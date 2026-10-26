@@ -48,6 +48,9 @@
 - [x] R1 validation: use calibrated production fixtures for service/consumer round trips and explicit fabricated wire evidence for codec-only matrices; experimental service results never become production fixtures.
 - [x] R1 P2-2: replace P30 assertions with tuning-call selection replay, criterion revision and digest bindings, split commitment, per-call policy digest and freeze chronology; missing/corrupted evidence blocks with P30 unverified.
 - [x] R1 integration: retain experimental receipt provenance in the private assessment recorder; reject undeclared fields and contradictory evidence while production consumers continue to refuse experiments.
+- [x] R1 final sweep: remove the obsolete Decision branch selector from CI manifest context as well as job conditions; regression asserts no Decision branch literal or selector survives in the workflow.
+- [x] R1 local validation: mesh 1501 tests / 86 files, source typecheck, lint and standalone build/pack passed; scoped cluster decision-receipts.spec.ts: 4 tests passed. Restored API/browser/VSCode jobs run in CI.
+- [x] R1 final CI-selection rerun: 16 tests passed after manifest cleanup; mechanical scope checks passed before each selective commit; all test/container steps used the shared Docker lock and isolated environment cleanup.
 - [x] P22: test reproduced two rounded micro-USD for combined sub-micro input/output work; round the per-receipt sum once, preserving v1 accounting sources and conservative unknown-usage reserves.
 - [x] Final mesh: 1485 tests / 86 files, typecheck and lint passed; CI selection/wiring: 40 tests passed. Cluster fixtures explicitly use the experimental profile; next-minor refusal assertions follow the new compatibility bound.
 - [ ] REVIEW: independent complementary review availability must be recorded; no consensus without two completed eligible legs.
