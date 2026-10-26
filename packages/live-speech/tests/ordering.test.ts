@@ -4,6 +4,13 @@ import { createSession, SessionJournal } from '../src/core/session.js';
 import type { JournalSnapshot } from '../src/core/session.js';
 
 describe('submission, tool history and effect barrier', () => {
+  it('should reject malformed historical turn references instead of inherited record entries', async () => {
+    const f = fixture();
+    await expect(f.core.status({ turnEpoch: '__proto__' } as never)).rejects.toThrow('identity');
+    const turn = await commit(f.core);
+    await expect(f.core.status({ ...turn, scope: undefined } as never)).rejects.toThrow('scope');
+  });
+
   it('should retain new call approvals while accepted old effects receive terminal evidence', async () => {
     const f = fixture();
     const old = await commit(f.core);

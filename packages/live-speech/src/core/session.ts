@@ -108,6 +108,9 @@ export const assertScope = (state: SessionState, scope: Scope): void => {
   if (!same(state.scope, scope)) throw new Error('Stale or unauthorized scope');
 };
 export const getTurn = (state: SessionState, ref: TurnRef): Turn => {
+  if (!ref || !Number.isSafeInteger(ref.turnEpoch) || ref.turnEpoch < 1 || !isValidScope(ref.scope)
+    || typeof ref.submitKey !== 'string' || !ref.submitKey) throw new Error('Invalid turn identity or scope');
+  if (!Object.hasOwn(state.turns, ref.turnEpoch)) throw new Error('Unknown turn identity');
   const turn = state.turns[ref.turnEpoch];
   if (!turn || turn.submitKey !== ref.submitKey) throw new Error('Unknown turn identity');
   if (!same(turn.scope, ref.scope)) throw new Error('Stale or unauthorized scope');
