@@ -55,8 +55,8 @@
   - [x] Record successor scope and independent memory migration reservation.
 - [ ] **Lot 1 — Tests first**
   - [x] Author `tests/engram-memory/postgres-registration.spec.ts` and `pg-host.ts`: real apply/verify history, reopen, idempotence and drift refusal; RED queued under shared lock.
-  - [ ] `tests/engram-memory/queries.spec.ts`: all five queries, foreign scope, paging, retained boundaries and resync.
-  - [ ] `tests/engram-memory/projection.spec.ts`: live K7/K8, completion, P3 replay and rollback.
+  - [x] Author `tests/engram-memory/queries.spec.ts`: all five queries, foreign scope, paging, retained boundaries and resync.
+  - [x] Author `tests/engram-memory/projection.spec.ts`: live K7/K8, completion, P3 replay and rollback.
   - [ ] Rerun existing `first-proof.spec.ts` and `completion.spec.ts`.
 - [ ] **Lot 2 — Implementation**
   - [ ] Memory-only SQL assets and shared schema-role loader hooks.
