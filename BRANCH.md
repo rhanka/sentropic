@@ -44,7 +44,7 @@
 ## Feedback Loop
 - [x] BR6-EX1 allows `packages/cluster-mesh/package.json` and `package-lock.json` version fields for the owner's unique dev.5 reservation; impact pack-only, rollback both fields together.
 - [x] E2 owns core `007-consumed-counters.sql`. E6 reserves memory chain `001-projections.sql`, next global receipt slot 008 after E2; no competing core migration.
-- [ ] Coordinate shared loader: E6 is sole writer of memory role/selection/fingerprint substitutions in migrations.ts after E2; peer message pending automatic approval review.
+- [x] Send public #768 coordination artifact to live Muse peer via h2a (26836350-4047-4c6f-bb57-a6c105a7ba04); E6 authors memory loader hooks, E2 does not touch migrations.ts; independent migration 001 consumes no core number. Peer ACK pending.
 - [x] Owner excludes Comments `incompatible_version` and selected packaging fixture 0.22.2 failures; #767 owns their one-time repair.
 - [x] K7 creation may share capture's append; the inherited zero-append guard applies to completion (revision 2), preserving the approved §5.2 distinction.
 - [x] `postgres-memory.spec.ts` enrolls memory PG tests in the existing E2 real-PG lane; standalone memory lane lacks PG and is not the durable receipt.
@@ -56,6 +56,8 @@
 - [x] PG memory corpus PASS: 10/10, zero skips; regression PASS: 61 tests, with only two separate-phase `postgres-crashes.spec.ts` cases skipped. Typecheck PASS; build/lint/mechanical/wiring PASS with cleanup=0.
 - [ ] Blocker: #768 is CONFLICTING/DIRTY and has no CI run. Integration `d22fc3f24` carries P2 `f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642`; E6 still carries required `2b85ff28...`. No base merge attempted; owner disposition requested before any action affecting this freeze.
 - [x] Retain local logs/checksums under `tmp/engram-e6-receipts/` and official lane receipts under `tmp/engram-e2-receipts/`.
+- [x] Remaining local E2 lanes PASS with cleanup=0: memory 76 tests (the 10 PG cases execute separately in the real PG receipt), common 10, grants 3; no source edits after the passing code snapshot.
+- [ ] Independent peer launch awaits owner authorization required by rules/subagents.md; no consensus review claimed.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky waiver applies.
@@ -70,18 +72,18 @@
 - [x] **Lot 0 — Baseline and scope**
   - [x] Read Docker lock, rules, approved E6 and #709 view/diff; mechanically check branch.
   - [x] Record successor scope and independent memory migration reservation.
-- [ ] **Lot 1 — Tests first**
+- [x] **Lot 1 — Tests first**
   - [x] Author `tests/engram-memory/postgres-registration.spec.ts` and `pg-host.ts`: real apply/verify history, reopen, idempotence and drift refusal; RED queued under shared lock.
   - [x] Author `tests/engram-memory/queries.spec.ts`: all five queries, foreign scope, paging, retained boundaries and resync.
   - [x] Author `tests/engram-memory/projection.spec.ts`: live K7/K8, completion, P3 replay and rollback.
-  - [ ] Rerun existing `first-proof.spec.ts` and `completion.spec.ts`.
+  - [x] Rerun existing `first-proof.spec.ts` (6 tests) and `completion.spec.ts` (7 tests).
 - [x] **Lot 2 — Implementation**
   - [x] Author memory-only SQL assets and shared schema-role loader hooks; E2 does not edit migrations.ts; independent module chain avoids core numbering collision.
   - [x] Author transactional projection and backend-backed validation; reuse #709 transition functions; qualification pending.
   - [x] Author five root-bound memory queries and scope-chain-index enumeration; qualification pending.
 - [ ] **Lot 3 — Final validation and draft handoff**
   - [x] Existing PG module-migration, migration, registration, query and policy regressions pass (61 PG tests including E6).
-  - [ ] Build, typecheck, lint, memory/common/grants and real PG qualification lanes pass except the two owner-listed failures.
+  - [x] Local build, typecheck, lint, mechanical/wiring, memory/common/grants and real PG lanes pass; the two owner-listed packaging/Comments failures remain outside E6 and belong to #767.
   - [x] Scope-check before every commit; P2 unchanged and Engram exactly 0.21.1.
   - [x] Unique pack-only 0.23.0-dev.5 manifest/root-lock version commit; E2 registry baseline is 0.22.1; no peer or Engram change.
   - [x] Push draft PR #768 to `feat/engram-e2-integration`; no merge; independent memory migration 001 (receipt slot 008 after E2 core 007).
