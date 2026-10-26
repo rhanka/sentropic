@@ -16,10 +16,16 @@ linearizable durable `AtomicJournalStorage` primitive. Restoring the same storag
 effects, admissions and accepted risk. The package supplies no production in-memory persistence or
 independent billing ledger.
 
+For a controller/source/consent change, the trusted host calls `rotateGeneration(expected, next)` on
+that same journal. The controller epoch must increase; authenticated session ownership stays fixed.
+Rotation atomically fences old turns and retains effects, action IDs, consumed approvals and risk history.
+Reopen `SessionJournal` with the new scope after restart. Old references remain queryable for settlement
+and late native-ID interruption; they cannot dispatch or become live again.
+
 The authority clock supplies durable epoch milliseconds for Stop status and risk audit timestamps.
 `verifyRisk` must verify controlling-user authentication and typed input bound to the entire immutable
 request, including its request ID, scope, barrier revision, effect IDs, displayed evidence and confirmation.
-`verifyMutation` verifies fresh explicit approval bound to the current scope/turn, tool, argument digest,
+`verifyMutation` verifies fresh explicit approval bound to the current scope/turn/call ID, tool, argument digest,
 action ID and barrier revision; returning principal identity alone does not establish that approval.
 The opaque proof remains transient. Admission receipts explicitly distinguish a first dispatch from a
 duplicate; only `admitted: true` permits execution. Pair an emitted but denied call through
@@ -31,6 +37,9 @@ delegated work. Declared coverage alone does not qualify a runtime; prove it wit
 records. Uninterceptable classes must be disabled. Only the runtime authority can report terminal states.
 
 Commit an immutable final input reference once, persist its epoch/submit key, then call `send`.
+Finals queue durably while prior turns settle. `send` returns false until all earlier turns are terminal
+or durably fenced; retry the queued reference after either event. A lost native ACK does not block
+the successor behind an already-installed fence. Effect uncertainty still gates its tool admissions.
 Never retry an uncertain native start: `recover` queries the original submission. A late native ID
 binds to its original tombstone and is interrupted without becoming a new live turn. Opaque native
 history is owned by its existing controller; consume each `toolResult` once under its original call ID.
@@ -56,7 +65,11 @@ The renderer reports cumulative samples actually played plus uncertainty; progre
 clamped to generated samples. Stop invalidates that epoch even if late frames arrive on another channel.
 
 `UsageReceipts` records one estimate and signed revision-deduplicated adjustments under one operation
-identity. These are operational receipts for the existing ledger integration, not cloud spending authority.
+identity. Supply the coordinator's journal as its third constructor argument to verify the admitted
+turn/submit key/native ID. The signature verifier must authenticate allocator receipt references.
+An allocator admission contributes at most one counted unit across operations, including after restart;
+additional zero-unit metadata receipts retain the same admitted turn identity.
+These are operational receipts for the existing ledger integration, not cloud spending authority.
 Backend spend/tokens may remain unknown; local speech has zero external speech charge. L8 must bind
 durable reservations and the shared ledger before any paid speech route is admitted.
 
