@@ -25,9 +25,7 @@ import type {
   VerifiedInvocationContext,
   VerifiedInvocationContextPort,
 } from '@sentropic/contracts';
-import { authorizeDispatch, authorizeVerifiedMemoryDispatch } from '@sentropic/mcp-platform/transport/dispatch';
-import { isMemoryToolName, projectMemoryContext, requireTrustedInvocationContext, MemoryTrustedContextError,
-  type StpConnectorContext } from '@sentropic/mcp-platform/memory';
+import { authorizeDispatch } from '@sentropic/mcp-platform/transport/dispatch';
 import type { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { ClusterMeshHonoNamespaceModule } from '../hono/plugin.js';
 import type { ClusterMeshModules } from '../modules/contracts.js';
@@ -41,7 +39,6 @@ import type {
   BridgeRunner,
   BridgeTool,
   RequestIdentity,
-  BridgeInvocation,
 } from '@sentropic/mcp-platform/transport/bridge';
 import type {
   McpHonoOptions,
@@ -73,8 +70,6 @@ export interface McpNamespaceOptions {
    * (mirrors the mesh invocation context contract; host-supplied).
    */
   generationId: string;
-  /** Resolve all frozen host bindings per tool call from the verified attachment. */
-  memoryContext?(verified: VerifiedInvocationContext, tool: string, signal: AbortSignal): Promise<StpConnectorContext>;
 }
 
 /**
@@ -83,7 +78,7 @@ export interface McpNamespaceOptions {
  * must be kebab-case plan codes (see `createRegistryPolicy`).
  */
 export interface GuardedRunnerPolicy {
-  authorize(input: { tool: string; principal: McpPrincipal; context?: StpConnectorContext }): Promise<
+  authorize(input: { tool: string; principal: McpPrincipal }): Promise<
     { allowed: true } | { allowed: false; reason: string; status?: 403 | 409 | 503 }
   >;
 }
@@ -100,9 +95,8 @@ export interface GuardedRunnerOptions {
 /** Compiled-plan policy over `authorizeDispatch` (unknown tool/scope/claims). */
 export function createRegistryPolicy(registry: CompiledMcpRegistry): GuardedRunnerPolicy {
   return {
-    authorize: async ({ tool, principal, context }) => {
-      if (isMemoryToolName(tool) && !context) throw new MemoryTrustedContextError();
-      const decision = isMemoryToolName(tool) ? authorizeVerifiedMemoryDispatch({ registry, toolName: tool, context: context! }) : authorizeDispatch({
+    authorize: async ({ tool, principal }) => {
+      const decision = authorizeDispatch({
         registry,
         toolName: tool,
         principal: {
@@ -126,24 +120,16 @@ type GuardedRun = (
   tool: string,
   args: Parameters<BridgeRunner['run']>[1],
   identity: RequestIdentity | undefined,
-  call?: BridgeInvocation,
 ) => Promise<AppToolResult>;
 
 /** Chain verified identity → context → plan policy → guard → runner; refusals stop before effects. */
 export function createGuardedRunner(options: GuardedRunnerOptions): BridgeRunner {
   return {
-    run: async (tool, args, identity, call) => {
-      const ctx = isMemoryToolName(tool) ? requireTrustedInvocationContext(call?.context) : undefined;
-      if (ctx) {
-        projectMemoryContext(ctx, typeof args.purpose_ref === 'string' ? args.purpose_ref : ctx.memory!.binding.purpose_ref);
-        call!.signal.throwIfAborted();
-      }
-      const principal = ctx ? { sub: ctx.principal.sub, clientId: ctx.mcpClient!.clientId,
-        tid: ctx.tenantRef, scopes: [...ctx.principal.scopes] } : await options.contextResolver(identity);
+    run: async (tool, args, identity) => {
+      const principal = await options.contextResolver(identity);
       if (options.policy !== undefined) {
-        const policy = await options.policy.authorize({ tool, principal, ...(ctx ? { context: ctx } : {}) });
+        const policy = await options.policy.authorize({ tool, principal });
         if (!policy.allowed) {
-          if (ctx) return refused('UNAUTHORIZED', 'Memory invocation refused', ctx);
           return {
             ok: false,
             auditId: 'namespace-guard',
@@ -154,7 +140,6 @@ export function createGuardedRunner(options: GuardedRunnerOptions): BridgeRunner
       }
       const decision = await options.invocation.authorize({ operation: 'invoke', principal, tool });
       if (!decision.allowed) {
-        if (ctx) return refused('UNAUTHORIZED', 'Memory invocation refused', ctx);
         return {
           ok: false,
           auditId: 'namespace-guard',
@@ -162,18 +147,16 @@ export function createGuardedRunner(options: GuardedRunnerOptions): BridgeRunner
           error: { code: 'invocation_refused', message: decision.reason, retriable: false },
         };
       }
-      call?.signal.throwIfAborted();
-      if (ctx) projectMemoryContext(ctx, ctx.memory!.binding.purpose_ref);
-      return options.runner.run(tool, args, ctx ? toRequestIdentity(principal) : identity, call);
+      return options.runner.run(tool, args, identity);
     },
   };
 }
 
-function refused(code: string, message: string, ctx?: StpConnectorContext): AppToolResult {
+function refused(code: string, message: string): AppToolResult {
   return {
     ok: false,
-    auditId: ctx?.auditId ?? 'namespace-guard',
-    redactionClass: ctx ? 'high' : 'low',
+    auditId: 'namespace-guard',
+    redactionClass: 'low',
     error: { code, message, retriable: false },
   };
 }
@@ -191,10 +174,6 @@ export async function createMcpNamespaceModule(
     loadMcpPlatformBridge(modules),
     loadMcpPlatformHono(modules),
   ]);
-  bridge.admitBridgeTools(options.tools);
-  if (options.tools.some(tool => isMemoryToolName(tool.name)) && !options.memoryContext) {
-    throw new MemoryTrustedContextError('memory host resolver required');
-  }
   for (const tool of options.tools) {
     const resolution: CompiledToolResolution | undefined = options.registry.resolveTool(tool.name);
     if (resolution === undefined) {
@@ -243,24 +222,16 @@ export async function createMcpNamespaceModule(
         const requestRunner = createGuardedRunner({
           contextResolver: async () => principal,
           invocation: options.invocation,
-          runner: { run: (tool, args, identity, call) => options.runner.run(tool, args, call ? identity : toRequestIdentity(principal), call) },
+          runner: {
+            run: (tool, args) => options.runner.run(tool, args, toRequestIdentity(principal)),
+          },
           policy,
         });
         const server = new SdkServer(
           { name: '@sentropic/cluster-mesh/mcp', version: '0.18.0' },
           { capabilities: { tools: {} } },
         );
-        bridge.registerBridgeTools(server, options.tools, requestRunner, {
-          memoryContext: async (tool, signal) => {
-            const ctx = requireTrustedInvocationContext(await options.memoryContext?.(verified, tool, signal));
-            if (verified.generationId !== options.generationId ||
-              ctx.principal.sub !== verified.principal.principalId || ctx.workspaceRef !== verified.workspace.workspaceId ||
-              ctx.memory?.binding.active_generation !== verified.generationId ||
-              ctx.memory.binding.policy_epoch !== verified.policyRevision ||
-              ctx.correlationId !== verified.correlationId) throw new MemoryTrustedContextError('attachment binding mismatch');
-            return ctx;
-          },
-        });
+        bridge.registerBridgeTools(server, options.tools, requestRunner);
         const transport = options.createTransport();
         await server.connect(transport);
         return transport.handleRequest(c.req.raw);

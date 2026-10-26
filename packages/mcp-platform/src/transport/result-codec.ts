@@ -128,7 +128,7 @@ export function decodeToolResult(wire: unknown): AppToolResult {
  * JSON value as `structuredContent`. No truncation or partial envelope.
  */
 export function encodeMemoryEnvelope(envelope: MemoryToolEnvelopeV1<unknown>): CallToolResult {
-  const text = JSON.stringify(envelope);
+  const text = canonicalJsonText(envelope);
   const structured = JSON.parse(text) as Record<string, unknown>;
   return {
     content: [{ type: 'text', text }],
