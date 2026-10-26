@@ -1,86 +1,53 @@
-# Feature: fix(memory-l5): rescope P09 to existing suites and re-freeze pre-candidate P3
+# Feature: feat(mcp-platform): admitBridgeTools (0.4.1)
 
 ## Objective
-- [x] Remove P09 references to four later-lot suites so L5 qualifies its 18 existing suites; retain remote coverage as unchecked R2/R7a obligations.
-- [x] L0 reissue: owner authorization recorded (text); detached signature pending.
-- [x] `authorizedBy`: `owner:antoinefa`; `at`: `2026-10-26T16:59:54Z`; `verbatim`: « Je dirai pas ca ma vas y », replying to the L0 freeze re-issue request (P09 rescoped, P2 to P3).
-- [x] `source`: `.tmp/owner-deliverables/OWNER-DELIVERABLES-2026-10-23.md`, conductor's log line at that timestamp; covered L0/P3 digests are recorded below and in `p3-owner-authorization.json`.
-- [x] `detachedSignature`: `null` (pending); text is not a signature or signed disposition; fail-closed behavior and `qualificationAccepted: false` remain unchanged.
-
+- [x] Propose additive memory bridge admission and explicit context support in platform 0.4.1.
 ## Scope / Guardrails
-- [x] Base: origin/main `22d8a9e68b1abae2665fedb528526d2a84c6bc4d`.
-- [x] Branch: `fix/memory-l5-p09-p3`; worktree: `tmp/worktrees/mem-l5-p3`.
-- [x] Approved correction SHA-256: `b13bcd77f4a78e20c7f6ed36561b5f2e57eeb7442ad5623d8607991a952a6ee9`.
-- [x] Catalog SHA-256: `9bf377b774dda54a3b37189eea57cb845acca7b27b8b55b399f23c20215a1211`.
-- [x] P3 manifest SHA-256: `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`.
-- [x] Reissued L0 SHA-256: `0541b15ba4d5e49ba3b30d92da1c5e3c2fd668e40937e4f942103a678e849bfb`.
-- [x] P3 freezing commit: `c919b638686fb93c8c90a2634d3c004fd25348b3`; producer heads and retained closure are unchanged.
-- [x] L0 also corrects the stale artifact-manifest schema pin; the schema bytes are unchanged.
-- [x] Make-only tests, shared Docker lock, isolated `ENV=test-mem-l5-p3` last, cleanup after each step.
-- [x] No service startup or port reservation; existing official disposable container targets only.
-- [x] No package/source/schema changes, repack, E4 rebuild, publication, registration or merge.
-- [x] Only `.tmp` write: root `.tmp/engram-l4-handoff-p2/BINDING.md`, new P3 section.
-- [x] Atomic commits below 150 changed lines, selective staging, `make commit`, no attribution trailers.
-
+- [x] Separate draft against main; pack only; no publish or merge.
+- [x] changes the L5 frozen inventory if adopted; decision pending.
+- [x] Preserve frozen catalog, L0 freeze, P3 manifest and Engram archives.
+- [x] ENV=test-mem-l5-lot3 last; no application services; ports 9625/5825/1725.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `tools/memory-mcp-l5/proof-catalog-v1.json`
-  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
-  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256`
-  - `tools/memory-mcp-l5/artifacts/history/f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642.json`
-  - `tools/memory-mcp-l5/artifacts/history/f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642.json.sha256`
-  - `tools/memory-mcp-l5/tests/p3-l0-freeze.test.mjs`
-  - `tools/memory-mcp-l5/tests/receipt-contract.test.mjs`
-  - `spec/evidence/memory-mcp-l5/l0-freeze.json`
-  - `spec/evidence/memory-mcp-l5/p3-*.md`
-  - `spec/evidence/memory-mcp-l5/p3-*.json`
+  - `packages/mcp-platform/src/memory/schema-profile.ts`
+  - `packages/mcp-platform/src/memory/wire-profile.ts`
+  - `packages/mcp-platform/src/transport/bridge.ts`
+  - `packages/mcp-platform/src/transport/dispatch.ts`
+  - `packages/mcp-platform/src/transport/result-codec.ts`
+  - `packages/mcp-platform/src/tool-configuration.ts`
+  - `packages/mcp-platform/tests/memory/schema-profile.test.ts`
+  - `packages/mcp-platform/tests/memory/wire-profile.test.ts`
+  - `packages/mcp-platform/tests/tool-configuration.test.ts`
+  - `packages/mcp-platform/package.json`
+  - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/**`
   - `.track/**`
-  - `plan/NN-BRANCH_*.md`
+  - `tools/memory-mcp-l5/**`
+  - `spec/evidence/memory-mcp-l5/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
-  - [x] No scope exception requested; no conditional path needed.
-
+  - [x] No exception required; platform change explicitly requested by owner.
 ## Feedback Loop
-- [ ] Owner: `owner:antoinefa`; status: owner authorization recorded (text); detached signature pending for the exact amended L0 digest.
-- [ ] Authorized L4/platform/broker/transport role dispositions must bind the new L0 and P3 tuple; no prior signatures reused.
-- [ ] Gr-conductor: acknowledge predecessor and P3 identities before downstream E4 rebuild/handoff.
-
+- [ ] Conductor: adoption changes the frozen inventory and requires a new freeze plus Engram repack; decision pending.
 ## AI Flaky tests
-- [x] No AI tests or flaky-test exception applies.
-
+- [x] Deterministic contracts; no waiver.
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; one author, no delegated implementation.
-- [x] Approved specification and Opus r2 review are inputs; this draft does not claim owner acceptance.
-
+- [x] Single author, two isolated branches; no peer launch.
 ## UAT Management (in orchestration context)
-- [x] No web, Chrome or VSCode surface changes; no product UAT in this correction.
-- [ ] Owner UAT and co-acceptance receipts require the actual P3 candidate tuple and CI binding later.
-
+- [x] No application UI change; SDK tests and package inspection only.
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and tests first**
-  - [x] Read Docker lock, repository rules, template, approved specification and Opus review; verify input hashes.
-  - [x] Create isolated worktree from exact base and pass mechanical `harness check branch`.
-  - [x] Run existing `make memory-l5-tooling` and `make memory-l5-test LOT=1` before changing frozen bytes.
-  - [x] Exercise real L0 catalog/schema validation and stale-hash refusals with the targeted regression.
-- [x] **Lot 1 — Exact frozen-byte correction**
-  - [x] Retain predecessor manifest and sidecar in history; preserve historical P2.
-  - [x] Copy approved catalog byte-for-byte; change exactly two L0 fields.
-  - [x] Derive P3 by exactly two inventory hash substitutions; emit matching sidecar.
-  - [x] Record base, seven inherited P2 deviations and detached signature slots explicitly pending.
-  - [x] Preserve both unchecked v9 R2-MEMORY/R7a-MEMORY obligations in repository evidence if v9 is outside Git.
-  - [x] Record P3 digest and freezing commit in the existing root BINDING.md under P3.
-- [ ] **Lot 2 — Validation and draft PR**
-  - [x] Run real L0 validator and existing tooling tests (`tools/memory-mcp-l5/tests/*.test.mjs`): 104 passed, including both stale-hash refusals.
-  - [x] Run Lot 1: platform `tests/memory/*.test.ts`, `request-identity.test.ts`, `wire-parity.test.ts`, `registry-dispatch.test.ts`; broker `tests/**/*.test.ts`: 183 passed before and after the correction.
-  - [x] Verify P3 retained inventory/archives using `make memory-l5-verify`: 30 files, 54 edges, exact P3 digest.
-  - [x] Record pending authority and the five retained checkpoint obligations in `spec/evidence/memory-mcp-l5/p3-validation.md`; metadata checks do not authorize owner signatures.
-  - [x] Resolve Opus r1 P1-1: record dated verbatim owner text authorization in all five requested files; preserve frozen bytes, pending detached signatures and fail-closed behavior.
-  - [x] Run `make scope-check` before each commit; inspect exact diff and hashes.
-  - [ ] Push, open draft PR to main using this plan as body, inspect CI and leave unmerged.
+- [x] Lot 0: isolate platform proposal from PR #777 and verify branch mechanically.
+- [x] Registry pre-bump observation: published platform is 0.4.0; propose 0.4.1 for pack-only validation.
+- [x] Lot 1: transfer schema admission and wire/context bridge with both profile suites.
+- [x] Transfer bounded wire implementation and schema-profile test coverage from c83189032.
+- [x] Transfer additive bridge admission, verified dispatch and complete-envelope codec.
+- [x] Align the version constant and workspace lock with 0.4.1 after strict-version regression tests identified the mismatch.
+- [x] Reseal the synthetic version-bound configuration receipt for 0.4.1; preserve frozen L5 files.
+- [x] Lot 2: 363/363 tests passed via make test-mcp-platform; pack-mcp-platform passed without publishing.
+- [x] Pack archive SHA-256: 1d6b7f3f02b7f1a56374a12ac06f8dcaf64518646bacb51d5216fa1979df4191.
+- [x] Lot 3: draft PR #783 against main; conductor decision pending; no merge or publication.
