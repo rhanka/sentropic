@@ -64,10 +64,11 @@ Additive exact u64 counters for generic storage, with opt-in consumed paths and 
 - [x] Counter guard: otherwise valid `terminal.count = '9007199254740992'` fails with exactly `terminal count must be a decimal counter`.
 - [x] Epoch domain: neutral `CanonicalInstanceOwnershipV1` keeps name/version/meaning/digest and error codes; internal epoch uses exact u64, public `storageEpoch` stays decimal string.
 - [x] `src/storage/common-contract.ts` untouched; no PG migration; no domain widening.
-- [x] Broader `test-cluster-mesh` shows 2 known pack-only fixture failures (`prepare-artifacts` selected-fixture alignment on `0.23.0-dev.2`, same category as E0 on `dev.1`); fixtures are outside this branch scope; E2 lanes are the gate.
+- [x] Broader `test-cluster-mesh` shows 2 known pack-only failures on `0.23.0-dev.2` (same pair as E0 `dev.1`, job 121554531282): (a) `tests/packaging/prepare-artifacts.spec.ts` selected fixture pins `file:...-0.22.2.tgz` vs candidate `0.23.0-dev.2`; (b) `tests/modules/registry.spec.ts` comments leaf resolves `incompatible_version` on `@sentropic/cluster-mesh` instead of `not_installed` on `@sentropic/comments` (a dev version never satisfies the Comments 0.3.0 range `>=0.21.0 <0.22.0`; no silent widening). Both are outside this branch scope (plan L7 selected-fixture hotspot + Comments disposition, integrator-owned). `validate-cluster-mesh` therefore stops at the test step; skipped downstream for that CI head: installed MCP contracts, Build, Pack, sibling packs, installed-comments PG, PG major-upgrade, packed lazy gate, candidate install. Local evidence instead: `build-cluster-mesh` green, `pack-cluster-mesh` green (`0.23.0-dev.2` mode=block sha256=3c433eec3dfd6618798c6c42efba8e2696af71297d6c259bd783928f589ef40f); lazy install gate attempted but blocked by fixture-pinned `@sentropic/llm-gateway@0.21.1` missing from the registry (latest `0.21.0`), same pre-existing fixture staleness, untouched. E2 `qualify-engram-e2` is green and is the gate.
 - [x] Lock lesson: `engram-e2-qualify` self-locks per lane; never wrap it in an outer shared-lock call (self-deadlock); run it bare with `ENV=test-e2-int` last.
 - [x] Scope lesson: PR diff vs integration includes the E0 merge until PR #758 lands; E0-originated paths above are declared inherited/unauthored. After E0 lands, merge the integration base and drop those lines.
-- [ ] Push draft PR targeting `feat/engram-e2-integration`; E2 qualification green; no merge.
+- [x] Draft PR #763 targeting `feat/engram-e2-integration` is open; E2 qualification green on the previous head.
+- [ ] Merge order (P2-6): #763 stays unmerged until #758 lands; then merge the integration base and drop the inherited-path lines.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky waiver applies.
@@ -96,6 +97,8 @@ Additive exact u64 counters for generic storage, with opt-in consumed paths and 
   - [x] Preserve `common-contract.ts` v1 allowlist; no PG migration; no domain widening.
 - [ ] **Lot 3 — Final validation**
   - [x] `make scope-check` before each commit; commits under 150 lines via `make commit`.
-  - [x] Scoped suites green: u64 (6), ownership (9+3 skip), representation (5), common-rule (11), grants (3), comments-fragment (4); build, typecheck, lint green.
-  - [ ] Run `make engram-e2-qualify ENV=test-e2-int` (self-locking; no outer lock wrapper).
-  - [ ] Push and open draft PR targeting `feat/engram-e2-integration`; verify E2 qualification green without merging.
+  - [x] Scoped suites green: u64 (8), ownership (9+3 skip), representation (5), common-rule (11), grants (3), comments-fragment (4); build, typecheck, lint green.
+  - [x] E2 lanes green locally: mechanical (CI-equivalent vars), wiring, memory (76), common, grants, postgres (51+2 skip).
+  - [x] Opus r1 P2 fixes: corpus vectors driven from `u64-contract.spec.ts`; u64 aggregate/guard/version validators covered; `common-rule/vectors.ts` extended; strict fragment counter assertion; failure description corrected.
+  - [x] Build/pack/install evidence: `build-cluster-mesh` green, `pack-cluster-mesh` green (`0.23.0-dev.2` mode=block); lazy install gate blocked by pre-existing fixture peer `llm-gateway@0.21.1` 404 (out of scope).
+  - [ ] Push new commits and verify E2 qualification green on PR #763 without merging (merges only after #758).
