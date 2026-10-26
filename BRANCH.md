@@ -40,5 +40,5 @@
 - [x] Lot 0: read lock/schedule/spec/template; verify mechanical branch and immutable baseline.
 - [x] Lot 1: six reference test files, signed-token corpus and manifest refusal tests specified; first store run fails on missing reference module.
 - [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
-- [ ] Lot 3: wire strict manifest receiving gate; retain immutable E4; run tooling/typecheck/lint and reference tests.
+- [ ] Lot 3: strict manifest receiver implemented; root gate, immutable E4 retention and validation next.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
