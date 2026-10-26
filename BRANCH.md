@@ -63,7 +63,7 @@
   - [x] Run existing `make memory-l5-tooling` and `make memory-l5-test LOT=1` before changing frozen bytes.
   - [x] Exercise real L0 catalog/schema validation and stale-hash refusals with the targeted regression.
 - [ ] **Lot 1 — Exact frozen-byte correction**
-  - [ ] Retain predecessor manifest and sidecar in history; preserve historical P2.
+  - [x] Retain predecessor manifest and sidecar in history; preserve historical P2.
   - [ ] Copy approved catalog byte-for-byte; change exactly two L0 fields.
   - [ ] Derive P3 by exactly two inventory hash substitutions; emit matching sidecar.
   - [ ] Record base, seven inherited P2 deviations and detached signature slots explicitly pending.
