@@ -6,6 +6,12 @@ import type { Pool, PoolClient } from 'pg';
 import type { KvPort } from '@sentropic/artifacts/server/ports';
 
 const require = createRequire(import.meta.url);
+const requiredRelations = [
+  'control.artifact_host_kv', 'control.artifact_package_migrations',
+  ...['storage_scopes', 'artifacts', 'releases', 'artifact_current', 'blobs', 'uploads',
+    'object_intents', 'idempotency_keys', 'artifact_access', 'artifact_sources',
+    'blob_ref_holders', 'blob_pins', 'operation_keys', 'operation_receipts'].map((name) => `artifacts.${name}`),
+];
 
 /** Upstream identities and bytes are pinned independently of package versions. */
 export const artifactMigrationAssets = Object.freeze([
@@ -40,6 +46,7 @@ export async function installArtifactPackageAssets(
   });
   const ownsClient = !('release' in connection);
   const client = 'release' in connection ? connection : await connection.connect();
+  let discard: Error | undefined;
   try {
     await client.query('BEGIN');
     await client.query(`SELECT pg_advisory_xact_lock(hashtext('sentropic:artifact-package-migrations'))`);
@@ -75,12 +82,22 @@ export async function installArtifactPackageAssets(
         [asset.id, asset.sha256],
       );
     }
+    const missing = await client.query<{ name: string }>(
+      'SELECT name FROM unnest($1::text[]) AS name WHERE to_regclass(name) IS NULL',
+      [requiredRelations],
+    );
+    if (missing.rows.length) throw new Error(`Missing artifact relation: ${missing.rows.map((row) => row.name).join(', ')}`);
     await client.query('COMMIT');
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollback) {
+      discard = rollback instanceof Error ? rollback : new Error(String(rollback));
+      throw new AggregateError([error, rollback], 'Artifact migration and rollback failed');
+    }
     throw error;
   } finally {
-    if (ownsClient) client.release();
+    if (ownsClient) client.release(discard);
   }
 }
 
