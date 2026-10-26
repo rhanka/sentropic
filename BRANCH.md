@@ -39,6 +39,7 @@
 - [x] PR targets `feat/app-cm-integration` as dispatched. Deviation: #773 currently targets main for CI; W1.b retains the integration destination and uses workflow_dispatch if its base does not trigger PR CI.
 - [ ] W0-close.e acceptance and W1.c/UP-T activation remain external gates; this lot activates no route or reader.
 - [ ] W2 binds verified transport identity and a current credential check on the coordinator transaction; credential verification must never come from tool/body arguments.
+- [ ] Independent review: automatic approval review rejected the Claude/h2a launch because private source would reach an unverified gateway without destination/payload authorization. No reviewer verdict exists; dossier `.tmp/app-w1b-review/dossier.md` at the root checkout. Owner approval is required before external review; no retry through another execution path.
 
 ## AI Flaky tests
 - [x] No AI tests, accepted flakes or increased timeouts.
@@ -56,5 +57,8 @@
   - [x] Implement transaction-bound current authority, explicit read/write credential permissions, provisional cumulative byte quota and request fences in `authorization.ts`.
 - [x] Lot 3: same test file covers revocation after lock waits, DB-time expiry after quota/receipt waits, quota contention/rollback, guarded replay, version witness and no new durable success on denial; first full run 10/10 passed.
   - [x] Add independent read/write credential permissions, viewer downgrade, disabled/forged identity, foreign artifact metadata denial and frozen APP-P1 digest/file-limit cases.
-- [ ] Lot 4: typecheck-api, lint-api, focused publication/migration/tenancy regressions; runtime logs and stack cleanup; inspect each authored hunk.
-- [ ] Lot 5: independent review/reconciliation, exact BRANCH.md draft PR body, push, green exact-head CI and W1.d/W2 handoff; do not merge.
+- [x] Lot 4: API typecheck passed, lint 0 errors/219 warnings; 15 publication + 16 host migration + 16 cluster migration + 11 tenant resolver cases passed, no skips; healthy HTTP 200 logs and empty Compose ps after down. Every authored hunk reviewed by the author; no independent approval is claimed.
+  - [x] Receipts: `/tmp/app-w1b-final-checks.log` (45 tests including 13 host cases), `/tmp/app-w1b-authority-regressions.log` (final 15 host + 11 tenant cases), `/tmp/app-w1b-runtime-scope-cleanup.log` (PASS C2, healthy logs, cleanup/empty ps). Optional multi-path readlink probe failed on BusyBox's single-file usage; physical dependency qualification remains W2's gate.
+- [ ] Lot 5: exact BRANCH.md draft PR body, push, green exact-head CI and W1.d/W2 handoff; do not merge. External review remains the explicitly blocked gate above.
+- [x] W1.d handoff: consume durable preparation intents, blob pins/references and upstream bounded cleanup/GC through separate host-maintenance authority; add recovery/restore proof. This lot starts no jobs or activation and uses no production memory fallback.
+- [x] W2 handoff: bind one verified subject/tenant/client/credential tuple across HTTP/MCP, supply the current transaction-bound credential reader with independent read/write scope permissions, select the frozen profile, compile/mount one registry path, reconcile API/root workspace locks and physical artifacts instances, and retain existing MCP/resource/namespace/gateway/D1 regressions.
