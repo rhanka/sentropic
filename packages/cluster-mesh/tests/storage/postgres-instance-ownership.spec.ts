@@ -13,6 +13,8 @@ import { isPositiveU64Counter } from '../../src/storage/u64.js';
 import { resolvePgStoreKey } from '../../src/storage/postgres/instance-ownership.js';
 import type { PgInstanceOwnershipSession } from '../../src/storage/postgres/instance-ownership.js';
 import { PostgresStorageError } from '../../src/storage/postgres/errors.js';
+import type { PostgresStorageOptions } from '../../src/storage/postgres/protocol.js';
+import type { StorageModuleId } from '../../src/storage/contracts.js';
 import { createPostgresKernel } from '../../src/storage/postgres/index.js';
 import { loadPgAssets } from '../../src/storage/postgres/migrations.js';
 import { decodePgText } from '../../src/storage/postgres/codec.js';
@@ -29,11 +31,14 @@ const owned = (kernel: PgTestKernel): PgInstanceOwnershipSession => {
   return kernel.ownership;
 };
 
-const withCanonical = (options: PgTestFixture['options'], extra: Record<string, unknown> = {}) =>
+const withCanonical = (
+  options: PostgresStorageOptions,
+  extra: { moduleId?: StorageModuleId; canonicalOwnership?: { leaseMs?: number; registry?: CanonicalInstanceRegistry } } = {},
+) =>
   createPostgresKernel({
     ...options,
-    canonicalOwnership: { leaseMs: 60000, ...(extra.canonicalOwnership as Record<string, unknown> | undefined) },
     ...extra,
+    canonicalOwnership: { leaseMs: 60000, ...(extra.canonicalOwnership ?? {}) },
   });
 
 const commitAs = async (kernel: PgTestKernel, chainId: string, hash: string) => {
@@ -223,4 +228,190 @@ describe.skipIf(!pgEnabled)('postgres durable instance ownership', () => {
     };
   };
   defineOwnershipSemantics('PostgreSQL durable', setupCase);
+
+  it('refuses a second live opener promptly without queueing or takeover', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const first = await withCanonical(fixture.options);
+      assert.equal(owned(first).handle.storageEpoch, '1');
+      await assert.rejects(
+        withCanonical(fixture.options),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'instance-busy',
+      );
+      // The refused open leaves the holder untouched: it still commits.
+      await commitAs(first, 'holder-chain', 'hash-holder');
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('releases and reacquires with a monotone epoch and the same instance', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const first = await withCanonical(fixture.options);
+      const retained = { ...owned(first).handle };
+      await owned(first).release();
+      const second = await withCanonical(fixture.options);
+      assert.equal(owned(second).handle.storageEpoch, '2');
+      assert.equal(owned(second).handle.instanceId, retained.instanceId);
+      // The released handle is stale even though the row still matches.
+      await assert.rejects(
+        commitAs(first, 'released-chain', 'hash-released'),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'stale-epoch',
+      );
+      await commitAs(second, 'reacquired-chain', 'hash-reacquired');
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('lets an idle-expired lease be taken over, revoking the old holder', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const first = await withCanonical(fixture.options, { canonicalOwnership: { leaseMs: 300 } });
+      const retained = { ...owned(first).handle };
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const second = await withCanonical(fixture.options, { canonicalOwnership: { leaseMs: 300 } });
+      assert.equal(owned(second).handle.storageEpoch, '2');
+      assert.equal(owned(second).handle.instanceId, retained.instanceId);
+      await assert.rejects(
+        commitAs(first, 'expired-chain', 'hash-expired'),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'stale-epoch',
+      );
+      await commitAs(second, 'takenover-chain', 'hash-takenover');
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('revokes readers once the retained session lapses', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const kernel = await withCanonical(fixture.options, { canonicalOwnership: { leaseMs: 300 } });
+      const bound = await kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      await assert.rejects(
+        bound.readHead('any-chain'),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'terminal-loss',
+      );
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('treats a swapped instance row as terminal loss', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const kernel = await withCanonical(fixture.options);
+      await fixture.tx.run(false, (session) =>
+        session.execute({
+          text: `UPDATE "${fixture.name}".instance_ownership SET instance='intruder' WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      await assert.rejects(
+        commitAs(kernel, 'swapped-chain', 'hash-swapped'),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'terminal-loss',
+      );
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('carries exact u64 epochs past 2^53 without Number conversion', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const first = await withCanonical(fixture.options);
+      assert.equal(owned(first).handle.storageEpoch, '1');
+      await fixture.tx.run(false, (session) =>
+        session.execute({
+          text: `UPDATE "${fixture.name}".instance_ownership SET epoch='9007199254740992' WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      const second = await withCanonical(fixture.options);
+      assert.equal(owned(second).handle.storageEpoch, '9007199254740993');
+      assert.equal(owned(second).handle.instanceId, owned(first).handle.instanceId);
+      await fixture.tx.run(false, (session) =>
+        session.execute({
+          text: `UPDATE "${fixture.name}".instance_ownership SET epoch='18446744073709551614' WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      const top = await withCanonical(fixture.options);
+      assert.equal(owned(top).handle.storageEpoch, '18446744073709551615');
+      await assert.rejects(
+        withCanonical(fixture.options),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'stale-epoch',
+      );
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('isolates ownership per module and per store', async () => {
+    const fixture = await createPgFixture();
+    const other = await createPgFixture();
+    try {
+      const comments = await withCanonical(fixture.options);
+      const live = await withCanonical({ ...fixture.options, moduleId: 'engram-live' });
+      assert.equal(owned(comments).handle.storageEpoch, '1');
+      assert.equal(owned(live).handle.storageEpoch, '1');
+      assert.notEqual(owned(live).handle.instanceId, owned(comments).handle.instanceId);
+      assert.notEqual(owned(live).handle.storeKey, owned(comments).handle.storeKey);
+      assert.equal(owned(live).handle.storeKey, resolvePgStoreKey(fixture.name, 'engram-live'));
+      const alone = await withCanonical(other.options);
+      assert.equal(owned(alone).handle.storageEpoch, '1');
+      assert.notEqual(owned(alone).handle.instanceId, owned(comments).handle.instanceId);
+    } finally {
+      await fixture.close();
+      await other.close();
+    }
+  });
+
+  it('reports instance-busy for concurrent opens, never a lock error', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const results = await Promise.allSettled([withCanonical(fixture.options), withCanonical(fixture.options)]);
+      const fulfilled = results.filter((result) => result.status === 'fulfilled');
+      const rejected = results.filter((result) => result.status === 'rejected');
+      assert.equal(fulfilled.length, 1);
+      assert.equal(rejected.length, 1);
+      const reason = (rejected[0] as PromiseRejectedResult).reason;
+      assert.ok(reason instanceof CanonicalOwnershipError && reason.code === 'instance-busy');
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('refuses opt-in open when the ownership table is not installed', async () => {
+    const legacy = (await loadPgAssets()).filter((asset) => asset.toVersion <= 7);
+    assert.ok(legacy.length === 7);
+    const fixture = await createPgFixture({ assets: legacy });
+    try {
+      await assert.rejects(
+        withCanonical(fixture.options),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'open-refused',
+      );
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('refuses opt-in open on a 007-only store without touching Comments behavior', async () => {
+    const legacy = (await loadPgAssets()).filter((asset) => asset.toVersion <= 7);
+    const fixture = await createPgFixture({ assets: legacy });
+    try {
+      // No opt-in flag: a legacy store opens exactly as before.
+      const kernel = await fixture.open();
+      await commitAs(kernel, 'legacy-chain', 'hash-legacy');
+      // Opt-in on the same legacy store is refused (installation incomplete).
+      await assert.rejects(withCanonical(fixture.options), (error: unknown) => {
+        assert.ok(error instanceof PostgresStorageError);
+        return true;
+      });
+    } finally {
+      await fixture.close();
+    }
+  });
 });
