@@ -18,12 +18,17 @@ test('should require completed PR and main receipts of the same policy within th
   const sample = (id, event, head_branch) => ({ policyDigest: 'final-policy', run: {
     id, event, head_branch, status: 'completed', conclusion: 'success',
     created_at: '2026-10-26T10:00:00Z', updated_at: '2026-10-26T10:38:08Z',
-  }, jobs: [{ name: 'ci-gate', runner_id: 1, conclusion: 'success' }] });
+  }, jobs: [{ name: 'ci-gate', runner_id: 1, conclusion: 'success',
+    started_at: '2026-10-26T10:38:00Z', completed_at: '2026-10-26T10:38:08Z' }] });
   const pr = sample(1, 'pull_request', 'topic');
   const main = sample(2, 'push', 'main');
   const proof = rows => wallClockProof(rows, 'final-policy');
   assert.equal(proof([pr, main]).accepted, true);
   assert.equal(proof([pr, main]).runs[0].wallClockSeconds, 2288);
+  const carried = { name: 'publish-contracts', runner_id: 2, conclusion: 'success',
+    started_at: '2026-10-26T09:50:00Z', completed_at: '2026-10-26T09:51:00Z' };
+  assert.equal(proof([pr, { ...main, jobs: [...main.jobs, carried] }]).accepted, false);
+  assert.equal(proof([pr, { ...main, jobs: [{ ...main.jobs[0], started_at: null }] }]).accepted, false);
   for (const rows of [[], [pr], [pr, pr], [pr, { ...main, policyDigest: 'old-policy' }],
     [pr, { ...main, run: { ...main.run, status: 'in_progress' } }],
     [pr, { ...main, run: { ...main.run, conclusion: 'cancelled' } }],
