@@ -680,3 +680,5 @@ export const getModelProfile = (
     ) ?? null
   );
 };
+
+export { getModelSpeechCapabilities } from './speech/catalog.js';
