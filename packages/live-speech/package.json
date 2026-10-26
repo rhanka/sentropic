@@ -1,0 +1,10 @@
+{
+  "name": "@sentropic/live-speech",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Provider-neutral live speech coordination and interruption core",
+  "license": "MIT",
+  "files": ["dist", "README.md"],
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run tests" }
+}
