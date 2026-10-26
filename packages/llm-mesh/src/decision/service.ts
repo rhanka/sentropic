@@ -136,17 +136,21 @@ export function createDecisionService(supplied: DecisionServiceOptions): Decisio
   return { async decide(candidate, callOptions) {
     const execution = beginDecisionExecution(candidate, { clock: options.clock, generateId: options.generateId,
       timeoutMs: options.policy.timeoutMs, signal: callOptions?.signal });
-    return runWithDecisionDeadline(execution, async () => {
+    const result = await runWithDecisionDeadline(execution, async () => {
       if (execution.idError) return persistDecisionResult(execution, options.receipts, createDecisionError('MESH_UNAVAILABLE', 'preflight'));
       const interrupted = decisionInterruption(execution, 'preflight');
       if (interrupted) return persistDecisionResult(execution, options.receipts, interrupted);
       const selection = await preflightDecisionRequest(candidate, options);
       if (!selection.ok) return persistDecisionResult(execution, options.receipts, createDecisionError(selection.code, 'preflight'));
       execution.receipt.evaluator = { ...selection.descriptor.evaluator };
+      if (selection.descriptor.executionProfile === 'qualification') execution.receipt.experimental = true;
       execution.receipt.retention = structuredClone(selection.descriptor.retention);
       const admitted = await admitDecision(execution, selection, options);
       if (!admitted.ok) return persistDecisionResult(execution, options.receipts, admitted.error);
       return dispatchDecision(execution, selection, admitted, options);
     });
+    if (execution.receipt.experimental) return { ...result, experimental: true,
+      ...(result.ok ? { kind: 'experimental-verdict' as const } : {}) };
+    return result;
   } };
 }
