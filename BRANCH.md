@@ -41,6 +41,7 @@
 - [x] Integration-target bump probes retained; positive https://github.com/rhanka/sentropic/actions/runs/40314659239 at `e6a62bf52`: bump and E2 qualification job `121545389429` passed; publishers disabled.
 - [x] Entry gates satisfied by owner update plus actual fail/pass probe; add neutral effect, grant, descriptor and fence-proof data types from the installed declaration.
 - [x] Freeze transaction reads/effects, flat handle, grant-bound handle and sync/async binding, including optional original-result recovery.
+- [x] Close constructor-option declarations locally (scope, clock, deadline, work limits); inventory installed structural error codes and terminal fence failures.
 - [x] Negative probe: https://github.com/rhanka/sentropic/actions/runs/40314176780 at `6ff00cfff`; enforce-package-bump job `121542495040` failed on unchanged cluster-mesh 0.22.2.
 - [x] Allocation: registry latest 0.22.1; 0.23.0 and 0.23.0-dev.1 return 404; no other E2 topic ref, 2026-10-26. 0.23.0-dev.1 exceeds registry/base and is reserved for E0 only.
 - [x] Register E0 dependencies, worktree/BRANCH and environment ownership in PLAN.md within this PR.
