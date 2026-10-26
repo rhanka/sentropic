@@ -188,13 +188,30 @@ describe('artifact host recovery', () => {
     expect(await blobs.getBlob(key('a'))).toBeDefined();
   });
 
-  it('should expire a grant even when maintenance never runs', () => {
-    let now = 1000;
-    const signer = createHmacGrantSigner({ secret: 'test-key', clock: () => now });
-    const token = signer.issue({ subjectId: 'alice', artifactId: 'artifact' });
-    expect(signer.verify(token).subjectId).toBe('alice');
-    now += 60000;
-    expect(() => signer.verify(token)).toThrow(/expired/);
+  it('should deny an expired host credential using DB time even when maintenance never runs', async () => {
+    const { blobs } = fixture();
+    await pool.query(`INSERT INTO users (id, role, account_status) VALUES ('alice', 'editor', 'active');
+      INSERT INTO tenants (id, name) VALUES ('tenant-a', 'A');
+      INSERT INTO workspaces (id, name, tenant_id) VALUES ('workspace-a', 'A', 'tenant-a');
+      INSERT INTO tenant_memberships (tenant_id, user_id, status) VALUES ('tenant-a', 'alice', 'approved');
+      INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ('workspace-a', 'alice', 'editor');
+      INSERT INTO user_sessions (id, user_id, session_token_hash, expires_at)
+        VALUES ('session-a', 'alice', 'hash', clock_timestamp() + interval '60 seconds');`);
+    const host = createArtifactHost({ pool, blobs, quotaBytes: 262144,
+      async currentIdentity(client, identity) {
+        const result = await client.query(`SELECT id FROM user_sessions WHERE id = $1 AND user_id = $2
+          AND expires_at > clock_timestamp() FOR SHARE`, [identity.credentialId, identity.subject]);
+        return { readable: result.rowCount === 1, writable: result.rowCount === 1 };
+      } });
+    const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'app', credentialId: 'session-a' };
+    const bound = await host.bind(identity, 'workspace-a');
+    expect((await bound.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
+    await pool.query(`UPDATE user_sessions SET expires_at = clock_timestamp() WHERE id = 'session-a'`);
+    expect((await bound.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(403);
+    expect((await bound.http({ method: 'POST', path: '/ensure',
+      body: { bindingName: 'expired', idempotencyKey: 'expired' } })).status).toBe(403);
+    await expect(host.bind(identity, 'workspace-a')).rejects.toThrow();
+    expect((await pool.query('SELECT count(*)::int AS count FROM artifacts.operation_receipts')).rows[0].count).toBe(0);
   });
 
   it('should invalidate restored activation and old grants before reopening', async () => {
@@ -280,6 +297,44 @@ describe('artifact host recovery', () => {
     expect((await publishing).status).toBe(201);
     expect((await collecting).failures).toEqual([]);
     expect(await blobs.getBlob(blob)).toEqual(new TextEncoder().encode(text));
+  });
+
+  it('should cache bucket privacy for 30 seconds, coalesce refreshes and refuse effects after a failed check', async () => {
+    let now = 1000;
+    let safe = true;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const send = vi.fn(async (command: unknown) => command instanceof GetPublicAccessBlockCommand
+      ? { PublicAccessBlockConfiguration: { BlockPublicAcls: safe, IgnorePublicAcls: true,
+        BlockPublicPolicy: true, RestrictPublicBuckets: true } } : {});
+    const checks = () => send.mock.calls.filter(([command]) => command instanceof GetPublicAccessBlockCommand).length;
+    try {
+      const storage = await createPrivateArtifactStorage({ client: { send } as unknown as S3Client, bucket: 'private' });
+      const read = () => storage.blobs.getBlob(key('a'));
+      const write = () => storage.blobs.putBlob(key('a'), new Uint8Array([1]));
+      await Promise.all([read(), write(), storage.blobs.deleteBlob(key('a')),
+        storage.blobs.listKeys(key('a')), storage.page(key('a'), 1)]);
+      expect(checks()).toBe(1);
+      now += 29999;
+      await read();
+      expect(checks()).toBe(1);
+      now++;
+      await Promise.all([read(), write()]);
+      expect(checks()).toBe(2);
+      now += 30000;
+      safe = false;
+      const calls = send.mock.calls.length;
+      await expect(write()).rejects.toThrow(/private/);
+      expect(send.mock.calls).toHaveLength(calls + 1);
+      expect(checks()).toBe(3);
+      safe = true;
+      await read();
+      expect(checks()).toBe(4);
+      now += 30000;
+      send.mockRejectedValueOnce(new Error('privacy check unavailable'));
+      await expect(read()).rejects.toThrow(/unavailable/);
+      await read();
+      expect(checks()).toBe(6);
+    } finally { clock.mockRestore(); }
   });
 
   it('should require all public access blocks and write through the private upstream S3 adapter', async () => {
