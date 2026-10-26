@@ -5,7 +5,7 @@ import { createArtifactsRegistryDefinition, compileArtifactsProfile, RADAR_ARTIF
   type ArtifactsDefinitionOptions } from '@sentropic/artifacts/mcp';
 import { compileAppMcpRegistry } from '../../src/services/mcp/cluster-registry';
 
-const names = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'] as const;
+const names = ['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish'] as const;
 const profile = () => compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
 function fixture() {
   const compiled = profile();
@@ -18,6 +18,17 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {} };
+}
+
+function localFixture() {
+  const input = fixture();
+  const local = createArtifactsRegistryDefinition({ ...input.artifacts, invocationScope: 'mcp:tools:invoke' });
+  if (!('toolValues' in local)) throw new Error('Expected a loaded local definition');
+  local.manifest = { ...local.manifest, providerId: 'app.local' };
+  local.parameterSchema = { properties: { limit: { type: 'integer', minimum: 1, maximum: 10 } }, required: ['limit'] };
+  return { ...input, registrations: [local], selection: ['app.local'],
+    configurations: { 'app.local': { limit: 2 } },
+    compatibility: { 'app.local': { manifestDigest: computeManifestDigest(local.manifest) } } };
 }
 
 describe('app MCP registry compilation', () => {
@@ -125,5 +136,52 @@ describe('app MCP registry compilation', () => {
       expect([...accepted.registry.providers.keys()]).toEqual(['app.local']);
       expect(accepted.registry.resolveTool('artifacts_list')?.providerId).toBe('app.local');
     }
+  });
+
+  it.each([{}, { limit: 0 }, { limit: '2' }, { limit: 2, extra: true }])(
+    'should refuse invalid local parameter values %j', async (values) => {
+      const result = await compileAppMcpRegistry({ ...localFixture(), configurations: { 'app.local': values } });
+      expect(result.ok).toBe(false);
+      expect(result).not.toHaveProperty('registry');
+    });
+
+  it('should preserve a valid generation when another configuration compiles or refuses', async () => {
+    const input = localFixture();
+    const first = await compileAppMcpRegistry(input);
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error(JSON.stringify(first.diagnostics));
+    const bytes = JSON.stringify([...first.registry.tools]);
+    input.configurations['app.local'].limit = 3;
+    const second = await compileAppMcpRegistry(input);
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.registry.providers.get('app.local')!.values).toEqual({ limit: 3 });
+    input.configurations['app.local'].limit = 11;
+    expect((await compileAppMcpRegistry(input)).ok).toBe(false);
+    expect(first.registry.providers.get('app.local')!.values).toEqual({ limit: 2 });
+    expect(JSON.stringify([...first.registry.tools])).toBe(bytes);
+  });
+
+  it('should refuse missing receipts and schema changes after local approval', async () => {
+    const input = localFixture();
+    const missing = await compileAppMcpRegistry({ ...input, compatibility: {} });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.diagnostics[0].code).toBe('missing_compatibility');
+    const tool = input.registrations[0].manifest.tools[0];
+    tool.inputSchema = { type: 'object', additionalProperties: true };
+    const changed = await compileAppMcpRegistry(input);
+    expect(changed.ok).toBe(false);
+    if (!changed.ok) expect(changed.diagnostics[0].code).toBe('compatibility_mismatch');
+  });
+
+  it('should refuse weakened local policy and a stale explicit APP-P1 receipt', async () => {
+    const input = localFixture();
+    input.registrations[0].toolValues.artifacts_ensure.policy = { requiredScopes: [] };
+    const weakened = await compileAppMcpRegistry(input);
+    expect(weakened.ok).toBe(false);
+    if (!weakened.ok) expect(weakened.diagnostics[0].code).toBe('policy_weakening');
+    const stale = await compileAppMcpRegistry({ ...fixture(),
+      compatibility: { 'sentropic.artifacts': { manifestDigest: 'stale' } } });
+    expect(stale.ok).toBe(false);
+    if (!stale.ok) expect(stale.diagnostics[0].code).toBe('compatibility_mismatch');
   });
 });
