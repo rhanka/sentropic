@@ -87,15 +87,15 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
   - [x] Trace impact across codec, journal, roots, readers, effects, core, queries, migrations.
   - [x] Create worktree `tmp/worktrees/mem-e2` on E1 base; verify P2 unchanged.
   - [x] Write BRANCH.md from template; reserve pack-only `0.23.0-dev.3`.
-- [ ] **Lot 1 — Tests first**
-  - [ ] Add `tests/storage/postgres-u64.spec.ts` (codec, crossing, max, exhaustion, reopen, rollback, conversion refusals).
-  - [ ] Add `tests/storage/postgres-u64-migration.spec.ts` (chain, idempotence, legacy compat, checksums, schema shape).
-- [ ] **Lot 2 — Implementation**
-  - [ ] Add `decodePgCounterU64` to `postgres/codec.ts`; keep legacy decoders frozen.
-  - [ ] Add `007-consumed-counters.sql` (numeric widening + u64 CHECKs); regenerate manifest; published SQL untouched.
-  - [ ] Move journal/roots/core/queries counters to `::numeric` bindings and u64 decodes; refuse at u64 exhaustion.
-  - [ ] Accept u64 aggregate versions/guards in PG effects (`U64AtomicUnit`, `validateU64AtomicUnit`); persist versions as given.
-  - [ ] Validate allocation comparison in readers (corruption on malformed).
+- [x] **Lot 1 — Tests first**
+  - [x] Add `tests/storage/postgres-u64.spec.ts` (codec, crossing, max, exhaustion, reopen, rollback, conversion refusals).
+  - [x] Add `tests/storage/postgres-u64-migration.spec.ts` (chain, idempotence, legacy compat, checksums, schema shape).
+- [x] **Lot 2 — Implementation**
+  - [x] Add `decodePgCounterU64` to `postgres/codec.ts`; keep legacy decoders frozen.
+  - [x] Add `007-consumed-counters.sql` (numeric widening + u64 CHECKs); regenerate manifest; published SQL untouched.
+  - [x] Move journal/roots/core/queries counters to `::numeric` bindings and u64 decodes; refuse at u64 exhaustion.
+  - [x] Accept u64 aggregate versions/guards in PG effects (`U64AtomicUnit`, `validateU64AtomicUnit`); persist versions as given.
+  - [x] Validate allocation comparison in readers (corruption on malformed).
 - [ ] **Lot 3 — Final validation**
   - [ ] `make scope-check` before each commit; commits under 150 lines via `make commit`.
   - [ ] Run build, typecheck, lint, memory, common, grants and real PG lanes with `ENV=test-e2-int` last.
