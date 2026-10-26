@@ -96,6 +96,9 @@ cluster-mesh-comments-test:
 	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=comments- API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
 CM_COMMENTS_TARBALL ?= .h2a/build/cm-comments-candidate/sentropic-cluster-mesh-0.19.0.tgz
+# Latest published cluster-mesh pin, read from the frozen packaging fixture so
+# the bare probe can tell a planned pack-only dev bump from a stale pin.
+CM_PACK_ONLY_PIN ?= $(shell grep -o 'sentropic-cluster-mesh-[0-9][0-9.]*\.tgz' packages/cluster-mesh/tests/packaging/fixtures/selected/package.json | head -n 1 | sed 's/.*-//;s/\.tgz//')
 CM_COMMENTS_REPORT ?= .h2a/build/comments-installed
 CM_COMMENTS_SIBLING_FLAGS = $(if $(SIBLING_ARCHIVES_FILE),$(if $(and $(filter 1,$(words $(SIBLING_ARCHIVES_FILE))),$(filter tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json,$(SIBLING_ARCHIVES_FILE))),-v "$(CURDIR):/workspace:ro" -e CM_COMMENTS_SIBLINGS=/workspace/$(SIBLING_ARCHIVES_FILE) -e CLUSTER_MESH_HEAD_SHA="$$(git rev-parse HEAD)",$(error SIBLING_ARCHIVES_FILE must be tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json)))
 define CM_COMMENTS_SIBLING_SETUP
@@ -113,9 +116,10 @@ cluster-mesh-comments-installed: cluster-mesh-pg-up
 	@mkdir -p "$(CM_COMMENTS_REPORT)"
 	@docker run --rm --init --network "$(CM_PG_NAME)" $(CM_COMMENTS_SIBLING_FLAGS) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/comments-npm-cache \
 		-e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
+		-e CM_PACK_ONLY_PIN="$(CM_PACK_ONLY_PIN)" \
 		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
 		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(CM_COMMENTS_SIBLING_SETUP) \
-		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /tmp/comments-bare/; cd /tmp/comments-bare; \
+		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /probe/pack-only-dev-gate.mjs /tmp/comments-bare/; cd /tmp/comments-bare; \
 		npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz >/dev/null; node installed-bare.mjs > /reports/bare.json; \
 		cd /tmp/comments-consumer; cp /probe/installed-*.mjs .; \
 		npm init -y >/dev/null; npm pkg set "overrides.zod=^4.6.6"; \
