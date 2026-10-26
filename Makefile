@@ -4458,6 +4458,10 @@ memory-l5-lot3-source: memory-l5-runtime
 	@echo 'Lot 3 source/regression evidence only; installed tuple and checkpoint remain unverified'
 	@$(MAKE) cluster-mesh-workspace CM_ACTION=memory-lot3 MEMORY_L5_SOURCE_HEAD="$$(git rev-parse HEAD)" CM_RUN_IMAGE=$(MEMORY_L5_NODE_IMAGE) API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
+.PHONY: memory-l5-lot3-evidence
+memory-l5-lot3-evidence: memory-l5-runtime
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot3-evidence.mjs "$$(git rev-parse HEAD)"
+
 .PHONY: memory-l5-e2-pin memory-l5-lot2-fixture memory-l5-lot2-evidence memory-l5-lot2-pack-reference memory-l5-lot2-retained
 memory-l5-e2-pin memory-l5-lot2-fixture memory-l5-lot2-evidence memory-l5-lot2-pack-reference memory-l5-lot2-retained: memory-l5-runtime
 
