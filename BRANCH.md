@@ -34,7 +34,7 @@
 - [x] **Exception process**: record reason, impact and rollback before editing a conditional or forbidden path.
 
 ## Feedback Loop
-- [x] BR770-EX1: preprod `deploy/k8s/**` sync and runbook changes; rationale: register radar's missing workload and support Secret rotation; impact: owner-triggered preprod imports only, no prod change; rollback: revert the sync ConfigMap/Job references and revoke the workload through the owner credential process.
+- [x] BR770-EX1: preprod `deploy/k8s/**` sync and runbook changes; rationale: register radar's missing workload and support Secret rotation; impact: preprod imports only, no prod change; rollback: revert the sync ConfigMap/Job references and revoke the workload through the owner credential process.
 - [x] BR770-EX2: `deploy/ci/idp-identity-sync/{README,CRED_CYCLE}.md` and `api/src/scripts/oauth-provision-exchange-client.ts`; rationale: one preprod creation path; impact: prevent manual preprod provisioning and document Secret-driven rotation; rollback: restore these files and disable the sync registration before reverting the guard.
 - [x] Existing policy rewrites the exact preprod MCP/API audiences but skips missing workload rows; register before its invariant snapshot.
 - [x] Author metadata: codex / gpt-6.1-sol / high; external reviews require repository reviewer authorization.
@@ -62,10 +62,10 @@
   - [x] Extend exact subject-audience and missing/form/dual-credential refusals; use a public synthetic 64-hex fixture.
   - [x] Gate: `make test-api-endpoints SCOPE=tests/api/auth/oauth-token-exchange.test.ts API_PORT=9845 UI_PORT=6045 MAILDEV_UI_PORT=1945 ENV=test-idp-token-exchange` passed (18 tests) through the CI toolbox and branch-file mounts.
 - [x] **Lot N-1 — Docs consolidation**
-  - [x] Align `deploy/ci/idp-identity-sync/{README,CRED_CYCLE}.md` and `deploy/k8s/README.md`: metadata check, one preprod writer, rotation, revocation and protected owner handoff.
+  - [x] Align `deploy/ci/idp-identity-sync/{README,CRED_CYCLE}.md` and `deploy/k8s/README.md`: metadata check, one preprod writer, 90-day rotation with schedule pause, revocation and protected owner handoff.
   - [x] No temporary feature spec or package source/version change; no UI/e2e surface or live AI dependency.
 - [ ] **Lot N — Final validation**
   - [x] Scoped IdP checks and API typecheck/lint pass; generic provisioning refuses the preprod API context with a synthetic fixture; dedicated-stack teardown uses Make only.
-  - [ ] Scope-check every atomic commit under 150 changed lines; selective staging and Make commits without attribution trailers.
+  - [x] Scope-check every atomic commit under 150 changed lines; selective staging and Make commits without attribution trailers.
   - [ ] Push and use this complete file as draft PR #770 body; verify CI green on the head and report its SHA.
   - [ ] Owner-only after review: merge, mint/handoff the credential, deploy, sync dry-run/commit and qualify radar. No deployment or secret creation in this author task.
