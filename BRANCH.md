@@ -55,7 +55,7 @@
   - [x] usage-receipts.test.ts: estimate/true-up dedupe, dimensions, restart and payload exclusion authored first.
   - [x] Red at 4f03beab7: scoped interrupt suite fails on missing core/session.js before source implementation.
 - [ ] **Lot 2 — Implementation**
-  - [ ] core/session.ts: trusted scoped authority, atomic journal, persisted epochs/tombstones, opaque control port.
+  - [x] core/session.ts: trusted scoped authority, atomic journal, persisted epochs/tombstones, opaque control port implemented.
   - [ ] core/interrupt.ts: all-class fence receipts, outcome pairing, effect barrier and typed authenticated risk acceptance.
   - [ ] core/playback.ts: monotonic rendered samples, queue clearing and stale frame refusal.
   - [ ] core/usage-receipts.ts: canonical operation identity and signed revision-deduplicated adjustments.
