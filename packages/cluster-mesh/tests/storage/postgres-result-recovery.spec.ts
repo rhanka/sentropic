@@ -36,6 +36,10 @@ describe.skipIf(!pgEnabled)('Postgres original-result recovery', () => {
       await bound.commitAtomic(withoutResult, { idempotencyKey: 'no-result', fence });
       await expect(recover('no-result')).rejects.toMatchObject({ code: 'unavailable' });
       await expect(recover('')).rejects.toMatchObject({ code: 'invalid-command' });
+      const base64 = { format: 'base64' as const, data: 'e30=' };
+      await bound.commitAtomic({ ...recoveryUnit(), moduleResult: base64 }, { idempotencyKey: 'base64', fence });
+      expect(await bound.readCommitResult('base64', fence)).toEqual(base64);
+      await expect(recover('base64')).rejects.toMatchObject({ code: 'unavailable' });
     } finally { await fixture.close(); }
   });
 

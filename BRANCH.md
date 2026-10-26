@@ -120,6 +120,9 @@
   - [x] Crash injection targets the transaction returning a receipt, after the idempotency preflight; expired fences refuse reads.
   - [x] Test grant expiry during the storage wait; revalidation must refuse the stored result.
 - [ ] **Lot 3 — Final validation**
+  - [x] Focused PostgreSQL recovery: 5 tests passed, zero skips; includes independent post-COMMIT SIGKILL/restart.
+  - [x] Typecheck identified generic base64 versus frozen memory UTF-8 boundary; bridge now refuses base64 without decoding or resampling.
+  - [ ] Rerun focused recovery and typecheck after the UTF-8 boundary correction.
   - [ ] `make scope-check` before each commit; commits under 150 lines via `make commit`.
   - [ ] Run build, typecheck, lint, memory, common, grants and real PG lanes with `ENV=test-e2-int` last.
   - [ ] Push and open draft PR targeting `feat/engram-e2-integration`; verify E2 qualification green without merging.
