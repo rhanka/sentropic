@@ -19,10 +19,34 @@ export function failClosedReport(raw) {
   } catch {
     throw new Error('malformed report');
   }
-  if (Array.isArray(parsed.Results) && !('SchemaVersion' in parsed) && !('ArtifactName' in parsed)) {
-    throw new Error('incomplete report');
-  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || parsed.error) throw new Error('invalid or errored report');
+  const trivy = parsed.SchemaVersion === 2 && typeof parsed.ArtifactName === 'string' && parsed.ArtifactName.length > 0 && Array.isArray(parsed.Results);
+  const npm = parsed.auditReportVersion === 2 && parsed.vulnerabilities && !Array.isArray(parsed.vulnerabilities) &&
+    typeof parsed.vulnerabilities === 'object' && parsed.metadata?.vulnerabilities &&
+    ['info', 'low', 'moderate', 'high', 'critical', 'total'].every((key) => Number.isInteger(parsed.metadata.vulnerabilities[key]) && parsed.metadata.vulnerabilities[key] >= 0);
+  if (!trivy && !npm) throw new Error('incomplete or unsupported report');
   return parsed;
+}
+
+// Registered acceptance annotates debt; it never removes a raw finding from this inventory.
+export function summarizeBacklog(findings, rows, { today = new Date().toISOString().slice(0, 10), complete = false, coverageBlocked = [] } = {}) {
+  if (!validDate(today) || !Array.isArray(findings) || !Array.isArray(rows)) throw new Error('invalid backlog input');
+  const unresolved = rows.filter((row) => row.status !== 'resolved');
+  const joined = findings.map((finding) => {
+    if (!['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(finding.severity)) throw new Error('invalid normalized finding severity');
+    return joinRegister(finding, unresolved, today);
+  });
+  const verificationPending = unresolved.filter((row) => !findings.some((finding) =>
+    joinRegister(finding, [row], today).register === 'registered-exception'));
+  const invalidRegister = unresolved.filter((row) => !row.id || !validDate(row.review_due)).length;
+  const expiryHistogram = {};
+  for (const row of unresolved) expiryHistogram[row.review_due || 'invalid'] = (expiryHistogram[row.review_due || 'invalid'] || 0) + 1;
+  const expired = unresolved.filter((row) => validDate(row.review_due) && today > row.review_due).length;
+  return { status: !complete || coverageBlocked.length || invalidRegister ? 'incomplete-scan' :
+    (joined.length || unresolved.length ? 'complete-with-findings' : 'complete-clean'),
+  findings: joined, unresolvedRegister: unresolved.length, expired,
+  unexpired: unresolved.length - expired - invalidRegister, invalidRegister, expiryHistogram, verificationPending,
+  coverageBlocked, staleContainerCandidates: unresolved.filter((row) => validDate(row.review_due) && today > row.review_due && row.component?.includes('tool')).length };
 }
 
 export function inventoryLocks(root = '.') {
