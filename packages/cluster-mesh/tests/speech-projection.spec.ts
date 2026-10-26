@@ -49,7 +49,8 @@ describe('speech projection', () => {
   it('should support independently evidenced duplex and every declared placement', () => {
     for (const placement of profile().allowedPlacements) {
       const duplex = engine('native-model', 'future', placement, 'native-adapter');
-      const p = { ...profile(), placement, pipeline: 'native-duplex', micMode: 'open-mic', bindings: { duplex } };
+      const p = { ...profile(), placement, pipeline: 'native-duplex', micMode: 'open-mic',
+        bindings: { duplex }, requiredCapabilities: {} };
       expect(projectSpeechProfile(resolveSpeechProfiles([p]), select(), {
         ...context(), catalogue: [capabilities(duplex)],
       })).toMatchObject({ available: true, micEnabled: false, profile: { pipeline: 'native-duplex', placement } });
@@ -74,5 +75,30 @@ describe('speech projection', () => {
     }
     expect(rebindSpeechProfile(current, config(), select('B'), context(), { ...barrier, expectedConfigRevision: 'old' }))
       .toMatchObject({ available: false, reason: 'revision' });
+  });
+  it('should isolate snapshot bytes and refuse ambiguous catalogue evidence', () => {
+    const ctx = context();
+    const result = projectSpeechProfile(config(), select(), ctx);
+    if (!result.available) throw new Error('fixture unavailable');
+    expect(Object.isFrozen(result.stages.stt?.capabilities.features)).toBe(true);
+    expect(Object.isFrozen(ctx.catalogue[0].features)).toBe(false);
+    expect(result.stages.stt?.negotiated.binding.resourceRef).toBe('resource:endpoint');
+    expect(projectSpeechProfile(config(), select(), { ...ctx, catalogue: [...catalogue, catalogue[0]] }))
+      .toMatchObject({ available: false, reason: 'unavailable' });
+  });
+  it('should refuse same-revision edits and cross-tenant rebind even at quiescence', () => {
+    const current = projectSpeechProfile(config(), select(), context());
+    if (!current.available) throw new Error('fixture unavailable');
+    const changed = resolveSpeechProfiles([{ ...primary[0], micMode: 'open-mic' }]);
+    const barrier = { expectedConfigRevision: 'r1', quiescent: true, cancelled: true, reconciled: true,
+      playbackDrained: true, previousConsentRevision: 'original', consent: consent('A') };
+    expect(rebindSpeechProfile(current, changed, select(), context(), barrier))
+      .toMatchObject({ available: false, reason: 'revision' });
+    expect(rebindSpeechProfile(current, config(), select('B'), { ...context(), tenantId: 'other' }, barrier))
+      .toMatchObject({ available: false, reason: 'tenant' });
+    const revised = resolveSpeechProfiles([{ ...primary[0], configRevision: 'r2', micMode: 'open-mic' }]);
+    expect(rebindSpeechProfile(current, revised, select('A', 'r2'), context(), {
+      ...barrier, consent: consent('A', 'r2'),
+    })).toMatchObject({ available: true, micEnabled: false, profile: { configRevision: 'r2', micMode: 'open-mic' } });
   });
 });

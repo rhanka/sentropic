@@ -23,7 +23,7 @@ describe('speech configuration', () => {
     });
   it('should preserve native duplex independently from chained stage choices', () => {
     const p = { ...profile(), pipeline: 'native-duplex',
-      bindings: { duplex: engine('native-model', 'future', 'cloud-relay', 'duplex') } };
+      bindings: { duplex: engine('native-model', 'future', 'cloud-relay', 'duplex') }, requiredCapabilities: {} };
     expect(resolveSpeechProfiles([p])[0]).toMatchObject(p);
   });
   it('should clone and freeze configuration instead of enabling microphone capture', () => {
