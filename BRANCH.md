@@ -67,6 +67,7 @@
   - [x] Real cancellation receipt exposed runner_id=0 entries with positive API intervals; preserve their identities/stamps but exclude them from execution, cost and peak credit (35 metrics tests).
   - [x] Post-run classification/verdict timing uses that same runner-dispatch evidence; absent runners never receive duration credit. New policy qualification uses ENV=test-ci-capacity.
   - [x] Include workflow admission before root job creation (rollback 189s; completed main 1s) in critical-path scheduling. Preserve unknown admission/readiness as null; completed main aggregate is 1559s.
+  - [x] Reject admission credit for partial/empty captures or missing execution stamps; reject release continuity without endpoint mappings. Preserve raw observed peaks separately (35 metrics tests).
   - [x] Add post-run Make capture using the actual run/attempt Jobs API, exact source workflow, and retained pre-dispatch manifest. Missing artifacts fail closed; no selection reconstructed from outcomes.
   - [x] Qualify aggregate scheduling receipts on identified critical-path executions; preserve single-job queue statistics. Main cancellations remain current across newer main runs (32 metrics tests).
   - [ ] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
