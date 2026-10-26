@@ -161,10 +161,11 @@ out="$(make --no-print-directory k8s-pgbackup-restore PG_BACKUP_KEY="$KEY" PG_BA
 sed -n '/-- sh -c /,$p' "$KUBECTL_RUN_ARGS" | sed '1s/.*-- sh -c //' > "$scratch/pod-main.sh"
 if [ -s "$scratch/pod-main.sh" ]; then ok "manifest-exec (pod script captured)"; else ko "manifest-exec: no pod script captured"; fi
 sed 's#/work#'"$scratch/workrun"'#g' "$scratch/pod-main.sh" > "$scratch/pod-main-run.sh"
-for qc in "'" '"' '\'; do
+fails_before_rewrite=$fail
+for qc in "'" '"' '\\'; do
   if [ "$(tr -cd "$qc" < "$scratch/pod-main.sh" | wc -c)" = "$(tr -cd "$qc" < "$scratch/pod-main-run.sh" | wc -c)" ]; then :; else ko "manifest-exec: quoting byte changed ($qc)"; fi
 done
-ok "manifest-exec (rewrite preserves quoting bytes)"
+if [ "$fail" -eq "$fails_before_rewrite" ]; then ok "manifest-exec (rewrite preserves quoting bytes)"; fi
 cat > "$scratch/manifest-runner.sh" <<RUNNER
 #!/usr/bin/env bash
 set -u
@@ -187,6 +188,7 @@ mout="" mstatus=0
 mout="$(SHA_REAL="$SHA_REAL" bash "$scratch/manifest-runner.sh" 2>&1)" || mstatus=$?
 if [ "$mstatus" -eq 0 ]; then ok "manifest-exec (restore script runs)"; else ko "manifest-exec: restore script failed"; printf '%s\n' "$mout"; fi
 block="$(printf '%s\n' "$mout" | sed -n '/MANIFEST-BEGIN/,/MANIFEST-END/p' | sed '1d;$d')"
+fails_before_content=$fail
 if printf '%s' "$block" | jq -e . >/dev/null 2>&1; then ok "manifest-exec (JSON valid)"; else ko "manifest-exec: invalid JSON"; printf '%s\n' "$block"; fi
 [ "$(printf '%s' "$block" | jq -r .manifest)" = "b03-backup-object" ] || ko "manifest-exec: bad manifest marker"
 [ "$(printf '%s' "$block" | jq -r .listing)" = '2026-10-26 11:14:31 bananas q 1234n' ] || ko "manifest-exec: listing corrupted"
@@ -195,7 +197,7 @@ if printf '%s' "$block" | jq -e . >/dev/null 2>&1; then ok "manifest-exec (JSON 
 [ "$(printf '%s' "$block" | jq -r .sha256)" = "$SHA_REAL" ] || ko "manifest-exec: bad sha"
 [ "$(printf '%s' "$block" | jq -r .sha256_checked)" = "true" ] || ko "manifest-exec: sha not checked"
 [ "$(printf '%s' "$block" | jq -r .organizations)" = "7" ] || ko "manifest-exec: bad organizations"
-ok "manifest-exec (content byte-exact)"
+if [ "$fail" -eq "$fails_before_content" ]; then ok "manifest-exec (content byte-exact)"; fi
 mout="" mstatus=0
 mout="$(SHA_REAL=0000000000000000000000000000000000000000000000000000000000000000 bash "$scratch/manifest-runner.sh" 2>&1)" || mstatus=$?
 case "$mout" in *"mismatch"*) ok "manifest-exec (sha mismatch fails closed)" ;; *) ko "manifest-exec: sha mismatch not refused" ;; esac

@@ -79,6 +79,6 @@ Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only,
   - [ ] Push, open draft PR #756 (base `main`: repo CI triggers only for main-targeted PRs; retarget to `feat/app-cm-w0-baseline` at W0-close.e integration), CI green; do not merge.
 - [ ] **Lot R1 — Opus r1 fixes (user-ordered 2026-10-26, PR #756 stays draft on main)**
   - [x] Extend the guard test first (red): default/admin identity, pod-spec without s5cmd in main, strict key, allowlist probes, secret/sha validation.
-  - [ ] P1: explicit `RESTORE_KUBECONFIG` plus negative prod/preprod `can-i`; meta-collecting initContainer; pipefail/`ON_ERROR_STOP`/`gzip -t`/optional sha compare.
+  - [ ] P1: explicit `RESTORE_KUBECONFIG` plus negative prod/preprod `can-i`; meta-collecting initContainer; pipefail/`ON_ERROR_STOP`/`gzip -t`/required sha compare.
   - [ ] P2: case-insensitive host/IP/namespace allowlists, `^[a-z0-9-]+$` secrets, distinct defaults, ETag (+versions best-effort), receipts outside repo, `bash` runbook, make+CI wiring, README update, PR-body do-not-merge line.
   - [ ] Test green, scope-checks, atomic commits, push, CI green; do not merge.

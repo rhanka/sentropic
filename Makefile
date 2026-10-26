@@ -3701,8 +3701,6 @@ k8s-pgbackup-restore: ## Restore a dump from S3 into the ISOLATED restore PG/DB 
 	for scope in sentropic sentropic-preprod "$(K8S_NAMESPACE)" "$(K8S_PREPROD_NAMESPACE)"; do \
 	  for verb in "create pods" "get secrets"; do \
 	    ans="$$(KUBECONFIG="$$KC" kubectl -n "$$scope" auth can-i $$verb --request-timeout=15s)" || { echo "ERROR: cannot verify absence of live-cluster rights (failing closed)" >&2; exit 1; } ; \
-	    ans="$$(KUBECONFIG="$$KC" kubectl -n "$$scope" auth can-i $$verb --request-timeout=15s)" || { echo "ERROR: cannot verify absence of live-cluster rights (failing closed)" >&2; exit 1; } ; \
-	    test "$$ans" = "no" || { echo "ERROR: refusing admin-capable identity: it holds live-cluster rights" >&2; exit 1; } ; \
 	    test "$$ans" = "no" || { echo "ERROR: refusing admin-capable identity: it holds live-cluster rights" >&2; exit 1; } ; \
 	  done ; \
 	done ; \
