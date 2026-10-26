@@ -4,13 +4,14 @@ import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sha256Hex, sha512Integrity, PINNED_IMAGE_DIGEST } from './schema-validator.mjs';
 import { readArchive } from './contract-graph.mjs';
-import { checkNodeFloor } from './receipt.mjs';
+import { checkNodeFloor, checkArtifactManifest } from './receipt.mjs';
+import { readInside } from './precandidate.mjs';
 import { resolveLockKey } from './lock-closure.mjs';
 export const P3_SHA256 = '1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730';
 export const E2_SHA256 = 'eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1';
 const ROOT_KEYS = ['manifestVersion', 'stage', 'status', 'preCandidate', 'e2', 'backend', 'neutralDeclarations', 'hostProfile', 'lock', 'closure', 'runtime', 'acknowledgements'];
 const REF_KEYS = ['path', 'sha256'];
-export function validateLot2Manifest(m, root) {
+export function validateLot2Provenance(m, root) {
   const errors = [];
   const closed = (value, keys, label) => {
     if (!value || Array.isArray(value) || typeof value !== 'object' || Object.keys(value).sort().join() !== [...keys].sort().join()) {
@@ -57,7 +58,7 @@ export function validateLot2Manifest(m, root) {
   for (const label of ['e2', 'backend']) {
     read(m[label], label, true);
     const found = packages.get(`${m[label]?.name}@${m[label]?.version}`);
-    if (!found || JSON.stringify(found.entry) !== JSON.stringify(m[label])) errors.push(`${label}: absent/mismatched closure`);
+    if (!found || ['path', 'sha256', 'name', 'version', 'integrity'].some(k => found.entry[k] !== m[label][k])) errors.push(`${label}: absent/mismatched closure`);
   }
   const lock = json(m.lock, 'lock');
   if (lock?.lockfileVersion !== 3 || !lock?.packages || !Array.isArray(m.closure) || !m.closure.length) errors.push('closure: complete v3 installed lock required');
@@ -95,6 +96,40 @@ export function validateLot2Manifest(m, root) {
       if (receipt?.status !== 'accepted' || receipt?.preCandidateManifestSha256 !== P3_SHA256 || receipt?.e2Sha256 !== m.e2?.sha256 || receipt?.backendSha256 !== m.backend?.sha256) errors.push(`acknowledgements.${name}: actual tuple disposition required`);
     }
   }
+  return errors;
+}
+/** The outer envelope is the existing frozen schema; host details are digest-bound provenance. */
+export function validateLot2Manifest(m, root) {
+  const errors = checkArtifactManifest(m);
+  if (errors.length) return errors;
+  if (m.stage !== 'lot2' || m.preCandidateManifestSha256 !== P3_SHA256 || m.e2ArtifactSha256 !== E2_SHA256) return ['manifest: exact P3/E2 lot2 envelope required'];
+  const read = ref => {
+    const file = realpathSync(resolve(root, ref.path)), rel = relative(realpathSync(root), file);
+    if (rel.startsWith('..') || rel.startsWith('/')) throw Error('manifest: unsafe reference');
+    const bytes = readFileSync(file);
+    if (sha256Hex(bytes) !== ref.sha256) throw Error('manifest: reference sha256 mismatch');
+    return bytes;
+  };
+  try {
+    const provenance = JSON.parse(read(m.e2Provenance));
+    errors.push(...validateLot2Provenance(provenance, root));
+    const preBytes = readInside(root, 'tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json');
+    if (sha256Hex(preBytes) !== P3_SHA256) throw Error('manifest: retained P3 changed');
+    const pre = JSON.parse(preBytes);
+    errors.push(...checkArtifactManifest(m, { retainedContractInventory: pre.contractInventory }));
+    if (m.source.specSha256 !== pre.source.specSha256 || m.source.l0Commit !== pre.source.l0Commit) errors.push('manifest: frozen spec/L0 mismatch');
+    const snapshot = read(m.source.declaredLockSnapshot);
+    if (sha256Hex(snapshot) !== m.source.declaredLockSha256) errors.push('manifest: declared lock mismatch');
+    for (const ref of m.source.toolchainSnapshots) read(ref);
+    for (const artifact of m.artifacts) {
+      const bytes = read({ path: artifact.archive, sha256: artifact.sha256 });
+      if (sha512Integrity(bytes) !== artifact.integrity) errors.push(`manifest: archive integrity ${artifact.name}`);
+      const item = provenance.closure?.find(x => x.name === artifact.name && x.version === artifact.version);
+      if (!item || item.sha256 !== artifact.sha256 || item.integrity !== artifact.integrity || item.path !== artifact.archive) errors.push(`manifest: unbound artifact ${artifact.name}`);
+    }
+    if (!m.artifacts.some(a => a.role === 'broker' && a.name === '@sentropic/mcp-broker') ||
+        !m.artifacts.some(a => a.role === 'mesh' && a.name === '@sentropic/cluster-mesh')) errors.push('manifest: broker reference and host backend artifacts required');
+  } catch (error) { errors.push(error.message); }
   return errors;
 }
 export function receiveLot2Manifest(path, root) {
