@@ -73,7 +73,7 @@ export function inventorySastRoots(contract, root) {
   return { roots, sourceFiles, blockedUntil: contract?.inventory?.sastBlockedUntil || 'S2c', qualified: false };
 }
 
-const SKIP = new Set(['.git', '.track', '.tmp', '.remote', '.claude', '.codex', '.agents', 'tmp',
+const SKIP = new Set(['.git', '.track', '.tmp', '.remote', '.claude', '.codex', '.agents', '.cursor', 'tmp',
   'node_modules', 'dist', 'build', 'coverage', '.svelte-kit', 'history', 'lock-snapshots', 'fixtures']);
 
 function repositoryFiles(root, limit = 100000) {
