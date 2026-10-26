@@ -15,7 +15,7 @@ export function selectLot3Files(catalog) {
     new Set(predecessors).size !== 18 || !predecessors.includes('packages/mcp-platform/tests/wire-parity.test.ts')) {
     throw Error('Lot 3 requires the unchanged 18-file P09 inventory');
   }
-  const extra = catalog.proofs.filter(p => ['P01', 'P02', 'P03', 'P04'].includes(p.id)).flatMap(p => p.files);
+  const extra = catalogDispositions(catalog, () => true).filter(row => row.status === 'run-here').map(row => row.file);
   const files = [...new Set([...predecessors, ...extra])];
   const select = pkg => files.filter(f => f.startsWith(`packages/${pkg}/`)).map(f => f.slice(`packages/${pkg}/`.length));
   return { predecessors, platform: select('mcp-platform'), mesh: select('cluster-mesh') };
@@ -39,6 +39,10 @@ export function runLot3Source(root, reports, retainedRoot) {
     throw Error('Lot 3 frozen proof catalog mismatch');
   }
   const catalog = JSON.parse(catalogBytes), selected = selectLot3Files(catalog);
+  const platformArchiveSha256 = sha256(readFileSync(process.env.MEMORY_L5_PLATFORM_ARCHIVE));
+  if (platformArchiveSha256 !== '67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5') {
+    throw Error('Lot 3 requires the published platform 0.4.0 archive');
+  }
   verifyRetainedP3(root, 'tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json');
   const inventory = JSON.parse(p3).contractInventory;
   const platform = JSON.parse(readFileSync(join(root, 'packages/mcp-platform/package.json')));
@@ -60,6 +64,8 @@ export function runLot3Source(root, reports, retainedRoot) {
   }
   mkdirSync(reports, { recursive: true });
   const summary = { sourceOnly: true, qualificationAccepted: false, preCandidateSha256: P3_SHA256,
+    runtimePlatform: { version: '0.4.0', publishedBytes: true,
+      archiveSha256: platformArchiveSha256 },
     sourceHead: process.env.MEMORY_L5_SOURCE_HEAD ?? null, node: process.version,
     catalogSha256: sha256(catalogBytes), predecessorFiles: selected.predecessors, packages: {},
     inventory: { authority: 'frozen P3 archive closure and ancillary files', rows: inventory, drift: [] },

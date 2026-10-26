@@ -56,6 +56,7 @@
 - [x] All platform source changes and dependent mesh composition withdrawn; original c83189032 and conductor handoff preserve the proposal.
 - [x] Both new platform profile suites transferred to the separate draft; blocked cases remain in the catalog and receipts.
 - [x] Mesh context suite withdrawn to the local conductor handoff; P01.mesh.memory-context remains blocked: platform-admitBridgeTools.
+- [x] Published 0.4.0 archive is hash-checked and supplies platform runtime JS for source imports and packaged P09 consumers; six dependent cases are explicitly blocked.
 - [ ] gr-conductor: P01.packed/P02.packed/P03/P04.packed need verified context/audit/schema/transport tuple; P05 canonical fenced-store; P06 restart/lost-ack; P07 assurance/continuation; P08 installed closure/disabled exports; P10 manifest/sidecar/G1-G4/C9 and tuple acceptances. Exact missing inputs: tools/memory-mcp-l5/lot3-dispositions.mjs WAITING_FOR.
 - [ ] Lot 4: S1 normalization, same frozen tuple/E4 installed six-suite qualification and owner UAT remain owning-lot gates; no successor freeze authorized.
 ## AI Flaky tests

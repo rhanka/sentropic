@@ -91,6 +91,8 @@ if [ -n "$receipt" ]; then cp "$receipt" "$platform_tgz"; fi
 
 # Lot 3's exact P09 subset needs only the existing MCP consumer, with unchanged packed bytes.
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" = mcp ]; then
+  test -n "${MEMORY_L5_PLATFORM_ARCHIVE:-}"
+  cp "$MEMORY_L5_PLATFORM_ARCHIVE" "$platform_tgz"
   node "$here/candidate-platform-registry.mjs" ../mcp-platform/package.json "$platform_tgz" > "$work/registry-url" &
   registry_pid=$!
   trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
