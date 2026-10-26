@@ -44,6 +44,13 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read lock/schedule/spec/template; verify mechanical branch and immutable baseline.
 - [x] Lot 1: six reference test files, signed-token corpus and manifest refusal tests specified; first store run fails on missing reference module.
+  - [x] `packages/mcp-broker/tests/memory/sqlite-workflow-store.test.ts`
+  - [x] `packages/mcp-broker/tests/memory/sqlite-workflow-crash.test.ts` and `fixtures/workflow-child.mjs`
+  - [x] `packages/mcp-broker/tests/memory/mutation-recovery.test.ts`
+  - [x] `packages/mcp-broker/tests/memory/policy-version-persistence.test.ts`
+  - [x] `packages/mcp-broker/tests/memory/confirmation-continuation.test.ts`
+  - [x] `packages/mcp-broker/tests/memory/oidc-assurance.test.ts`
+  - [x] `tools/memory-mcp-l5/tests/lot2-{assurance,manifest,retained-inputs,envelope}.test.mjs`
 - [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
-- [ ] Lot 3: source reference run passed 66 tests; route its pinned image through the existing lot runner, preserving P3 build parsing; final tooling/static gates pending.
+- [ ] Lot 3: reference run passed 66 and tooling passed 108; receiving envelope regression added to preserve the frozen artifact-manifest schema.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
