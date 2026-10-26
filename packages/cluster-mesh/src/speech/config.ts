@@ -116,8 +116,10 @@ function parseProfile(value: unknown): SpeechProfile {
   if (p.schemaVersion !== 1 || !Number.isSafeInteger(p.maxDurationMs) || (p.maxDurationMs as number) <= 0
     || typeof p.maxCostUsd !== 'number' || !Number.isFinite(p.maxCostUsd) || p.maxCostUsd < 0) fail();
   const pipeline = choice(p.pipeline, ['chained', 'native-duplex']);
-  const stages: readonly SpeechStage[] = pipeline === 'chained' ? ['stt', 'tts'] : ['duplex'];
-  const rawBindings = object(p.bindings); keys(rawBindings, stages);
+  const allowedStages: readonly SpeechStage[] = pipeline === 'chained' ? ['stt', 'tts'] : ['stt', 'tts', 'duplex'];
+  const rawBindings = object(p.bindings); keys(rawBindings, allowedStages);
+  const stages = allowedStages.filter((stage) => Object.hasOwn(rawBindings, stage));
+  if (!stages.length || (pipeline === 'native-duplex' && !stages.includes('duplex'))) fail();
   const bindings: Partial<Record<SpeechStage, SpeechBinding>> = {};
   for (const stage of stages) bindings[stage] = binding(rawBindings[stage]);
   const rawRequired = object(p.requiredCapabilities); keys(rawRequired, stages);
