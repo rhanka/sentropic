@@ -51,6 +51,7 @@
   - [x] Red: scoped integration target fails on missing postgres-activation module before implementation (2026-10-26).
   - [x] Add commit acknowledgement and uncertain-commit unit vectors in postgres-activation.test.ts.
 - [ ] Lot 2: versioned SQL, TicketStore/flow port, atomic consume, bounded cleanup and invalidation.
+  - [x] Versioned SQL: immutable rows, full binding FK, namespace generation, 60s cap and indexed expiry.
 - [ ] Lot 3: real PG vectors: two OS processes, restart, race, pre/post-commit crash, restore; no skipped vectors.
 - [ ] Lot 4: exact imports and authority/restore obligations; merge main again after #759.
 - [ ] Lot 5: separate pack-only 0.2.3 bump; typecheck/lint/unit/integration/pack gates.
