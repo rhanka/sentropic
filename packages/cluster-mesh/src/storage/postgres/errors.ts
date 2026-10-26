@@ -1,4 +1,5 @@
 import { isStorageError, StorageCasConflictError, StorageIdempotencyConflictError, StorageInvalidCommandError, StorageUnavailableError } from '../errors.js';
+import { CanonicalOwnershipError } from '../instance-ownership.js';
 
 export type PgFailureCondition = 'contention' | 'timeout' | 'unavailable' | 'outcome_unknown' | 'corruption' | 'configuration' | 'schema-drift';
 export class PostgresStorageError extends StorageUnavailableError {
@@ -16,6 +17,8 @@ export class PgSchemaDriftError extends PostgresStorageError {
 export type PgConstraintMap = Readonly<Record<string, 'cas-conflict' | 'idempotency-conflict' | 'invalid-command'>>;
 export const classifyPgFailure = (error: unknown, constraints: PgConstraintMap = {}): Error => {
   if (isStorageError(error)) return error;
+  // Canonical ownership refusals surface unwrapped (registry/SQLite parity).
+  if (error instanceof CanonicalOwnershipError) return error;
   const fields = typeof error === 'object' && error !== null ? error as Record<string, unknown> : {};
   const candidate = fields.sqlState ?? fields.code;
   const state = typeof candidate === 'string' && /^[0-9A-Z]{5}$/.test(candidate) ? candidate : undefined;
