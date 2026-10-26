@@ -50,12 +50,21 @@ import {
 | Duplex port | `SpeechSessionRequest`, `SpeechSessionReceipt`, `SpeechSessionState`, `SpeechCommand`, `SpeechEvent`, `SpeechSession`, `SpeechAdapter`; admitted receipt before media, async events plus independent write/control paths with AbortSignal |
 | Capabilities | `speechCapabilityNames`, `SpeechCapabilityName`, `SpeechUsageUnit`, `SpeechCapabilities`, `SpeechNegotiationRequest`, `SpeechNegotiationResult`, `negotiateSpeech`; per-tuple evidence and ordered exact-format negotiation |
 
-`getModelSpeechCapabilities(providerId, modelId)` is a catalogue/root export.
-An absent speech declaration is unqualified. Existing audio-input support does
+`getModelSpeechCapabilities(providerId, modelId, catalogue?)` returns all exact
+tuples from an independent `SpeechEngineCatalogue`, through root and speech
+exports. Open `SpeechEngineIdentity` strings accept STT/TTS engines without LLM
+profiles; each model can expose multiple adapters, revisions and placements.
+The default catalogue is empty until engines are qualified. No provider speech
+claim is inherited by chat models. An empty result is unqualified. Audio input does
 not advertise streaming STT, synthesis or duplex output. A required capability
 passes only with `supported`; `partial`, `unknown` and `unsupported` refuse.
 Negotiation never substitutes another engine/model/placement, and performs no
 authorization, account admission, spending or configuration mutation.
+Languages, voices and regions require membership in their declared supported
+sets; account/resource references remain with the selected session binding.
+`reviseSpeechTranscript` applies UTF-16 partial patches to a display projection,
+ignores stale/invalid revisions and preserves the first final. It does not submit
+an agent turn or own the coordinator's durable reconciliation.
 
 PCM16 little-endian mono supports negotiated 16/24/48 kHz; Opus is an explicit
 alternative, never an implicit conversion. Frame validation checks local
