@@ -38,7 +38,7 @@
 - [x] No UI change; reference/receiving harness only; final E4 and owner UAT remain later lots.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read lock/schedule/spec/template; verify mechanical branch and immutable baseline.
-- [ ] Lot 1: six reference test files and signed-token refusal corpus specified; manifest tests next.
+- [x] Lot 1: six reference test files, signed-token corpus and manifest refusal tests specified; first store run fails on missing reference module.
 - [ ] Lot 2: implement reference export/transactions/fences/policy persistence and assurance verifier.
 - [ ] Lot 3: wire strict manifest receiving gate; retain immutable E4; run tooling/typecheck/lint and reference tests.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
