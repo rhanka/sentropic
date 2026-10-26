@@ -35,9 +35,10 @@ import { PgTransactions } from './transactions.js';
 import { decodePgUtf8 } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { loadPgAssets, verifyPgInstallation } from './migrations.js';
-import { CanonicalInstanceRegistry } from '../instance-ownership.js';
+import { CanonicalInstanceRegistry, CanonicalOwnershipError } from '../instance-ownership.js';
 import {
   acquirePgInstanceOwnership,
+  acquisitionRaced,
   DEFAULT_LEASE_MS,
   expirePgInstanceLease,
   resolvePgStoreKey,
@@ -266,6 +267,13 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
   const assets = options.assets ?? (await loadPgAssets());
   assertNoDeprecatedAssetNames(assets);
   const opened = await provisional.tx.run(false, async (session) => {
+    if (cell && optIn) {
+      // G-P0a: the ownership catalog is a precondition of an opt-in open,
+      // checked before installation attestation so a missing or tampered
+      // catalog refuses with `open-refused` (registry/SQLite parity) rather
+      // than surfacing as schema drift.
+      await assertPgOwnershipCatalog(session, options.layout.dataSchema);
+    }
     await verifyPgInstallation(session, options.layout, assets, options.history);
     const wanted = provisional.options.descriptor
       ? createHash('sha256').update(JSON.stringify(provisional.options.descriptor), 'utf8').digest('hex')
@@ -278,10 +286,8 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
     });
     let ownership: PgInstanceOwnershipSession | null = null;
     if (cell && optIn) {
-      // G-P0a: catalog verification, then the open transaction retains the
-      // winning lease. A live holder refuses the open promptly (no queue,
-      // never supersede).
-      await assertPgOwnershipCatalog(session, options.layout.dataSchema);
+      // The open transaction retains the winning lease. A live holder
+      // refuses the open promptly (no queue, never supersede).
       const storeKey = resolvePgStoreKey(options.layout.dataSchema, options.moduleId);
       const registry = optIn.registry ?? new CanonicalInstanceRegistry();
       const won = await acquirePgInstanceOwnership(
@@ -307,6 +313,13 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
       };
     }
     return { stored, ownership };
+  }).catch((error: unknown) => {
+    // A serialization race lost at COMMIT time is still a concurrent
+    // acquisition: refuse it as `instance-busy`, never a lock error.
+    if (cell && optIn && acquisitionRaced(error)) {
+      throw new CanonicalOwnershipError('instance-busy', 'concurrent acquisition in progress');
+    }
+    throw error;
   });
   // G-P0b: for opt-in kernels the durable guard runs on the committing
   // session itself through the existing onCommitPossession seam (no second

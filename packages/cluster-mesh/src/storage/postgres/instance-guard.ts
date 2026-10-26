@@ -8,10 +8,10 @@
 // window). No transaction rewiring: the existing onCommitPossession seam is
 // reused, chained only for opt-in canonical kernels.
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { CanonicalOwnershipError } from '../instance-ownership.js';
 import { decodePgText } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import {
-  CanonicalOwnershipError,
   renewPgInstanceLease,
   verifyPgInstanceOwnership,
   type CanonicalInstanceHandle,
@@ -138,10 +138,14 @@ export const chainPossessionGuard = (
 
 /** G-P0a installed catalog check: the 008 table, the deferred lease trigger
  * and its guard function must exist with the contracted binding (enabled,
- * deferred, AFTER UPDATE ROW) — a fingerprint cannot see trigger state. */
+ * deferred, AFTER UPDATE ROW) — a fingerprint cannot see trigger state.
+ * Refusal is `open-refused` (registry/SQLite parity for opt-in opens), never
+ * a storage configuration error. The trigger is born `tgenabled='O'`
+ * (origin+local, the PostgreSQL default for constraint triggers); `'A'`
+ * (always) is accepted too. */
 export const assertPgOwnershipCatalog = async (session: PgSession, dataSchema: string): Promise<void> => {
   const refuse = (): never => {
-    throw new PostgresStorageError('configuration');
+    throw new CanonicalOwnershipError('open-refused', 'instance ownership catalog is not installed or was tampered with');
   };
   const columns = await session.execute({
     text: `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema=$1 AND table_name='instance_ownership'`,
@@ -165,7 +169,7 @@ export const assertPgOwnershipCatalog = async (session: PgSession, dataSchema: s
   });
   const trigger = triggers.rows.find((row) => row.tgname === 'instance_ownership_lease');
   if (!trigger) refuse();
-  if (trigger.tgenabled !== 'A' || trigger.tgdeferrable !== true || trigger.tginitdeferred !== true) refuse();
+  if ((trigger.tgenabled !== 'O' && trigger.tgenabled !== 'A') || trigger.tgdeferrable !== true || trigger.tginitdeferred !== true) refuse();
   if (trigger.tgtype !== 17) refuse();
   if (trigger.proname !== 'instance_ownership_guard' || trigger.lanname !== 'plpgsql') refuse();
   const prosrc = typeof trigger.prosrc === 'string' ? trigger.prosrc : '';
