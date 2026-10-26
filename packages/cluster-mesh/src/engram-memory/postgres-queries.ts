@@ -93,7 +93,7 @@ const readProjectedRows = async (context: PgQueryContext, name: MemoryQueryName,
         WHERE s.state='accepted_current' AND ($4::text IS NULL OR r.scope_ref=$4)
         AND ($5::text IS NULL OR (s.entry_key::jsonb->>2)>$5 COLLATE "C")
         AND convert_from(${data}.map_get($1::bigint,'["record",'||to_json(r.entry_key)::text||']'),'UTF8')::jsonb->>'payload'=r.payload_id
-        ORDER BY position COLLATE "C" LIMIT $6`,
+        ORDER BY (s.entry_key::jsonb->>2) COLLATE "C" LIMIT $6`,
       values: [context.root, memoryPgScope(context), input.systemAsOf, input.scopeRef ?? null, context.cursor as string | null,
         Math.min(context.limit, input.maxCandidates) + 1],
     });
@@ -121,26 +121,64 @@ export const memoryPgQuery = (name: MemoryQueryName): PgRegisteredQuery => {
     if (context.cursor !== null && typeof context.cursor !== 'string') {
       throw new StorageInvalidCommandError('invalid memory query continuation');
     }
-    switch (name) {
-      case 'memory-journal-page':
-      case 'memory-outbox-page':
-        validateMemoryPageInput(supplied, context.limit);
-        break;
-      case 'memory-record-by-id':
-        validateMemoryRecordByIdInput(supplied);
-        break;
-      case 'memory-accepted-snapshot':
-        validateMemorySnapshotInput(supplied, context.limit);
-        break;
-      case 'scope-chain-index':
-        break;
+    memoryPgSchema(context);
+    if (name === 'scope-chain-index') {
+      await requireAvailable(context, 'memory-journal');
+      const chain = await memoryPgMap<{ head: string; allocation: string }>(context, context.root, 'chain', 'memory-journal');
+      return { records: chain ? [{ chainId: 'memory-journal', headHash: chain.head, allocation: chain.allocation }] : [], nextCursor: null };
     }
-    return pendingTables(name);
+    if (name === 'memory-record-by-id') {
+      const input = validateMemoryRecordByIdInput(supplied);
+      const key = JSON.stringify(['memory-record-v1', input.recordId]);
+      await requireAvailable(context, key);
+      const ref = await memoryPgMap<{ payload: string }>(context, context.root, 'record', key);
+      return { records: ref ? [decodeMemoryValue(await readMemoryPgPayload(context, ref.payload))] : [], nextCursor: null };
+    }
+    if (name === 'memory-journal-page') await requireAvailable(context, 'memory-journal');
+    const limit = Math.min(context.limit, name === 'memory-accepted-snapshot'
+      ? validateMemorySnapshotInput(supplied, context.limit).maxCandidates
+      : validateMemoryPageInput(supplied, context.limit).limit);
+    const result = await readProjectedRows(context, name, supplied);
+    const records: unknown[] = [];
+    let position: string | null = null;
+    for (const row of result.rows.slice(0, limit)) {
+      const key = decodePgText(row.entry_key);
+      await requireAvailable(context, name === 'memory-journal-page' ? 'memory-journal' : key);
+      let value: Record<string, unknown>;
+      if (name === 'memory-journal-page') {
+        const data = quotePgIdentifier(context.layout.dataSchema);
+        const payload = (await context.session.execute({ text: `SELECT bytes,erased FROM ${data}.payloads WHERE scope_key=$1 AND id=$2`,
+          values: [memoryPgScope(context), decodePgText(row.payload_id)],
+        })).rows[0];
+        if (!payload || payload.erased === true || payload.bytes === null) throw new StorageUnavailableError('memory journal payload is unavailable');
+        value = decodePgJson<Record<string, unknown>>(decodePgUtf8(payload.bytes));
+      } else value = decodeMemoryValue(await readMemoryPgPayload(context, decodePgText(row.payload_id)));
+      const record = name === 'memory-accepted-snapshot' ? lexicalDocument(value) : value;
+      const next = name === 'memory-accepted-snapshot' ? decodePgText(row.position) : JSON.stringify([decodePgText(row.ordinal), key]);
+      if (Buffer.byteLength(JSON.stringify({ records: [...records, record], nextCursor: next }), 'utf8') > context.maxEncodedBytes) {
+        if (!records.length) throw new StorageCapacityExceededError('memory record exceeds query byte budget');
+        return { records, nextCursor: position };
+      }
+      records.push(record);
+      position = next;
+    }
+    return { records, nextCursor: result.rows.length > limit ? position : null };
   };
 };
 
-const pendingTables = (name: string): PgQueryPage => {
-  throw new StorageUnavailableError(`memory query ${name} requires the G1b memory projection tables`);
+// Same accepted lexical document fields as Engram 0.21.1's derivation.
+// Admission, eligibility, ranking and digest computation remain in Engram.
+const lexicalDocument = (record: Record<string, unknown>): unknown => {
+  const components = record.components as readonly { component_id: string; kind: string; text: string }[];
+  const citations = record.citations as readonly { source_ref: string }[];
+  const trust = record.trust as { class: string };
+  if (!Array.isArray(components) || !Array.isArray(citations) || !trust)
+    throw new StorageUnavailableError('accepted memory record cannot be projected');
+  const text = (kind: string) => components.filter((component) => component.kind === kind).map((component) => component.text).join('\n');
+  return { record_id: record.record_id, record_digest: record.record_digest, valid_time: record.valid_time, trust_class: trust.class,
+    fields: { primary: components.find((component) => component.component_id === record.primary_component_id)?.text ?? '',
+      context: text('context'), decision: text('decision'), evidence: text('evidence'),
+      citations: citations.map((citation) => citation.source_ref).join('\n') } };
 };
 
 export const MEMORY_PG_QUERIES = Object.freeze({
