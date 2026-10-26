@@ -45,6 +45,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# BR77-EX1: two package validation lanes and bounded runtime matrices.
+# Dependencies only stagger execution; every selected result remains required.
 jobs:
   enforce-package-bump:
     runs-on: ubuntu-latest
@@ -648,8 +650,8 @@ jobs:
 
   validate-llm-mesh:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-cowork-desktop]
+    if: always() && !cancelled() && (needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -675,8 +677,8 @@ jobs:
   # publication only after the npm trusted publisher has been attached.
   validate-cluster-mesh:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-llm-gateway]
+    if: always() && !cancelled() && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -761,8 +763,8 @@ jobs:
   # first publish is a manual bootstrap (see BRANCH.md), not steady-state OIDC.
   validate-llm-gateway:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-llm-mesh]
+    if: always() && !cancelled() && (needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -807,8 +809,8 @@ jobs:
 
   validate-cited-source-viewer:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.cited_source_viewer == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-chat-ui]
+    if: always() && !cancelled() && (needs.changes.outputs.cited_source_viewer == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -830,8 +832,8 @@ jobs:
 
   validate-cowork-bridge:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.cowork_bridge == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-cited-source-viewer]
+    if: always() && !cancelled() && (needs.changes.outputs.cowork_bridge == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -851,8 +853,8 @@ jobs:
 
   validate-oauth-verify:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.oauth_verify == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-cowork-bridge]
+    if: always() && !cancelled() && (needs.changes.outputs.oauth_verify == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -872,8 +874,8 @@ jobs:
 
   validate-mcp-auth:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.mcp_auth == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-oauth-verify]
+    if: always() && !cancelled() && (needs.changes.outputs.mcp_auth == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -914,8 +916,8 @@ jobs:
 
   validate-mcp-platform:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.mcp_platform == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-mcp-auth]
+    if: always() && !cancelled() && (needs.changes.outputs.mcp_platform == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -937,8 +939,8 @@ jobs:
 
   memory-l5-qualification:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.memory_l5 == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-harness]
+    if: always() && !cancelled() && (needs.changes.outputs.memory_l5 == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -950,8 +952,8 @@ jobs:
 
   validate-auth-hono:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.auth_hono == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-mcp-platform]
+    if: always() && !cancelled() && (needs.changes.outputs.auth_hono == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -971,8 +973,8 @@ jobs:
 
   validate-auth-client:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.auth_client == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-auth-hono]
+    if: always() && !cancelled() && (needs.changes.outputs.auth_client == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -992,8 +994,8 @@ jobs:
 
   validate-auth-ui:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.auth_ui == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-auth-client]
+    if: always() && !cancelled() && (needs.changes.outputs.auth_ui == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1013,8 +1015,8 @@ jobs:
 
   validate-cowork-desktop:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.cowork_desktop == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-auth-ui]
+    if: always() && !cancelled() && (needs.changes.outputs.cowork_desktop == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1053,8 +1055,8 @@ jobs:
 
   validate-events:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.events == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-contracts]
+    if: always() && !cancelled() && (needs.changes.outputs.events == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1072,8 +1074,8 @@ jobs:
 
   validate-chat-core:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.chat_core == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-events]
+    if: always() && !cancelled() && (needs.changes.outputs.chat_core == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1091,8 +1093,8 @@ jobs:
 
   validate-chat-server:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.chat_server == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-chat-core]
+    if: always() && !cancelled() && (needs.changes.outputs.chat_server == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1112,8 +1114,8 @@ jobs:
 
   validate-comments:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.comments == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-chat-server]
+    if: always() && !cancelled() && (needs.changes.outputs.comments == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1133,8 +1135,8 @@ jobs:
 
   validate-skills:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-comments]
+    if: always() && !cancelled() && (needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1148,8 +1150,8 @@ jobs:
 
   validate-flow:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.flow == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-skills]
+    if: always() && !cancelled() && (needs.changes.outputs.flow == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1167,8 +1169,8 @@ jobs:
 
   validate-artifacts:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-flow]
+    if: always() && !cancelled() && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1194,8 +1196,8 @@ jobs:
 
   validate-harness:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.harness == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, validate-artifacts]
+    if: always() && !cancelled() && (needs.changes.outputs.harness == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1307,6 +1309,7 @@ jobs:
       UI_PORT: '5691'
       MAILDEV_UI_PORT: '1591'
     strategy:
+      max-parallel: 3
       fail-fast: false
       matrix:
         include:
@@ -1449,6 +1452,7 @@ jobs:
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:
