@@ -34,11 +34,22 @@ export function stableUnitKey({ repository, repairClass, targets, fixedTarget })
   return [repository, repairClass, targetPart, fixedTarget].join('|');
 }
 
-export function joinRegister(finding, rows = []) {
-  const match = rows.find((row) => row.id === finding.id);
+export function validDate(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+}
+
+// Rows are normalized scanner identities, not the compliance verdict or register key alone.
+export function joinRegister(finding, rows = [], today = new Date().toISOString().slice(0, 10)) {
+  if (!validDate(today)) throw new Error('invalid inventory date');
+  const match = rows.find((row) => row.status === 'accepted_temporary' && validDate(row.review_due) &&
+    finding.id && row.id === finding.id &&
+    ['component', 'path', 'version', 'scanner'].every((key) =>
+      typeof finding[key] === 'string' && finding[key].length > 0 && row[key] === finding[key]) &&
+    ['platform', 'imageDigest', 'repository'].every((key) =>
+      (!finding[key] && !row[key]) || (key === 'repository' && !row[key]) || row[key] === finding[key]));
   if (!match) return { ...finding, queue: 'queued', register: 'none' };
-  const today = new Date().toISOString().slice(0, 10);
-  const expired = Boolean(match.review_due && today > match.review_due);
+  const expired = today > match.review_due;
   return { ...finding, queue: 'queued', register: 'registered-exception', review_due: match.review_due, expired };
 }
 
