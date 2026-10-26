@@ -33,6 +33,12 @@ Additive exact u64 counters for generic storage, with opt-in consumed paths and 
   - `packages/cluster-mesh/tests/storage/common-rule/contract.spec.ts`
   - `packages/cluster-mesh/tests/storage/scope-grant-modules.spec.ts`
   - `packages/cluster-mesh/tests/comments-fragment-vectors.spec.ts`
+  - `PLAN.md` (inherited: E0 merge content, unauthored here)
+  - `packages/cluster-mesh/src/engram-memory/neutral-contract.ts` (inherited: E0 merge content, unauthored here)
+  - `packages/cluster-mesh/assets/storage/engram-memory/**` (inherited: E0 merge content, unauthored here)
+  - `packages/cluster-mesh/tests/engram-memory/contract-vectors.spec.ts` (inherited: E0 merge content, unauthored here)
+  - `packages/cluster-mesh/tests/engram-memory/binding-compatibility.spec.ts` (inherited: E0 merge content, unauthored here)
+  - `packages/cluster-mesh/tests/engram-memory/neutral-contract-types.ts` (inherited: E0 merge content, unauthored here)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -60,6 +66,7 @@ Additive exact u64 counters for generic storage, with opt-in consumed paths and 
 - [x] `src/storage/common-contract.ts` untouched; no PG migration; no domain widening.
 - [x] Broader `test-cluster-mesh` shows 2 known pack-only fixture failures (`prepare-artifacts` selected-fixture alignment on `0.23.0-dev.2`, same category as E0 on `dev.1`); fixtures are outside this branch scope; E2 lanes are the gate.
 - [x] Lock lesson: `engram-e2-qualify` self-locks per lane; never wrap it in an outer shared-lock call (self-deadlock); run it bare with `ENV=test-e2-int` last.
+- [x] Scope lesson: PR diff vs integration includes the E0 merge until PR #758 lands; E0-originated paths above are declared inherited/unauthored. After E0 lands, merge the integration base and drop those lines.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; E2 qualification green; no merge.
 
 ## AI Flaky tests
