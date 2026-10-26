@@ -12,7 +12,6 @@ import {
 import { isPositiveU64Counter } from '../../src/storage/u64.js';
 import { resolvePgStoreKey } from '../../src/storage/postgres/instance-ownership.js';
 import type { PgInstanceOwnershipSession } from '../../src/storage/postgres/instance-ownership.js';
-import { PostgresStorageError } from '../../src/storage/postgres/errors.js';
 import type { PostgresStorageOptions } from '../../src/storage/postgres/protocol.js';
 import type { StorageModuleId } from '../../src/storage/contracts.js';
 import { createPostgresKernel } from '../../src/storage/postgres/index.js';
@@ -118,42 +117,57 @@ const pgCaseDriver = (
     session: PgInstanceOwnershipSession;
     handle: OwnershipCaseHandle;
   }
-  const live = new Map<string, LiveEntry>();
   const sessions = new Map<OwnershipCaseHandle, LiveEntry>();
-  const released = new Set<OwnershipCaseHandle>();
-  const lastKnown = new Map<string, string>();
-  const readRowEpoch = async (module: string): Promise<string | null> => {
+  // Durable-row reads (real PG state, never an in-memory map) for setup and
+  // `current`. Verdicts come from production: opens allocate through
+  // `acquirePgInstanceOwnership`, `verify`/`guard` run the real session and
+  // commit paths, `release` expires through `expirePgInstanceLease`.
+  const readRow = async (module: string): Promise<{ instance: string; epoch: string; live: boolean } | null> => {
     const rows = await fixture.tx.run(true, (session) =>
       session.execute({
-        text: `SELECT epoch FROM "${fixture.name}".instance_ownership WHERE module=$1`,
+        text: `SELECT instance, epoch, holder_until, clock_timestamp() AS now FROM "${fixture.name}".instance_ownership WHERE module=$1`,
         values: [module],
       }),
     );
-    return rows.rows.length === 0 ? null : decodePgText(rows.rows[0]!.epoch);
+    if (rows.rows.length === 0) return null;
+    const row = rows.rows[0]!;
+    // timestamptz arrives as Date (same coercion as production `decodeLeaseMs`).
+    const asMs = (value: unknown): number => new Date(value as string | Date).getTime();
+    return {
+      instance: decodePgText(row.instance),
+      epoch: decodePgText(row.epoch),
+      live: asMs(row.holder_until) > asMs(row.now),
+    };
   };
+  // Seeded setup rows go through DELETE+INSERT, never UPDATE: the deferred
+  // lease backstop rejects any UPDATE that commits a dead lease.
   const seedExpired = async (module: string, epoch: string): Promise<void> => {
-    await fixture.tx.run(false, (session) =>
-      session.execute({
+    await fixture.tx.run(false, async (session) => {
+      await session.execute({
+        text: `DELETE FROM "${fixture.name}".instance_ownership WHERE module=$1`,
+        values: [module],
+      });
+      await session.execute({
         text: `INSERT INTO "${fixture.name}".instance_ownership(module, instance, epoch, holder_until)
-          VALUES($1, $2, $3, clock_timestamp() - make_interval(secs => 3600))
-          ON CONFLICT(module) DO UPDATE SET instance=EXCLUDED.instance, epoch=EXCLUDED.epoch, holder_until=EXCLUDED.holder_until`,
+          VALUES($1, $2, $3, clock_timestamp() - make_interval(secs => 3600))`,
         values: [module, `instance-${randomUUID()}`, epoch],
-      }),
-    );
+      });
+    });
   };
   return {
     acquire: async (store, epoch) => {
+      // Format validation mirrors the registry reference; newness is decided
+      // by the durable row, and allocation by production open.
       if (epoch !== undefined && !isPositiveU64Counter(epoch)) {
         throw new CanonicalOwnershipError('stale-epoch', 'not a canonical u64 counter');
       }
-      const known = lastKnown.get(store) ?? '0';
-      if (epoch !== undefined && compareCanon(epoch, known) <= 0) {
-        throw new CanonicalOwnershipError('stale-epoch', 'explicit epoch is not newer');
-      }
       const module = forStore(store);
-      if (epoch !== undefined && epoch !== '1') {
-        const rowEpoch = await readRowEpoch(module);
-        if (rowEpoch === null || compareCanon(rowEpoch, decrementCanon(epoch)) !== 0) {
+      if (epoch !== undefined) {
+        const row = await readRow(module);
+        if (row !== null && compareCanon(epoch, row.epoch) <= 0) {
+          throw new CanonicalOwnershipError('stale-epoch', 'explicit epoch is not newer than the durable row');
+        }
+        if (epoch !== '1' && (row === null || row.epoch !== decrementCanon(epoch))) {
           await seedExpired(module, decrementCanon(epoch));
         }
       }
@@ -168,50 +182,48 @@ const pgCaseDriver = (
         storageEpoch: session.handle.storageEpoch,
         storeKey: store,
       };
-      const entry: LiveEntry = { kernel, session, handle };
-      live.set(store, entry);
-      sessions.set(handle, entry);
-      lastKnown.set(store, handle.storageEpoch);
+      sessions.set(handle, { kernel, session, handle });
       return handle;
     },
     verify: async (handle) => {
-      if (released.has(handle)) throw new CanonicalOwnershipError('stale-epoch', 'released ownership handle');
       const entry = sessions.get(handle);
       assert.ok(entry, 'unknown case handle');
+      // The kernel read path: production verify on a real read-only session.
       await fixture.tx.run(true, (txSession) => entry.session.verify(txSession));
     },
     release: async (handle) => {
       const entry = sessions.get(handle);
       assert.ok(entry, 'unknown case handle');
       await entry.session.release();
-      released.add(handle);
-      if (live.get(entry.handle.storeKey)?.handle === handle) live.delete(entry.handle.storeKey);
     },
     markTerminal: async (handle) => {
       const entry = sessions.get(handle);
       assert.ok(entry, 'unknown case handle');
-      const module = forStore(handle.storeKey);
-      await fixture.tx.run(false, (session) =>
-        session.execute({
-          text: `UPDATE "${fixture.name}".instance_ownership SET instance='terminated' WHERE module=$1 AND instance=$2 AND epoch=$3`,
-          values: [module, handle.instanceId, handle.storageEpoch],
-        }),
-      );
-      live.delete(handle.storeKey);
+      // Termination is DELETE+INSERT (never UPDATE: the lease backstop
+      // rejects an UPDATE committing a dead lease).
+      await fixture.tx.run(false, async (session) => {
+        await session.execute({
+          text: `DELETE FROM "${fixture.name}".instance_ownership WHERE module=$1 AND instance=$2 AND epoch=$3`,
+          values: [forStore(handle.storeKey), handle.instanceId, handle.storageEpoch],
+        });
+        await session.execute({
+          text: `INSERT INTO "${fixture.name}".instance_ownership(module, instance, epoch, holder_until)
+            VALUES($1, 'terminated', $2, clock_timestamp())`,
+          values: [forStore(handle.storeKey), handle.storageEpoch],
+        });
+      });
     },
     guard: (handle) => async () => {
       const entry = sessions.get(handle);
       assert.ok(entry, 'unknown case handle');
-      await fixture.tx.run(true, (txSession) => entry.session.verify(txSession));
+      // The real commit path through the kernel: the G-P0b hook renews on
+      // the committing session, and a dead row refuses the commit.
+      await commitAs(entry.kernel, `guard-${randomUUID()}`, 'hash-guard');
     },
     current: async (store) => {
-      const entry = live.get(store);
-      if (!entry) return null;
-      return {
-        instanceId: entry.handle.instanceId,
-        storageEpoch: entry.handle.storageEpoch,
-        storeKey: store,
-      };
+      const row = await readRow(forStore(store));
+      if (!row || !row.live) return null;
+      return { instanceId: row.instance, storageEpoch: row.epoch, storeKey: store };
     },
   };
 };
@@ -320,26 +332,32 @@ describe.skipIf(!pgEnabled)('postgres durable instance ownership', () => {
 
   it('carries exact u64 epochs past 2^53 without Number conversion', async () => {
     const fixture = await createPgFixture();
+    // Bumped-epoch setup goes through DELETE+INSERT (never UPDATE: the
+    // deferred lease backstop rejects an UPDATE committing a dead lease).
+    const expireWithEpoch = async (instance: string, epoch: string): Promise<void> => {
+      await fixture.tx.run(false, async (session) => {
+        await session.execute({
+          text: `DELETE FROM "${fixture.name}".instance_ownership WHERE module='comments'`,
+          values: [],
+        });
+        await session.execute({
+          text: `INSERT INTO "${fixture.name}".instance_ownership(module, instance, epoch, holder_until)
+            VALUES('comments', $1, $2, clock_timestamp() - make_interval(secs => 3600))`,
+          values: [instance, epoch],
+        });
+      });
+    };
     try {
       const first = await withCanonical(fixture.options);
       assert.equal(owned(first).handle.storageEpoch, '1');
-      await fixture.tx.run(false, (session) =>
-        session.execute({
-          text: `UPDATE "${fixture.name}".instance_ownership SET epoch='9007199254740992' WHERE module='comments'`,
-          values: [],
-        }),
-      );
+      await expireWithEpoch(owned(first).handle.instanceId, '9007199254740992');
       const second = await withCanonical(fixture.options);
       assert.equal(owned(second).handle.storageEpoch, '9007199254740993');
       assert.equal(owned(second).handle.instanceId, owned(first).handle.instanceId);
-      await fixture.tx.run(false, (session) =>
-        session.execute({
-          text: `UPDATE "${fixture.name}".instance_ownership SET epoch='18446744073709551614' WHERE module='comments'`,
-          values: [],
-        }),
-      );
+      await expireWithEpoch(owned(second).handle.instanceId, '18446744073709551614');
       const top = await withCanonical(fixture.options);
       assert.equal(owned(top).handle.storageEpoch, '18446744073709551615');
+      await owned(top).release();
       await assert.rejects(
         withCanonical(fixture.options),
         (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'stale-epoch',
@@ -378,7 +396,7 @@ describe.skipIf(!pgEnabled)('postgres durable instance ownership', () => {
       assert.equal(fulfilled.length, 1);
       assert.equal(rejected.length, 1);
       const reason = (rejected[0] as PromiseRejectedResult).reason;
-      assert.ok(reason instanceof CanonicalOwnershipError && reason.code === 'instance-busy');
+      assert.ok(reason instanceof CanonicalOwnershipError && reason.code === 'instance-busy', `concurrent loser: ${String(reason)}`);
     } finally {
       await fixture.close();
     }
@@ -406,10 +424,10 @@ describe.skipIf(!pgEnabled)('postgres durable instance ownership', () => {
       const kernel = await fixture.open();
       await commitAs(kernel, 'legacy-chain', 'hash-legacy');
       // Opt-in on the same legacy store is refused (installation incomplete).
-      await assert.rejects(withCanonical(fixture.options), (error: unknown) => {
-        assert.ok(error instanceof PostgresStorageError);
-        return true;
-      });
+      await assert.rejects(
+        withCanonical(fixture.options),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'open-refused',
+      );
     } finally {
       await fixture.close();
     }
