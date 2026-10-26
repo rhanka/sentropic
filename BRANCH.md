@@ -10,7 +10,7 @@
 - [x] Serialize Docker/test steps with the shared lock; existing Compose targets only; `make down` after each step.
 - [x] Preserve P2 `2b85ff28b6fe06bda0abcdc19255f61a1ed1e4b7cfbb40c2e881c98dd234424b`; stop if an authored change alters it.
 - [x] Specific-file staging; `make commit` only, each below 150 changed lines, without attribution trailers.
-- [ ] Sole integrator allocates a unique pack-only `0.23.0-dev.N`; final declaration packaging remains serially assigned to that integrator.
+- [x] Owner assigns this topic's unique pack-only `0.23.0-dev.1`; final declaration packaging remains serially assigned to the integrator.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -34,11 +34,13 @@
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
 - **Exception process**:
-  - [ ] Record a numbered exception with rationale, impact and rollback before the serial integrator-owned pack-only bump.
+  - [x] BR0-EX1 (owner-authorized): serial pack-only package.json/root lock bump to unique 0.23.0-dev.1; satisfies topic bump gate, never published; rollback both version fields together.
 
 ## Feedback Loop
 - [x] Owner update closes common-rule/Immo E2-D1 and Comments ACK gate; retained ACK in root `.tmp/engram-e2-host-tuple/e0-entry-check-2026-10-26.md`.
 - [ ] Integration-target bump probe: retain unchanged-version failure then corrected-version success here; no implementation acceptance before both receipts.
+- [x] Negative probe: https://github.com/rhanka/sentropic/actions/runs/40314176780 at `6ff00cfff`; enforce-package-bump job `121542495040` failed on unchanged cluster-mesh 0.22.2.
+- [x] Allocation: registry latest 0.22.1; 0.23.0 and 0.23.0-dev.1 return 404; no other E2 topic ref, 2026-10-26. 0.23.0-dev.1 exceeds registry/base and is reserved for E0 only.
 - [x] Register E0 dependencies, worktree/BRANCH and environment ownership in PLAN.md within this PR.
 - [x] Negative-probe source: initial C6 identity inventory only; package version unchanged from the actual integration base (0.22.2).
 - [x] Owner sanctions `test-e2-int`; E0 exclusively owns that Compose qualification project while holding the shared Docker lock; no host ports published.
