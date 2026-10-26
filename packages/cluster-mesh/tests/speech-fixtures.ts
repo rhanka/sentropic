@@ -1,5 +1,5 @@
 import type { SpeechBinding, SpeechCapabilities, SpeechPlacement } from '@sentropic/llm-mesh/speech';
-import type { SpeechProfileInput } from '../src/speech/config.js';
+import { resolveSpeechProfiles, type SpeechProfileInput } from '../src/speech/config.js';
 import type { SpeechProjectionContext } from '../src/speech/projection.js';
 
 export const pcm = { codec: 'pcm16-le', sampleRateHz: 16000, channels: 1 } as const;
@@ -47,7 +47,9 @@ export const context = (): SpeechProjectionContext => ({
     egress: binding.placement === 'cloud-relay' ? 'provider' :
       binding.placement === 'cluster-hosted' ? 'cluster' : 'device' }),
 });
-export const select = (profileId = 'A', configRevision = 'r1') => ({ profileId, configRevision });
+export const select = (profileId = 'A', configRevision = 'r1', input = primary.find((p) => p.profileId === profileId)!) => ({
+  profileId, configRevision, contentDigest: resolveSpeechProfiles([{ ...input, configRevision }])[0].contentDigest,
+});
 export const consent = (profileId = 'B', configRevision = 'r1') => ({
-  profileId, configRevision, egressPolicyRef: 'egress:voice', consentRevision: 'consent:renewed',
+  ...select(profileId, configRevision), egressPolicyRef: 'egress:voice', consentRevision: 'consent:renewed',
 });

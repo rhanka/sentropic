@@ -30,6 +30,7 @@ export type SpeechProjectionReason = 'profile' | 'tenant' | 'policy' | 'placemen
 export interface EffectiveSpeechProjection {
   readonly available: true;
   readonly schemaVersion: 1;
+  readonly contentDigest: string;
   readonly profile: SpeechProfile;
   readonly micEnabled: false;
   readonly requiresSessionAdmission: true;
@@ -51,6 +52,7 @@ export function projectSpeechProfile(profiles: readonly SpeechProfile[], selecte
   if (!candidates.length) return refused('profile');
   const profile = candidates.find((p) => p.tenantId === context.tenantId && p.workspaceId === context.workspaceId);
   if (!profile) return refused('tenant');
+  if (selected.contentDigest !== profile.contentDigest) return refused('revision');
   if (profile.policyRef !== context.policyRef || profile.egressPolicyRef !== context.egressPolicyRef
     || profile.budgetRef !== context.budgetRef) return refused('policy');
   const placements = [profile.placement, ...Object.values(profile.bindings).map((b) => b.placement)];
@@ -82,7 +84,7 @@ export function projectSpeechProfile(profiles: readonly SpeechProfile[], selecte
     stages[stage] = { capabilities: entries[0], negotiated };
   }
   return freezeSpeechSnapshot(structuredClone({ available: true, schemaVersion: 1, profile,
-    micEnabled: false, requiresSessionAdmission: true, stages })) as EffectiveSpeechProjection;
+    contentDigest: profile.contentDigest, micEnabled: false, requiresSessionAdmission: true, stages })) as EffectiveSpeechProjection;
 }
 
 export interface SpeechRebindBarrier {
@@ -111,9 +113,10 @@ export function rebindSpeechProfile(current: EffectiveSpeechProjection, profiles
   const next = projectSpeechProfile(profiles, selected, context);
   if (!next.available) return next;
   if (current.profile.profileId === next.profile.profileId && current.profile.configRevision === next.profile.configRevision
-    && JSON.stringify(current.profile) !== JSON.stringify(next.profile)) return refused('revision');
+    && current.contentDigest !== next.contentDigest) return refused('revision');
   const consent = barrier.consent;
   if (!consent || consent.profileId !== next.profile.profileId || consent.configRevision !== next.profile.configRevision
+    || consent.contentDigest !== next.contentDigest
     || consent.egressPolicyRef !== next.profile.egressPolicyRef || !consent.consentRevision?.trim()
     || !barrier.previousConsentRevision?.trim() || consent.consentRevision === barrier.previousConsentRevision) {
     return refused('consent');
