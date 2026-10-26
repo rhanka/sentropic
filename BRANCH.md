@@ -35,7 +35,7 @@ Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves bef
 
 ## Feedback Loop
 - [x] BR01-EX1: touch conditional `Makefile` target `wait-llm-gateway-mesh-dependency` only. Reason: the target strips one leading `^` and passes a broken `@sentropic/llm-mesh@0.27.0 || ^0.28.0` spec, so `publish-llm-gateway` can never observe the range. Impact: one recipe line plus pinned `semver` tool setup; no other target changed. Rollback: restore the single recipe line from `origin/main`.
-- [ ] CI run for PR: pending.
+- [x] CI run 40322725730 for PR #760: guard gates green (`validate-publishable-manifests`, `validate-llm-gateway`, `validate-llm-mesh`, `enforce-package-bump`, typecheck/lint). One failure: `validate-cluster-mesh` step `Qualify packed Cluster Mesh (lazy surface release gate)` cannot install `@sentropic/llm-gateway@0.21.1` (registry 404, version unpublished). Root cause is the blocked publication this branch unblocks, not this diff: no shared code path (lazy test never imports the guard module; pack steps passed), reproduced locally with the exact failing target. Needs owner decision: merge with override or bootstrap-publish 0.21.1, then re-run.
 
 ## AI Flaky tests
 - Acceptance rule:
