@@ -2,6 +2,38 @@ import { describe, expect, it, vi } from 'vitest';
 import { commit, fixture, mutation, scope } from './fixtures.js';
 
 describe('submission, tool history and effect barrier', () => {
+  it('should return a distinct non-dispatching receipt for duplicate admissions', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    await f.core.send(turn);
+    expect(await f.core.admitTool(turn, mutation())).toMatchObject({ admitted: true });
+    expect(await f.core.admitTool(turn, mutation())).toMatchObject({ admitted: false });
+    const receipt = await f.core.interrupt(turn, 'stop');
+    expect(f.journal.state.turns[turn.turnEpoch].tools['call-1'].admissionSequence).toBeLessThan(receipt.sequence);
+  });
+
+  it('should reject a reused approval and bind fresh approval to exact tool arguments', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    await f.core.send(turn);
+    await f.core.admitTool(turn, mutation('a'));
+    vi.mocked(f.authority.verifyMutation).mockImplementationOnce(async request => ({ ...request,
+      authorizationId: 'auth:action:a', principalId: scope.principalId, tenantId: scope.tenantId }));
+    await expect(f.core.admitTool(turn, mutation('b'))).rejects.toThrow('authorization');
+    vi.mocked(f.authority.verifyMutation).mockImplementationOnce(async request => ({ ...request,
+      argumentsDigest: 'other-arguments', authorizationId: 'fresh', principalId: scope.principalId, tenantId: scope.tenantId }));
+    await expect(f.core.admitTool(turn, mutation('b'))).rejects.toThrow('authorization');
+  });
+
+  it('should reject reserved record keys and preserve isolation of returned references', async () => {
+    const f = fixture();
+    await expect(commit(f.core, '__proto__')).rejects.toThrow('identity');
+    const turn = await commit(f.core);
+    await f.core.send(turn);
+    await expect(f.core.admitTool(turn, { ...mutation(), callId: 'constructor' })).rejects.toThrow('identity');
+    turn.scope.tenantId = 'altered';
+    expect(f.journal.state.scope.tenantId).toBe(scope.tenantId);
+  });
   it('should commit one final once and reject stale or conflicting references', async () => {
     const { core } = fixture();
     const [a, b] = await Promise.all([commit(core), commit(core)]);
@@ -17,7 +49,7 @@ describe('submission, tool history and effect barrier', () => {
     await f.core.send(turn);
     const tool = mutation();
     await f.core.admitTool(turn, tool);
-    expect(await f.core.admitTool(turn, tool)).toEqual(await f.core.toolResult(turn, tool.callId));
+    expect(await f.core.admitTool(turn, tool)).toMatchObject({ admitted: false });
     await f.core.interrupt(turn, 'stop');
     await f.core.resolveEffect(tool.effectId, 'unknown', 'lost status');
     const result = await f.core.toolResult(turn, tool.callId);
