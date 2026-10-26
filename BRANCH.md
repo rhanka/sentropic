@@ -65,7 +65,7 @@
   - [x] Tests first: decision-assessment.test.ts and recorded fixtures; all 10 initial assessment controls pass.
   - [x] Deterministic assessment/report schema with distinct held-out/challenge/repeat populations and conservative attempt/cost aggregation.
   - [x] Cap exhaustion and missing evidence produce incomplete/blocked reports; fixtures never establish semantic calibration.
-  - [ ] Scoped gate: make test-llm-mesh SCOPE=tests/decision-assessment.test.ts ENV=test-decision-v4l5.
+  - [x] Scoped assessment controls pass; recording tests validate receipt projections, independent work counts and pre-dispatch cap stops.
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Public exports, README, tracked mesh spec and L6 report/run-packet needs; coherent package feature tuple.
 - [ ] **Lot N — Final validation**
