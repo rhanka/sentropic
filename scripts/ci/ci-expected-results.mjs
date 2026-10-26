@@ -14,7 +14,7 @@ const BLOCKING = new Set(['failed', 'cancelled', 'timed_out', 'stale']);
 // Maximum weighted antichain: a conservative per-run slot bound, independent
 // of job durations or selection. Matrix weights honor max-parallel. Dilworth's
 // bipartite matching counts slots that cannot share a dependency chain.
-export function capacityDemand(workflow) {
+export function capacityDemand(workflow, selectedJobs = null) {
   const jobs = workflow.jobs;
   const ancestors = new Map();
   const visiting = new Set();
@@ -38,7 +38,7 @@ export function capacityDemand(workflow) {
     const count = job.strategy?.matrix?.include?.length ?? 1;
     const width = Math.min(count, job.strategy?.['max-parallel'] ?? count);
     if (!Number.isInteger(width) || width < 1) throw new Error(`Invalid capacity width: ${name}`);
-    return Array(width).fill(name);
+    return selectedJobs && !selectedJobs.has(name) ? [] : Array(width).fill(name);
   });
   const matched = new Map();
   const augment = (left, seen) => {
@@ -81,7 +81,7 @@ export function evaluateSelection(expression, lookup) {
     if (tokens[index] === '(') {
       take('('); take(')');
       if (token === 'always') return true;
-      if (token === 'cancelled') return false;
+      if (token === 'cancelled' || token === 'failure') return false;
       throw new Error(`Unsupported selection function: ${token}`);
     }
     if (!token) throw new Error(`Unexpected end: ${source}`);
@@ -279,9 +279,18 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
     const workflow = YAML.parse(fs.readFileSync(args[args.indexOf('--workflow-file') + 1], 'utf8'));
     if (args.includes('--capacity-policy')) {
-      const demand = capacityDemand(workflow);
+      const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
+      const scenarios = Object.fromEntries(['pull_request', 'push'].map(event => {
+        const context = { changes, event, ref: event === 'push' ? 'refs/heads/main' : 'refs/pull/77/merge' };
+        const expected = workflowExpected(workflow, context);
+        const selectedJobs = new Set(Object.keys(workflow.jobs).filter(name =>
+          ['ci-gate', 'ci-capacity-receipts'].includes(name) || expected.some(row => row.selected
+            && (row.job === name || row.job.startsWith(`${name} (`)))));
+        return [event, capacityDemand(workflow, selectedJobs)];
+      }));
+      const demand = Math.max(...Object.values(scenarios));
       console.log(JSON.stringify({ perRunSlots: demand, availableSlots: 17, reserveSlots: 2,
-        source: 'BR-76 observed lower bound; account quota remains to-measure', admitted: demand <= 15 }, null, 2));
+        scenarios, source: 'BR-76 observed lower bound; account quota remains to-measure', admitted: demand <= 15 }, null, 2));
       process.exit(demand <= 15 ? 0 : 1);
     }
     const context = JSON.parse(process.env.CI_SELECTION_CONTEXT);

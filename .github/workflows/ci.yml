@@ -1309,7 +1309,7 @@ jobs:
       UI_PORT: '5691'
       MAILDEV_UI_PORT: '1591'
     strategy:
-      max-parallel: 3
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:
@@ -1913,8 +1913,8 @@ jobs:
 
   publish-chat-ui:
     runs-on: ubuntu-latest
-    needs: [changes, validate-chat-ui]
-    if: needs.changes.outputs.chat_ui_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-chat-ui, validate-cluster-mesh, memory-l5-qualification]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.chat_ui_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -1927,8 +1927,8 @@ jobs:
 
   publish-cited-source-viewer:
     runs-on: ubuntu-latest
-    needs: [changes, validate-cited-source-viewer]
-    if: needs.changes.outputs.cited_source_viewer_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-cited-source-viewer, publish-chat-ui]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.cited_source_viewer_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -1941,8 +1941,8 @@ jobs:
 
   publish-cowork-bridge:
     runs-on: ubuntu-latest
-    needs: [changes, validate-cowork-bridge]
-    if: needs.changes.outputs.cowork_bridge_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-cowork-bridge, publish-cited-source-viewer]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.cowork_bridge_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -1955,8 +1955,8 @@ jobs:
 
   publish-oauth-verify:
     runs-on: ubuntu-latest
-    needs: [changes, validate-oauth-verify]
-    if: needs.changes.outputs.oauth_verify_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-oauth-verify, publish-cowork-bridge]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.oauth_verify_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -1971,9 +1971,9 @@ jobs:
   # only after the sibling publisher succeeded or was skipped, as gateway waits for mesh.
   publish-mcp-auth:
     runs-on: ubuntu-latest
-    needs: [changes, validate-mcp-auth, publish-oauth-verify]
+    needs: [changes, validate-mcp-auth, publish-oauth-verify, publish-harness]
     if: >-
-      always() &&
+      always() && !cancelled() && !failure() &&
       needs.changes.outputs.mcp_auth_publish == 'true' &&
       needs.validate-mcp-auth.result == 'success' &&
       (needs.publish-oauth-verify.result == 'success' || needs.publish-oauth-verify.result == 'skipped') &&
@@ -2025,8 +2025,8 @@ jobs:
 
   publish-mcp-platform:
     runs-on: ubuntu-latest
-    needs: [changes, validate-mcp-platform]
-    if: needs.changes.outputs.mcp_platform_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-mcp-platform, publish-oauth-verify]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.mcp_platform_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2039,8 +2039,8 @@ jobs:
 
   publish-artifacts:
     runs-on: ubuntu-latest
-    needs: [changes, validate-artifacts]
-    if: needs.changes.outputs.artifacts_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-artifacts, publish-mcp-platform]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.artifacts_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2053,8 +2053,8 @@ jobs:
 
   publish-auth-hono:
     runs-on: ubuntu-latest
-    needs: [changes, validate-auth-hono]
-    if: needs.changes.outputs.auth_hono_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-auth-hono, publish-artifacts]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.auth_hono_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2067,8 +2067,8 @@ jobs:
 
   publish-auth-client:
     runs-on: ubuntu-latest
-    needs: [changes, validate-auth-client]
-    if: needs.changes.outputs.auth_client_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-auth-client, publish-auth-hono]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.auth_client_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2081,8 +2081,8 @@ jobs:
 
   publish-auth-ui:
     runs-on: ubuntu-latest
-    needs: [changes, validate-auth-ui]
-    if: needs.changes.outputs.auth_ui_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-auth-ui, publish-auth-client]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.auth_ui_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2095,8 +2095,8 @@ jobs:
 
   publish-cowork-desktop:
     runs-on: ubuntu-latest
-    needs: [changes, validate-cowork-desktop]
-    if: needs.changes.outputs.cowork_desktop_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-cowork-desktop, publish-auth-ui]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.cowork_desktop_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2109,8 +2109,8 @@ jobs:
 
   publish-contracts:
     runs-on: ubuntu-latest
-    needs: [changes, validate-contracts]
-    if: needs.changes.outputs.contracts_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-contracts, publish-cowork-desktop]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.contracts_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2123,8 +2123,8 @@ jobs:
 
   publish-events:
     runs-on: ubuntu-latest
-    needs: [changes, validate-events]
-    if: needs.changes.outputs.events_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-events, publish-contracts]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.events_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2137,8 +2137,8 @@ jobs:
 
   publish-chat-core:
     runs-on: ubuntu-latest
-    needs: [changes, validate-chat-core]
-    if: needs.changes.outputs.chat_core_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-chat-core, publish-events]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.chat_core_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2151,8 +2151,8 @@ jobs:
 
   publish-chat-server:
     runs-on: ubuntu-latest
-    needs: [changes, validate-chat-server]
-    if: needs.changes.outputs.chat_server_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-chat-server, publish-chat-core]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.chat_server_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2165,8 +2165,8 @@ jobs:
 
   publish-comments:
     runs-on: ubuntu-latest
-    needs: [changes, validate-comments]
-    if: needs.changes.outputs.comments_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-comments, publish-chat-server]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.comments_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2179,8 +2179,8 @@ jobs:
 
   publish-flow:
     runs-on: ubuntu-latest
-    needs: [changes, validate-flow]
-    if: needs.changes.outputs.flow_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-flow, publish-comments]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.flow_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2193,8 +2193,8 @@ jobs:
 
   publish-harness:
     runs-on: ubuntu-latest
-    needs: [changes, validate-harness]
-    if: needs.changes.outputs.harness_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-harness, publish-flow]
+    if: always() && !cancelled() && !failure() && (needs.changes.outputs.harness_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2631,7 +2631,7 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
       - name: Qualify CI capacity metrics and expected-result fixtures
-        run: make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62
+        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-62
       - name: Prove selection-aware negative cases through the Make entry point
         run: |
           set -euo pipefail
