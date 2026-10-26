@@ -22,7 +22,13 @@ Later records do not certify native engines or live cancellation.
   129 tests skipped** by existing environment gates. Speech's 48 tests pass here
   after the root declaration correction. Database/crash/installed-fixture tests
   requiring separate environments are not inferred passed from this run.
-- Dedicated packed-consumer matrix: running separately; result recorded below.
+- Dedicated packed-consumer matrix: **15 files / 100 tests passed, zero skips**.
+  The selected installed train is cluster 0.23.0 / mesh 0.28.0 / gateway 0.21.1;
+  bare-root import/declarations stay free of optional peers, supported installed
+  tuples compile/load, and deliberately skewed tuples remain refused. Sibling
+  mesh/gateway archive SHA-256 values match the approved L1 bytes:
+  `be07abbd916276f524ac148b71cf28a7310dbb10c9c2d5140d9cd1fa78dfc485` /
+  `7d4f6e8f6e6c8543510f0bec3593b9238f4c1547b576dcafb9c965376b9df591`.
 - Registry `npm view` before the bump: cluster 0.22.1, mesh 0.27.1, gateway 0.21.0.
   Source train is cluster 0.23.0 / mesh 0.28.0 / gateway 0.21.1; no publication.
 
