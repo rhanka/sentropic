@@ -1,34 +1,34 @@
 2026-10-26T07:38:15Z
 
 NAMESPACE sentropic
- current_database | current_setting |        clock_timestamp        
+ current_database | current_setting |        clock_timestamp
 ------------------+-----------------+-------------------------------
  app              | on              | 2026-10-26 07:38:16.483142+00
 (1 row)
 
- table_schema |          table_name          
+ table_schema |          table_name
 --------------+------------------------------
  drizzle      | __drizzle_migrations
  public       | __drizzle_control_migrations
 (2 rows)
 
- journal | count | max |      max      
+ journal | count | max |      max
 ---------+-------+-----+---------------
  product |    44 |  44 | 1792201313001
  control |    11 |  11 | 1791860000000
 (2 rows)
 
- journal | id |                               hash                               |  created_at   
+ journal | id |                               hash                               |  created_at
 ---------+----+------------------------------------------------------------------+---------------
  product | 44 | 23a01a36ad15b1321bea3ca98cc374b7d07858c3206c1cceef5efb0b34458396 | 1792201313001
 (1 row)
 
- journal | id |                               hash                               |  created_at   
+ journal | id |                               hash                               |  created_at
 ---------+----+------------------------------------------------------------------+---------------
  control | 11 | 899d168ba7d859c87d2eeded76010267e66e64bb9f079c4c53ab601db6756b00 | 1791860000000
 (1 row)
 
- composition_root |          active_author          | status | selected_generation_id  | generation_status | supervisor_live | namespaces | namespace_set 
+ composition_root |          active_author          | status | selected_generation_id  | generation_status | supervisor_live | namespaces | namespace_set
 ------------------+---------------------------------+--------+-------------------------+-------------------+-----------------+------------+---------------
  auth-idp         | auth-hono-identity-module       | active | cluster-mesh-session-v1 |                   |                 |          1 | /auth
  auth-idp         | auth-hono-oauth-module          | active | cluster-mesh-session-v1 |                   |                 |          1 | /oauth
@@ -49,52 +49,52 @@ NAMESPACE sentropic
  product          | workspaces-hono-module          | active | cluster-mesh-session-v1 |                   |                 |          1 | /workspaces
 (17 rows)
 
- status | count | live_supervisor 
+ status | count | live_supervisor
 --------+-------+-----------------
 (0 rows)
 
- status | count | live_lease 
+ status | count | live_lease
 --------+-------+------------
 (0 rows)
 
- status | count | live_authority 
+ status | count | live_authority
 --------+-------+----------------
 (0 rows)
 
- status | count | live_lease 
+ status | count | live_lease
 --------+-------+------------
 (0 rows)
 
 
 NAMESPACE sentropic-preprod
- current_database | current_setting |        clock_timestamp        
+ current_database | current_setting |        clock_timestamp
 ------------------+-----------------+-------------------------------
  app              | on              | 2026-10-26 07:38:17.672996+00
 (1 row)
 
- table_schema |          table_name          
+ table_schema |          table_name
 --------------+------------------------------
  drizzle      | __drizzle_migrations
  public       | __drizzle_control_migrations
 (2 rows)
 
- journal | count | max |      max      
+ journal | count | max |      max
 ---------+-------+-----+---------------
  product |    44 |  44 | 1792201313001
  control |    11 |  11 | 1791860000000
 (2 rows)
 
- journal | id |                               hash                               |  created_at   
+ journal | id |                               hash                               |  created_at
 ---------+----+------------------------------------------------------------------+---------------
  product | 44 | 23a01a36ad15b1321bea3ca98cc374b7d07858c3206c1cceef5efb0b34458396 | 1792201313001
 (1 row)
 
- journal | id |                               hash                               |  created_at   
+ journal | id |                               hash                               |  created_at
 ---------+----+------------------------------------------------------------------+---------------
  control | 11 | 899d168ba7d859c87d2eeded76010267e66e64bb9f079c4c53ab601db6756b00 | 1791860000000
 (1 row)
 
- composition_root |        active_author        | status | selected_generation_id  | generation_status | supervisor_live | namespaces | namespace_set 
+ composition_root |        active_author        | status | selected_generation_id  | generation_status | supervisor_live | namespaces | namespace_set
 ------------------+-----------------------------+--------+-------------------------+-------------------+-----------------+------------+---------------
  auth-idp         | auth-hono-identity-module   | active | cluster-mesh-session-v1 |                   |                 |          1 | /auth
  auth-idp         | auth-hono-oauth-module      | active | cluster-mesh-session-v1 |                   |                 |          1 | /oauth
@@ -102,19 +102,19 @@ NAMESPACE sentropic-preprod
  product          | health-hono-module          | active | cluster-mesh-session-v1 |                   |                 |          1 | /health
 (4 rows)
 
- status | count | live_supervisor 
+ status | count | live_supervisor
 --------+-------+-----------------
 (0 rows)
 
- status | count | live_lease 
+ status | count | live_lease
 --------+-------+------------
 (0 rows)
 
- status | count | live_authority 
+ status | count | live_authority
 --------+-------+----------------
 (0 rows)
 
- status | count | live_lease 
+ status | count | live_lease
 --------+-------+------------
 (0 rows)
 
