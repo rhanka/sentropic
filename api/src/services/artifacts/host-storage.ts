@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 import type { Pool } from 'pg';
 import type { KvPort } from '@sentropic/artifacts/server/ports';
 
@@ -8,13 +9,21 @@ const require = createRequire(import.meta.url);
 
 /** Upstream identities and bytes are pinned independently of package versions. */
 export const artifactMigrationAssets = Object.freeze([
-  ['0001_artifacts.sql', '7b12713b949a956ad0b4c370a16e80fb4625a99a5097769ed0653df5973dc533'],
-  ['0002_lifecycle.sql', 'fdfbe97f84774b47a207e66915f7426926650e85b6dbb9a4d80272591df624fd'],
-  ['0003_coordinator.sql', '852f8d388ac3bd8bfc0b484ca55bba9ff2e3bf34b3339384732ffeda5f8f1420'],
-].map(([name, sha256]) => {
-  const id = `@sentropic/artifacts/migrations/${name}`;
-  return Object.freeze({ id, sha256, read: () => readFileSync(require.resolve(id), 'utf8') });
-}));
+  // Own journal: advancing Drizzle's frontier here would skip #677's pending 0012–0019.
+  Object.freeze({
+    id: '@sentropic/app/control/0020_app_artifact_host.sql',
+    sha256: '4f761972850c0cbceee2630c72cd8919483ac525a6f45ce5e7f40dd0aedc128e',
+    read: () => readFileSync(resolve('drizzle/control/0020_app_artifact_host.sql'), 'utf8'),
+  }),
+  ...[
+    ['0001_artifacts.sql', '7b12713b949a956ad0b4c370a16e80fb4625a99a5097769ed0653df5973dc533'],
+    ['0002_lifecycle.sql', 'fdfbe97f84774b47a207e66915f7426926650e85b6dbb9a4d80272591df624fd'],
+    ['0003_coordinator.sql', '852f8d388ac3bd8bfc0b484ca55bba9ff2e3bf34b3339384732ffeda5f8f1420'],
+  ].map(([name, sha256]) => {
+    const id = `@sentropic/artifacts/migrations/${name}`;
+    return Object.freeze({ id, sha256, read: () => readFileSync(require.resolve(id), 'utf8') });
+  }),
+]);
 
 /** Called only by the API migration runner, after the control stream. */
 export async function installArtifactPackageAssets(
@@ -33,6 +42,14 @@ export async function installArtifactPackageAssets(
   try {
     await client.query('BEGIN');
     await client.query(`SELECT pg_advisory_xact_lock(hashtext('sentropic:artifact-package-migrations'))`);
+    const journal = await client.query(`SELECT to_regclass('control.artifact_package_migrations') AS relation`);
+    if (journal.rows[0].relation === null) {
+      await client.query(assets[0].source);
+      await client.query(
+        'INSERT INTO control.artifact_package_migrations (asset_id, sha256) VALUES ($1, $2)',
+        [assets[0].id, assets[0].sha256],
+      );
+    }
     const { rows } = await client.query<{ asset_id: string; sha256: string }>(
       'SELECT asset_id, sha256 FROM control.artifact_package_migrations',
     );
