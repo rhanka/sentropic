@@ -76,6 +76,16 @@ describe('L01a common-rule vectors', () => {
     assert.equal(validateCommonManifestBody(incomplete).ok, false);
   });
 
+  it('should refuse an above-safe terminal count as a decimal counter', () => {
+    const v1 = COMMON_RULE_VECTORS_BY_ID['common-v1-transactional'];
+    const parsed = JSON.parse(v1.canonicalBytes) as Record<string, unknown>;
+    const aboveSafe = { ...parsed, terminal: { count: '9007199254740992', complete: true } };
+    assert.deepEqual(validateCommonManifestBody(aboveSafe), {
+      ok: false,
+      errors: ['terminal count must be a decimal counter'],
+    });
+  });
+
   it('should refuse a malformed object digest', () => {
     const v1 = COMMON_RULE_VECTORS_BY_ID['common-v1-transactional'];
     const parsed = JSON.parse(v1.canonicalBytes) as Record<string, unknown>;
