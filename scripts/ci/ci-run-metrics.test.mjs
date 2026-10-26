@@ -12,6 +12,7 @@ import {
   cancellationOwnership,
   captureRecords,
   concurrencyPeak,
+  criticalPathScheduling,
   releaseContinuity,
   dedupeJobs,
   deliveryElapsed,
@@ -36,6 +37,30 @@ const job = (overrides = {}) => ({
   startedAt: '2026-10-18T10:00:00.000Z',
   completedAt: '2026-10-18T10:03:44.000Z',
   ...overrides,
+});
+
+test('should sum queue waits along the elapsed critical path without summing parallel branches', () => {
+  const rows = [
+    job({ name: 'changes', jobId: 1, queuedAt: '2026-10-18T09:59:50Z', completedAt: '2026-10-18T10:00:10Z' }),
+    job({ name: 'test (a)', jobId: 2, queuedAt: '2026-10-18T10:00:10Z', startedAt: '2026-10-18T10:00:30Z', completedAt: '2026-10-18T10:01:30Z' }),
+    job({ name: 'test (b)', jobId: 3, queuedAt: '2026-10-18T10:00:10Z', startedAt: '2026-10-18T10:00:15Z', completedAt: '2026-10-18T10:00:20Z' }),
+    job({ name: 'ci-gate', jobId: 4, queuedAt: '2026-10-18T10:01:30Z', startedAt: '2026-10-18T10:02:05Z', completedAt: '2026-10-18T10:02:10Z' }),
+  ];
+  const graph = { changes: [], test: ['changes'], 'ci-gate': ['test'] };
+  const receipt = criticalPathScheduling(rows, graph, { qualification: ['ci-gate'] });
+  assert.equal(receipt.qualification.seconds, 65);
+  assert.deepEqual(receipt.qualification.jobs.map(row => row.jobId), [1, 2, 4]);
+  assert.equal(budgetVerdict({ schedulingSeconds: receipt.qualification.seconds }).budgets.schedulingSeconds.status, 'breach');
+  assert.equal(criticalPathScheduling(rows.map(row => row.jobId === 2 ? { ...row, queuedAt: null } : row),
+    graph, { qualification: ['ci-gate'] }).qualification.seconds, null);
+  assert.equal(criticalPathScheduling(rows, {}, { qualification: ['ci-gate'] }).qualification.seconds, null);
+  assert.equal(criticalPathScheduling(rows, graph, { images: [] }).images.seconds, null);
+});
+
+test('should never label an interrupted main release superseded by a later main run', () => {
+  const rows = [job({ runId: 1, headBranch: 'main', conclusion: 'cancelled' }),
+    job({ runId: 2, headBranch: 'main' })];
+  assert.equal(cancellationOwnership(rows).cancelled[0].ownership, 'current');
 });
 
 test('should retain Jobs API identities and step timestamps without inventing readiness', () => {
