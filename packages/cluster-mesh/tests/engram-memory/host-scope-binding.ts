@@ -21,7 +21,7 @@ export interface HostScopeOptions {
  * The host must restore authority separately on restart; an empty ledger refuses.
  * Keep the original store object: Engram 0.21.1 stamps its provenance by identity.
  */
-export const bindHostCandidateScope = (options: HostScopeOptions) => {
+export const bindHostCandidateScope = (options: HostScopeOptions): { store: CanonicalMemoryStorePort; crypto: CryptoPort } => {
   const { store, crypto, binding, currentInvocation } = options;
   const scope = { ...binding.scope };
   const storeId = binding.store_id;
@@ -88,6 +88,7 @@ export const bindHostCandidateScope = (options: HostScopeOptions) => {
   };
   return { store, crypto: {
     ...crypto,
+    version: crypto.version,
     // Preserve class-backed host crypto ports as well as plain fixture objects.
     open: crypto.open?.bind(crypto), destroy: crypto.destroy?.bind(crypto), rotate: crypto.rotate?.bind(crypto),
     seal: async (input: Parameters<CryptoPort['seal']>[0]): ReturnType<CryptoPort['seal']> => {

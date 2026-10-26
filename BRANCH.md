@@ -37,6 +37,7 @@
 - [ ] Report producer questions to gr-conductor; C7 is not accepted by this branch alone.
 - [ ] Integrate after E7; durable E9 and installed E10 acceptance remain separate.
 - [x] Host fixture keeps the factory-stamped store object; invocation and crypto dependencies are host/engine-private; a fresh ledger refuses until host authority is restored.
+- [x] Resume: retain prior commits; type the DTO fixtures and crypto result explicitly; cover admission, asynchronous issuance revocation and ambiguous commit refusal.
 - [x] Known llm-gateway 404 is outside E8 scope per owner.
 - [x] Registry 2026-10-26: latest mesh 0.22.1; assigned 0.23.0-dev.4 returns 404 and exceeds registry/base; pack-only manifest/root-lock bump, no publication.
 
