@@ -100,4 +100,22 @@ describe.skipIf(!pgEnabled)('Postgres original-result recovery', () => {
       expect(await bound.readCommitResult('absent', fence)).toBeNull();
     } finally { await fixture.close(); }
   });
+
+  it('should revalidate grant expiry after waiting for the stored result', async () => {
+    let now = '2026-10-23T00:00:00.000Z'; let expire = false;
+    const fixture = await createPgFixture({ now: () => now });
+    try {
+      const root = await createPostgresKernel({ ...fixture.options, driver: { transaction: (options, operation) =>
+        fixture.options.driver.transaction(options, (session) => operation({ execute: async (statement) => {
+          const result = await session.execute(statement);
+          if (expire && statement.text.includes('.map_get(')) now = '2026-10-25T00:00:00.000Z';
+          return result;
+        } })) } });
+      const grant = grantFor({ lifetime: { kind: 'lease', expiresAt: '2026-10-24T00:00:00.000Z' } });
+      const bound = await root.bindNew(grant); await root.provisionFence(grant, fence);
+      await bound.commitAtomic(recoveryUnit(), { idempotencyKey: recoveryIdentity, fence });
+      expire = true;
+      await expect(bound.readCommitResult(recoveryIdentity, fence)).rejects.toMatchObject({ code: 'denied' });
+    } finally { await fixture.close(); }
+  });
 });
