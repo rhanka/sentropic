@@ -36,11 +36,12 @@ const host = (binding = g1ScopeBinding()) => {
   const admission = vi.fn().mockResolvedValue({ ok: true, value: {} });
   const complete = vi.fn().mockResolvedValue({ ok: true, value: {} });
   const read = vi.fn().mockResolvedValue({ ok: true, value: {} });
+  const destroy = vi.fn().mockResolvedValue({ ok: true, value: {} });
   const store = { commitPending: commit, applyLifecycle: transition, applyAdmission: admission,
     readPending: read, recordCaptureIdempotency: complete } as unknown as CanonicalMemoryStorePort;
-  const crypto = { version: 1, seal } as unknown as CryptoPort;
+  const crypto = { version: 1, seal, destroy } as unknown as CryptoPort;
   const bound = bindHostCandidateScope({ store, crypto, binding, currentInvocation: () => current });
-  return { ...bound, original, commit, transition, seal, admission, complete, read, rawStore: store,
+  return { ...bound, original, commit, transition, seal, admission, complete, read, destroy, rawStore: store,
     enter: (invocation: HostInvocation | null) => { current = invocation; },
     // Host-private engine dependency: application callers never receive this callback.
     capture: () => bound.crypto.seal({ candidate_id: 'candidate-1', plaintext: 'opaque', context_digest: digest }),
@@ -48,6 +49,78 @@ const host = (binding = g1ScopeBinding()) => {
 };
 
 describe('C7 host candidate authority', () => {
+  it.each(['seal failure', 'seal throw', 'typed commit failure', 'post-seal host refusal'] as const)(
+    'should admit an owner retry after %s and refuse foreign retries', async (failure) => {
+      const h = host();
+      const unavailable = { ok: false, error: { code: 'UNAVAILABLE', operation: 'capture', retryable: true } };
+      if (failure === 'seal failure') h.seal.mockResolvedValueOnce(unavailable);
+      if (failure === 'seal throw') h.seal.mockRejectedValueOnce(new Error('seal unavailable'));
+      if (failure === 'seal throw') await expect(h.capture()).rejects.toThrow('seal unavailable');
+      else expect((await h.capture()).ok).toBe(failure !== 'seal failure');
+      if (failure === 'typed commit failure') {
+        h.commit.mockResolvedValueOnce(unavailable);
+        expect(await h.store.commitPending(pending)).toEqual(unavailable);
+      }
+      if (failure === 'post-seal host refusal') {
+        h.enter(null); // Engram destroys the uncommitted key after its host gate refuses.
+        expect((await h.store.commitPending(pending)).ok).toBe(false);
+        expect(h.commit).not.toHaveBeenCalled();
+        expect((await h.crypto.destroy({ key_ref: sealed.key_ref, idempotency_key: 'destroy:candidate-1' })).ok).toBe(true);
+        expect(h.destroy).toHaveBeenCalledTimes(1);
+      }
+      const calls = h.seal.mock.calls.length;
+      h.enter({ ...h.original });
+      expect((await h.capture()).ok).toBe(false);
+      expect((await h.store.commitPending(pending)).ok).toBe(false);
+      expect(h.seal).toHaveBeenCalledTimes(calls);
+      h.enter(h.original);
+      expect((await h.capture()).ok).toBe(true);
+      expect((await h.store.commitPending(pending)).ok).toBe(true);
+      expect((await h.capture()).ok).toBe(false);
+    },
+  );
+
+  it.each(['pending', 'spent', 'ambiguous'] as const)('should keep %s effects reserved after key cleanup', async (state) => {
+    const h = host();
+    await h.capture();
+    if (state === 'ambiguous') {
+      h.commit.mockRejectedValueOnce(new Error('ambiguous commit'));
+      await expect(h.store.commitPending(pending)).rejects.toThrow('ambiguous commit');
+    } else await h.store.commitPending(pending);
+    if (state === 'spent') await h.store.applyLifecycle(lifecycle);
+    await h.crypto.destroy({ key_ref: sealed.key_ref, idempotency_key: 'destroy:candidate-1' });
+    expect((await h.capture()).ok).toBe(false);
+    expect((await h.store.commitPending(pending)).ok).toBe(false);
+    expect(h.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('should return NOT_FOUND for an owned spent pending read without admitting another effect', async () => {
+    const h = host();
+    await h.capture();
+    await h.store.commitPending(pending);
+    await h.store.applyLifecycle(lifecycle);
+    expect(await h.store.readPending({ candidate_id: 'candidate-1', authorization_receipt_digest: digest }))
+      .toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+    expect(h.read).not.toHaveBeenCalled();
+    expect((await h.store.commitPending(pending)).ok).toBe(false);
+    expect((await h.store.applyLifecycle(lifecycle)).ok).toBe(false);
+    expect(h.commit).toHaveBeenCalledTimes(1);
+    expect(h.transition).toHaveBeenCalledTimes(1);
+  });
+
+  it('should refuse unknown and foreign spent pending reads before delegation', async () => {
+    const h = host();
+    await h.capture();
+    await h.store.commitPending(pending);
+    await h.store.applyLifecycle(lifecycle);
+    for (const candidate_id of ['unknown', 'candidate-1']) {
+      if (candidate_id === 'candidate-1') h.enter({ ...h.original });
+      expect(await h.store.readPending({ candidate_id, authorization_receipt_digest: digest }))
+        .toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
+    }
+    expect(h.read).not.toHaveBeenCalled();
+  });
+
   it('should reject an unknown candidate before commitPending or lifecycle effects', async () => {
     const h = host();
     expect(await h.store.commitPending(pending)).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
@@ -183,6 +256,8 @@ describe('C7 host candidate authority', () => {
     expect(h.complete).not.toHaveBeenCalled();
     const results = await Promise.all([h.store.applyAdmission(input), h.store.applyAdmission(input)]);
     expect(results.map((result) => result.ok)).toEqual([true, false]);
+    expect(await h.store.readPending({ candidate_id: 'candidate-1', authorization_receipt_digest: digest }))
+      .toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
     expect((await h.store.applyLifecycle(lifecycle)).ok).toBe(false);
     expect(h.admission).toHaveBeenCalledExactlyOnceWith(input);
     expect(h.transition).not.toHaveBeenCalled();
