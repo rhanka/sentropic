@@ -1,110 +1,77 @@
-# Feature: Live STT L1 provider-neutral speech contract
+# Feature: Fix CI gateway mesh range wait
 
 ## Objective
-- [x] Deliver approved r3 L1: speech identities, media/transcript contract, capability negotiation and public exports.
-- [x] Read L0 PR #753 at `008d66b5fd6ff04d1c44f69cf52892c4c3587980`; its docs/evidence remain the prerequisite inventory.
+Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves before publishing llm-gateway.
 
 ## Scope / Guardrails
-- [x] Author: codex / gpt-6.1-sol / high; spec SHA-256 `5a666faa9e1856245ef94b19988cb08514e6e1aeac32918715c07f8ce4a24c61`.
-- [x] Branch `feat/live-stt-l1`, worktree `tmp/worktrees/live-stt-l1`, origin/main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`.
-- [x] Make-only, ENV last: `ENV=test-live-stt-l1`; shared Docker flock; existing Compose qualification service, no published ports.
-- [x] No paid API, inference, microphone, model download, Python, publication or deployment.
-- [x] Specific-file staging; make commit only; commits under 150 changed lines; no attribution trailers.
-- [x] Preserve root and other worktrees; Sol serializes shared catalogue/barrel/manifest edits.
+- Scope limited to registry wait for gateway mesh dependency.
+- One migration max in `api/drizzle/*.sql` (if applicable).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/worktrees/ci-gateway-wait` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/llm-mesh/src/speech/**`
-  - `packages/llm-mesh/src/capabilities.ts`
-  - `packages/llm-mesh/src/catalog.ts`
-  - `packages/llm-mesh/src/index.ts`
-  - `packages/llm-mesh/tests/speech-contract.test.ts`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-mesh/README.md`
-  - `packages/llm-mesh/CHANGELOG.md`
-  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `api/tests/unit/gateway-package-version.test.ts`
-  - `package-lock.json`
-  - `.tmp/live-stt/l1/**`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/src/modules/catalog.ts`
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
-  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
-  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
-  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
-  - `packages/llm-gateway/package.json`
+  - `scripts/ci/publishable-manifests.mjs`
+  - `scripts/ci/publishable-pack.test.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
-  - `.track/**`
-  - `api/**`
-  - `ui/**`
-  - `plan/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `scripts/**` (none planned).
+  - `Makefile`
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] Declare BRLIVE-L1-EXn with reason, impact and rollback before extending scope; none planned.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] BRLIVE-L1-EX6: resync after PR 755 preserves BR-E2-EX1 workflow triggers, scoped predicates and Make qualification wiring byte for byte from origin/main. Keep the reviewed L1 implementation; no authored workflow or Track changes. Rollback: revert this merge only if the integration is withdrawn.
-- [x] BRLIVE-L1-EX5: owner-authorized PR 754 resync merges origin/main without rebasing; retain the L1 plan and every imported main change. Imported-only paths must match origin/main byte for byte. No workflow or Track changes; release versions remain above main and registry.
-- [x] BRLIVE-L1-EX4: exact-head CI 40289904989 passes cluster tests but packed qualification cannot open the frozen 0.22.1 candidate archive. Align selected fixture candidate/train versions, ranges and real packed sibling integrity, add a tuple regression and update stale optional-install/skew refusal messages. Impact: installed release qualification uses cluster 0.22.2 / mesh 0.28.0 / gateway 0.21.1; no gate weakened. Rollback: restore fixture metadata/assertions if these candidate bumps are reverted.
-- [x] BRLIVE-L1-EX2: finish the 0.28 additive tuple qualification in cluster packaging tests and update only the API gateway release assertion to 0.21.1. Impact: no API runtime change; new speech subpath and separate evidence catalogue do not alter text routing. Rollback: restore assertions if the release tuple is reverted.
-- [x] BRLIVE-L1-EX3: add the missing mesh 0.28.0 changelog/migration entry. Impact: document public speech and audio-output types. Rollback: remove the entry if 0.28.0 is withdrawn.
-- [x] R1: reproduce and fix all P1/P2 findings; scoped speech 31 passed, full mesh 855 passed, source/test typechecks pass. Final tuple/lint/pack and exact-head CI are reported at handoff.
-- [x] R1 P1-2/P1-3/P2-2: open speech engine identity and independent multi-tuple catalogue; session selector membership and gateway-owned account/resource admission; remove provider speech inheritance.
-- [x] R1 P2-1/P2-3: executable partial-revision projection with immutable finals and stale/range rejection; 0.28.0 migration entry and updated public catalogue documentation.
-- [x] R1 packed follow-through: 15 packaging files / 100 tests pass with real guarded mesh/gateway archives; frozen lock integrity matches CI bytes and incompatible old tuples remain refused.
-- [x] L0 is an open draft; retain exact evidence commit and open G-REVIEW.
-- [x] External Make adapter rebinds existing mesh targets to existing Compose qualification service; tracked build files unchanged.
-- [x] External gates remain with L0 owners; deterministic contract work can proceed per §11.2.
-- [x] BRLIVE-L1-EX1: root npm ci fails after mesh 0.28 bump; refresh proves cluster's `<0.28.0` peer conflict, then gateway's `^0.27.0` installs a second mesh. Align cluster peer/module range to `<0.29.0`, let gateway consume `^0.27.0 || ^0.28.0`, update version fixtures and patch bumps/lock. Impact: admit additive 0.28 with one workspace mesh; no speech config/projection/accounting. Rollback: restore ranges/lock/fixtures if mesh bump is reverted. Verify root dry-run and cluster module/integration tests; publication remains external.
+- [x] BR01-EX1: touch conditional `Makefile` target `wait-llm-gateway-mesh-dependency` only. Reason: the target strips one leading `^` and passes a broken `@sentropic/llm-mesh@0.27.0 || ^0.28.0` spec, so `publish-llm-gateway` can never observe the range. Impact: one recipe line plus pinned `semver` tool setup; no other target changed. Rollback: restore the single recipe line from `origin/main`.
+- [ ] CI run for PR: pending.
 
 ## AI Flaky tests
-- [x] Deterministic tests only; no flaky waiver or live qualification claim.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, sequential implementation; no delegated inference capacity admitted.
-- [ ] Multi-branch not required for L1.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single CI fix with one test cycle.
 
 ## UAT Management (in orchestration context)
-- [x] Review exported types/fixtures in draft PR; no web/Chrome/VSCode interaction changes.
-- [x] Device, native runtime and provider qualification remain downstream.
+- [x] No UI change; no UAT required.
 
 ## Plan / Todo (lot-based)
-- [x] **L1a — Baseline and constraints**
-  - [x] Read lock/rules/template/spec/owner answers and all eight L0 deliverables; mechanical branch check passes.
-  - [x] Write `.tmp/live-stt/l1/baseline.md`: pinned L0 gates, dedicated capacity, releases and placements.
-- [x] **L1b — Tests first**
-  - [x] Add `packages/llm-mesh/tests/speech-contract.test.ts`; red: missing speech/contracts.js before implementation.
-  - [x] Targeted green: 23 tests for negotiation, binary metadata, refusal, partial revisions and existing text compatibility.
-- [x] **L1c — Implementation**
-  - [x] Define exact engine/configuration/target identities and binary media headers with frame-local validation.
-  - [x] Add per-tuple four-state capabilities and fail-closed ordered media negotiation.
-  - [x] Define revisioned transcripts, admitted session receipt and independent duplex adapter port.
-  - [x] Add `speech/{contracts,capabilities,index}.ts`, catalogue lookup and exports.
-  - [x] Registry latest 0.27.1 checked before bump; prepare 0.28.0 and update root workspace lock version.
-- [x] **L1d — Docs consolidation**
-  - [x] Document all public exports and provider/coordinator ownership boundaries in package README.
-  - [x] Document public surface and evidence in README and `.tmp/live-stt/l1/validation.md`.
-- [x] **L1e — Final validation and draft handoff**
-  - [x] Cluster compatibility green: 73 module tests + 54 integration tests; packed imports/types and workspace npm ci dry-run pass.
-  - [x] BRLIVE-L1-EX1 red: topology rejects 0.28.0; add its admission regression before range alignment.
-  - [x] Align peer/module range and installed-version fixtures; prepare cluster 0.22.2 above refreshed published 0.22.1.
-  - [x] Mesh regression: 47 files / 847 tests pass; source and speech-test typecheck and changed-source lint pass.
-  - [x] Scoped red/green, full mesh tests, typecheck, lint, build and packed-export checks.
-  - [x] Scope check before every commit, whitespace/line-count/trailer checks and ENV cleanup.
-  - [x] Review selection failed: no entitled/current-day complementary reviewer allocation; `.tmp/live-stt/l1/review.md`, G-REVIEW open.
-  - [x] Push draft PR #754 with plan as body; CI run 40246816381 observed in progress at initial head 0e4a0d33e. Final exact-head state reported at handoff.
-
-## Deferred to later live-speech lots
-- [x] Configuration projection, coordinator/fences/reconciliation, adapters, accounting, capacity reservations, publication and deployment.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read packet, `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `DOCKER-LOCK.md`, `harness-using-harness`, `durable-test-collateral`.
+  - [x] Create worktree `tmp/worktrees/ci-gateway-wait` on `origin/main` as `fix/ci-gateway-mesh-range-wait`.
+  - [x] Confirm scope and declare `BRCGW-EX1` before touching `Makefile`.
+- [x] **Lot 1 — Range-aware wait**
+  - [x] Extend `scripts/ci/publishable-manifests.mjs` wait to resolve a full semver range against fresh packuments.
+  - [x] Pass the full declared requirement from `wait-llm-gateway-mesh-dependency` (no caret stripping).
+  - [x] Add maintained tests: single caret, `||` range, unsatisfiable range.
+  - [x] Lot gate:
+    - [x] `make test-publishable-manifests ENV=test-ci-gateway-wait` (88 pass).
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint
+  - [ ] Retest UI (cf Lot1, copy checklist)
+  - [ ] Retest API (cf Lot1, copy checklist)
+  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
+  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
