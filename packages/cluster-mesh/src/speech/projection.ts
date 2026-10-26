@@ -1,7 +1,12 @@
-import { getModelSpeechCapabilities, negotiateSpeech } from '@sentropic/llm-mesh/speech';
+import '../modules/topology-guard-llm-mesh.js';
+import { createModuleRegistry } from '../modules/registry.js';
 import type { SpeechBinding, SpeechCapabilities, SpeechCapabilityName, SpeechEngineCatalogue,
   SpeechNegotiationResult, SpeechPlacement, SpeechStage } from '@sentropic/llm-mesh/speech';
 import { freezeSpeechSnapshot, type SpeechEgress, type SpeechProfile, type SpeechProfileSelection } from './config.js';
+
+// Inspect version/export metadata before evaluating the optional speech peer.
+const { getModelSpeechCapabilities, negotiateSpeech } =
+  await createModuleRegistry().load('speech') as typeof import('@sentropic/llm-mesh/speech');
 
 export interface SpeechProjectionContext {
   /** Trusted host scope/policy, never copied from the requested profile. */

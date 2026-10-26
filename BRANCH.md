@@ -47,6 +47,7 @@
   - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
 
 ## Feedback Loop
+- [x] PR757-P2-1: eight tests first fail on missing speech registration; speech now loads through the typed registry with >=0.28.0 <0.29.0 metadata/member checks before provider evaluation, retaining existing text ranges and the topology guard.
 - [x] BRLIVE-L1C-EX3: register speech with the existing guarded module catalogue and extend the packed skew probe. Scope adds only module IDs and tuple-skew assertions; rollback removes that entry and probe. Required by PR757-P2-1; broad text-peer compatibility is retained.
 - [x] PR757-P1: tests first reproduced three refusals; chained profiles now allow STT-only or TTS-only, and native duplex permits independently selected companion stages. Empty profiles and requirements on absent stages remain refused.
 - [x] Draft #757 targets feat/live-stt-l1 to isolate this lot. Existing CI triggers only for main PRs, so exact-head workflow query returns no runs. Owner/integrator must merge #754 then retarget #757 to main and obtain its CI result before merge; no workflow gate changed.
