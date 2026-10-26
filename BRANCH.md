@@ -57,10 +57,10 @@ Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only,
   - [x] Read packet, DOCKER-LOCK, plan-v2 W0-close.b row, Sol r2 review, MASTER rules, both skills.
   - [x] No compose stack in this lot (fake-kubectl guard tests only); no ports allocated.
   - [x] `harness check branch` passes on this BRANCH.md.
-- [ ] **Lot 1 — Makefile guards plus manifest (W0-EX1)**
-  - [ ] Reject prod/preprod PG, namespaces and buckets; refuse absent identity and unsafe defaults, all before any write.
-  - [ ] Remove swallowed checksum/count failures; print the B03 manifest block.
-  - [ ] `make -n` dry-run plus `scope-check` before commit.
+- [x] **Lot 1 — Makefile guards plus manifest (W0-EX1)**
+  - [x] Reject prod/preprod PG, namespaces and buckets; refuse absent identity and unsafe defaults, all before any write.
+  - [x] Remove swallowed checksum/count failures; print the B03 manifest block.
+  - [x] `make -n` dry-run plus `scope-check` before commit.
 - [ ] **Lot 2 — Runbook plus isolation test**
   - [ ] `docs/runbooks/app-cm-baseline-restore.md` with the exact tenant command for W0-close.c.
   - [ ] `scripts/test-pgbackup-restore-isolation.sh` (shell, fake kubectl, no cluster).
