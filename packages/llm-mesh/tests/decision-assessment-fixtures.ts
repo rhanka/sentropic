@@ -15,11 +15,12 @@ export function assessmentFixture() {
     split: i < 200 ? 'tuning' as const : 'held-out' as const, gold: i % 2 === 0,
     source: 'recorded:domain-corpus', rights: 'owner-permission', rationale: 'Evidence spans reviewed.',
     annotators: ['domain-a', 'domain-b'], adjudication: 'agreed', slices: ['near-boundary'] }));
-  const rows = samples.map((sample, i) => ({ callId: `call-${i}`, sampleId: sample.id,
+  const rows = samples.map((sample, i) => ({ callId: `call-${i}`, sampleId: sample.id, inputDigest: sample.inputDigest,
     population: sample.split, attempts: 1 as const, outcome: 'verdict' as const, pass: sample.gold,
     score: sample.gold ? 1 : 0, label: null, internalWorkUnits: 1, billableUnits: 1000,
     amountMicroUsd: '42', pendingReconciliation: false, receiptRef: `recorded:receipt-${i}` }));
   for (let i = 0; i < 120; i++) rows.push({ ...rows[200 + i], callId: `extra-${i}`,
+    inputDigest: i < 60 ? digestStructuredArtifact({ variant: i }) : rows[200 + i].inputDigest,
     population: i < 30 ? 'injection' : i < 60 ? 'invariance' : 'repeat' } as never);
   const assessment: DecisionAssessment = { schemaVersion: 1, scope, date: '2026-10-26',
     executionDigest: decisionExecutionDigest(descriptor), evidenceKind: 'recorded', criterion: request.criterion,
