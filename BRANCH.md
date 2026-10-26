@@ -32,6 +32,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] Add explicit tests for 2s pending Stop, disconnect/reconnect fencing, completed-epoch late Stop and typed-acceptance replay after durable restart.
 - [x] First full core run: 17/19 pass; two ordering assertions expected lowercase substrings while authority errors start Action/Stale. Match the observed identity/revision error messages; no behavior change.
 - [x] Playback uses the L1 binary header shape (session/stream identity and negotiated format); add cross-session and independent-stream ordering assertions.
 - [x] Admission review adds tests requiring an explicit non-dispatching duplicate receipt, single-use approvals and safe record keys; callers must never infer dispatch permission from an absent result.

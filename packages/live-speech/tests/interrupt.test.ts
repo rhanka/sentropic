@@ -3,6 +3,45 @@ import { SpeechCoordinator, createSession } from '../src/core/session.js';
 import { commit, fixture, mutation, scope, TestJournal } from './fixtures.js';
 
 describe('durable interruption', () => {
+  it('should return fence acceptance while native Stop is pending and expose the 2s state', async () => {
+    const f = fixture();
+    let now = 100;
+    const core = new SpeechCoordinator(f.journal, f.control, f.authority, f.stopPlayback, () => now);
+    const turn = await commit(core);
+    await core.send(turn);
+    vi.mocked(f.control.interrupt).mockImplementation(() => new Promise(() => undefined));
+    await core.interrupt(turn, 'stop');
+    expect(await core.interruptStatus(turn)).toMatchObject({ state: 'stopping', effectsPending: [] });
+    now = 2100;
+    expect(await core.interruptStatus(turn)).toMatchObject({ state: 'pending' });
+    await core.complete(turn, 'interrupted');
+    expect(await core.interruptStatus(turn)).toMatchObject({ state: 'stopped' });
+  });
+
+  it('should fence disconnects and keep old admissions closed on reconnect', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    await f.core.send(turn);
+    await f.core.disconnect(scope);
+    await expect(f.core.admitTool(turn, mutation())).rejects.toThrow('fenced');
+    await expect(f.core.reconnect(scope, 1)).rejects.toThrow('epoch');
+    await f.core.reconnect(scope, 2);
+    await expect(f.core.admitTool(turn, mutation())).rejects.toThrow('fenced');
+    expect(f.journal.state.connectionEpoch).toBe(2);
+  });
+
+  it('should not send a late Stop for a completed epoch after the successor starts', async () => {
+    const f = fixture();
+    const old = await commit(f.core);
+    await f.core.send(old);
+    await f.core.complete(old, 'completed');
+    const next = await commit(f.core, 'next');
+    await f.core.send(next);
+    await f.core.interrupt(old, 'late-stop');
+    await f.core.flushInterrupt(old);
+    expect(f.control.interrupt).not.toHaveBeenCalled();
+    expect((await f.core.status(next)).phase).toBe('running');
+  });
   it('should never start when Stop precedes native submission', async () => {
     const { core, control, stopPlayback } = fixture();
     const turn = await commit(core);
