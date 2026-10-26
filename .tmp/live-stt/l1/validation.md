@@ -1,5 +1,25 @@
 # L1 verification receipt
 
+## PR #754 Opus r1 corrections
+
+- Tests preceded fixes in `85d194a7e`: seven catalogue/selector failures reproduced;
+  the executable partial-revision scenario then failed on its missing projection function.
+- Scoped speech: **31 passed**. Full mesh: **47 files / 855 tests passed**.
+  Source and isolated strict speech-test typechecks pass.
+- Independent `SpeechEngineCatalogue` entries retain the full open engine tuple,
+  with multiple adapters/revisions/placements and no chat-profile requirement.
+  Provider and model capabilities no longer carry a speech field to spread.
+- Negotiation checks only the six engine identity fields; language/voice/region
+  use supported sets. Account/resource references survive for gateway admission.
+- Transcript tests execute partial replacements, stale/range refusal and final
+  immutability. Opus output-only negotiation, missing feature evidence and every
+  existing text model are covered. Package 0.28.0 has a migration entry.
+- BRLIVE-L1-EX2 explicitly admits the additive 0.28 tuple through cluster packaging
+  tests and changes only the API gateway release assertion from 0.21.0 to 0.21.1.
+- The packed consumer now verifies all eight speech artifacts and the independent
+  catalogue exports/array return type. Final lint/pack/cluster and exact-head CI
+  evidence are reported at handoff; earlier receipts below describe the initial revision.
+
 Author: codex / gpt-6.1-sol / high. Scope: deterministic contract and packaging evidence, no runtime voice acceptance. Input/head/owner/gate references are in [baseline.md](baseline.md); independent-review selection is in [review.md](review.md).
 
 ## Test-first evidence
