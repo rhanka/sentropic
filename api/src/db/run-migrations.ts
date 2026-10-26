@@ -70,6 +70,7 @@ async function runControlMigrations(db: NodePgDatabase): Promise<void> {
  */
 export async function runMigrations(migrationPool: Pool = pool): Promise<void> {
   const client = await migrationPool.connect();
+  let migrationFailure: Error | undefined;
   try {
     // Retain the lock-owning connection across Drizzle's stream transactions.
     await client.query(`SELECT pg_advisory_lock(hashtext('sentropic:api-migrations'))`);
@@ -78,13 +79,18 @@ export async function runMigrations(migrationPool: Pool = pool): Promise<void> {
     await reconcileSettingsUserScopeSchema(db);
     await runControlMigrations(db);
     await installArtifactPackageAssets(client);
+  } catch (error) {
+    migrationFailure = error instanceof Error ? error : new Error(String(error));
+    throw error;
   } finally {
+    let unlockFailure: Error | undefined;
     try {
       await client.query(`SELECT pg_advisory_unlock(hashtext('sentropic:api-migrations'))`);
-      client.release();
     } catch (error) {
-      // An uncertain unlock must never return a potentially locked session to the pool.
-      client.release(error instanceof Error ? error : new Error(String(error)));
+      unlockFailure = error instanceof Error ? error : new Error(String(error));
     }
+    // Failed migration/cleanup sessions are destroyed, never recycled.
+    client.release(unlockFailure ?? migrationFailure);
+    if (unlockFailure && !migrationFailure) throw unlockFailure;
   }
 }
