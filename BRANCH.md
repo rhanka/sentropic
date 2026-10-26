@@ -39,7 +39,8 @@
 ## Feedback Loop
 - [x] Owner update closes common-rule/Immo E2-D1 and Comments ACK gate; retained ACK in root `.tmp/engram-e2-host-tuple/e0-entry-check-2026-10-26.md`.
 - [ ] Integration-target bump probe: retain unchanged-version failure then corrected-version success here; no implementation acceptance before both receipts.
-- [ ] Register E0 dependencies, worktree/BRANCH and environment ownership in PLAN.md within this PR.
+- [x] Register E0 dependencies, worktree/BRANCH and environment ownership in PLAN.md within this PR.
+- [x] Negative-probe source: initial C6 identity inventory only; package version unchanged from the actual integration base (0.22.2).
 - [x] Owner sanctions `test-e2-int`; E0 exclusively owns that Compose qualification project while holding the shared Docker lock; no host ports published.
 - [x] Integration fast-forwarded and pushed to main `6c3f9f04a`; no conflict or P2 change. #709 succession: E6 projection, E7 binding, E10 installed qualification; SQLite checkpoint 2026-10-30.
 - [x] No E0 source, assets, dependency locks or pre-candidate manifests changed before admission.
