@@ -47,6 +47,7 @@ import { callLLMStream } from '../../src/services/llm-runtime';
 import { generateFreeformPptx } from '../../src/services/pptx-generation';
 import { putObject } from '../../src/services/storage-s3';
 import { chatService } from '../../src/services/chat-service';
+import { CHAT_COMMON_PROMPTS } from '../../src/config/default-chat-system';
 
 type StreamEvent = { type: string; data: unknown };
 
@@ -59,7 +60,15 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
   let workspaceId: string;
   let folderId: string;
 
+  // Retirement bump (BR96-EX20): the successor default model supports reasoning,
+  // so the effort evaluator would consume the first mocked stream of every test.
+  // These tool-wiring suites run without the eval template (medium fallback, no
+  // extra LLM call), as before the bump; evaluation stays covered by dedicated tests.
+  let savedReasoningEffortEvalTemplate: string | undefined;
+
   beforeEach(async () => {
+    savedReasoningEffortEvalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval;
+    CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
     userId = createId();
     await db.insert(users).values({
       id: userId,
@@ -99,6 +108,10 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
     await db.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
+    if (savedReasoningEffortEvalTemplate !== undefined) {
+      CHAT_COMMON_PROMPTS.reasoning_effort_eval = savedReasoningEffortEvalTemplate;
+      savedReasoningEffortEvalTemplate = undefined;
+    }
     vi.clearAllMocks();
   });
 
