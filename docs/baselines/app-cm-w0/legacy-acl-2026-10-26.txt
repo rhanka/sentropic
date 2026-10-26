@@ -1,0 +1,53 @@
+2026-10-26T07:40:37Z
+
+NAMESPACE sentropic
+ current_database | current_setting |        clock_timestamp        
+------------------+-----------------+-------------------------------
+ app              | on              | 2026-10-26 07:40:38.150127+00
+(1 row)
+
+ t  |  w  |  role  | memberships 
+----+-----+--------+-------------
+ T1 | W1  | admin  |           2
+ T1 | W1  | editor |           1
+ T1 | W11 | admin  |           1
+ T1 | W11 | editor |           1
+ T1 | W2  | admin  |           1
+ T1 | W7  | admin  |           1
+(6 rows)
+
+ t  |  w  | messages | missing_scope | missing_user | owner_messages | member_messages 
+----+-----+----------+---------------+--------------+----------------+-----------------
+ T1 | W1  |      107 |             0 |            0 |             28 |             107
+ T1 | W11 |        8 |             0 |            0 |              8 |               8
+ T1 | W2  |        2 |             0 |            0 |              2 |               2
+ T1 | W7  |       20 |             0 |            0 |             20 |              20
+    |     |        4 |             4 |            0 |              0 |               0
+(5 rows)
+
+ documents | missing_scope | missing_owner 
+-----------+---------------+---------------
+        15 |             0 |             0
+(1 row)
+
+
+NAMESPACE sentropic-preprod
+ current_database | current_setting |        clock_timestamp        
+------------------+-----------------+-------------------------------
+ app              | on              | 2026-10-26 07:40:39.223715+00
+(1 row)
+
+ t | w | role | memberships 
+---+---+------+-------------
+(0 rows)
+
+ t | w | messages | missing_scope | missing_user | owner_messages | member_messages 
+---+---+----------+---------------+--------------+----------------+-----------------
+(0 rows)
+
+ documents | missing_scope | missing_owner 
+-----------+---------------+---------------
+         0 |             0 |             0
+(1 row)
+
+2026-10-26T07:40:39Z

@@ -1,0 +1,12 @@
+2026-10-26T07:40:36Z
+
+NAMESPACE sentropic
+[{"current_database":"app","current_setting":"on","clock_timestamp":"2026-10-26T07:40:38.329Z"}]
+{"backend":"s3","bucketConfigured":true,"referenceCount":14}
+{"source":"document","references":13,"heads":13,"downloads":13,"bytes":24780024,"sizeMismatches":0,"publicGrants":0,"nonOwnerGrants":0,"aclRead":13,"anonymousReadable":0,"failures":{},"contentDigestSetSha256":"3df7f4ec58c321d56946888779d5c81b6134edc10a4bb40971d124716e6817ae"}
+{"source":"job","references":1,"heads":1,"downloads":1,"bytes":15059783,"sizeMismatches":0,"publicGrants":0,"nonOwnerGrants":0,"aclRead":1,"anonymousReadable":0,"failures":{},"contentDigestSetSha256":"cabbf5fb6f22ebb24d7a753101c6b9e86882d7029b482da1d2c477f34a4f3f7a"}
+
+NAMESPACE sentropic-preprod
+[{"current_database":"app","current_setting":"on","clock_timestamp":"2026-10-26T07:41:00.543Z"}]
+{"backend":"s3","bucketConfigured":true,"referenceCount":0}
+2026-10-26T07:41:00Z
