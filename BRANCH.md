@@ -109,8 +109,8 @@
   - [x] Create `tmp/worktrees/mem-e3` on E2 and pass mechanical harness branch check.
   - [x] Use existing Compose qualification targets with shared Docker lock and cleanup after each step; ENV last.
 - [ ] **Lot 1 — Tests first**
-  - [ ] Add `tests/storage/commit-result-corpus.ts`: exact opaque result/time/epoch, absence, copy isolation, conflicting intent.
-  - [ ] Add `tests/storage/postgres-result-recovery.spec.ts`: lost ACK, process restart, new epoch, current grant/fence, foreign scopes, transient failure.
+  - [x] Add `tests/storage/commit-result-corpus.ts`: exact opaque result/time/epoch, absence, copy isolation, conflicting intent.
+  - [x] Add `tests/storage/postgres-result-recovery.spec.ts`: lost ACK, process restart, new epoch, current grant/fence, foreign scopes, transient failure.
   - [ ] Add `tests/storage/commit-result-process.ts` for independent process recovery; observe focused red run.
 - [ ] **Lot 2 — Implementation**
   - [ ] Add scoped lookup over existing immutable commit receipts; reuse stored moduleResult exclusively.
