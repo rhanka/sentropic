@@ -134,7 +134,7 @@ function parseProfile(value: unknown): SpeechProfile {
     allowedEgress: list(p.allowedEgress, (item) => choice(item, ['device', 'cluster', 'provider']), true),
     requiredCapabilities, inputFormats: list(p.inputFormats, format, true),
     outputFormats: list(p.outputFormats, format, true), maxDurationMs: p.maxDurationMs as number,
-    maxCostUsd: p.maxCostUsd, fallbacks: list(p.fallbacks ?? [], selection),
+    maxCostUsd: p.maxCostUsd as number, fallbacks: list(p.fallbacks ?? [], selection),
   };
 }
 

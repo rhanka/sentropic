@@ -2,6 +2,7 @@
 # Appended after the existing cold-workspace bootstrap, inside the ENV Compose service.
 set -eu
 /tmp/cm-tools/node_modules/.bin/tsc -p tsconfig.json
+/tmp/cm-tools/node_modules/.bin/tsc --noEmit -p tsconfig.test.json
 /tmp/cm-tools/node_modules/.bin/tsc --noEmit --strict --skipLibCheck --target ES2022 \
   --module NodeNext --moduleResolution NodeNext tests/speech-config.spec.ts tests/speech-projection.spec.ts
 npm_config_cache=/tmp/npm-cache npm install --prefix /tmp/l1c-lint --ignore-scripts \
