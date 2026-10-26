@@ -32,9 +32,16 @@ import { createStaticAuthorityPort } from '../kernel.js';
 import { HmacExactHeadBoundaryProvider, type ChainBoundaryProvider } from '../tokens.js';
 import { PgRoots, pgJsonBytes, type PgRoot } from './roots.js';
 import { PgTransactions } from './transactions.js';
-import { decodePgText, decodePgUtf8 } from './codec.js';
+import { decodePgUtf8 } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { loadPgAssets, verifyPgInstallation } from './migrations.js';
+import { CanonicalInstanceRegistry } from '../instance-ownership.js';
+import {
+  acquirePgInstanceOwnership,
+  resolvePgStoreKey,
+  type PgInstanceOwnershipSession,
+} from './instance-ownership.js';
+import { assertNoDeprecatedAssetNames, chainPossessionGuard, ensurePgModuleRecord } from './instance-guard.js';
 import { validatePgLayout, type PgSession, type PostgresStorageOptions } from './protocol.js';
 import { validateModuleDescriptor } from '../descriptor.js';
 const freezeRegistration = (value: unknown): void => {
@@ -75,6 +82,7 @@ export class PgCore {
   constructor(
     readonly options: PostgresStorageOptions,
     readonly incarnation: string,
+    readonly ownership: PgInstanceOwnershipSession | null = null,
   ) {
     if (typeof options.cursorSecret !== 'string' || !options.cursorSecret.trim()) {
       throw new StorageInvalidCommandError('durable Postgres storage requires a stable cursorSecret');
@@ -236,35 +244,36 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
   const provisional = new PgCore(options, options.incarnation ?? `store:${randomUUID()}`);
   options = provisional.options;
   const assets = options.assets ?? (await loadPgAssets());
-  const incarnation = await provisional.tx.run(false, async (session) => {
+  assertNoDeprecatedAssetNames(assets);
+  const opened = await provisional.tx.run(false, async (session) => {
     await verifyPgInstallation(session, options.layout, assets, options.history);
-    await session.execute({
-      text: `INSERT INTO ${provisional.roots.schema}.modules(module, incarnation) VALUES($1, $2) ON CONFLICT(module) DO NOTHING`,
-      values: [options.moduleId, provisional.incarnation],
-    });
-    const result = await session.execute({
-      text: `SELECT incarnation, descriptor_digest FROM ${provisional.roots.schema}.modules WHERE module=$1`,
-      values: [options.moduleId],
-    });
-    const stored = decodePgText(result.rows[0]?.incarnation);
-    if (options.incarnation !== undefined && options.incarnation !== stored)
-      throw new PostgresStorageError('configuration');
     const wanted = provisional.options.descriptor
       ? createHash('sha256').update(JSON.stringify(provisional.options.descriptor), 'utf8').digest('hex')
       : null;
-    const registered = result.rows[0]?.descriptor_digest;
-    if (registered !== null && registered !== wanted) throw new PostgresStorageError('configuration');
-    if (wanted && registered === null) {
-      const pinned = await session.execute({
-        text: `UPDATE ${provisional.roots.schema}.modules SET descriptor_digest=$1
-        WHERE module=$2 AND descriptor_digest IS NULL
-        AND NOT EXISTS(SELECT 1 FROM ${provisional.roots.schema}.scopes
-        WHERE module=$2 AND version>0) RETURNING module`,
-        values: [wanted, options.moduleId],
-      });
-      if (pinned.rows.length !== 1) throw new PostgresStorageError('configuration');
-    }
-    return stored;
+    const stored = await ensurePgModuleRecord(session, provisional.roots.schema, {
+      moduleId: options.moduleId,
+      incarnation: options.incarnation,
+      effectiveIncarnation: provisional.incarnation,
+      wantedDescriptorDigest: wanted,
+    });
+    // G-P0a: the open transaction retains the winning ownership pair.
+    const storeKey = resolvePgStoreKey(options.layout.dataSchema, options.moduleId);
+    const ownership = await acquirePgInstanceOwnership(
+      session,
+      provisional.roots.schema,
+      storeKey,
+      options.moduleId,
+      options.instanceRegistry ?? new CanonicalInstanceRegistry(),
+    );
+    return { stored, ownership };
   });
-  return new PgCore(options, incarnation);
+  // G-P0b: durable possession is verified before the caller hook, reusing
+  // the existing onCommitPossession seam (no transaction rewiring).
+  const readCommitted = <T>(operation: (session: PgSession) => Promise<T>): Promise<T> =>
+    provisional.tx.run(true, operation);
+  const chained: PostgresStorageOptions = {
+    ...options,
+    onCommitPossession: chainPossessionGuard(opened.ownership.verify, readCommitted, options.onCommitPossession),
+  };
+  return new PgCore(chained, opened.stored, opened.ownership);
 };
