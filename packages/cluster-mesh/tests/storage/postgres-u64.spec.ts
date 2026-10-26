@@ -87,6 +87,7 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
     try {
       const root = await fixture.open();
       const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
+      await root.bindNew(grant);
       await root.provisionFence(grant, { fenceId: 'u64', epoch: '9223372036854775808' } as unknown as WriterFence);
       await expect(root.provisionFence(grant, { fenceId: 'u64', epoch: '1' } as unknown as WriterFence)).rejects.toMatchObject({ code: 'invalid-command' });
       const reopened = await fixture.open();

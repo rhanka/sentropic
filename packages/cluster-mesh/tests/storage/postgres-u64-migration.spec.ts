@@ -74,7 +74,7 @@ describe.skipIf(!pgEnabled)('consumed-counter migration application', () => {
         text: `SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema=$1 AND ((table_name='scopes' AND column_name IN ('version','sequence')) OR (table_name='fences' AND column_name='epoch') OR (table_name='journal' AND column_name='sequence') OR (table_name='boundaries' AND column_name IN ('version','sequence')))`,
         values: [name],
       }));
-      expect(columns.rows).toHaveLength(7);
+      expect(columns.rows).toHaveLength(6);
       for (const row of columns.rows) expect(row.data_type).toBe('numeric');
       const checks = await tx.run(true, (session) => session.execute({
         text: `SELECT conname, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conrelid IN (to_regclass($1), to_regclass($2), to_regclass($3), to_regclass($4)) AND conname LIKE '%_u64'`,
