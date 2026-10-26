@@ -406,6 +406,33 @@ export function releaseContinuity(records, endpoints = {}) {
     endpoints: perEndpoint };
 }
 
+// Combined traffic is evaluated once: main's release slots are already in
+// the peak, so do not subtract the PR reserve a second time. A job-pair
+// witness proves actual execution overlap, not just overlapping run ages.
+export function contentionReceipt(captures) {
+  const sets = captures.map(capture => dedupeJobs(captureRecords(capture)).jobs);
+  const jobs = dedupeJobs(sets.flat()).jobs;
+  const complete = captures.every(capture => capture.run?.status === 'completed');
+  const overlaps = [];
+  for (let left = 0; left < sets.length; left++) for (let right = left + 1; right < sets.length; right++) {
+    let witness = null;
+    for (const a of sets[left]) for (const b of sets[right]) {
+      if (a.conclusion === 'skipped' || b.conclusion === 'skipped') continue;
+      if (durationSeconds(a.startedAt, a.completedAt) === null || durationSeconds(b.startedAt, b.completedAt) === null) continue;
+      const seconds = (Math.min(toMs(a.completedAt), toMs(b.completedAt)) - Math.max(toMs(a.startedAt), toMs(b.startedAt))) / 1000;
+      if (seconds > (witness?.seconds ?? 0)) witness = { seconds, left: jobKey(a), right: jobKey(b) };
+    }
+    overlaps.push({ leftRun: captures[left].run?.id, rightRun: captures[right].run?.id, witness });
+  }
+  const slots = captures[0]?.capacity?.availableSlots ?? null;
+  return { complete, observedPeak: concurrencyPeak(jobs),
+    admission: admissionDecision({ peak: complete ? concurrencyPeak(jobs) : null, availableSlots: slots }),
+    overlaps, cancellation: cancellationOwnership(jobs),
+    releases: captures.filter(capture => capture.run?.head_branch === 'main').map(capture => ({
+      runId: capture.run.id, attempt: capture.run.run_attempt, sourceSha: capture.run.head_sha,
+      continuity: releaseContinuity(captureRecords(capture), capture.endpoints) })) };
+}
+
 // Summarize one captured run file. Buckets are disjoint: skipped rows are
 // reported separately and never counted as measured; rows with timestamp gaps
 // are unmeasured, never zero-filled. Partial means the capture holds fewer
@@ -507,6 +534,9 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const expectedIndex = args.indexOf('--expected-jobs');
   const expectedJobCount = expectedIndex === -1 ? null : Number(args[expectedIndex + 1]);
   const captured = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const competitors = args.flatMap((arg, index) => arg === '--competing-file'
+    ? [JSON.parse(fs.readFileSync(args[index + 1], 'utf8'))] : []);
+  const contention = competitors.length ? contentionReceipt([captured, ...competitors]) : null;
   const records = captureRecords(captured);
   const { jobs } = dedupeJobs(records);
   const runCreatedAt = captured.runCreatedAt ?? captured.run?.created_at ?? null;
@@ -538,5 +568,5 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     queueSeconds: queueSeconds(record), steps: stepSpans(record),
   }));
   console.log(JSON.stringify({ file, identity, summary, readiness, queue, runnerMinutes: minutes, delivery, cache,
-    admission, budgets, scheduling, cancellation, continuity, executions }, null, 2));
+    admission, budgets, scheduling, cancellation, continuity, contention, executions }, null, 2));
 }
