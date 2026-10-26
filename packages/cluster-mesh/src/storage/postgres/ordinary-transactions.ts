@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   validateAtomicUnit,
   validateCommitOptions,
+  validateU64AtomicUnit,
   type AtomicUnit,
   type CommitOptions,
   type CommitReceipt,
@@ -38,7 +39,10 @@ export const applyPgTransaction = async (
   try {
     const unit = ownPgValue(input);
     const limits = core.work(options.limits);
-    if (!validateAtomicUnit(unit, limits).ok || !validateCommitOptions(options).ok)
+    if (
+      (!validateAtomicUnit(unit, limits).ok && !validateU64AtomicUnit(unit, limits).ok) ||
+      !validateCommitOptions(options).ok
+    )
       throw new StorageInvalidCommandError('invalid atomic input');
     const bytes = Buffer.byteLength(JSON.stringify(unit), 'utf8');
     if (
