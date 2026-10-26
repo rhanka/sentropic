@@ -36,6 +36,7 @@ describe('operational usage journal', () => {
     await expect(usage.record(entry(1))).rejects.toThrow('estimate');
     await expect(usage.record({ ...entry(), signature: 'forged' })).rejects.toThrow('signature');
     await expect(usage.record({ ...entry(), audio: new Uint8Array(2) } as UsageEntry)).rejects.toThrow('field');
+    await expect(usage.record({ ...entry(), nativeTurnId: new Uint8Array(2) } as unknown as UsageEntry)).rejects.toThrow('identity');
     await usage.record(entry());
     await expect(usage.record({ ...entry(), capturedSeconds: 2 })).rejects.toThrow('conflict');
     await expect(usage.record({ ...entry(1), attemptId: 'other' })).rejects.toThrow('identity');

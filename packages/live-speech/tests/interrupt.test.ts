@@ -97,6 +97,7 @@ describe('durable interruption', () => {
     vi.mocked(f.control.start).mockRejectedValue(new Error('lost ACK'));
     const turn = await commit(f.core);
     await expect(f.core.send(turn)).rejects.toThrow('lost ACK');
+    await expect(f.core.admitTool(turn, mutation())).rejects.toThrow('fenced');
     const restarted = fixture(f.journal.restart());
     await restarted.core.recover(turn);
     expect(restarted.control.query).toHaveBeenCalledWith(turn);
@@ -107,5 +108,13 @@ describe('durable interruption', () => {
   it('should refuse an enabled class without an intercept', () => {
     expect(() => new TestJournal(createSession(scope, { native: 'read-only' }, [], []))).toThrow('coverage');
     expect(SpeechCoordinator).toBeDefined();
+  });
+
+  it('should never treat inherited record keys as intercepted tool classes', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    await f.core.send(turn);
+    await expect(f.core.admitTool(turn, { ...mutation(), toolClass: 'toString' })).rejects.toThrow();
+    expect(Object.keys(f.journal.state.effects)).toHaveLength(0);
   });
 });
