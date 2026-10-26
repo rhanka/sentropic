@@ -43,7 +43,7 @@
 - [ ] `attention`: 21 October tenant metadata and 22 October product/control migration frontiers plus latest backup receipts are recorded without refusal; endpoint/config hashes, package/runtime state, private object/restore/ACL/disposition evidence remain open.
 - [x] `acknowledge`: F3/F4 owner answers Q1–Q4 copied verbatim into owner-decisions.md; owner holds all human roles, agents execute, no staffed windows or temporal slot bookings are required because there are no users; owner signs with a later-enrolled dedicated identity/key.
 - [ ] `blocked`: W0 acceptance remains gated by F1/B01–B03, F2/B04, B06 nonlocal migration-0017 reconciliation and exact-head independent review B08 in `docs/baselines/app-cm-w0/authorization.md`; later enrollment/infra/promotion receipts retain their downstream gates.
-- [x] `clarification`: D2 owns control 0012–0016 and O1 owns 9495/5695/1595; W1 reserves 0017, with app test ports 9710–9717 and e2e 9720–9727 (full triples in reservations.md).
+- [x] `clarification`: D2/#677 owns control 0012–0019; W1 withdraws 0017 and reserves verified-free 0020. O1 owns 9495/5695/1595; app ports remain in reservations.md; W2.b alone reconciles API manifest/root/API locks.
 - [x] Track import belongs to the designated root writer; this concurrent worktree updates mergeable source records only (`track-operation` contract).
 
 ## AI Flaky tests
@@ -75,6 +75,7 @@
   - [x] 21 October B01 follow-up: verify branch/pull; tenant-admin GETs only; record prod/preprod/remote running digests, pod UID/start, controller chains, content-role absence and config names/resourceVersions; delete temporary mode-600 kubeconfig; B02/B03 remain pending, no DB access.
   - [x] 22 October B02/B03 follow-up: verify branch/pull; owner-authorized read-only migration discovery/count/max/frontiers in prod/preprod and latest backup status/upload receipts recorded in migration-backup-readings-2026-10-22.md; temporary mode-600 kubeconfigs deleted, no refusal; runtime/package state, private object checkpoint and restore proof remain pending.
 - [ ] **Lot 1 — Frozen implementation handoffs**
+  - [x] W0-close.d/B06: 747 ref / 263 worktree nonlocal scan; withdraw 0017, reserve control 0020, freeze main/upstream/next-branch bases and W2.b's sole lock-writer turn.
   - [x] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
   - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
   - [x] Pin P canonical verifier, vectors and trust/key authorization contract in `promotion-contract.md` and `verifier-vectors.json`; Q3/Q4 settle signer/key source, with enrollment and public fingerprint deferred under B05.
