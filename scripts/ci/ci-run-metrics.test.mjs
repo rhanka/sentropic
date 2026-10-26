@@ -255,6 +255,17 @@ test('should not treat queued API placeholder timestamps as executed zero waits'
   assert.equal(row.headSha, 'abc');
 });
 
+test('should exclude cancelled jobs that never received a runner despite positive API intervals', () => {
+  const rows = captureRecords({ run: { id: 1 }, jobs: [{ id: 2, run_id: 1, run_attempt: 1,
+    name: 'deploy-preprod', status: 'completed', conclusion: 'cancelled', runner_id: 0,
+    created_at: '2026-10-26T15:46:09Z', started_at: '2026-10-26T15:46:09Z', completed_at: '2026-10-26T15:52:57Z' }] });
+  assert.equal(concurrencyPeak(rows), 0);
+  assert.equal(queueSeconds(rows[0]), null);
+  assert.equal(runnerMinutes(rows).totalMinutes, 0);
+  assert.equal(summarizeRun(rows).measured, 0);
+  assert.equal(endpointReadiness(rows, { preproduction: ['deploy-preprod'] }).preproduction.status, 'partial');
+});
+
 test('should exclude timestamped skipped rows from execution queue statistics', () => {
   const executed = job({ queuedAt: '2026-10-18T09:58:57.000Z' });
   const skipped = job({ conclusion: 'skipped', queuedAt: executed.startedAt });
