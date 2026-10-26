@@ -25,6 +25,57 @@ commitment remain outside this package. CLI enrollment uses an encrypted local
 keyring; portal mode remains injection-only. Override the CLI keyring directory
 with `SENTROPIC_LLM_MESH_KEYRING_DIR` when runtime isolation requires it.
 
+## Live speech contract (v1)
+
+`@sentropic/llm-mesh/speech` exports the provider-neutral duplex contract; the
+same surface is available from the package root. This is a contract release;
+engine adapters, configuration projection and runtime qualification follow in
+their own lots.
+
+```ts
+import {
+  negotiateSpeech,
+  isValidSpeechAudioFrame,
+  type SpeechAdapter,
+  type SpeechSessionReceipt,
+} from '@sentropic/llm-mesh/speech';
+```
+
+| Surface | Exports / semantics |
+| --- | --- |
+| Engine selection | `SpeechBinding`, `SpeechPlacement`, `speechPlacements`, `SpeechPipeline`, `SpeechMicMode`, `SpeechStage`; exact provider/model/artifact/adapter revisions and placement, optional opaque account/resource references |
+| Configuration and target | `SpeechConfigurationReference`, `SpeechTarget`; profile/config/policy revision, session/source/controller and consent identity |
+| Media | `SpeechAudioFormat`, `SpeechEventMetadata`, `SpeechInputFrame`, `SpeechOutputFrame`, `SpeechPlaybackProgress`, `isValidSpeechAudioFrame`; binary bytes, explicit clock domain, epochs, sequences and sample accounting |
+| Transcripts | `SpeechTranscriptPartial`, `SpeechTranscriptFinal`, `SpeechTranscript`; UTF-16 replacement range and hypothesis revision, separate immutable final with audio interval/language |
+| Duplex port | `SpeechSessionRequest`, `SpeechSessionReceipt`, `SpeechSessionState`, `SpeechCommand`, `SpeechEvent`, `SpeechSession`, `SpeechAdapter`; admitted receipt before media, async events plus independent write/control paths with AbortSignal |
+| Capabilities | `speechCapabilityNames`, `SpeechCapabilityName`, `SpeechUsageUnit`, `SpeechCapabilities`, `SpeechNegotiationRequest`, `SpeechNegotiationResult`, `negotiateSpeech`; per-tuple evidence and ordered exact-format negotiation |
+
+`getModelSpeechCapabilities(providerId, modelId, catalogue?)` returns all exact
+tuples from an independent `SpeechEngineCatalogue`, through root and speech
+exports. Open `SpeechEngineIdentity` strings accept STT/TTS engines without LLM
+profiles; each model can expose multiple adapters, revisions and placements.
+The default catalogue is empty until engines are qualified. No provider speech
+claim is inherited by chat models. An empty result is unqualified. Audio input does
+not advertise streaming STT, synthesis or duplex output. A required capability
+passes only with `supported`; `partial`, `unknown` and `unsupported` refuse.
+Negotiation never substitutes another engine/model/placement, and performs no
+authorization, account admission, spending or configuration mutation.
+Languages, voices and regions require membership in their declared supported
+sets; account/resource references remain with the selected session binding.
+`reviseSpeechTranscript` applies UTF-16 partial patches to a display projection,
+ignores stale/invalid revisions and preserves the first final. It does not submit
+an agent turn or own the coordinator's durable reconciliation.
+
+PCM16 little-endian mono supports negotiated 16/24/48 kHz; Opus is an explicit
+alternative, never an implicit conversion. Frame validation checks local
+metadata and PCM byte/sample agreement. The coordinator owns monotonic ordering,
+bounded queues, playback clamping, transcript reconciliation and deduplication.
+Provider `audio.output_done` means generation ended, while `provider.cancelled`
+acknowledges only the speech provider. Neither proves playback completion or an
+agent/tool stop. Durable interruption fences and effect outcomes belong to the
+agent-control/core and gateway lots. No provider model is qualified by this
+release; cluster-mesh L1c remains the authoritative configuration surface.
+
 `CloudCodeRuntimeClient` projects function parameter schemas onto the JSON
 Schema subset accepted by the Cloud Code Gemini wire. Tool names, properties,
 required fields and supported constraints are preserved; unsupported

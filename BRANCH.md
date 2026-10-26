@@ -21,6 +21,7 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
+  - [x] `.tmp/live-stt/l1/**`, `packages/llm-mesh/src/speech/**`, `packages/llm-mesh/src/index.ts`, `packages/llm-mesh/tests/speech-contract.test.ts`, `packages/llm-mesh/CHANGELOG.md` (BR96-EX31: incoming #754 history only)
   - [x] `Makefile`, `docker-compose*.yml`, `api/**`, `e2e/**`, `docs/governance/**`, `packages/artifacts/**`, `packages/cluster-mesh/**`, `packages/llm-mesh/tests/facade.test.ts`, `scripts/ci/immo-861-*` (BR96-EX25: incoming origin/main history only; no new implementation scope)
   - [x] `BRANCH.md`, `.h2a/build/**`
   - [x] `packages/llm-mesh/src/judge/**`, `packages/llm-mesh/src/transport/jev.ts`
@@ -75,6 +76,9 @@
 - [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13, BR96-EX14, BR96-EX15, BR96-EX16, BR96-EX17, BR96-EX18, BR96-EX19, BR96-EX20, BR96-EX21, BR96-EX22, BR96-EX23, BR96-EX24.
 
 ## Feedback Loop
+- [x] EX31 validation: full LLM Mesh 1381/1381, real guarded packed Cluster Mesh qualification 100/100 (15 files), and CI wiring/expected-results 38/38 passed under the shared lock with per-step teardown. Frozen lock mesh/gateway integrity matches the exact guarded archives. Decision implementation remains byte-identical to 46df280cc. Track needs no conflict repair: 362 valid events contain both parent journals (362 branch, 346 main).
+- [x] EX31 verification: admit test-llm-judge in the incoming speech verification adapter ENV guard so its existing mesh and guarded packed-tuple targets can verify the merge under the required isolated project. Same recipes, Docker lock and cleanup; rollback removes this ENV from the adapter guard.
+- [x] BR96-EX31: main advanced through live speech #754 (6c3f9f04a) during CI 40312214853; cancel that superseded run and merge main without rebase. Retain all speech and reviewed Decision sources; resolve release metadata to mesh 0.28.1 / gateway 0.21.1 / cluster 0.22.3, above main's 0.28.0 / 0.21.1 / 0.22.2 where this branch changes source. Align train literals, CI peers, public-surface version assertion and frozen selected fixture with guarded sibling archives. Scope: incoming speech history plus existing tuple/fixture/CI paths only. Rollback: revert this merge and its tuple alignment together.
 - [x] Lifecycle refresh at merge ce57fd093: re-anchor the two eligible done items using the Track CLI and reread the report; 15 done items remain NOT consolidated - to treat (acceptance unknown). The source trees of llm-mesh and cluster-mesh are byte-identical to the fully green head 444e7e41d.
 - [x] EX30 local validation: publication wiring and CI expected-results suites passed 38/38 through Compose under the shared lock; cleanup removed the test project. No Track conflict: valid 358-event journal contains both parent logs (358 branch, 346 main).
 - [x] EX30 verification lane: extend the incoming test-publishable-manifests Compose filter to test-llm-judge so wiring and expected-result regressions run through the existing target under the shared lock. Default runners and every assertion stay unchanged; rollback removes that ENV from this target.
