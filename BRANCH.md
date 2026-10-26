@@ -29,6 +29,8 @@
   - [x] `scripts/ci/publishable-ci-wiring.test.mjs`
   - [x] `scripts/ci/ci-expected-results.test.mjs`
   - [x] `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - [x] `spec/evidence/memory-mcp-l5/**` (BR95-EX3, unchanged main integration only)
+  - [x] `tools/memory-mcp-l5/**` (BR95-EX3, unchanged main integration only)
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
   - [x] `docker-compose*.yml`
@@ -39,6 +41,7 @@
 - [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
+- [x] BR95-EX3: merge origin/main at 365e8b313 after #756/#769; retain L5 BRANCH.md on the sole conflict. Imported memory evidence stays identical to main; rollback by reverting the merge. No memory implementation edits.
 - [x] BR95-EX1: synchronize package-lock workspace metadata and cluster/gateway compatibility with the L5 feature version; rollback the tuple together; no resolved dependency changes.
 - [x] BR95-EX2: CI edits limited to the release tuple; remove branch-name test exclusions per owner review, restoring API, browser E2E and VSCode gates. Earlier skips constrained provider/runtime work; existing CI gates must run.
 - [x] R1 P1-2: remove the branch-named CI bypass and assert selection of every API/E2E matrix member for global changes.
