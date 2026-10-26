@@ -49,7 +49,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read lock, full plan, MASTER/workflow/testing, template and W0 a/d evidence; mechanical branch check passes.
-- [ ] Lot 1: tests first in `api/tests/api/artifacts-host-migrations.test.ts`: empty DB, rerun, asset/journal mismatch refusal, fresh-process restart, concurrent KV insert.
+- [x] Lot 1: tests authored first in `api/tests/api/artifacts-host-migrations.test.ts`: empty DB, rerun, asset/journal mismatch refusal, fresh-process restart, scoped concurrent KV insert; execution waits for shared Docker lock.
 - [ ] Lot 2: control SQL/metadata for host KV and one package journal; hash-checked L3/L6 installation on one leased transaction; bounded migration runner hook.
 - [ ] Lot 3: scoped PostgreSQL tests, API typecheck/lint and migration regressions; inspect every hunk and clean test stack.
 - [ ] Lot 4: independent review/reconciliation; exact BRANCH.md PR body, push and draft delivery with green exact-head CI.
