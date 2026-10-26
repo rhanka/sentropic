@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/llm-gateway",
-  "version": "0.21.2",
+  "version": "0.21.3",
   "description": "Authenticated, pooled, metered LLM egress gateway for Sentropic (WP16 Layer B). Provider-compatible Anthropic/OpenAI wire over the @sentropic/llm-mesh account pool.",
   "type": "module",
   "license": "MIT",
@@ -54,7 +54,7 @@
   },
   "peerDependencies": {
     "@sentropic/mcp-auth": "^0.2.1",
-    "@sentropic/auth-hono": "^0.15.0 || ^0.16.0",
+    "@sentropic/auth-hono": "^0.15.0 || ^0.16.0 || ^0.17.0",
     "jose": "^5.10.0 || ^6.0.0"
   },
   "peerDependenciesMeta": {
