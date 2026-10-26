@@ -5,7 +5,7 @@ import { createPostgresCommitExecutor } from '@sentropic/artifacts/adapters/post
 import { createArtifactCommitCoordinator, type ArtifactInvocationContext } from '@sentropic/artifacts/server/commit-contract';
 import { createHttpArtifactApp, type ArtifactApp, type HttpRequest } from '@sentropic/artifacts/http';
 import { compileArtifactsProfile, createArtifactsToolExecutor, createRadarKeyDerivation,
-  RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
+  ArtifactProfileInputError, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
 import { ArtifactOperationError, classifyArtifactFailure, projectArtifactHttpOutcome } from '@sentropic/artifacts/server/outcome-contract';
 import { createLifecycleService } from '@sentropic/artifacts/server/lifecycle';
 import { createPostgresPublicationUnitWriter, type PublicationBlobStore } from '@sentropic/artifacts/server/publication';
@@ -83,6 +83,8 @@ export function createArtifactHost(options: ArtifactHostOptions) {
         try {
           if (supplied !== invocation) throw new ArtifactOperationError('access_denied');
           if (capability) {
+            // Public app bodies follow the closed profile, including host-only scope fields.
+            if (request.method === 'POST') profile.validate(capability, request.body ?? {}, request.idempotencyKey);
             const current = await authorization.current();
             if (!current.readable || (['artifacts_ensure', 'artifacts_publish'].includes(capability) && !current.writable)) {
               throw new ArtifactOperationError('access_denied');
@@ -98,7 +100,8 @@ export function createArtifactHost(options: ArtifactHostOptions) {
           return outcome;
         } catch (cause) {
           return { ok: false, failure: classifyArtifactFailure(cause, { invocationId: invocation.invocationId,
-            operation: capability ?? 'unsupported', phase: 'host_authority', commitState: 'not_committed' }) };
+            operation: capability ?? 'unsupported', phase: 'host_authority', commitState: 'not_committed' },
+          (error) => error instanceof ArtifactProfileInputError ? new ArtifactOperationError(error.category) : undefined) };
         }
       },
       async handle(request, supplied) { return projectArtifactHttpOutcome(await app.execute(request, supplied)); },

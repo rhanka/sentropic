@@ -1,7 +1,7 @@
 # Feature: W1.b app artifact composition and current authority
 
 ## Objective
-- [ ] Compose APP-P1 with durable app policy, opaque workspace scopes and one guarded HTTP/MCP effect path.
+- [x] Compose APP-P1 with durable app policy, opaque workspace scopes and one guarded HTTP/MCP effect path.
 
 ## Scope / Guardrails
 - [x] Owner dispatch: W1.b, plan-v2 lines 128–147; tests first, draft PR only, no merge or deployment.
@@ -40,6 +40,8 @@
 - [ ] W0-close.e acceptance and W1.c/UP-T activation remain external gates; this lot activates no route or reader.
 - [ ] W2 binds verified transport identity and a current credential check on the coordinator transaction; credential verification must never come from tool/body arguments.
 - [ ] Independent review: automatic approval review rejected the Claude/h2a launch because private source would reach an unverified gateway without destination/payload authorization. No reviewer verdict exists; dossier `.tmp/app-w1b-review/dossier.md` at the root checkout. Owner approval is required before external review; no retry through another execution path.
+- [x] HTTP-1: the focused red test returned HTTP 201 for a caller body scope equal to the verified scope, while MCP returned 400. Root cause: the upstream trusted HTTP app permits that field. Validate selected public POST bodies through the same compiled profile before authority/storage; map typed profile errors safely. Red `/tmp/app-w1b-closed-input-red.log`; final 16/16 green plus typecheck/lint `/tmp/app-w1b-closed-input-green.log`.
+- [x] Superseded CI https://github.com/rhanka/sentropic/actions/runs/40411129496 on `7a6e6138a` was cancelled only after HTTP-1 reproduction; the corrected pushed head requires a new exact-head run. No successful CI receipt is claimed for that attempt.
 
 ## AI Flaky tests
 - [x] No AI tests, accepted flakes or increased timeouts.
@@ -57,8 +59,8 @@
   - [x] Implement transaction-bound current authority, explicit read/write credential permissions, provisional cumulative byte quota and request fences in `authorization.ts`.
 - [x] Lot 3: same test file covers revocation after lock waits, DB-time expiry after quota/receipt waits, quota contention/rollback, guarded replay, version witness and no new durable success on denial; first full run 10/10 passed.
   - [x] Add independent read/write credential permissions, viewer downgrade, disabled/forged identity, foreign artifact metadata denial and frozen APP-P1 digest/file-limit cases.
-- [x] Lot 4: API typecheck passed, lint 0 errors/219 warnings; 15 publication + 16 host migration + 16 cluster migration + 11 tenant resolver cases passed, no skips; healthy HTTP 200 logs and empty Compose ps after down. Every authored hunk reviewed by the author; no independent approval is claimed.
+- [x] Lot 4: API typecheck passed, lint 0 errors/219 warnings; final 16 publication + 16 host migration + 16 cluster migration + 11 tenant resolver cases passed, no final skips; healthy HTTP 200 logs and empty Compose ps after down. Every authored hunk reviewed by the author; no independent approval is claimed.
   - [x] Receipts: `/tmp/app-w1b-final-checks.log` (45 tests including 13 host cases), `/tmp/app-w1b-authority-regressions.log` (final 15 host + 11 tenant cases), `/tmp/app-w1b-runtime-scope-cleanup.log` (PASS C2, healthy logs, cleanup/empty ps). Optional multi-path readlink probe failed on BusyBox's single-file usage; physical dependency qualification remains W2's gate.
 - [ ] Lot 5: exact BRANCH.md draft PR body, push, green exact-head CI and W1.d/W2 handoff; do not merge. External review remains the explicitly blocked gate above.
 - [x] W1.d handoff: consume durable preparation intents, blob pins/references and upstream bounded cleanup/GC through separate host-maintenance authority; add recovery/restore proof. This lot starts no jobs or activation and uses no production memory fallback.
-- [x] W2 handoff: bind one verified subject/tenant/client/credential tuple across HTTP/MCP, supply the current transaction-bound credential reader with independent read/write scope permissions, select the frozen profile, compile/mount one registry path, reconcile API/root workspace locks and physical artifacts instances, and retain existing MCP/resource/namespace/gateway/D1 regressions.
+- [x] W2 handoff: validate selected transport inputs before `bind` provisions scope metadata; bind one verified subject/tenant/client/credential tuple across HTTP/MCP; supply the current transaction-bound credential reader with independent read/write scope permissions and explicit initial quota; compile/mount one registry path; reconcile API/root workspace locks and physical artifacts instances; retain existing MCP/resource/namespace/gateway/D1 regressions.
