@@ -1,6 +1,18 @@
-import { assertScope, getTurn, isTerminal, same, validIdentity } from './session.js';
+import { assertScope, getTurn, isTerminal, isValidScope, same, validIdentity } from './session.js';
 import type { ControlPort, FenceReceipt, Journal, RiskAcceptance, RiskPrompt, RiskRequest, Scope,
-  SessionState, ToolCall, ToolOutcome, ToolResult, TrustedAuthority, TurnRef } from './session.js';
+  SessionState, ToolCall, ToolOutcome, ToolResult, TrustedAuthority, Turn, TurnRef } from './session.js';
+
+const installFence = (state: SessionState, turn: Turn, interruptId: string, now: number): FenceReceipt => {
+  if (turn.fence) return turn.fence;
+  turn.interruptIds.push(interruptId);
+  const sequence = ++state.sequence;
+  state.barrierRevision++;
+  turn.fence = { eventId: `fence:${sequence}`, sequence, turnEpoch: turn.turnEpoch,
+    submitKey: turn.submitKey, coverage: Object.keys(state.enabledClasses).sort(), installedAtMs: now };
+  if (turn.phase === 'committed') { turn.phase = 'interrupted'; turn.terminal = 'cancelled-before-start'; }
+  else if (!isTerminal(turn)) turn.phase = 'cancelling';
+  return turn.fence;
+};
 
 const unresolved = (state: SessionState) => Object.values(state.effects)
   .filter(e => (e.status === 'unknown' || e.status === 'completion-pending')
@@ -230,15 +242,7 @@ export class InterruptAuthority {
     const receipt = await this.journal.transact(state => {
       const turn = getTurn(state, ref);
       if (!interruptId) throw new Error('Interrupt identity required');
-      if (turn.fence) return turn.fence;
-      turn.interruptIds.push(interruptId);
-      const sequence = ++state.sequence;
-      state.barrierRevision++;
-      turn.fence = { eventId: `fence:${sequence}`, sequence, turnEpoch: turn.turnEpoch,
-        submitKey: turn.submitKey, coverage: Object.keys(state.enabledClasses).sort(), installedAtMs: this.now() };
-      if (turn.phase === 'committed') { turn.phase = 'interrupted'; turn.terminal = 'cancelled-before-start'; }
-      else if (!isTerminal(turn)) turn.phase = 'cancelling';
-      return turn.fence;
+      return installFence(state, turn, interruptId, this.now());
     });
     // Fence acceptance never waits for an RPC. Recovery replays only this idempotent Stop.
     void this.flushInterrupt(ref).catch(() => undefined);
@@ -275,5 +279,30 @@ export class InterruptAuthority {
       state.connectionEpoch = connectionEpoch;
       state.connected = true; // No capture/microphone operation is implied.
     });
+  }
+
+  /** Trusted host authority rotates generations in the same durable journal, never an empty session. */
+  async rotateGeneration(expected: Scope, next: Scope): Promise<void> {
+    expected = structuredClone(expected);
+    next = structuredClone(next);
+    const previous = await this.journal.transact(state => {
+      assertScope(state, expected);
+      if (!isValidScope(next) || next.controllerEpoch <= expected.controllerEpoch
+        || !same(expected, { ...next, sourceGeneration: expected.sourceGeneration,
+          controllerEpoch: expected.controllerEpoch, consentRevision: expected.consentRevision })) {
+        throw new Error('Invalid generation rotation');
+      }
+      const turns = Object.values(state.turns).filter(t => !isTerminal(t));
+      for (const turn of turns) installFence(state, turn, `rotation:${next.controllerEpoch}`, this.now());
+      state.scope = next;
+      state.barrierRevision++;
+      state.connectionEpoch++;
+      state.connected = true;
+      return turns;
+    });
+    for (const turn of previous) {
+      this.stopPlayback(turn.turnEpoch);
+      void this.flushInterrupt(turn).catch(() => undefined);
+    }
   }
 }

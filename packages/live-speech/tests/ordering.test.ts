@@ -1,9 +1,52 @@
 import { describe, expect, it, vi } from 'vitest';
-import { commit, fixture, mutation, scope } from './fixtures.js';
+import { commit, fixture, mutation, scope, TestJournal } from './fixtures.js';
 import { createSession, SessionJournal } from '../src/core/session.js';
 import type { JournalSnapshot } from '../src/core/session.js';
 
 describe('submission, tool history and effect barrier', () => {
+  it('should carry effect barriers, fences and consumed approvals into a new controller generation', async () => {
+    let bytes: string | undefined;
+    const storage = {
+      read: async () => bytes ? JSON.parse(bytes) as JournalSnapshot : undefined,
+      compareAndSwap: async (_key: string, expected: number | undefined, next: JournalSnapshot) => {
+        if ((bytes ? (JSON.parse(bytes) as JournalSnapshot).revision : undefined) !== expected) return false;
+        bytes = JSON.stringify(next);
+        return true;
+      },
+    };
+    const seed = new TestJournal().state;
+    const f = fixture(new SessionJournal(storage, 'session', seed));
+    const stale = new SessionJournal(storage, 'session', seed);
+    const old = await commit(f.core);
+    await f.core.send(old);
+    await f.core.admitTool(old, mutation('a'));
+    await f.core.interrupt(old, 'stop');
+    const prior = await f.core.riskPrompt(['effect:a']);
+    const nextScope = { ...scope, controllerEpoch: 2, sourceGeneration: 'source-2', consentRevision: 'consent-2' };
+    await expect(f.core.rotateGeneration(scope, { ...nextScope, tenantId: 'other' })).rejects.toThrow('rotation');
+    await f.core.rotateGeneration(scope, nextScope);
+    await expect(stale.transact(s => s.scope)).rejects.toThrow('scope');
+    await expect(f.core.rotateGeneration(scope, nextScope)).rejects.toThrow('scope');
+    const restarted = fixture(new SessionJournal(storage, 'session', { ...seed, scope: nextScope }));
+    await expect(restarted.core.acceptRisk({ ...prior, requestId: 'stale', proof: 'proof' })).rejects.toThrow('scope');
+    const next = await restarted.core.commit({ scope: nextScope, utteranceId: 'next', inputRef: 'final:next' });
+    await restarted.core.send(next);
+    await expect(restarted.core.admitTool(next, mutation('b'))).rejects.toThrow('barrier');
+    await expect(restarted.core.admitTool(old, mutation('late'))).rejects.toThrow('fenced');
+    expect(await restarted.core.send(old)).toBe(false);
+    vi.mocked(restarted.control.query).mockResolvedValueOnce({ status: 'unknown', nativeTurnId: 'native-1' });
+    await restarted.core.recover(old);
+    expect(restarted.control.interrupt).toHaveBeenCalledWith({ ...old, nativeTurnId: 'native-1' });
+    const prompt = await restarted.core.riskPrompt(['effect:a']);
+    await restarted.core.acceptRisk({ ...prompt, requestId: 'accepted', proof: 'proof' });
+    await expect(restarted.core.admitTool(next, mutation('a'))).rejects.toThrow('Action identity');
+    vi.mocked(restarted.authority.verifyMutation).mockImplementationOnce(async request => ({ ...request,
+      authorizationId: 'auth:action:a', principalId: scope.principalId, tenantId: scope.tenantId }));
+    await expect(restarted.core.admitTool(next, mutation('b'))).rejects.toThrow('authorization');
+    await restarted.core.admitTool(next, mutation('b'));
+    expect((await storage.read())?.state.authorizations['auth:action:a']).toBe('action:a');
+  });
+
   it('should bind risk verification to an immutable request while authentication awaits', async () => {
     const f = fixture();
     const turn = await commit(f.core);
