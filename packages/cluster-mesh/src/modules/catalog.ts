@@ -18,9 +18,9 @@ export const LLM_MESH_RANGE = '0.19.2 || >=0.22.0 <0.28.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.22.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
-/** Follows llm-gateway 0.19.6's declared optional peer range (parity with #674: admits auth-hono 0.16.0).
+/** Follows llm-gateway's declared optional peer range, including the Zod 4 auth-hono release.
  * Spelled as a bounded interval: the minimal release-range parser has no `||`. */
-export const AUTH_HONO_RANGE = '>=0.15.0 <0.17.0';
+export const AUTH_HONO_RANGE = '>=0.15.0 <0.18.0';
 export const COMMENTS_RANGE = '^0.3.0';
 
 export interface PeerRequirement {
