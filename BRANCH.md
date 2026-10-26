@@ -75,6 +75,7 @@
   - [x] `packages/cluster-mesh/tests/speech-projection.spec.ts`: offline snapshot, tenant/policy/egress refusal, unavailable catalogue, safe rebind, immutable revision, consent and no fallback.
   - [x] Red at `ac7134bfd`: both suites fail on missing speech/config.js before source implementation.
   - [x] Red run before implementation; first scoped green 48 tests after config/projection and existing seam integration.
+  - [x] Add reproducible Compose-only strict speech-test types, changed-source lint/build/content and existing packed-tuple adapter; root files unchanged.
 - [ ] **L1c-c — Implementation**
   - [x] Strict profile decoder, immutable snapshots and existing cluster config seam implemented; catalogue projection follows.
   - [x] Catalogue projection negotiates each exact stage tuple and intersects trusted tenant/policy/placement/egress evidence; no routing or credentials added.
