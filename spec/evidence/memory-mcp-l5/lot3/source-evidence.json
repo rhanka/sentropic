@@ -1,21 +1,27 @@
 {
   "status": "source-only",
   "qualificationAccepted": false,
-  "sourceHead": "82641829615d3b264da07cc97e7a46e3b0112add",
+  "sourceHead": "baf55ae8e6a4464de6e27bde26fe12f65ce28e86",
+  "runtimePlatform": {
+    "version": "0.4.0",
+    "publishedBytes": true,
+    "archiveSha256": "67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5"
+  },
   "preCandidateSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
   "catalogSha256": "9bf377b774dda54a3b37189eea57cb845acca7b27b8b55b399f23c20215a1211",
   "reports": [
-    {"kind":"mcp-platform","path":"spec/evidence/memory-mcp-l5/lot3/reports/b51ad17a381c53648725b192ef60e6bf9fb401ec3f3d0fac895f30a25688b3e7.json.gz","sha256":"b51ad17a381c53648725b192ef60e6bf9fb401ec3f3d0fac895f30a25688b3e7","uncompressedSha256":"006b1501c4a7cf78e39ff74bbb0203a678e0f8aa05c7a045afd580feebf7a0bc","passed":136},
-    {"kind":"cluster-mesh","path":"spec/evidence/memory-mcp-l5/lot3/reports/8b5a4ed387f040b34af7f3a9e300fb1e204c2d0abdbcd565e7f5129baaca7157.json.gz","sha256":"8b5a4ed387f040b34af7f3a9e300fb1e204c2d0abdbcd565e7f5129baaca7157","uncompressedSha256":"3ce9d350b751464911c8b2f793ea4ce0df23f171961ceb07ca0f6dfec4058b54","passed":31},
-    {"kind":"summary","path":"spec/evidence/memory-mcp-l5/lot3/reports/dc5a32b21780ad3825c2795c8c1bd10ef60e54d400765d9e65338b0670e74649.json.gz","sha256":"dc5a32b21780ad3825c2795c8c1bd10ef60e54d400765d9e65338b0670e74649","uncompressedSha256":"ed9969f37a67cfafcf8b9c4fadaf39f5ece8adb06605f955edd5202f375116fd","passed":null},
-    {"kind":"publication-observations","path":"spec/evidence/memory-mcp-l5/lot3/reports/b5d33cc78ac4851be5f8515cdc3ff53656780e2ef9f547232dc0654f5bd2c455.json.gz","sha256":"b5d33cc78ac4851be5f8515cdc3ff53656780e2ef9f547232dc0654f5bd2c455","uncompressedSha256":"116c555315ad4e39417dd0631c5aca7df507cc0f57b9f3ca610f924d279a1794","passed":null},
+    {"kind":"mcp-platform","path":"spec/evidence/memory-mcp-l5/lot3/reports/d82d19544a6eaa0d34483315ff92aa2bd5673fb9f8559a52752a0682cf04b7fa.json.gz","sha256":"d82d19544a6eaa0d34483315ff92aa2bd5673fb9f8559a52752a0682cf04b7fa","uncompressedSha256":"ac3cbc3ff73605baeeec03397f98ff988dd67e22febb9ca3d3516428e6faa476","passed":122},
+    {"kind":"cluster-mesh","path":"spec/evidence/memory-mcp-l5/lot3/reports/d93ff09ed5fda41013e213112fc563e8bec3b989e7e095ec5c7a8b70d6573946.json.gz","sha256":"d93ff09ed5fda41013e213112fc563e8bec3b989e7e095ec5c7a8b70d6573946","uncompressedSha256":"60fb800951b0b9900288666f07934d65fd30db5cc064d4fe5a72ad33e963011a","passed":23},
+    {"kind":"mcp-broker","path":"spec/evidence/memory-mcp-l5/lot3/reports/c4712feb389792a1c4ba4b6ca3dfafcd9530d73a50e9f94dde49050735a272af.json.gz","sha256":"c4712feb389792a1c4ba4b6ca3dfafcd9530d73a50e9f94dde49050735a272af","uncompressedSha256":"054517d8c5d428bb1420ebb2d540e9846300d1ffd9d576371b32cf909c024fe8","passed":27},
+    {"kind":"summary","path":"spec/evidence/memory-mcp-l5/lot3/reports/0c49479110862b0911bd1cb5809ab4c53535bf4c9d449973233f7a64cf1975d4.json.gz","sha256":"0c49479110862b0911bd1cb5809ab4c53535bf4c9d449973233f7a64cf1975d4","uncompressedSha256":"7b5725ad62442615794dbb2d6f02ccf0bb8670ab6c42ee03ecef1fd6f32993ec","passed":null},
+    {"kind":"publication-observations","path":"spec/evidence/memory-mcp-l5/lot3/reports/8003c34e2635e49717e8690b996eb9f9748d0a2881c48db5bf26ee7e91dd0032.json.gz","sha256":"8003c34e2635e49717e8690b996eb9f9748d0a2881c48db5bf26ee7e91dd0032","uncompressedSha256":"46f63dde1d950f514c363d0b9a3ccbd8eacecf6bb85161afc528ae2a63f88a83","passed":null},
     {"kind":"publication-lock","path":"spec/evidence/memory-mcp-l5/lot3/reports/cccbc543c0bcfd70b84180cee2dcd04b7eec405c3e2ea691cc65108776ae516b.json.gz","sha256":"cccbc543c0bcfd70b84180cee2dcd04b7eec405c3e2ea691cc65108776ae516b","uncompressedSha256":"aeddefeee7372936e8db5e2563a283469c4d8005b8f5e43272f2558e1a947485","passed":null}
   ],
   "registry": [
-    {"name":"@sentropic/mcp-platform","version":"0.4.0","integrity":"sha512-65FIZAJIzWTb1t3/IBQhwgLovjDFkbOm/s+LLy9hZGjmV7yLbCjd45XcAAbp1DDlUsX8xBEKvVMRFOOstel/jA==","archiveSha256":"67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5","tarball":"https://registry.npmjs.org/@sentropic/mcp-platform/-/mcp-platform-0.4.0.tgz","observedAt":"2026-10-26T22:14:06.063Z"},
-    {"name":"@sentropic/cluster-mesh","version":"0.22.4","integrity":"sha512-4BC8D9wXkG1CYRpW0I6p1MmZ+Tp/y9i9fOD8BGn1acQI4GYR+7Ld7F7t9D91JaDxyUhcsFjfLVdnAgWp+SZ9RA==","archiveSha256":"c483e033f8bdc48a1504b3bf0f135564dbd1a727ba0f7519ff762c496c2f4cf0","tarball":"https://registry.npmjs.org/@sentropic/cluster-mesh/-/cluster-mesh-0.22.4.tgz","observedAt":"2026-10-26T22:14:06.877Z"},
-    {"name":"@sentropic/llm-gateway","version":"0.21.3","integrity":"sha512-LMway0kmftMX74zOlqb1J5ELqd3aTxnhkAg1geOR6RnquNGgPZucGf4sISbAJGHKF6yvYjb7clBm54scVDMu1g==","archiveSha256":"2ca56c61c0d341e7d2bfdc8b99fe5ca29342d47371fc8c60ff8d770903103c74","tarball":"https://registry.npmjs.org/@sentropic/llm-gateway/-/llm-gateway-0.21.3.tgz","observedAt":"2026-10-26T22:14:07.374Z"},
-    {"name":"@sentropic/engram","version":"0.21.2","integrity":"sha512-RtifmT4E9to98b9zW9s0cLL/yajsu5ZQ+PwzjPD4iIXjKn+2dlYyamx5j7yXeCgNKAMoXQTKstdVljwp2nri1A==","archiveSha256":"eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1","tarball":"https://registry.npmjs.org/@sentropic/engram/-/engram-0.21.2.tgz","observedAt":"2026-10-26T22:14:08.996Z"}
+    {"name":"@sentropic/mcp-platform","version":"0.4.0","integrity":"sha512-65FIZAJIzWTb1t3/IBQhwgLovjDFkbOm/s+LLy9hZGjmV7yLbCjd45XcAAbp1DDlUsX8xBEKvVMRFOOstel/jA==","archiveSha256":"67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5","tarball":"https://registry.npmjs.org/@sentropic/mcp-platform/-/mcp-platform-0.4.0.tgz","observedAt":"2026-10-26T22:54:18.076Z"},
+    {"name":"@sentropic/cluster-mesh","version":"0.22.4","integrity":"sha512-4BC8D9wXkG1CYRpW0I6p1MmZ+Tp/y9i9fOD8BGn1acQI4GYR+7Ld7F7t9D91JaDxyUhcsFjfLVdnAgWp+SZ9RA==","archiveSha256":"c483e033f8bdc48a1504b3bf0f135564dbd1a727ba0f7519ff762c496c2f4cf0","tarball":"https://registry.npmjs.org/@sentropic/cluster-mesh/-/cluster-mesh-0.22.4.tgz","observedAt":"2026-10-26T22:54:18.962Z"},
+    {"name":"@sentropic/llm-gateway","version":"0.21.3","integrity":"sha512-LMway0kmftMX74zOlqb1J5ELqd3aTxnhkAg1geOR6RnquNGgPZucGf4sISbAJGHKF6yvYjb7clBm54scVDMu1g==","archiveSha256":"2ca56c61c0d341e7d2bfdc8b99fe5ca29342d47371fc8c60ff8d770903103c74","tarball":"https://registry.npmjs.org/@sentropic/llm-gateway/-/llm-gateway-0.21.3.tgz","observedAt":"2026-10-26T22:54:20.370Z"},
+    {"name":"@sentropic/engram","version":"0.21.2","integrity":"sha512-RtifmT4E9to98b9zW9s0cLL/yajsu5ZQ+PwzjPD4iIXjKn+2dlYyamx5j7yXeCgNKAMoXQTKstdVljwp2nri1A==","archiveSha256":"eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1","tarball":"https://registry.npmjs.org/@sentropic/engram/-/engram-0.21.2.tgz","observedAt":"2026-10-26T22:54:22.152Z"}
   ],
   "candidate": {
     "archive": "spec/evidence/memory-mcp-l5/lot2/archives/26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10.tgz",
@@ -30,7 +36,15 @@
   "dispositions": {
     "reportKind": "summary",
     "total": 50,
-    "outOfLot": 25
+    "outOfLot": 10,
+    "blocked": [
+      {"id":"P01","cases":["P01.mesh.memory-context"],"file":"packages/cluster-mesh/tests/memory-context.spec.ts","present":false,"status":"blocked: platform-admitBridgeTools","disposition":"blocked: platform-admitBridgeTools"},
+      {"id":"P01","cases":["P01.packed.identity-source-refusal"],"file":"tools/memory-mcp-l5/packed/identity-source-refusal.test.ts","present":false,"status":"blocked: platform-admitBridgeTools","disposition":"blocked: platform-admitBridgeTools"},
+      {"id":"P02","cases":["P02.packed.audit-verdict-refusal"],"file":"tools/memory-mcp-l5/packed/identity-source-refusal.test.ts","present":false,"status":"blocked: platform-admitBridgeTools","disposition":"blocked: platform-admitBridgeTools"},
+      {"id":"P03","cases":["P03.platform.schema-profile-2020-12"],"file":"packages/mcp-platform/tests/memory/schema-profile.test.ts","present":false,"status":"blocked: platform-admitBridgeTools","disposition":"blocked: platform-admitBridgeTools"},
+      {"id":"P04","cases":["P04.platform.wire-profile-v1"],"file":"packages/mcp-platform/tests/memory/wire-profile.test.ts","present":false,"status":"blocked: platform-admitBridgeTools","disposition":"blocked: platform-admitBridgeTools"},
+      {"id":"P04","cases":["P04.packed.sdk-discovery-call"],"file":"tools/memory-mcp-l5/packed/sdk-discovery-call.test.ts","present":false,"status":"blocked: platform-admitBridgeTools","disposition":"blocked: platform-admitBridgeTools"}
+    ]
   },
   "inventory": {
     "reportKind": "summary",
@@ -38,6 +52,12 @@
     "drift": []
   },
   "waitingFor": [
+    {"id":"P01.mesh.memory-context","owner":"gr-conductor","status":"blocked: platform-admitBridgeTools","missing":"separate platform 0.4.1 proposal; adoption and successor freeze decision pending"},
+    {"id":"P03.platform.schema-profile-2020-12","owner":"gr-conductor","status":"blocked: platform-admitBridgeTools","missing":"separate platform 0.4.1 proposal; adoption and successor freeze decision pending"},
+    {"id":"P04.platform.wire-profile-v1","owner":"gr-conductor","status":"blocked: platform-admitBridgeTools","missing":"separate platform 0.4.1 proposal; adoption and successor freeze decision pending"},
+    {"id":"P01.packed.identity-source-refusal","owner":"gr-conductor","status":"blocked: platform-admitBridgeTools","missing":"separate platform 0.4.1 proposal; adoption and successor freeze decision pending"},
+    {"id":"P02.packed.audit-verdict-refusal","owner":"gr-conductor","status":"blocked: platform-admitBridgeTools","missing":"separate platform 0.4.1 proposal; adoption and successor freeze decision pending"},
+    {"id":"P04.packed.sdk-discovery-call","owner":"gr-conductor","status":"blocked: platform-admitBridgeTools","missing":"separate platform 0.4.1 proposal; adoption and successor freeze decision pending"},
     {"id":"P01.packed","owner":"gr-conductor","missing":"verified P3-bound lot2-manifest/sidecar, host context/source closure; E4 identity-source-refusal suite"},
     {"id":"P02.packed","owner":"gr-conductor","missing":"same manifest and canonical E2 audit/literal-true verdict receipts; E4 refusal suite"},
     {"id":"P03","owner":"gr-conductor","missing":"manifest-bound neutral declarations, profile and lock closure for installed schema/digest qualification"},

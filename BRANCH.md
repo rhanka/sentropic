@@ -73,6 +73,7 @@
   - [x] Negative tests require all six platform-dependent cases to remain explicitly blocked and absent from execution selection.
   - [x] Tooling gate: 119 tests passed, including publication and receipt negative cases.
   - [x] Include all 11 independent broker catalog source suites against the same published platform; E4 and manifest obligations remain pending.
-  - [ ] Retain fresh platform/mesh reports executing the hash-verified published platform 0.4.0 JavaScript.
+  - [x] Replace superseded transport claims with the precise independent/blocked split in the report and Opus r2 dossier.
+  - [x] Fresh source head baf55ae8e: 122 platform, 23 mesh and 27 broker tests passed against published platform 0.4.0; all 18 P09 files retained.
 - [ ] Lot 4: push #777 and separate draft against main; final-head CI; no merge or publication.
   - [ ] Independent review remains open; no new peer launch authorized in this packet.
