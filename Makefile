@@ -4422,7 +4422,7 @@ memory-l5-runtime: ## Verify the frozen Node image, version floor and unflagged 
 .PHONY: memory-l5-lint
 memory-l5-lint: memory-l5-runtime build-mcp-platform build-mcp-broker ## L5 static source/packed import-graph lint (L5-EX1)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-lint requires ENV=<env> last" >&2; exit 1; }
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode source --root /workspace
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; mkdir -p packages/mcp-broker/node_modules/@sentropic; ln -sfn /workspace/packages/mcp-platform packages/mcp-broker/node_modules/@sentropic/mcp-platform; trap "rm -rf packages/mcp-broker/node_modules" EXIT; node tools/memory-mcp-l5/import-graph.mjs --mode source --root /workspace'
 
 .PHONY: memory-l5-tooling
 memory-l5-tooling: memory-l5-runtime ## L5 tooling contract tests via Vitest JSON-capable runner (L5-EX1)
@@ -4470,6 +4470,8 @@ memory-l5-lot2-retained:
 memory-l5-lot2: memory-l5-runtime
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo 'ERROR: Lot 2 requires a verified ARTIFACT_MANIFEST'; exit 1; }
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-manifest.mjs "$(ARTIFACT_MANIFEST)"
+	@test -n "$(LOT2_CANONICAL_REPORT)" || { echo 'ERROR: real installed E2 canonical case report is required; source reference tests cannot close Lot 2'; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-canonical-report.mjs "$(ARTIFACT_MANIFEST)" "$(LOT2_CANONICAL_REPORT)" "$$(git rev-parse HEAD)"
 	@$(MAKE) memory-l5-reference ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
 
 memory-l5-reference:

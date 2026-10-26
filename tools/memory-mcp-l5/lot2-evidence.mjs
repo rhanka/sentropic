@@ -24,7 +24,8 @@ const collect = path => {
   }
 };
 collect('packages/mcp-broker/src/memory-reference');
-for (const path of ['tools/memory-mcp-l5/verifier.mjs', 'tools/memory-mcp-l5/lot2-manifest.mjs']) sources.push({ path, sha256: sha256Hex(readFileSync(path)) });
+collect('tools/memory-mcp-l5/policies');
+for (const path of ['tools/memory-mcp-l5/verifier.mjs', 'tools/memory-mcp-l5/lot2-manifest.mjs', 'tools/memory-mcp-l5/lot2-canonical-report.mjs']) sources.push({ path, sha256: sha256Hex(readFileSync(path)) });
 const python = spawnSync('sh', ['-c', 'command -v python; command -v python3'], { encoding: 'utf8' });
 if (python.stdout.trim()) throw Error('runtime contains Python');
 const directory = mkdtempSync(join(tmpdir(), 'l5-probe-'));
