@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { sha256Hex, sha512Integrity, PINNED_IMAGE_DIGEST } from './schema-validator.mjs';
 import { readArchive } from './contract-graph.mjs';
 import { checkNodeFloor } from './receipt.mjs';
+import { resolveLockKey } from './lock-closure.mjs';
 export const P3_SHA256 = '1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730';
+export const E2_SHA256 = 'eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1';
 const ROOT_KEYS = ['manifestVersion', 'stage', 'status', 'preCandidate', 'e2', 'backend', 'neutralDeclarations', 'hostProfile', 'lock', 'closure', 'runtime', 'acknowledgements'];
 const REF_KEYS = ['path', 'sha256'];
 export function validateLot2Manifest(m, root) {
@@ -38,32 +40,47 @@ export function validateLot2Manifest(m, root) {
   const pre = json(m.preCandidate, 'preCandidate');
   if (m.preCandidate?.sha256 !== P3_SHA256 || pre?.stage !== 'pre-candidate') errors.push('preCandidate: exact frozen P3 required');
   if (m.e2?.name !== '@sentropic/engram' || m.e2?.version !== '0.21.2') errors.push('e2: exact published substrate 0.21.2 required');
+  if (m.e2?.sha256 !== E2_SHA256) errors.push('e2: published substrate digest mismatch');
   if (m.backend?.name !== '@sentropic/cluster-mesh') errors.push('backend: public cluster-mesh required');
   const packages = new Map();
   for (const [index, entry] of (Array.isArray(m.closure) ? m.closure : []).entries()) {
     const bytes = read(entry, `closure[${index}]`, true);
     if (!bytes) continue;
-    if (packages.has(entry.name)) errors.push(`closure: duplicate ${entry.name}`);
+    const id = `${entry.name}@${entry.version}`;
+    if (packages.has(id)) errors.push(`closure: duplicate ${id}`);
     try {
       const files = readArchive(bytes), pkg = JSON.parse(files.get('package.json'));
       if (pkg.name !== entry.name || pkg.version !== entry.version) errors.push(`closure: package identity ${entry.name}`);
-      packages.set(entry.name, { entry, pkg, files });
+      packages.set(id, { entry, pkg, files });
     } catch { errors.push(`closure: invalid archive ${entry.name}`); }
   }
   for (const label of ['e2', 'backend']) {
     read(m[label], label, true);
-    const found = packages.get(m[label]?.name);
+    const found = packages.get(`${m[label]?.name}@${m[label]?.version}`);
     if (!found || JSON.stringify(found.entry) !== JSON.stringify(m[label])) errors.push(`${label}: absent/mismatched closure`);
   }
   const lock = json(m.lock, 'lock');
   if (lock?.lockfileVersion !== 3 || !lock?.packages || !Array.isArray(m.closure) || !m.closure.length) errors.push('closure: complete v3 installed lock required');
   for (const [key, entry] of Object.entries(lock?.packages ?? {})) {
     if (!key) continue;
-    const name = key.split('node_modules/').pop(), found = packages.get(name);
+    const name = key.split('node_modules/').pop(), found = packages.get(`${name}@${entry.version}`);
     if (entry.link || !found || entry.version !== found.entry.version || entry.integrity !== found.entry.integrity ||
         typeof entry.resolved !== 'string' || !entry.resolved.startsWith('https://registry.npmjs.org/')) errors.push(`lock: unbound package ${key}`);
+    for (const dependency of Object.keys(found?.pkg.dependencies ?? {})) {
+      if (!resolveLockKey(lock.packages, key, dependency)) errors.push(`lock: missing transitive ${key}/${dependency}`);
+    }
   }
-  for (const name of packages.keys()) if (!Object.keys(lock?.packages ?? {}).some(key => key.endsWith(`node_modules/${name}`))) errors.push(`lock: missing ${name}`);
+  for (const { entry } of packages.values()) {
+    if (!Object.entries(lock?.packages ?? {}).some(([key, node]) => key.endsWith(`node_modules/${entry.name}`) && node.version === entry.version)) errors.push(`lock: missing ${entry.name}@${entry.version}`);
+  }
+  for (const label of ['e2', 'backend']) {
+    const pkg = m[label];
+    if (lock?.packages?.['']?.dependencies?.[pkg?.name] !== pkg?.version) errors.push(`lock: exact root ${label} pin required`);
+  }
+  const substrate = packages.get('@sentropic/engram@0.21.2');
+  const entry = substrate?.pkg.exports?.['./memory-substrate'];
+  const importEntry = entry?.import?.default ?? entry?.import;
+  if (typeof importEntry !== 'string' || !substrate.files.has(importEntry.replace(/^\.\//, ''))) errors.push('e2: installed public memory-substrate export required');
   const neutral = json(m.neutralDeclarations, 'neutralDeclarations'), profile = json(m.hostProfile, 'hostProfile');
   for (const [label, doc] of [['neutralDeclarations', neutral], ['hostProfile', profile]]) {
     if (doc?.status !== 'verified' || doc?.preCandidateManifestSha256 !== P3_SHA256 || doc?.e2Sha256 !== m.e2?.sha256 || doc?.backendSha256 !== m.backend?.sha256) errors.push(`${label}: tuple not verified`);

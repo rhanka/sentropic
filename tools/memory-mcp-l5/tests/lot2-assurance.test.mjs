@@ -16,7 +16,7 @@ function jwt(overrides = {}, key = root.privateKey) {
 }
 const check = (token, options = {}) => verifyAssurance(token, { policy, now: 1001, tenantId: 'tenant-1',
   principalId: 'human-1', enrollment: () => enrollment, ...options });
-it('should verify signature, enrolled human and fresh 2FA independently', () => {
+it('P07.broker.oidc-assurance: should verify signature, enrolled human and fresh 2FA independently', () => {
   expect(check(jwt())).toMatchObject({ authenticated: true, enrolled_2fa: true, step_up_assurance_verified: true });
   expect(check(jwt(), { now: 1300 })).toBeDefined();
   for (const patch of [{ iss: 'https://other.test' }, { aud: 'wrong' }, { exp: 1001 }, { nbf: 1002 },

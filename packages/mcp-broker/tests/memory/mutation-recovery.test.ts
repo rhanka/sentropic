@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteMemoryWorkflowStoreV1 } from '../../src/memory-reference/index.js';
 import { workflowInput } from './workflow-fixture.js';
-it('should fence expired workers and reconcile unknown outcomes before any repeat execution', async () => {
+it('P06.broker.mutation-recovery: should fence expired workers and reconcile unknown outcomes before any repeat execution', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'l5-recovery-'));
   const store = await SqliteMemoryWorkflowStoreV1.open(join(dir, 'workflow.sqlite'));
   store.putPolicy('admission', 'v1', { retention: 'original' });
