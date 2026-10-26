@@ -354,9 +354,18 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
         return [event, capacityDemand(workflow, selectedJobs)];
       }));
       const demand = Math.max(...Object.values(scenarios));
-      console.log(JSON.stringify({ perRunSlots: demand, availableSlots: 17, reserveSlots: 2,
-        scenarios, source: 'BR-76 observed lower bound; account quota remains to-measure', admitted: demand <= 15 }, null, 2));
-      process.exit(demand <= 15 ? 0 : 1);
+      const validators = Object.entries(workflow.jobs).filter(([name]) =>
+        /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
+        || name === 'memory-l5-qualification');
+      const independent = validators.every(([, job]) => JSON.stringify(job.needs) === '["changes"]');
+      const groups = new Set(validators.map(([, job]) => job.concurrency?.group));
+      const proofs = args.flatMap((arg, i) => arg === '--proof-file' ? [JSON.parse(fs.readFileSync(args[i + 1], 'utf8'))] : []);
+      const proof = wallClockProof(proofs, policyDigest(workflow));
+      const admitted = scenarios.pull_request <= 15 && scenarios.push <= 17 && independent && groups.size === 6;
+      console.log(JSON.stringify({ perRunSlots: demand, availableSlots: 17, releaseGroups: 2,
+        scenarios, independentValidators: independent, validatorSlots: groups.size, wallClockProof: proof,
+        source: 'BR-76 observed lower bound; account quota remains to-measure', admitted }, null, 2));
+      process.exit(admitted && (!args.includes('--require-proof') || proof.accepted) ? 0 : 1);
     }
     const context = JSON.parse(process.env.CI_SELECTION_CONTEXT);
     const expected = workflowExpected(workflow, context);

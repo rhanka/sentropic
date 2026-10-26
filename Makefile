@@ -828,7 +828,7 @@ CI_EXPECTED_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache np
 # BR77-EX2: fail closed when the workflow DAG exceeds the observed slot budget.
 .PHONY: ci-capacity-policy
 ci-capacity-policy: ## Check the per-run finite-capacity bound (quota remains separately inventoried)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --capacity-policy'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --capacity-policy $(if $(filter 1,$(CI_REQUIRE_CAPACITY_PROOF)),--require-proof) $(foreach file,$(CI_POLICY_RUN_FILES),--proof-file $(file))'
 CI_RUN_ATTEMPT ?= 1
 CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
 CI_CAPTURE_DIR ?= tmp/ci-capacity/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)
