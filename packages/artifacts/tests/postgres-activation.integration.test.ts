@@ -230,4 +230,55 @@ describe('shared PostgreSQL activation conformance', () => {
     expect(await foreign.tickets.peek(other.ticket.ticketId)).toEqual(other.ticket);
     await expect(adapter.cleanup(1001)).rejects.toThrow();
   });
+
+  it('should invalidate a restored pre-consume snapshot before either replica serves', async () => {
+    const namespace = 'restore:test';
+    const adapter = createPostgresActivationStore({ pool, namespace });
+    const live = await issue('restored-live', 55_000, adapter);
+    const used = await issue('restored-used', 55_000, adapter);
+    const expired = await issue('restored-expired', 150, adapter);
+    const backup = await pool.connect();
+    try {
+      // Logical PG snapshot retains original namespace, generation, issuance and payload bytes.
+      await backup.query('CREATE TEMP TABLE ticket_backup AS SELECT * FROM artifact_host.activation_tickets WHERE namespace=$1', [namespace]);
+      await backup.query('CREATE TEMP TABLE flow_backup AS SELECT * FROM artifact_host.browser_flows WHERE namespace=$1', [namespace]);
+      await backup.query("CREATE TEMP TABLE publication_witness(id text PRIMARY KEY, denied boolean); INSERT INTO publication_witness VALUES ('accepted-publication',true)");
+      expect(await adapter.consume(used.input, async () => true)).toEqual(used.ticket);
+      await backup.query('SELECT pg_sleep(0.18)');
+      await backup.query('BEGIN');
+      await backup.query('DELETE FROM artifact_host.activation_tickets WHERE namespace=$1', [namespace]);
+      await backup.query('INSERT INTO artifact_host.activation_tickets(namespace,generation,payload,issued_ms) SELECT namespace,generation,payload,issued_ms FROM ticket_backup');
+      await backup.query('INSERT INTO artifact_host.browser_flows(namespace,generation,payload,ticket_expires_ms) SELECT namespace,generation,payload,ticket_expires_ms FROM flow_backup');
+      await backup.query('COMMIT');
+      // Prove the resurrection risk exists, then perform the mandatory closed-serving step.
+      expect(await adapter.tickets.peek(used.ticket.ticketId)).toEqual(used.ticket);
+      await adapter.invalidate();
+      const replica = createPostgresActivationStore({ pool, namespace });
+      for (const old of [live, used, expired]) {
+        expect(await adapter.tickets.peek(old.ticket.ticketId)).toBeUndefined();
+        expect(await replica.flows.peek(old.flow.flowId)).toBeUndefined();
+        expect(await replica.consume(old.input, async () => true)).toBeUndefined();
+      }
+      expect((await backup.query('SELECT * FROM publication_witness')).rows)
+        .toEqual([{ id: 'accepted-publication', denied: true }]);
+      const revoked = await issue('post-restore-revoked', 55_000, adapter);
+      expect(await replica.consume(revoked.input, async () => false)).toBeUndefined();
+      const fresh = await issue('post-restore-fresh', 55_000, adapter);
+      expect(await replica.consume(fresh.input, async () => true)).toEqual(fresh.ticket);
+    } finally {
+      await backup.query('ROLLBACK');
+      await backup.query('DROP TABLE IF EXISTS ticket_backup,flow_backup,publication_witness');
+      backup.release();
+    }
+  });
+
+  it('should reject SQL binding mutation and fail closed when migration is absent', async () => {
+    const { ticket } = await issue('sql-immutable');
+    await expect(pool.query('UPDATE artifact_host.activation_tickets SET payload=$1 WHERE namespace=$2 AND ticket_id=$3',
+      [JSON.stringify({ ...ticket, subjectId: 'mallory' }), 'app:test', ticket.ticketId])).rejects.toThrow('immutable');
+    await pool.query('ALTER SCHEMA artifact_host RENAME TO activation_unavailable');
+    try {
+      await expect(store.tickets.peek(ticket.ticketId)).rejects.toThrow();
+    } finally { await pool.query('ALTER SCHEMA activation_unavailable RENAME TO artifact_host'); }
+  });
 });
