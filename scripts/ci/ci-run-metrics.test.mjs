@@ -50,12 +50,18 @@ test('should sum queue waits along the elapsed critical path without summing par
   const graph = { changes: [], test: ['changes'], 'ci-gate': ['test'] };
   const receipt = criticalPathScheduling(rows, graph, { qualification: ['ci-gate'] });
   assert.equal(receipt.qualification.seconds, 65);
+  assert.equal(criticalPathScheduling(rows.map(row => row.name === 'ci-gate' ? { ...row, queuedAt: '2026-10-18T10:02:00Z' } : row),
+    graph, { qualification: ['ci-gate'] }).qualification.seconds, 65, 'retain dependency-to-dispatch handoff delay');
   assert.deepEqual(receipt.qualification.jobs.map(row => row.jobId), [1, 2, 4]);
   assert.equal(budgetVerdict({ schedulingSeconds: receipt.qualification.seconds }).budgets.schedulingSeconds.status, 'breach');
   assert.equal(criticalPathScheduling(rows.map(row => row.jobId === 2 ? { ...row, queuedAt: null } : row),
     graph, { qualification: ['ci-gate'] }).qualification.seconds, null);
   assert.equal(criticalPathScheduling(rows, {}, { qualification: ['ci-gate'] }).qualification.seconds, null);
   assert.equal(criticalPathScheduling(rows, graph, { images: [] }).images.seconds, null);
+  assert.equal(criticalPathScheduling(rows.map(row => row.name === 'ci-gate' ? { ...row, conclusion: 'skipped' } : row),
+    graph, { qualification: ['ci-gate'] }).qualification.seconds, null);
+  assert.equal(criticalPathScheduling(rows.map(row => row.name === 'ci-gate' ? { ...row, completedAt: row.queuedAt } : row),
+    graph, { qualification: ['ci-gate'] }).qualification.seconds, null);
 });
 
 test('should never label an interrupted main release superseded by a later main run', () => {
@@ -237,6 +243,16 @@ test('queue waits require job readiness and never substitute workflow age', () =
     null,
   );
   assert.deepEqual([waits.count, waits.minSeconds, waits.p50Seconds, waits.maxSeconds], [2, 10, 60, 60]);
+});
+
+test('should not treat queued API placeholder timestamps as executed zero waits', () => {
+  const [row] = captureRecords({ run: { head_branch: 'main', head_sha: 'abc' }, jobs: [{
+    id: 1, run_id: 7, run_attempt: 2, status: 'queued',
+    created_at: '2026-10-26T15:00:00Z', started_at: '2026-10-26T15:00:00Z',
+  }] });
+  assert.equal(queueSeconds(row), null);
+  assert.equal(row.headBranch, 'main');
+  assert.equal(row.headSha, 'abc');
 });
 
 test('should exclude timestamped skipped rows from execution queue statistics', () => {

@@ -62,6 +62,7 @@
   - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
 - [ ] **Lot 3 — Contention budgets and rollback drill**
   - [x] Combine real run captures for observed-peak admission, execution-overlap witnesses, superseded PR ownership and per-main-release continuity; incomplete runs remain to-measure.
+  - [x] Reject queued API placeholder timestamps and invalid/skipped critical-path endpoints; include dependency-to-dispatch handoff delay in aggregate scheduling (34 metrics tests).
   - [x] Add post-run Make capture using the actual run/attempt Jobs API, exact source workflow, and retained pre-dispatch manifest. Missing artifacts fail closed; no selection reconstructed from outcomes.
   - [x] Qualify aggregate scheduling receipts on identified critical-path executions; preserve single-job queue statistics. Main cancellations remain current across newer main runs (32 metrics tests).
   - [ ] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
