@@ -90,7 +90,7 @@
   - [ ] `make scope-check` before each commit; staged whitespace and under-150-line checks; no attribution trailers.
   - [ ] Locked ENV cleanup between Docker steps; no services or published ports outside ENV.
 - [ ] **L1c-e — Draft handoff**
-  - [ ] Record independent-review eligibility/evidence; retain open G-REVIEW if no admitted reviewer capacity.
+  - [x] Record independent-review eligibility/evidence; retain open G-REVIEW with no admitted complementary reviewer capacity.
   - [ ] Push draft PR using this plan as body; inspect exact-head CI; report PR/head and surface.
 
 ## AI Flaky tests
