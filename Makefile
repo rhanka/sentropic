@@ -940,6 +940,12 @@ engram-e2-stable-publish-guard:
 	@version="$$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' packages/cluster-mesh/package.json | head -1)"; \
 		case "$$version" in *-*) echo 'Development Cluster Mesh versions are pack-only'; exit 1;; esac
 
+.PHONY: engram-e2-job-receipt
+engram-e2-job-receipt:
+	@mkdir -p "$(E2_RECEIPTS)"
+	@gh api "repos/$$GITHUB_REPOSITORY/actions/runs/$$GITHUB_RUN_ID/jobs?per_page=100" > "$(E2_RECEIPTS)/jobs.json"
+	@sha256sum "$(E2_RECEIPTS)/context.txt" "$(E2_RECEIPTS)/jobs.json" > "$(E2_RECEIPTS)/context.sha256"
+
 pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
 	$(call manifest_guard_pack,cluster-mesh)
 
