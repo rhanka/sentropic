@@ -34,6 +34,9 @@ if [ -f /source/.h2a/pg-crash-witness.json ]; then
 fi
 case "$CM_ACTION" in
   memory-lot3)
+    "$tsc" -p tsconfig.json
+    CLUSTER_MESH_PREPARE_ONLY=mcp sh tests/packaging/prepare.sh "$workspace/lot3-packaging"
+    export CLUSTER_MESH_PACKAGING_DIR="$workspace/lot3-packaging"
     node ../../tools/memory-mcp-l5/lot3-source.mjs "$workspace" /source/tmp/memory-l5-lot3-results /source ;;
   platform-test)
     cd ../mcp-platform

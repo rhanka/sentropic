@@ -18,9 +18,9 @@ const tool: BridgeTool = { name: 'engram_memory_search', profile: 'sentropic.eng
   }, required: ['ok', 'output', 'auditId', 'redactionClass'] },
   _meta: { source: 'mcp:engram-memory', capability: 'search' } };
 const envelope = { ok: true as const, output: { schema_version: 1 as const, value: 'é' }, auditId: 'audit-host-1', redactionClass: 'high' as const };
-async function linked(run: (...args: any[]) => Promise<any>, options: BridgeOptions = {}) {
+async function linked(run: (...args: any[]) => Promise<any>, options: BridgeOptions = {}, selectedTool = tool) {
   const server = new Server({ name: 'memory', version: '1' }, { capabilities: { tools: {} } });
-  registerBridgeTools(server, [tool], { run }, options);
+  registerBridgeTools(server, [selectedTool], { run }, options);
   const [a, b] = InMemoryTransport.createLinkedPair();
   await server.connect(b);
   const client = new Client({ name: 'memory-test', version: '1' });
@@ -70,6 +70,7 @@ describe('P04.platform.wire-profile-v1', () => {
   it('should refuse unknown profiles before installing SDK handlers', () => {
     const server = new Server({ name: 'bad', version: '1' });
     expect(() => registerBridgeTools(server, [{ ...tool, profile: 'unknown' }], { run: async () => envelope })).toThrow();
+    expect(() => registerBridgeTools(server, [tool, tool], { run: async () => envelope })).toThrow();
   });
   it('should admit the exact escaped 2 MiB ceiling and refuse ceiling + 1', () => {
     const make = (target: number) => {
@@ -90,6 +91,30 @@ describe('P04.platform.wire-profile-v1', () => {
       { memoryContext: async () => hostContext() });
     try {
       await expect(client.callTool({ name: tool.name, arguments: {} })).rejects.toMatchObject({ code: -32603 });
+    } finally { await client.close(); }
+  });
+  it('should carry mutation envelope bindings and refuse absent idempotency before runner contact', async () => {
+    const selected = { ...tool, name: 'engram_memory_capture' }, ctx = hostContext();
+    let calls = 0;
+    const client = await linked(async (_name, _args, _identity, call) => {
+      calls++; expect(call.context.memory.binding.idempotency_key).toBe('operation-key-0001'); return envelope;
+    }, { memoryContext: async () => ctx }, selected);
+    try {
+      await expect(client.callTool({ name: selected.name, arguments: {} })).rejects.toMatchObject({ code: -32603 });
+      expect(calls).toBe(0);
+      ctx.memory!.binding = { ...ctx.memory!.binding, idempotency_key: 'operation-key-0001' };
+      expect((await client.callTool({ name: selected.name, arguments: {} })).isError).toBe(false);
+      expect(calls).toBe(1);
+    } finally { await client.close(); }
+  });
+  it('should sanitize unexpected exceptions without exposing their messages', async () => {
+    const client = await linked(async () => { throw Error('private-credential-detail'); },
+      { memoryContext: async () => hostContext() });
+    try {
+      const result = await client.callTool({ name: tool.name, arguments: {} });
+      expect(result).toMatchObject({ isError: true, structuredContent: { ok: false, auditId: 'audit-host-1',
+        error: { code: 'CAPABILITY_UNAVAILABLE', message: 'Memory call failed' } } });
+      expect(JSON.stringify(result)).not.toContain('private-credential-detail');
     } finally { await client.close(); }
   });
 });

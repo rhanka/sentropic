@@ -25,6 +25,8 @@
   - `packages/cluster-mesh/tests/memory-context.spec.ts`
   - `packages/cluster-mesh/tests/mcp-composition.spec.ts`
   - `packages/cluster-mesh/tests/storage/cold-workspace.sh`
+  - `packages/cluster-mesh/tests/packaging/prepare.sh`
+  - `packages/cluster-mesh/tests/packaging/mcp-tuple.spec.ts`
   - `packages/cluster-mesh/tests/verified-invocation-context.spec.ts`
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
@@ -46,6 +48,7 @@
   - [x] L5L3-EX1: bounded root Makefile/CI source/regression wiring; preserve frozen producing recipes; rollback Lot 3 delegation only.
   - [x] L5L3-EX2: package version/lock scalars above published releases; retain frozen snapshots; successor pre-candidate/E4 required before installed acceptance.
   - [x] L5L3-EX3: add one Lot 3 action to the existing disposable cold workspace; reuse its installation, no additional runtime; rollback that action only.
+  - [x] L5L3-EX4: prepare the existing MCP packaging fixtures in isolation and update their platform floor to 0.4.1; three required P09 cases otherwise skip. Rollback the preparation mode and floor assertion together.
 ## Feedback Loop
 - [ ] gr-conductor: verified P3-bound lot2-manifest/sidecar, E2/backend/neutral/profile/lock closure and G1–G4/C9 receipts required; stop dependent qualification.
 - [ ] Lot 4: S1 normalization, compatible frozen successor/E4, installed six-suite qualification and owner UAT remain owning-lot gates.
@@ -65,4 +68,5 @@
   - [x] Preserve full context and cancellation; compile policy uses verified claims/source; mesh 0.22.5 requires corrected platform 0.4.1.
 - [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
   - [x] New runner/tests: tools/memory-mcp-l5/lot3-source.mjs and tests/lot3-source.test.mjs; exact P09 file set bound to the unchanged P3 catalog.
+  - [x] First exact run: platform 132 passed; mesh 24 passed/3 skipped, rejected by the reporter. Existing packaging fixtures now prepare those three required cases.
 - [ ] Lot 4: review, push draft PR to main, final-head CI green; list manifest-blocked proofs and Lot 4 estimate.
