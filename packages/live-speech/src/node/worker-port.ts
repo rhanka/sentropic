@@ -40,7 +40,10 @@ function defaultEnginePaths(): { engineModule: string; vadAssetPath: string } {
   const adapterPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'engines', 'faster-whisper.mjs');
   let engineRoot: string;
   try {
-    engineRoot = path.dirname(createRequire(import.meta.url).resolve('faster-whisper-ts/package.json'));
+    // The engine package does not export ./package.json; resolve its entry
+    // (dist/src/index.js) and step up to the package root.
+    const entry = createRequire(import.meta.url).resolve('faster-whisper-ts');
+    engineRoot = path.resolve(path.dirname(entry), '..', '..');
   } catch {
     throw new Error('faster-whisper-ts is not installed: provide engineModule explicitly or install the pinned engine');
   }
