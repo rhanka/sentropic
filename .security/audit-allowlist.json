@@ -1,17 +1,4 @@
 {
   "_comment": "Machine-readable allowlist for .security/audit-gate.mjs (the exception-aware npm-audit gate used in api/Dockerfile + ui/Dockerfile). Each entry allows ONE GHSA to not fail the HIGH/CRITICAL gate until review_due. Human record + full justification: .security/vulnerability-register.yaml. Keep the two in sync.",
-  "allow": [
-    {
-      "ghsa": "GHSA-mrhx-c7xc-m3w5",
-      "package": "zod",
-      "severity": "high",
-      "reason": "Memory exhaustion below 4.6.6; no same-major fix exists, migration to zod v4 pending (Track 01M5PMR6AG9QDZG9H3N57TB3FS). Dated exception, review 2026-11-07. Human record: .security/vulnerability-register.yaml GHSA-mrhx-c7xc-m3w5_zod_3.25.76.",
-      "review_due": "2026-11-07"
-    },
-    {
-      "ghsa": "GHSA-866g-f22w-33x8",
-      "review_due": "2026-10-30",
-      "reason": "@ai-sdk/provider-utils <=3.0.27 uncontrolled-resource-consumption advisory on the nested dev-only copy (ollama-ai-provider 1.2.0 via engram, pinned 2.2.8, no v2 fix published); bumping the v2 line under main-owned engram risks runtime breakage. Time-boxed pending upstream/main remediation; human record in vulnerability-register.yaml."
-    }
-  ]
+  "allow": []
 }

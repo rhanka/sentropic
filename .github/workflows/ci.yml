@@ -180,6 +180,7 @@ jobs:
       chat_core: ${{ steps.filter.outputs.chat_core }}
       chat_server: ${{ steps.filter.outputs.chat_server }}
       comments: ${{ steps.filter.outputs.comments }}
+      skills: ${{ steps.filter.outputs.skills }}
       events: ${{ steps.filter.outputs.events }}
       contracts: ${{ steps.filter.outputs.contracts }}
       flow: ${{ steps.filter.outputs.flow }}
@@ -445,6 +446,8 @@ jobs:
               - '.github/workflows/ci.yml'
             comments_publish:
               - 'packages/comments/**'
+            skills:
+              - 'packages/skills/**'
             events:
               - 'Makefile'
               - 'package.json'
@@ -741,7 +744,7 @@ jobs:
         if: steps.pack.outputs.manifest_mode == 'block'
         env:
           CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.2,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.3,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh candidate qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -1126,6 +1129,21 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-comments ENV=test-ci-comments
+
+  validate-skills:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Pack Skills
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-skills ENV=test-ci-skills
 
   validate-flow:
     runs-on: ubuntu-latest
@@ -2239,7 +2257,7 @@ jobs:
               fi ;;
             *) echo "::error title=Publication qualification::cluster-mesh status=${status}: unexpected publication outcome"; exit 1 ;;
           esac
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.2,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_WAIT_ATTEMPTS=36 QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.3,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_WAIT_ATTEMPTS=36 QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -2379,7 +2397,7 @@ jobs:
           if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
           if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.2,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.0 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.3,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload bootstrap publication receipts and qualification reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -2480,6 +2498,7 @@ jobs:
       - validate-chat-core
       - validate-chat-server
       - validate-comments
+      - validate-skills
       - validate-flow
       - validate-artifacts
       - validate-harness
@@ -2543,7 +2562,7 @@ jobs:
       validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
       validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
-      validate-chat-core, validate-chat-server, validate-comments, validate-flow,
+      validate-chat-core, validate-chat-server, validate-comments, validate-skills, validate-flow,
       validate-artifacts, validate-harness, build-api-image, build-api-tool-image,
       test-api-unit-integration, build-ui, test-e2e, e2e-vscode, smoke-idp-screens,
       security-sast-sca, security-iac, security-container, test-smoke-restore, validate-ci-capacity-metrics,

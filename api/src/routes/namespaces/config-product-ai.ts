@@ -57,7 +57,7 @@ export const createProductAISettingsRouter = (): Hono => {
     } catch (error) {
       console.error('Error updating AI settings:', error);
       if (error instanceof z.ZodError) {
-        return context.json({ message: 'Validation error', errors: error.errors }, 400);
+        return context.json({ message: 'Validation error', errors: error.issues }, 400);
       }
       return context.json({ message: 'Failed to update AI settings' }, 500);
     }
