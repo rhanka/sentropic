@@ -74,6 +74,11 @@ describe('C7 host candidate authority', () => {
     expect((await h.store.applyLifecycle(lifecycle)).ok).toBe(false);
     expect(h.commit).not.toHaveBeenCalled();
     expect(h.transition).not.toHaveBeenCalled();
+    h.enter(h.original);
+    expect((await h.store.commitPending(pending)).ok).toBe(true);
+    h.enter({ ...h.original, [key]: 'foreign' });
+    expect((await h.store.applyLifecycle(lifecycle)).ok).toBe(false);
+    expect(h.transition).not.toHaveBeenCalled();
   });
 
   it('should refuse copied caller assertions and repeated candidate issuance', async () => {
