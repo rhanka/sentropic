@@ -2,7 +2,7 @@
 // Canonical product adapter for the injected Cluster Mesh business transport.
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../utils/zod-validator';
 import { db, pool } from '../../db/client';
 import { organizations, folders, initiatives } from '../../db/schema';
 import { and, eq, inArray } from 'drizzle-orm';

@@ -1,7 +1,7 @@
 // Canonical product adapter for the injected Cluster Mesh business transport.
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../utils/zod-validator';
 import { productService } from '../../services/context-product';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
