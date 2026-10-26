@@ -6,12 +6,20 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
+
+test('should bound simultaneous execution slots across dependency joins and matrix caps', () => {
+  assert.equal(capacityDemand({ jobs: { a: {}, b: { needs: ['a'] }, c: {} } }), 2);
+  const matrix = { strategy: { 'max-parallel': 2, matrix: { include: [{ x: 1 }, { x: 2 }, { x: 3 }] } } };
+  assert.equal(capacityDemand({ jobs: { a: matrix, b: { needs: ['a'] }, c: {} } }), 3);
+  assert.throws(() => capacityDemand({ jobs: { a: { needs: ['missing'] } } }), /dependency/);
+  assert.throws(() => capacityDemand({ jobs: { a: { needs: ['b'] }, b: { needs: ['a'] } } }), /cycle/);
+});
 
 test('should capture every page of the current attempt at the actual gate and fail on API errors', async () => {
   const script = workflow.jobs['ci-gate'].steps.find((step) => step.name === 'Capture the current attempt for the final verdict').with.script;

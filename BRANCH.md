@@ -52,6 +52,7 @@
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
   - [x] Base origin/main 440599d04e91bb33e3874588f067c6a90bffd1b3; harness C1 passed; inherited suites passed 45/45. BR77 uses ENV=test-ci-capacity per owner packet.
 - [ ] **Lot 1 — Quota, reservation, and cost inventory (GitHub API)**
+  - [x] Query account/runner/billing routes directly; retain null quota and HTTP 404 rather than inventing capacity/cost. Record observed lower-bound policy and static slot admission in capacity.md.
   - [ ] Inventory real account quotas/runner classes via the GitHub API; record reservation, scheduling priorities, cost, and peak demand in `spec/ci-cd-ten-minutes/capacity.md`.
   - [ ] Lot gate: inventory receipts attached with API routes/IDs; unknowns stay to-measure, never assumed.
 - [ ] **Lot 2 — Bounded dispatch and concurrency**
