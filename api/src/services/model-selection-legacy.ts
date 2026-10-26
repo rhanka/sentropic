@@ -55,6 +55,13 @@ const LEGACY_MODEL_CUTOVER_RULES: LegacyModelCutoverRule[] = [
     fromModelId: 'claude-opus-4-7',
     toModelId: 'claude-opus-4-8',
   },
+  {
+    // Retired by OpenAI (404 "model has been deprecated" on live calls);
+    // stored nano selections cut over to the registered nano successor.
+    providerId: 'openai',
+    fromModelId: 'gpt-4.1-nano',
+    toModelId: 'gpt-5.4-nano',
+  },
 ];
 
 const LEGACY_MODEL_CUTOVER_BY_MODEL = new Map(

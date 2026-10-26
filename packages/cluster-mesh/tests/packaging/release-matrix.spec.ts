@@ -64,16 +64,16 @@ describe.skipIf(!enabled)('packed release matrix', () => {
     }
   });
 
-  it('should source each train package from a verified sibling archive or, for the unpublished workspace gateway, the local pack', () => {
+  it('should source each train package from a verified sibling archive or, for unpublished workspace versions, the local pack', () => {
     const index = siblingIndex();
     const localPackDir = fixtureDir('src');
     for (const fixture of ['selected', 'selected-session', 'latest', 'src/separate-runtime']) {
       const lines = read(join(fixtureDir(fixture), 'sources.txt')).trim().split('\n').map((line) => line.split(' '));
       expect(lines.map(([name]) => name).sort(), fixture).toEqual(['@sentropic/llm-gateway', '@sentropic/llm-mesh']);
       for (const [name, kind, spec] of lines) {
-        if (kind === 'sibling' && spec!.startsWith(`${localPackDir}/`) && name === '@sentropic/llm-gateway'
-          && spec === `${localPackDir}/sentropic-llm-gateway-${pinned[name!]!}.tgz`) {
-          // Locally packed workspace gateway while unpublished: no receipt covers it, so the
+        if (kind === 'sibling' && spec!.startsWith(`${localPackDir}/`)
+          && spec === `${localPackDir}/sentropic-${name!.split('/')[1]}-${pinned[name!]!}.tgz`) {
+          // Locally packed workspace train package while unpublished: no receipt covers it, so the
           // siblings index still reports the registry — the local pack is the intended source.
           expect(expectedSource(index, name!, pinned[name!]!), `${fixture} ${name}`).toBe('registry');
           continue;
