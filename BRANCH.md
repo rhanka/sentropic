@@ -1,7 +1,7 @@
 # Feature: feat(memory-l5): Lot 2 durable reference
 
 ## Objective
-- [ ] Implement durable workflow reference and fail-closed P3/E2 receiving harness; retain missing host acceptance explicitly.
+- [x] Implement durable workflow reference and fail-closed P3/E2 receiving harness; retain missing host acceptance explicitly.
 ## Scope / Guardrails
 - [x] Worktree tmp/worktrees/mem-l5-lot2; branch feat/memory-l5-lot2; base origin/fix/memory-l5-p09-p3; merge only.
 - [x] Preserve catalog, l0-freeze and P3 bytes; no Python; shared Docker lock; ENV=test-mem-l5-lot2 last.
@@ -52,5 +52,5 @@
   - [x] `packages/mcp-broker/tests/memory/oidc-assurance.test.ts`
   - [x] `tools/memory-mcp-l5/tests/lot2-{assurance,manifest,retained-inputs,envelope}.test.mjs`
 - [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
-- [ ] Lot 3: unverified fixture now uses the frozen envelope; retained P3 (30 files/54 edges) and full source gate passed; final JSON reports and refusal checks next.
+- [x] Lot 3: reference 66/tooling 109 passed; full source gate passed; reference archive and complete hashed reports retained; absent/unverified manifest refusals passed; Node 24.21.0/SQLite 3.53.4 WAL/FULL, no Python executable.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.

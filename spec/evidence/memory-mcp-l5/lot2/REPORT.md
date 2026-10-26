@@ -20,7 +20,8 @@ No catalog, L0 or P3 manifest byte changed. Historical retention reuses the exis
 ## Checks and limits
 
 Reference-only run: **66 tests passed** across 13 files, including independent-process contention, termination before claim and during execution, close/reopen, original recorded replay, policy history, deadlines/cancellation and signed-token refusals. These tests establish workflow/reference mechanics; their synthetic canonical proof inputs establish no real E2 effect, original canonical receipt or PostgreSQL guarantee.
-Tooling: **108 tests passed** before the receiving-envelope regression was added. Final counts and exact byte/report bindings are recorded in `reference-evidence.json` after final validation. Complete assertion reports are retained compressed by hash under `reports/`; no skipped/todo source case is accepted.
+Tooling: **109 tests passed**, including the existing frozen Lot 2 envelope regression. Exact byte/report bindings are in `reference-evidence.json`. Complete assertion reports are retained compressed by hash under `reports/`; no skipped/todo source case is accepted.
+Measured runtime: Node 24.21.0, SQLite 3.53.4, WAL/FULL, no Python executable. Reference archive SHA-256: `9b9c28ceb31f382f8a1ca5f378b6b29a1a91e1a4c34c9878b8db221c36ae6450`, retained outside P3 with its per-file inventory in `reference-artifact.json`.
 The CI source/reference gate retains P3 and runs the original Lot 1 regressions plus the new reference tests. It is not `L5-MEMORY-V1`. The real Lot 2 gate refuses an absent manifest or the committed unverified fixture.
 
 ## Waiting for gr-conductor and actual acceptance
