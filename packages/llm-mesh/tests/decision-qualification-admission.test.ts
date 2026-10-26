@@ -5,19 +5,9 @@ import { createDecisionService } from '../src/decision/service.js';
 import { createProviderRegistry } from '../src/registry.js';
 import { discoverDecisionEvaluator } from '../src/decision/qualification.js';
 import { decisionPrice, decisionServiceFixture } from './decision-fixtures.js';
-import { assessmentFixture } from './decision-assessment-fixtures.js';
+import { productionFixture } from './decision-production-fixtures.js';
 import { validateDecisionResult } from '../src/decision/validate-result.js';
 import { trustedNativeContext } from './decision-fixtures.js';
-
-function productionFixture() {
-  const f = decisionServiceFixture();
-  const a = assessmentFixture();
-  delete a.descriptor.executionProfile;
-  f.options.registry = createProviderRegistry([createJevAdapter({ descriptor: a.descriptor, transport: f.transport })]);
-  f.options.resolveEvaluator = () => a.descriptor;
-  f.options.readiness = { contractConformance: true, transportAccessible: true, policy: a.policy, assessments: [a.assessment] };
-  return { ...f, ...a };
-}
 
 describe('production prerequisites and isolated qualification', () => {
   it('should admit the exact fully qualified recorded scope', async () => {

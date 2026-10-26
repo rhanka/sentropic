@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { recordDecisionAssessmentRow, decisionAssessmentCapacity } from '../src/decision/assessment-recording.js';
 import { createDecisionService } from '../src/decision/service.js';
-import { decisionRequest, decisionServiceFixture, trustedNativeContext } from './decision-fixtures.js';
+import { decisionRequest, trustedNativeContext } from './decision-fixtures.js';
 import { assessmentFixture } from './decision-assessment-fixtures.js';
+import { productionFixture } from './decision-production-fixtures.js';
 
 describe('recording validated v1 results without replay', () => {
   it('should project one validated result and retain independent work counters', async () => {
-    const f = decisionServiceFixture();
+    const f = productionFixture();
     const request = decisionRequest({ correlationId: 'record-1', decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 } });
     const result = await createDecisionService(f.options).decide(request);
     const input = { request, context: trustedNativeContext(request), result, sampleId: 'item-1',
