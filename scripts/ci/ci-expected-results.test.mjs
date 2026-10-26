@@ -31,6 +31,8 @@ test('should capture only selected delivery endpoints and reject cross-head rece
   assert.deepEqual(capture.endpoints.images, ['publish-api-image']);
   assert.deepEqual(capture.endpoints.packages, ['publish-comments']);
   assert.equal(capture.timings.verdictSeconds, null);
+  assert.equal(capacityCapture(workflow, run, [{ name: 'changes', runner_id: 0, conclusion: 'cancelled',
+    started_at: '2026-10-26T15:46:09Z', completed_at: '2026-10-26T15:52:57Z' }], manifest).timings.classificationSeconds, null);
   assert.deepEqual(capture.dependencies['ci-gate'], workflow.jobs['ci-gate'].needs);
   assert.throws(() => capacityCapture(workflow, { ...run, head_sha: 'wrong' }, [], manifest), /identity/);
 });

@@ -2634,7 +2634,7 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
       - name: Qualify CI capacity metrics and expected-result fixtures
-        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-62
+        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity
       - name: Prove selection-aware negative cases through the Make entry point
         run: |
           set -euo pipefail
