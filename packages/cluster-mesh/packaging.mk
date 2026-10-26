@@ -35,6 +35,9 @@ test-lazy-package:
 	@$(MAKE) --no-print-directory -f Makefile build-cluster-mesh ENV=$(ENV)
 	@$(MAKE) --no-print-directory -f Makefile $(if $(filter test-861-int,$(ENV)),immo-861-build-mcp-platform,build-mcp-platform) ENV=$(ENV)
 	@$(MAKE) --no-print-directory -f Makefile build-artifacts ENV=$(ENV)
+	@$(MAKE) --no-print-directory -f Makefile build-llm-mesh ENV=$(ENV)
+	@$(MAKE) --no-print-directory -f Makefile build-llm-gateway ENV=$(ENV)
+	@$(MAKE) --no-print-directory -f Makefile build-comments ENV=$(ENV)
 	@$(LAZY_PACKAGE_RUN) sh -lc 'set -eu; work=/tmp/lazy-package; sh tests/packaging/prepare.sh "$$work"; \
 		cp vitest.config.ts "$$work/tools/vitest.config.ts"; \
 		CLUSTER_MESH_PACKAGING_DIR="$$work" NODE_PATH="$$work/tools/node_modules" \
