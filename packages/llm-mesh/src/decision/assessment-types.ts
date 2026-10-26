@@ -1,5 +1,5 @@
 import type { DecisionOperatingPolicy, DecisionQualificationScope } from './qualification-scope.js';
-import type { DecisionCriterion } from './request.js';
+import type { DecisionCriterion, DecisionRule } from './request.js';
 
 export type DecisionAssessmentPopulation = 'tuning' | 'held-out' | 'injection' | 'invariance' | 'repeat' | 'smoke';
 export interface DecisionAssessmentSample {
@@ -9,6 +9,7 @@ export interface DecisionAssessmentSample {
 }
 /** Recorded receipt projection. Receipt v1 remains unchanged; work/billable units live here. */
 export interface DecisionAssessmentRow {
+  policyDigest: string; startedAt: string;
   callId: string; sampleId: string; inputDigest: string; population: DecisionAssessmentPopulation; attempts: 0 | 1;
   outcome: 'verdict' | 'refusal' | 'malformed' | 'transport-failure';
   pass: boolean | null; score: number | null; label: string | null;
@@ -20,7 +21,9 @@ export interface DecisionAssessment {
   schemaVersion: 1; scope: DecisionQualificationScope; executionDigest: string; date: string; criterion: DecisionCriterion;
   evidenceKind: 'recorded' | 'fixture'; sourceRefs: string[]; access: 'verified' | 'unverified';
   dataset: { revision: string; splitRevision: string; samples: DecisionAssessmentSample[] };
-  policy: DecisionOperatingPolicy; policyFrozenBeforeAssessment: boolean; thresholdSelectedOn: 'tuning';
+  policy: DecisionOperatingPolicy;
+  controls: { criterionRevision: string; criterionDigest: string; policyDigest: string; splitDigest: string;
+    tuningCallIds: string[]; candidateRules: DecisionRule[]; frozenAt: string };
   authorizationRef: string; attemptCap: number; costCapMicroUsd: string;
   planned: Record<DecisionAssessmentPopulation, number>; rows: DecisionAssessmentRow[];
 }
@@ -33,7 +36,8 @@ export interface DecisionAssessmentReport {
     coverage: number; falsePassUpper95: number; falseFailUpper95: number };
   metrics: Record<string, number | number[][]>;
   labels: string[] | null;
-  evidence: { date: string | null; sourceRefs: string[]; datasetDigest: string | null; splitDigest: string | null };
+  evidence: { date: string | null; sourceRefs: string[]; datasetDigest: string | null; splitDigest: string | null;
+    p30: 'verified' | 'unverified' };
   slices: { tag: string; count: number; verdicts: number; falsePasses: number; falseFails: number; sufficientlySampled: boolean }[];
   latency: { status: 'measured' | 'unverified'; p50Ms: number | null; p95Ms: number | null };
 }
