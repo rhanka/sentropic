@@ -8,7 +8,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { captureRecords, executionSeconds } from './ci-run-metrics.mjs';
+import { createHash } from 'node:crypto';
+import { captureRecords, executionSeconds, durationSeconds } from './ci-run-metrics.mjs';
+
+const policyDigest = workflow => createHash('sha256').update(JSON.stringify(workflow)).digest('hex');
+
+export function wallClockProof(captures, digest) {
+  const runs = captures.map(capture => {
+    const run = capture.run ?? {};
+    const wallClockSeconds = durationSeconds(run.created_at, run.updated_at);
+    const gate = capture.jobs?.find(job => job.name === 'ci-gate');
+    return { runId: run.id, event: run.event, headBranch: run.head_branch, wallClockSeconds,
+      accepted: Boolean(run.id && capture.policyDigest === digest && run.status === 'completed'
+        && run.conclusion === 'success' && gate?.runner_id && gate.conclusion === 'success'
+        && wallClockSeconds !== null && wallClockSeconds <= 2288) };
+  });
+  const pr = runs.find(run => run.accepted && run.event === 'pull_request');
+  const main = runs.find(run => run.accepted && run.event === 'push' && run.headBranch === 'main');
+  return { baselineSeconds: 2288, runs, accepted: Boolean(pr && main && pr.runId !== main.runId) };
+}
 
 // Complete post-run capture: the pre-dispatch manifest owns selection; the
 // exact source workflow owns dependencies. Preserve null/incomplete endpoints.
@@ -21,7 +39,7 @@ export function capacityCapture(workflow, run, jobs, manifest) {
     const row = jobs.find(job => job.name === name);
     return row ? executionSeconds(captureRecords({ run, jobs: [row] })[0]) : null;
   };
-  return { run, jobs, sourceSha: run.head_sha, workflowSha: null,
+  return { run, jobs, sourceSha: run.head_sha, workflowSha: null, policyDigest: policyDigest(workflow),
     dependencies: Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
       [name, typeof job.needs === 'string' ? [job.needs] : job.needs ?? []])),
     endpoints: { qualification: ['ci-gate'], images: selected.filter(name => /^publish-.*-image$/.test(name)),

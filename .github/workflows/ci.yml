@@ -2090,7 +2090,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-chat-ui]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2108,7 +2109,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-cited-source-viewer]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-cited-source-viewer.result == 'success' && (needs.changes.outputs.cited_source_viewer_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-cited-source-viewer.result == 'success' && (needs.changes.outputs.cited_source_viewer_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2126,7 +2128,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-cowork-bridge]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-bridge.result == 'success' && (needs.changes.outputs.cowork_bridge_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-bridge.result == 'success' && (needs.changes.outputs.cowork_bridge_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2144,7 +2147,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-oauth-verify]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-oauth-verify.result == 'success' && (needs.changes.outputs.oauth_verify_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-oauth-verify.result == 'success' && (needs.changes.outputs.oauth_verify_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2222,7 +2226,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-mcp-platform]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-platform.result == 'success' && (needs.changes.outputs.mcp_platform_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-platform.result == 'success' && (needs.changes.outputs.mcp_platform_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2240,7 +2245,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-artifacts]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' && (needs.changes.outputs.artifacts_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' && (needs.changes.outputs.artifacts_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2258,7 +2264,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-auth-hono]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-auth-hono.result == 'success' && (needs.changes.outputs.auth_hono_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-hono.result == 'success' && (needs.changes.outputs.auth_hono_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2276,7 +2283,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-auth-client]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-auth-client.result == 'success' && (needs.changes.outputs.auth_client_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-client.result == 'success' && (needs.changes.outputs.auth_client_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2294,7 +2302,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-auth-ui]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-auth-ui.result == 'success' && (needs.changes.outputs.auth_ui_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-ui.result == 'success' && (needs.changes.outputs.auth_ui_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2312,7 +2321,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-cowork-desktop]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-desktop.result == 'success' && (needs.changes.outputs.cowork_desktop_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-desktop.result == 'success' && (needs.changes.outputs.cowork_desktop_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2330,7 +2340,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-contracts]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-contracts.result == 'success' && (needs.changes.outputs.contracts_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-contracts.result == 'success' && (needs.changes.outputs.contracts_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2348,7 +2359,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-events]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-events.result == 'success' && (needs.changes.outputs.events_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-events.result == 'success' && (needs.changes.outputs.events_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2366,7 +2378,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-chat-core]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-chat-core.result == 'success' && (needs.changes.outputs.chat_core_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-core.result == 'success' && (needs.changes.outputs.chat_core_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2384,7 +2397,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-chat-server]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-chat-server.result == 'success' && (needs.changes.outputs.chat_server_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-server.result == 'success' && (needs.changes.outputs.chat_server_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2402,7 +2416,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-comments]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-comments.result == 'success' && (needs.changes.outputs.comments_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-comments.result == 'success' && (needs.changes.outputs.comments_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2420,7 +2435,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-flow]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-flow.result == 'success' && (needs.changes.outputs.flow_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-flow.result == 'success' && (needs.changes.outputs.flow_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
@@ -2438,7 +2454,8 @@ jobs:
       queue: max
       cancel-in-progress: false
     needs: [changes, validate-harness]
-    if: !cancelled() && needs.changes.result == 'success' && needs.validate-harness.result == 'success' && (needs.changes.outputs.harness_publish == 'true' && github.ref == 'refs/heads/main')
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-harness.result == 'success' && (needs.changes.outputs.harness_publish == 'true' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       id-token: write
