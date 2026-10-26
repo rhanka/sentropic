@@ -22,6 +22,7 @@
   - `package-lock.json` (root workspace lock sync for packages/* bumps)
   - `package.json` (root, `overrides` pin only — forces the single v4 line tree-wide)
   - `api/src/**`
+  - `api/tests/unit/google-drive-oauth.test.ts` (deterministic tamper test blocking CI)
   - `packages/auth-hono/**`
   - `packages/comments/**`
   - `packages/skills/**`
@@ -64,6 +65,7 @@
 - [x] BR01-EX4: wire the skills pack lane into CI and its final gates. Reason: the existing wiring regression requires one validation pack step per registered lane. Impact: additive validation only; rollback: remove the skills filter/job and gate dependencies with its pack registration.
 - [x] CI 40244768449 passes the standalone audit and then reports only the frozen comments package-manifest hash mismatch. Preserve contract-v1.json and all 29 original pins; add a dated, digest-bound package migration receipt and verify that reversing exactly the version/Zod changes recovers the original bytes. Contract sources, exports and wire/hash rules stay pinned.
 - [x] CI 40245755696 reaches packed consumers: the selected fixture still pins published auth-hono 0.16.0/comments 0.3.0 while same-PR receipts carry 0.16.1/0.3.1. Advance only those fixture entries and record the verified candidate archive integrities, retaining the Zod 4 resolution.
+- [x] CI unit failure: google-drive-oauth.test.ts replaces the final signature characters with xx, which can decode to the same bytes as xw; an unchanged valid MAC then reports expiry. Flip a decoded signature byte and pass the test's fixed time so the tamper assertion always exercises authentication.
 - [ ] BR01-EX1 (`acknowledge` self): touch `Makefile` (Forbidden Path), pin-only changes of `zod@3.25.76`/`zod@3.23.8` install pins to the v4 line in package typecheck/test targets (skills, auth-hono, llm-gateway, auth-client, cluster-mesh peer tools). Reason: targets hardcode the exact zod version under test; without the pin update the gates keep validating against v3. Impact: version strings in ephemeral `npm install` commands only, no target logic change. Rollback: revert pin strings to v3.
 - [x] `acknowledge`: `make scope-check` available (harness CLI installed); run before every commit.
 - [x] Previous pause lifted by owner resume on 2026-10-25; merged the main fixes and refreshed the API lock. Current root audit reports zero HIGH/CRITICAL.
@@ -137,6 +139,7 @@
   - [x] Resume gates via Compose `make sh-api`: API typecheck PASS; auth-hono 239/239, comments 102/102, skills 136/136 tests PASS on the merged base.
   - [x] Root `overrides` pin `"zod": "^4.6.6"` added (single hoisted 4.6.7, zero v3) — `make lock-root` green.
   - [x] API typecheck via Compose PASS; full API, UI and E2E suites delegated to exact-head PR CI; no UAT (no UI change).
+  - [x] Reproduced identical decoded bytes for xw/xx suffixes; the corrected signature-tamper/expiry case PASS in scoped Vitest. Full OAuth file requires its normal CI database fixture.
 
 - [ ] **Lot 5 — Register cleanup + final validation**
   - [x] Root npm audit after migration: zero HIGH/CRITICAL, no Zod finding. Remove npm-audit/SCA-api dated exceptions and the GHSA allowlist first; remove remaining scanner aliases in the next atomic commit.
