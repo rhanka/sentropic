@@ -17,6 +17,8 @@
   - [x] `deploy/ci/idp-identity-sync/bundle-checks.mjs`
   - [x] `deploy/ci/idp-identity-sync/services-test.sh`
   - [x] `deploy/ci/idp-identity-sync/sql-test.sh`
+  - [x] `deploy/ci/idp-identity-sync/run-core.mjs`
+  - [x] `deploy/ci/idp-identity-sync/run.selftest.mjs`
   - [x] `deploy/ci/idp-identity-sync/CRED_CYCLE.md`
   - [x] `deploy/ci/idp-identity-sync/README.md`
   - [x] `api/src/scripts/oauth-provision-exchange-client.ts`
@@ -36,6 +38,7 @@
 ## Feedback Loop
 - [x] BR770-EX1: preprod `deploy/k8s/**` sync and runbook changes; rationale: register radar's missing workload and support Secret rotation; impact: preprod imports only, no prod change; rollback: revert the sync ConfigMap/Job references and revoke the workload through the owner credential process.
 - [x] BR770-EX2: `deploy/ci/idp-identity-sync/{README,CRED_CYCLE}.md` and `api/src/scripts/oauth-provision-exchange-client.ts`; rationale: one preprod creation path; impact: prevent manual preprod provisioning and document Secret-driven rotation; rollback: restore these files and disable the sync registration before reverting the guard.
+- [x] BR770-EX3: `deploy/ci/idp-identity-sync/{run-core,run.selftest}.mjs`; rationale: preserve the validated workload failure code in the operator message; impact: one additional allowed code, no new payload fields; rollback: remove that code and its regression assertion.
 - [x] Existing policy rewrites the exact preprod MCP/API audiences but skips missing workload rows; register before its invariant snapshot.
 - [x] Author metadata: codex / gpt-6.1-sol / high; external reviews require repository reviewer authorization.
 
@@ -55,6 +58,7 @@
   - [x] Validate 64 lowercase hex characters without a newline; hash in the importer before psql; only the hash reaches SQL.
   - [x] Make the named-Secret sync the only preprod creation/rotation path; preserve revoked state without blocking identity sync.
   - [x] Evolve `deploy/ci/idp-identity-sync/services-test.sh` and `sql-test.sh`: invalid inputs, registration, rollback, replay, rotation and revocation.
+  - [x] Preserve `workload_credential_invalid` through the launcher's validated pod-status failure message; reproduce its rejection, then pass all 47 selfchecks with the explicit operator-message regression.
   - [x] Gate: `make test-idp-sync-selftest ENV=test-idp-token-exchange` passed (47 checks).
   - [x] Gate: `make test-idp-sync-sql ENV=test-idp-token-exchange` passed, including statement-log secrecy, rotation rollback/commit and revoked-row sync.
 - [x] **Lot 2 — Policy regression**
