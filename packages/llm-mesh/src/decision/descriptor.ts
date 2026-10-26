@@ -19,6 +19,8 @@ export interface DecisionEvaluatorDescriptor {
     bundleDigest: string;
   };
   evaluator: EvaluatorRef;
+  /** Absent means production. Qualification is an explicit experimental composition. */
+  executionProfile?: 'production' | 'qualification';
   protocol?: DecisionBackendProtocol;
   wireModel: string;
   acceptedServedModelIds: readonly string[];

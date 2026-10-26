@@ -56,7 +56,7 @@
   - [x] Read Docker lock, spec v4 sections 3/7/8/9, rules and branch template; retain receipt v1.
   - [x] Run mechanical harness branch check before work.
 - [ ] **Lot 1 — Discovery and isolated qualification**
-  - [ ] Tests first: decision-qualification.test.ts, independent missing gates and execution/criterion/policy mutations.
+  - [x] Tests first: decision-qualification.test.ts, independent missing gates and execution/criterion/policy mutations; initial run rejects missing implementation.
   - [ ] Bind evidence to execution digest, exact criterion and operating policy; default production refuses missing calibration.
   - [ ] Qualification accepts provisional expected IDs while preserving auth, finite bounds, one attempt and experimental discovery.
   - [ ] Scoped gate: make test-llm-mesh SCOPE=tests/decision-qualification.test.ts ENV=test-decision-v4l5.
