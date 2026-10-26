@@ -49,7 +49,7 @@
   - [x] Mechanical harness branch check passes; no service ports required.
   - [x] Add package manifest, strict TS build, Make and CI entrypoints using the existing isolated qualification service.
 - [ ] **Lot 1 — Tests first**
-  - [ ] interrupt.test.ts: pre-start Stop, double Stop, late native ID, completion race, all-class fence and restart.
+  - [x] interrupt.test.ts: pre-start Stop, double Stop, late native ID, completion race, all-class fence and restart fixtures authored before source.
   - [ ] ordering.test.ts: one commit/submission, pairing/dedupe, stale generations, barrier, partial/stale risk acceptance and fresh authorization.
   - [ ] playback.test.ts: actual rendered samples, stale output, bounded queue and connection/turn epochs.
   - [ ] usage-receipts.test.ts: estimate/true-up dedupe, dimensions, restart and payload exclusion.
