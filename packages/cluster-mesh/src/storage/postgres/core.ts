@@ -38,10 +38,20 @@ import { loadPgAssets, verifyPgInstallation } from './migrations.js';
 import { CanonicalInstanceRegistry } from '../instance-ownership.js';
 import {
   acquirePgInstanceOwnership,
+  DEFAULT_LEASE_MS,
+  expirePgInstanceLease,
   resolvePgStoreKey,
+  verifyPgInstanceOwnership,
   type PgInstanceOwnershipSession,
 } from './instance-ownership.js';
-import { assertNoDeprecatedAssetNames, chainPossessionGuard, ensurePgModuleRecord } from './instance-guard.js';
+import {
+  assertNoDeprecatedAssetNames,
+  assertPgOwnershipCatalog,
+  chainPossessionGuard,
+  createOwnershipCell,
+  ensurePgModuleRecord,
+  wrapDriverWithOwnership,
+} from './instance-guard.js';
 import { validatePgLayout, type PgSession, type PostgresStorageOptions } from './protocol.js';
 import { validateModuleDescriptor } from '../descriptor.js';
 const freezeRegistration = (value: unknown): void => {
@@ -241,8 +251,18 @@ export class PgCore {
 }
 export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCore> => {
   if (!options.history) throw new PostgresStorageError('configuration');
-  const provisional = new PgCore(options, options.incarnation ?? `store:${randomUUID()}`);
+  // Opt-in canonical ownership wraps the driver before any transaction, so
+  // every kernel transaction verifies (and renews) the retained session on
+  // its own session. Without opt-in the driver passes through untouched.
+  const optIn = options.canonicalOwnership;
+  const cell = optIn ? createOwnershipCell('', options.moduleId, optIn.leaseMs ?? DEFAULT_LEASE_MS) : null;
+  const wrapped = cell ? wrapDriverWithOwnership(options.driver, cell) : null;
+  const provisional = new PgCore(
+    wrapped ? { ...options, driver: wrapped.driver } : options,
+    options.incarnation ?? `store:${randomUUID()}`,
+  );
   options = provisional.options;
+  if (cell) cell.schema = provisional.roots.schema;
   const assets = options.assets ?? (await loadPgAssets());
   assertNoDeprecatedAssetNames(assets);
   const opened = await provisional.tx.run(false, async (session) => {
@@ -256,24 +276,44 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
       effectiveIncarnation: provisional.incarnation,
       wantedDescriptorDigest: wanted,
     });
-    // G-P0a: the open transaction retains the winning ownership pair.
-    const storeKey = resolvePgStoreKey(options.layout.dataSchema, options.moduleId);
-    const ownership = await acquirePgInstanceOwnership(
-      session,
-      provisional.roots.schema,
-      storeKey,
-      options.moduleId,
-      options.instanceRegistry ?? new CanonicalInstanceRegistry(),
-    );
+    let ownership: PgInstanceOwnershipSession | null = null;
+    if (cell && optIn) {
+      // G-P0a: catalog verification, then the open transaction retains the
+      // winning lease. A live holder refuses the open promptly (no queue,
+      // never supersede).
+      await assertPgOwnershipCatalog(session, options.layout.dataSchema);
+      const storeKey = resolvePgStoreKey(options.layout.dataSchema, options.moduleId);
+      const registry = optIn.registry ?? new CanonicalInstanceRegistry();
+      const won = await acquirePgInstanceOwnership(
+        session,
+        provisional.roots.schema,
+        storeKey,
+        options.moduleId,
+        registry,
+        cell.leaseMs,
+      );
+      cell.handle = won.handle;
+      ownership = {
+        handle: won.handle,
+        verify: (verifySession) =>
+          verifyPgInstanceOwnership(verifySession, cell.schema, cell.moduleId, won.handle, cell.released),
+        release: async () => {
+          await provisional.tx.run(false, (releaseSession) =>
+            expirePgInstanceLease(releaseSession, cell.schema, cell.moduleId, won.handle),
+          );
+          cell.released = true;
+          registry.release(won.registryHandle);
+        },
+      };
+    }
     return { stored, ownership };
   });
-  // G-P0b: durable possession is verified before the caller hook, reusing
-  // the existing onCommitPossession seam (no transaction rewiring).
-  const readCommitted = <T>(operation: (session: PgSession) => Promise<T>): Promise<T> =>
-    provisional.tx.run(true, operation);
-  const chained: PostgresStorageOptions = {
-    ...options,
-    onCommitPossession: chainPossessionGuard(opened.ownership.verify, readCommitted, options.onCommitPossession),
-  };
+  // G-P0b: for opt-in kernels the durable guard runs on the committing
+  // session itself through the existing onCommitPossession seam (no second
+  // transaction, no transaction rewiring). Other kernels keep their hook.
+  const chained: PostgresStorageOptions =
+    cell && wrapped
+      ? { ...options, onCommitPossession: chainPossessionGuard(wrapped.useSession, cell, options.onCommitPossession) }
+      : options;
   return new PgCore(chained, opened.stored, opened.ownership);
 };

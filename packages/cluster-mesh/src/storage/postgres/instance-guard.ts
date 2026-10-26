@@ -70,11 +70,12 @@ export const ensurePgModuleRecord = async (
   return stored;
 };
 
-/** Retained session cell: filled once the open transaction acquires. */
+/** Retained session cell: schema and handle are filled at open, before any
+ * transaction runs through the wrapped driver. */
 export interface PgOwnershipCell {
   handle: CanonicalInstanceHandle | null;
   released: boolean;
-  readonly schema: string;
+  schema: string;
   readonly moduleId: string;
   readonly leaseMs: number;
 }
