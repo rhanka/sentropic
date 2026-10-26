@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createRemoteDecisionClient as createClient } from '../src/decision/client.js';
-import { createDecisionService } from '../src/decision/service.js';
-import { decisionRequest, decisionServiceFixture, jevResponse, trustedNativeContext } from './decision-fixtures.js';
+import { decisionWireFixture } from './decision-wire-fixtures.js';
+import { decisionRequest, trustedNativeContext } from './decision-fixtures.js';
 const createRemoteDecisionClient: typeof createClient = (options) =>
   createClient({ validationContext: ((snapshot) => trustedNativeContext(snapshot)) as never, ...options });
 import type { DecisionRequest } from '../src/decision/request.js';
@@ -16,14 +16,7 @@ const gradedNative = () => ({ score: 1.25, probabilities: { '0': 0.1, '1': 0.55,
 const choiceNative = () => ({ choice: 'a', probabilities: { a: 0.7, b: 0.3 }, confidence: 0.7 });
 
 async function realServiceResult(request: DecisionRequest, nativeAnswer?: unknown) {
-  const fixture = decisionServiceFixture();
-  if (nativeAnswer !== undefined) {
-    fixture.transport.send.mockResolvedValue({ ok: true, body: jevResponse(nativeAnswer) });
-  }
-  const service = createDecisionService(fixture.options);
-  const served = await service.decide(request);
-  if (!served.ok) throw new Error(`fixture service failed: ${JSON.stringify(served)}`);
-  return served;
+  return decisionWireFixture(request, nativeAnswer);
 }
 
 async function viaClient(request: DecisionRequest, payload: unknown) {
