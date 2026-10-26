@@ -1,7 +1,28 @@
-import type {
-  SpeechAudioFormat, SpeechBinding, SpeechCapabilityName, SpeechMicMode, SpeechPipeline,
-  SpeechPlacement, SpeechStage,
-} from '@sentropic/llm-mesh/speech';
+// The root configuration declaration graph must not require an optional provider peer.
+// Structural compatibility with the L1 contract is checked at the projection boundary.
+type SpeechPlacement = (typeof placements)[number];
+type SpeechCapabilityName = (typeof features)[number];
+type SpeechStage = 'stt' | 'tts' | 'duplex';
+type SpeechPipeline = 'chained' | 'native-duplex';
+type SpeechMicMode = 'key' | 'open-mic';
+interface SpeechBinding {
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly modelRevision: string;
+  readonly adapterId: string;
+  readonly adapterRevision: string;
+  readonly placement: SpeechPlacement;
+  readonly language?: string;
+  readonly voice?: string;
+  readonly region?: string;
+  readonly accountRef?: string;
+  readonly resourceRef?: string;
+}
+interface SpeechAudioFormat {
+  readonly codec: 'pcm16-le' | 'opus';
+  readonly sampleRateHz: 16000 | 24000 | 48000;
+  readonly channels: 1;
+}
 
 export type SpeechEgress = 'device' | 'cluster' | 'provider';
 export interface SpeechProfileSelection {
@@ -38,9 +59,9 @@ export class SpeechConfigurationError extends Error {
 
 const placements = [
   'endpoint-native', 'browser-wasm', 'local-companion', 'cluster-hosted', 'cloud-relay',
-] as const satisfies readonly SpeechPlacement[];
+] as const;
 const features = ['streamingStt', 'partialTranscript', 'nativeDuplex', 'tts', 'serverVad', 'clientVad',
-  'manualCommit', 'playoutTruncate', 'toolCancellation', 'resume'] as const satisfies readonly SpeechCapabilityName[];
+  'manualCommit', 'playoutTruncate', 'toolCancellation', 'resume'] as const;
 const fail = (): never => { throw new SpeechConfigurationError(); };
 const object = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : fail();
