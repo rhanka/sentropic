@@ -76,7 +76,7 @@
     "@sentropic/comments": "file:../packages/comments",
     "@sentropic/connector-host": "file:../packages/connector-host",
     "@sentropic/flow": "file:../packages/flow",
-    "@sentropic/llm-gateway": "^0.21.0",
+    "@sentropic/llm-gateway": "file:../packages/llm-gateway",
     "@sentropic/llm-mesh": "file:../packages/llm-mesh",
     "@sentropic/mcp-auth": "file:../packages/mcp-auth",
     "@sentropic/mcp-connector-google": "file:../packages/mcp-connector-google",
@@ -105,7 +105,7 @@
     "pino": "^9.1.0",
     "pino-pretty": "^11.0.0",
     "pptxgenjs": "^4.0.1",
-    "zod": "^3.22.4"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
