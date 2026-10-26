@@ -4,7 +4,11 @@
 // recomputes a new identity on import.
 
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import {
+  MEMORY_NEUTRAL_CONTRACT, MEMORY_NEUTRAL_HANDLE_METHODS, MEMORY_NEUTRAL_TRANSACTION_METHODS,
+} from '../../src/engram-memory/neutral-contract.js';
 import {
   MEMORY_CONTRACT_DIGEST,
   MEMORY_PINNED_PROFILES,
@@ -164,5 +168,51 @@ describe('memory semantic assets', () => {
     ) as { contractDigest: string; neutralClaims: unknown };
     expect(equivalence.contractDigest).toBe(PINNED_CONTRACT_DIGEST);
     expect(equivalence.neutralClaims).toEqual(MEMORY_PINNED_PROFILES.map((claim) => ({ ...claim })));
+  });
+});
+
+describe('C6 additive asset freeze', () => {
+  const asset = async (name: string) => JSON.parse(await readFile(
+    new URL(`../../assets/storage/engram-memory/${name}.json`, import.meta.url), 'utf8',
+  ));
+
+  it('should keep the C6 identity separate from both existing semantic identities', async () => {
+    const inventory = await asset('neutral-asset-inventory');
+    expect(MEMORY_NEUTRAL_CONTRACT).toMatchObject({
+      name: 'engram-memory-neutral-contract', version: '1.0.0',
+      declaration: 'contracts/engram-memory-neutral-contract-v1.d.ts',
+      contractVersion: 'memory-binding-v1', contractDigest: PINNED_CONTRACT_DIGEST,
+    });
+    expect(inventory.asset).toMatchObject({
+      name: MEMORY_NEUTRAL_CONTRACT.name, version: MEMORY_NEUTRAL_CONTRACT.version,
+      declarationSha256: null, status: 'final bytes pending',
+    });
+    expect(inventory.declarationDesign.handleMethods).toEqual(MEMORY_NEUTRAL_HANDLE_METHODS);
+    expect(inventory.declarationDesign.boundMethods).toEqual(MEMORY_NEUTRAL_HANDLE_METHODS);
+    expect(inventory.declarationDesign.transactionMethods).toEqual(MEMORY_NEUTRAL_TRANSACTION_METHODS);
+    expect(inventory.additiveMapping.map((entry: { manifestIndex: number }) => entry.manifestIndex))
+      .toEqual(memoryContractManifest().assets.additive.map((_, index) => index));
+    expect(inventory.constraints.grantOperations).toEqual(['read', 'write']);
+    expect(inventory.constraints.u64.maximum).toBe('18446744073709551615');
+    expect(memoryDescriptorDigest(memoryContractManifest())).toBe(PINNED_CONTRACT_DIGEST);
+  });
+
+  it('should bind the reconciliation to the exact installed declaration bytes', async () => {
+    const receipt = await asset('neutral-equivalence');
+    const entry = import.meta.resolve('@sentropic/engram/memory-substrate');
+    const metadata = JSON.parse(await readFile(new URL('../package.json', entry), 'utf8'));
+    const declaration = await readFile(new URL('memory-substrate.d.ts', entry));
+    expect(metadata.version).toBe(receipt.installedTarget.version);
+    expect(metadata.version).toBe(MEMORY_NEUTRAL_CONTRACT.engramVersion);
+    expect(createHash('sha256').update(declaration).digest('hex'))
+      .toBe(receipt.installedTarget.declarationSha256);
+    for (const [file, digest] of Object.entries(receipt.installedTarget.closureSha256)) {
+      expect(createHash('sha256').update(await readFile(new URL(file, entry))).digest('hex')).toBe(digest);
+    }
+    expect(receipt.semanticMapping.moduleDigest).toBe(PINNED_CONTRACT_DIGEST);
+    expect(receipt.semanticMapping.genericIdentity).toEqual(MEMORY_NEUTRAL_CONTRACT.genericContract);
+    expect(receipt.status.emittedBytes).toBe('final bytes pending');
+    expect(receipt.status.runtimeProfileEquivalence).toBe('equivalence pending');
+    expect(receipt.status.gaps2and3).toEqual(['source-gap', 'unverified']);
   });
 });
