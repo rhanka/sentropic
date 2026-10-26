@@ -27,6 +27,7 @@
   - [x] `packages/llm-gateway/package.json`
   - [x] `scripts/ci/publishable-ci-wiring.test.mjs`
   - [x] `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - [x] `api/tests/unit/gateway-package-version.test.ts`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
   - [x] `docker-compose*.yml`
@@ -43,6 +44,8 @@
 - [x] BR93-EX2: mesh 0.29.0 is rejected by cluster's current <0.29.0 bound. Extend only mesh compatibility to <0.30.0, gateway mesh dependency and exact fixture/CI tuple; patch-bump the affected metadata/source packages. Impact: admits the tested native Decisions minor via the existing loader. Rollback: revert tuple/range cells together. Conditional `.github/workflows/ci.yml` changes are limited to its three exact PEERS tuples.
 - [x] BR93-EX1: synchronize five `package-lock.json` workspace cells: llm-mesh version 0.29.0 for the native Decisions feature; cluster-mesh version 0.22.5 for its loader compatibility change; cluster-mesh llm-mesh peer range <0.30.0 to admit that feature; llm-gateway version 0.21.4 for its compatibility metadata change; llm-gateway llm-mesh dependency range adding ^0.29.0 to consume that feature (BR93-EX2). Impact: five metadata cells, no resolved dependency/integrity changes. Rollback: revert all five cells together with the corresponding package versions/ranges and BR93-EX2 tuple.
 - [x] Opus r1 P2-1/P2-2: add service controls for contradictory cached input and paid cache writes retaining the reserve without settle/release; test the shipped unqualified descriptor through service and direct adapter before egress; correct BR93-EX1.
+- [x] CI packaging: refresh the selected fixture's llm-mesh 0.29.0 integrity after the usage correction; CI run 40386278275/job 121798837785 rejected the stale archive hash while the mesh validation passed. Packed qualification: 107 tests/15 files passed; scope-check passed. Preserve the published Artifacts baseline.
+- [x] BR93-EX3: admit only `api/tests/unit/gateway-package-version.test.ts` to align its real-instance expectation with gateway 0.21.4 from BR93-EX2. CI 40392898856/job 121861085578 received 0.21.4 while the test pinned 0.21.3; main 40390149749 passed that lane. Impact: one version literal. Rollback: revert with the gateway candidate version.
 - [x] OD-5 remains open; live identity, billing and calibration belong to L5/L6.
 
 ## Deferred to BR-7x
