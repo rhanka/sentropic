@@ -273,6 +273,7 @@ The `allow-pgbackup-to-postgres` NetworkPolicy lets the job reach postgres.
 make k8s-pgbackup-now KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37c
 # Restore a chosen dump into the ISOLATED restore namespace (never the live DB):
 make k8s-pgbackup-restore PG_BACKUP_KEY=pg/<ts>.sql.gz \
+  PG_BACKUP_SHA256=<64-hex-digest-of-the-object> \
   RESTORE_KUBECONFIG=<path-to-restore-namespace-kubeconfig> ENV=test-feat-deploy-poc-k8s-37c
 ```
 
@@ -280,7 +281,7 @@ Never point `RESTORE_KUBECONFIG` at an admin, prod, or preprod kubeconfig
 (e.g. `$HOME/.kube/poc.yaml`): the target refuses default kubeconfigs and any
 identity holding live-cluster rights. `k8s-pgbackup-restore` downloads the dump
 with an init container, restores it into the isolated `app_cm_restore` DB with
-pipefail/`ON_ERROR_STOP`, optionally verifies `PG_BACKUP_SHA256`, then prints
+pipefail/`ON_ERROR_STOP`, requires and verifies `PG_BACKUP_SHA256`, then prints
 the B03 manifest block (`MANIFEST-BEGIN` … `MANIFEST-END`).
 
 ## Public ingress / TLS
