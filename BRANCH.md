@@ -66,6 +66,7 @@
   - [x] SDK red run: outputSchema loss and absent-audit protocol refusal reproduced; explicit memory bridge implemented; platform 0.4.1 fixes the existing declared profile within current peer intervals.
 - [ ] Lot 2: mesh context/guards/cancellation/compiled dispatch; concurrent subject/tenant/workspace tests.
   - [x] Preserve full context and cancellation; compile policy uses verified claims/source; mesh 0.22.5 requires corrected platform 0.4.1.
+  - [x] HTTP namespace proof: real SDK client/compiled registry, frozen get schemas, tenant distinct from workspace, forged headers and full envelope; five mesh cases passed.
 - [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
   - [x] New runner/tests: tools/memory-mcp-l5/lot3-source.mjs and tests/lot3-source.test.mjs; exact P09 file set bound to the unchanged P3 catalog.
   - [x] First exact run: platform 132 passed; mesh 24 passed/3 skipped, rejected by the reporter. Existing packaging fixtures now prepare those three required cases.
