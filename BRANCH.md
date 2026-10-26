@@ -37,12 +37,15 @@
 - [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
-- [ ] CI-LIVE — attention: standard API/E2E/VSCode/restore jobs receive provider secrets. Owner choice pending for the tested draft-only fixture CI proposal; do not open an auto-running PR before resolving the no-paid/live-inference constraint.
+- [x] CI-LIVE — conductor decision B-lite (2026-10-26): open the draft PR with existing provider-backed CI under the owner's current budget. Added tests use fixtures and recorded answers only; no new live-call job or offline-CI profile is introduced.
 - [ ] REVIEW — attention: exact complementary reviewers not selected; no independent code-review consensus is claimed. Author handoff is ready for the conductor.
 - [x] P24 dated GA schema: two additional missing-usage-details controls failed before correction; require cache/reasoning objects while preserving independently reported counters.
 - [x] BR93-EX2: mesh 0.29.0 is rejected by cluster's current <0.29.0 bound. Extend only mesh compatibility to <0.30.0, gateway mesh dependency and exact fixture/CI tuple; patch-bump the affected metadata/source packages. Impact: admits the tested native Decisions minor via the existing loader. Rollback: revert tuple/range cells together. Conditional `.github/workflows/ci.yml` changes are limited to its three exact PEERS tuples.
 - [x] BR93-EX1: synchronize only the llm-mesh workspace version in `package-lock.json` after the mandatory feature bump. Impact: one workspace metadata cell, no dependency resolution changes. Rollback: revert that cell with the package version.
 - [x] OD-5 remains open; live identity, billing and calibration belong to L5/L6.
+
+## Deferred to BR-7x
+- [ ] CI train owner: evaluate local proposal `tmp/decision-v4l3-offline-ci.patch`; retain the file unapplied and uncommitted. Acceptance: an independently reviewed offline CI profile with its own train validation; no profile workflow change in V4-L3.
 
 ## AI Flaky tests
 - [x] No live provider tests or accepted flaky failures.
@@ -76,7 +79,7 @@
   - [x] Source qualification head 1f4ed952d: verified sibling receipts; mesh archive SHA256 fd8a63feae824e3dc0800aa926ff64749681e4191b43391f906ac0da2dea342e. Preserve the published artifacts 0.1.4 lock baseline.
   - [x] CI wiring tests: 24 passed; memory-l5-verify: 30 files/54 edges, unchanged retained manifest.
   - [ ] Independent harness review; reconcile findings with tests.
-  - [ ] Scope-check before every selective atomic commit under 150 lines.
+  - [x] Scope-check before every selective atomic commit under 150 lines.
   - [ ] Push and open draft PR with this plan as body and requested title.
   - [ ] Verify CI green at final head; do not merge.
 - [x] Atomic artifact: test(decision): pin JEV discriminator conformance.
