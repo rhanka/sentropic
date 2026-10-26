@@ -203,7 +203,7 @@ describe.skipIf(!pgEnabled)('postgres durable instance ownership', () => {
       assert.equal(owned(second).handle.instanceId, owned(first).handle.instanceId);
       await fixture.tx.run(false, (session) =>
         session.execute({
-          text: `UPDATE "${fixture.name}".instance_ownership SET epoch='18446744073709551615' WHERE module='comments'`,
+          text: `UPDATE "${fixture.name}".instance_ownership SET epoch='18446744073709551614' WHERE module='comments'`,
           values: [],
         }),
       );
