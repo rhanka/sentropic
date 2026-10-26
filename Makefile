@@ -4449,6 +4449,9 @@ else
 endif
 
 .PHONY: memory-l5-lot2 memory-l5-reference
+.PHONY: memory-l5-e2-pin memory-l5-lot2-fixture memory-l5-lot2-evidence memory-l5-lot2-pack-reference memory-l5-lot2-retained
+memory-l5-e2-pin memory-l5-lot2-fixture memory-l5-lot2-evidence memory-l5-lot2-pack-reference memory-l5-lot2-retained: memory-l5-runtime
+
 memory-l5-e2-pin:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-pin.mjs
 
@@ -4457,6 +4460,9 @@ memory-l5-lot2-fixture:
 
 memory-l5-lot2-evidence:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-evidence.mjs "$$(git rev-parse HEAD)"
+
+memory-l5-lot2-pack-reference:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-pack-reference.mjs "$$(git rev-parse HEAD)"
 
 memory-l5-lot2-retained:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/lot2-retained.mjs "$(ARTIFACT_MANIFEST)"

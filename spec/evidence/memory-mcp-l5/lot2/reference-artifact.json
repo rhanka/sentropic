@@ -1,0 +1,22 @@
+{
+  "status": "unverified",
+  "qualificationAccepted": false,
+  "scope": "reference artifact; outside frozen P3",
+  "sourceHead": "5a93d999d099ee8e63115ca6ff3516dea4f274b9",
+  "name": "@sentropic/mcp-broker",
+  "version": "0.2.0",
+  "path": "spec/evidence/memory-mcp-l5/lot2/archives/9b9c28ceb31f382f8a1ca5f378b6b29a1a91e1a4c34c9878b8db221c36ae6450.tgz",
+  "sha256": "9b9c28ceb31f382f8a1ca5f378b6b29a1a91e1a4c34c9878b8db221c36ae6450",
+  "integrity": "sha512-sqjMp75MKrVKsdcA4bZoiz+9nHRyMSU3c2pmpsP9O0Bm+6Gq6FmoEAxUAVT6y5YdztQdrzxIUbbkyS2zwJC9iA==",
+  "referenceExport": "@sentropic/mcp-broker/memory-reference",
+  "files": [
+    {"path":"dist/memory-reference/driver.js","sha256":"74809ecc9639516b84d0936e465bbf0e4498f6e555ec8ef2759c400a4817d91a"},
+    {"path":"dist/memory-reference/index.js","sha256":"7a0a62fddf82b5b3242cfb53bf59010c1ea6351e91312845ec303dd9f78ba004"},
+    {"path":"dist/memory-reference/schema.js","sha256":"39b1e02ce9eb026b28d47999991ee0158635afdd6d675a5e9ef00d1133aac169"},
+    {"path":"dist/memory-reference/sqlite-memory-workflow-store.js","sha256":"466670a30f4f483e4cd7a749daae1bc6709bc41111ced15495d56cc86c5019fb"},
+    {"path":"dist/memory-reference/driver.d.ts","sha256":"460a4a361e0454a1529a7ec7bc7af9b455dc6cd90e96711ec1c50920ffcb80b6"},
+    {"path":"dist/memory-reference/index.d.ts","sha256":"fcdc33dfd992f0935322f92563471d6494a9f64537ec79a1ee4e52d63c95f3a8"},
+    {"path":"dist/memory-reference/schema.d.ts","sha256":"752fbf5fe87bc3ca8b73d5beafcee62a4fdaef86dac587c8edb8df9b8c807fc2"},
+    {"path":"dist/memory-reference/sqlite-memory-workflow-store.d.ts","sha256":"82a8fe302070ffc1307b65b73304c5d2926998424d548b20af1ea69d2de09c0a"}
+  ]
+}
