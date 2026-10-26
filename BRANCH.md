@@ -1,7 +1,7 @@
 # Feature: Live STT L2 interruption core
 
 ## Objective
-- [ ] Deliver approved r3 L2: durable interruption, all-class dispatch fencing, playback invalidation and usage receipts.
+- [x] Deliver approved r3 L2 implementation: durable interruption, all-class dispatch fencing, playback invalidation and usage receipts; final qualification tracked below.
 
 ## Scope / Guardrails
 - [x] Author: codex / gpt-6.1-sol / high. Spec: `.tmp/live-stt/spec-plan.md`, r3, L2 row and sections 4/7.
@@ -65,13 +65,13 @@
   - [x] Read Docker lock first, project rules, approved spec, owner answers and PR757 base.
   - [x] Mechanical harness branch check passes; no service ports required.
   - [x] Add package manifest, strict TS build, Make and CI entrypoints using the existing isolated qualification service.
-- [ ] **Lot 1 — Tests first**
+- [x] **Lot 1 — Tests first**
   - [x] interrupt.test.ts: pre-start Stop, double Stop, late native ID, completion race, all-class fence and restart fixtures authored before source.
   - [x] ordering.test.ts: one commit/submission, pairing/dedupe, stale generations, barrier, partial/stale risk acceptance and fresh authorization fixtures authored first.
   - [x] playback.test.ts: actual rendered samples, stale output, bounded queue and connection/turn epochs authored first.
   - [x] usage-receipts.test.ts: estimate/true-up dedupe, dimensions, restart and payload exclusion authored first.
   - [x] Red at 4f03beab7: scoped interrupt suite fails on missing core/session.js before source implementation.
-- [ ] **Lot 2 — Implementation**
+- [x] **Lot 2 — Implementation**
   - [x] Snapshot command identities and typed risk bodies before asynchronous admission/authentication; opaque proofs stay transient and are never journalled.
   - [x] Durable scopes and receipts require complete authenticated tenant/workspace identity; shared shape validation rejects omitted or extra fields.
   - [x] Uncertain native starts install a tombstone before rethrowing; admission rejects inherited class keys and receipts validate optional identity fields.
@@ -87,8 +87,8 @@
   - [x] README: control/journal integration, authority and runtime qualification boundaries, L3 integration seam documented.
   - [ ] Strict source/test types, lint, build/exports and full package tests through locked Make targets.
   - [ ] make scope-check before every commit; atomic-size, whitespace and trailer audit.
-  - [ ] Review dossier records exact author/head and independent review outcome without inferred capacity.
+  - [x] Review dossier records exact author/source and selection failure without inferred reviewer allocation or consensus; G-REVIEW remains open for merge.
 - [ ] **Lot 4 — Draft handoff**
-  - [ ] Push branch, create draft PR to main using this plan as body; post implementation plan.
+  - [x] Push branch and create draft PR776 to main using this plan as body; plan comment follows final validation.
   - [ ] Obtain green exact-head CI; report PR, head SHA, CI URL and L3 readiness.
   - [ ] Keep BRANCH.md and draft; do not merge.
