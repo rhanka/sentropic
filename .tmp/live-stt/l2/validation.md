@@ -8,7 +8,8 @@
 - Scoped interruption run after implementation: 10/10 pass, including uncertain native start,
   pre-start/double Stop, completion race, native-ID arrival, pending Stop and reconnect.
 - Strict source and all test types passed at source 4238b516b; final scope/auth snapshots require rerun.
-- Full final tests, lint, build/export/pack and exact-head CI: pending execution.
+- Full final tests: 27/27 pass across all four suites at source 5e51979ba, including CAS restart and immutable typed risk.
+- Final typecheck, lint, build/export/pack and exact-head CI: pending execution.
 - Every local container/test gate uses the shared Docker flock, ENV=test-stt-l2 last and Make cleanup.
   Official gates now clean their qualification network on exit, including failures; no ports published.
 - Mechanical branch gate passed before source work; scope gate run before each commit.
