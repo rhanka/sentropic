@@ -42,7 +42,9 @@ export class InterruptAuthority {
   }
 
   async acceptRisk(request: RiskRequest): Promise<RiskAcceptance> {
-    const actor = await this.authority.verifyRisk(request);
+    const { proof, ...body } = request;
+    request = { ...structuredClone(body), proof };
+    const actor = await this.authority.verifyRisk({ ...structuredClone(body), proof });
     if (actor.method !== 'typed') throw new Error('Authenticated typed confirmation required');
     return this.journal.transact(state => {
       assertScope(state, request.scope);
@@ -68,6 +70,8 @@ export class InterruptAuthority {
   }
 
   async admitTool(ref: TurnRef, call: ToolCall): Promise<{ admitted: boolean; admissionSequence: number; result?: ToolResult }> {
+    ref = structuredClone(ref);
+    call = { ...call };
     if (![call.callId, call.actionId, call.toolClass].every(validIdentity)
       || (call.effectId !== undefined && !validIdentity(call.effectId))) throw new Error('Invalid tool identity');
     const preliminary = await this.journal.transact(state => {
@@ -81,7 +85,7 @@ export class InterruptAuthority {
     const request = { ...ref, toolClass: call.toolClass, toolName: call.toolName,
       actionId: call.actionId, argumentsDigest: call.argumentsDigest,
       barrierRevision: preliminary.barrierRevision, proof: call.proof };
-    const grant = preliminary.mutating ? await this.authority.verifyMutation(request) : undefined;
+    const grant = preliminary.mutating ? await this.authority.verifyMutation({ ...request, scope: { ...request.scope } }) : undefined;
     return this.journal.transact(state => {
       const turn = getTurn(state, ref);
       if (turn.fence || isTerminal(turn) || !state.connected) throw new Error('Turn fenced');
@@ -174,6 +178,7 @@ export class InterruptAuthority {
   }
 
   async send(ref: TurnRef): Promise<boolean> {
+    ref = structuredClone(ref);
     const input = await this.journal.transact(state => {
       const turn = getTurn(state, ref);
       if (turn.fence || turn.phase !== 'committed' || !state.connected) return undefined;
@@ -219,6 +224,7 @@ export class InterruptAuthority {
   }
 
   async interrupt(ref: TurnRef, interruptId: string): Promise<FenceReceipt> {
+    ref = structuredClone(ref);
     this.stopPlayback(ref.turnEpoch);
     const receipt = await this.journal.transact(state => {
       const turn = getTurn(state, ref);
