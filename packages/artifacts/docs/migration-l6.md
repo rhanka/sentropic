@@ -83,7 +83,12 @@ under this lock and compares it to the stored receipt. Missing or changed
 targets deny before the host guard; explicit replay requires a binding.
 
 Use `createGuardedEnsureService` and `createGuardedPublicationService` for
-custom services. The canonical coordinator exposes `finalizeOperation` and
+custom services. Pass the request-bound host guard as `publishFinalized(input)`'s
+optional `authorizeCommit` field to preserve host approval policy and refusal codes;
+it runs after lifecycle, ACL and policy revision checks. When omitted, publication
+uses `participant.checkApproval` and denies unapproved or expired commits.
+HTTP/MCP pass the invocation's host guard automatically.
+The canonical coordinator exposes `finalizeOperation` and
 `replayOperation` with the frozen L0 inputs. Bind fresh domain request plans
 through its `operations` option; no process-local replay cache is used.
 Provider adapters use `finalizePrepared` and `replayPrepared` on that same
