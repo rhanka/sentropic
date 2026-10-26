@@ -830,6 +830,16 @@ CI_EXPECTED_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache np
 ci-capacity-policy: ## Check the per-run finite-capacity bound (quota remains separately inventoried)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --capacity-policy $(if $(filter 1,$(CI_REQUIRE_CAPACITY_PROOF)),--require-proof) $(foreach file,$(CI_POLICY_RUN_FILES),--proof-file $(file))'
 CI_RUN_ATTEMPT ?= 1
+CI_CAPACITY_REF ?= $(shell git branch --show-current)
+.PHONY: ci-capacity-dispatch ci-capacity-runs ci-capacity-status
+ci-capacity-dispatch: ## Dispatch this branch's package publication dry-run (never main)
+	@test -n "$(CI_CAPACITY_REF)" && test "$(CI_CAPACITY_REF)" != main
+	@gh workflow run ci.yml --repo rhanka/sentropic --ref "$(CI_CAPACITY_REF)" -f bootstrap_publish_target=none -f capacity_publish_dry_run=true
+ci-capacity-runs: ## List identified policy runs on the qualification branch
+	@gh run list --repo rhanka/sentropic --workflow ci.yml --branch "$(CI_CAPACITY_REF)" --limit 5 --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url
+ci-capacity-status: ## Inspect CI_RUN_ID without cancelling or retrying any job
+	@printf '%s\n' '$(CI_RUN_ID)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@gh run view $(CI_RUN_ID) --repo rhanka/sentropic --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,jobs --jq '{databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,pendingOrFailed: [.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | {databaseId,name,status,conclusion,startedAt,completedAt}]}'
 .PHONY: ci-capacity-publish-dry-run
 ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
 	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
