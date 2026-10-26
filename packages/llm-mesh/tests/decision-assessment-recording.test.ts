@@ -10,7 +10,7 @@ describe('recording validated v1 results without replay', () => {
     const f = productionFixture();
     const request = decisionRequest({ correlationId: 'record-1', decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 } });
     const result = await createDecisionService(f.options).decide(request);
-    const input = { request, context: trustedNativeContext(request), result, sampleId: 'item-1',
+    const input = { request, context: trustedNativeContext(request), result, sampleId: 'item-1', policyDigest: f.scope.policyDigest,
       population: 'held-out' as const, internalWorkUnits: 3, billableUnits: 1000 };
     expect(recordDecisionAssessmentRow(input)).toMatchObject({ attempts: 1, internalWorkUnits: 3,
       billableUnits: 1000, amountMicroUsd: '42', pass: false, outcome: 'verdict' });

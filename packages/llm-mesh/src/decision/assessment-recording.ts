@@ -9,12 +9,13 @@ import { ASSESSMENT_POPULATIONS } from './assessment-validation.js';
 
 /** Pure projection of a validated v1 result. No dispatch, retry, token estimate or receipt extension. */
 export function recordDecisionAssessmentRow(input: { request: DecisionRequest; context: DecisionValidationContext;
+  policyDigest: string;
   result: unknown; sampleId: string; population: DecisionAssessmentPopulation; internalWorkUnits: number;
   billableUnits: number; nowMs?: number }): DecisionAssessmentRow | null {
   const snapshot = snapshotBoundedJson(input);
   if (!snapshot.ok || !isRecord(snapshot.value)) return null;
   const value = snapshot.value as unknown as typeof input;
-  if (!isText(value.sampleId) || !ASSESSMENT_POPULATIONS.includes(value.population)
+  if (!isText(value.sampleId) || !/^[a-f0-9]{64}$/.test(value.policyDigest) || !ASSESSMENT_POPULATIONS.includes(value.population)
     || ![value.internalWorkUnits, value.billableUnits].every((n) => Number.isSafeInteger(n) && n >= 0)) return null;
   const context = parseDecisionValidationContext(value.context, value.request, value.nowMs ?? Date.now());
   if (!context) return null;
@@ -22,6 +23,7 @@ export function recordDecisionAssessmentRow(input: { request: DecisionRequest; c
   if (!result || (result.receipt.attempts === 0 && (value.internalWorkUnits !== 0 || value.billableUnits !== 0))) return null;
   const receipt = result.receipt;
   return freezeDecisionData({ callId: receipt.callId, sampleId: value.sampleId, inputDigest: digestStructuredArtifact(value.request.inputs),
+    policyDigest: value.policyDigest, startedAt: receipt.startedAt,
     population: value.population, attempts: receipt.attempts,
     outcome: result.ok ? 'verdict' : result.error.code === 'PROVIDER_REJECTED' ? 'refusal'
       : ['VERDICT_INVALID', 'USAGE_INVALID', 'RESPONSE_TOO_LARGE'].includes(result.error.code) ? 'malformed' : 'transport-failure',

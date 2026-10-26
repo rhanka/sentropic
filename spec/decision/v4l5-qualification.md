@@ -35,9 +35,19 @@ It rebuilds status from the record; a supplied `passed` field is rejected. Its i
   receipt references, native evidence, outcome categories, 0/1 outer attempts, internal work and
   billable units, per-receipt rounded costs and pending-reconciliation markers.
 
+P30 is verified from `controls`: an explicit criterion revision, criterion/policy/split digests,
+using the registered revision or the content digest as the arbitrary rubric's revision,
+the exact tuning call IDs, ordered candidate rules and a policy freeze timestamp. The assessor
+replays minimum-error selection on tuning calls only (first candidate wins ties), compares the
+winner with the operating policy and checks every call's policy digest and chronology. Tuning
+must precede the freeze; held-out, challenge and repeat calls must follow it. Missing or corrupt
+controls block calibration and report `evidence.p30: 'unverified'`; validated controls report
+`verified`. The two former self-declared freeze/selection fields are rejected.
+
 Records are trusted evidence supplied by the host, not consumer assertions. The recorder must
 verify source permissions, human label authority, locked split/threshold timing and receipt
-provenance before importing them. Structural validation cannot authenticate those external facts.
+provenance before importing them. Replay and digest checks cannot authenticate external timestamps,
+prove that an omitted candidate was never tried, or establish human authority independently.
 Transport fixtures use `evidenceKind: 'fixture'` and cannot pass semantic calibration. Unit tests
 also fabricate recorded-shaped inputs to test acceptance and independent corruption controls;
 those objects are not provider qualification reports and do not activate shipped descriptors.
