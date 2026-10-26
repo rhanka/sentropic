@@ -50,12 +50,12 @@
   - [x] Add local Secret-backed registration and references in both preprod Job sources; preserve existing IDs and hashes.
   - [x] Test `services-test.sh` registration, invalid secret, mismatch, rollback, idempotence and unrelated-client preservation.
   - [x] Gate: `make test-idp-sync-selftest` (47 checks) and `make test-idp-sync-sql` passed; disposable containers removed; teardown requested.
-- [ ] **Lot 2 — Policy regression**
+- [x] **Lot 2 — Policy regression**
   - [x] Test preprod allowed exchange, public/unregistered denial, wrong subject/target audiences and client_credentials denial in `api/tests/api/auth/oauth-token-exchange.test.ts`.
-  - [ ] Gate: scoped API endpoint suite, then teardown.
-- [ ] **Lot 3 — Operator handoff and draft PR**
+  - [x] Gate: 11 canonical-route tests passed using `createIdpApp()` and the verified main toolbox; `make down` completed.
+- [x] **Lot 3 — Operator handoff and draft PR**
   - [x] Document owner secret minting, radar handoff, dry-run, rollout and acceptance in `deploy/k8s/README.md`.
-  - [ ] Scope-check each atomic commit under 150 lines; push; open requested draft PR; monitor CI and record SHA/ETA in the external report.
+  - [x] Scope-check each atomic commit under 150 lines; push; draft PR #770 opened; CI monitored and SHA/ETA recorded in the external report. Full CI and independent review remain pending before merge.
 
 ## Historical main plans (reference only)
 
