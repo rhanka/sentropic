@@ -49,7 +49,7 @@ test('stable keys use canonical aliases independent of day and base SHA', () => 
   const keyA = stableFindingKey({ repository: 'rhanka/sentropic', aliases: { ghsa: 'ghsa-cg2g-xh64-v4q7', cve: 'CVE-2026-111943' }, component: 'dompurify', path: 'ui/package-lock.json' });
   const keyB = stableFindingKey({ repository: 'rhanka/sentropic', aliases: { aliases: ['CVE-2026-111943', 'GHSA-CG2G-XH64-V4Q7'] }, component: 'dompurify', path: 'ui/package-lock.json' });
   assert.equal(keyA, keyB);
-  assert.deepEqual(canonicalAliases({ ghsa: 'ghsa-b' }), ['GHSA-B']);
+  assert.deepEqual(canonicalAliases({ ghsa: 'ghsa-cg2g-xh64-v4q7' }), ['GHSA-CG2G-XH64-V4Q7']);
   const unit = stableUnitKey({ repository: 'r', repairClass: 'npm-patch', targets: ['b', 'a'], fixedTarget: '1.2.4' });
   assert.equal(unit, 'r|npm-patch|a,b|1.2.4');
 });
@@ -126,4 +126,13 @@ test('should retain all severities and declare separate own-code and reconciliat
   const changed = structuredClone(contract);
   changed.severity.actionable = [];
   assert.equal(validateContract(changed).ok, false);
+});
+
+test('should reject malformed or absent advisory identities and ambiguous key delimiters', () => {
+  for (const aliases of [{ cve: {} }, { aliases: [42] }, { ghsa: 'bad' }]) {
+    assert.throws(() => canonicalAliases(aliases), /alias/);
+  }
+  assert.throws(() => stableFindingKey({ repository: 'r', component: 'p', path: 'x' }), /identity/);
+  assert.throws(() => stableUnitKey({ repository: 'r', repairClass: 'dependency', targets: [], fixedTarget: '1.2.4' }), /target/);
+  assert.throws(() => stableUnitKey({ repository: 'r|other', repairClass: 'dependency', targets: ['p'], fixedTarget: '1.2.4' }), /identity/);
 });

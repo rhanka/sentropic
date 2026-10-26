@@ -10,27 +10,35 @@ export function isActionable(severity) {
 }
 
 export function canonicalAliases(input = {}) {
+  if (!input || typeof input !== 'object') throw new Error('invalid alias input');
+  if (Array.isArray(input)) input = { aliases: input };
   const out = new Set();
   for (const key of ['ghsa', 'cve', 'aliases']) {
     const value = input[key];
     if (!value) continue;
     for (const item of Array.isArray(value) ? value : [value]) {
-      const text = String(item).trim().toUpperCase();
+      if (typeof item !== 'string') throw new Error('invalid alias type');
+      const text = item.trim().toUpperCase();
+      if (!/^(?:CVE-\d{4}-\d{4,}|GHSA-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})$/.test(text)) throw new Error('invalid advisory alias');
       if (text) out.add(text);
     }
   }
   return [...out].sort();
 }
 
-export function stableFindingKey({ repository, aliases, component, path }) {
-  if (!repository || !component || !path) throw new Error('finding key requires repository, component and path');
-  const aliasPart = canonicalAliases(aliases).join('+') || 'NOALIAS';
+const keyIdentity = (value) => typeof value === 'string' && value.length > 0 && !/[|~,+\r\n]/.test(value);
+
+export function stableFindingKey({ repository, aliases, component, path, defectIdentity }) {
+  if (![repository, component, path].every(keyIdentity)) throw new Error('invalid finding identity');
+  const aliasPart = canonicalAliases(aliases).join('+') || (keyIdentity(defectIdentity) ? defectIdentity : '');
+  if (!aliasPart) throw new Error('finding requires advisory or source-defect identity');
   return [repository, aliasPart, component, path].join('|');
 }
 
 export function stableUnitKey({ repository, repairClass, targets, fixedTarget }) {
-  if (!repository || !repairClass || !fixedTarget) throw new Error('unit key requires repository, repairClass and fixedTarget');
-  const targetPart = [...new Set(targets || [])].sort().join(',');
+  if (![repository, repairClass, fixedTarget].every(keyIdentity)) throw new Error('invalid unit identity');
+  if (!Array.isArray(targets) || !targets.length || !targets.every(keyIdentity)) throw new Error('invalid unit targets');
+  const targetPart = [...new Set(targets)].sort().join(',');
   return [repository, repairClass, targetPart, fixedTarget].join('|');
 }
 
