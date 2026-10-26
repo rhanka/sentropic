@@ -939,8 +939,8 @@ engram-e2-postgres-up:
 	@$(ARTIFACTS_COMPOSE) up -d --wait postgres
 
 engram-e2-stable-publish-guard:
-	@version="$$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' packages/cluster-mesh/package.json | head -1)"; \
-		case "$$version" in *-*) echo 'Development Cluster Mesh versions are pack-only'; exit 1;; esac
+	@version="$$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' packages/cluster-mesh/package.json | head -1)"; \
+		[[ "$$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo 'Only stable Cluster Mesh versions may be published'; exit 1; }
 
 .PHONY: engram-e2-job-receipt
 engram-e2-job-receipt:

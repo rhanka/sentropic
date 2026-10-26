@@ -51,18 +51,19 @@
   - [x] Read Docker lock, plan §§1/3.1/5/6/7, repository rules and template; create worktree from origin/main.
   - [x] Run mechanical `harness check branch`; inspect Immo Compose runner and existing PG qualification.
   - [x] Verify registry 0.22.0/0.22.1 and 0.23.0 absence; retain #709 closure bytes and ancestry evidence outside the PR.
-- [ ] **Lot 1 — BR-E2-EX1 CI qualification**
+- [x] **Lot 1 — BR-E2-EX1 CI qualification**
   - [x] Add exact E2 and preserve Immo integration PR bases; compare bump gate to actual PR head/base merge-base.
   - [x] Wire existing build/typecheck/lint/scoped memory/storage tests and real PG through isolated Compose; retain commands, exit codes, inventory, logs and hashes.
   - [x] Keep every existing publish job predicate unchanged; no development version publication.
+  - [x] Verify compact/pretty development manifests refuse and the reserved stable manifest passes the publication guard without invoking a publisher.
   - [x] Include existing `scripts/ci/publishable-ci-wiring.test.mjs` assertions through the same disposable Compose runner.
   - [x] Connect E2's scoped change-filter and final `ci-gate`; keep selection compatible with the existing expected-result evaluator.
-  - [ ] Run `make scope-check ENV=test-e2-int` before each atomic commit below 150 lines.
+  - [x] Run `make scope-check ENV=test-e2-int` before each atomic commit below 150 lines.
 - [ ] **Lot 2 — PRE-E0 record and final validation**
   - [x] Write root `.tmp/engram-e2-host-tuple/pre-e0-entry.md`, with registry, ancestry, repair/receiving status, Q1 conditions and Comments route.
   - [x] Preserve #709 Lots 2/4/6 succession to E6/E7/E10; retain completed descriptor/Engram pin, keep SQLite qualification separate.
     - [x] Future topics declare E1–E5 generic contracts/atomic/backend/u64/ownership, PG codecs/journal/roots/readers/migrations/instance/transaction/core/scope files, assets and plan §3.2 tests before editing; this preparation changes none.
   - [x] Execute build, typecheck, lint, `tests/engram-memory` (70), common-v1 (10), grants (3), and real PostgreSQL (51) through Make; crash-phase cases stay in the existing main crash lane.
   - [x] Push; open PR #755 to main using this file as body; leave merging to conductor/owner GO.
-  - [ ] Verify final committed-head wiring and CI after correcting the expected-result fixture environment and job-level lock context.
+  - [x] Verify committed-head wiring (38 tests) and E2 CI after correcting fixture environment/lock context: job `121459264616` passed at `50dd8e91c`; final guard probes pass separately.
   - [ ] After owner GO and CI landing, conduct real integration-target unchanged/corrected bump probes before admitting topics; refresh each receipt on head/base changes.
