@@ -327,8 +327,8 @@ export type { ConsumedCounter, ConsumedVersion };
 // E2 additive exact-u64 atomic unit: same structure as AtomicUnit, but
 // aggregate versions, aggregate-version guards and absent allocations accept
 // exact u64 decimal strings alongside legacy safe numbers. Legacy
-// validateAtomicUnit stays frozen; the PG commit gate accepts a unit when
-// either validator passes.
+// validateAtomicUnit stays frozen; the PG commit gate requires this
+// validator, including unique non-empty index result IDs on both paths.
 export type U64VersionInput = number | U64Counter;
 
 export interface U64ChainAppend {
