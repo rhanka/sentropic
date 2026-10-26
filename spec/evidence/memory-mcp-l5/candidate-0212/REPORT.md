@@ -6,9 +6,11 @@ receipt digest was issued. L4's exit condition remains unmet.
 This is a blocked qualification, not an observed six-tool runtime failure.
 Attempt 2 supersedes attempt 1's interpretation of the Docker rule: the owner
 explicitly permits existing official targets using `docker run --rm`, under
-the shared flock. The official CI gate has been submitted; its execution is
-currently waiting for that lock. See `attempt-2-lock.txt` for the captured
-holder and nested waiter in `tmp/worktrees/mem-e1`; no L5 container has started.
+the shared flock. The official CI gate was submitted, but the shared lock
+prevented it from starting. See `attempt-2-lock.txt` for the captured holder
+and nested waiter in `tmp/worktrees/mem-e1`. Only the childless L5 waiter was
+stopped; no L5 container started. [Execution evidence](EXECUTION.md) records
+the distinction between the terminated flock and an unexecuted test gate.
 
 The [producer audit](PRODUCERS.md) traces the absent proof files to unimplemented
 harness lots and predecessor integrations. They are source suites, not outputs
@@ -92,6 +94,11 @@ make -f spec/evidence/memory-mcp-l5/candidate-0212/inspection.mk memory-l5-inspe
 official `memory-l5-gate LOT=1` with CI's retained P2 manifest and the same ports/ENV,
 under the shared flock. It does not qualify the engram candidate by itself.
 The archive SHA-256/SHA-512, P2 binding and static inspection were rerun successfully.
+The lock waiter exited 143 after targeted cancellation; this is not a test failure
+or test exit code. `make down` was attempted under the same flock with a 15-second
+wait and timed out before make started. Read-only `make ps` exited 0 with no L5
+services listed. No container, native addon, Python process or key was created by
+this qualification attempt.
 
 L5 harness owner: complete the catalog-mapped candidate lots and authenticated
 provenance verification, preserving every proof, pinned image and receipt check. Acceptance requires
