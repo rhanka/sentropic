@@ -8,6 +8,7 @@ import * as sessionLeaf from '../../src/integrations/gateway/auth-hono.js';
 import * as meshProvider from '@sentropic/llm-mesh';
 import * as meshLeaf from '../../src/integrations/llm-mesh/index.js';
 import { createClusterMeshModules, verifyClusterMeshTopology } from '../../src/index.js';
+import { TRAIN_LLM_GATEWAY_VERSION, TRAIN_LLM_MESH_VERSION } from '../fixtures/train.js';
 import { loadGateway } from '../../src/loaders/gateway/index.js';
 import { loadGatewayAuth } from '../../src/loaders/gateway/auth.js';
 import { loadGatewayAuthHono } from '../../src/loaders/gateway/auth-hono.js';
@@ -49,7 +50,7 @@ describe('gateway static leaves', () => {
     expect(session.AuthHonoVerifyToken).toBe(sessionProvider.AuthHonoVerifyToken);
     const snapshot = await modules.probe();
     for (const id of ['gateway', 'gateway/auth', 'gateway/auth-hono'] as const) {
-      expect(snapshot[id]).toMatchObject({ availability: 'available', state: 'loaded', installedVersion: '0.21.1' });
+      expect(snapshot[id]).toMatchObject({ availability: 'available', state: 'loaded', installedVersion: TRAIN_LLM_GATEWAY_VERSION });
     }
   });
 
@@ -58,10 +59,10 @@ describe('gateway static leaves', () => {
     expect(gatewayLeaf.MAX_BUDGET_RETRY_AFTER_SECONDS).toBe(60);
     expect(meshLeaf.quoteRoute).toBe(meshProvider.quoteRoute);
     const report = verifyClusterMeshTopology({ require: ['llm-mesh', 'gateway'] });
-    expect(report.gateway).toMatchObject({ version: '0.21.1' });
+    expect(report.gateway).toMatchObject({ version: TRAIN_LLM_GATEWAY_VERSION });
     expect(report.gateway?.llmMesh?.path).toBe(report.llmMesh?.path);
     const snapshot = await createClusterMeshModules().probe();
-    expect(snapshot['llm-mesh']).toMatchObject({ state: 'installed', installedVersion: '0.28.0' });
-    expect(snapshot.gateway).toMatchObject({ state: 'installed', installedVersion: '0.21.1' });
+    expect(snapshot['llm-mesh']).toMatchObject({ state: 'installed', installedVersion: TRAIN_LLM_MESH_VERSION });
+    expect(snapshot.gateway).toMatchObject({ state: 'installed', installedVersion: TRAIN_LLM_GATEWAY_VERSION });
   });
 });
