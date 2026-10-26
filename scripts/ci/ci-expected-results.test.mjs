@@ -6,12 +6,30 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture, wallClockProof } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
+
+test('should require completed PR and main receipts of the same policy within the baseline', () => {
+  const sample = (id, event, head_branch) => ({ policyDigest: 'final-policy', run: {
+    id, event, head_branch, status: 'completed', conclusion: 'success',
+    created_at: '2026-10-26T10:00:00Z', updated_at: '2026-10-26T10:38:08Z',
+  }, jobs: [{ name: 'ci-gate', runner_id: 1, conclusion: 'success' }] });
+  const pr = sample(1, 'pull_request', 'topic');
+  const main = sample(2, 'push', 'main');
+  const proof = rows => wallClockProof(rows, 'final-policy');
+  assert.equal(proof([pr, main]).accepted, true);
+  assert.equal(proof([pr, main]).runs[0].wallClockSeconds, 2288);
+  for (const rows of [[], [pr], [pr, pr], [pr, { ...main, policyDigest: 'old-policy' }],
+    [pr, { ...main, run: { ...main.run, status: 'in_progress' } }],
+    [pr, { ...main, run: { ...main.run, conclusion: 'cancelled' } }],
+    [pr, { ...main, run: { ...main.run, event: 'workflow_dispatch' } }],
+    [pr, { ...main, run: { ...main.run, updated_at: '2026-10-26T10:38:09Z' } }],
+    [pr, { ...main, jobs: [] }]]) assert.equal(proof(rows).accepted, false);
+});
 
 test('should bound shared queued slots without inventing validator dependencies', () => {
   const concurrency = { group: 'capacity-0', queue: 'max', 'cancel-in-progress': false };
