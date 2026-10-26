@@ -1,7 +1,7 @@
 # Feature: W2.a compiled app MCP registry
 
 ## Objective
-- [ ] Compile one cluster-mesh provider registry with exact APP-P1 public names for W4.
+- [x] Compile one cluster-mesh provider registry with exact APP-P1 public names for W4.
 
 ## Scope / Guardrails
 - [x] Base W1.b #780 `8fca05df3`; mesh 0.22.4; merge only, never rebase.
@@ -38,6 +38,7 @@
 - [x] BR02-EX1 pins all test artifacts imports to workspace dist, matching the mesh loader and keeping HTTP/MCP on one profile instance. Root lock installs an API-private artifacts copy; its profile WeakSet refuses cross-copy profiles. Production physical resolution remains W2.b's required gate.
 - [x] W2.b owns route mounting, identity/dispatch integration and root/API lock reconciliation.
 - [x] W4 consumes the returned compiled registry exact-name map without sanitization.
+- [x] Compiled order: `artifacts_ensure`, `artifacts_get`, `artifacts_list`, `artifacts_publish`.
 - [ ] Independent review and final CI receipts remain required; no inherited review approves this diff.
 
 ## AI Flaky tests
@@ -54,11 +55,14 @@
 - [x] Lot 1: tests first in `api/tests/api/app-mcp-registry.test.ts`; missing-module red captured in `/tmp/app-w2a-module-red.log` after BR02-EX1.
 - [x] Lot 2: implement `api/src/services/mcp/cluster-registry.ts` using mesh modules, builtin and facade.
 - [x] Lot 3: same test file covers exact names, explicit selection/config, collisions, missing peers, profile/schema/policy integrity and atomic refusal.
-- [ ] Lot 4: focused API suite, API typecheck/lint, relevant registry and MCP regressions; cleanup.
+- [x] Lot 4: focused API suite, API typecheck/lint, relevant registry and MCP regressions; cleanup.
   - [x] API typecheck; lint 0 errors/219 warnings; focused registry 17/17: `/tmp/app-w2a-types-coherence.log`, `/tmp/app-w2a-final-focused.log`.
-  - [ ] API regressions: `api/tests/api/{app-mcp-registry,artifacts-host-publication,artifacts-host-migrations,mcp-resource-server,cluster-mesh-mcp-singleton,cluster-mesh-namespace-inventory}.test.ts`.
-  - [ ] Consumed mesh registry suite: `packages/cluster-mesh/tests/mcp-registry.spec.ts`.
-- [ ] Lot 5: independent review; push, draft PR from this file, exact-head CI green; report names and SHA.
+  - [x] API regressions: `api/tests/api/{app-mcp-registry,artifacts-host-publication,artifacts-host-migrations,mcp-resource-server,cluster-mesh-mcp-singleton,cluster-mesh-namespace-inventory}.test.ts`: 74/74, `/tmp/app-w2a-regressions.log`.
+  - [x] Consumed mesh registry suite: `packages/cluster-mesh/tests/mcp-registry.spec.ts`: 4/4, `/tmp/app-w2a-mesh-registry.log`.
+  - [x] API stack reached healthy before tests; all steps cleaned with locked make down; final make ps has no services. No AI calls or skips.
+- [x] Lot 5 authoring: push and draft PR #785 against `feat/app-cm-integration`; PR body is this file; no merge.
+  - [ ] Exact-head remote CI receipt: workflow_dispatch required for this integration base; confirm success in the PR before acceptance.
+  - [ ] Independent review dispatch awaits owner OK required by `rules/subagents.md`; no reviewer verdict or consensus claimed.
 
 ## Inherited main qualification record
 
