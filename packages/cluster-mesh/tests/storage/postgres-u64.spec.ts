@@ -101,7 +101,7 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
       await expect(rebound.journalRead(9007199254740992, 10)).rejects.toMatchObject({ code: 'invalid-command' });
     } finally { await fixture.close(); }
   });
-  it.each([undefined, [1], [''], ['r', 'r'], [null], ['r', undefined]])('refuses invalid index result ids %j before persistence', async (resultIds) => {
+  it.each([undefined, [1], [-1], [9007199254740992], [''], ['r', 'r'], [null], ['r', undefined]].map((resultIds) => ({ resultIds })))('refuses invalid index result ids $resultIds before persistence', async ({ resultIds }) => {
     let effects = 0;
     const fixture = await createPgFixture({ validateEffects: async () => { effects += 1; } });
     try {
