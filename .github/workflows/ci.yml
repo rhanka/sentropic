@@ -152,7 +152,6 @@ jobs:
       pull-requests: read
     outputs:
       expected_attempt: ${{ steps.ci_expected.outputs.attempt }}
-      decision_fixture_only: ${{ github.event_name == 'pull_request' && github.head_ref == 'feat/decision-v4-l5' && 'true' || 'false' }}
       global: ${{ steps.filter.outputs.global }}
       idp_sync: ${{ steps.filter.outputs.idp_sync }}
       api: ${{ steps.filter.outputs.api }}
@@ -1299,7 +1298,7 @@ jobs:
   test-api-unit-integration:
     runs-on: ubuntu-latest
     needs: [changes, build-api-image, build-api-tool-image]
-    if: needs.changes.outputs.decision_fixture_only != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     continue-on-error: ${{ matrix.suite == 'ai' }}
     env:
       API_TEST_CI: '1'
@@ -1449,7 +1448,7 @@ jobs:
   test-e2e:
     runs-on: ubuntu-latest
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
-    if: needs.changes.outputs.decision_fixture_only != 'true' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -1510,7 +1509,7 @@ jobs:
   e2e-vscode:
     runs-on: ubuntu-latest
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
-    if: needs.changes.outputs.decision_fixture_only != 'true' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
