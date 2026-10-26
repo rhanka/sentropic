@@ -120,6 +120,8 @@ export interface TicketRecord extends TicketBinding {
 }
 
 export interface TicketStore {
+  /** Optional authoritative-clock issuance; peek/take must also deny expired records. */
+  issue?(record: Omit<TicketRecord, 'expiresAt'>, ttlMs: number): Promise<TicketRecord>;
   put(record: TicketRecord): Promise<void>;
   peek(ticketId: string): Promise<TicketRecord | undefined>;
   /** Atomically remove and return the record (single-use consumption). */
@@ -170,6 +172,10 @@ export function createTicketService(options: {
         (input.channel !== 'stable' && input.channel !== 'pinned')
       ) throw new Error('invalid ticket: binding');
       const ticketId = ids();
+      if (options.store.issue) {
+        const record = await options.store.issue({ ...input, ticketId }, ttlMs);
+        return { ticketId: record.ticketId, expiresAt: record.expiresAt };
+      }
       const expiresAt = clock() + ttlMs;
       await options.store.put({
         ticketId,
@@ -184,7 +190,7 @@ export function createTicketService(options: {
     async redeem(ticketId, expected) {
       const record = await options.store.peek(ticketId);
       if (record === undefined) throw new Error('invalid ticket');
-      if (clock() >= record.expiresAt) {
+      if (!options.store.issue && clock() >= record.expiresAt) {
         await options.store.remove(ticketId);
         throw new Error('ticket expired');
       }
