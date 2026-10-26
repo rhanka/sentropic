@@ -46,12 +46,12 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Read-only diagnosis**
   - [x] Read Docker lock, rules, radar aadc5291 runbook steps 3–4 and server-http.ts; inspect CI deploy and live discovery.
-- [ ] **Lot 1 — Workload registration**
+- [x] **Lot 1 — Workload registration**
   - [x] Add local Secret-backed registration and references in both preprod Job sources; preserve existing IDs and hashes.
-  - [ ] Test `services-test.sh` registration, invalid secret, mismatch, rollback, idempotence and unrelated-client preservation.
-  - [ ] Gate: `make test-idp-sync-selftest` and `make test-idp-sync-sql`, then teardown.
+  - [x] Test `services-test.sh` registration, invalid secret, mismatch, rollback, idempotence and unrelated-client preservation.
+  - [x] Gate: `make test-idp-sync-selftest` (47 checks) and `make test-idp-sync-sql` passed; disposable containers removed; teardown requested.
 - [ ] **Lot 2 — Policy regression**
-  - [ ] Test preprod allowed exchange, public/unregistered denial, wrong subject/target audiences and client_credentials denial in `api/tests/api/auth/oauth-token-exchange.test.ts`.
+  - [x] Test preprod allowed exchange, public/unregistered denial, wrong subject/target audiences and client_credentials denial in `api/tests/api/auth/oauth-token-exchange.test.ts`.
   - [ ] Gate: scoped API endpoint suite, then teardown.
 - [ ] **Lot 3 — Operator handoff and draft PR**
   - [ ] Document owner secret minting, radar handoff, dry-run, rollout and acceptance in `deploy/k8s/README.md`.

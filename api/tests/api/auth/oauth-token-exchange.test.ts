@@ -18,8 +18,8 @@ import { cleanupAuthData, createTestUser } from '../../utils/auth-helper';
 const PUBLIC_CLIENT_ID = 'immo-mcp';
 const WORKLOAD_CLIENT_ID = 'immo-mcp-workload';
 const WORKLOAD_SECRET = 'immo-mcp-workload-secret-dev-only';
-const MCP_AUDIENCE = 'https://immo.sent-tech.ca/mcp';
-const RADAR_AUDIENCE = 'https://immo.sent-tech.ca';
+const MCP_AUDIENCE = 'https://preprod.immo.sent-tech.ca/mcp';
+const RADAR_AUDIENCE = 'https://preprod.immo.sent-tech.ca';
 const EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
 const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 const CODE_VERIFIER = 'test-exchange-verifier-with-enough-entropy-1234567890';
@@ -43,7 +43,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
   it('exchanges a host-issued subject for a Radar-audience token with the mandatory act claim', async () => {
     const subject = await issueSubjectToken();
 
-    const res = await app.request('http://localhost:9197/api/v1/oauth/token', {
+    const res = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
       body: new URLSearchParams({
         audience: RADAR_AUDIENCE,
         grant_type: EXCHANGE_GRANT,
@@ -79,7 +79,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
   it('rejects the public client and a wrong workload secret before any exchange', async () => {
     const subject = await issueSubjectToken();
 
-    const asPublic = await app.request('http://localhost:9197/api/v1/oauth/token', {
+    const asPublic = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
       body: exchangeBody(subject),
       headers: {
         Authorization: basicAuth(PUBLIC_CLIENT_ID, 'not-a-secret'),
@@ -90,7 +90,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     expect(asPublic.status).toBe(401);
     await expect(asPublic.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
 
-    const wrongSecret = await app.request('http://localhost:9197/api/v1/oauth/token', {
+    const wrongSecret = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
       body: exchangeBody(subject),
       headers: {
         Authorization: basicAuth(WORKLOAD_CLIENT_ID, 'wrong-secret'),
@@ -105,7 +105,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
   it('rejects a scope outside the workload policy', async () => {
     const subject = await issueSubjectToken();
 
-    const res = await app.request('http://localhost:9197/api/v1/oauth/token', {
+    const res = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
       body: new URLSearchParams({
         audience: RADAR_AUDIENCE,
         grant_type: EXCHANGE_GRANT,
@@ -123,6 +123,48 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_scope' } });
   });
 
+  it.each(['missing', 'no-policy'])('denies an unregistered exchange client: %s', async (state) => {
+    const subject = await issueSubjectToken();
+    if (state === 'missing') {
+      await db.delete(serviceClients).where(eq(serviceClients.clientId, WORKLOAD_CLIENT_ID));
+    } else {
+      await db.update(serviceClients).set({ exchangePolicy: null }).where(eq(serviceClients.clientId, WORKLOAD_CLIENT_ID));
+    }
+    const res = await workloadRequest(exchangeBody(subject));
+    expect(res.status).toBe(state === 'missing' ? 401 : 400);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: state === 'missing' ? 'invalid_client' : 'unauthorized_client' } });
+  });
+
+  it.each(['https://immo.sent-tech.ca', `${RADAR_AUDIENCE}/`, MCP_AUDIENCE])('denies target audience %s', async (audience) => {
+    const body = new URLSearchParams(exchangeBody(await issueSubjectToken()));
+    body.set('audience', audience);
+    const res = await workloadRequest(body.toString());
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
+  });
+
+  it('denies a host-issued subject for the production MCP audience', async () => {
+    const audience = 'https://immo.sent-tech.ca/mcp';
+    await db.update(oauthClients).set({ resourceIndicators: [audience] }).where(eq(oauthClients.clientId, PUBLIC_CLIENT_ID));
+    const res = await workloadRequest(exchangeBody(await issueSubjectToken(audience)));
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+  });
+
+  it('denies client credentials and form-only credentials for the registered workload', async () => {
+    const credentials = await workloadRequest(new URLSearchParams({ grant_type: 'client_credentials', scope: 'immo:search' }).toString());
+    expect(credentials.status).toBe(400);
+    await expect(credentials.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
+    const body = new URLSearchParams(exchangeBody(await issueSubjectToken()));
+    body.set('client_id', WORKLOAD_CLIENT_ID);
+    body.set('client_secret', WORKLOAD_SECRET);
+    const res = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
+      method: 'POST', body: body.toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+  });
+
   it('refuses both grants on a corrupt workload policy (fail-closed)', async () => {
     const subject = await issueSubjectToken();
     await db
@@ -130,7 +172,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
       .set({ exchangePolicy: { enabled: true, actorSub: 'x' } })
       .where(eq(serviceClients.clientId, WORKLOAD_CLIENT_ID));
 
-    const exchange = await app.request('http://localhost:9197/api/v1/oauth/token', {
+    const exchange = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
       body: exchangeBody(subject),
       headers: {
         Authorization: basicAuth(WORKLOAD_CLIENT_ID, WORKLOAD_SECRET),
@@ -141,7 +183,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     expect(exchange.status).toBe(400);
     await expect(exchange.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
 
-    const credentials = await app.request('http://localhost:9197/api/v1/oauth/token', {
+    const credentials = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
       body: new URLSearchParams({ grant_type: 'client_credentials', scope: 'immo:search' }).toString(),
       headers: {
         Authorization: basicAuth(WORKLOAD_CLIENT_ID, WORKLOAD_SECRET),
@@ -163,7 +205,12 @@ const exchangeBody = (subject: string): string =>
     subject_token_type: ACCESS_TOKEN_TYPE,
   }).toString();
 
-const issueSubjectToken = async (): Promise<string> => {
+const workloadRequest = (body: string) => app.request('http://localhost:9197/api/v1/auth/oauth/token', {
+  method: 'POST', body,
+  headers: { Authorization: basicAuth(WORKLOAD_CLIENT_ID, WORKLOAD_SECRET), 'Content-Type': 'application/x-www-form-urlencoded' },
+});
+
+const issueSubjectToken = async (audience = MCP_AUDIENCE): Promise<string> => {
   const user = await createTestUser({
     displayName: 'Exchange User',
     email: `exchange-user-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`,
@@ -171,12 +218,12 @@ const issueSubjectToken = async (): Promise<string> => {
     withSession: true,
   });
 
-  const authorizeUrl = new URL('http://localhost:9197/api/v1/oauth/authorize');
+  const authorizeUrl = new URL('http://localhost:9197/api/v1/auth/oauth/authorize');
   authorizeUrl.searchParams.set('response_type', 'code');
   authorizeUrl.searchParams.set('client_id', PUBLIC_CLIENT_ID);
   authorizeUrl.searchParams.set('redirect_uri', 'https://claude.ai/api/mcp/auth_callback');
   authorizeUrl.searchParams.set('scope', 'immo:read immo:search');
-  authorizeUrl.searchParams.set('resource', MCP_AUDIENCE);
+  authorizeUrl.searchParams.set('resource', audience);
   authorizeUrl.searchParams.set('code_challenge', createHash('sha256').update(CODE_VERIFIER).digest('base64url'));
   authorizeUrl.searchParams.set('code_challenge_method', 'S256');
   authorizeUrl.searchParams.set('state', 'exchange-state-1');
@@ -187,7 +234,7 @@ const issueSubjectToken = async (): Promise<string> => {
   const consentLocation = new URL(authorize.headers.get('location') ?? '');
   const sealedState = consentLocation.searchParams.get('state') ?? '';
 
-  const decision = await app.request('http://localhost:9197/api/v1/oauth/consent/decision', {
+  const decision = await app.request('http://localhost:9197/api/v1/auth/oauth/consent/decision', {
     body: JSON.stringify({ decision: 'approve', state: sealedState }),
     headers: {
       Accept: 'application/json',
@@ -200,7 +247,7 @@ const issueSubjectToken = async (): Promise<string> => {
   const code = new URL((await decision.json()).redirectTo).searchParams.get('code');
   expect(code).toBeTruthy();
 
-  const token = await app.request('http://localhost:9197/api/v1/oauth/token', {
+  const token = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
     body: new URLSearchParams({
       client_id: PUBLIC_CLIENT_ID,
       code: code ?? '',
@@ -213,7 +260,7 @@ const issueSubjectToken = async (): Promise<string> => {
   });
   expect(token.status).toBe(200);
   const subject = ((await token.json()) as { access_token: string }).access_token;
-  expect((decodeJwt(subject) as { aud: string }).aud).toBe(MCP_AUDIENCE);
+  expect((decodeJwt(subject) as { aud: string }).aud).toBe(audience);
   return subject;
 };
 
