@@ -70,6 +70,7 @@
   - [ ] Budget to measure: classification ≤15s, verdict ≤5s, aggregate critical-path scheduling ≤60s under declared concurrent traffic.
   - [ ] Rollback drill: restore prior scheduling policy and conservative dispatch width; keep expected-result and metrics checks; demonstrate that cancellation never stops the current release.
   - [x] Prepare live conservative rollback: one package validation lane and API/E2E widths 1/1; retain the pre-BR77 cancellation/release groups and every completeness/metrics check. Run beside main 40341027258 attempt 2.
+  - [x] Rollback head 474e023163fd1be0b2f0ac7f33442c2d97dc561c started run 40353670942; prior run 40352448337 was automatically cancelled (57 cancelled rows; its complete-result gate failed). Main attempt 2 continued. Restore bounded 2/2 policy and retain dependency/capacity inputs in workflow artifacts.
 - [ ] **Lot 4 — Docs consolidation**
   - [ ] Update this plan, the study, and `spec/ci-cd-ten-minutes/capacity.md` with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
