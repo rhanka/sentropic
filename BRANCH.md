@@ -41,7 +41,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: isolate platform proposal from PR #777 and verify branch mechanically.
 - [x] Registry pre-bump observation: published platform is 0.4.0; propose 0.4.1 for pack-only validation.
-- [ ] Lot 1: transfer schema admission and wire/context bridge with both profile suites.
+- [x] Lot 1: transfer schema admission and wire/context bridge with both profile suites.
 - [x] Transfer bounded wire implementation and schema-profile test coverage from c83189032.
 - [x] Transfer additive bridge admission, verified dispatch and complete-envelope codec.
 - [ ] Lot 2: run platform tests and pack-mcp-platform; inspect additive package exports.
