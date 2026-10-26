@@ -6,20 +6,15 @@ import assert from 'node:assert/strict';
 import { closeSync, openSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import {
-  CANONICAL_INSTANCE_OWNERSHIP_CONTRACT,
-  CanonicalInstanceRegistry,
-  CanonicalOwnershipError,
-  commitPossessionGuard,
-} from '../../src/storage/instance-ownership.js';
+import { CanonicalOwnershipError } from '../../src/storage/instance-ownership.js';
 import { pgEnabled } from './pg-driver.js';
 import { createPgFixture } from './pg-fixture.js';
 import { grantFor } from './authority-corpus.js';
-import { defineRegistrySemantics } from './instance-corpus.js';
+import { defineOwnershipSemantics, registryDriver } from './instance-corpus.js';
 import { createSqliteFixture } from './sqlite-fixture.js';
 
 describe('canonical instance ownership', () => {
-  defineRegistrySemantics(() => new CanonicalInstanceRegistry());
+  defineOwnershipSemantics('neutral registry', async () => ({ driver: registryDriver(), teardown: async () => {} }));
 
   it('refuses SQLite commits after the ownership row moves, without partial persist', async () => {
     const fixture = createSqliteFixture();
@@ -161,9 +156,7 @@ describe.skipIf(!pgEnabled)('postgres commit-possession hook', () => {
         await bound.commitAtomic(unit);
         assert.fail('a refused possession must roll back');
       } catch (error) {
-        assert.ok(error instanceof Error && error.name === 'PostgresStorageError');
-        const cause = (error as { cause?: unknown }).cause;
-        assert.ok(cause instanceof CanonicalOwnershipError && cause.code === 'terminal-loss');
+        assert.ok(error instanceof CanonicalOwnershipError && error.code === 'terminal-loss');
       }
       assert.equal(calls, 2);
       assert.equal(await bound.readHead('hook-chain'), null);
@@ -193,10 +186,10 @@ describe.skipIf(!pgEnabled)('postgres commit-possession hook', () => {
       order.length = 0;
       armed = true;
       const unit = { guards: [], records: [], appends: [{ chainId: 'after-hook', record: { id: 'h1', bytes: '{"n":1}', hash: 'hash-after-hook' }, expectation: { kind: 'absent', allocation: '0' } as const }], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [] };
-      await assert.rejects(bound.commitAtomic(unit), (error: unknown) => {
-        const cause = (error as { cause?: unknown }).cause;
-        return cause instanceof CanonicalOwnershipError && cause.code === 'terminal-loss';
-      });
+      await assert.rejects(
+        bound.commitAtomic(unit),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'terminal-loss',
+      );
       assert.deepEqual(order, ['outbox', 'hook']);
       assert.equal(valid, false);
       assert.equal(await bound.readHead('after-hook'), null);
