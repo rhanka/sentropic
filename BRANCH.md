@@ -1,75 +1,73 @@
-# fix(artifacts): 0.2.1 host guard and host failure mapper
+# Feature: Engram E2 non-publishing integration qualification
 
 ## Objective
-- [x] Fix the two Radar acceptance defects for immo #861 without changing frozen contracts.
+- [ ] Deliver PRE-E0 evidence and BR-E2-EX1 only; open the CI preparation PR to main and leave merging to the conductor after owner GO.
 
 ## Scope / Guardrails
-- [x] Worktree: `tmp/worktrees/artifacts-021`, branch `fix/artifacts-0.2.1-acceptance`, base `origin/main`.
-- [x] Make-only; shared Docker lock; cleanup after each step; no merge.
-- [x] Environment: `test-artifacts-021`; Compose qualification has no published ports.
-- [x] Existing qualification Compose lane extended to `test-artifacts-021` (BR861-EX1).
-- [x] Preserve `packages/artifacts/l0-freeze/**` byte for byte and existing wire shapes.
-- [x] Commits below 150 lines, selective staging, `make commit` only.
+- [x] Sole release integrator: Codex, requested gpt-6.1-sol high; no delegated implementation.
+- [x] Worktree: `tmp/worktrees/engram-e2-integration`; branch: `feat/engram-e2-integration`; base: `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`.
+- [x] Make-only, ENV last: `ENV=test-e2-int`; Docker commands serialized with `/home/antoinefa/.cache-tmp/sentropic-docker.lock` and cleaned with `make down` after each step.
+- [x] Use existing `docker-compose.immo-861.yml`; no published ports, no owner stacks, no migration or package version edits.
+- [x] Keep Engram 0.21.1, L4 P2 `2b85ff28`, and original P1 `68181613ff36b601d7f6bb62550294fdcd2c0ad26f2ed25cc1ad2fa633fafd5a` unchanged.
+- [x] Reserve mesh 0.23.0 after #709, Immo 0.22.0 and corrective 0.22.1; development manifests are pack-only and never published.
+- [x] Future E0–E11 topics need their own exact scope declarations; this preparation does not authorize source implementation.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/src/http.ts`
-  - `packages/artifacts/src/mcp-core.ts`
-  - `packages/artifacts/src/server/publication.ts`
-  - `packages/artifacts/src/server/commit/coordinator.ts`
-  - `packages/artifacts/src/server/commit/types.ts`
-  - `packages/artifacts/tests/**`
-  - `packages/artifacts/probe/**`
-  - `packages/artifacts/examples/radar-commit-setup.ts`
-  - `packages/artifacts/README.md`
-  - `packages/artifacts/docs/migration-l6.md`
-  - `packages/artifacts/package.json`
-  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts`
-  - `package-lock.json`
-  - `Makefile`
 - **Forbidden Paths (must not change in this branch)**:
+  - `packages/**`
+  - `package*.json`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/artifacts/l0-freeze/**`
+  - `plan/**`
+  - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
+  - `.github/workflows/ci.yml` — BR-E2-EX1
+  - `Makefile` — BR-E2-EX1
 - **Exception process**:
-  - [x] Declare rationale, impact and rollback in Feedback Loop before any exception.
+  - [x] Declare BR-E2-EX1 below before implementation; retain main and Immo qualification and publication predicates.
 
 ## Feedback Loop
-- [x] BR861-EX1: extend existing Compose qualification ENV allowlist to the requested `test-artifacts-021`; required by Docker lock and make-only constraints. Impact: only that isolated ENV selects qualification services, scope checks and cleanup. Rollback: remove its four allowlist entries.
-- [x] BR861-EX2: route existing package-pack/consumer recipes through the same Compose lane and add a packed-example check; required to verify installed mapper declarations under the Docker lock. Default commands are unchanged. Rollback: remove the pack-run indirection and example target.
-- [x] CI catalog adaptation: mesh's artifacts catalog test pinned version 0.2.0; compare against the exported artifacts version so the 0.2.1 patch retains the catalog contract. No mesh runtime code changed.
-- [x] Opus r1 P1/P2 reconciled: restore default approval for direct publication, pass the optional host guard from HTTP/MCP, and document custom-service semantics. PR remains unmerged.
+- [x] Owner GO for PR #755: merge origin/main after #751, preserve both qualification environments and all reviewed CI triggers and predicates; exact-head CI gates the final merge.
+- [x] BR-E2-EX1 — `acknowledge`, owner: sole release integrator, 2026-10-26; bounded to `.github/workflows/ci.yml` and `Makefile`.
+  - [x] Mechanical alias `BR2-EX1` names the same exception because the installed harness accepts only numbered BR identifiers.
+  - [x] Rationale: topic merges otherwise bypass the required checks.
+  - [x] Impact: additional qualification and artifact retention only for PRs targeting `feat/engram-e2-integration` with E2-relevant paths; main and Immo PRs skip `qualify-engram-e2` and retain their existing gates. Preserve all main-only publish event/ref predicates and forbid publishing development versions.
+  - [x] Rollback: remove the E2 branch trigger, `changes.outputs.engram_e2`, its path filter and `engram_e2_scope` step, the E2 expected-manifest override, `qualify-engram-e2` and its `ci-gate` need, plus E2-specific Make runner wiring; preserve Immo/main gates and suspend E2 topic merges until equivalent checks are restored.
+  - [x] P2-1: qualify the path-filter output by the E2 PR base in `changes`; feed that same scoped output into the expected manifest instead of its raw path filter, retaining the existing job predicate so the evaluator and dispatch agree.
+  - [x] Selection dry-run (2026-10-26): parse the actual workflow, execute the scope-output and expected-manifest context scripts, and verify that the manifest and dispatch use the same string output through `workflowExpected` and `evaluateExpected`; with relevant paths changed, `main` and Immo yield `false`/unselected and accept a skipped job, while E2 yields `true`/selected and rejects a skipped job. With no relevant paths, all three bases yield `false`/unselected.
+  - [x] Dry-run receipt: `tmp/engram-e2-selection.test.mjs` (local probe); `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make test-publishable-manifests 'SCOPE=tmp/engram-e2-selection.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/ci-expected-results.test.mjs' ENV=test-e2-int` passed 44/44 (six selection cases plus 38 existing assertions); `make down ENV=test-e2-int` under the same lock removed the disposable project.
+- [ ] E0 admission remains blocked until this CI change reaches main, a real integration-target fail/pass bump probe passes, receiving records and Comments deployment separation are confirmed.
 
 ## AI Flaky tests
-- [x] No AI-dependent tests in scope.
+- [x] No AI tests, accepted flakiness or timeout changes in this preparation.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; one author, independent review before handoff.
+- [x] Mono-branch, sole integrator for this CI preparation; E-lot topics later target this integration branch and rebase without cherry-picks.
+- [ ] Multi-branch implementation is outside this preparation.
 
 ## UAT Management (in orchestration context)
-- [x] Library-only change; application regression tests and packed consumer serve as UAT.
+- [x] No web, Chrome or VS Code behavior changes; qualify workflow routing, bump comparison and package/storage Make lanes.
 
 ## Plan / Todo (lot-based)
-- [x] Review r1 P1 — Restore default approval checks for direct publication; accept an optional host guard and forward it from HTTP/MCP.
-  - [x] Tests: `tests/commit-publication-boundary.integration.test.ts` direct denial/host refusal and expiry/replay: 17 failures before the fix, 28 passes after; `tests/host-acceptance.test.ts` HTTP/MCP host refusal: 6 passes.
-- [x] Review r1 P2 — Document custom publication guard composition in README and migration guide; retain version 0.2.1 and frozen bytes.
-- [x] Lot 0 — Read Docker lock, Radar analysis and spec r2; create worktree; mechanical branch check.
-- [x] Lot 1 — Reproduce account suspension after barrier in HTTP publication; host callback and refusal code; retain lifecycle/ACL/revision checks.
-  - [x] Baseline regression run: four failures; host callback called zero times; HTTP/MCP S3 timeout and coordinator acquisition returned non-retriable `provider_error`.
-  - [x] Tests: `tests/host-acceptance.test.ts`, `tests/fixtures/transport-world.ts`; four baseline failures, four passes after fixes.
-- [x] Lot 2 — Wire optional `mapHostError` through HTTP, MCP and coordinator classification.
-  - [x] Additive dependencies wired; HTTP/MCP S3 and coordinator acquisition regressions pass.
-  - [x] Tests: `tests/host-acceptance.test.ts`, `tests/commit-failure-parity.integration.test.ts`; typed timeout red then green, private causes and retry parity.
-  - [x] Direct-publication integration fixture uses the service's default approval guard; expiry and replay denial assertions remain unchanged.
-- [x] Lot 3 — Bump artifacts to 0.2.1; update packed host composition and documentation.
-  - [x] Registry latest verified as 0.2.0; package, workspace lock and provider manifest version bumped to 0.2.1.
-  - [x] Tests: `probe/packed-example.test.mjs` and packed consumer pass; version remains 0.2.1 and frozen bytes match origin/main.
-- [ ] Lot 4 — Final validation and PR.
-  - [x] 445 unit tests passed; typecheck, lint, frozen declarations and maintained ABI fixture passed.
-  - [x] CI `validate-artifacts` passed all unit/integration/build/lint/pack/consumer gates on `123a581cc`; final-head rerun follows catalog test adaptation and packed declaration gate wiring.
-  - [x] Run artifacts typecheck, lint, 446 unit and 176 integration/e2e tests, frozen declarations and packed-consumer checks under lock; clean each stack.
-  - [x] Review the exact diff and reconcile Opus r1 P1/P2 findings.
-  - [ ] Push; PR to main with this plan as body; CI green on exact head; do not merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read Docker lock, plan §§1/3.1/5/6/7, repository rules and template; create worktree from origin/main.
+  - [x] Run mechanical `harness check branch`; inspect Immo Compose runner and existing PG qualification.
+  - [x] Verify registry 0.22.0/0.22.1 and 0.23.0 absence; retain #709 closure bytes and ancestry evidence outside the PR.
+- [x] **Lot 1 — BR-E2-EX1 CI qualification**
+  - [x] Add exact E2 and preserve Immo integration PR bases; compare bump gate to actual PR head/base merge-base.
+  - [x] Wire existing build/typecheck/lint/scoped memory/storage tests and real PG through isolated Compose; retain commands, exit codes, inventory, logs and hashes.
+  - [x] Keep every existing publish job predicate unchanged; no development version publication.
+  - [x] Verify compact/pretty development manifests refuse and the reserved stable manifest passes the publication guard without invoking a publisher.
+  - [x] Include existing `scripts/ci/publishable-ci-wiring.test.mjs` assertions through the same disposable Compose runner.
+  - [x] Connect E2's scoped change-filter and final `ci-gate`; keep selection compatible with the existing expected-result evaluator.
+  - [x] Run `make scope-check ENV=test-e2-int` before each atomic commit below 150 lines.
+- [ ] **Lot 2 — PRE-E0 record and final validation**
+  - [x] Write root `.tmp/engram-e2-host-tuple/pre-e0-entry.md`, with registry, ancestry, repair/receiving status, Q1 conditions and Comments route.
+  - [x] Preserve #709 Lots 2/4/6 succession to E6/E7/E10; retain completed descriptor/Engram pin, keep SQLite qualification separate.
+    - [x] Future topics declare E1–E5 generic contracts/atomic/backend/u64/ownership, PG codecs/journal/roots/readers/migrations/instance/transaction/core/scope files, assets and plan §3.2 tests before editing; this preparation changes none.
+  - [x] Execute build, typecheck, lint, `tests/engram-memory` (70), common-v1 (10), grants (3), and real PostgreSQL (51) through Make; crash-phase cases stay in the existing main crash lane.
+  - [x] Push; open PR #755 to main using this file as body; leave merging to conductor/owner GO.
+  - [x] Verify committed-head wiring (38 tests) and E2 CI after correcting fixture environment/lock context: job `121459264616` passed at `50dd8e91c`; final guard probes pass separately.
+  - [ ] After owner GO and CI landing, conduct real integration-target unchanged/corrected bump probes before admitting topics; refresh each receipt on head/base changes.
