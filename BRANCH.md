@@ -51,12 +51,12 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Read-only diagnosis**
   - [x] Read Docker lock, rules, radar aadc5291 runbook steps 3–4 and server-http.ts; inspect CI deploy and live discovery.
-- [ ] **Lot 1 — Workload registration and rotation**
+- [x] **Lot 1 — Workload registration and rotation**
   - [x] Validate 64 lowercase hex characters without a newline; hash in the importer before psql; only the hash reaches SQL.
   - [x] Make the named-Secret sync the only preprod creation/rotation path; preserve revoked state without blocking identity sync.
   - [x] Evolve `deploy/ci/idp-identity-sync/services-test.sh` and `sql-test.sh`: invalid inputs, registration, rollback, replay, rotation and revocation.
-  - [ ] Gate: `make test-idp-sync-selftest ENV=test-idp-token-exchange`.
-  - [ ] Gate: `make test-idp-sync-sql ENV=test-idp-token-exchange`.
+  - [x] Gate: `make test-idp-sync-selftest ENV=test-idp-token-exchange` passed (47 checks).
+  - [x] Gate: `make test-idp-sync-sql ENV=test-idp-token-exchange` passed, including statement-log secrecy, rotation rollback/commit and revoked-row sync.
 - [ ] **Lot 2 — Policy regression**
   - [x] Test preprod allowed exchange, public/unregistered denial, wrong subject/target audiences and client_credentials denial in `api/tests/api/auth/oauth-token-exchange.test.ts`.
   - [x] Extend exact subject-audience and missing/form/dual-credential refusals; use a public synthetic 64-hex fixture.
