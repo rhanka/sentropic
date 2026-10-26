@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { decodeJwt } from 'jose';
 
-import { app } from '../../../src/app';
+import { createIdpApp } from '../../../../apps/auth-idp/idp-app';
 import { db } from '../../../src/db/client';
 import {
   authorizationCodes,
@@ -23,6 +23,7 @@ const RADAR_AUDIENCE = 'https://preprod.immo.sent-tech.ca';
 const EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
 const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 const CODE_VERIFIER = 'test-exchange-verifier-with-enough-entropy-1234567890';
+const app = createIdpApp();
 
 describe('OAuth token exchange API route (2-IdP)', () => {
   beforeEach(async () => {

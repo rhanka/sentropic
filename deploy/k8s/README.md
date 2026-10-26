@@ -431,9 +431,11 @@ sync rewrites the reviewed workload policy to these exact bindings:
    `client_credentials` for this workload must fail. Radar then completes its
    digest-bound A2 qualification before arming its receiver.
 
-Allow approximately **10–20 minutes after the owner starts rollout and sync**
-for the IdP-side prerequisites, excluding approval queues and radar's separate
-A2 qualification. No additional IdP implementation release is required.
+Exchange becomes available as soon as registration commits and radar has the
+matching Secret. Allow **10–20 minutes for the owner-operated sync/rollout**
+after the main revision and images are approved, excluding CI builds, runner/
+approval queues and radar's separate A2 qualification. The already served IdP
+implements the grant; no additional OAuth implementation is required.
 
 ### Disaster recovery — back up the controller sealing key
 
