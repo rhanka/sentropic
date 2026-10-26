@@ -88,6 +88,37 @@ describe('Decisions dedicated transport, tariff and route registration', () => {
       usage: { tokens: { input: { value: 1000 } } }, cost: { amountMicroUsd: '100' } } });
     expect(f.fetch).toHaveBeenCalledTimes(1);
   });
+  it.each([
+    { cached_tokens: 1001, cache_write_tokens: 0 },
+    { cached_tokens: 0, cache_write_tokens: 1 },
+  ])('should retain the reserve without settlement for invalid usage details %j', async (details) => {
+    const f = setup();
+    f.body.usage.input_tokens_details = details;
+    const result = await createDecisionService(f.options).decide(f.request);
+    expect(result).toMatchObject({ ok: false, error: { code: 'USAGE_INVALID' }, receipt: { attempts: 1,
+      usage: { tokens: { input: { value: null, source: 'not-reported' } } },
+      cost: { amountMicroUsd: '205', source: 'reserved-liability' },
+      budget: { state: 'pending-reconciliation', reservedMicroUsd: '205' } } });
+    expect(f.budget.admit).toHaveBeenCalledTimes(1);
+    expect(f.budget.markDispatched).toHaveBeenCalledTimes(1);
+    expect(f.budget.settle).not.toHaveBeenCalled();
+    expect(f.budget.release).not.toHaveBeenCalled();
+    expect(f.state.ledger).toEqual([]);
+    expect(f.state.receipts).toEqual([result.receipt]);
+    expect(f.fetch).toHaveBeenCalledTimes(1);
+  });
+  it('should refuse the shipped unqualified descriptor before service or direct adapter egress', async () => {
+    const f = setup();
+    const adapter = createOpenAiDecisionsAdapter({ transport: createOpenAiDecisionsTransport({ fetch: f.fetch }) });
+    const result = await createDecisionService({ ...f.options, registry: createProviderRegistry([adapter]),
+      resolveEvaluator: () => openAiDecisionsDescriptor }).decide(f.request);
+    expect(result).toMatchObject({ ok: false, error: { code: 'PROVIDER_UNAVAILABLE' }, receipt: { attempts: 0 } });
+    expect(await adapter.decision(f.request, { auth: await f.options.resolveAuth() })).toMatchObject({
+      ok: false, error: { code: 'PROVIDER_UNAVAILABLE', phase: 'preflight' },
+      usage: { tokens: { input: { value: null, source: 'not-reported' } } } });
+    expect(f.budget.admit).not.toHaveBeenCalled();
+    expect(f.fetch).not.toHaveBeenCalled();
+  });
   it('should retain the reserve for a foreign served identity without substituting a route', async () => {
     const f = setup();
     f.body.model = 'foreign-model';
