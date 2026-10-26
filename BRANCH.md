@@ -18,15 +18,18 @@ Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only,
   - `BRANCH.md`
   - `docs/runbooks/app-cm-baseline-restore.md`
   - `scripts/test-pgbackup-restore-isolation.sh`
-  - `Makefile` (`k8s-pgbackup-restore` block and its `RESTORE_*` variables only, under W0-EX1)
+  - `Makefile` (`k8s-pgbackup-restore` block, its `RESTORE_*` variables and the `test-pgbackup-restore-isolation` target only, under W0-EX1)
+  - `.github/workflows/ci.yml` (`global` filter entry plus one guard-test step only, under W0-EX1)
+  - `deploy/k8s/README.md` (restore paragraph only, under W0-EX1)
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile` outside the `k8s-pgbackup-restore` block and its `RESTORE_*` variables
+  - `Makefile` outside the leased blocks
   - `k8s-db-restore-preprod` target block
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
   - `docs/baselines/app-cm-w0/**`
-  - `deploy/**`
+  - `deploy/**` outside the leased README paragraph
+  - `.github/workflows/**` outside the leased hunk
   - `plan/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - _(none; the Makefile lease is Allowed under W0-EX1)_
@@ -38,6 +41,10 @@ Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only,
   - [x] Reason: the repo is Make-only, so the isolation guards must live in the existing restore target.
   - [x] Impact: `k8s-pgbackup-restore` block plus `RESTORE_*` variables only; no other target touched.
   - [x] Rollback: revert the Makefile hunk of the Lot 1 commit.
+- [x] `W0-EX1` extension (Opus r1 review of PR #756, user-ordered 2026-10-26).
+  - [x] Reason: fix the 3 P1 + 7 P2 production-reachability findings in the leased target, wire its guard test into make/CI, and update the stale `deploy/k8s/README.md` restore paragraph that invites admin-kubeconfig use.
+  - [x] Impact: `k8s-pgbackup-restore` block rework, one new `test-pgbackup-restore-isolation` target, one `global`-filter entry plus one step in `ci.yml`, one README paragraph. No other target, job or doc touched.
+  - [x] Rollback: revert the R1 hunks commit by commit.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests; the isolation guard test is deterministic shell with a fake kubectl shim.
@@ -70,3 +77,8 @@ Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only,
 - [ ] **Lot 4 — Final validation**
   - [x] `make scope-check` before each commit; atomic `make commit` per file group, each under 150 lines.
   - [ ] Push, open draft PR #756 (base `main`: repo CI triggers only for main-targeted PRs; retarget to `feat/app-cm-w0-baseline` at W0-close.e integration), CI green; do not merge.
+- [ ] **Lot R1 — Opus r1 fixes (user-ordered 2026-10-26, PR #756 stays draft on main)**
+  - [x] Extend the guard test first (red): default/admin identity, pod-spec without s5cmd in main, strict key, allowlist probes, secret/sha validation.
+  - [ ] P1: explicit `RESTORE_KUBECONFIG` plus negative prod/preprod `can-i`; meta-collecting initContainer; pipefail/`ON_ERROR_STOP`/`gzip -t`/optional sha compare.
+  - [ ] P2: case-insensitive host/IP/namespace allowlists, `^[a-z0-9-]+$` secrets, distinct defaults, ETag (+versions best-effort), receipts outside repo, `bash` runbook, make+CI wiring, README update, PR-body do-not-merge line.
+  - [ ] Test green, scope-checks, atomic commits, push, CI green; do not merge.
