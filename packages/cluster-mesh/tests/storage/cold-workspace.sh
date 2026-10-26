@@ -45,6 +45,7 @@ if [ -f /source/.h2a/pg-crash-witness.json ]; then
 fi
 case "$CM_ACTION" in
   memory-lot3)
+    "$tsc" -p ../mcp-broker/tsconfig.json
     "$tsc" -p tsconfig.json
     CLUSTER_MESH_PREPARE_ONLY=mcp sh tests/packaging/prepare.sh "$workspace/lot3-packaging"
     export CLUSTER_MESH_PACKAGING_DIR="$workspace/lot3-packaging"

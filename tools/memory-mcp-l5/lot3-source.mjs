@@ -18,7 +18,7 @@ export function selectLot3Files(catalog) {
   const extra = catalogDispositions(catalog, () => true).filter(row => row.status === 'run-here').map(row => row.file);
   const files = [...new Set([...predecessors, ...extra])];
   const select = pkg => files.filter(f => f.startsWith(`packages/${pkg}/`)).map(f => f.slice(`packages/${pkg}/`.length));
-  return { predecessors, platform: select('mcp-platform'), mesh: select('cluster-mesh') };
+  return { predecessors, platform: select('mcp-platform'), mesh: select('cluster-mesh'), broker: select('mcp-broker') };
 }
 
 export function validateLot3Report(report, files, packageRoot) {
@@ -70,7 +70,7 @@ export function runLot3Source(root, reports, retainedRoot) {
     catalogSha256: sha256(catalogBytes), predecessorFiles: selected.predecessors, packages: {},
     inventory: { authority: 'frozen P3 archive closure and ancillary files', rows: inventory, drift: [] },
     dispositions, waitingFor: WAITING_FOR };
-  for (const [pkg, files] of [['mcp-platform', selected.platform], ['cluster-mesh', selected.mesh]]) {
+  for (const [pkg, files] of [['mcp-platform', selected.platform], ['cluster-mesh', selected.mesh], ['mcp-broker', selected.broker]]) {
     const packageRoot = join(root, 'packages', pkg), reportPath = join(reports, `${pkg}.json`);
     const run = spawnSync(process.execPath, [join(process.env.NODE_PATH, 'vitest/vitest.mjs'), 'run', ...files,
       '--environment', 'node', '--maxWorkers=1', '--reporter=json', `--outputFile=${reportPath}`], { cwd: packageRoot, stdio: 'inherit' });
