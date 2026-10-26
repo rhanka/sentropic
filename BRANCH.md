@@ -18,6 +18,9 @@ Make the `cluster-mesh-comments-installed` bare probe accept the `incompatible_v
   - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts`
   - `packages/cluster-mesh/tests/storage/installed-bare.mjs`
   - `packages/cluster-mesh/tests/storage/postgres.mk`
+  - `packages/cluster-mesh/tests/fixtures/reserved-versions.ts` (stacked base #767, already APPROVE)
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts` (stacked base #767, already APPROVE)
+  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (stacked base #767, already APPROVE)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.github/workflows/**`
