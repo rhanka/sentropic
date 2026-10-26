@@ -118,6 +118,7 @@ cluster-mesh-comments-installed: cluster-mesh-pg-up
 		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /tmp/comments-bare/; cd /tmp/comments-bare; \
 		npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz >/dev/null; node installed-bare.mjs > /reports/bare.json; \
 		cd /tmp/comments-consumer; cp /probe/installed-*.mjs .; \
+		npm init -y >/dev/null; npm pkg set "overrides.zod=^4.6.6"; \
 		npm install --omit=optional --ignore-scripts --no-audit --no-fund --save-exact /candidate.tgz @sentropic/comments@0.3.0 >/dev/null; \
 		npm install --save-dev --ignore-scripts --no-audit --no-fund --save-exact pg@8.16.3 >/dev/null; \
 		cp node_modules/@sentropic/cluster-mesh/assets/storage/comments/oracle/conformance.mjs installed-oracle.mjs; \
