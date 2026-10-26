@@ -1,7 +1,7 @@
 import { InterruptAuthority } from './interrupt.js';
 
 export interface Scope {
-  speechSessionId: string; tenantId: string; principalId: string; targetSessionId: string;
+  speechSessionId: string; tenantId: string; workspaceId: string; principalId: string; targetSessionId: string;
   sourceGeneration: string; controllerEpoch: number; consentRevision: string;
 }
 export interface TurnRef { scope: Scope; turnEpoch: number; submitKey: string }
@@ -93,6 +93,12 @@ const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(
   : value !== null && typeof value === 'object' ? Object.fromEntries(Object.entries(value)
     .filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, canonical(v)])) : value;
 export const same = (a: unknown, b: unknown): boolean => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+export const scopeFields = Object.freeze(['speechSessionId', 'tenantId', 'workspaceId', 'principalId',
+  'targetSessionId', 'sourceGeneration', 'controllerEpoch', 'consentRevision']);
+export const isValidScope = (scope: Scope): boolean => Boolean(scope)
+  && scopeFields.every(k => Object.hasOwn(scope, k)) && Object.keys(scope).every(k => scopeFields.includes(k))
+  && Object.entries(scope).every(([k, v]) => k === 'controllerEpoch'
+    ? Number.isSafeInteger(v) && Number(v) > 0 : typeof v === 'string' && v.length > 0);
 export const validIdentity = (id: string): boolean => typeof id === 'string' && id.length > 0 && id.length <= 512
   && !Object.hasOwn(Object.prototype, id) && id !== 'prototype';
 export const assertScope = (state: SessionState, scope: Scope): void => {
@@ -107,7 +113,7 @@ export const getTurn = (state: SessionState, ref: TurnRef): Turn => {
 export const isTerminal = (turn: Turn): boolean => ['completed', 'interrupted', 'failed'].includes(turn.phase);
 export const createSession = (scope: Scope, enabledClasses: SessionState['enabledClasses'],
   interceptedClasses: string[], statusTools: string[]): SessionState => {
-  if (!Object.values(scope).every(v => typeof v === 'number' ? Number.isSafeInteger(v) && v > 0 : Boolean(v))
+  if (!isValidScope(scope)
     || Object.keys(enabledClasses).some(c => !interceptedClasses.includes(c))) throw new Error('Invalid scope or fence coverage');
   return { schemaVersion: 1, scope: structuredClone(scope), nextEpoch: 1, sequence: 0, barrierRevision: 0,
     connected: true, connectionEpoch: 1, enabledClasses: { ...enabledClasses }, statusTools: [...statusTools],
