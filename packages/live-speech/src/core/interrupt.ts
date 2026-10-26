@@ -6,7 +6,7 @@ const installFence = (state: SessionState, turn: Turn, interruptId: string, now:
   if (turn.fence) return turn.fence;
   turn.interruptIds.push(interruptId);
   const sequence = ++state.sequence;
-  state.barrierRevision++;
+  if (!isTerminal(turn)) state.barrierRevision++;
   turn.fence = { eventId: `fence:${sequence}`, sequence, turnEpoch: turn.turnEpoch,
     submitKey: turn.submitKey, coverage: Object.keys(state.enabledClasses).sort(), installedAtMs: now };
   if (turn.phase === 'committed') { turn.phase = 'interrupted'; turn.terminal = 'cancelled-before-start'; }
@@ -179,13 +179,13 @@ export class InterruptAuthority {
         throw new Error('Invalid effect outcome');
       }
       if (effect.evidence.some(e => e.status === outcome && e.evidence === evidence)) return;
+      const wasUnresolved = unresolved(state).some(e => e.effectId === effectId);
       effect.evidence.push({ status: outcome, evidence, timestamp: this.now() });
       if (['unknown', 'completion-pending'].includes(effect.status)
         || (effect.status === 'unknown-accepted' && !['unknown', 'completion-pending'].includes(outcome))) effect.status = outcome;
       const tool = state.turns[effect.turnEpoch].tools[effect.callId];
       tool.result ??= { callId: effect.callId, effectId, outcome, evidence };
-      const turn = state.turns[effect.turnEpoch];
-      if (turn.fence || isTerminal(turn)) state.barrierRevision++;
+      if (wasUnresolved || unresolved(state).some(e => e.effectId === effectId)) state.barrierRevision++;
     });
   }
 
@@ -255,7 +255,8 @@ export class InterruptAuthority {
       if (isTerminal(turn)) return;
       turn.phase = outcome;
       turn.terminal = outcome;
-      if (Object.values(turn.tools).some(t => t.call.effectId)) state.barrierRevision++;
+      if (!turn.fence && Object.values(state.effects).some(e => e.turnEpoch === turn.turnEpoch
+        && ['unknown', 'completion-pending'].includes(e.status))) state.barrierRevision++;
       for (const tool of Object.values(turn.tools)) {
         tool.result ??= { callId: tool.call.callId, effectId: tool.call.effectId,
           outcome: 'completion-pending', evidence: 'Runtime terminal; tool outcome remains unresolved' };
