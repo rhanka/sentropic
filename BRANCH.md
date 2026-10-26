@@ -60,7 +60,7 @@
   - [ ] Rerun existing `first-proof.spec.ts` and `completion.spec.ts`.
 - [ ] **Lot 2 — Implementation**
   - [ ] Memory-only SQL assets and shared schema-role loader hooks.
-  - [ ] Transactional projection and backend-backed validation; reuse #709 transition functions.
+  - [x] Author transactional projection and backend-backed validation; reuse #709 transition functions; qualification pending.
   - [ ] Root-bound memory queries and scope-chain-index enumeration.
 - [ ] **Lot 3 — Final validation and draft handoff**
   - [ ] Existing PG module-migration, migration, registration, query and policy regressions pass.
