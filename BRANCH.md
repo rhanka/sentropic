@@ -88,6 +88,7 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
 
 ## Feedback Loop
 - [x] PR765 r1 P1-2: PG atomic gate requires unique non-empty string result IDs for legacy and u64 units; missing and malformed IDs refuse before effects.
+- [x] P1-2 negative fixture rows retain array identity (including duplicates) and include negative/unsafe numeric IDs; legacy and u64 gate paths both tested.
 - [x] Base `origin/feat/cluster-mesh-engram-e1` at `2b741f557`; P2 unchanged (`2b85ff28...`).
 - [x] Registry check 2026-10-26: mesh latest `0.22.1`; `0.23.0` reserved, `dev.1`/`dev.2` taken; `0.23.0-dev.3` is next free N.
 - [x] Inventory: exact-u64 = scopes.version/sequence, fences.epoch, journal.sequence/positions/segments, consumer cursor/scanned/failedSeq/lag, snapshot watermarks, boundaries.version/sequence, chain allocation strings, aggregate versions/guards. Bounded Numbers = chain seq/count/positions, page sizes/limits/budgets, snapshot page ordinals, staged counts, work limits. Physical bigint IDs = map node/root IDs, boundary root, record offsets, schema ordinals.
