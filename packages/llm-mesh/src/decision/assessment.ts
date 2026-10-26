@@ -5,7 +5,7 @@ import type { DecisionEvaluatorDescriptor } from './descriptor.js';
 import { freezeDecisionData } from './descriptor-validation.js';
 import { digestStructuredArtifact } from './validation.js';
 import { ASSESSMENT_POPULATIONS, parseDecisionAssessment } from './assessment-validation.js';
-import { decisionChoiceMetrics, decisionRiskUpper95, decisionSpearman } from './assessment-statistics.js';
+import { decisionBootstrap95, decisionChoiceMetrics, decisionRiskUpper95, decisionSpearman } from './assessment-statistics.js';
 
 /** Recomputed from immutable recorded data; never accepts a supplied pass/fail boolean. */
 export function assessDecisionCalibration(candidate: unknown, descriptor: DecisionEvaluatorDescriptor,
@@ -13,7 +13,7 @@ export function assessDecisionCalibration(candidate: unknown, descriptor: Decisi
   const report: DecisionAssessmentReport = { schemaVersion: 1, status: 'blocked', reasons: [], recordDigest: null, scope: structuredClone(scope),
     totals: { calls: 0, attempts: 0, internalWorkUnits: 0, billableUnits: 0, amountMicroUsd: '0' }, populations: {},
     heldOut: { count: 0, negatives: 0, positives: 0, falsePasses: 0, falseFails: 0, coverage: 0,
-      falsePassUpper95: 1, falseFailUpper95: 1 }, metrics: {},
+      falsePassUpper95: 1, falseFailUpper95: 1 }, metrics: {}, labels: null,
     evidence: { date: null, sourceRefs: [], datasetDigest: null, splitDigest: null }, slices: [],
     latency: { status: 'unverified', p50Ms: null, p95Ms: null } };
   const record = parseDecisionAssessment(candidate, scope, descriptor);
@@ -78,8 +78,12 @@ export function assessDecisionCalibration(candidate: unknown, descriptor: Decisi
     const labels = criterion.kind === 'choice' ? criterion.options.map((o) => o.id) : [];
     if (labels.length < 2 || held.some((r) => !samples.get(r.sampleId)!.goldLabel)) blocked('missing-choice-gold-labels');
     if (labels.some((label) => held.filter((r) => samples.get(r.sampleId)!.goldLabel === label).length < 100)) blocked('insufficient-label-denominators');
-    const metrics = decisionChoiceMetrics(labels, held.map((r) => ({ gold: samples.get(r.sampleId)!.goldLabel!, predicted: r.label })));
+    const pairs = held.map((r) => ({ gold: samples.get(r.sampleId)!.goldLabel!, predicted: r.label }));
+    const metrics = decisionChoiceMetrics(labels, pairs);
+    report.labels = labels;
     Object.assign(report.metrics, metrics);
+    const [macroF1Lower95, macroF1Upper95] = decisionBootstrap95(pairs, (sample) => decisionChoiceMetrics(labels, sample).macroF1);
+    Object.assign(report.metrics, { macroF1Lower95, macroF1Upper95, bootstrapResamples: 512 });
     if (metrics.macroF1 < 0.90 || metrics.minimumRecall < 0.85) report.reasons.push('choice-quality-gate');
   } else if (scope.criterionKind === 'graded') {
     if (held.some((r) => samples.get(r.sampleId)!.goldScore === undefined || (r.outcome === 'verdict' && r.score === null))) blocked('missing-graded-evidence');
@@ -88,6 +92,12 @@ export function assessDecisionCalibration(candidate: unknown, descriptor: Decisi
     const mae = scores.length ? scores.reduce((sum, score, i) => sum + Math.abs(score - gold[i]), 0) / scores.length : 1;
     const spearman = decisionSpearman(gold, scores);
     Object.assign(report.metrics, { mae, spearman });
+    const pairs = scores.map((score, i) => ({ score, gold: gold[i] }));
+    const [maeLower95, maeUpper95] = decisionBootstrap95(pairs,
+      (sample) => sample.reduce((sum, p) => sum + Math.abs(p.score - p.gold), 0) / sample.length);
+    const [spearmanLower95, spearmanUpper95] = decisionBootstrap95(pairs,
+      (sample) => decisionSpearman(sample.map((p) => p.gold), sample.map((p) => p.score)));
+    Object.assign(report.metrics, { maeLower95, maeUpper95, spearmanLower95, spearmanUpper95, bootstrapResamples: 512 });
     if (mae > 0.35 || spearman < 0.80) report.reasons.push('graded-quality-gate');
   } else {
     report.metrics.brierEvaluatedCount = primary.length;

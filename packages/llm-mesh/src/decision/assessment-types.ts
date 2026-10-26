@@ -32,6 +32,7 @@ export interface DecisionAssessmentReport {
   heldOut: { count: number; negatives: number; positives: number; falsePasses: number; falseFails: number;
     coverage: number; falsePassUpper95: number; falseFailUpper95: number };
   metrics: Record<string, number | number[][]>;
+  labels: string[] | null;
   evidence: { date: string | null; sourceRefs: string[]; datasetDigest: string | null; splitDigest: string | null };
   slices: { tag: string; count: number; verdicts: number; falsePasses: number; falseFails: number; sufficientlySampled: boolean }[];
   latency: { status: 'measured' | 'unverified'; p50Ms: number | null; p95Ms: number | null };

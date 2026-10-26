@@ -62,7 +62,7 @@
   - [x] Bind evidence to execution digest, exact criterion and operating policy; scope mutation controls pass.
   - [x] Qualification accepts provisional expected IDs while preserving auth, finite bounds, one attempt and experimental discovery.
   - [x] Scoped discovery/admission gates pass; source typecheck and lint pass; full mesh baseline 1472 tests passes.
-- [ ] **Lot 2 — Reproducible assessment**
+- [x] **Lot 2 — Reproducible assessment**
   - [x] Tests first: decision-assessment.test.ts and recorded fixtures; all 10 initial assessment controls pass.
   - [x] Deterministic assessment/report schema with distinct held-out/challenge/repeat populations and conservative attempt/cost aggregation.
   - [x] Cap exhaustion and missing evidence produce incomplete/blocked reports; fixtures never establish semantic calibration.
