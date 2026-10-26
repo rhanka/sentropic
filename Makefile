@@ -735,6 +735,10 @@ pack-publishable-manifest: ## Real npm pack + packed-manifest guard for an alrea
 	@printf '%s' "$(PACKAGE)" | grep -Eq '^[a-z0-9][a-z0-9-]*$$' || { echo "ERROR: PACKAGE=<slug> is required"; exit 1; }
 	$(call manifest_guard_pack,$(PACKAGE))
 
+.PHONY: pack-live-speech
+pack-live-speech: ## Build and guard the L2 archive in transient container storage
+	$(call manifest_guard_pack,live-speech,. /workspace/packages/live-speech/pack.sh;)
+
 check-publishable-manifest: ## Strictly inspect one real archive TARBALL=<path> [SOURCE_MANIFEST=<path>]
 	@test -f "$(TARBALL)" || { echo "ERROR: TARBALL=<path> must be an existing file"; exit 1; }
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
