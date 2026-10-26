@@ -13,6 +13,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '#mcp-platform-hono': pkgSrc('mcp-platform', 'hono.ts'),
+      // Registry fixtures use the same artifacts instance as the mesh module loader.
+      '@sentropic/artifacts': fileURLToPath(new URL('../packages/artifacts/dist', import.meta.url)),
       '@sentropic/comments/hono': pkgSrc('comments', 'hono.ts'),
       '@sentropic/connector-host/hono': pkgSrc('connector-host', 'hono.ts'),
       '@sentropic/flow/hono': pkgSrc('flow', 'hono.ts'),
