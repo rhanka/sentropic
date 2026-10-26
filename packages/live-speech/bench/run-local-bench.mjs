@@ -1,12 +1,10 @@
-// Local STT bench runner (r3 L3). Real tiny/base transcription timing on
-// Node-generated PCM fixtures — no microphone, no paid API, no audio in output.
-// The engine (faster-whisper-ts) is loaded dynamically; models are pinned local
-// artifacts (see profiles.ts, the single source of truth for digests).
-// Usage: node bench/run-local-bench.mjs --models-dir <dir> --out <receipt.json>
-//   [--engine faster-whisper-ts] [--wav-16k <file> (optional real-speech fixture)]
-// Exit 0 with a measured receipt when the engine runs, else exit 2 with a receipt
-// marked pending that records the exact blocker. Never invent numbers.
-import { createHash } from 'node:crypto';
+// Local STT bench runner (r3 L3). Real tiny/base timing through the production
+// path — one child per profile (native binding loads once per process) running
+// profile-run.mjs: worker + session over eSpeak NG fixtures (see profiles.ts pins).
+// Usage: node bench/run-local-bench.mjs --dist <dir> --models-dir <dir> --out <receipt.json>
+//   [--install-lock <package-lock.json>] [--espeak-bin <path>]
+// Exit 0 measured, else exit 2 pending with the exact blocker. Never invent numbers.
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,28 +17,13 @@ function arg(name, fallback = null) {
   return process.argv[index + 1] ?? fallback;
 }
 
-function sha256Hex(bytes) {
-  return createHash('sha256').update(bytes).digest('hex');
-}
-
 /** Read the pinned model digests from src/node/profiles.ts (single source of truth). */
 function readPinnedDigests() {
   const source = readFileSync(join(here, '..', 'src', 'node', 'profiles.ts'), 'utf8');
-  const digests = [...source.matchAll(/modelDigest:\s*'(sha256:[0-9a-f]+)'/g)].map((match) => match[1]);
+  const digests = [...source.matchAll(/modelBin:\s*'(sha256:[0-9a-f]+)'/g)].map((match) => match[1]);
   const engine = source.match(/engineVersion:\s*'([^']+)'/)?.[1] ?? null;
   if (digests.length !== 2 || !engine) throw new Error('cannot extract pinned tiny/base digests from profiles.ts');
   return { tiny: digests[0], base: digests[1], engineVersion: engine };
-}
-
-/** Deterministic 16 kHz mono fixture (sine + silence padding); digest recorded, audio never logged. */
-function makeFixture(kind) {
-  const rate = 16000;
-  const seconds = kind === 'tone' ? 3 : 1;
-  const pcm = new Float32Array(seconds * rate);
-  if (kind === 'tone') {
-    for (let i = 0; i < pcm.length; i++) pcm[i] = 0.3 * Math.sin((2 * Math.PI * 440 * i) / rate);
-  }
-  return { kind, sampleRateHz: rate, samples: pcm.length, sha256: `sha256:${sha256Hex(Buffer.from(pcm.buffer))}` };
 }
 
 function pendingReceipt(out, blocker, evidence) {
@@ -57,9 +40,11 @@ function pendingReceipt(out, blocker, evidence) {
   process.exit(2);
 }
 
+const dist = arg('dist');
 const modelsDir = arg('models-dir');
 const out = resolve(arg('out', join(here, 'local-stt-bench.receipt.json')));
-const engineSpecifier = arg('engine', 'faster-whisper-ts');
+const installLock = arg('install-lock');
+const espeakBin = arg('espeak-bin', 'espeak-ng');
 
 const pinned = readPinnedDigests();
 const evidence = {
@@ -69,78 +54,50 @@ const evidence = {
   modelsDir: modelsDir ?? '(missing --models-dir)',
 };
 
+if (!dist) pendingReceipt(out, 'no compiled dist directory provided (pass --dist)', evidence);
 if (!modelsDir) {
   pendingReceipt(out, 'no models directory provided (pass --models-dir)', evidence);
-} else {
-  let engineModule;
-  try {
-    engineModule = await import(engineSpecifier);
-  } catch (error) {
-    pendingReceipt(out, 'engine module not loadable', {
-      ...evidence,
-      detail: String(error?.message ?? error).slice(0, 500),
-      hint: 'npm install faster-whisper-ts@1.2.1 (pinned) with a working native toolchain, then rerun',
-    });
-  }
-  if (!engineModule?.transcribe && typeof engineModule?.WhisperModel !== 'function') {
-    pendingReceipt(out, 'engine module has no usable transcribe entry', {
-      ...evidence,
-      exports: Object.keys(engineModule ?? {}),
-    });
-  }
-  const models = {};
-  for (const [id, subdir] of [['tiny', 'faster-whisper-tiny'], ['base', 'faster-whisper-base']]) {
-    const binPath = join(modelsDir, subdir, 'model.bin');
-    let bytes;
-    try {
-      bytes = readFileSync(binPath);
-    } catch {
-      pendingReceipt(out, `model artifact missing: ${binPath}`, evidence);
-    }
-    const digest = `sha256:${sha256Hex(bytes)}`;
-    if (digest !== pinned[id]) {
-      pendingReceipt(out, `model digest mismatch for ${id}`, { ...evidence, expected: pinned[id], actual: digest });
-    }
-    models[id] = { dir: join(modelsDir, subdir), digest };
-  }
-  const fixtures = [makeFixture('tone'), makeFixture('silence')];
-  const results = {};
-  for (const [id, model] of Object.entries(models)) {
-    const started = performance.now();
-    const instance = new engineModule.WhisperModel(model.dir);
-    const loadedMs = performance.now() - started;
-    const runs = [];
-    for (const fixture of fixtures) {
-      const pcm = new Float32Array(fixture.samples);
-      if (fixture.kind === 'tone') {
-        for (let i = 0; i < pcm.length; i++) pcm[i] = 0.3 * Math.sin((2 * Math.PI * 440 * i) / fixture.sampleRateHz);
-      }
-      const at = performance.now();
-      const transcription = await instance.transcribe(pcm, { language: 'en' });
-      const elapsedMs = performance.now() - at;
-      const textLength = (transcription.segments ?? []).reduce((sum, segment) => sum + String(segment.text ?? '').length, 0);
-      runs.push({
-        fixture: fixture.kind,
-        fixtureDigest: fixture.sha256,
-        samples: fixture.samples,
-        elapsedMs: Math.round(elapsedMs * 10) / 10,
-        segments: (transcription.segments ?? []).length,
-        chars: textLength,
-      });
-    }
-    if (typeof instance.free === 'function') await instance.free();
-    results[id] = { modelDigest: model.digest, loadMs: Math.round(loadedMs * 10) / 10, runs };
-  }
-  const receipt = {
-    status: 'measured',
-    lot: 'L3',
-    createdAt: new Date().toISOString(),
-    note: 'Functional pipeline timing on synthetic fixtures (no speech content); quality and latency budgets belong to the M1 campaign with real speech fixtures.',
-    ...evidence,
-    modelsDir,
-    results,
-  };
-  mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, `${JSON.stringify(receipt, null, 2)}\n`);
-  console.log(`bench measured: ${out}`);
 }
+
+const espeakVersion = spawnSync(espeakBin, ['--version'], { encoding: 'utf8' });
+if (espeakVersion.status !== 0) pendingReceipt(out, 'espeak-ng binary not available', { ...evidence, detail: String(espeakVersion.error?.message ?? '').slice(0, 300) });
+
+const utterances = {
+  'local-tiny': { lang: 'en', voice: 'en', speed: '175', text: 'The quick brown fox jumps over the lazy dog' },
+  'local-base': { lang: 'fr', voice: 'fr', speed: '120', text: 'Bonjour, comment allez vous ?' },
+};
+const results = {};
+let provisioned = null;
+for (const [profileId, utterance] of Object.entries(utterances)) {
+  const runs = [];
+  for (const kind of ['espeak', 'silence']) {
+    const childArgs = [join(here, 'profile-run.mjs'), '--dist', dist, '--models-dir', modelsDir,
+      '--profile', profileId, '--fixture-kind', kind, '--espeak-bin', espeakBin, '--utterance', utterance.text,
+      '--voice', utterance.voice, '--speed', utterance.speed];
+    if (installLock) childArgs.push('--install-lock', installLock);
+    const child = spawnSync(process.execPath, childArgs, { encoding: 'utf8', timeout: 300000 });
+    let parsed = null;
+    try { parsed = JSON.parse(String(child.stdout)); } catch { parsed = null; }
+    if (child.status !== 0 || !parsed) {
+      pendingReceipt(out, `bench child failed for ${profileId}/${kind}`, { ...evidence, detail: String(child.stderr ?? child.error?.message ?? '').slice(0, 500) });
+    }
+    if (!provisioned) provisioned = parsed.provisioned;
+    runs.push({ loadMs: parsed.loadMs, ...parsed.run });
+    if (kind === 'espeak') results[profileId] = { fixture: { lang: utterance.lang, ...parsed.fixture } };
+    results[profileId].runs = runs;
+  }
+}
+const receipt = {
+  status: 'measured',
+  lot: 'L3',
+  createdAt: new Date().toISOString(),
+  note: 'Functional pipeline timings through worker + session on eSpeak NG fixtures resampled to 16 kHz in-process; quality and latency budgets belong to the M1 campaign with real speech fixtures.',
+  ...evidence,
+  engineId: 'faster-whisper-ts/1.2.1',
+  espeak: { binary: espeakBin, version: String(espeakVersion.stdout ?? '').split('\n')[0].slice(0, 120) },
+  provisioned,
+  results,
+};
+mkdirSync(dirname(out), { recursive: true });
+writeFileSync(out, `${JSON.stringify(receipt, null, 2)}\n`);
+console.log(`bench measured: ${out}`);
