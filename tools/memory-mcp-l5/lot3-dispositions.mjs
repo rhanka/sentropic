@@ -27,8 +27,9 @@ export function catalogDispositions(catalog, exists) {
     return proof.files.map(file => {
       if (!proof.fileCases[file]?.length) throw Error(`Unmapped catalog file: ${file}`);
       const blocked = proof.fileCases[file].some(id => PLATFORM_BLOCKED_CASES.includes(id));
-      const here = !blocked && ['P01', 'P02', 'P03', 'P04', 'P07', 'P09'].includes(proof.id) &&
-        /^packages\/(mcp-platform|cluster-mesh)\//.test(file);
+      const here = !blocked && (file.startsWith('packages/mcp-broker/') ||
+        (['P01', 'P02', 'P03', 'P04', 'P07', 'P09'].includes(proof.id) &&
+        /^packages\/(mcp-platform|cluster-mesh)\//.test(file)));
       let disposition;
       if (blocked) disposition = 'blocked: platform-admitBridgeTools';
       else if (here) disposition = 'run here: published platform 0.4.0 regression only';

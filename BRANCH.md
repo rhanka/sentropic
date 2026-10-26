@@ -1,7 +1,7 @@
 # Feature: feat(memory-l5): Lot 3 transport and context integration
 
 ## Objective
-- [x] Integrate explicit memory profiles and verified context through existing transport/mesh; preserve P3.
+- [x] Prove independent Lot 3 regressions on published platform 0.4.0; preserve P3 and block dependent memory transport cases.
 ## Scope / Guardrails
 - [x] Worktree tmp/worktrees/mem-l5-lot3; branch feat/memory-l5-lot3; base origin/feat/memory-l5-lot2; merge only; merge main after #771 merges.
 - [x] Approved schedule supersedes R2/R7a/R3 dependency; retain 18 P09 suites and current remote-binding refusal.
@@ -46,7 +46,7 @@
   - `.github/workflows/**`
 - **Exception process**:
   - [x] L5L3-EX1: bounded root Makefile/CI source/regression wiring; preserve frozen producing recipes; rollback Lot 3 delegation only.
-  - [x] L5L3-EX2: mesh patch version only; platform package.json restored byte-for-byte to P3 0.4.0; retain its existing dependency floor and frozen snapshots.
+  - [x] L5L3-EX2: platform source and mesh integration withdrawn; restore mesh 0.22.4 and its lock entry; retain platform 0.4.0 and frozen snapshots.
   - [x] L5L3-EX3: add one Lot 3 action to the existing disposable cold workspace; reuse its installation, no additional runtime; rollback that action only.
   - [x] L5L3-EX4: prepare the existing MCP packaging fixtures in isolation with the frozen platform 0.4.0 floor; three required P09 cases otherwise skip. Rollback the preparation mode only.
 ## Feedback Loop
@@ -67,19 +67,12 @@
 - [x] No UI/API change; SDK transport tests; final installed E4/owner UAT remain later lots.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read lock/rules/spec/schedule/template; mechanically verify isolated branch and P3.
-- [x] Lot 1: failing wire/schema tests; profile admission, full-envelope codec, protocol refusal.
-  - [x] Schema test reproduced missing admission module; wire SDK tests specified; finite schema admission implemented.
-  - [x] Added explicit transport call context types; memory text uses the complete JSON envelope without changing the default codec.
-  - [x] SDK red run: outputSchema loss and absent-audit protocol refusal reproduced; explicit memory bridge implemented; platform version remains frozen at 0.4.0.
-- [x] Lot 2: mesh context/guards/cancellation/compiled dispatch; concurrent subject/tenant/workspace tests.
-  - [x] Preserve full context and cancellation; compile policy uses verified claims/source; mesh 0.22.5 retains the platform >=0.4.0 floor.
-  - [x] HTTP SDK proof: strict client reproduced missing root object type; full rerun passes with the complete frozen oneOf preserved (136 platform/28 mesh).
-- [x] Lot 3 source scope: profile/context tests and all 18 P09 suites; retain reports and real publication receipts; installed qualification remains manifest-blocked above.
-  - [x] Review r1: produce npm view/download receipts, recompute SHA-512 and compare registry metadata plus a real npm-generated observation lock; retain both with source reports.
-  - [x] Review r1: every catalog file/case has an explicit run-here/out-of-lot disposition, existence observation and gate/dependency; frozen P3 archive inventory is reverified before source tests.
-  - [x] Review r1: HTTP cases cover a coherent wrong-subject binding, absent binding and foreign tenant; each must return -32603 before authorization or runner effects.
-  - [x] New runner/tests: tools/memory-mcp-l5/lot3-source.mjs and tests/lot3-source.test.mjs; exact P09 file set bound to the unchanged P3 catalog.
-  - [x] First exact run: platform 132 passed; mesh 24 passed/3 skipped, rejected by the reporter. Existing packaging fixtures now prepare those three required cases.
-- [ ] Lot 4: review, push draft PR to main, final-head CI green; list manifest-blocked proofs and Lot 4 estimate.
-  - [x] Draft PR #777 targets main; no merge. Source head 826418296: 136 platform/31 mesh passed; 119 tooling passed; actual npm receipts and source reports retained under spec/evidence/memory-mcp-l5/lot3/.
-  - [ ] Final independent review/consensus remains open; supplied Opus r1 changes addressed in this author response; no new peer launch authorized in this packet.
+- [x] Lot 1: withdraw all platform source changes and both new profile suites into a separate 0.4.1 draft proposal.
+- [x] Lot 2: withdraw dependent mesh composition and context suite; preserve c83189032 and local conductor handoff.
+- [x] Lot 3: classify every catalog file/case as run-here, blocked or out-of-lot; retain all 18 P09 suites.
+  - [x] Negative tests require all six platform-dependent cases to remain explicitly blocked and absent from execution selection.
+  - [x] Tooling gate: 119 tests passed, including publication and receipt negative cases.
+  - [x] Include all 11 independent broker catalog source suites against the same published platform; E4 and manifest obligations remain pending.
+  - [ ] Retain fresh platform/mesh reports executing the hash-verified published platform 0.4.0 JavaScript.
+- [ ] Lot 4: push #777 and separate draft against main; final-head CI; no merge or publication.
+  - [ ] Independent review remains open; no new peer launch authorized in this packet.

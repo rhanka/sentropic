@@ -11,6 +11,7 @@ describe('Lot 3 exact predecessor inventory', () => {
     expect(files.platform).not.toContain('tests/memory/schema-profile.test.ts');
     expect(files.mesh).not.toContain('tests/memory-context.spec.ts');
     expect(files.platform).toContain('tests/memory/confirmation.test.ts');
+    expect(files.broker).toHaveLength(11);
   });
   it('should refuse missing or duplicate predecessor mappings', () => {
     for (const change of [files => files.pop(), files => { files[0] = files[1]; }]) {
@@ -28,7 +29,7 @@ describe('Lot 3 exact predecessor inventory', () => {
     const blocked = rows.filter(row => row.status === 'blocked: platform-admitBridgeTools');
     expect(blocked.flatMap(row => row.cases).sort()).toEqual([...PLATFORM_BLOCKED_CASES].sort());
     expect(blocked.every(row => row.disposition === 'blocked: platform-admitBridgeTools')).toBe(true);
-    expect(rows.filter(row => row.file.startsWith('packages/mcp-broker/')).every(row => row.status === 'out-of-lot')).toBe(true);
+    expect(rows.filter(row => row.file.startsWith('packages/mcp-broker/')).every(row => row.status === 'run-here')).toBe(true);
     expect(WAITING_FOR.filter(row => !row.status).map(row => row.id)).toEqual(['P01.packed', 'P02.packed', 'P03', 'P04.packed', 'P05', 'P06', 'P07', 'P08', 'P10']);
     expect(WAITING_FOR.filter(row => row.status).map(row => row.id)).toEqual(PLATFORM_BLOCKED_CASES);
   });
