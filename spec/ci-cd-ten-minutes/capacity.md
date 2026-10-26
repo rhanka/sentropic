@@ -43,7 +43,8 @@ remains mandatory. The PR and main full-selection DAG bounds both read 15.
 | Baseline endpoints | Qualification 2288s; selected images 2128s; preproduction 2254s; cluster publication 1879s from workflow creation. Classification job `121635441567` 18s; gate `121657161589` 14s. | Classification/verdict budgets breached; no fresh npm-publication claim. |
 | Superseded PR | `40352448337`, attempt 1, head `0a1eb32ea873a48b71833d163537719dae1e2bb1`, automatically cancelled when rollback head was pushed; 57 identified cancelled rows. Gate `121681630885` failed as required. Classification `121675860608` 21s; gate 19s. | Cancellation observed; 15s/5s budgets breached. |
 | Conservative rollback | Head `474e023163fd1be0b2f0ac7f33442c2d97dc561c`, run `40353670942`, attempt 1: one package validation lane, API/E2E 1/1; static bounds PR 13 / main 14. Classification `121682062979` 20s. | Live dispatch observed; classification breached. Restore the qualified bounded policy afterwards. |
-| Concurrent release | Main `40341027258`, attempt 2, same source: classification `121676338012` 19s; still executing through the rollback transition. | No cancellation observed; complete release continuity and aggregate scheduling await the completed capture. |
+| Concurrent release | Main `40341027258`, attempt 2, same source: completed successfully through both PR supersessions. 89 rows / 68 executions / 21 skipped; peak 12; 210.45 runner-minutes; execution queues p50 383s / max 860s. | All four selected endpoints continuous. Classification `121676338012` 19s; gate `121701213010` 19s; critical-path scheduling 1558s: all three budgets breached. |
+| Concurrent endpoints | Main attempt 2: qualification 2750s; selected images 2359s; preproduction 2534s; selected packages 2477s. Longest qualification-path wait: `smoke-idp-screens` job `121684322205`, 860s. | Completed measured delivery, not a ten-minute result or a fresh npm-publication sample. |
 
 The cancelled Jobs API rows include `runner_id: 0` with positive intervals
 (for example job `121676271575`, 15:46:09–15:52:57 UTC). These never received
@@ -71,8 +72,9 @@ includes dependency-to-dispatch handoff and queue waits; it is not the
 maximum single-job queue sample.
 
 Remaining branch-author acceptance: final-head complete CI/security verdict,
-completed concurrent-main selected images/preproduction/packages and expected
-membership, combined admission and aggregate scheduling. Quota/billed cost
+new-base current-main membership and combined admission. Completed main
+attempt 2 already proves selected release continuity and measures the
+1558s scheduling breach. Quota/billed cost
 remain unavailable through the inventoried token. Unmet 15s/5s/60s budgets
 remain open; a green correctness verdict does not satisfy them.
 
