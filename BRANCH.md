@@ -79,9 +79,11 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
 - **Exception process**:
+  - [x] BR2-EX2: owner-authorized PR765 r1 fixes include PostgreSQL snapshots, scope cursor signatures and directly affected PG tests; exact journal positions must cover full u64. Impact: PG counter strings; rollback: revert r1 commits together.
   - [x] BR2-EX1: pack-only package.json/root lock bump to unique `0.23.0-dev.3`; satisfies topic bump gate, never published; rollback both version fields together.
 
 ## Feedback Loop
+- [x] PR765 r1 P1-2: PG atomic gate requires unique non-empty string result IDs for legacy and u64 units; missing and malformed IDs refuse before effects.
 - [x] Base `origin/feat/cluster-mesh-engram-e1` at `2b741f557`; P2 unchanged (`2b85ff28...`).
 - [x] Registry check 2026-10-26: mesh latest `0.22.1`; `0.23.0` reserved, `dev.1`/`dev.2` taken; `0.23.0-dev.3` is next free N.
 - [x] Inventory: exact-u64 = scopes.version/sequence, fences.epoch, journal.sequence, boundaries.version/sequence, chain allocation strings, aggregate versions/guards. Bounded Numbers stay = chain seq/count/positions, read windows/limits/budgets, consumer cursor/scanned, staged counts, work limits. Physical bigint IDs stay = map node/root IDs, boundary root, record offsets, schema ordinals.
