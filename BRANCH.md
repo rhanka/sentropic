@@ -55,6 +55,7 @@
   - [x] Declare BRLIVE-L1-EXn with reason, impact and rollback before extending scope; none planned.
 
 ## Feedback Loop
+- [x] BRLIVE-L1-EX5: owner-authorized PR 754 resync merges origin/main without rebasing; retain the L1 plan and every imported main change. Imported-only paths must match origin/main byte for byte. No workflow or Track changes; release versions remain above main and registry.
 - [x] BRLIVE-L1-EX4: exact-head CI 40289904989 passes cluster tests but packed qualification cannot open the frozen 0.22.1 candidate archive. Align selected fixture candidate/train versions, ranges and real packed sibling integrity, add a tuple regression and update stale optional-install/skew refusal messages. Impact: installed release qualification uses cluster 0.22.2 / mesh 0.28.0 / gateway 0.21.1; no gate weakened. Rollback: restore fixture metadata/assertions if these candidate bumps are reverted.
 - [x] BRLIVE-L1-EX2: finish the 0.28 additive tuple qualification in cluster packaging tests and update only the API gateway release assertion to 0.21.1. Impact: no API runtime change; new speech subpath and separate evidence catalogue do not alter text routing. Rollback: restore assertions if the release tuple is reverted.
 - [x] BRLIVE-L1-EX3: add the missing mesh 0.28.0 changelog/migration entry. Impact: document public speech and audio-output types. Rollback: remove the entry if 0.28.0 is withdrawn.
