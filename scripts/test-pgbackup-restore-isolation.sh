@@ -84,9 +84,13 @@ case "$out" in *"RESTORE_KUBECONFIG is required"*) ;; *) ko "no-restore-kubeconf
 if [ -s "$KUBECTL_CALL_LOG" ]; then ko "no-restore-kubeconfig: kubectl was called"; else ok "no-restore-kubeconfig (no default identity)"; fi
 
 # Default prod-admin kubeconfig path: refused even though it is a set value.
+# Hermetic: stage the file under a fake HOME so the default-path refusal (not
+# the file-missing guard) fires identically on machines with or without it.
+mkdir -p "$scratch/fakehome/.kube"
+printf 'fake' > "$scratch/fakehome/.kube/poc.yaml"
 : > "$KUBECTL_CALL_LOG"
 out="" status=0
-out="$(make --no-print-directory k8s-pgbackup-restore PG_BACKUP_KEY="$KEY" RESTORE_KUBECONFIG="$HOME/.kube/poc.yaml" ENV=test-app-w0-restore 2>&1)" || status=$?
+out="$(HOME="$scratch/fakehome" make --no-print-directory k8s-pgbackup-restore PG_BACKUP_KEY="$KEY" RESTORE_KUBECONFIG="$scratch/fakehome/.kube/poc.yaml" ENV=test-app-w0-restore 2>&1)" || status=$?
 if [ "$status" -eq 0 ]; then ko "default-kubeconfig: target succeeded"; fi
 case "$out" in *"refusing default kubeconfig"*) ;; *) ko "default-kubeconfig: missing message"; printf '%s\n' "$out" ;; esac
 if [ -s "$KUBECTL_CALL_LOG" ]; then ko "default-kubeconfig: kubectl was called"; else ok "default-kubeconfig refused"; fi
