@@ -52,6 +52,7 @@
 - [x] BRLIVE-L1-EX2: finish the 0.28 additive tuple qualification in cluster packaging tests and update only the API gateway release assertion to 0.21.1. Impact: no API runtime change; new speech subpath and separate evidence catalogue do not alter text routing. Rollback: restore assertions if the release tuple is reverted.
 - [x] BRLIVE-L1-EX3: add the missing mesh 0.28.0 changelog/migration entry. Impact: document public speech and audio-output types. Rollback: remove the entry if 0.28.0 is withdrawn.
 - [ ] R1: reproduce and fix all P1/P2 findings; run full mesh and tuple regressions, then exact-head CI.
+- [x] R1 P1-2/P1-3/P2-2: open speech engine identity and independent multi-tuple catalogue; session selector membership and gateway-owned account/resource admission; remove provider speech inheritance.
 - [x] L0 is an open draft; retain exact evidence commit and open G-REVIEW.
 - [x] External Make adapter rebinds existing mesh targets to existing Compose qualification service; tracked build files unchanged.
 - [x] External gates remain with L0 owners; deterministic contract work can proceed per §11.2.

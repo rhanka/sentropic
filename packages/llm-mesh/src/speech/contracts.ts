@@ -9,13 +9,17 @@ export type SpeechMicMode = 'key' | 'open-mic';
 export type SpeechStage = 'stt' | 'tts' | 'duplex';
 
 /** Exact engine tuple, independent of the existing agent model/route. No secrets. */
-export interface SpeechBinding {
+export interface SpeechEngineIdentity {
   readonly providerId: string;
   readonly modelId: string;
   readonly modelRevision: string;
   readonly adapterId: string;
   readonly adapterRevision: string;
   readonly placement: SpeechPlacement;
+}
+
+/** Session selectors are independent of the engine's catalogue identity. */
+export interface SpeechBinding extends SpeechEngineIdentity {
   readonly language?: string;
   readonly voice?: string;
   readonly region?: string;
