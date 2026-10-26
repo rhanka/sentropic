@@ -15,6 +15,14 @@ import {
 } from './schema.mjs';
 
 const contract = JSON.parse(readFileSync(new URL('../../../.security/security-fix.json', import.meta.url), 'utf8'));
+const target = { surface: 'api-toolbox', imageLineage: 'ghcr.io/rhanka/sentropic-api-tool', platform: 'linux/amd64', path: '/bin/esbuild' };
+const scan = (day) => ({
+  kind: 'daily-full', day, scanId: `public-${day}`, sourceSha: 'a'.repeat(40),
+  scannedAt: `${day}T05:17:00Z`, dbUpdatedAt: `${day}T04:00:00Z`, dbIdentity: `sha256:${'b'.repeat(64)}`,
+  scannerIdentity: 'trivy@sha256:qualified', policyIdentity: 'policy-1', flags: ['all-severities'],
+  complete: true, findingsMatched: 0, gaps: 0,
+  coverage: [{ ...target, imageDigest: `sha256:${'c'.repeat(64)}` }],
+});
 
 test('contract validates: images, locks, toolbox, register, scope, pins, P3-1, P3-4, N=2, limits', () => {
   const result = validateContract(contract);
@@ -71,9 +79,51 @@ test('all-public owner decision: no private scan repo or storage assumed', () =>
 });
 
 test('N=2 reconciliation accepts two complete scans and resets on gaps', () => {
-  const good = { complete: true, findingsMatched: 0, gaps: 0, identicalFlags: true, surfaceCovered: true, dbIdentity: 'db-1' };
-  assert.equal(checkReconciliationStreak([good, { ...good }]).ok, true);
-  assert.equal(checkReconciliationStreak([good]).ok, false);
-  assert.equal(checkReconciliationStreak([good, { ...good, gaps: 1 }]).ok, false);
-  assert.equal(checkReconciliationStreak([good, { ...good, identicalFlags: false }]).ok, false);
+  const good = scan('2026-10-25'), next = scan('2026-10-26');
+  assert.equal(checkReconciliationStreak([good, next], target).ok, true);
+  assert.equal(checkReconciliationStreak([good], target).ok, false);
+  for (const patch of [{ gaps: 1 }, { flags: ['HIGH', 'CRITICAL'] }, { findingsMatched: 1 },
+    { coverage: [] }, { sourceSha: '' }, { scannerIdentity: 'different' },
+    { dbUpdatedAt: '2026-10-20T00:00:00Z' }, { policyIdentity: 'changed' }, { kind: 'partial' }]) {
+    assert.equal(checkReconciliationStreak([good, { ...next, ...patch }], target).ok, false, JSON.stringify(patch));
+  }
+  assert.equal(checkReconciliationStreak([good, scan('2026-10-27')], target).ok, false);
+  assert.equal(checkReconciliationStreak([good, good], target).ok, false);
+  assert.equal(checkReconciliationStreak([good, { ...next, dbIdentity: `sha256:${'d'.repeat(64)}` }], target).ok, true);
+});
+
+test('should reject missing scan identities and nonconsecutive reconciliation days', () => {
+  const scan = { complete: true, findingsMatched: 0, gaps: 0, identicalFlags: true, surfaceCovered: true, dbIdentity: 'db-1' };
+  assert.equal(checkReconciliationStreak([scan, scan]).ok, false);
+});
+
+test('should keep repositories and repair classes in separate bounded lots', () => {
+  const unit = (repository, repairClass, files = 1, lines = 10) => ({
+    unitKey: `${repository}|${repairClass}|pkg|1.2.4`, repository, repairClass, files, lines,
+  });
+  const lots = batchLots([unit('a', 'dependency'), unit('b', 'dependency'), unit('a', 'reconciliation')]);
+  assert.equal(lots.length, 3);
+  assert.throws(() => batchLots([unit('a', 'dependency', 11)]), /bound/);
+  assert.throws(() => batchLots([unit('a', 'dependency', 1, 151)]), /bound/);
+  assert.throws(() => batchLots([{ unitKey: 'unknown' }]), /estimate|identity/);
+});
+
+test('should group all affected locks with stable keys and retain no-fix findings', () => {
+  const finding = { repository: 'r', repairClass: 'dependency', component: 'pkg',
+    path: 'package-lock.json', fixedTarget: '1.2.4', severity: 'LOW' };
+  const grouped = groupFindings([finding, { ...finding, path: 'ui/package-lock.json', id: 'another' }]);
+  assert.deepEqual(grouped[0].locks, ['package-lock.json', 'ui/package-lock.json']);
+  assert.match(grouped[0].unitKey, /package-lock.json,ui\/package-lock.json/);
+  assert.equal(groupFindings([{ ...finding, fixedTarget: null }])[0].state, 'no-upstream-fix');
+});
+
+test('should retain all severities and declare separate own-code and reconciliation scope', () => {
+  assert.deepEqual(contract.severity.inventory, ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+  assert.equal(contract.automaticScope.ownCode.enabled, false);
+  assert.deepEqual(contract.automaticScope.ownCode.sourcePaths, []);
+  assert.deepEqual(contract.automaticScope.ownCode.testPaths, []);
+  assert.equal(contract.automaticScope.reconciliation.removalOnly, true);
+  const changed = structuredClone(contract);
+  changed.severity.actionable = [];
+  assert.equal(validateContract(changed).ok, false);
 });
