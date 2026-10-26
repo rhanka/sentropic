@@ -109,6 +109,23 @@ describe('artifact host migrations', () => {
     expect(await journal()).toHaveLength(4);
   });
 
+  it('should refuse missing receipts when an installed package schema remains', async () => {
+    await runMigrations(database);
+    await database.query(`DELETE FROM control.artifact_package_migrations WHERE asset_id = $1`, [artifactMigrationAssets[3].id]);
+    await database.query('ALTER TABLE artifacts.operation_receipts DROP COLUMN receipt');
+    const before = await journal();
+    await expect(installArtifactPackageAssets(database)).rejects.toThrow(/missing.*receipt/i);
+    expect(await journal()).toEqual(before);
+  });
+
+  it('should refuse a lost host journal instead of re-attesting an existing artifact schema', async () => {
+    await runMigrations(database);
+    await database.query('DROP TABLE control.artifact_package_migrations, control.artifact_host_kv');
+    await database.query('ALTER TABLE artifacts.operation_receipts DROP COLUMN receipt');
+    await expect(installArtifactPackageAssets(database)).rejects.toThrow(/untracked artifact schema/i);
+    expect((await database.query(`SELECT to_regclass('control.artifact_package_migrations') AS journal`)).rows[0].journal).toBeNull();
+  });
+
   it('should keep one immutable KV value across competing writers and a fresh process', async () => {
     await runMigrations(database);
     const kv = createArtifactHostKv(database, 'scope-a');
