@@ -21,6 +21,7 @@ export interface ProviderDescriptor {
   family: ProviderFamily;
   label: string;
   status: ProviderStatus;
+  decisionOnly?: true;
   capabilities: ProviderCapabilities;
 }
 
@@ -238,6 +239,21 @@ export const providerProfiles = {
       structuredOutputLevel: 'tool-input-schema',
       accountTransports: ['muse'],
     }),
+  },
+  typesafe: {
+    providerId: 'typesafe', family: 'typesafe', label: 'TypeSafe', status: 'planned', decisionOnly: true,
+    capabilities: {
+      decision: { support: 'supported' },
+      tools: { support: 'unsupported', parallelCalls: 'unsupported', streamedArgumentDeltas: 'unsupported',
+        resultContinuation: 'unsupported', toolChoice: [] },
+      streaming: { support: 'unsupported', nativeProviderChunks: 'unsupported' },
+      structuredOutput: { support: 'unsupported', strategies: [],
+        jsonSchema: { support: 'unsupported', level: 'none', strict: false } },
+      reasoning: { support: 'unsupported', tier: 'none', controls: 'unsupported', visibleSummaries: 'unsupported',
+        hiddenSignatures: 'unsupported', tokenUsageAccounting: 'unsupported' },
+      modalities: { input: [], output: [] },
+      auth: { tokenSources: ['environment-token'], accountTransports: [] },
+    },
   },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;
 
