@@ -92,16 +92,16 @@ export const validateMemoryEffects = async (
   effects: AtomicUnit,
   resolveCurrent?: MemoryCurrentStateResolver,
 ): Promise<void> => {
-  let touchesCapture = false;
+  let completesCapture = false;
   for (const update of effects.updates) {
     const kind = updateKind(update.key);
     if (kind === null) throw new StorageInvalidCommandError('memory aggregate update requires a compound key');
     const value = decodeUpdateValue(update.value);
     if (kind === 'memory-capture-idempotency-v1') {
-      touchesCapture = true;
       if (!isMemoryCaptureProof(value)) {
         throw new StorageInvalidCommandError('memory capture update requires a capture proof value');
       }
+      completesCapture ||= value.revision !== 1;
       if (resolveCurrent !== undefined) {
         const current = await resolveCurrent(update.key);
         const transition = validateCaptureTransition(current ?? null, value);
@@ -126,7 +126,7 @@ export const validateMemoryEffects = async (
       }
     }
   }
-  if (touchesCapture && effects.appends.length !== 0) {
+  if (completesCapture && effects.appends.length !== 0) {
     throw new StorageInvalidCommandError('memory capture completion carries strictly zero appends');
   }
 };
