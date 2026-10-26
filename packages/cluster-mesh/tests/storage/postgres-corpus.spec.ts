@@ -43,9 +43,27 @@ describe.skipIf(!pgEnabled)('shared corpora on injected Postgres', () => {
       let liveForeign = initialForeign;
       const client = (issued: typeof grant, bound: PgScoped, getLive: () => PgScoped) => {
         const base = pgCorpusClient(root, issued, bound);
+        // The frozen shared corpus uses small numeric positions. Keep its
+        // adapter local; PostgreSQL's public transport remains exact strings.
+        const bounded = (value: unknown): unknown => {
+          if (Array.isArray(value)) return value.map(bounded);
+          if (!value || typeof value !== 'object') return value;
+          return Object.fromEntries(Object.entries(value).map(([key, item]) => {
+            if (['seq', 'from', 'to', 'watermark', 'cursor', 'lag', 'journalSeq'].includes(key) && typeof item === 'string' && /^(0|[1-9][0-9]*)$/.test(item)) {
+              const number = Number(item);
+              if (!Number.isSafeInteger(number)) throw new Error('shared corpus position exceeds its numeric fixture range');
+              return [key, number];
+            }
+            return [key, bounded(item)];
+          }));
+        };
         const extra = {
-          journalRead: (consumer: string, after: number, limit: number) => bound.journalRead(after, limit, consumer),
-          journalMarkPoison: bound.journalPoison.bind(bound), externalRead: (after: number, limit: number) => bound.journalRead(after, limit),
+          journalRead: async (consumer: string, after: number, limit: number) => bounded(await bound.journalRead(after, limit, consumer)),
+          externalRead: async (after: number, limit: number) => bounded(await bound.journalRead(after, limit)),
+          journalInspect: async (consumer: string) => bounded(await bound.journalInspect(consumer)),
+          journalResync: async (...args: Parameters<PgScoped['journalResync']>) => bounded(await bound.journalResync(...args)),
+          snapshotRead: async (...args: Parameters<PgScoped['snapshotRead']>) => bounded(await bound.snapshotRead(...args)),
+          journalMarkPoison: bound.journalPoison.bind(bound),
           armExternalFailure: async () => { fail = true; },
           commitAtomic: (...args: Parameters<PgScoped['commitAtomic']>) => getLive().commitAtomic(...args),
           appendChain: (...args: Parameters<PgScoped['appendChain']>) => getLive().appendChain(...args),

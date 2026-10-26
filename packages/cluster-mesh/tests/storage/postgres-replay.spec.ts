@@ -15,11 +15,11 @@ describe.skipIf(!pgEnabled)('durable journal consumers', () => {
       const delivery = await bound.journalRead(0, 2, 'consumer');
       await bound.journalPoison('consumer', delivery.events[0]!.eventId, 'decode failed');
       bound = await (await fixture.open()).bind(grant);
-      expect(await bound.journalInspect('consumer')).toMatchObject({ status: 'stalled', cursor: 0, failedEvent: delivery.events[0]!.eventId });
+      expect(await bound.journalInspect('consumer')).toMatchObject({ status: 'stalled', cursor: '0', failedEvent: delivery.events[0]!.eventId });
       await bound.journalRetry('consumer', delivery.events[0]!.eventId, fence);
       await expect(bound.journalCheckpoint('consumer', 0, 2, fence)).rejects.toMatchObject({ code: 'invalid-command' });
       await bound.journalRead(0, 2, 'consumer'); await bound.journalCheckpoint('consumer', 0, 2, fence);
-      expect(await bound.journalInspect('consumer')).toMatchObject({ status: 'running', cursor: 2, failedEvent: null, lag: 0 });
+      expect(await bound.journalInspect('consumer')).toMatchObject({ status: 'running', cursor: '2', failedEvent: null, lag: '0' });
     } finally { await fixture.close(); }
   });
 });
