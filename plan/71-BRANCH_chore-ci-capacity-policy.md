@@ -57,7 +57,7 @@
   - [x] Inventory real account quotas/runner classes via the GitHub API; record reservation, scheduling priorities, cost, and peak demand in `spec/ci-cd-ten-minutes/capacity.md`.
   - [x] Lot gate: inventory receipts attached with API routes/IDs; unknowns stay to-measure, never assumed.
 - [ ] **Lot 2 — Bounded dispatch and concurrency**
-  - [x] Admit full PR/main DAGs only at <=15 slots (17 observed minus 2 release allowance); ordinary publishers use one lane, existing mesh/gateway/cluster barriers and bootstrap remain intact. API/E2E widths settle at 2/2.
+  - [ ] Admit PR/common work into 15 shared queued slots plus two existing release groups (17 observed); restore reference API/E2E 15/5 widths. Complete wiring and receipts before acceptance.
   - [x] Review r1: remove the 13/10-deep validator chains; six queued capacity groups preserve 23 independent jobs and their selected-result identities.
   - [x] Review r1: ordinary publishers depend on their own validators; preserve the existing oauth-to-mcp-auth and mesh/gateway/cluster registry dependency barriers.
   - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.

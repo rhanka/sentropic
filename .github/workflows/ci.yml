@@ -50,6 +50,10 @@ concurrency:
 jobs:
   enforce-package-bump:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-12
+      queue: max
+      cancel-in-progress: false
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v6
@@ -113,6 +117,10 @@ jobs:
 
   qualify-engram-e2:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-13
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.engram_e2 == 'true'
     permissions:
@@ -149,6 +157,10 @@ jobs:
 
   changes:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-14
+      queue: max
+      cancel-in-progress: false
     permissions:
       contents: read
       pull-requests: read
@@ -541,6 +553,10 @@ jobs:
   # skipped `changes` cannot silently skip this required check; never a publisher dependency.
   validate-publishable-manifests:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-6
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled()
     permissions:
@@ -574,6 +590,10 @@ jobs:
   # Build E2E Docker image
   build-e2e:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-7
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     env:
       DOCKER_USERNAME: nologin
@@ -598,6 +618,10 @@ jobs:
 
   typecheck-lint-ui:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-8
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     steps:
       - uses: actions/checkout@v6
@@ -614,6 +638,10 @@ jobs:
 
   typecheck-lint-api:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-9
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     steps:
       - uses: actions/checkout@v6
@@ -639,6 +667,10 @@ jobs:
 
   validate-idp-sync:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-10
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.idp_sync == 'true'
     steps:
@@ -1310,6 +1342,10 @@ jobs:
   # Build API Docker image (independent from API tests)
   build-api-image:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-11
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     env:
       DOCKER_USERNAME: nologin
@@ -1354,6 +1390,10 @@ jobs:
 
   build-api-tool-image:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-12
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     steps:
@@ -1390,6 +1430,10 @@ jobs:
 
   test-api-unit-integration:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-${{ strategy.job-index }}
+      queue: max
+      cancel-in-progress: false
     needs: [changes, build-api-image, build-api-tool-image]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     continue-on-error: ${{ matrix.suite == 'ai' }}
@@ -1496,6 +1540,10 @@ jobs:
   # Build & Unit Test UI
   build-ui:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-13
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     steps:
       - uses: actions/checkout@v6
@@ -1541,6 +1589,10 @@ jobs:
 
   test-e2e:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-${{ strategy.job-index }}
+      queue: max
+      cancel-in-progress: false
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     strategy:
@@ -1603,6 +1655,10 @@ jobs:
 
   e2e-vscode:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-14
+      queue: max
+      cancel-in-progress: false
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
@@ -1661,6 +1717,10 @@ jobs:
   # API/unit suite never exercised the served consent screen end-to-end.
   smoke-idp-screens:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-6
+      queue: max
+      cancel-in-progress: false
     needs: [changes, typecheck-lint-api, build-api-image, build-api-tool-image, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
@@ -1702,6 +1762,10 @@ jobs:
   # Security: SAST and SCA scans (code and dependencies)
   security-sast-sca:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-7
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
     steps:
@@ -1739,6 +1803,10 @@ jobs:
   # Security: IaC scans (infrastructure configuration)
   security-iac:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-8
+      queue: max
+      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.global == 'true'
     steps:
@@ -1761,6 +1829,10 @@ jobs:
   # Security: Container scans (Docker images)
   security-container:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-9
+      queue: max
+      cancel-in-progress: false
     needs: [changes, build-api-image, build-api-tool-image, build-ui]
     # UI-only changes intentionally skip the toolbox job; keep the UI scan active.
     if: >-
@@ -1824,6 +1896,10 @@ jobs:
 
   test-smoke-restore:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-10
+      queue: max
+      cancel-in-progress: false
     needs: [changes, build-api-image, build-api-tool-image, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
@@ -1882,6 +1958,10 @@ jobs:
 
   publish-ui-image:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-capacity-11
+      queue: max
+      cancel-in-progress: false
     needs: [changes, test-e2e, e2e-vscode, security-container]
     if: (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
