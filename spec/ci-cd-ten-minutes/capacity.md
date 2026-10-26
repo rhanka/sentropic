@@ -45,7 +45,9 @@ mutexes remain separate. Other workflows/repositories remain outside this bound.
 Static admission is not timing acceptance. Use `CI_REQUIRE_CAPACITY_PROOF=1`
 and `CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json'` with
 `make ci-capacity-policy`. Both identified runs must complete successfully,
-carry the exact workflow policy digest, and finish within the 2288s baseline.
+carry the exact workflow policy digest retained before dispatch, and finish
+within the 2288s baseline. Historical captures without that attestation
+remain measurable but cannot qualify the new policy; mismatches fail closed.
 One must be a PR, the other a push on main. Cancelled runs, incomplete
 captures, old-policy main runs and branch dry-runs never qualify this proof.
 The prior 13/10-deep chains are rejected: run `40368572524` was still
