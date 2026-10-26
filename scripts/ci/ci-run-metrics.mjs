@@ -43,7 +43,7 @@ export function captureRecords(captured) {
   if (!Array.isArray(captured.jobs) || !captured.run) throw new Error('Missing run/jobs capture');
   return captured.jobs.map((row) => ({
     runId: row.run_id, attempt: row.run_attempt, jobId: row.id, name: row.name,
-    conclusion: row.conclusion, queuedAt: row.created_at,
+    conclusion: row.conclusion, status: row.status, queuedAt: row.created_at,
     startedAt: row.started_at, completedAt: row.completed_at, labels: row.labels,
     headSha: row.head_sha ?? captured.run.head_sha ?? null,
     headBranch: row.head_branch ?? captured.run.head_branch ?? null,
@@ -84,6 +84,7 @@ export function dedupeJobs(records) {
 // readiness substitute. Skipped rows have no runner queue measurement.
 export function queueSeconds(record) {
   if (record?.conclusion === 'skipped') return null;
+  if (['queued', 'waiting', 'pending', 'requested'].includes(record?.status)) return null;
   const queued = toMs(record?.queuedAt ?? record?.createdAt);
   const start = toMs(record?.startedAt);
   if (queued === null || start === null || start < queued) return null;
@@ -126,7 +127,10 @@ export function criticalPathScheduling(records, dependencies = {}, endpoints = {
       if (!executed.length) result = parent;
       else if (executed.every(row => durationSeconds(row.startedAt, row.completedAt) !== null)) {
         const last = executed.sort((a, b) => toMs(b.completedAt) - toMs(a.completedAt))[0];
-        result = { end: toMs(last.completedAt), jobs: [...parent.jobs, last] };
+        const queue = queueSeconds(last);
+        const handoff = parent.end > 0 ? durationSeconds(parent.end, last.startedAt) : queue;
+        const schedulingSeconds = queue === null || handoff === null ? null : Math.max(queue, handoff);
+        result = { end: toMs(last.completedAt), jobs: [...parent.jobs, { ...last, schedulingSeconds }] };
       }
     }
     visiting.delete(name);
@@ -139,9 +143,10 @@ export function criticalPathScheduling(records, dependencies = {}, endpoints = {
       && row.conclusion !== 'skipped'));
     const path = executed && paths.length && paths.every(Boolean) ? paths.sort((a, b) => b.end - a.end)[0] : null;
     const jobs = path?.jobs.map(row => ({ key: jobKey(row), runId: row.runId,
-      attempt: row.attempt, jobId: row.jobId, name: row.name, queueSeconds: queueSeconds(row) })) ?? [];
-    const measured = jobs.length > 0 && jobs.every(row => row.queueSeconds !== null);
-    return [endpoint, { seconds: measured ? jobs.reduce((sum, row) => sum + row.queueSeconds, 0) : null, jobs }];
+      attempt: row.attempt, jobId: row.jobId, name: row.name, queueSeconds: queueSeconds(row),
+      schedulingSeconds: row.schedulingSeconds })) ?? [];
+    const measured = jobs.length > 0 && jobs.every(row => row.schedulingSeconds !== null);
+    return [endpoint, { seconds: measured ? jobs.reduce((sum, row) => sum + row.schedulingSeconds, 0) : null, jobs }];
   }));
 }
 
@@ -279,7 +284,7 @@ export function concurrencyPeak(records) {
 }
 
 // Measured-slot admission: evaluate observed demand against declared capacity.
-// availableSlots comes from the owner-supplied quota inventory (or a measured
+// availableSlots comes from the agent's API quota inventory (or a measured
 // lower bound recorded in capacity.md); reserveSlots holds release lanes.
 // Missing inputs stay to-measure, never zero: no admission claim without them.
 export function admissionDecision({ peak, availableSlots = null, reserveSlots = 0 } = {}) {
@@ -522,7 +527,8 @@ startedAt, completedAt, queuedAt?, steps?[{ name, conclusion, startedAt,
 completedAt }], runnerName?/runner?/labels?[], cache? }], "runCreatedAt":
 <workflow creation stamp> } plus optional "endpoints": { <name>: [<pattern>] },
 "capacity": { availableSlots?, reserveSlots? }, and "timings":
-{ classificationSeconds?, verdictSeconds? }.`;
+{ classificationSeconds?, verdictSeconds? }. Repeated --competing-file <capture.json>
+adds identified PR/main traffic for combined admission and continuity receipts.`;
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const args = process.argv.slice(2);
