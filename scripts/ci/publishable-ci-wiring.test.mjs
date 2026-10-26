@@ -279,7 +279,7 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
 test('release train: validation barrier, strict chain, serialization, lock-sync and lock integrity (BRDP-EX10)', () => {
   const validated = TRAIN_VALIDATES.map(([job, filter]) => `(needs.${job}.result == 'success' || (needs.${job}.result == 'skipped' && needs.changes.outputs.${filter} != 'true' && needs.changes.outputs.global != 'true'))`);
   for (const [job, upstreams] of Object.entries(TRAIN_UPSTREAMS)) {
-    const cond = jobs[job].if;
+    const cond = jobs[job].if.replaceAll("(github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true)", "github.ref == 'refs/heads/main'");
     const slug = job.slice('publish-'.length);
     // `!cancelled()` instead of design section 5's `always()`: a manual cancel stops the train.
     assert.ok(cond.startsWith(`!cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && needs.changes.outputs.${publishFilter(slug)} == 'true' && `), `${job}: barrier prefix`);

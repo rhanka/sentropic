@@ -2197,7 +2197,7 @@ jobs:
       cancel-in-progress: false
     needs: [changes, validate-mcp-auth, publish-oauth-verify]
     if: >-
-      !cancelled() && needs.changes.result == 'success' &&
+      always() && !cancelled() && needs.changes.result == 'success' &&
       needs.changes.outputs.mcp_auth_publish == 'true' &&
       needs.validate-mcp-auth.result == 'success' &&
       (needs.publish-oauth-verify.result == 'success' || needs.publish-oauth-verify.result == 'skipped') &&
