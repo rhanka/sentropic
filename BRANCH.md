@@ -37,7 +37,9 @@ Make the `cluster-mesh-comments-installed` bare probe accept the `incompatible_v
 - [x] Second dev-bump gate: `installed-bare.mjs:17` pins `not_installed`; a `0.23.0-dev.N` candidate refuses with `incompatible_version` (frozen Comments range).
 - [x] Same triple contract as #767 (`isPackOnlyDevBump`, `RESERVED_NEXT = 0.23.0`, latest published `0.22.4`), duplicated as plain `.mjs` for the bare probe; bump together with #767's module.
 - [x] Pin fed from the frozen fixture via `CM_PACK_ONLY_PIN` (make extraction + docker env); gate module copied next to the probe.
-- [x] Negative tests in `pack-only-dev-gate.spec.ts`: stale pin, wrong reserved, rc, stable and off-line candidates keep refusing.
+- [x] Negative tests in `pack-only-dev-gate.spec.ts`: stale pin, wrong reserved, rc, stable, off-line and wrong-package candidates keep refusing.
+- [x] Opus r1 P2 (exact package+version pair): `isPackOnlyDevBump` requires `packageName === '@sentropic/cluster-mesh'`; probe passes the installed name; wrong-package cases tested.
+- [x] Opus r1 P3 (stack on #767): branch rebased onto `feat/engram-e2-pack-only-fixtures`; one BRANCH.md rewrite in the final diff.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; verify validate-cluster-mesh green without merging.
 
 ## AI Flaky tests
