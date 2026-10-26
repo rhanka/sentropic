@@ -71,7 +71,7 @@ describe.skipIf(!pgEnabled)('scoped memory PostgreSQL queries', () => {
     } finally { await host.close(); }
   });
 
-  it('should order full-u64 outbox cursors exactly and refuse unavailable retained data', async () => {
+  it('should order full-u64 outbox cursors exactly and recheck retained-page authority', async () => {
     const host = await memoryPgHost();
     try {
       const root = await host.open();
@@ -93,6 +93,24 @@ describe.skipIf(!pgEnabled)('scoped memory PostgreSQL queries', () => {
       await root.revoke(grant.token);
       await expect(bound.query('memory-outbox-page', { after: '0', limit: 1 }, { limit: 1, cursor: first.nextCursor }))
         .rejects.toMatchObject({ code: 'denied' });
+    } finally { await host.close(); }
+  });
+
+  it('should refuse oversized query records and erased canonical payloads explicitly', async () => {
+    const host = await memoryPgHost();
+    try {
+      const bound = await (await host.open()).bindNew(memoryGrant());
+      await bound.commitAtomic(memoryUnit({ records: [{
+        key: JSON.stringify(['memory-record-v1', 'r1']), contentHash: 'digest-r1',
+        bytes: { format: 'utf8', data: JSON.stringify({ record_id: 'r1', content: 'x'.repeat(2048) }) },
+      }] }));
+      await expect(bound.query('memory-record-by-id', { record_id: 'r1' }, { limit: 1, maxEncodedBytes: 512 }))
+        .rejects.toMatchObject({ code: 'capacity-exceeded' });
+      await host.tx.run(false, (session) => session.execute({
+        text: `UPDATE "${host.name}".payloads SET bytes=NULL,erased=true`, values: [],
+      }));
+      await expect(bound.query('memory-record-by-id', { record_id: 'r1' }, { limit: 1 }))
+        .rejects.toMatchObject({ code: 'unavailable' });
     } finally { await host.close(); }
   });
 });

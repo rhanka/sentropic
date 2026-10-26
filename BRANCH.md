@@ -45,6 +45,7 @@
 - [x] `postgres-memory.spec.ts` enrolls memory PG tests in the existing E2 real-PG lane; standalone memory lane lacks PG and is not the durable receipt.
 - [x] Add adversarial same-unit duplicate event/proof tests; projection must refuse before publishing any canonical root.
 - [x] Query tests cover exact unsigned cursor ordering through max u64 and current grant revocation on retained continuation.
+- [x] First real PG pass: 6 pass/2 fail/0 skips; duplicate `event_id` accepted within one unit reproduced. Add per-unit identity set; correct fixture moduleResult to the existing EncodedValue wire type.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky waiver applies.

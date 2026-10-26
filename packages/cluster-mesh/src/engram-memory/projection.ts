@@ -63,11 +63,14 @@ export const validateMemoryPgEffects: PgRegisteredProjection = async (effects, c
     await validateMemoryEffects({ ...effects, updates: [update] }, current);
     proposed.set(update.key, decodeMemoryValue(update.value));
   }
+  const events = new Set<string>();
   for (const append of effects.appends) {
     if (append.chainId !== 'memory-journal') throw new StorageInvalidCommandError('unknown memory chain');
     const event = decodeMemoryValue({ format: 'utf8', data: append.record.bytes });
     if (event.event_id !== append.record.id || !isCanonicalU64(event.cursor) || typeof event.intent_hash !== 'string')
       throw new StorageInvalidCommandError('memory journal identity is invalid');
+    if (events.has(append.record.id)) throw new StorageIdempotencyConflictError('memory event repeats within one unit');
+    events.add(append.record.id);
     const row = (await context.session.execute({ text: `SELECT intent_hash FROM ${schema}.memory_entries
       WHERE scope_key=$1 AND event_id=$2`, values: [memoryPgScope(context), append.record.id],
     })).rows[0];
