@@ -60,6 +60,7 @@
 - [ ] **Lot 0 — Baseline and evidence boundaries**
   - [x] W0-close.a/B01: 26 October endpoint-to-Service/Pod routing, public HTTPS body hashes, live ConfigMap/template/environment hashes and refreshed image identities recorded; BR142-EX3 temporary merge allowance removed.
   - [x] W0-close.a/B02: current package-journal discovery and complete cutover/author/generation/lease inventory recorded; absent runtime authority is explicit and positive fencing remains W2 qualification.
+  - [x] W0-close.a/B04: dated scoped SQL inventory and per-source leave-in-place disposition; 4 unscoped chat messages explicitly excluded from import, legacy readers retained.
   - [x] Read MASTER/workflow, README/TODO/PLAN, branch template and approved owner request/plan.
   - [x] Mechanical `harness check branch` passes; branch is clean and starts at pinned main.
   - [x] Follow-up: branch verified, remote pulled with fast-forward only, main integrated under BR142-EX2; identical Track blobs and all 342 event IDs preserved. Track acceptance refresh stays with the designated root writer.
