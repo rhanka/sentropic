@@ -1,92 +1,75 @@
-# fix(cluster-mesh): freeze common v1 module list (0.22.1)
+# fix(artifacts): 0.2.1 host guard and host failure mapper
 
 ## Objective
-- [x] Repair common-v1 admission of engram-memory, which persists in published 0.22.0, and prepare corrective 0.22.1.
-- [ ] Qualify the exact PR head in CI; leave merge and publication to the owner's GO.
+- [x] Fix the two Radar acceptance defects for immo #861 without changing frozen contracts.
 
 ## Scope / Guardrails
-- [x] Follow approved E2 r3 P2-1 and its corrective-main fallback; #709 merged as b67e2a49af789f8f51d91cc5695f89caa63db2ee.
-- [x] Base merged: origin/main e9f82d14a1a62b95050a91c36b4a01a1aed153c0; worktree: tmp/worktrees/cm-0213-fix.
-- [x] Make-only; ENV=test-cm-common-v1 last; no Python; isolated Compose qualification service without published ports.
-- [x] Selective staging and make commit only; each commit below 150 changed lines; no attribution trailers.
-- [x] Shared generic registry retains engram-memory; no authority/type migration or common descriptor/vector changes.
-- [x] Push and open a DRAFT PR; do not merge or publish without the owner's GO.
+- [x] Worktree: `tmp/worktrees/artifacts-021`, branch `fix/artifacts-0.2.1-acceptance`, base `origin/main`.
+- [x] Make-only; shared Docker lock; cleanup after each step; no merge.
+- [x] Environment: `test-artifacts-021`; Compose qualification has no published ports.
+- [x] Existing qualification Compose lane extended to `test-artifacts-021` (BR861-EX1).
+- [x] Preserve `packages/artifacts/l0-freeze/**` byte for byte and existing wire shapes.
+- [x] Commits below 150 lines, selective staging, `make commit` only.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/cluster-mesh/src/storage/common-contract.ts`
-  - `packages/cluster-mesh/tests/storage/common-rule/contract.spec.ts`
-  - `packages/cluster-mesh/tests/storage/scope-grant-modules.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `packages/cluster-mesh/package.json`
+  - `packages/artifacts/src/http.ts`
+  - `packages/artifacts/src/mcp-core.ts`
+  - `packages/artifacts/src/server/publication.ts`
+  - `packages/artifacts/src/server/commit/coordinator.ts`
+  - `packages/artifacts/src/server/commit/types.ts`
+  - `packages/artifacts/tests/**`
+  - `packages/artifacts/probe/**`
+  - `packages/artifacts/examples/radar-commit-setup.ts`
+  - `packages/artifacts/README.md`
+  - `packages/artifacts/docs/migration-l6.md`
+  - `packages/artifacts/package.json`
+  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts`
   - `package-lock.json`
-  - `scripts/ci/qualify-published-install.mjs`
-  - `scripts/ci/qualify-published-install.test.mjs`
-  - `scripts/ci/publishable-manifests.mjs`
-  - `scripts/ci/publishable-manifests.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-- **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
-  - `plan/**`
-  - `packages/cluster-mesh/src/storage/contracts.ts`
+  - `packages/artifacts/l0-freeze/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/ci.yml`
-  - `packages/*/package.json` (peer ranges only if the bump gate requires them)
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] Declare BR0213-EXn with rationale, impact and rollback before conditional edits.
+  - [x] Declare rationale, impact and rollback in Feedback Loop before any exception.
 
 ## Feedback Loop
-- [x] Registry pre-bump check: latest is 0.22.0, integrity sha512-xy+3lnR6mwu7R8asatuUbXunuVmaAg2BWnEgGVHaI79BGNXZhQ7npvNWRoO5XnWzQZY67i0JxQ0gaQKjsXGVYQ==. Set package, workspace lock and selected candidate fixture to 0.22.1 without changing peer ranges.
-- [x] Merge origin/main e9f82d14a1a62b95050a91c36b4a01a1aed153c0 without rebase; retain the common-v1 fix and current artifacts 0.2.0 peer. Main 0.22.0 still calls isStorageModuleId and accepts engram-memory; reserve corrective 0.22.1.
-- [x] CI bump repair: job 120542263109 passed package tests, installed Comments and PG upgrade, then failed ENOENT for the selected fixture's stale sentropic-cluster-mesh-0.21.2.tgz. Update only that fixture's candidate path/version to 0.21.3; preserve every registry peer and its integrity.
-- [x] BR0213-EX1 — allow .github/workflows/ci.yml's Cluster Mesh post-publication wait budget only. Reason: npm processing took over three minutes on #709, exhausting 18 reads before availability. Impact: up to 36 fresh reads, ten seconds apart, for this publisher only; no publication/skip predicates change. Rollback: remove the explicit budget argument and its wiring test.
-- [x] Affected publication: @sentropic/cluster-mesh@0.21.2, registry time 2026-10-23T14:44:35Z; correction reserved as 0.21.3.
-- [x] [Failure evidence](https://github.com/rhanka/sentropic/actions/runs/39969215826/job/120474774878): npm accepted publication at 14:41:27Z with "being processed"; qualification exhausted 18 fresh reads at 14:44:23Z. Registry publication time is 14:44:35.992Z, about 12 seconds after failure (188 seconds after publish acceptance).
-- [x] [Later-run evidence](https://github.com/rhanka/sentropic/actions/runs/39974392072/job/120485106662): cluster_mesh_publish=false, "Matching files: none"; its publish job 120493036670 skipped. The filter correctly requires packages/cluster-mesh/** changes; this run changed root/tooling/lock files.
-- [x] Read-only requalification of registry 0.21.2 passes every runtime import and the SLSA source check against b67e2a49af789f8f51d91cc5695f89caa63db2ee; receipt retained at tmp/cm-0213-affected-registry. This confirms packaging/provenance availability, not common-v1 correctness.
-- [x] Affected integrity: sha512-ZWBR6JqlCNsYWGQX1wnjfkNKQoiWcZi2ZaJt2zdjaLHP+aXf1lAZev//QPalp5CH+ehcSOyoSdZufPMNeQHQ+Q==.
+- [x] BR861-EX1: extend existing Compose qualification ENV allowlist to the requested `test-artifacts-021`; required by Docker lock and make-only constraints. Impact: only that isolated ENV selects qualification services, scope checks and cleanup. Rollback: remove its four allowlist entries.
+- [x] BR861-EX2: route existing package-pack/consumer recipes through the same Compose lane and add a packed-example check; required to verify installed mapper declarations under the Docker lock. Default commands are unchanged. Rollback: remove the pack-run indirection and example target.
+- [x] CI catalog adaptation: mesh's artifacts catalog test pinned version 0.2.0; compare against the exported artifacts version so the 0.2.1 patch retains the catalog contract. No mesh runtime code changed.
+- [x] Opus r1 P1/P2 reconciled: restore default approval for direct publication, pass the optional host guard from HTTP/MCP, and document custom-service semantics. PR remains unmerged.
 
 ## AI Flaky tests
-- [x] No AI-dependent tests or timeout relaxation; no flaky acceptance requested.
+- [x] No AI-dependent tests in scope.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, single release integrator; no cherry-picks or delegated implementation.
-- [ ] Multi-branch (not applicable).
+- [x] Mono-branch; one author, independent review before handoff.
 
 ## UAT Management (in orchestration context)
-- [x] No web, Chrome or VS Code surface changes; validate package contracts and clean consumers.
+- [x] Library-only change; application regression tests and packed consumer serve as UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read rules, template, E2 r3 repair/fallback and review-opus-r3.md.
-  - [x] Create requested worktree/branch from origin/main; harness check branch passes.
-  - [x] Use existing scoped test, lint, typecheck, pack and qualification Make targets.
-- [x] **Lot 1 — Freeze common v1 and bump patch**
-  - [x] File-local frozen COMMON_V1_MODULE_IDS with comments and engram-live only.
-  - [x] Extend tests/storage/common-rule/contract.spec.ts: both original modules accepted, memory rejected with exact existing error across all common surfaces.
-  - [x] Add tests/storage/scope-grant-modules.spec.ts: Comments valid/invalid grants and exact errors, generic memory registration and read/write grants accepted.
-  - [x] Bump package manifest and root workspace lock to 0.21.3; peer ranges only if required.
-  - [x] Align the selected packed-consumer manifest/lock with the 0.21.3 candidate; preserve all peers and their integrities.
-  - [x] Common regression fails before repair and passes afterward (10 common tests, 3 grant tests).
-- [x] **Lot 2 — Registry qualification diagnosis and repair**
-  - [x] Inspect run 39969215826 publish-cluster-mesh failure and run 39974392072 skip.
-  - [x] Set Cluster Mesh's existing post-publication qualifier to 36 reads; regression accepts visibility on read 20 and refuses persistent absence at read 36. All 87 manifest/wiring tests pass.
-  - [x] make test-publishable-manifests test-qualify-published-install ENV=test-cm-0213: 87 + 18 tests pass; registry 0.21.2 requalification passes without publishing.
-- [ ] **Lot 3 — Docs consolidation and final validation**
-  - [x] Record concrete qualification cause and evidence here; no additional product specification required.
-  - [x] Local lint, typecheck and guarded pack pass. Full package tests, real PG recovery, installed Comments corpus and PG major-upgrade qualification pass in CI on 7aba104a7 (run 39990919502); two local full-suite attempts encountered 5-second SQLite timeouts, retained under root .tmp/cm-0213-full-tests*.log, without timeout changes.
-  - [ ] Complete make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-cm-0213 and verify the refreshed fixture in current-head CI.
-  - [ ] Run make scope-check ENV=test-cm-0213 before each commit and inspect every diff hunk.
-  - [x] Push; create draft PR #729 with this file as body and post the bounded execution plan.
-  - [ ] Verify current-head CI green; report PR, head SHA, CI URL and qualification cause.
-  - [ ] Owner GO to merge/publish (deliberately pending; retain BRANCH.md).
-- [ ] **Lot 4 — Refresh on published 0.22.0**
-  - [x] Merge origin/main without rebase; retain every parent Track event and the current artifacts peer.
-  - [x] Confirm the defect remains on main 0.22.0 and bump the corrective candidate to 0.22.1.
-  - [ ] Rerun the common-contract and grant vectors with type checks on the merged source.
-  - [ ] Update draft PR #729 and verify CI green on its exact head, including enforce-package-bump.
+- [x] Review r1 P1 — Restore default approval checks for direct publication; accept an optional host guard and forward it from HTTP/MCP.
+  - [x] Tests: `tests/commit-publication-boundary.integration.test.ts` direct denial/host refusal and expiry/replay: 17 failures before the fix, 28 passes after; `tests/host-acceptance.test.ts` HTTP/MCP host refusal: 6 passes.
+- [x] Review r1 P2 — Document custom publication guard composition in README and migration guide; retain version 0.2.1 and frozen bytes.
+- [x] Lot 0 — Read Docker lock, Radar analysis and spec r2; create worktree; mechanical branch check.
+- [x] Lot 1 — Reproduce account suspension after barrier in HTTP publication; host callback and refusal code; retain lifecycle/ACL/revision checks.
+  - [x] Baseline regression run: four failures; host callback called zero times; HTTP/MCP S3 timeout and coordinator acquisition returned non-retriable `provider_error`.
+  - [x] Tests: `tests/host-acceptance.test.ts`, `tests/fixtures/transport-world.ts`; four baseline failures, four passes after fixes.
+- [x] Lot 2 — Wire optional `mapHostError` through HTTP, MCP and coordinator classification.
+  - [x] Additive dependencies wired; HTTP/MCP S3 and coordinator acquisition regressions pass.
+  - [x] Tests: `tests/host-acceptance.test.ts`, `tests/commit-failure-parity.integration.test.ts`; typed timeout red then green, private causes and retry parity.
+  - [x] Direct-publication integration fixture uses the service's default approval guard; expiry and replay denial assertions remain unchanged.
+- [x] Lot 3 — Bump artifacts to 0.2.1; update packed host composition and documentation.
+  - [x] Registry latest verified as 0.2.0; package, workspace lock and provider manifest version bumped to 0.2.1.
+  - [x] Tests: `probe/packed-example.test.mjs` and packed consumer pass; version remains 0.2.1 and frozen bytes match origin/main.
+- [ ] Lot 4 — Final validation and PR.
+  - [x] 445 unit tests passed; typecheck, lint, frozen declarations and maintained ABI fixture passed.
+  - [x] CI `validate-artifacts` passed all unit/integration/build/lint/pack/consumer gates on `123a581cc`; final-head rerun follows catalog test adaptation and packed declaration gate wiring.
+  - [x] Run artifacts typecheck, lint, 446 unit and 176 integration/e2e tests, frozen declarations and packed-consumer checks under lock; clean each stack.
+  - [x] Review the exact diff and reconcile Opus r1 P1/P2 findings.
+  - [ ] Push; PR to main with this plan as body; CI green on exact head; do not merge.
