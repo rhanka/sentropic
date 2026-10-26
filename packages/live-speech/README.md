@@ -16,6 +16,15 @@ linearizable durable `AtomicJournalStorage` primitive. Restoring the same storag
 effects, admissions and accepted risk. The package supplies no production in-memory persistence or
 independent billing ledger.
 
+The authority clock supplies durable epoch milliseconds for Stop status and risk audit timestamps.
+`verifyRisk` must verify controlling-user authentication and typed input bound to the entire immutable
+request, including its request ID, scope, barrier revision, effect IDs, displayed evidence and confirmation.
+`verifyMutation` verifies fresh explicit approval bound to the current scope/turn, tool, argument digest,
+action ID and barrier revision; returning principal identity alone does not establish that approval.
+The opaque proof remains transient. Admission receipts explicitly distinguish a first dispatch from a
+duplicate; only `admitted: true` permits execution. Pair an emitted but denied call through
+`recordRejectedCall`; no inferred tool result or native history write is performed by this core.
+
 `createSession` requires interception coverage for every enabled tool class. A runtime integration must
 route every admission through `admitTool`, including known-safe reads, approvals, native tools and
 delegated work. Declared coverage alone does not qualify a runtime; prove it with fixture invocation
