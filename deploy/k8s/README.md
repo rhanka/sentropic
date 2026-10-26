@@ -370,6 +370,71 @@ SealedSecret resource files are produced by the operator from the real secret
 values after the controller is installed; they are intentionally **not**
 authored as part of this manifest/tooling change.
 
+### Radar preprod MCP workload: RFC 8693
+
+Owner actions only; this preparation does not deploy or generate a credential.
+The IdP already implements and advertises token exchange. The existing identity
+sync rewrites the reviewed workload policy to these exact bindings:
+
+| Setting | Required value |
+|---|---|
+| Confidential service client / `act.sub` | `immo-mcp-workload` |
+| Authentication / grant | `client_secret_basic` / `urn:ietf:params:oauth:grant-type:token-exchange` only |
+| Subject client / audience | `immo-mcp` / `https://preprod.immo.sent-tech.ca/mcp` |
+| Target audience / scope | `https://preprod.immo.sent-tech.ca` / `immo:search` |
+| Lifetime | At most 300 seconds, bounded by the human token expiry |
+| Token endpoint | `https://preprod.auth.sent-tech.ca/api/v1/auth/oauth/token` |
+
+1. In the approved secret manager, generate **32 random bytes**, encoded as
+   64 hexadecimal characters without a trailing newline. Store it as the
+   preprod `immo-mcp-workload` credential. Never reuse a production/development
+   credential or place the value in Git, CLI arguments, logs or a PR.
+   If this client already exists, verify its existing credential through the
+   protected channel; a different credential or a revoked row stops the import.
+   Rotation/revocation requires the existing explicit credential lifecycle;
+   registration neither rotates nor reactivates an existing client.
+2. Materialize an Opaque Secret **by name** in `sentropic-preprod`:
+   `immo-mcp-workload`, key `IMMO_MCP_WORKLOAD_CLIENT_SECRET`, through the
+   approved Kubernetes secret-management interface. Transfer the same credential
+   to radar out of band. Radar creates Secret `immo-mcp-workload` with the same
+   key in `radar-immobilier-preprod`, as radar's
+   `RUNBOOK-PREPROD-MCP-RACCORDEMENTS.md` steps 3–4 require.
+   No cross-namespace Secret reference is possible; these are two local copies.
+3. Merge the qualified PR to `main`; normal CI pins and rolls out the preprod
+   API/IdP images and the sync ConfigMap/CronJob. Verify `deploy-preprod` succeeds.
+   For an explicitly approved manual rollout from that exact main checkout:
+
+   ```sh
+   rtk make k8s-deploy-preprod KUBECONFIG=/secure/preprod-kubeconfig ENV=test-idp-token-exchange
+   ```
+
+   This command changes preprod. Do not execute it during code preparation.
+4. In GitHub Actions, dispatch **IdP identity sync** on `main`, first with
+   `DRY_RUN=true`, empty `ALLOWED_REKEY`, and `ALLOWED_CLIENTS=immo-mcp` if the
+   public connector must also be synchronized. Review the counts and confirm
+   `outcome=rolled_back`. Then dispatch with `DRY_RUN=false`, the same reviewed
+   allowlists, and `CONFIRM=idp-sync-YYYY-MM-DD` for the current UTC date;
+   confirm `outcome=committed`. This established workflow also triggers the
+   restricted prod identity export and creates a preprod backup before import;
+   its protected environment approvals still apply.
+   The import Job reads the named preprod Secret, hashes it locally and creates
+   only the reviewed `service_clients` row inside the identity transaction.
+   The Secret reference is optional so unrelated identity sync continues before
+   bootstrap; an absent Secret plus absent row leaves exchange unavailable.
+5. Confirm the preprod service registry contains `immo-mcp-workload`, is not
+   revoked, and has the exact policy above (inspect metadata only, never the
+   stored hash). Confirm both discovery documents advertise RFC 8693 and Basic
+   auth. With an approved active human MCP token, qualify the token endpoint:
+   success preserves human `sub`, sets singleton API `aud`, `client_id` and
+   `act.sub` to the workload, has no nested actor/`cnf`, and satisfies the TTL.
+   Wrong subject/target audiences, unknown clients, form-only credentials and
+   `client_credentials` for this workload must fail. Radar then completes its
+   digest-bound A2 qualification before arming its receiver.
+
+Allow approximately **10–20 minutes after the owner starts rollout and sync**
+for the IdP-side prerequisites, excluding approval queues and radar's separate
+A2 qualification. No additional IdP implementation release is required.
+
 ### Disaster recovery — back up the controller sealing key
 
 The controller stores its master sealing key as a labelled Secret in the
