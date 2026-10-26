@@ -1,7 +1,7 @@
 # Fix: pack-only dev tolerance for fixture pins
 
 ## Objective
-Make the two version-pinned specs tolerate pack-only `0.23.0-dev.N` topic bumps so every lot stays green without touching frozen fixtures, peer ranges or versions.
+Make the two version-pinned specs tolerate pack-only `0.23.0-dev.N` topic bumps (the integration's reserved next, declared once in `tests/fixtures/reserved-versions.ts`) so every lot stays green without touching frozen fixtures, peer ranges or versions. The frozen fixture keeps pinning the latest published release (`0.22.4`).
 
 ## Scope / Guardrails
 - Base `origin/feat/engram-e2-integration` (0.22.4 after the r1 merge of `origin/main`); PR targets `feat/engram-e2-integration`.
@@ -16,6 +16,7 @@ Make the two version-pinned specs tolerate pack-only `0.23.0-dev.N` topic bumps 
   - `BRANCH.md`
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
   - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/fixtures/reserved-versions.ts` (reserved-next / latest-published constants + `isPackOnlyDevBump` / `isPrerelease` helpers)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -39,8 +40,10 @@ Make the two version-pinned specs tolerate pack-only `0.23.0-dev.N` topic bumps 
 - [x] prepare-artifacts: on `-dev.` candidates the frozen fixture must keep pinning a stable release tarball; the lock entry must match that frozen version.
 - [x] registry: any prerelease leaf is refused before peer resolution (matches the pinned `0.23.0` and `0.22.1-rc.1` refusals); released leaves still prove the optional peer is required.
 - [x] Opus r1 P2-1 (merge `origin/main` into the integration branch): done, `d22fc3f24` (tuple 0.22.4 / 0.21.3 / 0.28.1, all published); fix branch merged onto it.
-- [x] Opus r1 P2-2/P2-3 (named same-base predicate + negative test): `isPackOnlyDevBump` in `prepare-artifacts.spec.ts`; `0.22.1`, cross-base `-dev.`, `-rc.1` and stable-same-base stay on the strict path.
-- [x] Opus r1 P2-4 (dev-branch proof in CI on the head): the `isPackOnlyDevBump` cases run in CI; the file-driven dev path was simulated locally on a `-dev.` bump.
+- [x] Opus r1 P2-2/P2-3 (named same-base predicate + negative test): superseded by the r2 triple contract below.
+- [x] Opus r1 P2-4 (dev-branch proof in CI on the head): superseded by the synthetic `0.23.0-dev.1` tests below, which run in CI unconditionally.
+- [x] Opus r2 (triple contract, lots stay on `0.23.0-dev.N` by plan): `isPackOnlyDevBump(workspaceVersion, publishedPin, reservedNext)` in `tests/fixtures/reserved-versions.ts` (declared once, `RESERVED_NEXT = 0.23.0`, latest published `0.22.4`); true only for `<reservedNext>-dev.N` against the latest published pin. Negatives: stable `0.22.1`, `0.24.0-dev.1`, wrong reserved, stale pin, `0.23.0` pin, `-rc.1`.
+- [x] Opus r2 (dev path in CI): `checkCandidateAlignment` extracted in `prepare-artifacts.spec.ts` with synthetic pass (`0.23.0-dev.1` vs frozen `0.22.4`) and strict-path throw cases (stale pin, stable non-pin); registry gains a literal `0.23.0-dev.1` refusal test plus the named `isPrerelease` helper.
 - [x] Opus r1 P2-5 (BRANCH.md checkboxes): this file.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; verify validate-cluster-mesh green without merging.
 
@@ -60,8 +63,9 @@ Make the two version-pinned specs tolerate pack-only `0.23.0-dev.N` topic bumps 
 - [x] **Lot 1 — Tests (the fix is the tests)**
   - [x] Tolerate `-dev.` candidates in `prepare-artifacts.spec.ts` (frozen stable pin + matching lock entry).
   - [x] Expect prerelease-leaf refusal in `registry.spec.ts` (released leaves keep the peer-required proof).
-  - [x] Named `isPackOnlyDevBump` same-base predicate with positive and negative cases.
+  - [x] Shared `reserved-versions.ts`: `RESERVED_NEXT`, latest published pin, `isPackOnlyDevBump` triple contract with positive and negative cases.
+  - [x] Synthetic CI tests: reserved-next dev pass + strict-path throws; literal `0.23.0-dev.1` registry refusal.
 - [ ] **Lot 2 — Final validation**
   - [ ] `make scope-check` before each commit; commits under 150 lines via `make commit`.
-  - [ ] Run the two specs on integration (0.22.4, original paths) and on a dev bump (new paths).
+  - [x] Run the two specs on integration (0.22.4, original paths): prepare-artifacts 14/14, registry 49/49, synthetic dev cases included.
   - [ ] Push and open draft PR targeting `feat/engram-e2-integration`; verify validate-cluster-mesh green without merging.
