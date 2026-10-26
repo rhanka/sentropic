@@ -27,7 +27,7 @@ const FROZEN_DATA_ASSETS = [
 describe('consumed-counter migration chain', () => {
   it('keeps published 001-006 assets byte-identical and chains 007 exactly', async () => {
     const assets = await loadPgAssets();
-    expect(assets).toHaveLength(7);
+    expect(assets).toHaveLength(8);
     for (const [id, file, order, fromVersion, toVersion, checksum] of FROZEN_DATA_ASSETS) {
       const asset = assets.find((candidate) => candidate.id === id);
       expect(asset, id).toBeDefined();
@@ -51,6 +51,17 @@ describe('consumed-counter migration chain', () => {
     expect(seventh.mode).toBe('transactional');
     expect(seventh.sql).toContain('NUMERIC(20)');
     expect(seventh.sql).toContain('18446744073709551615');
+    const eighth = assets[7]!;
+    expect(eighth.id).toBe('cluster-mesh-pg/008-instance-ownership@1');
+    expect(eighth.file).toBe('008-instance-ownership.sql');
+    expect(eighth.order).toBe(8);
+    expect(eighth.fromVersion).toBe(7);
+    expect(eighth.toVersion).toBe(8);
+    expect(eighth.requires).toEqual(['cluster-mesh-pg/007-consumed-counters@1']);
+    expect(eighth.dialect).toBe('postgresql');
+    expect(eighth.mode).toBe('transactional');
+    expect(eighth.sql).toContain('instance_ownership');
+    expect(eighth.sql).toContain('18446744073709551615');
   });
 });
 
