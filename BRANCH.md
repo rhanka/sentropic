@@ -57,25 +57,25 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - [x] Read packet, `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `DOCKER-LOCK.md`, spec-plan r3 (L3 row l.420, §8.1).
   - [x] Create worktree `tmp/worktrees/stt-l3` on `origin/feat/live-stt-l1c` as `feat/live-stt-l3`.
   - [x] Confirm scope and declare `BR03-EX1` before touching `Makefile`.
-- [ ] **Lot 1 — Local STT adapter**
-  - [ ] `packages/live-speech/package.json` (private), `tsconfig.json`.
-  - [ ] `src/node/profiles.ts`: independently pinned tiny/base profiles, runtime selection, no fixed model.
-  - [ ] `src/node/engine-port.ts`: engine port interface (no faster-whisper import).
-  - [ ] `src/node/stt-worker.mjs`: isolated worker entry (plain JS), engine path injected, no audio in logs.
-  - [ ] `src/node/local-stt.ts`: rolling windows, VAD-gated endpointing, overlap dedupe, one final, teardown.
-  - [ ] `Makefile`: `test-live-speech` target (BR03-EX1).
-  - [ ] Lot gate:
-    - [ ] `make test-live-speech ENV=test-stt-l3`
-- [ ] **Lot 2 — Tests + bench receipts**
-  - [ ] `tests/local-stt.test.ts`: model selection, one final, teardown/no starvation.
-  - [ ] `tests/window-reconciliation.test.ts`: overlap dedupe, stable prefix, revision replace, out-of-order finals.
-  - [ ] `bench/run-local-bench.mjs` + `bench/local-stt-bench.receipt.json` (real tiny/base timings or pending with blocker).
-  - [ ] `bench/l3-g-native.receipt.json` (§8.1 evidence).
-  - [ ] Lot gate:
-    - [ ] `make test-live-speech ENV=test-stt-l3`
+- [x] **Lot 1 — Local STT adapter**
+  - [x] `packages/live-speech/package.json` (private), `tsconfig.json`.
+  - [x] `src/node/profiles.ts`: independently pinned tiny/base profiles, runtime selection, no fixed model.
+  - [x] `src/node/engine-port.ts`: engine port interface (no faster-whisper import).
+  - [x] `src/node/worker-port.ts`: `NodeWorkerClient` transport + `SessionClosedError`.
+  - [x] `src/node/stt-worker.mjs`: isolated worker entry (plain JS), engine path injected, no audio in logs.
+  - [x] `src/node/local-stt.ts` + `utterance-buffer.ts` + `reconciler.ts`: rolling windows, VAD-gated endpointing, overlap dedupe, one final, teardown.
+  - [x] `Makefile`: `test-live-speech` target (BR03-EX1).
+  - [x] Lot gate: `make test-live-speech ENV=test-stt-l3` green (17/17, tsc clean).
+- [x] **Lot 2 — Tests + bench receipts**
+  - [x] `tests/local-stt.test.ts` + `profiles.test.ts`: model selection, one final, teardown/no starvation.
+  - [x] `tests/window-reconciliation.test.ts` + `ordering.test.ts` + `worker-protocol.test.ts`: overlap dedupe, stable prefix, out-of-order finals, real-thread round-trip.
+  - [x] `bench/run-local-bench.mjs` + `bench/local-stt-bench.receipt.json` (pending with recorded blocker: no native bridge/onnx GPU wheel).
+  - [x] `bench/l3-g-native.receipt.json` (§8.1 evidence).
+  - [x] Lot gate: `make test-live-speech ENV=test-stt-l3` green (17/17, tsc clean).
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest package (cf Lot1/Lot2 checklists)
+  - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
+  - [x] Retest package: 17/17 green on head
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`. (New private package: CI skips bump check.)
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`. (New private package: CI skips bump check.)
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
