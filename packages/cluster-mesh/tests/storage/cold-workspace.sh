@@ -27,6 +27,17 @@ tsc=/tmp/cm-tools/node_modules/.bin/tsc
 for package in contracts events llm-mesh oauth-verify mcp-auth auth-hono llm-gateway mcp-platform artifacts comments; do
   "$tsc" --typeRoots /tmp/cm-tools/node_modules/@types -p "packages/$package/tsconfig.json"
 done
+if [ "$CM_ACTION" = memory-lot3 ]; then
+  archive=/source/tmp/lot3-inputs/published-mcp-platform-0.4.0.tgz
+  printf '67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5  %s\n' "$archive" | sha256sum -c -
+  published=$(mktemp -d)
+  tar -xzf "$archive" -C "$published"
+  rm -rf packages/mcp-platform/dist
+  cp -R "$published/package/dist" packages/mcp-platform/dist
+  # Existing tests import ../src/*.js; execute the identical published JS there too.
+  cp -R "$published/package/dist/." packages/mcp-platform/src/
+  export MEMORY_L5_PLATFORM_ARCHIVE="$archive"
+fi
 cd packages/cluster-mesh
 mkdir -p ../../.h2a
 if [ -f /source/.h2a/pg-crash-witness.json ]; then

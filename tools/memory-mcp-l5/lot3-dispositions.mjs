@@ -1,4 +1,10 @@
+export const PLATFORM_BLOCKED_CASES = [
+  'P01.mesh.memory-context', 'P03.platform.schema-profile-2020-12', 'P04.platform.wire-profile-v1',
+  'P01.packed.identity-source-refusal', 'P02.packed.audit-verdict-refusal', 'P04.packed.sdk-discovery-call',
+];
 export const WAITING_FOR = [
+  ...PLATFORM_BLOCKED_CASES.map(id => ({ id, owner: 'gr-conductor',
+    status: 'blocked: platform-admitBridgeTools', missing: 'separate platform 0.4.1 proposal; adoption and successor freeze decision pending' })),
   { id: 'P01.packed', owner: 'gr-conductor', missing: 'verified P3-bound lot2-manifest/sidecar, host context/source closure; E4 identity-source-refusal suite' },
   { id: 'P02.packed', owner: 'gr-conductor', missing: 'same manifest and canonical E2 audit/literal-true verdict receipts; E4 refusal suite' },
   { id: 'P03', owner: 'gr-conductor', missing: 'manifest-bound neutral declarations, profile and lock closure for installed schema/digest qualification' },
@@ -20,10 +26,12 @@ export function catalogDispositions(catalog, exists) {
         Object.keys(proof.fileCases).some(file => !proof.files.includes(file))) throw Error(`Unmapped catalog item: ${proof.id}`);
     return proof.files.map(file => {
       if (!proof.fileCases[file]?.length) throw Error(`Unmapped catalog file: ${file}`);
-      const here = ['P01', 'P02', 'P03', 'P04', 'P09'].includes(proof.id) &&
+      const blocked = proof.fileCases[file].some(id => PLATFORM_BLOCKED_CASES.includes(id));
+      const here = !blocked && ['P01', 'P02', 'P03', 'P04', 'P07', 'P09'].includes(proof.id) &&
         /^packages\/(mcp-platform|cluster-mesh)\//.test(file);
       let disposition;
-      if (here) disposition = 'run here: source regression only';
+      if (blocked) disposition = 'blocked: platform-admitBridgeTools';
+      else if (here) disposition = 'run here: published platform 0.4.0 regression only';
       else if (['P05', 'P06', 'P07', 'P08'].includes(proof.id) || file.startsWith('tools/memory-mcp-l5/packed/')) {
         disposition = 'deferred to lot2-manifest and same-tuple E4 qualification';
       } else if (file.startsWith('packages/mcp-broker/')) disposition = 'run by other gate: memory-l5-gate LOT=reference';
@@ -31,7 +39,8 @@ export function catalogDispositions(catalog, exists) {
       else throw Error(`Undisposed catalog file: ${file}`);
       const present = exists(file);
       if (here && !present) throw Error(`Lot 3 required file absent: ${file}`);
-      return { id: proof.id, cases: proof.fileCases[file], file, present, status: here ? 'run-here' : 'out-of-lot', disposition };
+      return { id: proof.id, cases: proof.fileCases[file], file, present,
+        status: blocked ? 'blocked: platform-admitBridgeTools' : here ? 'run-here' : 'out-of-lot', disposition };
     });
   });
 }

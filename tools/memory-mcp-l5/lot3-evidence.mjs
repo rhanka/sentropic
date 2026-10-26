@@ -50,11 +50,13 @@ const e4 = '26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10';
 const archive = `spec/evidence/memory-mcp-l5/lot2/archives/${e4}.tgz`;
 if (sha256(readFileSync(archive)) !== e4) throw Error('Lot 3 retained E4 mismatch');
 const result = { status: 'source-only', qualificationAccepted: false, sourceHead: summary.sourceHead,
+  runtimePlatform: summary.runtimePlatform,
   preCandidateSha256: P3_SHA256, catalogSha256: summary.catalogSha256, reports, registry,
   candidate: { archive, sha256: e4, status: 'input only; same frozen tuple installed qualification pending' },
   runtime: { imageDigest: PINNED_IMAGE_DIGEST, nodeVersion: process.versions.node, pythonExecutablePresent: false },
   dispositions: { reportKind: 'summary', total: summary.dispositions.length,
-    outOfLot: summary.dispositions.filter(row => row.status === 'out-of-lot').length },
+    outOfLot: summary.dispositions.filter(row => row.status === 'out-of-lot').length,
+    blocked: summary.dispositions.filter(row => row.status === 'blocked: platform-admitBridgeTools') },
   inventory: { reportKind: 'summary', rows: summary.inventory.rows.length, drift: summary.inventory.drift }, waitingFor: WAITING_FOR };
 const output = JSON.stringify(result, null, 2).replace(/\{\n\s+"(?:kind|name|id)": [^{}]+\}/g, row => JSON.stringify(JSON.parse(row)));
 writeFileSync(`${base}/source-evidence.json`, output + '\n');
