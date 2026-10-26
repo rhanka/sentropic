@@ -36,14 +36,16 @@ E2 = #765 core 007; E4 reserves core **008** (recorded below).
   - `packages/cluster-mesh/tests/storage/postgres-module-migrations.spec.ts` (hypothetical 008→009 only)
   - `packages/cluster-mesh/tests/storage/postgres-reattest.spec.ts` (last ordinal 7→8 only)
   - `packages/cluster-mesh/tests/storage/postgres-u64-migration.spec.ts` (length 7→8 + 008 block only)
-  - `packages/cluster-mesh/tests/storage/postgres-manifest.spec.ts` (double-open commit moved to the surviving kernel: E4 supersede turns the first kernel terminal)
-  - `packages/cluster-mesh/tests/storage/postgres-publication.spec.ts` (post-reopen commits moved to the surviving kernels)
-  - `packages/cluster-mesh/tests/storage/postgres-corpus.spec.ts` (journal rebind: flush entry points follow the surviving kernel, fenced ops stay on the fence owner)
-  - `packages/cluster-mesh/tests/storage/postgres-lifecycle.spec.ts` (same redirect for the lifecycle rebind)
-  - `packages/cluster-mesh/src/storage/postgres/core.ts` (open wiring only: G-P0a acquire in the open tx, G-P0b chained hook, ownership field; no transaction rewiring)
-  - `packages/cluster-mesh/src/storage/postgres/protocol.ts` (`instanceRegistry` option only)
+  - `packages/cluster-mesh/tests/storage/postgres-manifest.spec.ts` (reverted to E2: opt-in leaves existing kernels unchanged)
+  - `packages/cluster-mesh/tests/storage/postgres-publication.spec.ts` (reverted to E2: same reason)
+  - `packages/cluster-mesh/tests/storage/postgres-corpus.spec.ts` (reverted to E2: same reason)
+  - `packages/cluster-mesh/tests/storage/postgres-lifecycle.spec.ts` (reverted to E2: same reason)
+  - `packages/cluster-mesh/src/storage/postgres/core.ts` (open wiring only: opt-in lease acquire in the open tx, per-kernel driver wrapper install, conditional G-P0b hook; no transaction rewiring)
+  - `packages/cluster-mesh/src/storage/postgres/protocol.ts` (`canonicalOwnership` opt-in option only; memory kernel only)
   - `packages/cluster-mesh/src/storage/postgres/index.ts` (expose kernel ownership only)
-  - `packages/cluster-mesh/tests/storage/postgres-u64-migration.spec.ts` (asset count 7→8 + 008 block only)
+  - `packages/cluster-mesh/src/storage/postgres/errors.ts` (CanonicalOwnershipError passthrough in classifyPgFailure only)
+  - `packages/cluster-mesh/tests/storage/postgres-instance-multiprocess.spec.ts` (new: two OS processes, crash then takeover after lease expiry)
+  - `packages/cluster-mesh/tests/storage/pg-open-child.mjs` (new: child opener helper for the multiprocess spec)
   - `packages/cluster-mesh/package.json` + `package-lock.json` (pack-only 0.23.0-dev.7 only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -64,7 +66,7 @@ E2 = #765 core 007; E4 reserves core **008** (recorded below).
 
 ## Plan / Todo (lot-based)
 
-- [ ] Lot E4-0 — setup: this BRANCH.md; harness branch check; pack-only `0.23.0-dev.7` (`package.json` + lock); record core 008 reservation (EX0 above).
+- [x] Lot E4-0 — setup: this BRANCH.md; harness branch check; pack-only `0.23.0-dev.7` (`package.json` + lock); record core 008 reservation (EX0 above).
 - [ ] Lot E4-1 — tests first (red): `instance-corpus.ts` shared registry semantics; parameterize `instance-ownership.spec.ts` (same outcomes); new `postgres-instance-ownership.spec.ts` (two processes/copies, same principal, aliases, different store_id for one journal, exactly one live holder, prompt refusal, release/reacquire, exact u64 epoch advance, terminal loss); new `postgres-instance-guard.spec.ts` (G-P0a open, G-P0b commit guard, journal/scope↔store identity, installed asset/catalog checks, contract digest + error codes unchanged).
 - [ ] Lot E4-2 — 008 migration + manifest sync: `008-instance-ownership.sql` (ownership table, exact u64 epoch, additive only); `manifest.json` 008 entry; generator entry; pinned-spec updates (module hypothetical→009, reattest ordinal→8, u64 length→8 + 008 block).
 - [ ] Lot E4-3 — implementation (green): `instance-ownership.ts` (durable acquire/verify/release/mark-terminal/current, exact u64, `CanonicalOwnershipError` codes); `instance-guard.ts` (G-P0a retained-session open, G-P0b commit decision guard); wire open path only (no transaction rewiring — E5).
@@ -73,5 +75,9 @@ E2 = #765 core 007; E4 reserves core **008** (recorded below).
 ## Feedback Loop
 
 - Blocker: if E2's #765 lands on the integration branch with a different 008 occupant, stop and coordinate (requires-chain conflict) — do not renumber.
+- Resync R1: merged `origin/feat/cluster-mesh-engram-e2` at `09cff1f8b` (merge commit `41071d16d`); 007 checksum re-derived from E2 (`545e6f92…`); 008 stays chained after it.
+- R1 redesign (Opus r1 CHANGES): opt-in `canonicalOwnership` (memory kernel only; Comments/M2 behavior unchanged, no 008 requirement); lease-based retained session (`holder_until`) with prompt `instance-busy` refusal (no supersede, no queue); in-commit-tx guard via per-kernel driver wrapper + AsyncLocalStorage session (no second tx, no pool deadlock); renewal piggyback on RW txs; deferred lease trigger in 008 as installed final backstop + catalog verification (`tgenabled='A'`, binding, deferral).
+- Code mapping (neutral-contract parity, corpus-passing): superseded/released/unknown holder → `stale-epoch`; explicit terminal or expired-unclaimed lease → `terminal-loss`; live second opener → `instance-busy`; open-time refusal → `open-refused`; PG surfaces `CanonicalOwnershipError` unwrapped (passthrough in `classifyPgFailure`).
+- No deferred "final event" table: the guard's renewal UPDATE inside the commit tx is the in-tx enforcement (row-match atomicity, no TOCTOU); the deferred trigger re-checks liveness at COMMIT. No flush-code changes (E5 owns transactions).
 - Watch: `postgres-module-migrations.spec.ts` hypothetical must track the real latest core (009 while this branch owns 008).
 - AI CI job red-on-main is out of scope for this lot's gate (E4 gate = cluster-mesh lanes green).
