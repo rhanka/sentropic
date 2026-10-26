@@ -1,11 +1,11 @@
 import { expect, it } from 'vitest';
 import { generateKeyPairSync, sign } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { verifyAssurance } from '../verifier.mjs';
 const root = generateKeyPairSync('ed25519'), foreign = generateKeyPairSync('ed25519');
-const policy = { version: 'qualification/v1', purpose: 'qualification', issuer: 'https://qualification.memory.test',
-  audience: 'memory-l5', maxStepUpAgeSeconds: 300, acr: ['urn:qualification:2fa'], amr: ['pwd', 'otp'],
+const policy = { ...JSON.parse(readFileSync(new URL('../policies/qualification-v1.json', import.meta.url))),
   keys: { key1: root.publicKey.export({ format: 'jwk' }) } };
-const claims = { iss: policy.issuer, sub: 'subject-1', aud: 'memory-l5', iat: 1000, nbf: 1000, exp: 1400,
+const claims = { iss: 'https://qualification.memory.test', sub: 'subject-1', aud: 'memory-l5', iat: 1000, nbf: 1000, exp: 1400,
   auth_time: 1000, amr: ['pwd', 'otp'], acr: 'urn:qualification:2fa', tid: 'tenant-1' };
 const enrollment = { subject: 'subject-1', principalId: 'human-1', tenantId: 'tenant-1', enrolled: true,
   revoked: false, human: true, enrolled2fa: true, receiptDigest: 'sha256:' + 'a'.repeat(64) };
@@ -32,8 +32,8 @@ it('P07.broker.oidc-assurance: should verify signature, enrolled human and fresh
   }
 });
 it('should keep production roots and verified claim mappings separate from qualification', () => {
-  const production = { ...policy, purpose: 'production', issuer: 'https://auth.sent-tech.ca', keys: {},
-    mappingStatus: 'unverified', acr: [], amr: [] };
+  const production = JSON.parse(readFileSync(new URL('../policies/production-v1.json', import.meta.url)));
+  expect(production).toMatchObject({ purpose: 'production', issuer: 'https://auth.sent-tech.ca', mappingStatus: 'unverified' });
   expect(() => check(jwt(), { policy: production })).toThrow('gate_failed');
   expect(() => check(jwt({ iss: production.issuer }), { policy: production })).toThrow('gate_failed');
   expect(() => check('approved:true')).toThrow('gate_failed');

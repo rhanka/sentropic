@@ -23,6 +23,7 @@ Reference-only run: **66 tests passed** across 13 files, including independent-p
 Tooling: **109 tests passed**, including the existing frozen Lot 2 envelope regression. Exact byte/report bindings are in `reference-evidence.json`. Complete assertion reports are retained compressed by hash under `reports/`; no skipped/todo source case is accepted.
 Measured runtime: Node 24.21.0, SQLite 3.53.4, WAL/FULL, no Python executable. Reference archive SHA-256: `9b9c28ceb31f382f8a1ca5f378b6b29a1a91e1a4c34c9878b8db221c36ae6450`, retained outside P3 with its per-file inventory in `reference-artifact.json`.
 The CI source/reference gate retains P3 and runs the original Lot 1 regressions plus the new reference tests. It is not `L5-MEMORY-V1`. The real Lot 2 gate refuses an absent manifest or the committed unverified fixture.
+After a real manifest is received, the gate also requires `LOT2_CANONICAL_REPORT`: a digest-bound Vitest result with the exact source/manifest/E2/reference archive binding and all five real canonical fencing/crash cases. Source-only results cannot close it. This guard verifies completeness, not authenticated CI or owner acceptance.
 
 ## Waiting for gr-conductor and actual acceptance
 
