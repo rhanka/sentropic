@@ -73,13 +73,15 @@ describe.skipIf(!enabled)('packed declarations and bundlers', () => {
   it('should keep the artifacts builtin leaf free of embedded provider code', () => {
     // The mcp/artifacts leaf carries mesh code (the sentropic.artifacts builtin
     // factory), so it is not an export-star leaf — but like every leaf it must
-    // not embed provider code: the only external @sentropic/* edge is the
-    // declared optional artifacts peer, imported, never inlined.
+    // not embed provider code: artifacts remains an external optional peer;
+    // the runtime also uses the declared platform dependency for its digest.
     for (const leaf of ['dist/integrations/mcp/artifacts.js', 'dist/integrations/mcp/artifacts.d.ts']) {
       const source = read(join(packageDir('bare'), leaf));
       const externals = [...source.matchAll(/from\s+["'](@sentropic\/[^"']+)["']/gu)].map((match) => match[1]);
-      expect(externals, leaf).not.toHaveLength(0);
-      for (const name of externals) expect(name, leaf).toBe('@sentropic/artifacts/mcp');
+      const expected = leaf.endsWith('.js')
+        ? ['@sentropic/artifacts/mcp', '@sentropic/mcp-platform/tool-configuration']
+        : ['@sentropic/artifacts/mcp'];
+      expect([...new Set(externals)].sort(), leaf).toEqual(expected.sort());
     }
     expect(read(join(packageDir('bare'), 'dist/integrations/mcp/artifacts.js'))).toMatch(/export function createArtifactsBuiltin/u);
   });

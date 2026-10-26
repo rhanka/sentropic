@@ -5,6 +5,23 @@ SHELL := /bin/bash
 ENV ?= dev
 export COMPOSE_PROJECT_NAME ?= $(ENV)
 DOCKER_COMPOSE  ?= docker compose
+# BR861-EX1: preserve the package recipes while qualifying inside Compose.
+ARTIFACTS_RUN = docker run --rm
+ARTIFACTS_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
+ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
+ARTIFACTS_NETWORK = --network "$$net"
+ARTIFACTS_PLATFORM_BUILD = build-mcp-platform
+CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
+CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
+ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
+ARTIFACTS_RUN_IMAGE = qualification
+ARTIFACTS_NETWORK =
+ARTIFACTS_PLATFORM_BUILD = immo-861-build-mcp-platform
+CM_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
+CM_RUN_IMAGE = qualification
+endif
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
 CI_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.ci.yml
@@ -36,7 +53,7 @@ export WEBAUTHN_ORIGIN ?= http://localhost:$(UI_PORT)
 export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
-export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/cluster-mesh/src packages/cluster-mesh/package.json packages/cluster-mesh/tsconfig.json packages/llm-mesh/src packages/llm-mesh/package.json packages/llm-mesh/tsconfig.json packages/chat-server/src packages/chat-server/package.json packages/chat-server/tsconfig.json packages/comments/src packages/comments/package.json packages/comments/tsconfig.json api/src api/drizzle apps/auth-idp api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/artifacts packages/auth-client packages/auth-hono packages/auth-ui packages/chat-core packages/chat-server packages/cluster-mesh packages/comments packages/connector-host packages/contracts packages/events packages/flow packages/llm-gateway packages/llm-mesh packages/mcp-auth packages/mcp-connector-google packages/mcp-platform packages/oauth-verify packages/skills packages/ubo-contracts api apps/auth-idp apps/llm-gateway e2e/package.json e2e/package-lock.json e2e/tests/fixtures ui/package.json .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' ! -name 'data.db' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
@@ -462,6 +479,52 @@ lock-api-direct: ## Bump proxy-addr 2.0.7 -> 2.0.8 in api + root locks (pinned, 
 	@for f in api/package-lock.json package-lock.json; do test $$(sed -n '/"node_modules\/proxy-addr": {/,/^    },/p' $$f | grep -c '"version": "2.0.8"') -eq 1 || (echo "❌ proxy-addr 2.0.8 missing in $$f" && exit 1); done
 	@! grep -q 'proxy-addr-2\.0\.7\.tgz' api/package-lock.json package-lock.json || (echo "❌ stale proxy-addr 2.0.7 reference remains" && exit 1)
 	@echo "✅ proxy-addr 2.0.8 in both locks"
+MARKDOWN_IT_NEW_INTEGRITY := sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==
+MARKDOWN_IT_ROOT_OLD_INTEGRITY := sha512-RCEsPjR+sr0x+AuYp601tKTkgFG4YEPLCzHST3cQ/fhlJkqAkz1L2/Qbp1j9qw5SBwQHFBoW8+hoN5xssOF0Tw==
+MARKDOWN_IT_UI_OLD_INTEGRITY := sha512-BuU2qnTti9YKgK5N+IeMubp14ZUKUUw7yeJbkjtosvHiP0AZ5c8IAgEMk79D0eC8F23r4Ac/q8cAIFdm2FtyoA==
+MARKDOWN_IT_1432_INTEGRITY := sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==
+MARKDOWN_IT_1433_INTEGRITY := sha512-L//tDAkjTjJCU6pBUSBTgs3Kg4InVaZuUZog/b6V12UKhcDQ7S78877ibbCanRExwPuYP1CZD7Gd2dxSy1GXRg==
+.PHONY: lock-markdown-it-14-3-3
+lock-markdown-it-14-3-3: ## Bump markdown-it 14.3.2 -> 14.3.3 in root + ui locks (pinned, no stack; BR710-EX4)
+	@echo "🔒 Bumping markdown-it to 14.3.3 in package-lock.json + ui/package-lock.json..."
+	sed -i 's|"version": "14.3.2"|"version": "14.3.3"|; s|markdown-it-14.3.2.tgz|markdown-it-14.3.3.tgz|; s|$(MARKDOWN_IT_1432_INTEGRITY)|$(MARKDOWN_IT_1433_INTEGRITY)|' package-lock.json ui/package-lock.json
+	@for f in package-lock.json ui/package-lock.json; do test $$(grep -c '"version": "14.3.3"' $$f) -eq 1 || (echo "❌ markdown-it 14.3.3 missing in $$f" && exit 1); done
+	@! grep -q 'markdown-it-14.3.2.tgz' package-lock.json ui/package-lock.json || (echo "❌ stale markdown-it 14.3.2 reference remains" && exit 1)
+	@echo "✅ markdown-it 14.3.3 in both locks"
+FOLLOW_REDIRECTS_1160_INTEGRITY := sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==
+FOLLOW_REDIRECTS_1161_INTEGRITY := sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==
+.PHONY: lock-follow-redirects-1-16-1
+lock-follow-redirects-1-16-1: ## Bump follow-redirects 1.16.0 -> 1.16.1 in the root lock (pinned, no stack; BR710-EX5)
+	@echo "🔒 Bumping follow-redirects to 1.16.1 in package-lock.json..."
+	sed -i 's|"version": "1.16.0"|"version": "1.16.1"|; s|follow-redirects-1.16.0.tgz|follow-redirects-1.16.1.tgz|; s|$(FOLLOW_REDIRECTS_1160_INTEGRITY)|$(FOLLOW_REDIRECTS_1161_INTEGRITY)|' package-lock.json
+	@test $$(grep -c '"version": "1.16.1"' package-lock.json) -eq 1 || (echo "❌ follow-redirects 1.16.1 missing in package-lock.json" && exit 1)
+	@! grep -q 'follow-redirects-1.16.0.tgz' package-lock.json || (echo "❌ stale follow-redirects 1.16.0 reference remains" && exit 1)
+	@echo "✅ follow-redirects 1.16.1 in the root lock"
+VITE_736_INTEGRITY := sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==
+VITE_737_INTEGRITY := sha512-AHEzTORMbi7/7aXp7w7KZ5+DCUdSeLsJz0grY8xHpc9DHdYb0vQu6DqJfm2tOw3gDExNgPgnJTXxM6syYFHaCA==
+VITE_822_INTEGRITY := sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q==
+VITE_824_INTEGRITY := sha512-lfauXnrf2x0p+UoA+wXh0dgFWnUjCyG6Js95KBkgaCwUU9k0DAHI4W6Q0WCx+h+5g+Alce1y4Zi2QjjK0UvGBw==
+.PHONY: lock-vite-737-824
+lock-vite-737-824: ## Bump vite 7.3.6->7.3.7 and 8.2.2->8.2.4 in root + api locks (pinned, no stack; BR710-EX6)
+	@echo "🔒 Bumping vite to 7.3.7 / 8.2.4 in package-lock.json + api/package-lock.json..."
+	sed -i 's|"version": "7.3.6"|"version": "7.3.7"|; s|vite-7.3.6.tgz|vite-7.3.7.tgz|; s|$(VITE_736_INTEGRITY)|$(VITE_737_INTEGRITY)|' package-lock.json
+	sed -i 's|"version": "8.2.2"|"version": "8.2.4"|; s|vite-8.2.2.tgz|vite-8.2.4.tgz|; s|$(VITE_822_INTEGRITY)|$(VITE_824_INTEGRITY)|' package-lock.json api/package-lock.json
+	@test $$(grep -c '"version": "7.3.7"' package-lock.json) -eq 1 || (echo "❌ vite 7.3.7 missing in package-lock.json" && exit 1)
+	@test $$(grep -c '"version": "8.2.4"' package-lock.json) -eq 2 || (echo "❌ vite 8.2.4 count wrong in package-lock.json" && exit 1)
+	@test $$(grep -c '"version": "8.2.4"' api/package-lock.json) -eq 1 || (echo "❌ vite 8.2.4 missing in api/package-lock.json" && exit 1)
+	@! grep -q 'vite-7.3.6.tgz' package-lock.json || (echo "❌ stale vite 7.3.6 reference remains" && exit 1)
+	@! grep -q 'vite-8.2.2.tgz' package-lock.json api/package-lock.json || (echo "❌ stale vite 8.2.2 reference remains" && exit 1)
+	@echo "✅ vite 7.3.7 / 8.2.4 in root + api locks"
+.PHONY: lock-markdown-it-direct
+lock-markdown-it-direct: ## Bump markdown-it 14.3.0/14.1.1 -> 14.3.2 in root + ui locks (pinned, no stack)
+	@echo "🔒 Bumping markdown-it to 14.3.2 in package-lock.json + ui/package-lock.json..."
+	sed -i '/"node_modules\/markdown-it": {/,/^    },/ { s/"version": "14\.3\.0"/"version": "14.3.2"/; s|markdown-it-14\.3\.0\.tgz|markdown-it-14.3.2.tgz|; s|$(MARKDOWN_IT_ROOT_OLD_INTEGRITY)|$(MARKDOWN_IT_NEW_INTEGRITY)|; }' package-lock.json
+	sed -i '/"node_modules\/markdown-it": {/,/^    },/ { s/"version": "14\.1\.1"/"version": "14.3.2"/; s|markdown-it-14\.1\.1\.tgz|markdown-it-14.3.2.tgz|; s|$(MARKDOWN_IT_UI_OLD_INTEGRITY)|$(MARKDOWN_IT_NEW_INTEGRITY)|; }' ui/package-lock.json
+	@test $$(sed -n '/"node_modules\/markdown-it": {/,/^    },/p' package-lock.json | grep -c '"version": "14.3.2"') -eq 1 || (echo "❌ markdown-it 14.3.2 missing in package-lock.json" && exit 1)
+	@test $$(sed -n '/"node_modules\/markdown-it": {/,/^    },/p' ui/package-lock.json | grep -c '"version": "14.3.2"') -eq 1 || (echo "❌ markdown-it 14.3.2 missing in ui/package-lock.json" && exit 1)
+	@! grep -q 'markdown-it-14\.3\.0\.tgz' package-lock.json || (echo "❌ stale markdown-it 14.3.0 reference remains" && exit 1)
+	@! grep -q 'markdown-it-14\.1\.1\.tgz' ui/package-lock.json || (echo "❌ stale markdown-it 14.1.1 reference remains" && exit 1)
+	@echo "✅ markdown-it 14.3.2 in both locks"
 
 .PHONY: lock-root
 lock-root: ## Update root package-lock.json using Node container (workspace root)
@@ -494,8 +557,10 @@ load-ui:
 	@echo "📥 Loading UI image from artifact..."
 	@docker load -i ui-image.tar
 
-.PHONY: build-api-image
-build-api-image: ## Build the API Docker image for production
+.PHONY: build-api-image build-api-image-fresh
+build-api-image: ## Reuse the canonical production image when its tag exists; build only on established absence
+	@REGISTRY="$(REGISTRY)" API_IMAGE_NAME="$(API_IMAGE_NAME)" API_VERSION="$(API_VERSION)" API_IMAGE_RECEIPT="$(API_IMAGE_RECEIPT)" DOCKER_COMPOSE="$(DOCKER_COMPOSE)" bash scripts/resolve-api-image.sh
+build-api-image-fresh: ## Force a no-cache production build and record its identity (bypasses canonical-tag reuse)
 	API_IMAGE_REF= TARGET=production $(DOCKER_COMPOSE) build --no-cache api
 	@$(MAKE) record-api-image ENV=$(ENV)
 
@@ -531,6 +596,10 @@ test-ci-api-runtime: verify-api-image ## Prove the production artifact has no np
 .PHONY: test-ci-api-tag-guard
 test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision guard (absent, exists-same, exists-different)
 	@bash scripts/test-api-tag-guard.sh $(or $(CI_TAG_GUARD_CASE),all)
+
+.PHONY: test-ci-api-image-canonical
+test-ci-api-image-canonical: ci-test-env ## Regress canonical artifact resolution (reuse/absent/fail-closed) and tag inputs
+	@bash scripts/test-api-image-canonical.sh $(or $(CI_CANONICAL_CASE),all)
 
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 api-tool-version: ## Print the content-addressed CI toolbox tag
@@ -746,6 +815,23 @@ test-publishable-manifests: ## Run publishable manifest guard fixture tests in D
 check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropic workspace packages (owned by h2a)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/eradicated-packages.mjs
 
+# BR76-EX2 — CI capacity metrics entry points (plan/62-BRANCH_chore-ci-capacity-metrics.md).
+.PHONY: ci-run-metrics ci-expected-results ci-expected-manifest test-ci-run-metrics test-ci-expected-results
+CI_METRICS_DIR ?= tmp/ci-capacity
+CI_EXPECTED_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export CI_EXPECTED_TOOL_DIR="$$tool_dir"
+ci-expected-manifest: ## Retain the selected workflow/member manifest before dispatch (BR76-EX2)
+	@mkdir -p "$(CI_METRICS_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_SELECTION_CONTEXT -v "$(CURDIR):/workspace:ro" -v "$(abspath $(CI_METRICS_DIR)):/receipts" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --manifest-file /receipts/expected.json'
+	@if [ -n "$$GITHUB_OUTPUT" ]; then printf 'attempt=%s\n' "$$GITHUB_RUN_ATTEMPT" >> "$$GITHUB_OUTPUT"; fi
+ci-run-metrics: ## Summarize one captured CI run file RUN_FILE=<path> (BR76-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help)
+ci-expected-results: ## Evaluate expected vs executed results EXPECTED_FILE=<json> EXECUTED_FILE=<json> (BR76-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_GATE_NEEDS -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-expected-results.mjs $(if $(EXPECTED_FILE),--expected-file $(EXPECTED_FILE),--help) $(if $(EXECUTED_FILE),--executed-file $(EXECUTED_FILE),)
+test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node --test scripts/ci/ci-run-metrics.test.mjs
+test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR76-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-expected-results.test.mjs'
+
 
 .PHONY: typecheck
 .NOTPARALLEL: typecheck
@@ -778,7 +864,7 @@ lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned m
 .PHONY: typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh publish-cluster-mesh publish-cluster-mesh-token
 # BRE-EX1: provider leaves need the optional peers' dists at dev time; link them inside the container and remove the links on
 # exit, interrupt or termination (INT/TERM exit through the EXIT trap; `docker run --init` forwards signals to the shell).
-CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2
+CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2 @sentropic/engram@0.21.1
 typecheck-cluster-mesh: ## Run self-contained cold @sentropic/cluster-mesh type checks
 	@$(MAKE) cluster-mesh-workspace CM_ACTION=typecheck ENV=$(ENV)
 
@@ -790,11 +876,11 @@ build-cluster-mesh: ## Build @sentropic/cluster-mesh without persistent dependen
 
 .PHONY: cluster-mesh-workspace
 cluster-mesh-workspace:
-	@docker run --rm --init $(CM_DOCKER_NETWORK) -u "$$(id -u):$$(id -g)" \
+	@$(CM_RUN) -u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
 		-e CM_SCOPE="$(patsubst packages/cluster-mesh/%,%,$(SCOPE))" \
 		-e CM_PG_URL="$(CM_PG_URL)" -e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
-		-v "$(CURDIR):/source" $(LLM_MESH_NODE_IMAGE) \
+		-v "$(CURDIR):/source" $(CM_RUN_IMAGE) \
 		sh /source/packages/cluster-mesh/tests/storage/cold-workspace.sh
 
 pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
@@ -1319,43 +1405,52 @@ typecheck-mcp-platform: install-internal-packages ## Run @sentropic/mcp-platform
 
 .PHONY: build-mcp-platform
 build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform dist package
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line (or make -e) must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
+.PHONY: immo-861-build-mcp-platform freeze-types
+immo-861-build-mcp-platform: install-internal-packages
+	@case "$(ENV)" in test-861-int|test-861-gaps) ;; *) exit 1 ;; esac
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf dist node_modules; tool_dir="$$(mktemp -d)"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+
+freeze-types:
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 >/dev/null; PATH="$$tool_dir/node_modules/.bin:$$PATH" npm run freeze-types'
+
 .PHONY: build-artifacts
-build-artifacts: build-mcp-platform ## Build @sentropic/artifacts dist package
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+build-artifacts: $(ARTIFACTS_PLATFORM_BUILD) ## Build @sentropic/artifacts dist package
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: typecheck-artifacts
-typecheck-artifacts: build-mcp-platform ## Run @sentropic/artifacts type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+typecheck-artifacts: $(ARTIFACTS_PLATFORM_BUILD) ## Run @sentropic/artifacts type checks
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@types node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn "$$tool_dir/node_modules/@types/pg" node_modules/@types/pg; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-artifacts
 test-artifacts: build-artifacts ## Run @sentropic/artifacts unit tests (excludes *.integration/*.e2e; use test-artifacts-integration)
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/artifacts/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "**/*.integration.test.ts" --exclude "**/*.e2e.test.ts"; fi'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/artifacts/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "**/*.integration.test.ts" --exclude "**/*.e2e.test.ts"; fi'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-artifacts-integration
 test-artifacts-integration: build-artifacts ## Run @sentropic/artifacts integration/e2e suites on disposable project postgres/minio
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d --wait postgres minio
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@$(ARTIFACTS_COMPOSE) up -d --wait postgres minio
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 	@set -eu; net="$$(docker network ls --format "{{.Name}}" | grep -E "^$(COMPOSE_PROJECT_NAME)[_-]default$$" | head -1)"; [ -n "$$net" ] || { echo "ERROR: compose network not found" >&2; exit 1; }; \
-	docker run --rm --network "$$net" $(LLM_MESH_NODE_IMAGE) node -e "const t0=Date.now();(async()=>{while(Date.now()-t0<60000){try{const r=await fetch('http://minio:9000/minio/health/live');if(r.ok)process.exit(0)}catch{ }await new Promise(r=>setTimeout(r,1000))}process.exit(1)})()" || { echo "ERROR: minio not ready" >&2; exit 1; }; \
+	$(ARTIFACTS_RUN) $(ARTIFACTS_NETWORK) $(ARTIFACTS_RUN_IMAGE) node -e "const t0=Date.now();(async()=>{while(Date.now()-t0<60000){try{const r=await fetch('http://minio:9000/minio/health/live');if(r.ok)process.exit(0)}catch{ }await new Promise(r=>setTimeout(r,1000))}process.exit(1)})()" || { echo "ERROR: minio not ready" >&2; exit 1; }; \
 	db_user="$(POSTGRES_USER)"; db_pass="$(POSTGRES_PASSWORD)"; db_name="$(POSTGRES_DB)"; [ -n "$$db_user" ] || db_user=app; [ -n "$$db_pass" ] || db_pass=app; [ -n "$$db_name" ] || db_name=app; \
 	s3_user="$(MINIO_ROOT_USER)"; s3_pass="$(MINIO_ROOT_PASSWORD)"; [ -n "$$s3_user" ] || s3_user=minioadmin; [ -n "$$s3_pass" ] || s3_pass=minioadmin; \
-	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp --network "$$net" -e DATABASE_URL="postgres://$$db_user:$$db_pass@postgres:5432/$$db_name" -e ARTIFACTS_S3_ENDPOINT="http://minio:9000" -e ARTIFACTS_S3_REGION="us-east-1" -e ARTIFACTS_S3_ACCESS_KEY_ID="$$s3_user" -e ARTIFACTS_S3_SECRET_ACCESS_KEY="$$s3_pass" -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/artifacts/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run $$scope --environment node; else for f in tests/*.integration.test.ts tests/*.e2e.test.ts; do [ -e "$$f" ] || continue; "$$tool_dir/node_modules/.bin/vitest" run "$$f" --environment node || exit 1; done; fi'
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(ARTIFACTS_NETWORK) -e DATABASE_URL="postgres://$$db_user:$$db_pass@postgres:5432/$$db_name" -e ARTIFACTS_S3_ENDPOINT="http://minio:9000" -e ARTIFACTS_S3_REGION="us-east-1" -e ARTIFACTS_S3_ACCESS_KEY_ID="$$s3_user" -e ARTIFACTS_S3_SECRET_ACCESS_KEY="$$s3_pass" -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/artifacts/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node pg@8.22.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 >/dev/null; mkdir -p node_modules/@aws-sdk node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; ln -sfn "$$tool_dir/node_modules/@aws-sdk/client-s3" node_modules/@aws-sdk/client-s3; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run $$scope --environment node; else for f in tests/*.integration.test.ts tests/*.e2e.test.ts; do [ -e "$$f" ] || continue; "$$tool_dir/node_modules/.bin/vitest" run "$$f" --environment node || exit 1; done; fi'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: lint-artifacts
 lint-artifacts: ## Lint @sentropic/artifacts sources and tests (same generated config as lint-cluster-mesh)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
-		-w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
+		-w /workspace/packages/artifacts $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; \
 		tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" \
 			--no-save --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null; \
 		printf "%s\n" "import tseslint from '\''typescript-eslint'\'';" \
@@ -1410,7 +1505,7 @@ probe-artifacts-packed-consumer: ## Second-host packed-consumer proof of the @se
 	@$(MAKE) pack-mcp-platform PACK_DESTINATION=tmp/artifacts-platform-pack ENV=$(ENV)
 	@$(MAKE) pack-artifacts PACK_DESTINATION=tmp/artifacts-pack ENV=$(ENV)
 	@cp tmp/artifacts-platform-pack/*.tgz tmp/artifacts-pack/
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs /probe/adapter-consumer.mjs ./; node ./packed-consumer.mjs; npm install /pack/*.tgz @aws-sdk/client-s3@3.1095.0 pg@8.22.0 --no-save --no-audit --no-fund >/dev/null 2>&1; node ./adapter-consumer.mjs'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs /probe/adapter-consumer.mjs /probe/host.mjs ./; node ./packed-consumer.mjs; npm install /pack/*.tgz @aws-sdk/client-s3@3.1095.0 pg@8.22.0 --no-save --no-audit --no-fund >/dev/null 2>&1; node ./adapter-consumer.mjs'
 
 .PHONY: test-mcp-platform
 test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (builds dist first for the packaged test, BR1a-EX3)
@@ -1419,9 +1514,10 @@ test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (buil
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: api-extract-mcp-platform
-api-extract-mcp-platform: install-internal-packages ## Verify @sentropic/mcp-platform public API golden report (api-extractor CI mode; fails on any etc/mcp-platform.api.md drift)
+api-extract-mcp-platform: install-internal-packages ## Verify public API reports incl. ./memory; API_EXTRACT_LOCAL=1 regenerates reports explicitly (CI defaults to strict verification)
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line (or make -e) must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules temp'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node @microsoft/api-extractor@7.58.9 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local); "$$tool_dir/node_modules/.bin/api-extractor" run $(if $(filter 1,$(API_EXTRACT_LOCAL)),--local) --config api-extractor.memory.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules temp'
 
 .PHONY: pack-mcp-platform
@@ -1432,7 +1528,7 @@ pack-mcp-platform: build-mcp-platform ## Validate @sentropic/mcp-platform npm pa
 probe-mcp-platform-clean-consumer: ## Clean-consumer install+import probe of the packed @sentropic/mcp-platform tarball (R2-M4 UAT, BR1a-EX3)
 	@rm -rf tmp/mcp-platform-probe
 	@$(MAKE) pack-mcp-platform PACK_DESTINATION=tmp/mcp-platform-probe ENV=$(ENV)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/mcp-platform-probe:/pack:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; node --input-type=module -e "let fetchCalls = 0; globalThis.fetch = async () => { fetchCalls += 1; throw new Error('"'"'network must not be used'"'"'); }; const { canonicalJson, compileToolConfiguration, computeCompatibilityDigest, computeHandlersDigest, computeManifestDigest, computePayloadDigest, sha256Hex } = await import('"'"'@sentropic/mcp-platform/tool-configuration'"'"'); const manifest = { appId: '"'"'probe-app'"'"', providerId: '"'"'probe-provider'"'"', version: '"'"'0.0.0'"'"', displayName: '"'"'Probe'"'"', resources: [], tools: [{ kind: '"'"'tool'"'"', name: '"'"'probe_tool'"'"', description: '"'"'Probe tool.'"'"', requiredScopes: ['"'"'probe:use'"'"'], requiredClaims: [], inputSchema: { type: '"'"'object'"'"' }, outputSchema: { type: '"'"'object'"'"' }, redactionClass: '"'"'low'"'"', mutability: '"'"'read-only'"'"', mutatesExternalSystem: false, idempotency: { required: false }, gates: { requiresElicitation: false, requiresHumanConfirmation: false, requiresPrincipalGate: false } }], prompts: [], authz: { requiredClaims: [], scopes: ['"'"'probe:use'"'"'], tenantResolution: '"'"'connector-instance'"'"' }, audit: { eventKinds: ['"'"'invoke'"'"'] }, durability: {} }; const handlers = { '"'"'local-probe'"'"': { handlerId: '"'"'local-probe'"'"', capabilityRef: '"'"'probe_tool'"'"', configSchema: { type: '"'"'object'"'"', properties: { maxResults: { type: '"'"'integer'"'"', minimum: 1, maximum: 100 } }, required: ['"'"'maxResults'"'"'], additionalProperties: false } } }; const snapshot = { schemaVersion: '"'"'v1'"'"', providerId: '"'"'probe-provider'"'"', revision: '"'"'rev-1'"'"', manifestDigest: computeManifestDigest(manifest), providerVersion: '"'"'0.0.0'"'"', platformVersion: '"'"'0.3.0'"'"', compatibilityDigest: computeCompatibilityDigest(manifest), handlersDigest: computeHandlersDigest(handlers), provenance: { approvalRef: '"'"'approval-probe-1'"'"', revision: '"'"'rev-1'"'"', manifestDigest: computeManifestDigest(manifest), reviewedBy: ['"'"'probe-owner'"'"'] }, bindings: [{ toolName: '"'"'probe_tool'"'"', capabilityRef: '"'"'probe_tool'"'"', handlerId: '"'"'local-probe'"'"', values: { maxResults: 5 } }] }; snapshot.provenance.payloadDigest = computePayloadDigest(snapshot); const result = compileToolConfiguration({ snapshot: snapshot, manifest: manifest, handlers: handlers, compatibilityDigest: computeCompatibilityDigest(manifest) }); if (!result.ok) { console.error(JSON.stringify(result.diagnostics)); process.exit(1); } console.log('"'"'CLEAN_CONSUMER_OK payloadDigest='"'"' + result.config.payloadDigest + '"'"' handlersDigest='"'"' + result.config.handlersDigest + '"'"' compiledDigest='"'"' + sha256Hex(canonicalJson(result.config)) + '"'"' fetchCalls='"'"' + fetchCalls); const expectedPayload = '"'"'81148c5dfeade5f39a71b6bc9eb72082a53a9e5d8a2e741c5470f4cb9a5c8547'"'"'; const expectedHandlers = '"'"'163e199a420dd97b7832368ab70bd6e572ca7b03b3d217a686526abeeef206b8'"'"'; const expectedCompiled = '"'"'121fbcb194e06a1c66ae6859e9a8aaa60d53c6213dc0c95d8a6e2a47ac58c9b5'"'"'; const compiledDigest = sha256Hex(canonicalJson(result.config)); if (result.config.payloadDigest !== expectedPayload || result.config.handlersDigest !== expectedHandlers || compiledDigest !== expectedCompiled || fetchCalls !== 0) { console.error(JSON.stringify({ payload: result.config.payloadDigest, handlers: result.config.handlersDigest, compiled: compiledDigest, fetchCalls })); process.exit(1); }; const { createProviderRegistry } = await import('"'"'@sentropic/mcp-platform/registry'"'"'); const registry = createProviderRegistry(); const adapter = { appId: '"'"'probe-app'"'"' }; registry.register({ manifest: manifest, adapter: adapter, parameterSchema: { properties: {} }, handlers: handlers, requiredPorts: [], provenance: snapshot.provenance, toolValues: { '"'"'probe_tool'"'"': { handlerId: '"'"'local-probe'"'"', values: { maxResults: 5 } } } }); registry.select(['"'"'probe-provider'"'"']); registry.configure('"'"'probe-provider'"'"', {}); const compiled = registry.compile({ bindings: {}, compatibility: { '"'"'probe-provider'"'"': { manifestDigest: computeManifestDigest(manifest) } } }); if (!compiled.ok) { console.error(JSON.stringify(compiled.diagnostics)); process.exit(1); } if (compiled.registry.resolveTool('"'"'probe_tool'"'"') === undefined) { console.error('"'"'registry resolve failed'"'"'); process.exit(1); }"'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/mcp-platform-probe:/pack:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; node --input-type=module -e "let fetchCalls = 0; globalThis.fetch = async () => { fetchCalls += 1; throw new Error('"'"'network must not be used'"'"'); }; const { TOOL_CONFIGURATION_PLATFORM_VERSION, canonicalJson, compileToolConfiguration, computeCompatibilityDigest, computeHandlersDigest, computeManifestDigest, computePayloadDigest, sha256Hex } = await import('"'"'@sentropic/mcp-platform/tool-configuration'"'"'); const manifest = { appId: '"'"'probe-app'"'"', providerId: '"'"'probe-provider'"'"', version: '"'"'0.0.0'"'"', displayName: '"'"'Probe'"'"', resources: [], tools: [{ kind: '"'"'tool'"'"', name: '"'"'probe_tool'"'"', description: '"'"'Probe tool.'"'"', requiredScopes: ['"'"'probe:use'"'"'], requiredClaims: [], inputSchema: { type: '"'"'object'"'"' }, outputSchema: { type: '"'"'object'"'"' }, redactionClass: '"'"'low'"'"', mutability: '"'"'read-only'"'"', mutatesExternalSystem: false, idempotency: { required: false }, gates: { requiresElicitation: false, requiresHumanConfirmation: false, requiresPrincipalGate: false } }], prompts: [], authz: { requiredClaims: [], scopes: ['"'"'probe:use'"'"'], tenantResolution: '"'"'connector-instance'"'"' }, audit: { eventKinds: ['"'"'invoke'"'"'] }, durability: {} }; const handlers = { '"'"'local-probe'"'"': { handlerId: '"'"'local-probe'"'"', capabilityRef: '"'"'probe_tool'"'"', configSchema: { type: '"'"'object'"'"', properties: { maxResults: { type: '"'"'integer'"'"', minimum: 1, maximum: 100 } }, required: ['"'"'maxResults'"'"'], additionalProperties: false } } }; const snapshot = { schemaVersion: '"'"'v1'"'"', providerId: '"'"'probe-provider'"'"', revision: '"'"'rev-1'"'"', manifestDigest: computeManifestDigest(manifest), providerVersion: '"'"'0.0.0'"'"', platformVersion: TOOL_CONFIGURATION_PLATFORM_VERSION, compatibilityDigest: computeCompatibilityDigest(manifest), handlersDigest: computeHandlersDigest(handlers), provenance: { approvalRef: '"'"'approval-probe-1'"'"', revision: '"'"'rev-1'"'"', manifestDigest: computeManifestDigest(manifest), reviewedBy: ['"'"'probe-owner'"'"'] }, bindings: [{ toolName: '"'"'probe_tool'"'"', capabilityRef: '"'"'probe_tool'"'"', handlerId: '"'"'local-probe'"'"', values: { maxResults: 5 } }] }; snapshot.provenance.payloadDigest = computePayloadDigest(snapshot); const result = compileToolConfiguration({ snapshot: snapshot, manifest: manifest, handlers: handlers, compatibilityDigest: computeCompatibilityDigest(manifest) }); if (!result.ok) { console.error(JSON.stringify(result.diagnostics)); process.exit(1); } console.log('"'"'CLEAN_CONSUMER_OK payloadDigest='"'"' + result.config.payloadDigest + '"'"' handlersDigest='"'"' + result.config.handlersDigest + '"'"' compiledDigest='"'"' + sha256Hex(canonicalJson(result.config)) + '"'"' fetchCalls='"'"' + fetchCalls); const expectedPayload = '"'"'eb0d45a5a342e09fc9953e3060f5156f7cdffc3504ce7933672bf42839b15c9a'"'"'; const expectedHandlers = '"'"'163e199a420dd97b7832368ab70bd6e572ca7b03b3d217a686526abeeef206b8'"'"'; const expectedCompiled = '"'"'924c6c18c005b532eac9ba3937047dc718f2ccb7771f2de8f015b24a586aca41'"'"'; const compiledDigest = sha256Hex(canonicalJson(result.config)); if (result.config.payloadDigest !== expectedPayload || result.config.handlersDigest !== expectedHandlers || compiledDigest !== expectedCompiled || fetchCalls !== 0) { console.error(JSON.stringify({ payload: result.config.payloadDigest, handlers: result.config.handlersDigest, compiled: compiledDigest, fetchCalls })); process.exit(1); }; const { createProviderRegistry } = await import('"'"'@sentropic/mcp-platform/registry'"'"'); const registry = createProviderRegistry(); const adapter = { appId: '"'"'probe-app'"'"' }; registry.register({ manifest: manifest, adapter: adapter, parameterSchema: { properties: {} }, handlers: handlers, requiredPorts: [], provenance: snapshot.provenance, toolValues: { '"'"'probe_tool'"'"': { handlerId: '"'"'local-probe'"'"', values: { maxResults: 5 } } } }); registry.select(['"'"'probe-provider'"'"']); registry.configure('"'"'probe-provider'"'"', {}); const compiled = registry.compile({ bindings: {}, compatibility: { '"'"'probe-provider'"'"': { manifestDigest: computeManifestDigest(manifest) } } }); if (!compiled.ok) { console.error(JSON.stringify(compiled.diagnostics)); process.exit(1); } if (compiled.registry.resolveTool('"'"'probe_tool'"'"') === undefined) { console.error('"'"'registry resolve failed'"'"'); process.exit(1); }"'
 
 .PHONY: publish-mcp-platform
 publish-mcp-platform: build-mcp-platform ## Publish @sentropic/mcp-platform from CI OIDC trusted publishing
@@ -1706,9 +1802,15 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
+ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1)
+	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
+	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
+else
 scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
 	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) node dist/bin/harness.js check scope --branch-md /workspace/BRANCH.md --staged-files "$$files"
+endif
 
 .PHONY: typecheck-cowork-desktop
 typecheck-cowork-desktop: ## Run @sentropic/cowork-desktop type checks
@@ -1800,7 +1902,7 @@ package-desktop-windows: ## Build the signable single Windows .exe for @sentropi
 
 .PHONY: install-internal-packages
 install-internal-packages: ## Install workspace deps and link internal packages into node_modules (no api/ui)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/cluster-mesh --workspace=packages/flow --workspace=packages/mcp-platform --workspace=packages/artifacts --include-workspace-root --ignore-scripts --no-audit --no-fund'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(ARTIFACTS_RUN_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/cluster-mesh --workspace=packages/flow --workspace=packages/mcp-platform --workspace=packages/artifacts --include-workspace-root --ignore-scripts --no-audit --no-fund'
 
 .PHONY: build-contracts
 build-contracts: install-internal-packages ## Build @sentropic/contracts dist package (standalone, no @sentropic deps)
@@ -2517,7 +2619,11 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
+ifneq ($(filter $(ENV),test-861-int test-861-gaps),)
+	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
+else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
+endif
 
 # -----------------------------------------------------------------------------
 # Standalone IdP (BR-39m Phase A0 — exception BR39m-EX1)
@@ -3896,16 +4002,99 @@ test-connector-host: ## Run hermetic @sentropic/connector-host tests (requires E
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/connector-host $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: typecheck-mcp-broker
-typecheck-mcp-broker: ## Run @sentropic/mcp-broker type checks (BR-72 DEPTH Lot 2 broker proof)
+typecheck-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker type checks (L5 Lot 1: plan-bound broker, public platform contracts)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-mcp-broker
-test-mcp-broker: ## Run @sentropic/mcp-broker tests (BR-72 DEPTH Lot 2 broker proof, hermetic)
+test-mcp-broker: build-mcp-platform ## Run @sentropic/mcp-broker tests (L5 Lot 1: plan-bound broker, public platform contracts)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-broker/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-broker/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: build-mcp-broker
+build-mcp-broker: build-mcp-platform ## Build @sentropic/mcp-broker dist package (L5 Lot 1: public platform contracts)
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line (or make -e) must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/mcp-platform node_modules/@sentropic/mcp-platform; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+MEMORY_L5_NODE_IMAGE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+MEMORY_L5_TOOLCHAIN := typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9
+memory-l5-lint memory-l5-tooling memory-l5-test memory-l5-packed memory-l5-pack memory-l5-receipt memory-l5-verify memory-l5-gate: export LLM_MESH_NODE_IMAGE = $(MEMORY_L5_NODE_IMAGE)
+
+.PHONY: memory-l5-runtime
+memory-l5-runtime: ## Verify the frozen Node image, version floor and unflagged execution
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e MEMORY_L5_IMAGE="$(MEMORY_L5_NODE_IMAGE)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/runtime.mjs
+
+.PHONY: memory-l5-lint
+memory-l5-lint: memory-l5-runtime build-mcp-platform build-mcp-broker ## L5 static source/packed import-graph lint (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-lint requires ENV=<env> last" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode source --root /workspace
+
+.PHONY: memory-l5-tooling
+memory-l5-tooling: memory-l5-runtime ## L5 tooling contract tests via Vitest JSON-capable runner (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-tooling requires ENV=<env> last" >&2; exit 1; }
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tools/memory-mcp-l5/tests --environment node'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+
+.PHONY: memory-l5-test
+memory-l5-test: memory-l5-runtime ## L5 lot-scoped package tests, LOT=<n> enumerates the exact lot file set (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-test requires ENV=<env> last" >&2; exit 1; }
+	@test "$(LOT)" = "1" || { echo "ERROR: memory-l5-test LOT=$(LOT) is owned by a later lot (only LOT=1 exists)" >&2; exit 1; }
+	@$(MAKE) test-mcp-platform SCOPE=tests/memory API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/request-identity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/wire-parity.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-platform SCOPE=tests/registry-dispatch.test.ts API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) test-mcp-broker SCOPE=tests API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+
+.PHONY: memory-l5-packed
+memory-l5-packed: memory-l5-runtime ## L5 installed-consumer packed SDK suite, SCOPE=packed/<file> against ARTIFACT_MANIFEST (Lot 4)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-packed requires ENV=<env> last" >&2; exit 1; }
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-packed requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
+	@test -d tools/memory-mcp-l5/packed || { echo "ERROR: tools/memory-mcp-l5/packed is absent (arrives in Lot 4)" >&2; exit 1; }
+	@test -n "$(SCOPE)" || { echo "ERROR: memory-l5-packed requires SCOPE=packed/<file>" >&2; exit 1; }
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" "$$tool_dir/node_modules/.bin/vitest" run "$(SCOPE)" --environment node --root tools/memory-mcp-l5'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
+
+.PHONY: memory-l5-toolchain-snapshot
+memory-l5-toolchain-snapshot: memory-l5-runtime ## Regenerate the P1 union toolchain snapshot from the pinned specs (explicit; review the diff)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-toolchain-snapshot requires ENV=<env> last" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --snapshot-toolchain --root /workspace
+
+.PHONY: memory-l5-pack
+memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extract-mcp-platform ## L5 packer: writes then validates ARTIFACT_MANIFEST from exact built contracts (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-pack requires ENV=<env> last" >&2; exit 1; }
+	@test "$(STAGE)" = "pre-candidate" || { echo "ERROR: memory-l5-pack STAGE=$(STAGE) is owned by a later lot (only pre-candidate exists)" >&2; exit 1; }
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-pack requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
+	@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: LLM_MESH_NODE_IMAGE from the command line (or make -e) must equal the frozen MEMORY_L5_NODE_IMAGE" >&2; exit 1; };; esac
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/pack.mjs --stage "$(STAGE)" --manifest "$(ARTIFACT_MANIFEST)" --l5-head "$$(git rev-parse HEAD)" --base "$$(git rev-parse origin/main)" --head-lock-sha "$$(git show HEAD:package-lock.json | sha256sum | cut -d' ' -f1)" --root /workspace
+
+.PHONY: memory-l5-receipt
+memory-l5-receipt: memory-l5-runtime ## L5 receipt verifier: MODE=preflight reports obligations, MODE=checkpoint gates strictly (L5-EX1)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-receipt requires ENV=<env> last" >&2; exit 1; }
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-receipt requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
+	@test -n "$(CHECKPOINT)" || { echo "ERROR: memory-l5-receipt requires CHECKPOINT=<path> (arrives in Lot 5+)" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/receipt.mjs --mode "$(MODE)" --checkpoint "$(CHECKPOINT)" --manifest "$(ARTIFACT_MANIFEST)" --base-dir /workspace
+
+.PHONY: memory-l5-verify
+memory-l5-verify: memory-l5-runtime ## Verify retained P1 manifest, exact inventory and packed runtime/declaration graph
+	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: ARTIFACT_MANIFEST is required" >&2; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/import-graph.mjs --mode packed --root /workspace --manifest "$(ARTIFACT_MANIFEST)"
+
+.PHONY: memory-l5-gate
+memory-l5-gate: memory-l5-runtime ## L5 lot gate aggregate: lint, tooling, LOT tests (L5-EX1; later lots extend it)
+	@test -n "$(ENV)" || { echo "ERROR: memory-l5-gate requires ENV=<env> last" >&2; exit 1; }
+	@test -n "$(LOT)" || { echo "ERROR: memory-l5-gate requires LOT=<n>" >&2; exit 1; }
+	@$(MAKE) memory-l5-verify ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) typecheck-mcp-platform API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) typecheck-mcp-broker API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-lint API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-tooling API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-test LOT=$(LOT) API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
 .PHONY: smoke-mcp-broker-github
 smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic-broker smoke (BR-72 DEPTH Lot 2, BR72-EX1) — hits https://api.github.com, not hermetic

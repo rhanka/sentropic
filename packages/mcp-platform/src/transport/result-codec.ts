@@ -11,9 +11,23 @@
  * empty content, non-text items, unparsable text and non-boolean `isError`
  * are refused. An absent `output` normalizes to `null` on decode.
  */
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { assertMcpJson, validateMcpLimits, type McpToolValidationLimits } from './tool-json.js';
 import { canonicalJsonText, parseStrictJson } from '../registry-canonical.js';
 import type { AppToolResult } from '../runtime.js';
+import type { MemoryToolEnvelopeV1 } from '../memory/contracts.js';
+
+/** Validate a view, return the original native wire value without codec normalization. */
+export function validateMcpWireResult(
+  result: unknown, limits: McpToolValidationLimits,
+): CallToolResult {
+  validateMcpLimits(limits);
+  assertMcpJson(result, limits.maxResultBytes, limits.maxResultDepth);
+  if (!CallToolResultSchema.safeParse(result).success) {
+    throw new TypeError('Invalid MCP wire result');
+  }
+  return result as CallToolResult;
+}
 
 /** Encode an internal tool result to the MCP wire form. */
 export function encodeToolResult(result: AppToolResult): CallToolResult {
@@ -100,4 +114,25 @@ export function decodeToolResult(wire: unknown): AppToolResult {
   const decoded: AppToolResult = { ok: true, output: parsed, auditId, redactionClass };
   if (typeof meta['durableCallRef'] === 'string') decoded.durableCallRef = meta['durableCallRef'];
   return decoded;
+}
+
+// ---------------------------------------------------------------------------
+// Memory full-envelope codec (L5 Lot 1, M2 wire profile)
+// ---------------------------------------------------------------------------
+
+/**
+ * Encode a memory domain envelope to the MCP wire form: the text is UTF-8
+ * JSON of the ENTIRE envelope (including `ok`, success `output` or failure
+ * `error`, `auditId` and `redactionClass`), and `structuredContent` carries
+ * the same value. `isError` equals `!ok`. Parsing the text yields the same
+ * JSON value as `structuredContent`. No truncation or partial envelope.
+ */
+export function encodeMemoryEnvelope(envelope: MemoryToolEnvelopeV1<unknown>): CallToolResult {
+  const text = canonicalJsonText(envelope);
+  const structured = JSON.parse(text) as Record<string, unknown>;
+  return {
+    content: [{ type: 'text', text }],
+    structuredContent: structured,
+    isError: !envelope.ok,
+  };
 }

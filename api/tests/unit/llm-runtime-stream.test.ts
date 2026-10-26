@@ -1979,6 +1979,62 @@ describe('LLM stream event normalization', () => {
     ]);
   });
 
+  it('should preserve image content parts for Mistral chat input', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('mistral');
+    const dispatch = vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: 'Red image' } }] };
+        yield { choices: [{ delta: {}, finish_reason: 'stop' }] };
+      })(),
+    );
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+    const content = [
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+    ];
+    const events = await collectStreamEvents(callLLMStream({
+      messages: [{ role: 'user', content }] as never,
+      providerId: 'mistral', model: 'mistral-small-2603',
+    }));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      requestOptions: expect.objectContaining({ messages: [{ role: 'user', content }] }),
+    }));
+    expect(events.filter((event) => event.type === 'content_delta')).toHaveLength(1);
+  });
+
+  it('should stream Mistral images with instructions and tools without a separate analysis call', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('mistral');
+    const analyze = vi.spyOn(provider, 'generate').mockResolvedValue({
+      choices: [{ message: { content: '' } }],
+    });
+    const dispatch = vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () { yield { choices: [{ delta: { content: 'Blue' } }] }; })(),
+    );
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+    const system = { role: 'system', content: 'Application instructions' };
+    const content = [
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+    ];
+    const tools = [{ type: 'function', function: { name: 'lookup', description: 'Look up data', parameters: { type: 'object', properties: {} } } }];
+    const events = await collectStreamEvents(callLLMStream({
+      messages: [system, { role: 'user', content }] as never,
+      tools: tools as never, providerId: 'mistral', model: 'mistral-small-2603',
+    }));
+    expect(analyze).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      requestOptions: expect.objectContaining({
+        tools,
+        messages: [system, { role: 'user', content }],
+      }),
+    }));
+    expect(content).toHaveLength(2);
+    expect(events).toContainEqual({ type: 'content_delta', data: { delta: 'Blue' } });
+  });
+
   it('should convert image content parts for Gemini request input', async () => {
     const { buildGeminiRequestBody } = await import('../../src/services/llm-runtime');
 

@@ -14,6 +14,8 @@ export const CLUSTER_MESH_PROVIDER_MODULE_IDS = [
   'mcp-platform/registry',
   'mcp-platform/entry',
   'mcp-platform/bridge',
+  'mcp-platform/tool-schemas',
+  'mcp-platform/result-codec',
   'mcp-platform/hono',
   'mcp-platform/stdio',
   'mcp/artifacts',

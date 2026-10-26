@@ -268,6 +268,10 @@ export function normalizeStringListField(value: unknown): string[] {
 }
 
 function parseJsonLenient<T>(raw: string): T {
+  // PostgreSQL text/jsonb rejects decoded NUL, including nested generated strings.
+  const parse = (text: string): T => JSON.parse(text, (_key, value: unknown) =>
+    typeof value === 'string' ? value.replaceAll('\u0000', '') : value
+  ) as T;
   const cleaned = raw
     .trim()
     .replace(/^```json\s*/i, '')
@@ -276,12 +280,12 @@ function parseJsonLenient<T>(raw: string): T {
     .trim();
 
   try {
-    return JSON.parse(cleaned) as T;
+    return parse(cleaned);
   } catch {
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
     if (firstBrace >= 0 && lastBrace > firstBrace) {
-      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as T;
+      return parse(cleaned.slice(firstBrace, lastBrace + 1));
     }
     throw new Error('Invalid JSON response');
   }

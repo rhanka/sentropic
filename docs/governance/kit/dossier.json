@@ -1,0 +1,1315 @@
+{
+  "schema": "sentropic.focus.decision-kit/v4",
+  "id": "governance-unification",
+  "title": "Gouvernance des quatre projets",
+  "revision": "r11",
+  "status": "final — owner decisions recorded; capability map pending",
+  "architectureHash": "2c49df27b12dbb38e9d3c613790d0ba329036eeab2bf2a386000b474bce41a59",
+  "summary": "G1, G2, G3 et H1 sont actés. Restent la carte de capacités à valider et la mise en œuvre à qualifier.",
+  "truthBanner": "Décisions actées ≠ implémentations qualifiées. Les états du code, des publications et de l’exécution restent datés et distincts. La carte C01–C14 demeure une proposition.",
+  "convergence": {
+    "ownerReviewNote": "Demandes verbatim du propriétaire (OWNER-REQUEST.md + owner-sketch.jpg, 2026-10-18) : (1) « Je voudrais mettre un diagramme au coeur d un contrat long terme d unification de la gouvernance h2a engram sentropic et design system. Lance une etude la dessus. Decision dossier avec diagramme au centre permettant de router les besoins comme annotate / annotation etc » ; (2) « Il faudra associer les capabilities à l'ensemble du système : mémoire agentique, traçabilité end to end des demandes jusque mise en prod, décisions et architecture, organisation humains et agents... » ; (3) « Je dois encore fournir la capability map mais tu peux en donner en premier. Je pense aussi aux canvas ui / artefacts ». — Arbitrages verbatim sur les diagrammes (owner-diagram-decisions-via-hcond.md, 2026-10-18) : (1) « Les algo open licence libre ou algo public mais dans notre js a nous … On respect mais on libere au max et on a nos propres souches » ; (2) « diagrammes gigogne (ouvrables) … Tout diagramme est un graph et toute representation est une forme de synthese. Il faut bie modeliser diagramme layout et skills de presentation » ; (3) « L enjeu n est pas la taille mais la reactivité et l atomicité des editions … la acapacite offline sans cdn doit etre possible donc ok la 32Mo qd js embedb ». — Arbitrage verbatim après round 3 de revue Sol (OWNER-REQUEST.md:13-17, 2026-10-18) : (1) sur U1 : « Question très mal posée. Les canvas (ui+interaction ia) doivent être dans le catalogue, exposé avec un mcp, hosté par dessus artefact et potentiellement ui en prod. Mais j'imagine que le modèle d'annotation doit être annotation + annotate j'imagine un modèle de donnée. A voir où tu gères la mise en catalog et mcp » ; (2) sur la scène de trace demande→prod : « Écoute je veux voir le decision dossier pour pouvoir juger est nécessaire ».",
+    "provenance": "Finalisation r10 du 2026-10-19 sur le portable r9 d97426a07bfb2012e0679b0c33a0b9d50a9568e0251cd998d1d0fe8e82f0327d. G1/G2/G3 et H1 sont enregistrés selon les mots du propriétaire. Les preuves d’implémentation historiques ne deviennent pas des preuves de déploiement.",
+    "contractClauses": [
+      {
+        "id": "C-01",
+        "title": "Responsabilité par acte et garde des accès (Accountability & Custody)",
+        "authority": "Contrat quadripartite (h2a · engram · sentropic · design-system)",
+        "rule": "Chaque acte conséquent possède un et un seul dépôt responsable principal (Accountable), désigné par un mandat durable et jamais par une session éphémère : h2a détient les contrats de coopération, d’organisation (Track) et de décision (Focus) ; engram garde la sémantique des ontologies (WP9), le cycle de vie mémoire (D3/D10) et le centre des temps (D1=C) ; sentropic détient l’intégration entre instances Sentropic (Cluster) et l’intégration aux services providers (cloud/K8s/mails transactionnels, App Store, registres applicatifs, d’agents et de MCP), l’autorisation hôte, la garde des sièges (#596) et la persistance applicative (#684) ; le design-system détient les composants visuels, le rendu et la mise en page. Le noyau @sentropic/harness reste dans sentropic sauf transfert acquitté ; le Design System conserve et publie la mécanique diagram-core (G2 actée). Décision propriétaire actée le 2026-10-19 : « G1 = option 1 ». Chaque acte a un seul responsable sous mandat explicite. Chaque dépôt garde ses autorités de code, de publication et de données ; les frontières partagées sont co-gelées. Seuls les conflits matériels non résolus remontent au propriétaire. Décision propriétaire actée le 2026-10-19 : « G2 = option 1 ». Engram gouverne les profils, schémas, fixtures et migrations. Le Design System conserve et publie l’exécuteur générique @sentropic/diagram-core ainsi que le layout et le rendu. Les consommateurs épinglent les profils ; aucun second méta-modèle de diagramme. Décision propriétaire actée le 2026-10-19 : « g3 = a ok ». Le Design System possède annotate pour la présentation seulement : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions ; il ne résout ni ne persiste les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans copie.",
+        "verification": "Table de la Capability Map C01–C14 (un seul responsable principal par ligne) et séparation conducteur / auteur / relecteur / contrôle."
+      },
+      {
+        "id": "C-02",
+        "title": "Registres d’autorité et projections explicites",
+        "authority": "h2a · engram · sentropic",
+        "rule": "Track conserve le journal append-only des demandes rattachées à un lot (WP), des décisions et des preuves (.track/events.jsonl) ; engram conserve le journal mémoire canonique (D3) et le service central des références de temps (D1=C) ; chaque dépôt et hôte conserve ses faits de code, de release et de déploiement ; chaque application conserve ses données métier. Toute projection (.engram/graph.json, carte Focus, entrée de catalogue) déclare sa source, sa version, sa fraîcheur et ses limites sans jamais prévaloir sur le registre d’autorité. Selon OWNER-REQUEST.md et ../cluster-mesh-storage/OWNER-ORIENTATIONS.md, Sentropic/cluster-mesh porte l’interface de sérialisation DB neutre avec trois surfaces optimisées : transactionnel, analytique et graphe live. SQLite et Postgres sont prioritaires. La sérialisation des modèles (graphe live en base, annotations, états, documents/vues) est distincte des bundles et releases d’artefacts. Les éléments Postgres/S3 #684 observés ne qualifient pas le contrat cible ; chaque surface nécessite ses propres preuves. Spanner, Iceberg et Neo4j restent des adaptateurs supplémentaires sans livraison attestée ; la sérialisation S3 à faible fréquence reste une piste à étudier.",
+        "verification": "Catalogue N01–N33 et plans A à E ; preuves distinctes pour les surfaces transactionnelle, analytique et graphe live, et séparation de la cible neutre avec l’implémentation Postgres/S3 observée."
+      },
+      {
+        "id": "C-03",
+        "title": "Règles de changement des contrats partagés",
+        "authority": "Propriétaires des domaines & co-propriétaires de frontière",
+        "rule": "Toute modification d’un contrat partagé part de la dernière version acceptée, identifie les producteurs, les consommateurs et les migrations de données, et met à jour simultanément les exemples, les jeux d’essai figés (fixtures) et les preuves de compatibilité (STUDY → VOL → EVOL). Le propriétaire du domaine autorise le changement sémantique ; les co-propriétaires de la frontière gèlent conjointement le contrat partagé ; aucune étiquette « documentation seule » ne permet de contourner un changement de contrat.",
+        "verification": "Contrôles harness check scope|branch et empreintes SHA-256 des contrats aux coutures."
+      },
+      {
+        "id": "C-04",
+        "title": "Un seul catalogue logique, canvas (UI + interaction IA) sur artifacts/UI prod, et emplacement de la mise en catalogue et du MCP",
+        "authority": "sentropic (cluster-mesh) + dépôts producteurs (design-system · h2a · engram)",
+        "rule": "Le catalogue logique unifié et le registre MCP synchrone résident dans sentropic (api/src/services/catalog/types.ts:22,95 avec 5 kinds implémentés : skill, tool, agent, workflow, canvas ; SPEC_EVOL_CATALOG.md:99,150,177 ; SPEC_EVOL_APP_CATALOG.md:5,29,46 ; SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md:227,250 D13 /catalog ; packages/mcp-platform/src/registry.ts:61,128 ; SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md:91,714,745). Conformément à l’arbitrage propriétaire post-R3, les canvas (UI + interaction IA) sont inscrits dans le catalogue (kind: \"canvas\"), exposés via un serveur MCP, hébergés par-dessus @sentropic/artifacts (0.1.1, CanonicalManifest SHA-256, SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md:101,109,135 #679/#692) et potentiellement montés comme UI en production. Chaque domaine producteur publie son descripteur (design-system pour les templates canvas/composants, h2a pour Focus et le MCP ui:// Option E H-4 SPEC_EVOL_DS_JSON_RENDER_STANDARD.md:71,102, engram pour les 6 outils MCP mémoire v3.2 et ontology_call) et l’inscrit dans cluster-mesh. La découverte applique deny-as-missing sans activer de fournisseur paresseux ; les secrets restent dans @sentropic/llm-mesh. Le catalogue MCP comprend une entrée « harnais » : h2a y expose ses outils, dont annotate, Track, Focus et les sessions ; annotation reste le modèle canonique via comments. Il comprend également les connecteurs que Sentropic doit broker : Gmail, GChat, Atlassian, GitHub, Notion, Slack, OpenERP, WaveApps, Stripe… Les catalogues UI de canvas et d’apps y figurent explicitement, notamment bpmn-canvas et le templater Sentropic ; leurs descripteurs, exposition MCP/ui://, hébergement sur artifacts et UI en production restent liés. Cette classification cible ne vaut pas qualification des connecteurs ou catalogues ajoutés. Décision propriétaire actée le 2026-10-19 : « g3 = a ok ». Le Design System possède annotate pour la présentation seulement : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions ; il ne résout ni ne persiste les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans copie.",
+        "verification": "Catalogue types.ts:22 (kind=\"canvas\"), registre MCP synchrone registry.ts:61, @sentropic/artifacts 0.1.1 et adaptateurs createClusterMeshAppAdapter / createMcpAuth."
+      },
+      {
+        "id": "C-05",
+        "title": "Garde des ontologies par Engram (WP9), paternité métier, anglais et langue utilisateur BCP 47",
+        "authority": "engram (gardien WP9) + propriétaires métier",
+        "rule": "Engram détient l’identité des profils, leur validation, leur composition, les jeux d’essai figés par empreinte SHA-256 et les migrations. Chaque propriétaire métier approuve le sens de son vocabulaire (track/focus par h2a, rendu par le DS). Les contrats bpmn-moddle F1 et profile-c14n/2 sont préservés sans second modèle. Règle linguistique acquise : tous les nouveaux identifiants techniques sont en anglais (merged, deployed, retry, conflictPosture), l’affichage suit la langue utilisateur BCP 47, et les valeurs françaises historiques persistées dans .track/events.jsonl (mergé, déployé, relance) sont résolues par une table d’alias de lecture à vie sans jamais réécrire le journal append-only.",
+        "verification": "Modules src/ontology-profile.ts, src/profile-validate.ts, src/merge-graphs.ts dans engram et résolution K-07."
+      },
+      {
+        "id": "C-06",
+        "title": "Versionnement, compatibilité N/N−1, rejet des majeurs inconnus et intégrité SHA-256",
+        "authority": "Contrat quadripartite",
+        "rule": "Le contrat distingue la version SemVer du paquet, la version majeure du schéma de document, la version du profil d’ontologie, la version de canonicalisation (profile-c14n/2) et la génération de politique. La règle N/N−1 et SemVer-dès-0.x de cluster-mesh s’applique aux frontières d’intégration. Les majeurs de schéma inconnus sont refusés ou conservés comme non validés selon le contrat F1, jamais interprétés comme faits validés. Un hachage non cryptographique de mise en page (FNV) ne sert jamais de preuve d’intégrité ou d’autorisation (empreinte SHA-256 requise).",
+        "verification": "Manifestes CanonicalManifest (@sentropic/artifacts 0.1.1), architectureHash et SHA256SUMS."
+      },
+      {
+        "id": "C-07",
+        "title": "Identité vérifiée, périmètre d’espace de travail et second facteur 2FA",
+        "authority": "sentropic · h2a",
+        "rule": "Chaque hôte lie l’identité authentifiée (humain ou identité non-humaine NHI DEC-114), le tenantId, le workspaceId, l’espace d’isolation (namespace), la finalité (purpose_ref) et la politique effective à l’opération. Il est interdit d’assimiler par homonymie workspaceId, tenantId, namespace Hono, namespace de ressource, schéma SQL Postgres et namespace Kubernetes. Lecture, écriture, délivrance à un agent, action sur un appareil Cowork, export et élévation 2FA (amr: \"mfa\" #695) sont vérifiés séparément.",
+        "verification": "session-resolver.ts, workspace-scope-guard et vérification indépendante des permissions."
+      },
+      {
+        "id": "C-08",
+        "title": "Circuit de revue contradictoire indépendante et plafond de 3 tours",
+        "authority": "h2a · engram · sentropic · design-system",
+        "rule": "Toute conception ou modification inter-projets requiert les propriétaires des domaines touchés et une revue contradictoire indépendante de la frontière partagée (l’auteur du build ne compte jamais comme relecteur). Les exigences locales plus fortes (≥ 2 pairs indépendants dans h2a, circuit spec Engram avec co-gel) sont préservées. Un défaut récurrent au tour 2 exige une note de conception écrite avant nouveau build ; au plafond de 3 tours, bascule d’auteur ou escalade d’options au propriétaire.",
+        "verification": "Journaux de revue multi-pairs et suivi des tours dans Track."
+      },
+      {
+        "id": "C-09",
+        "title": "Résolution des conflits et escalade bornée au propriétaire",
+        "authority": "Propriétaires de registres · arch · propriétaire",
+        "rule": "Tout litige est d’abord classé : fait erroné, contrat ambigu, désaccord de politique, conflit de priorité ou conflit d’autorité. Le propriétaire du registre tranche une correction factuelle sur preuve ; le mainteneur du domaine tranche une implémentation locale compatible ; les co-propriétaires réconcilient une frontière partagée avec avis obligatoire d’arch. Tant que le conflit n’est pas résolu, la dernière version qualifiée reste active. Seul un choix matériel non résolu est escaladé au propriétaire (escalate-not-resolve) via un dossier Focus.",
+        "verification": "Présence d’options distinctes, de leurs conséquences et de leur réversibilité dans chaque dossier Focus."
+      },
+      {
+        "id": "C-10",
+        "title": "Résultats d’exécution, observabilité et réconciliation des opérations incertaines",
+        "authority": "Chaque hôte d’exécution · sentropic · h2a",
+        "rule": "Chaque opération distingue l’entrée soumise, le travail engagé, l’écriture durable (commise), la visibilité publiée et le résultat accepté (surface-invariants.md:63). Elle enregistre les clés auditId/correlationId et d’idempotence ainsi que le reçu durable. Une expiration de délai (timeout) à l’issue incertaine déclenche obligatoirement une procédure de réconciliation d’état, jamais un succès inventé ni un rejeu aveugle. Fusion Git, publication npm, installation et acceptation propriétaire sont séparées ; un état jamais qualifié s’affiche « non qualifié » sans couleur. H1 · 2026-10-19 : « il faut prevoir les 2 ». Chaque application Sentropic doit permettre l’hébergement d’artefacts sur un sous-domaine ou sur un domaine distinct.",
+        "verification": "Corrélation auditId de bout en bout et séparation des états dans Track et cluster-mesh."
+      },
+      {
+        "id": "C-11",
+        "title": "Transfert durable d’obligation et règles de dépréciation",
+        "authority": "Dépôt cédant × dépôt récepteur",
+        "rule": "Tout transfert de responsabilité ou d’item nomme le contrat/item source, le rôle et le dépôt récepteur responsable, l’identifiant de destination accepté, les liens réciproques, l’obligation de sortie/retour arrière (rollback) et l’acceptation consommateur restante. L’ancien propriétaire reste responsable jusqu’à l’acquittement explicite du récepteur. Publier un paquet en amont ne clôt jamais l’obligation d’adoption aval (les 8 sujets du dossier ds-history conservent leurs dispositions distinctes).",
+        "verification": "Preuve d’acquittement bidirectionnel dans Track avant toute dépréciation ou clôture."
+      },
+      {
+        "id": "C-12",
+        "title": "Cycle de vie de la mémoire agentique (D3/D10) et étanchéité des exports Git",
+        "authority": "engram · sentropic (#684 / #685 / L5)",
+        "rule": "La mémoire agentique est gouvernée exclusivement par le journal canonique D3 et l’état d’autorisation courant via les 6 outils MCP gelés v3.2 (src/mcp/memory/contracts.ts:142). La projection filtrée D10 (.engram/graph.json), l’indexation Git engram-live et les exports ne créent aucune voie d’admission parallèle. Le retrait ou l’oubli (tombstone) purge les stockages (X2/X2b) et les tests de restauration (#372 X4) prouvent qu’aucune sauvegarde ne ressuscite un souvenir oublié. Aucun identifiant, empreinte ou arête mémoire (MemoryRef) n’est commité dans les exports Git (knowledge/*). Engram doit consommer de façon agnostique l’interface DB neutre de cluster-mesh (C-02) : il déclare la surface par besoin — transactionnel pour le journal canonique D3, analytique pour les références de temps D1=C, graphe live pour les faits Git et la projection filtrée D10 — sans choisir de backend et sans pilote DB natif dans sa fermeture de dépendances. E2/L5 doit qualifier la surface transactionnelle sur SQLite d’abord (image Node 24), puis Postgres ; les surfaces analytique et graphe live restent à qualifier séparément.",
+        "verification": "Qualifications #685 → E2/L5 (#697) : reçus transactionnels SQLite (Node 24), puis Postgres ; audit de la fermeture de dépendances sans pilote DB natif ; tests X2/X2b/X4, absence de MemoryRef dans Git et preuves propres aux deux autres surfaces."
+      },
+      {
+        "id": "C-13",
+        "title": "Références de temps (D1=C + agent-stats) et garde de planification",
+        "authority": "engram (D1=C) · h2a (WP8 & agent-stats) · sentropic (#698)",
+        "rule": "Conformément au choix D1 = C, Engram est le service central des références de temps ; les exports typés commités (knowledge/manifest.json, ci/timings.json, ci/graph.json, architecture/graph.json) déclarent leur version source, les 4 horloges (exécution, collecte, publication, applicabilité), l’empreinte du régime de configuration et la version de l’estimateur. Les estimations (en heures d’agent et tours de revue via D1=C et agent-stats sur 7 jours glissants par défaut) distinguent valeurs mesurées, intervalles modélisés et statuts incomplete/unknown ; une prévision temporelle n’autorise jamais à sauter une porte de qualification.",
+        "verification": "Schémas d’export repo-knowledge@1 et séparation entre prévision et preuve de livraison."
+      },
+      {
+        "id": "C-14",
+        "title": "Critères d’acceptation du contrat unifié sur 4 routes verticales réelles",
+        "authority": "h2a · engram · sentropic · design-system",
+        "rule": "La mise en œuvre du contrat unifié est qualifiée bout-en-bout sur quatre routes verticales réelles : (1) la route d’annotation (surcouche annotate → persistance comments avec namespace et 2FA → délivrance à l’agent h2a), (2) la route de mémoire autorisée (search/capture/admit/forget via cluster-mesh selon l’ordre #685 → L5 → R2/R7a/R3), (3) la route de diagramme adossée à un profil d’ontologie figé d’Engram et rendue par le Design System, et (4) une trace complète en 7 sauts de la demande à la production.",
+        "verification": "Preuves d’exécution réelles des jalons M1 à M5."
+      },
+      {
+        "id": "C-15",
+        "title": "Un seul modèle de données (annotation) + un outil (annotate) sur les canvas du catalogue/MCP",
+        "authority": "Arbitrage propriétaire post-R3 (OWNER-REQUEST.md:13-17) · sentropic · design-system · h2a · engram",
+        "rule": "Conformément à l’arbitrage propriétaire post-R3 (« Les canvas (ui+interaction ia) doivent être dans le catalogue, exposé avec un mcp, hosté par dessus artefact et potentiellement ui en prod. Mais j'imagine que le modèle d'annotation doit être annotation + annotate j'imagine un modèle de donnée. A voir où tu gères la mise en catalog et mcp ») : il existe un seul modèle de données canonique d’annotation (annotation dans @sentropic/comments 0.3.0 : anchors.ts:1,87, revisions.ts:1,29, stockage Postgres #684 et 2FA #695 sous la clé (tenantId, workspaceId, namespace, kind, id)) et un outil de capture/interaction (annotate : surcouche UI/MCP @sentropic/annotate + AnchorResolver, SPEC_EVOL_UI_ANNOTATE_OVERLAY.md:90,105,156 #694). Tout canvas (kind=\"canvas\" sur @sentropic/artifacts ou en UI prod, y compris Focus et diagrammes) utilise annotate pour produire des enregistrements annotation dans ce modèle unique. La mise en catalogue et le registre MCP sont gérés dans sentropic (cluster-mesh), tandis que la création d’un item Track (@sentropic/track) ou l’admission d’une leçon (@sentropic/engram D3) sont des promotions aval explicites pointant vers l’annotation canonique (et non des modèles d’annotation concurrents). L’agent destinataire est résolu depuis la table de confiance de l’hôte servi (synthesis.md:123,130), jamais depuis le DOM ou une image. L’outil annotate est exposé avec les autres outils h2a dans l’entrée « harnais » du catalogue MCP ; cette entrée ne crée aucun second modèle annotation. Décision propriétaire actée le 2026-10-19 : « g3 = a ok ». Le Design System possède annotate pour la présentation seulement : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions ; il ne résout ni ne persiste les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans copie.",
+        "verification": "Vue d’étude architecture.annotate, résolution K-01, spécifications catalogue/MCP (#679, #692, #694) et G3 actée le 2026-10-19."
+      },
+      {
+        "id": "C-16",
+        "title": "Diagrammes gigognes, algorithmes dans notre JS, éditions atomiques et mode 100 % offline sans CDN",
+        "authority": "Arbitrages verbatim du propriétaire sur les diagrammes (via h-cond)",
+        "rule": "Application directe des trois arbitrages propriétaire : (1) algorithmes ouverts/publics (placement en couches, routage orthogonal, couverture ELK planifiée) implémentés dans nos propres souches JS ; (2) diagrammes gigognes ouvrables où tout diagramme est un graphe et toute représentation une synthèse séparant modèle de graphe (SemanticDocument / GraphModel [PROPOSAL]), mise en page (ViewDocument / DiagramLayout) et skill de présentation (PresentationSkill) ; (3) priorité à la réactivité et à l’atomicité des éditions ainsi qu’au fonctionnement 100 % offline sans CDN (l’embarquement autonome du JS, y compris ~32 Mo, étant accepté par le propriétaire pour garantir le mode offline). Décision propriétaire actée le 2026-10-19 : « G2 = option 1 ». Engram gouverne les profils, schémas, fixtures et migrations. Le Design System conserve et publie l’exécuteur générique @sentropic/diagram-core ainsi que le layout et le rendu. Les consommateurs épinglent les profils ; aucun second méta-modèle de diagramme.",
+        "verification": "Rendu hors-ligne sans CDN dans ce kit (maquette statique d’étude en r1) et raccordement du moteur partagé au jalon M4 selon G2 actée le 2026-10-19."
+      },
+      {
+        "id": "C-17",
+        "title": "Gouvernance des identités non humaines (NHI1..NHI9)",
+        "authority": "h2a · sentropic (auth-idp)",
+        "rule": "Tout agent, connecteur, service ou jeton automatisé est rattaché à un responsable humain identifié, un mandat borné, une durée de vie finie et une procédure de révocation et d’offboarding vérifiable (h2a_nhi_* dans h2a et packages/auth-idp/src/nhi.ts dans sentropic). Aucun secret ni jeton NHI n’est partagé implicitement entre espaces de travail.",
+        "verification": "Registre NHI h2a_nhi_inventory / h2a_nhi_offboard et contrôle auth-idp/src/nhi.ts."
+      },
+      {
+        "id": "C-18",
+        "title": "Consentement explicite par action sur poste utilisateur (Cowork)",
+        "authority": "sentropic (cowork-bridge / cowork-desktop) · h2a (drive.instruction)",
+        "rule": "Les surfaces cowork-desktop et cowork-bridge appliquent le même contrat d’identité et de catalogue que CLI et Cloud, enrichi d’un consentement explicite de l’utilisateur par action (drive.instruction, h2a_drive_consent_*) et d’une fenêtre d’exclusion prioritaire de 60 secondes dès qu’une activité locale humaine est détectée.",
+        "verification": "Contrôles de présence appareil cowork-bridge/desktop et révocation immédiate sur activité locale humaine (60 s)."
+      }
+    ],
+    "sections": [
+      {
+        "phase": "central",
+        "title": "Glossaire opérationnel et séparation des 4 systèmes de référence",
+        "paragraphs": [
+          "Ce dossier place le diagramme d’architecture au cœur du contrat long terme entre les quatre projets (h2a, engram, sentropic, design-system). Lorsqu’un humain ou un agent exprime un besoin concret (« annoter un écran », « conserver une annotation », « suivre une demande jusqu’en production », « estimer un lot »), le sélecteur ci-dessus illumine la route correspondante sur le diagramme central, identifie l’unique dépôt responsable principal proposé et distingue les projets contributeurs.",
+          "Pour permettre une lecture directe sans jargon d’implémentation, la table ci-dessous précise à la fois la responsabilité exclusive de chaque dépôt et le sens opérationnel des termes utilisés dans les cartes de routage (les 4 axes de disponibilité, la garde des sièges, les empreintes SHA-256, les 7 sauts de traçabilité et le couloir prioritaire « Mémoire d’abord »)."
+        ],
+        "columns": [
+          "Système ou terme opérationnel",
+          "Responsable principal",
+          "Signification concrète pour le propriétaire",
+          "Garde-fou & frontière à ne pas franchir"
+        ],
+        "rows": [
+          [
+            "1. h2a · Organisation IA responsable · Track & Focus",
+            "h2a",
+            "Définit qui a le droit d’agir (rôles, mandats, identités d’agents NHI), suit les demandes rattachées à un lot de travail (WP) dans le journal .track/events.jsonl et présente les choix d’architecture dans Focus.",
+            "Ne stocke ni la mémoire sémantique des agents (déléguée à engram), ni les bases de données applicatives ou les secrets (délégués à sentropic)."
+          ],
+          [
+            "2. engram · Mémoire agentique, ontologies (WP9) & temps (D1=C)",
+            "engram",
+            "Garde le journal officiel des souvenirs admis (D3) et son graphe filtré à l’oubli (D10), valide toutes les ontologies en anglais (lot WP9) et calcule les références de temps mesurées (choix D1=C).",
+            "Ne prend aucune décision de gouvernance à la place de h2a et n’exporte jamais d’identifiant de souvenir privé (MemoryRef) dans les fichiers Git."
+          ],
+          [
+            "3. sentropic · Plateforme agentique",
+            "sentropic",
+            "Expose les services par API ; porte workflows, catalogue logique (MCP, IA, ressources, UI/canvas/apps), sécurité et observabilité, stockage des modèles et artefacts. Cluster intègre exclusivement les instances Sentropic entre elles. Le même cadre Intégration contient les services providers : cloud (K8s, mails transactionnels), App Store et registres applicatifs, d’agents et de MCP. Le stockage porte l’interface DB neutre et trois surfaces optimisées (transactionnel, analytique, graphe live), avec SQLite et Postgres prioritaires ; cible à qualifier distincte du constat Postgres/S3 #684. Le catalogue MCP inclut le harnais (outils h2a dont annotate, modèle annotation via comments), les outils mémoire/ontologies et les connecteurs à broker ; le catalogue UI inclut bpmn-canvas et le templater Sentropic. Les familles demandées restent distinctes de leur statut de livraison.",
+            "N’invente pas de second modèle de mémoire ou de suivi de tâches, et n’active aucun connecteur sans autorisation vérifiée."
+          ],
+          [
+            "4. Design System · Annotations, diagramme, dossier de décision et 200+ composants UI",
+            "design-system",
+            "Porte les quatre responsabilités visuelles : annotations/annotate, graphe × layout × présentation, rendu des dossiers Focus, composants et thèmes. Le schéma et la skill Focus restent dans h2a ; le modèle annotation est exposé par comments MCP et sérialisé dans le stockage.",
+            "Aucune logique métier d’application, aucun accès direct aux bases de données et aucun appel réseau vers un CDN externe."
+          ],
+          [
+            "5. Termes de disponibilité (Décision / Code / Publication / Hôte)",
+            "Gouvernance commune",
+            "Chaque route distingue décision propriétaire (G1–G3 actées le 2026-10-19), code, publication et exécution hôte. Une décision ne qualifie pas une implémentation.",
+            "Évite toute confusion entre une orientation d’architecture, un code fusionné, un paquet publié sur npm et un service réellement actif en production."
+          ],
+          [
+            "6. Termes clés : Garde des sièges, Empreinte SHA-256, 7 sauts & Couloir mémoire",
+            "Gouvernance commune",
+            "« Garde des sièges » = coffre central chiffré des abonnements CLI/LLM (#596). « Empreinte SHA-256 » = sceau cryptographique garantissant qu’un fichier ou contrat n’a pas changé. « 7 sauts » = chaîne reliant une demande initiale jusqu’à l’acceptation en production. « #685 → L5 → R2/R7a/R3 » = obligation de qualifier la mémoire (M1) avant d’ouvrir le catalogue (M2).",
+            "En r1, les 5 vues SVG de ce dossier sont une maquette statique d’étude ; le moteur dynamique partagé (@sentropic/diagram-kernel [PROPOSAL] : GraphModel + DiagramLayout + PresentationSkill) sera raccordé en M4."
+          ]
+        ]
+      },
+      {
+        "phase": "central",
+        "title": "Croquis, positions des projets et dernier retour propriétaire",
+        "columns": [
+          "Élément du croquis / arbitrage",
+          "Observation dans les sources propriétaire & h2a.md",
+          "Traduction architecturale dans le contrat d’unification",
+          "Ancrage dans le kit Focus"
+        ],
+        "rows": [
+          [
+            "Accès · croquis complété par le retour du propriétaire",
+            "Le dernier retour ajoute ChatGPT, Gemini, Claude et Muse, avec les liaisons Cowork/MCP, aux accès CLI, Cowork et Cloud.",
+            "Chaque surface rejoint la façade serveur API. La qualification de chaque liaison fournisseur reste explicite ; aucun accès n’impose de transiter par les autres surfaces.",
+            "Scène architecture.central · groupes h2a et surfaces"
+          ],
+          [
+            "Croquis propriétaire · Connexions Engram ↔ Catalogue & ajouts proposés",
+            "Sur le croquis, les branches ontologies (dev, track, archi) et memory du bloc catalogues descendent directement vers engram (ontologies et live, mem, agents).",
+            "Engram déclare ses contrats mémoire et ontologies dans le catalogue MCP (mcp-tools sous cat-mcp), fournit les profils à ds-diagram et consomme l’interface de sérialisation DB neutre de cluster-mesh. Il déclare une surface (D3 transactionnel, D1=C analytique, Git/D10 graphe live) sans choisir de backend ni embarquer de pilote DB natif ; son autorité D3/D10 reste inchangée. E2/L5 doit qualifier le transactionnel sur SQLite (Node 24), puis Postgres.",
+            "Scène architecture.central · flèches e-eng-mem, e-eng-onto, e-eng-ds et intra-mesh"
+          ],
+          [
+            "Carte initiale h2a.md vs Croquis propriétaire",
+            "Dans h2a.md [PROPOSAL], la carte Mermaid trace h2a → CLI/cowork/cloud → Catalogue sentropic → {Track, Engram, Focus} → Design system (avec Engram ---|profils versionnés| DS).",
+            "Réconciliation : h2a détient la paternité sémantique et les journaux de Track et Focus (comme sur le croquis), tandis que le catalogue cluster-mesh de sentropic expose leurs capacités et contrats.",
+            "Scène architecture.central · e-api-mcp, e-apis-wf et e-mesh-h2a"
+          ],
+          [
+            "Arbitrage verbatim h-cond #1 · Algorithmes publics dans notre JS",
+            "« Les algo open licence libre ou algo public mais dans notre js a nous … On respect mais on libere au max et on a nos propres souches ».",
+            "Implémentation dans nos propres souches JS/TS des algorithmes de mise en page en couches, de routage orthogonal et de la couverture ELK planifiée (@sentropic/diagram-canvas L8 / @sentropic/diagram-kernel [PROPOSAL]).",
+            "Clause C-16 · Décision G2 · Vue d’étude architecture.ontologies"
+          ],
+          [
+            "Arbitrage verbatim h-cond #2 · Diagrammes gigognes ouvrables",
+            "« diagrammes gigogne (ouvrables) … Tout diagramme est un graph et toute representation est une forme de synthese. Il faut bie modeliser diagramme layout et skills de presentation ».",
+            "Séparation formelle en 3 couches : SemanticDocument / GraphModel [PROPOSAL] (nœuds composites ouvrables), ViewDocument / DiagramLayout (géométrie sans coordonnées auteur dans Focus) et PresentationSkill.",
+            "Clause C-16 · Maquette d’étude à 5 vues [data-gigogne-id] (moteur partagé en M4)"
+          ],
+          [
+            "Arbitrage verbatim h-cond #3 · Réactivité, atomicité et mode offline sans CDN",
+            "« L enjeu n est pas la taille mais la reactivité et l atomicité des editions … la acapacite offline sans cdn doit etre possible donc ok la 32Mo qd js embedb ».",
+            "Priorité à la réactivité et aux transactions atomiques d’édition ainsi qu’au fonctionnement 100 % hors-ligne sans CDN (l’embarquement autonome du JS, tel qu’un bundle de 32 Mo, étant accepté sans constituer un plafond inventé).",
+            "Clause C-16 · Fichier HTML portable autonome sans CDN"
+          ],
+          [
+            "Arbitrage verbatim post-R3 (OWNER-REQUEST.md:13-17) · Canvas au catalogue/MCP sur artifacts/UI prod & modèle unique annotation + outil annotate",
+            "« Question très mal posée. Les canvas (ui+interaction ia) doivent être dans le catalogue, exposé avec un mcp, hosté par dessus artefact et potentiellement ui en prod. Mais j'imagine que le modèle d'annotation doit être annotation + annotate j'imagine un modèle de donnée. A voir où tu gères la mise en catalog et mcp ».",
+            "Les canvas (UI + interaction IA) sont des entrées du catalogue (kind=\"canvas\"), exposées via un serveur MCP, hébergées par-dessus @sentropic/artifacts (0.1.1) et potentiellement servies comme UI en prod ; l’annotation repose sur un seul modèle de données (annotation dans @sentropic/comments) couplé à l’outil de capture (annotate) ; la mise en catalogue et le registre MCP résident dans sentropic (cluster-mesh).",
+            "Clauses C-04 & C-15 · Décision G3 · Vue d’étude architecture.annotate"
+          ]
+        ]
+      },
+      {
+        "phase": "central",
+        "title": "Architecture unifiée suite à l’arbitrage propriétaire post-R3 : canvas (UI + interaction IA au catalogue, MCP, sur artifacts et UI prod), modèle de données unique « annotation » + outil « annotate », et emplacement de la mise en catalogue et du MCP",
+        "columns": [
+          "Brique architecturale",
+          "Nature exacte (arbitrage propriétaire post-R3)",
+          "Responsable principal & spécifications de référence",
+          "Chaîne d’exécution & d’exposition (Qui fait quoi)",
+          "Persistance, hébergement & preuve"
+        ],
+        "rows": [
+          [
+            "1. Canvas (UI + interaction IA) : entrée catalogue, exposition MCP, hébergement sur artifacts et UI en prod",
+            "Surface interactive combinant rendu UI et interaction IA (Focus, diagrammes gigognes, BPMN, écrans d’application), inscrite au catalogue et exposée par MCP.",
+            "design-system (templates & composants <st-*>, diagram-canvas L8) · h2a (Focus & MCP ui:// H-4) · sentropic (catalogue kind=\"canvas\", registre MCP & @sentropic/artifacts)",
+            "1. Le template est inscrit comme kind=\"canvas\" (api/src/services/catalog/types.ts:22,95 ; SPEC_EVOL_CATALOG.md:99,150 ; SPEC_EVOL_APP_CATALOG.md:5,29,46) → 2. Son serveur MCP est enregistré dans cluster-mesh (SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md:101,109,135 #679/#692 ; Option E H-4 SPEC_EVOL_DS_JSON_RENDER_STANDARD.md:71,102) → 3. Il est hébergé par-dessus @sentropic/artifacts (0.1.1) et potentiellement monté directement comme UI en production.",
+            "Manifeste CanonicalManifest SHA-256 (@sentropic/artifacts 0.1.1, origines isolées <artifactId>.<base> / <releaseId>.pinned.<base>) + rendu UI prod"
+          ],
+          [
+            "2. Outil « annotate » (outil de capture UI + interaction IA / MCP)",
+            "Outil d’interaction visuelle et MCP permettant de sélectionner une ancre sur tout canvas ou écran de production et de créer/mettre à jour une entrée dans le modèle de données unique annotation.",
+            "Décision propriétaire actée le 2026-10-19 : « g3 = a ok ». Le Design System possède annotate pour la présentation seulement : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions ; il ne résout ni ne persiste les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans copie.",
+            "1. L’hôte ou le canvas active l’outil annotate (primitives visuelles DS + AnchorResolver) → 2. L’outil capture l’ancre typée (sélecteur DOM/SVG, nœud/arête SemanticDocument ou bloc Focus) et l’intention → 3. Appelle l’API/MCP de persistance sans jamais utiliser le CommentStore mémoire local de diag comme stockage de production.",
+            "État de saisie UI éphémère (Plan D) ; écriture déléguée au modèle de données unique annotation (@sentropic/comments)"
+          ],
+          [
+            "3. Modèle de données unique « annotation » (persistance durable, ancres typées & révisions immuables)",
+            "Unique modèle de données durable d’annotation pour toutes les surfaces (écrans d’applications managées, canvas graphiques du Design System, dossiers Focus).",
+            "sentropic (@sentropic/comments 0.3.0 : sentropic/packages/comments/src/anchors.ts:1,87, src/revisions.ts:1,29, stockage #684, 2FA #695)",
+            "1. Sentropic vérifie la session et le 2FA (#695 amr: \"mfa\") → 2. Persiste l’enregistrement annotation sous la clé composite (tenantId, workspaceId, namespace, kind, id) avec révisions immuables et ancres structurées → 3. Résout l’agent destinataire depuis la table de confiance de l’hôte servi (threads/catalogue/synthesis.md:123,130) et livre à l’inbox h2a.",
+            "PostgreSQL Sentropic (#684, Plan C, règles DL-8/13/17) + reçu de délivrance corrélé (auditId) dans l’inbox h2a-agent"
+          ],
+          [
+            "4. Emplacement proposé de la mise en catalogue et du MCP (références aux spécifications catalogue)",
+            "Séparation entre la déclaration par chaque domaine producteur et la médiation centrale (catalogue logique + registre MCP synchrone + hébergement artifacts) dans sentropic.",
+            "Sentropic : modèle annotation, catalogue central et façade MCP ; Design System : présentation annotate et descripteur UI/canvas (G3 actée).",
+            "G3 actée le 2026-10-19 : « g3 = a ok ». Le DS déclare la présentation UI/canvas ; Sentropic inscrit les API/outils comments, projette /catalog, opère le registre MCP synchrone et héberge sur artifacts. h2a expose les outils du harnais et ui:// ; Engram expose mémoire et ontologies.",
+            "Registre MCP synchrone (registry.ts:61) + projection CatalogSource.refresh() sans activation de fournisseur paresseux au lookup"
+          ],
+          [
+            "5. Promotions aval explicites : item de travail (@sentropic/track) et leçon admise (@sentropic/engram D3)",
+            "Actes aval déclenchés à partir d’une annotation (et non modèles de données d’annotation concurrents).",
+            "h2a (@sentropic/track, C02/C04) pour l’organisation et la décision · engram (journal canonique D3 & graphe D10, C05) pour la mémoire",
+            "1. Vers l’organisation et la décision : promotion explicite d’une annotation en événement Track (demand.raised / item.created dans .track/events.jsonl) pointant vers l’URI de l’annotation (résoudre le fil ne clôt jamais l’item Track). 2. Vers la mémoire : demande explicite memory_request_admission vers le journal D3 d’Engram avec ExternalRef (aucune promotion automatique d’une annotation en souvenir).",
+            "Journal append-only .track/events.jsonl (Plan A) et journal canonique D3 / graphe filtré D10 d’engram (Plan B)"
+          ]
+        ]
+      },
+      {
+        "phase": "central",
+        "title": "Positions vérifiées [FACT/CODE], propositions [PROPOSAL] et écarts résiduels des 4 projets",
+        "columns": [
+          "Projet & révision épinglée",
+          "Faits vérifiés dans le code [FACT/CODE] et décisions actées [CONDUCTOR]",
+          "Propositions d’architecture [PROPOSAL / SPEC]",
+          "Écarts identifiés & décisions propriétaires correspondantes"
+        ],
+        "rows": [
+          [
+            "h2a (h2a.md · H = 46b82b42 · inventory.md · DECISIONS-owner.md)",
+            "[CODE] Distingue acteurs, mandats et engagements CLI (packages/h2a/src/types.ts, VOCABULARY.md). Track porte demande brute → WP → items, RACI, décisions et preuves sur journal append-only .track/events.jsonl (MCP autonome en lecture seule). Focus publie packages/focus/registry/entries.v1.json. docs/governance/RACI.md est marqué en attente de ratification. [CONDUCTOR] Décisions actées (pas preuves de livraison) : WP obligatoire, défaut 7 jours glissants, « non qualifié » sans couleur, identifiants neutres + langue BCP 47, fusion et installation séparées.",
+            "[PROPOSAL] Conserver h2a pour coordination/mandats, Track pour faits d’organisation et de décision, harness pour méthode, Focus pour composition décisionnelle. Séparer conducteur, auteur, relecteur et contrôle. Articuler agent-stats (0.1.0) avec D1=C pour l’estimateur WP8 (prévision ≠ preuve de livraison).",
+            "Décision propriétaire actée le 2026-10-19 : « G1 = option 1 ». Mandats et RACI alignés sur le contrat fédéré ; conducteur, auteur, relecteur et contrôle distincts. La carte C01–C14 reste une proposition en attente de la carte du propriétaire."
+          ],
+          [
+            "Couture visuelle h2a × design-system (h2a.md [FACT] · D = 25c0f3d3)",
+            "[CODE] Focus porte le champ scene: SemanticDocument sans coordonnées auteur, mais packages/h2a/focus-kit/src/Canvas.svelte utilise encore un adaptateur provisoire sans appeler le moteur du Design System. Dans sent-tech-design-system (25c0f3d3), packages/components-svelte/src/lib/index.ts exporte 221 composants Svelte, et packages/diagram-core (0.1.0, SemanticDocument/ViewDocument/Transaction) ainsi que packages/diagram-canvas (layout L8) existent mais sont encore marqués private: true.",
+            "[PROPOSAL] Publier le moteur de diagrammes et converger vers l’architecture cible (@sentropic/diagram-kernel [PROPOSAL] : GraphModel gigogne ouvrable + DiagramLayout dans nos propres souches JS avec couverture ELK planifiée + PresentationSkill), réactive, atomique et 100 % offline sans CDN ; inscrire les canvas (UI + interaction IA) au catalogue, exposés en MCP et hébergés sur @sentropic/artifacts et potentiellement en UI prod.",
+            "Décision propriétaire actée le 2026-10-19 : « G2 = option 1 ». En M4, profils Engram épinglés par digest et moteur publié par le DS qualifiés ensemble ; remplacement de l’adaptateur provisoire, transactions atomiques et fonctionnement hors-ligne sans CDN."
+          ],
+          [
+            "engram (engram.md · E = a88375f0 · @sentropic/engram 0.20.0)",
+            "[CODE] Journal mémoire canonique D3 (spec/SPEC_EVOL_AGENT_MEMORY_SUBSTRATE.md:11,73), graphe filtré à l’oubli D10 (#393), 6 outils MCP gelés v3.2 dans src/mcp/memory/contracts.ts:142, engram-live Git dans engram-live/ (engram-live/line-attribution.ts G1 #389, engram-live/symbol-history.ts G2 #390, L9 #391, L9-H #400), validation et fusion de profils dans src/ontology-profile.ts:69,188, src/profile-validate.ts:223 et src/merge-graphs.ts:1. [CONDUCTOR] Gardien de toutes les ontologies (WP9) et centre des références de temps (D1=C).",
+            "[PROPOSAL / SPEC] Gouverner les profils d’ontologies 100 % anglais avec empreintes SHA-256 hors-ligne au build et outil MCP ontology_call au runtime ; publier les exports typés commités knowledge/* (repo-knowledge@1) sans aucun MemoryRef ; assembler des ContextPacks [PROPOSAL] signés.",
+            "Décision propriétaire actée le 2026-10-19 : « G2 = option 1 ». Engram gouverne les profils, schémas, fixtures et migrations. Le Design System conserve et publie l’exécuteur générique @sentropic/diagram-core ainsi que le layout et le rendu. Les consommateurs épinglent les profils ; aucun second méta-modèle de diagramme. Priorité mémoire : #685 → L5 avant R2/R7a/R3."
+          ],
+          [
+            "sentropic (sentropic.md · S = 441453966 · cluster-mesh 0.18.0)",
+            "[CODE] Implémentations inspectées avant le dernier retour : APIs serveur ; @sentropic/comments (0.3.0, anchors.ts, revisions.ts), sessions/workflows (WorkspaceBindingStore D1=A), catalogue dans api/src/services/catalog/types.ts:22 définissant 5 kinds implémentés (skill | tool | agent | workflow | canvas, #679) & registre MCP synchrone (deny-as-missing, createClusterMeshAppAdapter, createMcpAuth), sécurité IdP/2FA (session-resolver.ts, #695 sur branche), @sentropic/llm-mesh 0.26.1 (garde des sièges #596) & juge sur branche feat/llm-judge (030198a3), stockage (#684) & @sentropic/artifacts (0.1.1). Héberge @sentropic/harness.",
+            "[PROPOSAL / SPEC] Gérer dans sentropic (cluster-mesh) la mise en catalogue (SPEC_EVOL_CATALOG.md, SPEC_EVOL_APP_CATALOG.md), le registre MCP et l’hébergement sur @sentropic/artifacts des canvas (UI + interaction IA, SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md #679/#692) ainsi que le modèle de données unique d’annotation (@sentropic/comments #684/#694) ; qualifier d’abord #685 → L5 (#697) en M1 avant d’exposer R2/R7a/R3 en M2. Classement du dernier retour : harnais (outils h2a dont annotate et annotation via comments), mémoire/ontologies et connecteurs à broker dans le catalogue MCP ; IA et catalogues UI/canvas/apps explicites ; sécurité et observabilité séparées des IA ; modèles et artefacts dans le stockage ; Intégration : échanges entre instances Sentropic et services providers (cloud/K8s/mails transactionnels, App Store, registres applicatifs, d’agents et de MCP).",
+            "Décision propriétaire actée le 2026-10-19 : « g3 = a ok ». Le Design System possède annotate pour la présentation seulement : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions ; il ne résout ni ne persiste les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans copie."
+          ]
+        ]
+      },
+      {
+        "phase": "capabilities",
+        "title": "Première proposition de Carte des Capacités (C01 à C14) — Proposition initiale des auteurs en attente de la carte du propriétaire",
+        "paragraphs": [
+          "Statut provisoire explicite (OWNER-REQUEST.md, ajout 2 : « Je dois encore fournir la capability map mais tu peux en donner en premier. Je pense aussi aux canvas ui / artefacts ») : cette carte de 14 capacités système (C01 à C14, couvrant notamment Canvas UI C09 et Artefacts C10) est une première proposition des auteurs destinée à être confrontée, amendée ou remplacée par la carte du propriétaire (carte encore attendue, distincte de G1 actée).",
+          "Conformément à la règle d’unicité de responsabilité (Clause C-01), chaque capacité désigne un résultat observable et nomme un seul dépôt comme responsable d’intégration proposé (Accountable unique), tout en distinguant explicitement les projets contributeurs aux coutures."
+        ],
+        "columns": [
+          "ID · Capacité système et résultat observable",
+          "Domaine proposé",
+          "Responsable principal proposé (Accountable unique)",
+          "Projets contributeurs (coopération aux coutures)",
+          "Besoins routés (N01–N33) & contrats vérifiés [CODE] / [SPEC]"
+        ],
+        "rows": [
+          [
+            "C01 · Organisation humains–agents : identifier les participants, mandats, espaces de travail et actes permis",
+            "Organisation Humains & Agents",
+            "h2a",
+            "sentropic (authentification IdP/accès) · engram (ontologie des rôles)",
+            "N01, N02 · G1 actée le 2026-10-19 : « G1 = option 1 ». Mandats explicites ; alignement RACI à réaliser sans créer de droits implicites."
+          ],
+          [
+            "C02 · Livraison gouvernée : cadrer le périmètre, distribuer le travail, vérifier mécaniquement et préserver l’acceptation",
+            "Traçabilité & Livraison",
+            "h2a",
+            "sentropic (code du noyau mécanique @sentropic/harness et profils de dépôts)",
+            "N03, N04, N31 · [CODE] @sentropic/track (.track/events.jsonl), @sentropic/harness (scope-check, VerificationRun)"
+          ],
+          [
+            "C03 · Décisions propriétaires : présenter les alternatives sans biais, consigner le choix et tracer son effet",
+            "Décisions & Architecture",
+            "h2a",
+            "design-system (rendu <st-decision-dossier>) · sentropic (registres cluster-mesh) · engram (liens connaissance)",
+            "N05 · [CODE] @sentropic/focus 0.5.0 (entries.v1.json, sentropic.focus.decision-kit/v4) · [SPEC] élément <st-decision-dossier> Option E"
+          ],
+          [
+            "C04 · Traçabilité de bout en bout (demande → mise en prod) : relier les 7 sauts sans journal doublon",
+            "Traçabilité & Livraison",
+            "h2a",
+            "sentropic (@sentropic/artifacts, reçus de déploiement) · engram (faits Git engram-live) · chaque dépôt (Git/release)",
+            "N06, N30, N31 · [CODE] lignée Track demand → item → decision → acceptance + harness + artifacts · [SPEC] fermeture E2E en M5"
+          ],
+          [
+            "C05 · Mémoire agentique : rappeler, capturer, admettre, contester, retirer et oublier dans le périmètre autorisé",
+            "Mémoire & Connaissance",
+            "engram",
+            "sentropic (hôte MCP #685 / lot L5 #697, stockage #684) · h2a (contexte agent/session et adoption R5/R6)",
+            "N07, N08, N09 · [CODE] src/mcp/memory/contracts.ts:142 (6 outils MCP v3.2), journal D3, graphe filtré D10 (#393) · [PROPOSAL] ContextPack signé"
+          ],
+          [
+            "C06 · Connaissance live du développement : inspecter le code, l’historique Git, les PRs et l’attribution de lignes",
+            "Mémoire & Connaissance",
+            "engram",
+            "sentropic (persistance cluster-mesh #664 / #684) · h2a (activation explicite par session #342 / #343)",
+            "N10 · [CODE] @sentropic/engram 0.20.0 engram-live/ (engram-live/line-attribution.ts #389 attribution de lignes, engram-live/symbol-history.ts #390 symboles, #391 20 enquêtes, #400 portage L9-H)"
+          ],
+          [
+            "C07 · Architecture et ontologies : gouverner les vocabulaires (dev, track, archi), modéliser les systèmes et vérifier la compatibilité",
+            "Décisions & Architecture",
+            "engram",
+            "h2a, Sentropic, bpmn-canvas et d2d : auteurs métier ; DS : diagram-core, layout et rendu (G2 actée).",
+            "N11, N12, N13 · [CODE] src/ontology-profile.ts, src/profile-validate.ts, src/merge-graphs.ts, diagram-core 0.1.0, bpmn-canvas 0.3.0 · [SPEC] WP9 & ontology_call"
+          ],
+          [
+            "C08 · Découverte et distribution unifiées : trouver toute capacité disponible, son contrat et sa voie d’installation ou d’appel",
+            "Exposition & Surfaces",
+            "sentropic",
+            "h2a (distributeur d’équipement R5/R6 & descripteurs Focus/Track) · engram (descripteurs mémoire/ontologies) · design-system (descripteurs kind=\"canvas\" & <st-*>) · sentropic (projection centrale /catalog & registre MCP synchrone)",
+            "N14, N15, N16, N24 · [CODE] api/src/services/catalog/types.ts:22,95 (5 kinds : skill, tool, agent, workflow, canvas, #679), cluster-mesh/src/modules/catalog.ts:79, mcp-platform/src/registry.ts:61,128 · [SPEC] SPEC_EVOL_CATALOG.md:99,150,177, SPEC_EVOL_APP_CATALOG.md:5,29,46, SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md:227,250, SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md:91,714,745 (+3 kinds : app, ontology, ui)"
+          ],
+          [
+            "C09 · Composition Canvas (UI + interaction IA) : inscrire au catalogue, exposer via MCP, héberger par-dessus @sentropic/artifacts et monter potentiellement comme UI en prod",
+            "Exposition & Surfaces (Canvas UI)",
+            "design-system",
+            "sentropic (catalogue kind=\"canvas\", registre MCP & hébergement par-dessus @sentropic/artifacts #679/#692) · h2a (Focus entries.v1.json & module MCP ui:// H-4)",
+            "N17, N18 · [CODE] 221 composants Svelte exportés (index.ts:1-541), thèmes --st-*, diagram-canvas L8, kind=\"canvas\" (#679) · [SPEC] SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md:101,109,135, SPEC_EVOL_DS_JSON_RENDER_STANDARD.md:71,102 · [PROPOSAL] @sentropic/diagram-kernel"
+          ],
+          [
+            "C10 · Modèles, artefacts et cycle de vie : sérialisation DB neutre, trois surfaces optimisées, releases scellées, export et effacement",
+            "Exposition & Surfaces (Modèles et artefacts)",
+            "sentropic",
+            "Propriétaires des applications managées (schéma métier) · engram (cascade d’oubli mémoire X2/X2b et sauvegarde X4)",
+            "N23, N24, N25 · [CODE observé] @sentropic/artifacts 0.1.1 (SHA-256), #684 Postgres/S3, DL-8/13/17 · [CIBLE propriétaire] Interface DB neutre ; transactionnel, analytique et graphe live optimisés ; SQLite et Postgres prioritaires ; qualifications à établir."
+          ],
+          [
+            "C11 · Feedback annoté (modèle de données unique annotation + outil annotate) : capturer une cible sur un canevas ou une UI en prod, persister l’annotation par namespace et router vers l’agent",
+            "Exposition & Surfaces",
+            "sentropic",
+            "DS : présentation annotate ; Sentropic : ancres, fils, résolution et persistance (G3 actée) ; h2a : inbox et promotion Track ; Engram : promotion D3.",
+            "N19, N20, N21, N22 · [CODE] @sentropic/comments 0.3.0 (modèle de données unique annotation : anchors.ts, revisions.ts), @sentropic/annotate 0.1.0 (outil annotate) · [SPEC] SPEC_EVOL_UI_ANNOTATE_OVERLAY.md:90,105,107,156 (#694) & pont E2E en M3"
+          ],
+          [
+            "C12 · Identité, confiance et contrôle d’accès : authentifier humains et NHI, appliquer les grants, l’isolation namespace et le 2FA",
+            "Sécurité & Exécution",
+            "sentropic",
+            "h2a (mandats par acte, identités d’acteurs vérifiées DEC-114, gouvernance NHI1..NHI9)",
+            "N26 · [CODE] auth-idp, auth-hono session-resolver.ts:18,47, createMcpAuth, nhi.ts · [SPEC/BRANCH] politique 2FA amr: \"mfa\" (#695 r2)"
+          ],
+          [
+            "C13 · Exécution IA et appareils dirigée par l’utilisateur : appeler les modèles avec garde des sièges, évaluer via le Juge et piloter Cowork",
+            "Sécurité & Exécution",
+            "sentropic",
+            "h2a (orchestration de sessions, matérialisation locale access-only des sièges #348, consentement drive.instruction)",
+            "N16, N27, N28, N29 · [CODE] @sentropic/llm-mesh 0.26.1 & llm-gateway (#596 SeatBundle), cowork-bridge/desktop · [BRANCH] @sentropic/llm-mesh/judge (feat/llm-judge 030198a3)"
+          ],
+          [
+            "C14 · Apprentissage opérationnel et références de temps : expliquer les échecs, estimer par cohortes mesurées et améliorer la planification",
+            "Mémoire & Connaissance",
+            "engram",
+            "h2a (estimateur de délai WP8 & @sentropic/agent-stats 0.1.0) · sentropic (collecte d’observations CI/CD #698 et reçus)",
+            "N32, N33 · [CODE] @sentropic/agent-stats 0.1.0 · [CONDUCTOR/SPEC] choix propriétaire D1=C (01M57PXN14JMZ23BM3YK537JWH), branche #698 et exports repo-knowledge@1"
+          ]
+        ]
+      },
+      {
+        "phase": "capabilities",
+        "title": "Catalogue des besoins concrets routables (N01 à N17) — Aligné sur study.md et le sélecteur interactif",
+        "columns": [
+          "ID · Besoin concret (« Ce que demande l’humain ou l’agent »)",
+          "Capacité",
+          "Responsable principal → Projets contributeurs",
+          "Parcours interactif & route sur le diagramme central"
+        ],
+        "rows": [
+          [
+            "N01 · Savoir quel humain ou agent a le droit de décider, construire ou relire un acte",
+            "C01",
+            "h2a (roles, RACI.md, acteurs vérifiés DEC-114) ← sentropic (authentification)",
+            "12. Organisation & accès CLI / Cowork / Cloud / IA · Relations du parcours : Rôles et mandats → Demandes → Track (mandats et WP) ; Demandes → Track → Agents, session, inbox (items) ; Agents, session, inbox → Poste CLI (CLI et sessions) ; Poste CLI → 1. API serveur (accès CLI) ; Poste Cowork → 1. API serveur (accès Cowork) ; Apps Sentropic/tiers → 1. API serveur (accès Cloud) ; Fournisseurs IA → 1. API serveur (MCP via façade) ; Fournisseurs IA → Poste Cowork (liaison Cowork) ; 1. API serveur → Accès et sièges (autorisation)."
+          ],
+          [
+            "N02 · Travailler dans un dépôt ou un worktree avec vérification du périmètre autorisé",
+            "C01",
+            "h2a (déclaration d’espace de travail & workspace-scope-guard) → sentropic (liaison hôte)",
+            "12. Organisation & accès CLI / Cowork / Cloud / IA · Relations du parcours : Rôles et mandats → Demandes → Track (mandats et WP) ; Demandes → Track → Agents, session, inbox (items) ; Agents, session, inbox → Poste CLI (CLI et sessions) ; Poste CLI → 1. API serveur (accès CLI) ; Poste Cowork → 1. API serveur (accès Cowork) ; Apps Sentropic/tiers → 1. API serveur (accès Cloud) ; Fournisseurs IA → 1. API serveur (MCP via façade) ; Fournisseurs IA → Poste Cowork (liaison Cowork) ; 1. API serveur → Accès et sièges (autorisation)."
+          ],
+          [
+            "N03 · Transformer une demande propriétaire en lot de travail cadré (WP) et le distribuer",
+            "C02",
+            "h2a (@sentropic/track demand.raised → item.created & conducteur)",
+            "11. Traçabilité 7 sauts (demande → prod) · Relations du parcours : Demandes → Track → Agents, session, inbox (items) ; Décision → Focus → Agents, session, inbox (dossiers Focus) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; 2. Workflows agents → Observabilité et audit (traces et reçus) ; Cloud et registres → Observabilité et audit (reçus de déploiement) ; Artefacts → Cloud et registres (release à déployer) ; 1. API serveur → Cloud et registres (intégrations providers) ; 1. API serveur → Instances Sentropic (intégration)."
+          ],
+          [
+            "N04 · Vérifier mécaniquement un changement et prouver qu’il respecte le périmètre déclaré (BRANCH.md)",
+            "C02",
+            "sentropic (noyau @sentropic/harness) + h2a (ingestion VerificationRun dans Track)",
+            "11. Traçabilité 7 sauts (demande → prod) · Relations du parcours : Demandes → Track → Agents, session, inbox (items) ; Décision → Focus → Agents, session, inbox (dossiers Focus) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; 2. Workflows agents → Observabilité et audit (traces et reçus) ; Cloud et registres → Observabilité et audit (reçus de déploiement) ; Artefacts → Cloud et registres (release à déployer) ; 1. API serveur → Cloud et registres (intégrations providers) ; 1. API serveur → Instances Sentropic (intégration)."
+          ],
+          [
+            "N05 · Présenter une décision d’architecture au propriétaire dans Focus et conserver son choix",
+            "C03",
+            "h2a (schéma/skill @sentropic/focus & Track decision.select) → design-system (<st-decision-dossier>) & sentropic (registre)",
+            "9. Canvas UI & Focus (Option E) · Relations du parcours : Décision → Focus → Dossier de décision (schéma et skill) ; Dossier de décision → Diagramme (diagramme central) ; Dossier de décision → Annotation (feedback) ; Diagramme → 200+ composants UI (rendu UI) ; 200+ composants UI → UI · canvas et apps (descripteurs canvas / UI) ; UI · canvas et apps → Catalogue Agents (catalogue logique) ; UI · canvas et apps → Artefacts (hébergement UI / apps) ; Catalogue Agents → Artefacts (références / hébergement) ; UI · canvas et apps → Mémoires/ontologies (liaison MCP / ui://)."
+          ],
+          [
+            "N06 · Suivre ce qu’est devenue une demande jusqu’à la mise en production et l’acceptation (7 sauts)",
+            "C04",
+            "h2a (lignée Track) + sentropic (harness, artifacts, déploiement) + engram (engram-live Git)",
+            "11. Traçabilité 7 sauts (demande → prod) · Relations du parcours : Demandes → Track → Agents, session, inbox (items) ; Décision → Focus → Agents, session, inbox (dossiers Focus) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; 2. Workflows agents → Observabilité et audit (traces et reçus) ; Cloud et registres → Observabilité et audit (reçus de déploiement) ; Artefacts → Cloud et registres (release à déployer) ; 1. API serveur → Cloud et registres (intégrations providers) ; 1. API serveur → Instances Sentropic (intégration)."
+          ],
+          [
+            "N07 · Rappeler uniquement ce qu’un agent est autorisé à savoir pour sa tâche courante",
+            "C05",
+            "engram (memory_search / memory_get) ← sentropic (hôte MCP qualifié #685/L5) & h2a (contexte session)",
+            "4. Mémoire agentique & live · Relations du parcours : Mémoire live agents → Mémoires/ontologies (contrats mémoire) ; Mémoire live agents → Modèles · sérialisation (déclare la surface) ; 2. Workflows agents → Modèles · sérialisation (états de session) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; 1. API serveur → 2. Workflows agents (appels) ; 1. API serveur → Accès et sièges (autorisation)."
+          ],
+          [
+            "N08 · Retenir une leçon réutilisable dans le journal canonique de mémoire (D3)",
+            "C05",
+            "engram (memory_capture & memory_request_admission dans D3) ← sentropic (#685/L5) & h2a",
+            "4. Mémoire agentique & live · Relations du parcours : Mémoire live agents → Mémoires/ontologies (contrats mémoire) ; Mémoire live agents → Modèles · sérialisation (déclare la surface) ; 2. Workflows agents → Modèles · sérialisation (états de session) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; 1. API serveur → 2. Workflows agents (appels) ; 1. API serveur → Accès et sièges (autorisation)."
+          ],
+          [
+            "N09 · Retirer ou oublier définitivement un souvenir (tombstone) sans résurrection au restore",
+            "C05",
+            "engram (memory_withdraw / memory_forget, filtre D10 #393, tests X4 #372) + sentropic (purge X2/X2b #684)",
+            "4. Mémoire agentique & live · Relations du parcours : Mémoire live agents → Mémoires/ontologies (contrats mémoire) ; Mémoire live agents → Modèles · sérialisation (déclare la surface) ; 2. Workflows agents → Modèles · sérialisation (états de session) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; 1. API serveur → 2. Workflows agents (appels) ; 1. API serveur → Accès et sièges (autorisation)."
+          ],
+          [
+            "N10 · Savoir quel commit ou quelle PR a introduit un comportement dans le code",
+            "C06",
+            "engram (faits Git engram-live : lignes #389, symboles #390, 20 enquêtes #391/#400) + sentropic (#664/#684)",
+            "4. Mémoire agentique & live · Relations du parcours : Mémoire live agents → Mémoires/ontologies (contrats mémoire) ; Mémoire live agents → Modèles · sérialisation (déclare la surface) ; 2. Workflows agents → Modèles · sérialisation (états de session) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; 1. API serveur → 2. Workflows agents (appels) ; 1. API serveur → Accès et sièges (autorisation)."
+          ],
+          [
+            "N11 · Définir, dériver, empiler ou faire évoluer une ontologie (100 % en anglais) sans collision",
+            "C07",
+            "engram (gardien des ontologies WP9) + propriétaire métier (h2a, sentropic, DS) → sentropic (catalogue/MCP)",
+            "3. Ontologies (WP9) · Relations du parcours : Ontologies · WP9 → Mémoires/ontologies (contrats ontologies) ; Ontologies · WP9 → Diagramme (profils épinglés) ; 1. API serveur → Mémoires/ontologies (expose les MCP)."
+          ],
+          [
+            "N12 · Modéliser l’architecture et ses sous-diagrammes gigognes ouvrables sur un graphe unique",
+            "C07",
+            "engram (profil d’architecture gouverné WP9) + design-system (SemanticDocument / ViewDocument, selon G2 actée le 2026-10-19)",
+            "5. Diagrammes gigognes & BPMN · Relations du parcours : Ontologies · WP9 → Diagramme (profils épinglés) ; Dossier de décision → Diagramme (diagramme central) ; Diagramme → 200+ composants UI (rendu UI) ; Diagramme → Modèles · sérialisation (sérialisation neutre) ; Décision → Focus → Dossier de décision (schéma et skill)."
+          ],
+          [
+            "N13 · Rendre ou éditer un diagramme BPMN sans perdre ses extensions métier (extensionElements)",
+            "C07",
+            "design-system (bpmn-canvas 0.3.0 & d2d : mapping bpmn-moddle F1 + profile-c14n/2) + engram (profil bpmn@1)",
+            "5. Diagrammes gigognes & BPMN · Relations du parcours : Ontologies · WP9 → Diagramme (profils épinglés) ; Dossier de décision → Diagramme (diagramme central) ; Diagramme → 200+ composants UI (rendu UI) ; Diagramme → Modèles · sérialisation (sérialisation neutre) ; Décision → Focus → Dossier de décision (schéma et skill)."
+          ],
+          [
+            "N14 · Découvrir une skill, un outil MCP, un agent, un workflow, un canevas ou une application dans le catalogue",
+            "C08",
+            "sentropic (projection centrale /catalog dans cluster-mesh : 5 kinds en code + 3 en spécification, filtrage deny-as-missing) ← descripteurs déclarés par DS, h2a, engram, sentropic",
+            "2. Catalogue · MCP, IA & ressources · Relations du parcours : 1. API serveur → Mémoires/ontologies (expose les MCP) ; 1. API serveur → Harnais · outils h2a (expose le harnais MCP) ; 1. API serveur → Connecteurs à broker (broker MCP) ; 1. API serveur → Catalogue IA (expose les IA) ; 1. API serveur → Catalogue Agents (expose le catalogue) ; Mémoire live agents → Mémoires/ontologies (contrats mémoire) ; Ontologies · WP9 → Mémoires/ontologies (contrats ontologies) ; Catalogue Agents → Artefacts (références / hébergement) ; Apps Sentropic/tiers → Catalogue Agents (synchronise le catalogue) ; UI · canvas et apps → Catalogue Agents (catalogue logique)."
+          ],
+          [
+            "N15 · Équiper un agent avec une skill approuvée ou un fournisseur MCP qualifié",
+            "C08",
+            "h2a (distributeur d’équipement R5/R6 & PluginManifest) + sentropic (registre MCP synchrone cluster-mesh / mcp-platform)",
+            "2. Catalogue · MCP, IA & ressources · Relations du parcours : 1. API serveur → Mémoires/ontologies (expose les MCP) ; 1. API serveur → Harnais · outils h2a (expose le harnais MCP) ; 1. API serveur → Connecteurs à broker (broker MCP) ; 1. API serveur → Catalogue IA (expose les IA) ; 1. API serveur → Catalogue Agents (expose le catalogue) ; Mémoire live agents → Mémoires/ontologies (contrats mémoire) ; Ontologies · WP9 → Mémoires/ontologies (contrats ontologies) ; Catalogue Agents → Artefacts (références / hébergement) ; Apps Sentropic/tiers → Catalogue Agents (synchronise le catalogue) ; UI · canvas et apps → Catalogue Agents (catalogue logique)."
+          ],
+          [
+            "N16 · Appeler Gmail, Stripe ou un autre connecteur externe sous autorisation scopée",
+            "C08 / C13",
+            "sentropic (registre MCP, garde des secrets llm-mesh & ConnectorGrant avec auditId)",
+            "2. Catalogue · MCP, IA & ressources · Relations du parcours : 1. API serveur → Mémoires/ontologies (expose les MCP) ; 1. API serveur → Harnais · outils h2a (expose le harnais MCP) ; 1. API serveur → Connecteurs à broker (broker MCP) ; 1. API serveur → Catalogue IA (expose les IA) ; 1. API serveur → Catalogue Agents (expose le catalogue) ; Mémoire live agents → Mémoires/ontologies (contrats mémoire) ; Ontologies · WP9 → Mémoires/ontologies (contrats ontologies) ; Catalogue Agents → Artefacts (références / hébergement) ; Apps Sentropic/tiers → Catalogue Agents (synchronise le catalogue) ; UI · canvas et apps → Catalogue Agents (catalogue logique)."
+          ],
+          [
+            "N17 · Construire un écran d’application managée avec les 221 composants et thèmes standards",
+            "C09",
+            "design-system (@sentropic/design-system-svelte, jetons --st-*) + propriétaire de l’application (adoption ds-history)",
+            "9. Canvas UI & Focus (Option E) · Relations du parcours : Décision → Focus → Dossier de décision (schéma et skill) ; Dossier de décision → Diagramme (diagramme central) ; Dossier de décision → Annotation (feedback) ; Diagramme → 200+ composants UI (rendu UI) ; 200+ composants UI → UI · canvas et apps (descripteurs canvas / UI) ; UI · canvas et apps → Catalogue Agents (catalogue logique) ; UI · canvas et apps → Artefacts (hébergement UI / apps) ; Catalogue Agents → Artefacts (références / hébergement) ; UI · canvas et apps → Mémoires/ontologies (liaison MCP / ui://)."
+          ]
+        ]
+      },
+      {
+        "phase": "capabilities",
+        "collapsed": true,
+        "title": "Catalogue des besoins concrets routables (N18 à N33) — Aligné sur study.md et le sélecteur interactif",
+        "columns": [
+          "ID · Besoin concret (« Ce que demande l’humain ou l’agent »)",
+          "Capacité",
+          "Responsable principal → Projets contributeurs",
+          "Parcours interactif & route sur le diagramme central"
+        ],
+        "rows": [
+          [
+            "N18 · Ouvrir un canevas (UI + interaction IA, au catalogue kind=\"canvas\", exposé via MCP, hébergé par-dessus @sentropic/artifacts et potentiellement UI en prod) ou mettre en page un diagramme avec nos propres souches JS",
+            "C09",
+            "design-system (diagram-core / diagram-canvas L8, gabarits de canevas) + sentropic (catalogue kind=\"canvas\", MCP & hébergement par-dessus @sentropic/artifacts #679/#692) + h2a (Focus MCP ui:// H-4)",
+            "9. Canvas UI & Focus (Option E) · Relations du parcours : Décision → Focus → Dossier de décision (schéma et skill) ; Dossier de décision → Diagramme (diagramme central) ; Dossier de décision → Annotation (feedback) ; Diagramme → 200+ composants UI (rendu UI) ; 200+ composants UI → UI · canvas et apps (descripteurs canvas / UI) ; UI · canvas et apps → Catalogue Agents (catalogue logique) ; UI · canvas et apps → Artefacts (hébergement UI / apps) ; Catalogue Agents → Artefacts (références / hébergement) ; UI · canvas et apps → Mémoires/ontologies (liaison MCP / ui://)."
+          ],
+          [
+            "N19 · Annoter visuellement une zone d’un canevas ou d’un écran de production (outil annotate)",
+            "C11",
+            "Design System : présentation annotate ; Sentropic : résolution des ancres et persistance dans @sentropic/comments (G3 actée le 2026-10-19 : « g3 = a ok »).",
+            "1. annotate vs annotation · Relations du parcours : Annotation → Harnais · outils h2a (annotate via façade MCP) ; Harnais · outils h2a → Modèles · sérialisation (persiste annotation) ; Harnais · outils h2a → Accès et sièges (autorisation) ; Harnais · outils h2a → 2. Workflows agents (remise autorisée) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; Demandes → Track → Agents, session, inbox (items)."
+          ],
+          [
+            "N20 · Stocker, lire, répondre à ou résoudre durablement une annotation dans le modèle de données unique annotation",
+            "C11",
+            "sentropic (@sentropic/comments 0.3.0 : modèle de données unique annotation avec ancres typées, révisions immuables, namespace & stockage Postgres #684)",
+            "1. annotate vs annotation · Relations du parcours : Annotation → Harnais · outils h2a (annotate via façade MCP) ; Harnais · outils h2a → Modèles · sérialisation (persiste annotation) ; Harnais · outils h2a → Accès et sièges (autorisation) ; Harnais · outils h2a → 2. Workflows agents (remise autorisée) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; Demandes → Track → Agents, session, inbox (items)."
+          ],
+          [
+            "N21 · Envoyer le retour annoté à l’agent responsable sans risque d’usurpation depuis le DOM",
+            "C11",
+            "sentropic (table de routage destinataire de confiance de l’hôte servi) → h2a (inbox de l’agent cible)",
+            "1. annotate vs annotation · Relations du parcours : Annotation → Harnais · outils h2a (annotate via façade MCP) ; Harnais · outils h2a → Modèles · sérialisation (persiste annotation) ; Harnais · outils h2a → Accès et sièges (autorisation) ; Harnais · outils h2a → 2. Workflows agents (remise autorisée) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; Demandes → Track → Agents, session, inbox (items)."
+          ],
+          [
+            "N22 · Promouvoir une annotation en correctif suivi dans Track ou en leçon admise dans Engram par pointeur URI vers annotation",
+            "C11",
+            "h2a (@sentropic/track pour un item de travail pointant vers l’URI de l’annotation) · engram (admission explicite dans le journal D3 avec ExternalRef)",
+            "1. annotate vs annotation · Relations du parcours : Annotation → Harnais · outils h2a (annotate via façade MCP) ; Harnais · outils h2a → Modèles · sérialisation (persiste annotation) ; Harnais · outils h2a → Accès et sièges (autorisation) ; Harnais · outils h2a → 2. Workflows agents (remise autorisée) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; Demandes → Track → Agents, session, inbox (items)."
+          ],
+          [
+            "N23 · Publier un contenu généré comme artefact ou release scellée par empreinte SHA-256",
+            "C10",
+            "sentropic (@sentropic/artifacts 0.1.1 : CanonicalManifest SHA-256 & jeton HMAC 55 s sur origine isolée)",
+            "10. Modèles & artefacts (#684) · Relations du parcours : Diagramme → Modèles · sérialisation (sérialisation neutre) ; Diagramme → 200+ composants UI (rendu UI) ; 200+ composants UI → UI · canvas et apps (descripteurs canvas / UI) ; UI · canvas et apps → Artefacts (hébergement UI / apps) ; Catalogue Agents → Artefacts (références / hébergement) ; Harnais · outils h2a → Modèles · sérialisation (persiste annotation) ; Mémoire live agents → Modèles · sérialisation (déclare la surface)."
+          ],
+          [
+            "N24 · Intégrer OpenERP, nc-fullstack ou CV comme application managée sans confondre catalogue et base métier",
+            "C08 / C10",
+            "sentropic (plan de contrôle d’applications & projection kind=\"app\" dans SPEC_EVOL_APP_CATALOG.md)",
+            "2. Catalogue · MCP, IA & ressources · Relations du parcours : 1. API serveur → Mémoires/ontologies (expose les MCP) ; 1. API serveur → Harnais · outils h2a (expose le harnais MCP) ; 1. API serveur → Connecteurs à broker (broker MCP) ; 1. API serveur → Catalogue IA (expose les IA) ; 1. API serveur → Catalogue Agents (expose le catalogue) ; Mémoire live agents → Mémoires/ontologies (contrats mémoire) ; Ontologies · WP9 → Mémoires/ontologies (contrats ontologies) ; Catalogue Agents → Artefacts (références / hébergement) ; Apps Sentropic/tiers → Catalogue Agents (synchronise le catalogue) ; UI · canvas et apps → Catalogue Agents (catalogue logique)."
+          ],
+          [
+            "N25 · Sérialiser, exporter, restaurer ou effacer les données d’une application (cycle DL-8/13/17)",
+            "C10",
+            "sentropic (ports de stockage #684 & règles DL-8/13/17) + propriétaire de l’app + engram (non-résurrection X4)",
+            "10. Modèles & artefacts (#684) · Relations du parcours : Diagramme → Modèles · sérialisation (sérialisation neutre) ; Diagramme → 200+ composants UI (rendu UI) ; 200+ composants UI → UI · canvas et apps (descripteurs canvas / UI) ; UI · canvas et apps → Artefacts (hébergement UI / apps) ; Catalogue Agents → Artefacts (références / hébergement) ; Harnais · outils h2a → Modèles · sérialisation (persiste annotation) ; Mémoire live agents → Modèles · sérialisation (déclare la surface)."
+          ],
+          [
+            "N26 · Authentifier un humain ou une identité non-humaine (NHI) et exiger le second facteur 2FA (amr: \"mfa\")",
+            "C12",
+            "sentropic (auth-idp, auth-hono session-resolver.ts, #695) + h2a (identités DEC-114 & mandats NHI1..NHI9)",
+            "7. Sécurité, IAM & 2FA (#695) · Relations du parcours : Rôles et mandats → Demandes → Track (mandats et WP) ; Demandes → Track → Agents, session, inbox (items) ; Agents, session, inbox → Poste CLI (CLI et sessions) ; Poste CLI → 1. API serveur (accès CLI) ; 1. API serveur → Accès et sièges (autorisation) ; Accès et sièges → Observabilité et audit (audit des accès)."
+          ],
+          [
+            "N27 · Choisir et appeler un modèle éligible avec garde centrale des sièges CLI (#596)",
+            "C13",
+            "sentropic (@sentropic/llm-mesh 0.26.1 & llm-gateway : SeatBundle chiffré ≤ 48 Kio) + h2a (projection access-only #348)",
+            "8. Garde des sièges & Juge LLM · Relations du parcours : 2. Workflows agents → Catalogue IA (appels IA) ; Catalogue IA → Accès et sièges (garde et droits) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus)."
+          ],
+          [
+            "N28 · Obtenir l’évaluation technique d’un Juge LLM multi-modèles sous enveloppe JEV",
+            "C13",
+            "sentropic (@sentropic/llm-mesh/judge sur la branche feat/llm-judge 030198a3, distinct d’une acceptation Track)",
+            "8. Garde des sièges & Juge LLM · Relations du parcours : 2. Workflows agents → Catalogue IA (appels IA) ; Catalogue IA → Accès et sièges (garde et droits) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus)."
+          ],
+          [
+            "N29 · Laisser un agent inspecter ou agir sur le poste de travail utilisateur (Cowork) avec consentement par action",
+            "C13",
+            "sentropic (@sentropic/cowork-bridge & cowork-desktop : présence et consentement explicite drive.instruction)",
+            "12. Organisation & accès CLI / Cowork / Cloud / IA · Relations du parcours : Rôles et mandats → Demandes → Track (mandats et WP) ; Demandes → Track → Agents, session, inbox (items) ; Agents, session, inbox → Poste CLI (CLI et sessions) ; Poste CLI → 1. API serveur (accès CLI) ; Poste Cowork → 1. API serveur (accès Cowork) ; Apps Sentropic/tiers → 1. API serveur (accès Cloud) ; Fournisseurs IA → 1. API serveur (MCP via façade) ; Fournisseurs IA → Poste Cowork (liaison Cowork) ; 1. API serveur → Accès et sièges (autorisation)."
+          ],
+          [
+            "N30 · Utiliser la même capacité depuis la CLI, Cowork ou le Cloud avec liaison durable au projet",
+            "C04 / C08",
+            "sentropic (WorkspaceBindingStore D1=A) + h2a (h2a-cli) + opérateur du cluster (poc-k8s distinct des workloads tenants)",
+            "12. Organisation & accès CLI / Cowork / Cloud / IA · Relations du parcours : Rôles et mandats → Demandes → Track (mandats et WP) ; Demandes → Track → Agents, session, inbox (items) ; Agents, session, inbox → Poste CLI (CLI et sessions) ; Poste CLI → 1. API serveur (accès CLI) ; Poste Cowork → 1. API serveur (accès Cowork) ; Apps Sentropic/tiers → 1. API serveur (accès Cloud) ; Fournisseurs IA → 1. API serveur (MCP via façade) ; Fournisseurs IA → Poste Cowork (liaison Cowork) ; 1. API serveur → Accès et sièges (autorisation)."
+          ],
+          [
+            "N31 · Approuver une release, la promouvoir en environnement et enregistrer séparément installation et acceptation",
+            "C02 / C04",
+            "Dépôt producteur (release) + sentropic/opérateur (reçu de déploiement) + propriétaire (Track acceptance)",
+            "11. Traçabilité 7 sauts (demande → prod) · Relations du parcours : Demandes → Track → Agents, session, inbox (items) ; Décision → Focus → Agents, session, inbox (dossiers Focus) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; 2. Workflows agents → Observabilité et audit (traces et reçus) ; Cloud et registres → Observabilité et audit (reçus de déploiement) ; Artefacts → Cloud et registres (release à déployer) ; 1. API serveur → Cloud et registres (intégrations providers) ; 1. API serveur → Instances Sentropic (intégration)."
+          ],
+          [
+            "N32 · Estimer un lot ou ordonnancer un train à partir des durées mesurées (D1=C + agent-stats)",
+            "C14",
+            "engram (service central des références de temps D1=C) + h2a (estimateur WP8, agent-stats & skill plan)",
+            "6. Temps CI/CD & vélocité (D1=C) · Relations du parcours : Observabilité et audit → Ontologies · WP9 (observations D1=C) ; Cloud et registres → Observabilité et audit (reçus de déploiement) ; 2. Workflows agents → Observabilité et audit (traces et reçus) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; Demandes → Track → Agents, session, inbox (items)."
+          ],
+          [
+            "N33 · Expliquer pourquoi une requête inter-projets a échoué ou pris du retard (corrélation auditId)",
+            "C14",
+            "sentropic & chaque hôte (reçus d’exécution soumis/commis/visible/accepté) + h2a / engram (investigation autorisée)",
+            "6. Temps CI/CD & vélocité (D1=C) · Relations du parcours : Observabilité et audit → Ontologies · WP9 (observations D1=C) ; Cloud et registres → Observabilité et audit (reçus de déploiement) ; 2. Workflows agents → Observabilité et audit (traces et reçus) ; 2. Workflows agents → Agents, session, inbox (inbox et reçus) ; Demandes → Track → Agents, session, inbox (items)."
+          ]
+        ]
+      },
+      {
+        "phase": "ontologies",
+        "title": "Architecture de gouvernance des ontologies (WP9) : consolidation des 46 familles inventoriées en 3 paliers",
+        "columns": [
+          "Palier ontologique",
+          "Volume",
+          "Responsable de garde & auteurs métier",
+          "Familles canoniques (identifiants 100 % en anglais)",
+          "Règle de validation & d’exposition"
+        ],
+        "rows": [
+          [
+            "Palier 1 · Noyau de gouvernance (Core Governance)",
+            "12 familles",
+            "engram (gardien WP9) · h2a (auteur métier)",
+            "actor.identity, mandate.role, workspace.scope, demand.raw, work.package, work.item, decision.record, review.verdict, verification.run, acceptance.receipt, artifact.manifest, time.reference",
+            "Schémas JSON/TypeBox figés par empreinte SHA-256 hors-ligne au build ; 0 dépendance circulaire."
+          ],
+          [
+            "Palier 2A · Packs de gouvernance et de coordination",
+            "10 familles",
+            "engram (gardien WP9) · h2a (auteur métier)",
+            "d2d.protocol, focus.kit, nhi.lifecycle, conflict.posture, escalation.policy, scope.contract, branch.lot, verification.gate, amendment.trace, audit.trail",
+            "Importent uniquement le Palier 1 ; validés par track_validate et WP9 (src/profile-validate.ts:223)."
+          ],
+          [
+            "Palier 2B · Packs produit, runtime et connecteurs",
+            "6 familles",
+            "engram (gardien WP9) · sentropic (auteur métier)",
+            "sentropic.workspace, sentropic.cluster_mesh, sentropic.agent_runtime, sentropic.release_pipeline, sentropic.connector, bpmn.execution",
+            "Définis par sentropic et exposés dans le catalogue cluster-mesh (extension kind=\"ontology\" [SPEC])."
+          ],
+          [
+            "Palier 2C · Packs visuels, canevas et diagrammes",
+            "6 familles",
+            "engram (gardien WP9) · design-system (auteur métier)",
+            "design.tokens, design.component, canvas.viewport, canvas.annotation_layer, diagram.graph_model (generic@1/bpmn@1/archimate@1/uml@1), diagram.presentation_skill",
+            "Zéro second méta-modèle de diagramme ; mapping unique bpmn@1 ↔ bpmn-moddle F1 + profile-c14n/2."
+          ],
+          [
+            "Palier 3 · Projections, vues dérivées & absorptions",
+            "12 familles absorbées",
+            "Vues dérivées (sans schéma racine dupliqué)",
+            "Absorption des doublons d’inventaire (canevas/canvas, d2d_view, status_summary, cursor_state, etc.) en projections typées des Paliers 1 et 2.",
+            "Élimine l’inflation de schémas tout en préservant l’intégralité des capacités métier."
+          ],
+          [
+            "Pont cognitif · Mémoire & références externes",
+            "6 primitives + ExternalRef",
+            "engram",
+            "engram.episode, engram.fact, engram.procedure, engram.constraint, engram.concept, engram.semantic_annotation + ExternalRef (h2a_uri, sentropic_uri)",
+            "Pont unidirectionnel propre : engram référence les URI h2a/sentropic sans dupliquer leurs schémas ni commiter de MemoryRef dans Git."
+          ]
+        ]
+      },
+      {
+        "phase": "ontologies",
+        "title": "Résolution des 7 collisions ontologiques inter-projets (K-01 à K-07)",
+        "columns": [
+          "Code · Collision détectée",
+          "Dépôts en conflit",
+          "Ambiguïté ou doublon observé dans les sources",
+          "Résolution normative dans le contrat"
+        ],
+        "rows": [
+          [
+            "K-01 · Modèle de données unique annotation + outil annotate (sur canevas & UI en prod)",
+            "h2a · engram · design-system · sentropic",
+            "h2a.md [PROPOSAL] proposait 5 contrats d’annotation distincts tandis que sentropic.md:65 en proposait 4 ; l’arbitrage propriétaire post-Round-3 tranche : « Les canvas (ui+interaction ia) doivent être dans le catalogue, exposé avec un mcp, hosté par dessus artefact et potentiellement ui en prod. Mais j'imagine que le modèle d'annotation doit être annotation + annotate j'imagine un modèle de donnée. A voir où tu gères la mise en catalog et mcp ».",
+            "Un seul modèle de données canonique d’annotation (annotation dans @sentropic/comments 0.3.0 : ancres DOM/SVG/graphe, révisions immuables, namespace, 2FA #695) + l’outil de capture annotate (@sentropic/annotate + AnchorResolver #694), appliqué à tous les canevas (inscrits au catalogue kind=\"canvas\", exposés via MCP, hébergés par-dessus @sentropic/artifacts et potentiellement UI en prod), avec promotion aval explicite vers Track et Engram (D3) par pointeur URI (Clause C-15)."
+          ],
+          [
+            "K-02 · DecisionRecord (Focus/Track) vs DecisionMemory (engram)",
+            "h2a · engram",
+            "h2a gouverne le vote/arbitrage (Focus/Track) tandis qu’engram stocke les décisions consolidées en mémoire.",
+            "h2a:DecisionRecord est l’acte d’autorité signé ; engram:DecisionMemory est sa projection cognitive avec pointeur obligatoire vers h2a_uri."
+          ],
+          [
+            "K-03 · Session (mandat h2a) vs Session (cluster-mesh) vs Episode (engram)",
+            "h2a · sentropic · engram",
+            "Trois objets « session » coexistaient avec des cycles de vie différents.",
+            "h2a:GovernanceSession (mandat/engagement), sentropic:RuntimeSession (PTY/API + WorkspaceBindingStore), engram:Episode (trace cognitive)."
+          ],
+          [
+            "K-04 · Couture visuelle Focus (adaptateur provisoire) vs moteur DS (diagram-core/canvas)",
+            "h2a · design-system · engram",
+            "h2a/focus-kit/src/Canvas.svelte utilise encore un adaptateur provisoire tandis que diagram-core et diagram-canvas sont encore privés dans le DS (h2a.md [FACT]).",
+            "Focus porte scene: SemanticDocument sans coordonnées auteur ; publication de diagram-core/diagram-canvas et remplacement de l’adaptateur provisoire au jalon M4 selon la décision G2."
+          ],
+          [
+            "K-05 · BPMN Diagram vs BPMN Execution",
+            "design-system · sentropic · h2a",
+            "bpmn-canvas.md mêlait les formes visuelles BPMN, les portes de gouvernance et le moteur d’exécution.",
+            "Mapping unique bpmn@1 ↔ bpmn-moddle F1 + profile-c14n/2 dans DS/bpmn-canvas ; portes de conformité dans h2a ; exécution runtime dans sentropic."
+          ],
+          [
+            "K-06 · Artifact (manifeste SHA-256) vs Document (stockage) vs Bundle portable",
+            "h2a · sentropic · design-system",
+            "Flou entre l’objet stocké sur S3, son manifeste signé et le fichier HTML/SVG autonome.",
+            "sentropic:CanonicalManifest (@sentropic/artifacts SHA-256), sentropic:StoredObject (#684), ds:PortableBundle (HTML/SVG 100 % offline sans CDN)."
+          ],
+          [
+            "K-07 · Identifiants français codés en dur (mergé, déployé, relance, conflit_interet)",
+            "h2a · track · engram",
+            "Présence d’identifiants français dans les données persistées (report-status.ts, drumbeat-decision.ts) face à la règle d’identifiants neutres en anglais et de langue BCP 47 (h2a.md [FACT]).",
+            "Règle normative acquise (Clause C-05) : identifiants neutres 100 % anglais pour toute nouvelle écriture, catalogues d’affichage BCP 47 et table d’alias de lecture à vie pour les événements historiques sans jamais réécrire .track/events.jsonl."
+          ]
+        ]
+      },
+      {
+        "phase": "ontologies",
+        "collapsed": true,
+        "title": "Architecture cible @sentropic/diagram-kernel [PROPOSAL] (diagram-core & diagram-canvas) : souches JS internes, couverture ELK planifiée, diagrammes gigognes et autonomie offline",
+        "columns": [
+          "Couche du noyau diagramme",
+          "Responsabilité formelle (arbitrages verbatim via h-cond & h2a.md)",
+          "État actuel [CODE] vs Cible [PROPOSAL]",
+          "Critère de vérification mécanique (r1 vs M4)"
+        ],
+        "rows": [
+          [
+            "1. SemanticDocument / GraphModel [PROPOSAL] (Graphe gigogne ouvrable)",
+            "« diagrammes gigogne (ouvrables) … Tout diagramme est un graph » : structure de données avec nœuds atomiques, groupes conteneurs et nœuds composites ouvrables en sous-graphes liés.",
+            "[CODE] SemanticDocument et Transaction existent dans packages/diagram-core/src/document.ts:73,127 (privé dans DS). [PROPOSAL] Extension gigogne GraphModel avec navigation drill-down/roll-up partagée avec Focus.",
+            "En r1 : maquette statique d’étude à 5 vues avec parentContainerIds explicites. En M4 : projection dynamique depuis SemanticDocument avec conservation des identifiants et des arêtes."
+          ],
+          [
+            "2. ViewDocument / DiagramLayout [PROPOSAL] (Nos propres souches JS + couverture ELK)",
+            "« Les algo open licence libre ou algo public mais dans notre js a nous … On respect mais on libere au max et on a nos propres souches » : calcule les boîtes et les routes sans coordonnées auteur dans Focus.",
+            "[CODE] packages/diagram-canvas (L8, privé dans DS) et souches JS locales architecture-layout.js / architecture-routing.js dans ce kit. [PROPOSAL] Couverture progressive des algorithmes publics (Sugiyama, Brandes-Köpf, A* orthogonal, ELK) dans notre propre JS.",
+            "Vérifié mécaniquement par validate-kit.mjs : 0 collision visible (node↔node, edge↔node, edge↔edge, label↔node, label↔edge, label↔label et empreintes de flèches = 0)."
+          ],
+          [
+            "3. PresentationSkill [PROPOSAL] (Synthèse visuelle par intention)",
+            "« toute representation est une forme de synthese. Il faut bie modeliser diagramme layout et skills de presentation » : filtre, regroupe et met en relief un graphe selon l’usage.",
+            "[CODE] Descripteur Focus entries.v1.json et mise en relief déclarative par route dans ce kit. [PROPOSAL] Contrat formel PresentationSkill projetant un même SemanticDocument en synthèse décisionnelle, vue d’architecture ou audit.",
+            "Vérifié mécaniquement en r1 : chaque parcours sélectionné dérive ses nœuds et groupes actifs de ses arêtes connectées sans extrémité éteinte ni nœud isolé."
+          ],
+          [
+            "4. Réactivité, atomicité des éditions & autonomie 100 % offline sans CDN",
+            "« L enjeu n est pas la taille mais la reactivité et l atomicité des editions … la acapacite offline sans cdn doit etre possible donc ok la 32Mo qd js embedb ».",
+            "[CODE] Transaction atomique dans diagram-core ; assemblage monofichier sans CDN par build-portable.mjs. Le propriétaire accepte l’embarquement autonome du JS (y compris ~32 Mo) pour garantir le mode offline sans imposer un plafond artificiel.",
+            "En r1 : 0 requête réseau externe (0 CDN, 0 police distante) et navigation réactive vérifiée sous Chromium sans réseau. En M4 : vérification des transactions d’édition atomiques sur SemanticDocument."
+          ]
+        ]
+      },
+      {
+        "phase": "memory",
+        "title": "Séparation des 5 plans de persistance et fédération par pointeurs URI",
+        "columns": [
+          "Plan de persistance",
+          "Autorité d’écriture",
+          "Technologie & emplacement",
+          "Contenu canonique",
+          "Règle d’accès inter-projets"
+        ],
+        "rows": [
+          [
+            "Plan A · Registre de gouvernance, organisation et décision · Track & Focus",
+            "h2a",
+            "Journaux JSONL append-only (.track/events.jsonl) + descripteurs Focus (entries.v1.json)",
+            "Demandes rattachées à un WP, mandats NHI, consentements, sessions, revues multi-pairs, dossiers Focus et preuves d’acceptation.",
+            "MCP Track autonome en lecture seule ; écritures via CLI/canal d’ingestion autorisé ; lecture par URI h2a://."
+          ],
+          [
+            "Plan B · Mémoire agentique (D3/D10) & références de temps (D1=C)",
+            "engram",
+            "Autorité D3/D10 ; cible de persistance via l’interface DB neutre de cluster-mesh : transactionnel D3, analytique D1=C, graphe live Git/D10 ; aucun choix de backend ni pilote DB natif dans Engram.",
+            "Souvenirs admis (accepted_current), faits Git engram-live, profils d’ontologies WP9, ContextPacks [PROPOSAL] et distributions de temps D1=C.",
+            "Accès via les 6 outils MCP mémoire v3.2 gelés (src/mcp/memory/contracts.ts:142) ; aucun MemoryRef commité dans les exports Git knowledge/*. E2/L5 : transactionnel à qualifier sur SQLite (Node 24), puis Postgres ; preuves distinctes pour les deux autres surfaces."
+          ],
+          [
+            "Plan C · État applicatif produit, commentaires, sièges & artefacts",
+            "sentropic",
+            "Observé : PostgreSQL applicatif (#684), S3/objets et SeatBundle chiffré (@sentropic/llm-mesh #596). Cible cluster-mesh : interface de sérialisation DB neutre et trois surfaces optimisées (transactionnel, analytique, graphe live), SQLite et Postgres prioritaires ; qualification non attestée ici.",
+            "Workspaces, WorkspaceBindingStore, @sentropic/comments (modèle de données unique annotation avec namespace), @sentropic/artifacts (SHA-256, hébergeant aussi les canevas) et reçus de déploiement.",
+            "Cycle de vie DL-8/13/17 ; aucune table cognitive ou de gouvernance dupliquée ; pointe vers h2a_uri et engram_uri."
+          ],
+          [
+            "Plan D · État d’interaction & cache de vue",
+            "design-system / client UI",
+            "Mémoire vive Svelte ($state) + stockage local du navigateur",
+            "Zoom/pan courant, besoin sélectionné, vue d’étude active, brouillon de sélection ou de note avant export.",
+            "Éphémère et local ; purgé sur révocation de consentement (exclusion 60 s)."
+          ],
+          [
+            "Plan E · Artefacts & bundles portables hors-ligne",
+            "h2a (sceau) + design-system (build)",
+            "Fichiers HTML/SVG monofichiers autonomes (dist/*-portable.html) & exports knowledge/*",
+            "Dossier Focus interactif complet avec diagrammes SVG, tables de preuves et export des réponses propriétaire.",
+            "100 % autonome hors-ligne sans CDN ; intégrité vérifiée par architectureHash et SHA256SUMS."
+          ]
+        ]
+      },
+      {
+        "phase": "memory",
+        "title": "Chaîne de traçabilité de bout en bout en 7 sauts (Hop 1 → Hop 7) : de la demande verbatim au reçu d’installation et à l’acceptation",
+        "columns": [
+          "Saut (Hop)",
+          "Artefact & identifiant canonique",
+          "Responsable principal",
+          "Preuve amont requise",
+          "Vérification mécanique & séparation des états"
+        ],
+        "rows": [
+          [
+            "Hop 1 · Saut 1 — Demande → Lot de travail (WP) (N03)",
+            "DemandRaw → item.created (req_id, phrase propriétaire verbatim, wp_id, périmètre BRANCH.md)",
+            "h2a (@sentropic/track)",
+            "Demande rattachée obligatoirement à un WP (défaut signalé si sans WP, h2a.md [FACT])",
+            "Enregistrement append-only dans .track/events.jsonl (demand.raised → item.created)"
+          ],
+          [
+            "Hop 2 · Saut 2 — Organisation → Décision & Architecture (N05 / N32)",
+            "DecisionDossierDocument + Track decision.select + estimation D1=C / agent-stats [PROPOSAL: ContextPack]",
+            "h2a (Focus / Track) + engram (WP9 / D1=C)",
+            "Double revue IA contradictoire indépendante + choix propriétaire sur le dossier Focus",
+            "validate-kit.mjs + signature de décision dans Track (prévision temporelle distincte d’une preuve de livraison)"
+          ],
+          [
+            "Hop 3 · Saut 3 — Organisation → Changement de code (N10)",
+            "Commits base/head/merged & faits dérivés engram-live (#389 lignes, #390 symboles)",
+            "Dépôt producteur + engram (engram-live)",
+            "Périmètre BRANCH.md déclaré et mandat d’acteur vérifié (DEC-114 / workspace-scope-guard)",
+            "harness check branch + conservation de l’historique des PRs fermées ou remplacées"
+          ],
+          [
+            "Hop 4 · Saut 4 — Changement → Qualification mécanique & revues (N04)",
+            "VerificationRun (@sentropic/harness) + revues indépendantes (≥ 2 pairs)",
+            "sentropic (@sentropic/harness) + h2a (track_verification_runs)",
+            "Commit candidat exact (Hop 3) exécuté sur ENV=test-* ou ENV=e2e-*",
+            "make scope-check (harness check scope) + distinction entre contrôle manquant et contrôle en échec (« non qualifié » sans couleur)"
+          ],
+          [
+            "Hop 5 · Saut 5 — Qualification → Release scellée (N23)",
+            "CanonicalManifest (@sentropic/artifacts 0.1.1) avec empreinte SHA-256 immuable",
+            "sentropic (@sentropic/artifacts) / autorité de publication du paquet",
+            "Qualification verte (Hop 4) + répétition npm publish --dry-run / canal de release",
+            "Sceau SHA-256 du contenu publié ; fusion Git ≠ publication npm"
+          ],
+          [
+            "Hop 6 · Saut 6 — Release → Installation / Mise en production (N31)",
+            "Reçu d’installation par environnement et namespace + cible de retour arrière (rollback)",
+            "sentropic / opérateur d’hôte (SPEC_EVOL_DEPLOYMENT_PLANE.md, deploy/k8s)",
+            "Empreinte SHA-256 publiée (Hop 5) + vérification de santé après installation",
+            "Séparation stricte entre fusion Git, publication npm et installation effective (h2a.md [FACT])"
+          ],
+          [
+            "Hop 7 · Saut 7 — Production → Acceptation propriétaire & adoption aval (N06 / N32)",
+            "Track acceptance (pass/fail/waived/stale) distinct de done + suivi ds-history + retour D1=C",
+            "Propriétaire & application consommatrice (Track) + engram (retour D1=C / admission éventuelle D3)",
+            "Vérification sur l’environnement réel (Hop 6) sur la fenêtre de 7 jours glissants par défaut",
+            "Publier un paquet ne vaut jamais adoption dans l’application cible (les 8 sujets ds-history restent suivis séparément)"
+          ]
+        ]
+      },
+      {
+        "phase": "memory",
+        "collapsed": true,
+        "title": "Synthèse de réconciliation : study-astra.md (A-01 à A-27), owner-diagram-decisions-via-hcond.md (H-01), h2a.md (H-02), review-sol.md / r2 / r3 et arbitrage post-Round-3",
+        "columns": [
+          "Axes de réconciliation",
+          "Source réconciliée",
+          "Contenu factuel et normatif aligné",
+          "Emplacement dans l’étude et le kit Focus"
+        ],
+        "rows": [
+          [
+            "A-01 à A-05 & S-01 / S-10 · Unicité des identifiants C01–C14 et N01–N33 & statut provisoire de la carte",
+            "study-astra.md + study.md + review-sol.md (#1, #10)",
+            "Alignement intégral des identifiants C01–C14 et N01–N33 entre study.md, dossier.json et ROUTED_NEEDS ; mention explicite du statut provisoire en attente de la carte propriétaire ; un seul dépôt Accountable par capacité.",
+            "Phase capabilities (bandeau + tables C01–C14 et N01–N33) et ROUTED_NEEDS"
+          ],
+          [
+            "A-06 à A-20 & S-02 / S-09 / R3 · Connexions fidèles au croquis, routes mises en relief connectées et sous-scène traceability exacte",
+            "owner-sketch.jpg + study-astra.md + review-sol.md (#2, #9) + review-sol-r3.md + OWNER-REQUEST.md:17",
+            "Connexions directes d’engram (ontologies et mémoire) vers cm-catalog, arête eng-ontologies → ds-diagram, arête reçus/inbox vers h2a-agent, arêtes intra-mesh, dérivation mécanique des surbrillances et câblage exact de la sous-scène traceability (e-hop4-5 : hop-4 → hop-5 ; e-hop6-7 : hop-6 → hop-7a).",
+            "Scènes architecture.central & architecture.traceability, App.svelte (selectNeed) et validate-kit.mjs"
+          ],
+          [
+            "A-21 à A-27 & S-03 · Préservation des clauses normatives de l’étude et alignement intégral des 18 clauses C-01 à C-18",
+            "study-astra.md + study.md (§6) + review-sol.md (#3) + review-sol-r2.md (#1)",
+            "Maintien intégral des clauses C-01 à C-14 de study.md (incluant règles de changement C-03, rejet des majeurs de schéma inconnus C-06, revue C-08, conflits C-09, réconciliation d’opérations incertaines C-10, transfert durable C-11, mémoire C-12, temps C-13) et identités distinctes pour C-15 (annotation), C-16 (diagrammes), C-17 (NHI1..NHI9) et C-18 (consentement Cowork & exclusion 60 s).",
+            "contractClauses (C-01 à C-18) dans study.md et dossier.json, et références dans ROUTED_NEEDS / G1–G3"
+          ],
+          [
+            "H-01 & S-04 / S-08 · Arbitrages verbatim sur les diagrammes sans plafond de taille inventé & distinction maquette r1 / moteur M4",
+            "owner-diagram-decisions-via-hcond.md + review-sol.md (#4, #8)",
+            "Priorité à la réactivité, aux éditions atomiques et au mode offline sans CDN (le cas 32 Mo en JS embarqué étant accepté sans constituer une limite maximale) ; distinction explicite entre la maquette SVG statique de ce dossier (r1) et la projection dynamique SemanticDocument (M4).",
+            "Clause C-16, table @sentropic/diagram-kernel [PROPOSAL] et Décision G2"
+          ],
+          [
+            "H-02, S-05 / S-06 / S-07 / S-11 & Arbitrage post-Round-3 · Canevas au catalogue/MCP/artifacts/prod, modèle unique annotation + outil annotate et localisation catalogue & MCP",
+            "OWNER-REQUEST.md:13-17 + h2a.md + engram.md + sentropic.md + review-sol.md / r2 / r3",
+            "Canevas (UI + interaction IA) inscrits au catalogue (kind=\"canvas\"), exposés avec un MCP, hébergés par-dessus @sentropic/artifacts et potentiellement UI en prod ; modèle de données unique annotation (@sentropic/comments 0.3.0) + outil annotate (@sentropic/annotate) ; localisation explicite de la mise en catalogue et du MCP citant SPEC_EVOL_CATALOG.md, SPEC_EVOL_APP_CATALOG.md, SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md, SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md et SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md.",
+            "Clauses C-04 et C-15, tables central/capabilities/ontologies/migration et Décisions G1–G3"
+          ]
+        ]
+      },
+      {
+        "phase": "migration",
+        "title": "Séquence de migration dépendante des décisions (M0 à M6) — respectant l’ordre impératif « Mémoire d’abord » (#685 → L5 en M1 avant R2/R7a/R3 en M2)",
+        "columns": [
+          "Jalon & ordre de dépendance",
+          "Intitulé & périmètre (couloir mémoire vs gouvernance)",
+          "Responsable récepteur & contributeurs",
+          "Livrables des décisions actées G1, G2 et G3",
+          "Critère de sortie & preuve de retour arrière (rollback)"
+        ],
+        "rows": [
+          [
+            "M0 · État des lieux épinglé & réconciliation",
+            "Validation croisée des positions (h2a.md, engram.md, sentropic.md, design-system.md), de study-astra.md, study.md et review-sol.md",
+            "Responsable : les 4 conducteurs (h-cond, gr-conductor, s-conductor, ds-conductor)",
+            "Dossier Focus r1, study.md, reconciliation.md et treatment.md scellés par SHA256SUMS ; séparation stricte entre code fusionné [CODE], spécification [SPEC] et proposition [PROPOSAL].",
+            "Sortie : validate-kit.mjs 100 % vert. Rollback : modifications purement documentaires, contrats déployés inchangés."
+          ],
+          [
+            "M1 · Couloir prioritaire « Mémoire d’abord » (#685 → L5) [non bloqué par la gouvernance]",
+            "Qualification de l’hôte MCP et raccordement des 6 outils mémoire v3.2 avant toute exposition au catalogue",
+            "Responsable récepteur : sentropic (hôte #685, stockage #684, lot L5 #697) · Autorité mémoire : engram (src/mcp/memory/contracts.ts:142)",
+            "1. Qualification de l’hôte MCP Sentropic (#685) et de l’interface DB neutre (C-02/C-12). 2. E2/L5 (#697) qualifie la surface transactionnelle sur SQLite d’abord (image Node 24), puis Postgres, avec les 6 outils MCP mémoire v3.2 d’Engram (search, get, capture, admit, withdraw, forget), isolation deny-as-missing et tests X2/X2b/X4. Engram déclare la surface sans choisir de backend ni embarquer de pilote DB natif. Aucun chantier d’ontologie ne bloque ce couloir.",
+            "Sortie : reçus réels de lecture/écriture/oubli mémoire scopés sur SQLite, puis Postgres, audit sans pilote DB natif dans Engram et test de non-résurrection X4 (#372). Les surfaces analytique et graphe live exigent des preuves séparées. Rollback : désactivation du pont MCP mémoire hôte tout en préservant l’intégrité du journal D3."
+          ],
+          [
+            "M2 · Catalogue et application de G1–G3 actées",
+            "Après M1, découverte unifiée et inscription des canevas au catalogue/MCP.",
+            "Sentropic : catalogue, MCP et hébergement ; h2a : équipement ; DS : présentation annotate ; Engram : profils.",
+            "Décision propriétaire actée le 2026-10-19 : « G1 = option 1 ». Chaque acte a un seul responsable sous mandat explicite. Chaque dépôt garde ses autorités de code, de publication et de données ; les frontières partagées sont co-gelées. Seuls les conflits matériels non résolus remontent au propriétaire. Décision propriétaire actée le 2026-10-19 : « G2 = option 1 ». Engram gouverne les profils, schémas, fixtures et migrations. Le Design System conserve et publie l’exécuteur générique @sentropic/diagram-core ainsi que le layout et le rendu. Les consommateurs épinglent les profils ; aucun second méta-modèle de diagramme. Décision propriétaire actée le 2026-10-19 : « g3 = a ok ». Le Design System possède annotate pour la présentation seulement : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions ; il ne résout ni ne persiste les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans copie. H1 · 2026-10-19 : « il faut prevoir les 2 ». Chaque application Sentropic doit permettre l’hébergement d’artefacts sur un sous-domaine ou sur un domaine distinct.",
+            "Sortie : 0 activation de fournisseur paresseux au lookup ; deny-as-missing vérifié ; canevas découvrables via /catalog et MCP ; 0 réécriture de .track/events.jsonl. Rollback : maintien des résolveurs locaux existants."
+          ],
+          [
+            "M3 · Annotation de bout en bout selon G3 actée",
+            "Raccordement de l’outil de capture @sentropic/annotate au modèle de données unique annotation (@sentropic/comments 0.3.0) sur les canevas et l’UI en prod",
+            "DS : présentation ; Sentropic : ancres, fils, résolution, persistance, 2FA et routage hôte ; h2a/Engram : promotions aval.",
+            "M3 : Sentropic résout et enregistre les propositions du DS dans leur namespace, avec 2FA. Ancres stables : TextQuoteSelector pour le texte ; identité de nœud Focus / FE-2 pour les blocs ; {diagramId, targetIds[], frame, geometry} pour les diagrammes.",
+            "Sortie : toute annotation sur un canevas ou une UI en prod est enregistrée dans le modèle unique annotation avec son namespace, survit au rechargement et n’atteint que l’agent autorisé. Rollback : désactivation de l’envoi agent tout en conservant les annotations persistées dans Postgres (#684)."
+          ],
+          [
+            "M4 · Profils Engram, moteur DS et références de temps D1=C",
+            "Publication et qualification du moteur DS selon G2 actée le 2026-10-19 actée.",
+            "Engram : profils et D1=C ; DS : diagram-core, diagram-canvas et rendu ; h2a : consommation et WP8.",
+            "En M4, profils Engram épinglés par digest et moteur publié par le DS qualifiés ensemble ; remplacement de l’adaptateur provisoire, transactions atomiques et fonctionnement hors-ligne sans CDN. Exports knowledge/* sans MemoryRef.",
+            "Sortie : 0 second modèle de diagramme ; 0 MemoryRef dans Git ; mode 100 % offline sans CDN. Rollback : l’adaptateur actuel de focus-kit reste actif tant que le moteur publié n’est pas qualifié."
+          ],
+          [
+            "M5 · Fermeture d’une trace réelle en 7 sauts de la demande à la production (C04)",
+            "Qualification bout-en-bout des 7 sauts sur un changement réel d’application managée",
+            "Responsable récepteur : h2a (lignée Track) en fédération avec sentropic (harness, artifacts, déploiement) et engram (engram-live, D1=C)",
+            "Sur un changement réel d’application managée, relier demande verbatim → WP Track → décision Focus → PR/commit (engram-live) → VerificationRun (harness) & double revue → artefact SHA-256 → reçu d’installation/déploiement → acceptation propriétaire (7 jours glissants par défaut).",
+            "Sortie : les 7 sauts se résolvent aux versions exactes ; fusion, publication, installation et acceptation sont prouvées séparément. Rollback : retour arrière sur le digest d’artefact précédent."
+          ],
+          [
+            "M6 · Transferts d’obligations acquittés (ds-history) et gardes de non-dérive CI",
+            "Exécution des transferts acquittés selon la Clause C-11 et contrôle CI des empreintes de contrats",
+            "Responsable récepteur : propriétaire de chaque application cible (pour l’adoption ds-history) & mainteneurs des 4 dépôts",
+            "Exécution des transferts uniquement après acquittement du rôle récepteur (identifiant de destination, liens réciproques et critère d’acceptation consommateur pour les 8 sujets ds-history). Ajout des contrôles de compatibilité de contrats dans les files de release.",
+            "Sortie : aucune obligation ds-history n’est close du seul fait de la publication d’un paquet amont. Rollback : maintien de la responsabilité chez le cédant jusqu’à l’acquittement complet (Clause C-11)."
+          ]
+        ]
+      },
+      {
+        "phase": "migration",
+        "collapsed": true,
+        "title": "Registre des 13 risques d’architecture et de gouvernance (R-01 à R-13) et parades",
+        "columns": [
+          "ID · Risque",
+          "Gravité",
+          "Mécanisme de défaillance",
+          "Parade contractuelle & technique"
+        ],
+        "rows": [
+          [
+            "R-01 · Checkout local, README ou ref de suivi en retard",
+            "Élevée",
+            "Une brique fusionnée sur origin/main paraît absente, ou une simple proposition/spécification paraît déjà livrée en production.",
+            "Épingler les commits immuables (H, E, S, D) et distinguer à chaque ligne l’état sur 4 axes : décision, code source, publication et exécution hôte."
+          ],
+          [
+            "R-02 · RACI descriptif pris pour un mandat d’écriture exécutable",
+            "Élevée",
+            "Un agent écrit, fusionne ou publie sur la foi d’un libellé de rôle non ratifié dans RACI.md.",
+            "Clauses C-01 et C-07 + workspace-scope-guard : résoudre séparément le mandat (G1 actée le 2026-10-19) et le droit d’accès à l’espace de travail."
+          ],
+          [
+            "R-03 · Le catalogue devient un second système de politique ou de secrets",
+            "Élevée",
+            "Refus incohérents, duplication de secrets hors de llm-mesh ou fuite de métadonnées.",
+            "Clause C-04 : découverte deny-as-missing, garde centrale des sièges dans @sentropic/llm-mesh (#596) et qualification d’activation séparée."
+          ],
+          [
+            "R-04 · Garde des ontologies confondue avec la propriété des bases métier",
+            "Élevée",
+            "Track, les bases applicatives ou les déploiements reçoivent des écritures concurrentes depuis le gardien d’ontologies.",
+            "Clauses C-02 et C-05 : gouverner une ontologie dans Engram ne transfère jamais la propriété des événements Track ni des bases Postgres."
+          ],
+          [
+            "R-05 · Fuite de mémoire protégée via des références dans Git",
+            "Élevée",
+            "Un export commité dans knowledge/* révèle l’existence d’un souvenir privé ou ressuscite un souvenir oublié.",
+            "Clause C-12 : exclusion totale de tout MemoryRef des fichiers commités et test de non-résurrection au restore (#372 X4)."
+          ],
+          [
+            "R-06 · Création d’un second méta-modèle de diagramme ou perte BPMN",
+            "Élevée",
+            "Divergence entre bpmn-canvas, Focus, d2d et diagram-core ou perte des extensionElements BPMN.",
+            "Clauses C-05 et C-16 : conserver SemanticDocument / ViewDocument, le mapping unique bpmn-moddle F1 et la canonicalisation profile-c14n/2."
+          ],
+          [
+            "R-07 · Écart persistant entre focus-kit (adaptateur provisoire) et diagram-core/canvas privés",
+            "Moyenne",
+            "Le kit Focus dans h2a continue d’utiliser un adaptateur provisoire sans bénéficier du moteur du Design System ni des souches JS communes.",
+            "Couture visuelle identifiée dans h2a.md [FACT] : publication de diagram-core / diagram-canvas et convergence au jalon M4 selon G2 actée le 2026-10-19."
+          ],
+          [
+            "R-08 · Succès de la surcouche annotate confondu avec une annotation persistée et routée",
+            "Élevée",
+            "Un commentaire reste dans le magasin mémoire local ou sa cible agent est lue depuis le DOM non fiable.",
+            "Clauses C-07 et C-15 : persistance dans le modèle unique annotation (@sentropic/comments #684) et résolution de l’agent destinataire depuis la table hôte de confiance."
+          ],
+          [
+            "R-09 · Publication npm confondue avec l’installation ou l’adoption applicative",
+            "Élevée",
+            "Les 8 sujets historiques ds-history sont clos dès la publication du paquet amont sans adoption dans l’application.",
+            "Clauses C-10 et C-11 : fusion Git, publication npm, installation et acceptation consommateur sont suivies séparément."
+          ],
+          [
+            "R-10 · Dépendance CDN ou appel MCP bloquant le rendu hors-ligne",
+            "Élevée",
+            "Un diagramme ou un dossier Focus échoue hors-ligne ou attend un appel réseau pour s’afficher.",
+            "Clauses C-05 et C-16 : nos propres souches JS, profils figés par empreinte au build et fonctionnement 100 % offline sans CDN."
+          ],
+          [
+            "R-11 · Fausse certitude des estimations de délai",
+            "Moyenne",
+            "Des estimations arbitraires ou de simples durées de jobs CI remplacent la vélocité mesurée ou servent à sauter une porte de revue.",
+            "Clause C-13 : estimer en heures d’agent et tours de revue via D1=C (engram) et agent-stats (h2a), en marquant incomplete/unknown explicitement."
+          ],
+          [
+            "R-12 · Casse des journaux .track/events.jsonl lors du passage aux identifiants anglais",
+            "Moyenne",
+            "La suppression brutale de mergé / déployé / relance casse le rejeu des événements historiques ou la chaîne de hachage prevHash.",
+            "Clause C-05 et K-07 : identifiants neutres/anglais pour le neuf + catalogues BCP 47 + table d’alias de lecture à vie sans jamais réécrire le journal."
+          ],
+          [
+            "R-13 · Illisibilité des grands graphes ou incohérence entre carte et route surlignée",
+            "Moyenne",
+            "Un diagramme monolithique devient illisible, ou le clic sur un besoin allume des arêtes dont les extrémités restent éteintes.",
+            "Clauses C-14 et C-16 : vues gigognes d’étude, dérivation mécanique des nœuds/groupes depuis les arêtes connectées et validation géométrique à 0 collision."
+          ]
+        ]
+      }
+    ],
+    "ownerFeedbackAnnex": {
+      "title": "Retour du propriétaire",
+      "source": "owner-feedback-diagram/OWNER-FEEDBACK-RAW.md · 18–19 octobre 2026 · verbatim intégral",
+      "rawText": "# Owner feedback on the governance central diagram — RAW, VERBATIM (2026-10-18). Binding; do not paraphrase.\nScreenshots in this folder: 24.png (whole diagram), 22.png (access surfaces), 23.png (block 4 « sécurité, LLM mesh & juge »).\n\ndiagramme de gouvernance [Image #24]\nil faut ajouter aux surfaces d'acces les fournisseurs IA: chatgpt, gemini, claude, muse (avec les cowork/mcp) [Image #22]\n[Image #23] t'est pas sérieux j'avais séparé sécurité et llm (qui étaient dans le catalogue des différentes ia: llm, juge, vision/sam-yolo, tts, stt, ...) - observabilité devrait davantage aller avec sécurité qu'avec cluster\nles mcp ne sont meme pas dans les catalogue alors que c'est souhaitable\nles api sont les surfaces d'exposition serveur ocmment n'a rien a y faire il est dans les mcp selon moi\nstockage c'est pas que les artefact, c'est aussi la sérialisation des modeles : graph en base live, annotations, ...\ncluster = ce devrait être la couche d'intégration inter-instance - on pourrait aussi y adjoindre d'autres infra/paas couches comme les intégration non mcp comme k8s, mails transactionnels, cloud\ndans le design system tu devrais retrouver: annotations, diagramme, decision dossier, et les 200+ composants ui\n\nlog mon retour adjoint au decision dossier et transmes mes comments raw aux ia max\n\n## Addition (VERBATIM, 2026-10-18), screenshot 25.png\n« il y a beaucoup d'espace vertical inutile, fixe ça stp rapidement »\n\n## Addition (VERBATIM, 2026-10-18), screenshot 25.png\n« il y a beaucoup d'espace vertical inutile, fixe ça stp rapidement »\n« + assure la justification verticale stp ça manque d'harmonie »\n\n## Addition (VERBATIM, 2026-10-18), screenshot 26.png\n« y a encore trop d'espace gars. faut maximiser la lisibilité pleine page stp »\n\n## 2026-10-19 — on the full-page version (sha c9b809e4…), owner screenshot #28 of the central diagram, VERBATIM\n« polices trop petites d'au moins 50%, espaces verticaux injustifiés entre cellules dans le dossier, stp raffraichis vite »\nWhat the screenshot shows: in the central routing diagram, the card fonts and labels are very small. Groups have large empty vertical gaps between rows of cells: for example, inside \"sentropic · services partagés\", the cards of each column sit at the bottom with empty space above them (\"3. Catalogues\", \"5. Stockage\", \"4. Sécurité\", \"6. Cluster\"); there are also large gaps between \"h2a\" rows and between the upper band and the Design System band.\n\n## 2026-10-19 — on sha 58556c4c… (fonts +50%), owner feedback VERBATIM (screenshots #1-#8 seen by the owner, not available as files)\ngouvernance:\n  1. [Image #1] faudrait que ca tienne sur l'écran en 16:9 plutôt qu'en 1:1 - élargit les boites comme elles étaient avant ca devrait être bon\n  2. [Image #2] et [Image #3]: bascule dans le diagramme c'est bizarre que ca depasse comme ca\n  3. [Image #4] il n'y a que les ontologie au dessous du coup ca fait bizarre. [Image #5] globalement ca ne sert a rien\n  4. [Image #6] je mettrais organisation et decision plutôt que \"travail\"\n  5. [Image #7] in fine je separerai cluster = intégration entre instances sentropic et  l'intégration aux services provider : cloud (k8s, transactionel mail), registry applicatives appstore et autres (registry d'agents / mcp),\n  6. [Image #8] je mettrais aussi les outils de harnais la dedans. h2a doit exposer ses outils la dedans. je mettrais plutôt harnais incluant l'outil d'annotation et tout le reste, et je mettrais aussi les autres connecteur mcp aux connecteurs qu'on\n  va broker: gmail, gchat, atlassian, github, notion, slack, openerp, waveapps, stripe ...\n  7. (follow-up message) « ah dans le catalog j'ai oublié les catalog d'ui de canvas / apps (eg. bpmn-canvas, et le templater de sentropic, etc.) »\n\n## 2026-10-19 — on sha 35f825f6d695ca66… (r2)\nScreenshots: owner-feedback-diagram/r3/image-30.png (right edge: arrow labels \"liaison Cowork\" / \"expose les MCP\" floating in the margin), image-31.png (Fournisseurs IA → Cowork arrow, label \"liaison Cowork\" off to the far right), image-32.png (full diagram).\nOwner words, verbatim:\n« [Image #30] stp tu peux ranger ces annotation de fleche a un autre endroit en termes de layout [Image #31] la fleche est particulierement mal placée et peu lisible »\n« [Image #32] c,est globalement tres bien pourrais tu faire une version \"depliable\" (avec moi de détail, pour masquer / afficher) le contenu de chaque boite qui a des sous-boites ? »\n\n## 2026-10-19 — on sha 7f9ef8833a9d17e2… (r3)\nScreenshots: owner-feedback-diagram/r4/image-34.png (shared-services frame with sub-frames collapsed, big \"+\" buttons), image-33-influence-reference.png (the influence dossier style the owner prefers; source /home/antoinefa/src/influence/dossier/influnified-analyse.html, engine /home/antoinefa/src/influence/dossier/work/scene.mjs + diagrams.mjs + style.css).\nOwner words, verbatim:\n« 1. [Image #34] j'imagine que quand on réduit le 3 il pourrait s'ajuster en largeur.\n2. les \"+\" sont immondes (bcp trop grand, et on a un design system)\n3. converge vers les boites du dossier influence stp »\nEarlier, on image 33: « sur le decision dossier, j'aime bcp plus le style utilisé pour les questions sur \"influence\". »\n« Ce qui est positif ici c'est: - les icones - la gestion des évitements - la forme des boites - le layout des boites (centrage vertcal) - les espacement de carte harmonieux et minimalistes »\n\n## 2026-10-19 — request during r4\nOwner words, verbatim:\n« je voudrais les deux version de render: comme influence, et comme les decision dossier (aligne design system avec les box plus carrées) je veux voire la différence des deux stp (avec un bouton pour switch) »\n\n## 2026-10-19 — card style preference (hrpolnav)\nScreenshots: owner-feedback-diagram/r6/image-36-hrpolnav-card-text.png, image-37-hrpolnav-card.png (hrpolnav card: uppercase kicker \"AUT\", icon shield, title \"Auth Manager\", detail lines, muted tone line, separator, bold footer \"service: …\", left accent bar).\nOwner words, verbatim:\n« [Image #36] je viens de dire côté hrpolnav qu'il faut pour ces cartes [Image #37] juste 2 px en plus de marge a gauche pour les texte qui sont au dessous de l'icone pour faire plus aéré. vérifie avec design system qui détient ce style, mais je reste plus fan de ce style pour les cartes in fine »\nFollow-up, screenshot owner-feedback-diagram/r6/image-38-hrpolnav-edge-label.png (hrpolnav edge label \"sources\" overlapping/abutting the arrow line).\nOwner words, verbatim:\n« [Image #38] par contre dans le style influence les texte sur les fleches sont mieux placés »\nFollow-up, screenshot owner-feedback-diagram/r6/image-39-influence-colours.png (influence diagram: light grey global canvas, tinted card fills per tone — blue/info, orange/warning, red/critical, grey/neutral — containers with tinted header).\nOwner words, verbatim:\n« [Image #39] dans les couleurs cela est mieux de ce côté (avoir des fonds non blanc pour le fond global our pour les autres aide a la lisibilité »\n\n## 2026-10-19 — correction on the two renders\nScreenshot owner-feedback-diagram/r6/image-40-card-reference.png (card \"SCC / AI Security\": icon, uppercase code, bold title, detail, muted line, rule, bold footer \"service: …\", left accent).\nOwner words, verbatim:\n« t'a pas pigé les cartes ce sont celles comme dans le dossier i-cond ou hrpolnav ou les précédents design system : [Image #40] (avec les modifications de 2px demandées et les contrastes de couleurs). »\n\n## 2026-10-19 — on r4 (sha 7c4d51ea…)\nOwner words, verbatim:\n« note : j'ai plus mes \"+\" dans cette version... »\nReading: r4 replaced the +/− controls with small chevrons; the owner wants the +/− (expand/collapse) kept, but small and DS-styled (previous complaint was only size/style: « les \"+\" sont immondes (bcp trop grand, et on a un design system) »).\n\n## 2026-10-19 — on r6 (sha 1af8e417…)\nScreenshot owner-feedback-diagram/r6/image-42-r6-dossier-render.png (\"Dossier\" render).\nOwner words, verbatim:\n« cette vue censée être celle de i-cond ou des précédents dossier les cartes ne sont pas les memes, et dans ces dossier i-cond, polnav, il y a des largeur standard qui ici ne sont pas respectées. on n'a toujours pas les \"+\" pour déplier. et la justification verticale n'est pas respectée. le layout n,est pas bon »\n\n## 2026-10-19 — on r7 (sha 82a5b88f…)\nScreenshots: owner-feedback-diagram/r8/image-43.png (full r7), image-44.png (two inter-instance cards \"Liaisons inter-instance\" + \"Autres instances Sentropic\" in frame 6), image-45.png (card \"Cloud, App Store et registres\" in frame 7), image-46.png (title \"sentropic · services partagés\"), image-47.png (dotted \"accès CLI\" arrow entering the frame header area badly).\nOwner words, verbatim:\n« [Image #43] utilise un seule modele de largeur pour les fiches (le moins large petit donc)\nles +/- sont un peu bogué fonctionnent pas tjs\nrenomme 6 en Integration et tu peut mettre une seule boite ici ([Image #44]), et mettre [Image #45] dedans\nune seule version design system sera suffisant, et par contre il la faut bilngue\n[Image #46] mets un S a sentropic\n[Image #47] stp fais attention a certains fleches encore bien pourries\na la premiere présentation, laisse tout replié »\n\nFollow-up on r7, screenshot owner-feedback-diagram/r8/image-48.png (frame title \"h2a · organisation et décision\"). Owner words, verbatim:\n« mets un O a organisation »\n\nFollow-up, screenshot owner-feedback-diagram/r8/image-49.png (all collapsed: 5 top frames). Owner words, verbatim:\n« au niveau principal je suis pas sur que les flux principaux soient bien représentés quand on replie tout ni que les fleches soient bien positionnées. on utilise bien xyflow la ? »\n\n## 2026-10-19 — on r8 (sha 9abe9c0c…): top-level flow labels\nScreenshots owner-feedback-diagram/r9/image-50..53.png (edge labels \"CLI et sessions\", \"accès CLI\", \"annotate via façade MCP\", \"contrats mémoire\").\nOwner words, verbatim:\n« ok parfait pour le diagramme\n[Image #50] ce serait plutôt harnais et collaboration - et ca touche les cli et le chat et le cowork\n[Image #51] la ce serait session et outils ?\n[Image #52] ce serai plutôt canvas UI ?\n[Image #53] memoire et savoir »\n\nFollow-up, screenshot owner-feedback-diagram/r9/image-54.png (\"liaison Cowork\" edge entering a card off-centre). Owner words, verbatim:\n« on a encore bcp de lignes placées en dehors des centres de cellules, c'est weird. un autolayout devrait l'empecher »\n\n## 2026-10-19 — finalisation (on r9 sha d97426a0…)\nOwner words, verbatim:\n« je comprends pas pour g3 on a deja statué t'as pas modifié la deicion. pour le reste on pourra considérer le dossier comme finalisé a commité push pr, et surtout je voudrais que le README des 3 repos porte le contra de gouvernance global pour contextualiser le rôle de chaque repo »\nClarification asked « Quels sont les 3 dépôts ? » → owner: « Les 4 » (sentropic, h2a, engram, design system).\n"
+    }
+  },
+  "facts": [
+    "F1 · [DEMANDE PROPRIÉTAIRE] OWNER-REQUEST.md et owner-sketch.jpg établissent la demande verbatim : placer un diagramme au cœur d’un contrat long terme d’unification de la gouvernance h2a, engram, sentropic et design-system permettant de router les besoins (comme annotate / annotation) et d’associer une première proposition de Capability Map (en attente de la carte du propriétaire) couvrant mémoire agentique, traçabilité E2E jusqu’en prod, décisions/architecture, organisation humains/agents, canvas UI et artefacts.",
+    "F2 · [ARBITRAGES DIAGRAMMES] owner-diagram-decisions-via-hcond.md consigne verbatim les 3 arbitrages du propriétaire : (1) « Les algo open licence libre ou algo public mais dans notre js a nous … On respect mais on libere au max et on a nos propres souches » ; (2) « diagrammes gigogne (ouvrables) … Tout diagramme est un graph et toute representation est une forme de synthese. Il faut bie modeliser diagramme layout et skills de presentation » ; (3) « L enjeu n est pas la taille mais la reactivité et l atomicité des editions … la acapacite offline sans cdn doit etre possible donc ok la 32Mo qd js embedb » (acceptation d’un bundle JS embarqué de ~32 Mo pour l’autonomie offline, sans en faire un plafond artificiel).",
+    "F3 · [FAITS VÉRIFIÉS SUR CODE] Aux commits épinglés (H = 46b82b42, E = a88375f0, S = 441453966, D = 25c0f3d3) : sentropic/api/src/services/catalog/types.ts:22 définit 5 kinds implémentés (skill | tool | agent | workflow | canvas, #679) tandis que app, ontology et ui sont des extensions en spécification ; engram expose ses 6 outils MCP mémoire v3.2 dans src/mcp/memory/contracts.ts:142, ses faits Git dans engram-live/ (engram-live/line-attribution.ts) et ses validateurs d’ontologies dans src/ontology-profile.ts, src/profile-validate.ts et src/merge-graphs.ts ; Focus porte scene: SemanticDocument mais focus-kit/src/Canvas.svelte utilise encore un adaptateur provisoire tandis que diagram-core et diagram-canvas sont encore privés dans le Design System (h2a.md [FACT]).",
+    "F4 · [ORDRE DE LIVRAISON & CONVERGENCES DE POSITION] L’ordre d’exécution « Mémoire d’abord » (#685 → L5 en M1 avant l’exposition catalogue R2/R7a/R3 en M2) est impératif et non bloqué par la gouvernance des ontologies. Les positions des projets convergent sur le découpage des 4 pôles, la préservation du journal append-only .track/events.jsonl (WP obligatoire, 7 jours glissants par défaut, « non qualifié » sans couleur, identifiants anglais + langue utilisateur BCP 47 avec alias de lecture à vie pour mergé/déployé/relance, fusion et installation séparées) et le centre des références de temps D1=C dans Engram articulé avec agent-stats (0.1.0).",
+    "F5 · [ARBITRAGE PROPRIÉTAIRE POST-ROUND-3 : CANEVAS AU CATALOGUE/MCP/ARTIFACTS & MODÈLE UNIQUE ANNOTATION + ANNOTATE] OWNER-REQUEST.md:13-17 consigne verbatim l’arbitrage du propriétaire après la revue Sol Round 3 : « Question très mal posée. Les canvas (ui+interaction ia) doivent être dans le catalogue, exposé avec un mcp, hosté par dessus artefact et potentiellement ui en prod. Mais j'imagine que le modèle d'annotation doit être annotation + annotate j'imagine un modèle de donnée. A voir où tu gères la mise en catalog et mcp » et « Écoute je veux voir le decision dossier pour pouvoir juger est nécessaire ». En conséquence : (1) les canevas (UI + interaction IA) sont des entrées du catalogue (kind: \"canvas\"), exposés via MCP (ui:// H-4 & registre MCP #679/#692), hébergés par-dessus @sentropic/artifacts (CanonicalManifest SHA-256) et potentiellement montés comme UI en production ; (2) le modèle d’annotation est un unique modèle de données canonique (annotation dans @sentropic/comments 0.3.0) + l’outil de capture annotate (@sentropic/annotate + AnchorResolver #694), Track et Engram (D3) étant des promotions aval explicites par pointeur URI ; (3) la projection centrale du catalogue et la médiation synchrone du registre MCP résident dans sentropic (SPEC_EVOL_CATALOG.md:99,150,177, SPEC_EVOL_APP_CATALOG.md:5,29,46, SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md:227,250 D13, SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md:91,714,745, SPEC_EVOL_CLUSTER_MESH_MCP_REGISTRY_ARTIFACTS.md:101,109,135 #679/#692), tandis que chaque producteur déclare ses descripteurs."
+  ],
+  "decisions": [
+    {
+      "key": "G1",
+      "title": "Contrat fédéré : un responsable par acte",
+      "context": "Décision propriétaire actée le 2026-10-19 : « G1 = option 1 ».",
+      "question": "Chaque acte a un seul responsable, sous mandat explicite. Chaque dépôt conserve ses autorités sur le code, les publications et les données. Les responsables concernés figent ensemble les contrats partagés. Seuls les conflits importants non résolus remontent au propriétaire.",
+      "source": "OWNER-DECISIONS-2026-10-19.md · DS-POSITION-G3-2026-10-19.md · study.md §9",
+      "statusLabel": "Actée par le propriétaire · 2026-10-19",
+      "decisionStatus": "accepted",
+      "ownerChoice": "A",
+      "ownerRemarks": [
+        {
+          "round": "2026-10-19",
+          "text": "« G1 = option 1 »"
+        }
+      ],
+      "response": [
+        {
+          "round": "r10",
+          "text": "Chaque acte a un seul responsable, sous mandat explicite. Chaque dépôt conserve ses autorités sur le code, les publications et les données. Les responsables concernés figent ensemble les contrats partagés. Seuls les conflits importants non résolus remontent au propriétaire."
+        }
+      ],
+      "recommended": "A",
+      "recommendation": "Chaque acte a un seul responsable, sous mandat explicite. Chaque dépôt conserve ses autorités sur le code, les publications et les données. Les responsables concernés figent ensemble les contrats partagés. Seuls les conflits importants non résolus remontent au propriétaire.",
+      "diagram": null,
+      "options": [
+        {
+          "key": "A",
+          "title": "Contrat fédéré : un responsable par acte",
+          "consequence": "Chaque acte a un seul responsable, sous mandat explicite. Chaque dépôt conserve ses autorités sur le code, les publications et les données. Les responsables concernés figent ensemble les contrats partagés. Seuls les conflits importants non résolus remontent au propriétaire.",
+          "strengths": "Le conducteur, l’auteur, le relecteur et le contrôle ont des rôles distincts. Aligner les mandats et les responsabilités ; la carte C01–C14 reste soumise au propriétaire.",
+          "openPoints": "M2 : aligner les contrats sans fusionner les dépôts. Toute évolution relève de C-03 et d’une nouvelle décision explicite."
+        }
+      ],
+      "sections": [
+        {
+          "title": "Application de G1",
+          "columns": [
+            "Dimension",
+            "Contrat acté"
+          ],
+          "rows": [
+            [
+              "Dépend de",
+              "OWNER-DECISIONS-2026-10-19.md · C-01 / C-03 / C-04 / C-15 / C-16"
+            ],
+            [
+              "Critère d’acceptation",
+              "Le conducteur, l’auteur, le relecteur et le contrôle ont des rôles distincts. Aligner les mandats et les responsabilités ; la carte C01–C14 reste soumise au propriétaire."
+            ],
+            [
+              "Coût et réversibilité",
+              "M2 : aligner les contrats sans fusionner les dépôts. Toute évolution relève de C-03 et d’une nouvelle décision explicite."
+            ]
+          ]
+        }
+      ],
+      "decidedAt": "2026-10-19",
+      "ownerQuote": "G1 = option 1"
+    },
+    {
+      "key": "G2",
+      "title": "Profils Engram ; moteur et rendu Design System",
+      "context": "Décision propriétaire actée le 2026-10-19 : « G2 = option 1 ».",
+      "question": "Engram gouverne les profils, schémas, jeux d’essai de référence et migrations. Le Design System conserve et publie le moteur générique @sentropic/diagram-core, la mise en page et le rendu. Les consommateurs épinglent les profils ; aucun second modèle de diagramme.",
+      "source": "OWNER-DECISIONS-2026-10-19.md · DS-POSITION-G3-2026-10-19.md · study.md §9",
+      "statusLabel": "Actée par le propriétaire · 2026-10-19",
+      "decisionStatus": "accepted",
+      "ownerChoice": "A",
+      "ownerRemarks": [
+        {
+          "round": "2026-10-19",
+          "text": "« G2 = option 1 »"
+        }
+      ],
+      "response": [
+        {
+          "round": "r10",
+          "text": "Engram gouverne les profils, schémas, jeux d’essai de référence et migrations. Le Design System conserve et publie le moteur générique @sentropic/diagram-core, la mise en page et le rendu. Les consommateurs épinglent les profils ; aucun second modèle de diagramme."
+        }
+      ],
+      "recommended": "A",
+      "recommendation": "Engram gouverne les profils, schémas, jeux d’essai de référence et migrations. Le Design System conserve et publie le moteur générique @sentropic/diagram-core, la mise en page et le rendu. Les consommateurs épinglent les profils ; aucun second modèle de diagramme.",
+      "diagram": null,
+      "options": [
+        {
+          "key": "A",
+          "title": "Profils Engram ; moteur et rendu Design System",
+          "consequence": "Engram gouverne les profils, schémas, jeux d’essai de référence et migrations. Le Design System conserve et publie le moteur générique @sentropic/diagram-core, la mise en page et le rendu. Les consommateurs épinglent les profils ; aucun second modèle de diagramme.",
+          "strengths": "M4 : qualifier ensemble les profils Engram épinglés par empreinte et le moteur publié par le DS, puis remplacer l’adaptateur provisoire. Préserver les transactions atomiques et le fonctionnement hors ligne sans CDN.",
+          "openPoints": "Le moteur reste dans le DS. Conserver la dernière version qualifiée pendant la migration M4."
+        }
+      ],
+      "sections": [
+        {
+          "title": "Application de G2",
+          "columns": [
+            "Dimension",
+            "Contrat acté"
+          ],
+          "rows": [
+            [
+              "Dépend de",
+              "OWNER-DECISIONS-2026-10-19.md · C-01 / C-03 / C-04 / C-15 / C-16"
+            ],
+            [
+              "Critère d’acceptation",
+              "M4 : qualifier ensemble les profils Engram épinglés par empreinte et le moteur publié par le DS, puis remplacer l’adaptateur provisoire. Préserver les transactions atomiques et le fonctionnement hors ligne sans CDN."
+            ],
+            [
+              "Coût et réversibilité",
+              "Le moteur reste dans le DS. Conserver la dernière version qualifiée pendant la migration M4."
+            ]
+          ]
+        }
+      ],
+      "decidedAt": "2026-10-19",
+      "ownerQuote": "G2 = option 1"
+    },
+    {
+      "key": "G3",
+      "title": "Annotate : présentation DS ; modèle de données Sentropic",
+      "context": "Décision propriétaire actée le 2026-10-19 : « g3 = a ok ».",
+      "question": "Le Design System gère la présentation d’annotate : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions, sans résoudre ni enregistrer les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans les copier.",
+      "source": "OWNER-DECISIONS-2026-10-19.md · DS-POSITION-G3-2026-10-19.md · study.md §9",
+      "statusLabel": "Actée par le propriétaire · 2026-10-19",
+      "decisionStatus": "accepted",
+      "ownerChoice": "A",
+      "ownerRemarks": [
+        {
+          "round": "2026-10-19",
+          "text": "« g3 = a ok »"
+        }
+      ],
+      "response": [
+        {
+          "round": "r10",
+          "text": "Le Design System gère la présentation d’annotate : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions, sans résoudre ni enregistrer les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans les copier."
+        }
+      ],
+      "recommended": "A",
+      "recommendation": "Le Design System gère la présentation d’annotate : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions, sans résoudre ni enregistrer les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans les copier.",
+      "diagram": null,
+      "options": [
+        {
+          "key": "A",
+          "title": "Annotate : présentation DS ; modèle de données Sentropic",
+          "consequence": "Le Design System gère la présentation d’annotate : sélection, marqueurs et affichage des fils. Il reçoit une ancre opaque et émet des propositions, sans résoudre ni enregistrer les ancres. Sentropic possède le modèle unique : ancres, fils, résolution et persistance. Les ancres de diagramme référencent les profils Engram sans les copier.",
+          "strengths": "M3 : Sentropic résout et enregistre les propositions du DS dans leur namespace, avec 2FA. Ancres stables : TextQuoteSelector pour le texte ; identité de nœud Focus / FE-2 pour les blocs ; {diagramId, targetIds[], frame, geometry} pour les diagrammes.",
+          "openPoints": "Le DS et @sentropic/comments doivent partager un contrat d’ancre stable, qualifié avant adoption. Sentropic conserve l’unique stockage de production."
+        }
+      ],
+      "sections": [
+        {
+          "title": "Application de G3",
+          "columns": [
+            "Dimension",
+            "Contrat acté"
+          ],
+          "rows": [
+            [
+              "Dépend de",
+              "OWNER-DECISIONS-2026-10-19.md · C-01 / C-03 / C-04 / C-15 / C-16"
+            ],
+            [
+              "Critère d’acceptation",
+              "M3 : Sentropic résout et enregistre les propositions du DS dans leur namespace, avec 2FA. Ancres stables : TextQuoteSelector pour le texte ; identité de nœud Focus / FE-2 pour les blocs ; {diagramId, targetIds[], frame, geometry} pour les diagrammes."
+            ],
+            [
+              "Coût et réversibilité",
+              "Le DS et @sentropic/comments doivent partager un contrat d’ancre stable, qualifié avant adoption. Sentropic conserve l’unique stockage de production."
+            ]
+          ]
+        }
+      ],
+      "decidedAt": "2026-10-19",
+      "ownerQuote": "g3 = a ok"
+    }
+  ]
+}

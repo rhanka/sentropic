@@ -1,8 +1,8 @@
 {
   "name": "@sentropic/mcp-broker",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "BR-72 DEPTH Lot 2 proof: a minimal, connector-AGNOSTIC MCP provider broker (ConnectorRegistry + McpProviderBroker) generalizing the mount+invoke seam proven per-connector in @sentropic/mcp-connector-github's live broker (Lot 1), against the @sentropic/mcp-platform AppConnectorProviderAdapter contract. Not the production connector, NOT published; production residence is an architect D4 decision, deferred.",
+  "description": "Plan-bound MCP provider broker with the frozen memory contract entry: McpProviderBroker dispatches against the immutable compiled registry plan with a verified host invocation context per call (MCP-L5 Lot 1). Memory contracts under ./memory. No in-memory identity manufacturing.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -16,13 +16,35 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./memory": {
+      "types": "./dist/memory/index.d.ts",
+      "import": "./dist/memory/index.js"
     }
+  },
+  "typesVersions": {
+    "*": {
+      "memory": [
+        "./dist/memory/index.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
   },
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests"
+  },
+  "dependencies": {
+    "@sentropic/mcp-platform": "^0.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",

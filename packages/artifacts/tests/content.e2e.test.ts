@@ -1,26 +1,8 @@
-/**
- * L-5d — content serving journey (spec-v8 §9 5d): publish on the control
- * app, activate a version through a single-use ticket, serve raw bytes on
- * stable and pinned origins under short grants, fresh-version consent on
- * republish, and immediate cutoff on withdrawal (grant rechecked per
- * request). Actual domain/TLS/browser proof stays Radar-side.
- */
+/** Content serving journey through the selected guarded control app. */
 import { describe, expect, it } from 'vitest';
-import { createHttpArtifactApp, type HttpRequest } from '../src/http.js';
-import { createArtifactService } from '../src/server/service.js';
-import {
-  createPublicationService,
-  createMemoryStateStore,
-  createMemoryBlobStore,
-} from '../src/server/publication.js';
-import { createMemoryIntentStore } from '../src/server/object-intents.js';
-import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
-import { createLifecycleService, createMemoryLifecycleStore } from '../src/server/lifecycle.js';
-import { createForkService, createMemoryForkStore } from '../src/server/fork.js';
-import { createMemoryAclStore } from '../src/server/access.js';
-import { createMemorySourceStore } from '../src/server/sources.js';
-import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
-import { defineParameters } from '../src/parameters.js';
+import type { HttpRequest } from '../src/http.js';
+import { createTransportWorld } from './fixtures/transport-world.js';
+import { grantAccess } from '../src/server/access.js';
 import { createHmacGrantSigner, createMemoryTicketStore, createTicketService } from '../src/content/grants.js';
 import { createContentHandler, type ContentRequest } from '../src/content/handler.js';
 
@@ -32,42 +14,19 @@ const V2 = '<!doctype html><h1>v2</h1>';
 const bytes = (text: string): number[] => [...new TextEncoder().encode(text)];
 const text = (data: Uint8Array | undefined): string => new TextDecoder().decode(data);
 
+
 function makeWorld() {
-  const state = createMemoryStateStore();
-  const blobs = createMemoryBlobStore();
-  const acls = createMemoryAclStore();
-  const lifecycle = createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z', state);
-  const publication = createPublicationService({
-    state,
-    blobs,
-    intents: createMemoryIntentStore(),
-    idempotency: createIdempotencyStore(createMemoryIdempotencyKv()),
-  });
-  const app = createHttpArtifactApp({
-    parameterSchema: defineParameters([{ key: 'title', type: 'string', required: true }]),
-    artifacts: createArtifactService({ kv: createMemoryKv(), uuid: createCryptoUuid() }),
-    publication,
-    lifecycle,
-    forks: createForkService(createMemoryForkStore()),
-    acls,
-    sources: createMemorySourceStore(),
-    blobs,
-  });
+  const world = createTransportWorld([FARID, STEVE], 'scope-1');
   const tickets = createTicketService({ store: createMemoryTicketStore() });
   const handler = createContentHandler({
-    acls,
-    lifecycle,
-    publication,
-    blobs,
-    grants: createHmacGrantSigner({ secret: 'e2e-grant-secret' }),
-    tickets,
-    baseDomain: BASE,
+    acls: world.acls, lifecycle: world.lifecycle, publication: world.publication, blobs: world.blobs,
+    grants: createHmacGrantSigner({ secret: 'e2e-grant-secret' }), tickets, baseDomain: BASE,
   });
-  return { app, handler, tickets };
+  return { ...world, handler, tickets };
 }
 
 function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
-  return { method, path, body, actorId };
+  return { method, path, body, actorId, storageScopeId: "scope-1" };
 }
 
 type World = ReturnType<typeof makeWorld>;
@@ -76,8 +35,8 @@ async function publish(world: World, html: string, key: string): Promise<{ id: s
   const ensured = await world.app.handle(
     req('POST', '/ensure', {
       bindingName: 'view', storageScopeId: 'scope-1', idempotencyKey: 'e-1',
-      paramsHash: 'h-1', parameters: { title: 'View' },
-    }, FARID),
+      parameters: {},
+    }, FARID), world.invocation(FARID),
   );
   const id = (ensured.body as { artifactId: string }).artifactId;
   const published = await world.app.handle(
@@ -87,8 +46,8 @@ async function publish(world: World, html: string, key: string): Promise<{ id: s
         { path: 'index.html', mimeType: 'text/html', bytes: bytes(html) },
         { path: 'service-worker.js', mimeType: 'text/javascript', bytes: bytes('self.x=1') },
       ],
-      idempotencyKey: key, paramsHash: key,
-    }, FARID),
+      idempotencyKey: key,
+    }, FARID), world.invocation(FARID),
   );
   expect(published.status).toBe(201);
   return { id, releaseId: (published.body as { releaseId: string }).releaseId };
@@ -109,6 +68,51 @@ async function activate(
 const get = (world: World, input: ContentRequest) => world.handler.handle(input);
 
 describe('content serving e2e', () => {
+  it('should return secured stable errors when a content dependency throws', async () => {
+    const world = makeWorld();
+    const { id } = await publish(world, V1, 'internal-error');
+    world.publication.getCurrent = async () => { throw new Error('private driver details'); };
+    for (const method of ['GET', 'HEAD']) {
+      const response = await get(world, { method, host: `${id}.${BASE}`, path: '/' });
+      expect(response.status).toBe(500);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.body).toEqual(method === 'HEAD' ? undefined : { error: 'internal_error' });
+      expect(response.bytes).toBeUndefined();
+    }
+  });
+
+  it('should omit all HEAD bodies and secure errors and activation responses', async () => {
+    const world = makeWorld();
+    const { id, releaseId } = await publish(world, V1, 'head');
+    const host = `${id}.${BASE}`;
+    const issued = await world.tickets.issue({ subjectId: FARID, artifactId: id, releaseId, channel: 'stable' });
+    const activation = await get(world, { method: 'HEAD', host, path: '/', actorId: FARID, ticket: issued.ticketId });
+    const cookie = activation.headers['set-cookie'];
+    expect(activation.status).toBe(200);
+    const served = await get(world, { method: 'HEAD', host, path: '/', cookie });
+    expect(served.status).toBe(200);
+    expect(served.headers['content-length']).toBe(String(bytes(V1).length));
+    const errors = await Promise.all([
+      get(world, { method: 'GET', host, path: '/' }),
+      get(world, { method: 'GET', host: 'invalid', path: '/' }),
+      get(world, { method: 'GET', host, path: '/missing', cookie }),
+      get(world, { method: 'HEAD', host, path: '/' }),
+    ]);
+    for (const response of [activation, ...errors]) {
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['x-frame-options']).toBe('DENY');
+      expect(response.headers['cross-origin-resource-policy']).toBe('same-origin');
+      expect(response.headers['referrer-policy']).toBe('no-referrer');
+      expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+    }
+    for (const response of [activation, served, errors[3]!]) {
+      expect(response.body).toBeUndefined();
+      expect(response.bytes).toBeUndefined();
+    }
+  });
+
   it.each(['stable', 'pinned'] as const)('should refuse a %s ticket on the other channel', async (channel) => {
     const world = makeWorld();
     const v1 = await publish(world, V1, 'p-1');
@@ -164,9 +168,8 @@ describe('content serving e2e', () => {
   it('activates, serves raw bytes, pins releases and cuts off on withdrawal', async () => {
     const world = makeWorld();
     const v1 = await publish(world, V1, 'p-1');
-    await world.app.handle(
-      req('POST', '/access/grant', { artifactId: v1.id, principalId: STEVE, grant: 'read' }, FARID),
-    );
+    const acl = await world.acls.getArtifactAcl(v1.id);
+    await world.acls.putArtifactAcl(v1.id, grantAccess(acl!, FARID, { principalId: STEVE, grant: 'read' }));
     const stable = `${v1.id}.${BASE}`;
     const pinnedV1 = `${v1.releaseId}.pinned.${BASE}`;
     const anonymous = await get(world, { method: 'GET', host: stable, path: '/' });
@@ -193,10 +196,10 @@ describe('content serving e2e', () => {
     const pinnedServed = await get(world, { method: 'GET', host: pinnedV1, path: '/', cookie: pinnedCookie });
     expect(text(pinnedServed.bytes)).toBe(V1);
     // Withdrawal cuts readers off at the next request despite a live grant.
-    await world.app.handle(req('POST', '/withdraw', { artifactId: v1.id }, FARID));
+    await world.lifecycle.withdraw(v1.id, FARID);
     const cut = await get(world, { method: 'GET', host: pinnedV1, path: '/', cookie: pinnedCookie });
     expect(cut.status).toBe(404);
-    await world.app.handle(req('POST', '/restore', { artifactId: v1.id }, FARID));
+    await world.lifecycle.restore(v1.id, FARID);
     const back = await get(world, { method: 'GET', host: pinnedV1, path: '/', cookie: pinnedCookie });
     expect(back.status).toBe(200);
     expect(text(back.bytes)).toBe(V1);

@@ -16,6 +16,37 @@ import {
   checkCheckpoint,
 } from '../receipt.mjs';
 import { canonicalizeJson } from '../schema-validator.mjs';
+import { computeLockFingerprint } from '../lock-fingerprint.mjs';
+
+const SYNTH_GUARD = '@case " $(origin LLM_MESH_NODE_IMAGE) " in " command line "|" environment override ") test "$(LLM_MESH_NODE_IMAGE)" = "$(MEMORY_L5_NODE_IMAGE)" || { echo "ERROR: guard" >&2; exit 1; };; esac';
+const SYNTH_MAKEFILE = [
+  'MEMORY_L5_NODE_IMAGE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6',
+  'MEMORY_L5_TOOLCHAIN := typescript@5.4.5 @types/node@22.20.1 @microsoft/api-extractor@7.58.9',
+  'export LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim',
+  'memory-l5-lint memory-l5-pack: export LLM_MESH_NODE_IMAGE = $(MEMORY_L5_NODE_IMAGE)',
+  'build-mcp-platform:',
+  `\t${SYNTH_GUARD}`,
+  '\t@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc \'rm -rf dist node_modules\'',
+  '\t@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc \'set -eu; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json\'',
+  'build-mcp-broker:',
+  `\t${SYNTH_GUARD}`,
+  '\t@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc \'set -eu; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json\'',
+  'api-extract-mcp-platform:',
+  `\t${SYNTH_GUARD}`,
+  '\t@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc \'set -eu; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run\'',
+  'memory-l5-pack: memory-l5-runtime build-mcp-platform build-mcp-broker api-extract-mcp-platform',
+  `\t${SYNTH_GUARD}`,
+].join('\n');
+
+const synthToolchainRecord = (version, name) => ({ version, resolved: `https://registry.npmjs.org/${name}.tgz`, integrity: `sha512-synth-${name}==` });
+const SYNTH_TOOLCHAIN_LOCKS = {
+  lock: { lockfileVersion: 3, packages: {
+    'node_modules/typescript': synthToolchainRecord('5.4.5', 'ts'),
+    'node_modules/@types/node': synthToolchainRecord('22.20.1', 'node'),
+    'node_modules/@microsoft/api-extractor': synthToolchainRecord('7.58.9', 'ae'),
+  } },
+  pkg: { name: '@sentropic/mcp-l5-toolchain', version: '0.0.0', dependencies: { typescript: '5.4.5', '@types/node': '22.20.1', '@microsoft/api-extractor': '7.58.9' } },
+};
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SCHEMA_PATH = join(HERE, '..', 'schemas', 'checkpoint-v1.schema.json');
@@ -124,7 +155,10 @@ function buildCheckpointBundle(baseDir) {
   for (const a of artifacts) lockPackages[`node_modules/${a.name}`] = { version: a.version, resolved: a.archiveRef, integrity: a.integrity, sha256: a.sha256 };
   const lockRef = writeRef(baseDir, 'package-lock.json', { lockfileVersion: 3, packages: lockPackages });
   const instLockRef = writeRef(baseDir, 'receipts/installed-lock.json', { sdkVersion: '1.31.0', sdkRange: '^1.31.0', protocolVersions: ['2025-03-26'], packages: lockPackages });
-  const mfSource = { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: lockRef.sha256 };
+  const mfSource = { specSha256: FROZEN_SPEC_SHA256, l0Commit: C40, br3Commit: C40, l5Head: C40, sdkRange: '^1.31.0', declaredLockSha256: lockRef.sha256, lockFingerprintVersion: 4,
+    lockFingerprint: computeLockFingerprint({ lockDoc: JSON.parse(lockRef.bytes.toString('utf8')), makefileText: SYNTH_MAKEFILE, configFiles: {}, toolchainLocks: SYNTH_TOOLCHAIN_LOCKS }),
+    declaredLockSnapshot: { path: `lock-snapshots/${lockRef.sha256}.package-lock.json`, sha256: lockRef.sha256 },
+    toolchainSnapshots: [{ path: 'tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json', sha256: H64 }, { path: 'tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json', sha256: H64 }] };
   const toMfItem = (a) => ({ role: a.role, name: a.name, version: a.version, sha256: a.sha256, integrity: a.integrity, sourceHead: a.sourceHead, archive: a.archiveRef });
   const preMf = writeRef(baseDir, 'tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json', {
     manifestVersion: 1, stage: 'pre-candidate', source: mfSource, artifacts: [toMfItem(artifacts[1]), toMfItem(artifacts[2])], contractInventory,
@@ -283,9 +317,11 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
     }
   });
 
+// Lot 1 state: the importGraph.resolver obligation cleared when Lot 1
+// delivered tools/memory-mcp-l5/import-graph.mjs. The remaining entries are
+// still pending (predecessors, verifier, CI/owner/acceptance provenance).
 const EXPECTED_LOT0_OBLIGATIONS = [
   'provenance.predecessors: pendingPredecessorMappings remain unresolved (BR3/L5-F1)',
-  'importGraph.resolver: tools/memory-mcp-l5/import-graph.mjs is not yet implemented (Lot 1 obligation)',
   'assurance.verifier: tools/memory-mcp-l5/verifier.mjs is not yet implemented (Lot 2 obligation)',
   'ci.provenance: trusted CI run provenance is not established by local evidence files',
   'ownerUat.provenance: authenticated owner decision provenance is not established by local actorRef strings',

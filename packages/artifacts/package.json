@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/artifacts",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
   "type": "module",
   "license": "MIT",
@@ -11,6 +11,11 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "imports": {
+    "#artifacts-frozen-commit": {
+      "types": "./l0-freeze/commit-contract.ts"
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -32,6 +37,10 @@
       "types": "./dist/adapters/postgres.d.ts",
       "import": "./dist/adapters/postgres.js"
     },
+    "./adapters/postgres-commit": {
+      "types": "./dist/adapters/postgres-commit.d.ts",
+      "import": "./dist/adapters/postgres-commit.js"
+    },
     "./migrations/*": "./migrations/*",
     "./server/ports": {
       "types": "./dist/server/ports.d.ts",
@@ -44,6 +53,18 @@
     "./server/authorization": {
       "types": "./dist/server/authorization.d.ts",
       "import": "./dist/server/authorization.js"
+    },
+    "./server/commit-contract": {
+      "types": "./dist/server/commit-contract.d.ts",
+      "import": "./dist/server/commit-contract.js"
+    },
+    "./server/outcome-contract": {
+      "types": "./dist/server/outcome-contract.d.ts",
+      "import": "./dist/server/outcome-contract.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     },
     "./server/bindings": {
       "types": "./dist/server/bindings.d.ts",
@@ -101,6 +122,10 @@
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.js"
     },
+    "./mcp-core": {
+      "types": "./dist/mcp-core.d.ts",
+      "import": "./dist/mcp-core.js"
+    },
     "./content/grants": {
       "types": "./dist/content/grants.d.ts",
       "import": "./dist/content/grants.js"
@@ -140,7 +165,11 @@
   },
   "files": [
     "dist",
+    "l0-freeze",
+    "src/contracts.ts",
     "migrations",
+    "docs/migration-l6.md",
+    "examples/radar-commit-setup.ts",
     "README.md",
     "LICENSE"
   ],
@@ -151,11 +180,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "freeze-types": "tsc --noEmit --strict --skipLibCheck --target es2022 --module nodenext --moduleResolution nodenext --verbatimModuleSyntax l0-freeze/commit-contract.ts l0-freeze/failure-contract.ts l0-freeze/profile-contract.ts l0-freeze/command-identity-contract.ts",
     "test": "vitest run tests"
   },
   "peerDependencies": {
     "@aws-sdk/client-s3": "^3.980.0",
-    "@sentropic/mcp-platform": ">=0.3.0 <0.4.0",
+    "@sentropic/mcp-platform": ">=0.3.0 <0.5.0",
     "pg": "^8.12.0"
   },
   "peerDependenciesMeta": {

@@ -327,7 +327,7 @@ describe('createLlmMesh', () => {
     expect(getModelProfile('gemini', 'gemini-3.5-flash')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('anthropic', 'claude-opus-4-8')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('gcp', 'google/gemini-3.5-flash@gcp')?.capabilities.modalities.input).toContain('image');
-    expect(getModelProfile('mistral', 'mistral-small-2603')?.capabilities.modalities.input).not.toContain('image');
+    expect(getModelProfile('mistral', 'mistral-small-2603')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('cohere', 'command-a-03-2025')?.capabilities.modalities.input).not.toContain('image');
   });
 

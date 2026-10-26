@@ -12,9 +12,11 @@
 - [x] English records with owner quotations retained verbatim; no W0-authored product/API/UI/package/lock/deployment changes; no migration file on W0; inherited main changes only under BR142-EX2.
 - [x] Root dev 8787/5173/1080 and D2 9381/5581/1481, 9382/5582/1482 remain reserved to their owners.
 - [x] W0 runtime slot: `test-app-cm-w0`, API/UI/Maildev UI 9710/5910/1810; no service listeners started.
+- [x] 26 October follow-up: execute only plan-v2 W0-close.a/d; merge current main without rebasing, preserve historical readings, use `ENV=test-app-w0`; no restore, PR merge or deployment.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `**` (BR142-EX3 only: inherited main merge; removed immediately after commit)
   - `BRANCH.md`
   - `docs/baselines/app-cm-w0/**`
   - `.h2a/owner-questions-w0.md`
@@ -36,6 +38,7 @@
   - Declare `BR-CM-W0-EXn` with reason, impact and rollback before any scope expansion.
   - [x] `BR-CM-W0-EX1`: owner follow-up explicitly requests `.h2a/owner-questions-w0.md` in French; impact is one decision-preparation record, no operator/key assignment; rollback removes that record. Other records remain English.
   - [x] `BR142-EX2`: owner follow-up explicitly requested merging origin/main `cf0ad8ee44f9bb7cf4ad1222a468172f0f77fc2d` into W0. Integrated unchanged upstream bytes at fe26214df; temporary allowances removed. Impact: main history and its existing package/lock/CI/spec/plan changes entered this branch; rollback: owner-authorized merge revert. No PR merge or deployment is authorized.
+  - [x] `BR142-EX3`: owner requests merging origin/main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`, including the published artifacts/mesh tuple. All inherited paths are allowed solely for this merge; retain this branch's BRANCH.md on add/add conflict. Impact: unchanged main bytes/history, exceeding the authored-diff limit; rollback: separately authorized merge revert. Track contains all 342 prior branch events and matches main byte-for-byte; acceptance refresh belongs to the designated Track writer.
 
 ## Feedback Loop
 - [ ] `attention`: 21 October tenant metadata and 22 October product/control migration frontiers plus latest backup receipts are recorded without refusal; endpoint/config hashes, package/runtime state, private object/restore/ACL/disposition evidence remain open.
@@ -59,6 +62,7 @@
   - [x] Read MASTER/workflow, README/TODO/PLAN, branch template and approved owner request/plan.
   - [x] Mechanical `harness check branch` passes; branch is clean and starts at pinned main.
   - [x] Follow-up: branch verified, remote pulled with fast-forward only, main integrated under BR142-EX2; identical Track blobs and all 342 event IDs preserved. Track acceptance refresh stays with the designated root writer.
+  - [x] 26 October: current main merged under BR142-EX3; only BRANCH.md conflicted, retained W0 plan; no source/lock/package conflict resolution or rebase.
   - [x] Record available runtime evidence, pending operator facts, endpoint parity, configured domains and generated-content authorities in `docs/baselines/app-cm-w0/baseline.md`.
   - [x] Pin exact releases, selected peers, integrities and lock/config hashes in `published-tuple.json`.
   - [x] F1/F2 follow-up: add standalone read-only metadata/archive collectors; validate COPY counting with a two-table fixture before recording historical aggregates.

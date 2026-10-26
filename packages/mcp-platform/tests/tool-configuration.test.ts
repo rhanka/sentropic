@@ -111,8 +111,9 @@ const consumerDigest = computeCompatibilityDigest(manifest);
 // Frozen reference digests for the synthetic fixture above (M5/M6): any
 // algorithm or fixture change fails these before it can drift silently.
 const GOLDEN_MANIFEST_DIGEST = '1b3514cd8e7d0991f9dadc4061da7950a04f2bcf655c4be0f04b4bee28a8ea4d';
-const GOLDEN_PAYLOAD_DIGEST = 'b3da6d59aa52fcd86acdb8e5d2adf93c31727803392b73c8a1525dc69eef86c1';
-const GOLDEN_COMPILED_DIGEST = '4d2f74f29865fe78787cd9b85d7d2b80c65968da740760c7b478d97ae853cb37';
+// Version-bound synthetic configuration receipt; Immo wire fixtures remain unchanged.
+const GOLDEN_PAYLOAD_DIGEST = 'dd09ba467afd79f37873ab5b4f9c781a60f1625e09051971ceb8fa51747a2747';
+const GOLDEN_COMPILED_DIGEST = '9ffd4becce9209c137e9777804243b64e2768eb3adefb6d4c2888f7d2c11bf0d';
 
 function buildSnapshot(): ApprovedToolSnapshot {
   const revision = 'rev-1';
@@ -1106,6 +1107,15 @@ process.stdin.on('end', () => {
   it('ties platform version to package.json with strict equality (R3-m5)', () => {
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
     expect(TOOL_CONFIGURATION_PLATFORM_VERSION).toBe(pkg.version);
+  });
+
+  it('accepts a resealed snapshot naming the installed platform version', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    const snapshot = buildSnapshot();
+    snapshot.platformVersion = pkg.version;
+    reseal(snapshot);
+    const result = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(result.ok).toBe(true);
   });
 
   it('requires qualified provider and platform versions', () => {
