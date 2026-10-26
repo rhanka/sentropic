@@ -27,6 +27,7 @@
   - [x] `packages/cluster-mesh/tests/**`
   - [x] `packages/llm-gateway/package.json`
   - [x] `scripts/ci/publishable-ci-wiring.test.mjs`
+  - [x] `scripts/ci/ci-expected-results.test.mjs`
   - [x] `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
@@ -57,11 +58,11 @@
   - [x] Run mechanical harness branch check before work.
 - [ ] **Lot 1 — Discovery and isolated qualification**
   - [x] Tests first: decision-qualification.test.ts, independent missing gates and execution/criterion/policy mutations; initial run rejects missing implementation.
-  - [ ] Bind evidence to execution digest, exact criterion and operating policy; default production refuses missing calibration.
+  - [x] Bind evidence to execution digest, exact criterion and operating policy; scope mutation controls pass.
   - [ ] Qualification accepts provisional expected IDs while preserving auth, finite bounds, one attempt and experimental discovery.
   - [ ] Scoped gate: make test-llm-mesh SCOPE=tests/decision-qualification.test.ts ENV=test-decision-v4l5.
 - [ ] **Lot 2 — Reproducible assessment**
-  - [x] Tests first: decision-assessment.test.ts and recorded fixtures; initial failure confirms absent assessment implementation.
+  - [x] Tests first: decision-assessment.test.ts and recorded fixtures; all 10 initial assessment controls pass.
   - [ ] Deterministic assessment/report schema with distinct held-out/challenge/repeat populations and conservative attempt/cost aggregation.
   - [ ] Cap exhaustion and missing evidence produce incomplete/blocked reports; fixtures never establish semantic calibration.
   - [ ] Scoped gate: make test-llm-mesh SCOPE=tests/decision-assessment.test.ts ENV=test-decision-v4l5.
