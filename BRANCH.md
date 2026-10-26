@@ -59,8 +59,8 @@
 - [ ] **Lot 1 — Discovery and isolated qualification**
   - [x] Tests first: decision-qualification.test.ts, independent missing gates and execution/criterion/policy mutations; initial run rejects missing implementation.
   - [x] Bind evidence to execution digest, exact criterion and operating policy; scope mutation controls pass.
-  - [ ] Qualification accepts provisional expected IDs while preserving auth, finite bounds, one attempt and experimental discovery.
-  - [ ] Scoped gate: make test-llm-mesh SCOPE=tests/decision-qualification.test.ts ENV=test-decision-v4l5.
+  - [x] Qualification accepts provisional expected IDs while preserving auth, finite bounds, one attempt and experimental discovery.
+  - [x] Scoped discovery/admission gates pass; source typecheck and lint pass; full mesh baseline 1472 tests passes.
 - [ ] **Lot 2 — Reproducible assessment**
   - [x] Tests first: decision-assessment.test.ts and recorded fixtures; all 10 initial assessment controls pass.
   - [x] Deterministic assessment/report schema with distinct held-out/challenge/repeat populations and conservative attempt/cost aggregation.

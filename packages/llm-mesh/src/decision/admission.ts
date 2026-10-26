@@ -10,6 +10,7 @@ import { quoteDecision, priceDecisionUsage } from './pricing.js';
 import type { DecisionQuote } from './pricing.js';
 import { unreportedDecisionUsage } from './receipt.js';
 import { isCorrelationId } from './validation.js';
+import { discoverDecisionEvaluator } from './qualification.js';
 
 export type AdmittedDecision = { ok: true; holdId: string; quote: DecisionQuote; auth: AuthResolution }
   | { ok: false; error: DecisionError };
@@ -46,6 +47,11 @@ export async function admitDecision(execution: DecisionExecution, selection: Ext
   if (expired) return failed(expired);
   const quoted = quoteDecision(selection.request, selection.descriptor, candidate, options.policy?.maxCostMicroUsd);
   if (!quoted.ok) return failed(createDecisionError(quoted.code, 'admission'));
+  if (selection.descriptor.executionProfile !== 'qualification'
+    && !discoverDecisionEvaluator(selection.descriptor, { ...options.readiness,
+      price: candidate } as Parameters<typeof discoverDecisionEvaluator>[1], selection.request).productionReady) {
+    return failed(createDecisionError('PROVIDER_UNAVAILABLE', 'admission'));
+  }
   execution.phase = 'preflight';
   const resolved = await resolveDecisionAuth(selection.descriptor, options.resolveAuth);
   if (!resolved.ok) return failed(createDecisionError(resolved.code, 'preflight'));
