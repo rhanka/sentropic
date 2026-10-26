@@ -67,5 +67,6 @@
   - [x] Export the adapter and unchanged versioned SQL; document W1.c/A6 composition and host authority/restore obligations.
 - [ ] Lot 5: separate pack-only 0.2.3 bump; typecheck/lint/unit/integration/pack gates.
   - [x] Registry pre-bump check: latest 0.2.1; reserve owner-selected 0.2.3 after pending #759/0.2.2, no publication.
+  - [x] Separate pack-only bump: package manifest, provider constant and workspace lock set to 0.2.3.
   - [x] Full unit gate: 450/450, 37 suites; scoped UP-T gate: 18/18, zero skips.
 - [ ] Lot 6: scope-check before atomic commits (<150 lines); push; draft PR body from this file; CI green; do not merge.
