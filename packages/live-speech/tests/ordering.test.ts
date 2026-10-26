@@ -42,6 +42,22 @@ describe('submission, tool history and effect barrier', () => {
     vi.mocked(f.authority.verifyMutation).mockImplementationOnce(async request => ({ ...request,
       argumentsDigest: 'other-arguments', authorizationId: 'fresh', principalId: scope.principalId, tenantId: scope.tenantId }));
     await expect(f.core.admitTool(turn, mutation('b'))).rejects.toThrow('authorization');
+    vi.mocked(f.authority.verifyMutation).mockImplementationOnce(async request => ({ ...request,
+      barrierRevision: 0, authorizationId: 'old-unused-approval', principalId: scope.principalId, tenantId: scope.tenantId }));
+    await expect(f.core.admitTool(turn, mutation('b'))).rejects.toThrow('authorization');
+  });
+
+  it('should pair an emitted fenced call as cancelled-before-start without dispatch', async () => {
+    const f = fixture();
+    const turn = await commit(f.core);
+    await f.core.interrupt(turn, 'stop');
+    await expect(f.core.admitTool(turn, mutation())).rejects.toThrow('fenced');
+    const result = await f.core.recordRejectedCall(turn, mutation(), 'Core gate denied admission');
+    expect(result).toMatchObject({ callId: 'call-1', outcome: 'cancelled-before-start' });
+    expect(await f.core.recordRejectedCall(turn, mutation(), 'Core gate denied admission')).toEqual(result);
+    expect(await f.core.toolResult(turn, 'call-1')).toEqual(result);
+    expect(Object.keys(f.journal.state.effects)).toHaveLength(0);
+    expect(f.control.start).not.toHaveBeenCalled();
   });
 
   it('should reject reserved record keys and preserve isolation of returned references', async () => {

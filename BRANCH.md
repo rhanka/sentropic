@@ -32,6 +32,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] Add exact barrier-revision approval binding (including previously unused approvals) and explicit paired cancellation for emitted calls denied before admission.
 - [x] Each official live-speech gate now invokes cleanup via Make on exit while still under the shared lock, preserving failures. CI selects this gate only for its package/build/workflow changes.
 - [x] Add explicit tests for 2s pending Stop, disconnect/reconnect fencing, completed-epoch late Stop and typed-acceptance replay after durable restart.
 - [x] First full core run: 17/19 pass; two ordering assertions expected lowercase substrings while authority errors start Action/Stale. Match the observed identity/revision error messages; no behavior change.
