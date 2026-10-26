@@ -1,4 +1,4 @@
-import { same } from './session.js';
+import { isValidScope, same, scopeFields } from './session.js';
 import type { Scope } from './session.js';
 
 export interface UsageEntry {
@@ -15,7 +15,6 @@ const fields = ['operationId', 'attemptId', 'scope', 'turnEpoch', 'submitKey', '
   'seatRef', 'allocatorReceiptRef', 'configurationRef', 'engineRef', 'placement', 'revision', 'kind',
   'estimateRef', 'countedUnitDelta', 'capturedSeconds', 'admittedSeconds', 'localComputeMs',
   'externalSpeechUsd', 'backendSpendUsd', 'backendTokens', 'outcome', 'settlement', 'signature'];
-const scopeFields = ['speechSessionId', 'tenantId', 'principalId', 'targetSessionId', 'sourceGeneration', 'controllerEpoch', 'consentRevision'];
 const nonnegative = (value: number) => Number.isFinite(value) && value >= 0;
 
 /** Operational receipts only. L8 binds reservations and settlement to the existing billing ledger. */
@@ -31,8 +30,7 @@ export class UsageReceipts {
       entry.allocatorReceiptRef, entry.configurationRef, entry.engineRef, entry.placement, entry.signature];
     if (refs.some(v => typeof v !== 'string' || !v)
       || (entry.nativeTurnId !== undefined && (typeof entry.nativeTurnId !== 'string' || !entry.nativeTurnId))
-      || scopeFields.some(k => !(k in entry.scope))
-      || Object.values(entry.scope).some(v => typeof v === 'number' ? !Number.isSafeInteger(v) || v < 1 : typeof v !== 'string' || !v)
+      || !isValidScope(entry.scope)
       || !Number.isSafeInteger(entry.turnEpoch) || entry.turnEpoch < 1
       || !Number.isSafeInteger(entry.revision) || entry.revision < 0
       || !['estimate', 'adjustment'].includes(entry.kind)
