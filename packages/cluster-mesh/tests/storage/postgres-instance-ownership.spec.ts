@@ -158,4 +158,90 @@ describe.skipIf(!pgEnabled)('postgres durable instance ownership', () => {
       await fixture.close();
     }
   });
+
+  it('treats a swapped instance row as terminal loss', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const kernel = await fixture.open();
+      await fixture.tx.run(false, (session) =>
+        session.execute({
+          text: `UPDATE "${fixture.name}".instance_ownership SET instance='intruder' WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      await assert.rejects(commitAs(kernel, 'swapped-chain', 'hash-swapped'), (error: unknown) => {
+        assert.ok(error instanceof PostgresStorageError);
+        const cause = (error as { cause?: unknown }).cause;
+        return cause instanceof CanonicalOwnershipError && cause.code === 'terminal-loss';
+      });
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('carries exact u64 epochs past 2^53 without Number conversion', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const first = await fixture.open();
+      assert.equal(owned(first).handle.storageEpoch, '1');
+      await fixture.tx.run(false, (session) =>
+        session.execute({
+          text: `UPDATE "${fixture.name}".instance_ownership SET epoch='9007199254740992' WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      const second = await fixture.open();
+      assert.equal(owned(second).handle.storageEpoch, '9007199254740993');
+      assert.equal(owned(second).handle.instanceId, owned(first).handle.instanceId);
+      await fixture.tx.run(false, (session) =>
+        session.execute({
+          text: `UPDATE "${fixture.name}".instance_ownership SET epoch='18446744073709551615' WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      const top = await fixture.open();
+      assert.equal(owned(top).handle.storageEpoch, '18446744073709551615');
+      await assert.rejects(
+        fixture.open(),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'stale-epoch',
+      );
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('isolates ownership per module and per store', async () => {
+    const fixture = await createPgFixture();
+    const other = await createPgFixture();
+    try {
+      const comments = await fixture.open();
+      const live = await createPostgresKernel({ ...fixture.options, moduleId: 'engram-live' });
+      assert.equal(owned(comments).handle.storageEpoch, '1');
+      assert.equal(owned(live).handle.storageEpoch, '1');
+      assert.notEqual(owned(live).handle.instanceId, owned(comments).handle.instanceId);
+      assert.notEqual(owned(live).handle.storeKey, owned(comments).handle.storeKey);
+      const rows = await ownershipRow(fixture);
+      assert.equal(rows.length, 2);
+      const alone = await other.open();
+      assert.equal(owned(alone).handle.storageEpoch, '1');
+      assert.notEqual(owned(alone).handle.instanceId, owned(comments).handle.instanceId);
+    } finally {
+      await fixture.close();
+      await other.close();
+    }
+  });
+
+  it('refuses to open when the ownership table is not installed', async () => {
+    const legacy = (await loadPgAssets()).filter((asset) => asset.toVersion <= 7);
+    assert.ok(legacy.length === 7);
+    const fixture = await createPgFixture({ assets: legacy });
+    try {
+      await assert.rejects(
+        fixture.open(),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'open-refused',
+      );
+    } finally {
+      await fixture.close();
+    }
+  });
 });
