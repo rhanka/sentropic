@@ -1,7 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
 import { commit, fixture, mutation, scope } from './fixtures.js';
+import { createSession, SessionJournal } from '../src/core/session.js';
+import type { JournalSnapshot } from '../src/core/session.js';
 
 describe('submission, tool history and effect barrier', () => {
+  it('should atomically commit storage revisions and restore tombstones from persisted bytes', async () => {
+    let bytes: string | undefined;
+    const storage = {
+      read: async () => bytes ? JSON.parse(bytes) as JournalSnapshot : undefined,
+      compareAndSwap: vi.fn(async (_key: string, expected: number | undefined, next: JournalSnapshot) => {
+        const current = bytes ? JSON.parse(bytes) as JournalSnapshot : undefined;
+        if (current?.revision !== expected) return false;
+        bytes = JSON.stringify(next);
+        return true;
+      }),
+    };
+    const seed = createSession(scope, { read: 'read-only' }, ['read'], ['status']);
+    const journal = new SessionJournal(storage, 'trusted-storage-key', seed);
+    const f = fixture(journal);
+    const turn = await commit(f.core);
+    await f.core.interrupt(turn, 'stop');
+    const restarted = fixture(new SessionJournal(storage, 'trusted-storage-key', seed));
+    expect(await restarted.core.send(turn)).toBe(false);
+    await expect(journal.transact(state => { state.nextEpoch = 999; throw new Error('rollback'); }))
+      .rejects.toThrow('rollback');
+    expect((await storage.read())?.state.nextEpoch).toBe(2);
+    storage.compareAndSwap.mockResolvedValueOnce(false);
+    expect(await journal.transact(state => state.nextEpoch)).toBe(2);
+    expect((await storage.read())?.revision).toBeGreaterThan(1);
+  });
   it('should keep typed acceptance idempotent across restart and append late outcomes only once', async () => {
     const f = fixture();
     const turn = await commit(f.core);

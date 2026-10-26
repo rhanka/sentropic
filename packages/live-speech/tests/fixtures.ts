@@ -26,7 +26,7 @@ export class TestJournal implements Journal {
   restart() { return new TestJournal(JSON.parse(JSON.stringify(this.state)) as SessionState); }
 }
 
-export const fixture = (journal = new TestJournal()) => {
+export const fixture = <J extends Journal = TestJournal>(journal: J = new TestJournal() as unknown as J) => {
   const control: ControlPort = {
     start: vi.fn(async () => ({ nativeTurnId: 'native-1' })),
     interrupt: vi.fn(async () => undefined),
