@@ -1,21 +1,21 @@
-# Feature: W1.d artifact host jobs and recovery composition
+# Feature: W2.a compiled app MCP registry
 
 ## Objective
-- [x] Compose bounded private-artifact maintenance and closed-serving recovery through unchanged #861 ports.
+- [ ] Compile one cluster-mesh provider registry with exact APP-P1 public names for W4.
 
 ## Scope / Guardrails
-- [x] Owner dispatch W1.d, plan-v2 read in full; tests first, draft PR, green CI, no merge or deployment.
-- [x] Branch `feat/app-cm-w1d`, worktree `tmp/worktrees/app-w1d`, base W1.b `8fca05df3`; merge only, never rebase.
-- [x] Consume artifacts 0.2.1 unchanged; no package, migration, manifest or lock authoring.
-- [x] Make-only; Docker build/start/test under `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; down after every step.
-- [x] `ENV=test-app-w1d` last; API/UI/Maildev UI 8795/5181/1088; no owner environments.
-- [x] Atomic authored commits under 150 lines, selective staging, scope-check then `make commit`; no attribution trailers.
+- [x] Base W1.b #780 `8fca05df3`; mesh 0.22.4; merge only, never rebase.
+- [x] Worktree `tmp/worktrees/app-w2a`, branch `feat/app-cm-w2a`; draft against `feat/app-cm-integration`; no merge.
+- [x] Read Docker lock, full plan-v2, contract-v9 registry boundaries, W0 host fit and W1.b contract.
+- [x] Make-only; Docker builds/tests/start under shared flock; down after every step.
+- [x] `ENV=test-app-w2a` last; API/UI/Maildev ports 8794/5180/1087 if needed; no owner environment.
+- [x] Tests first; specific staging; scope-check before make commit; authored commits below 150 lines.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/src/services/artifacts/lifecycle.ts`
-  - `api/tests/api/artifacts-host-recovery.test.ts`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -23,42 +23,34 @@
   - `packages/**`
   - `plan/**`
   - `.track/**`
-  - `api/src/db/**`
-  - `api/drizzle/**`
-  - `**/package*.json`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/src/routes/**`
+  - `api/package*.json`
+  - `package-lock.json`
+- **Conditional Paths (allowed only with explicit exception)**:
   - `.github/workflows/**`
-  - `api/src/services/artifacts/composition.ts`
-- [x] Exception process: declare BR01-EXn with rationale, impact and rollback before expansion.
+- [x] Exception process: BR02-EXn records reason, impact and rollback before scope expansion.
 
 ## Feedback Loop
-- [x] BR01-EX1: `/tmp/app-w1d-recovery-race-red.log` proves a concurrent W1.b publication returns 201 but loses bytes to GC. Wire preparation refs to unchanged upstream `createPostgresClaimGuardedRefs` in `composition.ts`; impact limited to pin/reference exclusion with maintenance; rollback reverts this wiring and keeps jobs disabled. No package algorithm change.
-- [ ] W1.c-dependent post-restore activation invalidation is drafted against UP-T PR #782 import path `@sentropic/artifacts/adapters/postgres-activation`, `PostgresActivationStore.cleanup/invalidate`; finalize host wiring and real adapter recovery proof when artifacts 0.2.3 publishes and W1.c lands. Also prove activation flow/ticket expiry within 60 seconds under DB time without cleanup. Host credential expiry is covered here; activation expiry remains W1.c. No copied PG algorithm or runtime import of an unpublished module.
-- [ ] W3/W5 must fence all writers/readers, retire pre-restore grant signing authority and reconcile current denials before reopening; W1.d supplies composition only.
-- [ ] W3 provider qualification gate: supply `createPrivateArtifactStorage` with bucket-scoped GetPublicAccessBlock permission and prove the target private S3 endpoint enforces all four blocks; provider support is unverified. Positive checks cache for at most 30 seconds; expired/unsupported checks refuse effects, with no runtime fallback.
-- [x] PR base `feat/app-cm-integration` is outside this inherited workflow's PR triggers; use CI workflow_dispatch on the pushed exact head with bootstrap publication disabled.
+- [x] W2.b owns route mounting, identity/dispatch integration and root/API lock reconciliation.
+- [x] W4 consumes the returned compiled registry exact-name map without sanitization.
+- [ ] Independent review and final CI receipts remain required; no inherited review approves this diff.
 
 ## AI Flaky tests
-- [x] No AI tests, accepted flakes or increased timeouts.
+- [x] No AI calls, accepted flakes or timeout increases.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch: one author; independent review before handoff, merge-only integration.
+- [x] Mono-branch, one author; independent review only at the final commit.
 
 ## UAT Management (in orchestration context)
-- [x] Backend-only; web, Chrome and VSCode journeys remain W3/W4/W5; no root UAT stack.
+- [x] Compilation only; web/Chrome/VSCode flows belong to W2.b/W4/W5; no UI or E2E changes.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0: read lock, plan, MASTER/workflow/testing/API rules, README/TODO/template; create worktree and mechanically check branch.
-- [x] Lot 1: `api/tests/api/artifacts-host-recovery.test.ts` first; red run on missing lifecycle composition, `/tmp/app-w1d-red.log`.
-- [x] Lot 2: `lifecycle.ts` private S3 and bounded preparation cleanup/collection; PG references, pins, failure retries and maintenance denial tested in the recovery file.
-  - [x] Initial seven recovery cases pass, `/tmp/app-w1d-green-2.log`; fixtures use upstream `sha256:` digest codec.
-- [x] Lot 3: recovery fence orders activation invalidation and grant-key retirement before reopening; failure remains closed; host credential expiry uses DB time independently of cleanup (activation expiry remains W1.c).
-  - [x] Recovery/race tests first: 7 passed, 6 expected failures (missing recovery port and published bytes erased), `/tmp/app-w1d-recovery-race-red.log`.
-  - [x] All 16 recovery cases pass; API typecheck passes; lint has 0 errors/219 warnings, `/tmp/app-w1d-recovery-green.log`.
-- [x] Lot 4: 48/48 recovery/publication/migration tests, API typecheck/lint, healthy HTTP 200 runtime logs, down, empty Compose ps and PASS C2; `/tmp/app-w1d-final.log`.
-- [x] Review R1 P1: pool-bound intents/refs, per-item claim transactions, durable retry count and 60-second deferral; invalid metadata remains poisoned by the package. Regression cases cover invalid metadata, purge claims, unavailable storage, restart progress and subsequent retry (`api/tests/api/artifacts-host-recovery.test.ts`); red `/tmp/app-w1d-r1-red.log`, 19/19 green `/tmp/app-w1d-r1-p1.log`.
-- [x] Review R1 P2: replace the signer-only expiry probe with host HTTP/MCP credential expiry using PostgreSQL time; cache positive bucket privacy checks for 30 seconds and coalesce refreshes. Count checks across reads/writes/deletes/listing, TTL expiry and failed refreshes in `api/tests/api/artifacts-host-recovery.test.ts`. Final 52/52 recovery/publication/migration tests and API typecheck pass; lint 0 errors/219 warnings (`/tmp/app-w1d-r1-final.log`), runtime HTTP 200 (`/tmp/app-w1d-r1-runtime.log`).
-- [ ] Lot 5: draft PR against `feat/app-cm-integration`, exact BRANCH.md body, independent review, push and exact-head green CI; report W1.c remainder; do not merge.
+- [x] Lot 0: mechanical branch check; freeze scope, dependencies, environment and contract.
+- [ ] Lot 1: tests first in `api/tests/api/app-mcp-registry.test.ts`; capture missing-module red.
+- [ ] Lot 2: implement `api/src/services/mcp/cluster-registry.ts` using mesh modules, builtin and facade.
+- [ ] Lot 3: same test file covers exact names, explicit selection/config, collisions, missing peers, profile/schema/policy integrity and atomic refusal.
+- [ ] Lot 4: focused API suite, API typecheck/lint, relevant registry and MCP regressions; cleanup.
+- [ ] Lot 5: independent review; push, draft PR from this file, exact-head CI green; report names and SHA.
 
 ## Inherited main qualification record
 
