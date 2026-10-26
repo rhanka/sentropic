@@ -13,23 +13,25 @@ import {
   inventoryRepository,
   inventorySastRoots,
 } from './inventory.mjs';
-import { joinRegister } from './schema.mjs';
+import { joinRegister, loadContract } from './schema.mjs';
+
+const contract = loadContract();
 
 test('inventory covers three images with toolbox Dockerfile', () => {
-  const seen = inventoryImages({ inventory: { images: [
-    { key: 'api-production', dockerfile: 'api/Dockerfile' },
-    { key: 'api-toolbox', dockerfile: 'api/Dockerfile' },
-    { key: 'ui-production', dockerfile: 'ui/Dockerfile' },
-  ] } });
+  const seen = inventoryImages(contract, '.');
+  assert.equal(seen.length, 3);
   assert.ok(seen.every((image) => image.present));
-  assert.ok(seen.filter((image) => image.dockerfile === 'api/Dockerfile').length >= 2);
+  assert.equal(seen.filter((image) => image.dockerfile === 'api/Dockerfile').length, 2);
+  const missingStage = structuredClone(contract);
+  missingStage.inventory.images.find((image) => image.key === 'api-toolbox').stage = 'missing-stage';
+  assert.equal(inventoryImages(missingStage, '.').find((image) => image.key === 'api-toolbox').present, false);
 });
 
 test('inventory covers root, UI and kit locks', () => {
   const locks = inventoryLocks('.');
-  assert.ok(locks.find((lock) => lock.path === 'package-lock.json'));
-  assert.ok(locks.find((lock) => lock.path === 'ui/package-lock.json'));
-  assert.ok(locks.find((lock) => lock.path === 'docs/governance/kit/package-lock.json'));
+  for (const path of ['package-lock.json', 'ui/package-lock.json', 'docs/governance/kit/package-lock.json']) {
+    assert.equal(locks.find((lock) => lock.path === path)?.present, true, path);
+  }
 });
 
 test('SAST roots stay explicitly blocked until S2c', () => {
@@ -39,7 +41,7 @@ test('SAST roots stay explicitly blocked until S2c', () => {
   assert.match(sast.blockedUntil, /S2c/);
 });
 
-test('register join keeps 67 rows with expiry state, seven stale-container candidates separate', () => {
+test('register join refuses rows without affected identity and keeps unmatched findings queued', () => {
   const rows = [
     { id: 'kept-1', review_due: '2026-11-20' },
     { id: 'old-1', review_due: '2026-10-11' },
@@ -63,14 +65,8 @@ test('repository inventory finds derived-pin consumers including L5 manifest', (
   const consumers = findDerivedPinConsumers('.');
   assert.ok(consumers.length > 0);
   assert.ok(consumers.some((path) => path.includes('pre-candidate-manifest.json')));
-  const repo = inventoryRepository('.', {
-    inventory: { images: [
-      { key: 'api-production', dockerfile: 'api/Dockerfile' },
-      { key: 'api-toolbox', dockerfile: 'api/Dockerfile' },
-      { key: 'ui-production', dockerfile: 'ui/Dockerfile' },
-    ], sastRoots: ['api/src'], sastBlockedUntil: 'S2c' },
-    derivedPins: { undeclaredConsumerIsBlocker: true },
-  });
+  const repo = inventoryRepository('.', contract);
+  assert.ok(repo.images.every((image) => image.present));
   assert.equal(repo.coverage.undeclaredConsumerIsBlocker, true);
 });
 
@@ -82,6 +78,39 @@ test('should reject unrelated or errored reports instead of declaring zero findi
     assert.throws(() => failClosedReport(raw), /report/);
   }
   assert.equal(failClosedReport({ SchemaVersion: 2, ArtifactName: 'x', Results: [{ Target: 'package-lock.json', Vulnerabilities: [] }] }).Results.length, 1);
+});
+
+test('should refuse npm reports with malformed entries or inconsistent severity counters', () => {
+  const clean = { auditReportVersion: 2, vulnerabilities: {}, metadata: {
+    vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 },
+  } };
+  assert.deepEqual(failClosedReport(clean), clean);
+  const full = structuredClone(clean);
+  for (const severity of ['info', 'low', 'moderate', 'high', 'critical']) {
+    full.vulnerabilities[severity] = { name: severity, severity, range: '<1.2.3',
+      via: [{ name: severity, severity, range: '<1.2.3' }, 'transitive-package'] };
+    full.metadata.vulnerabilities[severity] = 1;
+  }
+  full.metadata.vulnerabilities.total = 5;
+  assert.deepEqual(failClosedReport(full), full);
+  const contradictory = structuredClone(clean);
+  contradictory.metadata.vulnerabilities.critical = contradictory.metadata.vulnerabilities.total = 2;
+  assert.throws(() => failClosedReport(contradictory), /report/);
+  for (const entry of [null, {}, { ...full.vulnerabilities.high, name: 'other' },
+    { ...full.vulnerabilities.high, severity: 'unknown' }, { ...full.vulnerabilities.high, range: null },
+    { ...full.vulnerabilities.high, via: null }, { ...full.vulnerabilities.high, via: [] },
+    { ...full.vulnerabilities.high, via: [null] }, { ...full.vulnerabilities.high, via: [{}] }]) {
+    assert.throws(() => failClosedReport({ ...full, vulnerabilities: { ...full.vulnerabilities, high: entry } }), /report/);
+  }
+  for (const key of ['info', 'low', 'moderate', 'high', 'critical', 'total']) {
+    const mismatch = structuredClone(full);
+    mismatch.metadata.vulnerabilities[key] += 1;
+    assert.throws(() => failClosedReport(mismatch), /report/, key);
+  }
+  const swapped = structuredClone(full);
+  swapped.metadata.vulnerabilities.high = 0;
+  swapped.metadata.vulnerabilities.critical = 2;
+  assert.throws(() => failClosedReport(swapped), /report/);
 });
 
 test('should join register metadata only on the exact affected identity', () => {
@@ -130,6 +159,7 @@ test('should keep the 67-row baseline pending and every reported severity in the
   assert.equal(report.unresolvedRegister, 67);
   assert.equal(report.expired, 7);
   assert.equal(report.unexpired, 60);
+  assert.equal(report.staleContainerCandidates, 7);
   assert.equal(report.verificationPending.length, 66);
   assert.equal(summarizeBacklog([], rows, { complete: true }).status, 'complete-with-findings');
   assert.equal(summarizeBacklog([], [], { complete: false }).status, 'incomplete-scan');
@@ -145,6 +175,10 @@ test('should inventory the current register separately from its historical 67-ro
   const pending = Object.entries(document.vulnerability_register.vulnerabilities).filter(([, row]) => row.status !== 'resolved');
   const report = summarizeBacklog([], rows, { today: '2026-10-26', complete: true });
   assert.equal(report.unresolvedRegister, pending.length);
+  const staleContainers = pending.filter(([, row]) => row.review_due < '2026-10-26' &&
+    (row.image_digest || row.embedded_path || /^(?:usr|lib|bin|sbin|etc|workspace)\//.test(row.file || '') ||
+      /image|toolbox|production|api-tool/.test(row.component || '')));
+  assert.equal(report.staleContainerCandidates, staleContainers.length);
   assert.deepEqual(report.verificationPending.map((row) => row.registerKey), pending.map(([key]) => key));
   assert.equal(report.status, pending.length ? 'complete-with-findings' : 'complete-clean');
   // Legitimate removal-only reconciliation must never require editing this test or a frozen count.

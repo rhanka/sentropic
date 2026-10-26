@@ -39,6 +39,9 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] Opus r1 P2-2: validate npm entry names, severities, via/range types and exact per-severity/total counters; refuse empty contradictory reports and null/malformed entries, with clean and populated positive controls.
+- [x] Opus r1 P2-3: exercise real Dockerfile stages plus a missing-stage fixture, assert required lock presence, compute seven stale candidates on the 67-row fixture and derive the current-register count; retitle metadata-only assertions.
+- [x] Review-fix final local gate: required `scripts/ci/publishable-ci-wiring.test.mjs` entrypoint passes all 119 tests after merging `365e8b313`; locked Make execution on `ENV=test-sec-s1`, no failures or skips.
 - [x] Resync after Opus r1: merge `origin/main` at `365e8b313f1c4c627c87db4f6761847a1e6a5ae7`, retain the S1 plan on the sole `BRANCH.md` conflict and preserve Track events; incoming L5 artifacts remain main's exact bytes, with the repair class disabled.
 - [x] Opus r1 P2-1: pin disabled activation, exact allow/deny scope, grouping, fail-closed kill switch, blocked L5 class and budget ceilings independently of the candidate JSON; weakened fixtures reproduce the former acceptance gap.
 - [x] Review-fix validation uses `ENV=test-sec-s1` last and the shared Docker lock; all 70 weakened-contract fixtures pass after the validator fix (the remaining failing npm-counter regression is handled separately).
@@ -57,7 +60,7 @@
 - [x] Malformed-report regression: Trivy result rows and finding identities are validated, so a valid outer envelope cannot turn missing/partial nested findings into a clean report.
 - [x] Coverage alignment: discover package/app/script/tool source roots and workspace manifests, verify the three image stages, enumerate reviewed hash consumers and expose missing locks/unknown consumers/SAST qualification as blockers.
 - [x] Identity hardening: malformed aliases and ambiguous/empty key components fail closed; source defects may use an explicit stable defect identity. Local editor-rule symlinks are excluded from application surface discovery.
-- [ ] Independent review: harness selection failed because no reachable exact-model catalog establishes two eligible Claude-hosted models; dossier retained in `.tmp/daily-sec-fix/s1-review-dossier.md`. No consensus or merge readiness claimed.
+- [ ] Independent review: Opus r1 on `d405cf7e0` returned CHANGES (0 P1, 3 P2); the three findings are corrected above, with re-review/approval pending. No consensus or merge readiness claimed.
 - [x] SECDAILY-EX6 inventory: `api/Dockerfile` (`ci-tools` and `ci-esbuild`) is the existing approved toolbox path; S1 does not modify it or introduce an image.
 - `owner-all-public` / `acknowledge`: binding owner decision (OWNER-REQUEST.md 2026-10-23 disclosure section) supersedes the spec private-scan design. No private scan repo, everything runs in the public repos, fix PRs are public and auto-merged after other-model review and green CI. S1 contract adapted accordingly.
 

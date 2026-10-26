@@ -26,9 +26,19 @@ export function failClosedReport(raw) {
         result[kind].every((finding) => finding && typeof finding[kind === 'Vulnerabilities' ? 'VulnerabilityID' : 'ID'] === 'string' &&
           ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(finding.Severity) &&
           (kind !== 'Vulnerabilities' || (typeof finding.PkgName === 'string' && typeof finding.InstalledVersion === 'string'))))));
+  const npmSeverities = ['info', 'low', 'moderate', 'high', 'critical'];
+  const npmEntries = Object.entries(parsed.vulnerabilities || {});
+  const nonempty = (value) => typeof value === 'string' && value.length > 0;
   const npm = parsed.auditReportVersion === 2 && parsed.vulnerabilities && !Array.isArray(parsed.vulnerabilities) &&
     typeof parsed.vulnerabilities === 'object' && parsed.metadata?.vulnerabilities &&
-    ['info', 'low', 'moderate', 'high', 'critical', 'total'].every((key) => Number.isInteger(parsed.metadata.vulnerabilities[key]) && parsed.metadata.vulnerabilities[key] >= 0);
+    [...npmSeverities, 'total'].every((key) => Number.isInteger(parsed.metadata.vulnerabilities[key]) && parsed.metadata.vulnerabilities[key] >= 0) &&
+    npmEntries.every(([name, entry]) => nonempty(name) && entry && entry.name === name &&
+      npmSeverities.includes(entry.severity) && typeof entry.range === 'string' &&
+      Array.isArray(entry.via) && entry.via.length > 0 && entry.via.every((via) =>
+        typeof via === 'string' ? nonempty(via) : via && nonempty(via.name) &&
+          npmSeverities.includes(via.severity) && typeof via.range === 'string')) &&
+    npmSeverities.every((severity) => npmEntries.filter(([, entry]) => entry.severity === severity).length === parsed.metadata.vulnerabilities[severity]) &&
+    parsed.metadata.vulnerabilities.total === npmEntries.length;
   if (!trivy && !npm) throw new Error('incomplete or unsupported report');
   return parsed;
 }
