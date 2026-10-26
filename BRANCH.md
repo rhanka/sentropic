@@ -40,9 +40,9 @@
   - [x] `BR142-EX3`: owner requests merging origin/main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`, including the published artifacts/mesh tuple. All inherited paths are allowed solely for this merge; retain this branch's BRANCH.md on add/add conflict. Impact: unchanged main bytes/history, exceeding the authored-diff limit; rollback: separately authorized merge revert. Track contains all 342 prior branch events and matches main byte-for-byte; acceptance refresh belongs to the designated Track writer.
 
 ## Feedback Loop
-- [ ] `attention`: 21 October tenant metadata and 22 October product/control migration frontiers plus latest backup receipts are recorded without refusal; endpoint/config hashes, package/runtime state, private object/restore/ACL/disposition evidence remain open.
+- [ ] `attention`: 26 October B01/B02/B04 and B06 number evidence supplied; B03 isolated recovery/checkpoint and B08 exact-head reviews remain open. Missing upstream UP-T durable activation receipt gates W1.c; positive writer fencing gates W2.
 - [x] `acknowledge`: F3/F4 owner answers Q1–Q4 copied verbatim into owner-decisions.md; owner holds all human roles, agents execute, no staffed windows or temporal slot bookings are required because there are no users; owner signs with a later-enrolled dedicated identity/key.
-- [ ] `blocked`: W0 acceptance remains gated by F1/B01–B03, F2/B04, B06 nonlocal migration-0017 reconciliation and exact-head independent review B08 in `docs/baselines/app-cm-w0/authorization.md`; later enrollment/infra/promotion receipts retain their downstream gates.
+- [ ] `blocked`: W0 acceptance remains gated by B03 and exact-head independent review B08 in authorization.md; UP-T, enrollment/infra/promotion and runtime qualification retain their applicable downstream gates.
 - [x] `clarification`: D2/#677 owns control 0012–0019; W1 withdraws 0017 and reserves verified-free 0020. O1 owns 9495/5695/1595; app ports remain in reservations.md; W2.b alone reconciles API manifest/root/API locks.
 - [x] Track import belongs to the designated root writer; this concurrent worktree updates mergeable source records only (`track-operation` contract).
 
@@ -88,6 +88,7 @@
   - [x] Enumerate remaining W0 acceptance blockers precisely: serving-cluster/DB/backup/object access and F1/F2 receipts/disposition, B06 nonlocal migration-0017 reconciliation and B08 independent final-head review; distinguish later technical/action gates.
   - [x] Consolidate findings into the bounded downstream branch handoffs, including W3/T3 EX1 and P/TG EX2.
 - [ ] **Lot 3 — Final validation and draft delivery**
+  - [x] W0-close.a/d: baseline/authorization/catalogue/README consolidated around dated current receipts; B03/B08 remain open, UP-T W1.c dependency explicit, no restore or PR merge.
   - [x] Check JSON, source citations, secret hygiene, reservations, prototype/verifier evidence and every diff hunk; run `make scope-check` before each commit.
   - [x] Reproducible committed `probe.mk`: `w0-host-fit` and `w0-record-check` pass on the pinned Node image, exact selectors and frozen public vectors; no product services/credentials.
   - [x] Follow-up validation: w0-record-check passes; 34 local record/dossier links and retained CI JSON checked; COPY fixture passes; live digests and independent acceptance stay pending.

@@ -1,5 +1,15 @@
 # W4 request context handoff
 
+## 26 October receiving freeze
+
+Current workspace base is `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`; [published/source tuple and exact trees](published-tuple-2026-10-26.json), [APP-P1/internal ports and loaded Comments/gateway fit](host-fit.md). This supersedes the old unrestricted artifacts catalogue assumed by the 18 October prototype; the context signatures/authorization rules below remain required. Original line-number citations are historical seam locators, not assertions about current line positions.
+
+W4 consumes W2's **same compiled four-name map**: `artifacts_ensure`, `artifacts_publish`, `artifacts_list`, `artifacts_get`. Filter that map with freshly resolved subject/session/tenant/workspace/membership/consent/policy/read-only authority before discovery/ranking/counts. Public HTTP and chat execution both carry the trusted invocation context to W1's same coordinator/service; no identity or authority is deserialized from tool args. Immutable profile, selected-capability and manifest digests bind the same input; W2/W4 qualify that binding at the accepted integration head.
+
+The legacy Google Drive/Gmail catalogue/reader surfaces retain their own current scopes and verified account selectors. Four-tool APP-P1 selection applies to the artifacts provider, not a replacement for connector authorization. Reader activation/content access and host cleanup/GC are the separately frozen internal ports: never include them as catalogue tools or use them to dispatch an unselected public mutation. Extra artifacts capabilities require upstream qualification before catalogue exposure.
+
+[Current legacy disposition](legacy-inventory-2026-10-26.md) leaves each source in place. Four unscoped historical chat messages supply no tenant/workspace authority for import, even though their users exist. W4 may expose new private artifacts only through the required fresh context; it does not relabel old documents/jobs/conversations into artifacts or retire their readers. UP-T durable activation remains an upstream W1.c dependency as recorded in host-fit; W4 neither implements that adapter nor bypasses it.
+
 T4 implements this contract; W0 freezes its shape and callers only. The current seams omit context: `routes/namespaces/catalog.ts:36,78`, `services/skills/catalog.ts:254`, `foundation-executor.ts:199,583`, `catalog/execution-seam.ts:145`. Existing auth middleware on some routes does not make the global projection safe for private entries.
 
 ## Server-only type and resolver

@@ -4,7 +4,17 @@ Source authority: `9ed96eb83cd77da710f1adeb83a19e425d6c4910` (initial HEAD = ori
 
 19 October follow-up: origin/main `cf0ad8ee44f9bb7cf4ad1222a468172f0f77fc2d` was integrated unchanged at fe26214df under the owner's explicit instruction. The [verbatim Q1–Q4 answers](owner-decisions.md) supersede the original plan's staffing/window and signer/key choices. No PR merge or deployment is authorized. The initial source/lock/package observations retain their original source SHA and collection date; they are not observations of the integrated main or its published packages.
 
-## Evidence boundary
+## Current W0-close.a/d extension — 26 October
+
+Current main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6` was merged without rebase at `79a4f2703ffd34ad2b66999d3daf8b7516e90735`; only BRANCH.md conflicted. [Published/source tuple](published-tuple-2026-10-26.json) selects artifacts 0.2.0 / mesh 0.22.1 and retains the full workspace-lock reference and whole installed published tree. Old observations below keep their original dates/source pins.
+
+- **B01 supplied:** [endpoint/config receipt](endpoint-config-2026-10-26.md), live hashes and Ingress→Service→ready-Pod/proxy binding; prod/preprod public health/session/MCP 200/401/404 and 200/401/401. Positive authenticated parity remains W2.
+- **B02 supplied as observed baseline:** [package/authority receipt](package-authority-2026-10-26.md); no artifacts schema/package journal, 17/4 active cutovers, no generation/server/registration/lease rows. Do not infer a valid writer fence; W2 must qualify it before effects.
+- **B04 supplied:** [dated scoped inventory/disposition](legacy-inventory-2026-10-26.md); 15 documents, 258 jobs, 141 messages, 14 verified private objects; all sources explicitly left in place with readers retained. Four unscoped chat messages are excluded from import.
+- **B06 number reconciliation closed:** [reservations](reservations.md) withdraw 0017, preserve #677's 0012–0019 and reserve verified-free control 0020. APP-P1/internal ports, branch bases and W2.b lock turn are frozen in the receiving handoffs.
+- **W0 still pending:** B03 object-version/checkpoint and isolated restore, plus B08 two independent exact-head reviews/reconciliation. Restore lots b/c were not performed. Missing published UP-T durable activation/receipt separately gates W1.c; no local duplicate is authorized by this evidence update.
+
+## Historical evidence boundary — 18–22 October
 
 Initial observations began at 23:26 UTC with registry/GitHub GETs, unauthenticated HTTPS GETs and pinned source reads. The 19 October follow-up collected [inactive-cluster metadata and scoped-account denials](cluster-readings.md), plus [archive/CI recovery evidence and historical counts](recovery-readings.md). The [21 October tenant-admin metadata collection](tenant-readings-2026-10-21.md), explicitly authorized by the owner, records running prod/preprod/remote images, controller ownership and config revisions without RBAC refusal. The [22 October read-only collection](migration-backup-readings-2026-10-22.md) adds live product/control migration frontiers and latest backup receipts in prod/preprod, also without refusal. The older zero-pod observations describe a different cluster. Endpoint-to-cluster binding, rendered config hashes and current application-data/private-object inventories remain **pending**, not empty. This record does not qualify W0 for downstream dispatch until [authorization.md](authorization.md) closes.
 
