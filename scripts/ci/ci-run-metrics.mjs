@@ -566,10 +566,11 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const admission = admissionDecision({ peak: summary.concurrencyPeak,
     availableSlots: capacity.availableSlots ?? null, reserveSlots: capacity.reserveSlots ?? 0 });
   const timings = captured.timings ?? {};
+  const jobDuration = name => executionSeconds(jobs.find(row => row.name === name));
   const scheduling = criticalPathScheduling(jobs, captured.dependencies, captured.endpoints);
   const waits = Object.entries(scheduling).filter(([name]) => captured.endpoints[name].length > 0).map(([, row]) => row.seconds);
-  const budgets = budgetVerdict({ classificationSeconds: timings.classificationSeconds ?? null,
-    verdictSeconds: timings.verdictSeconds ?? null,
+  const budgets = budgetVerdict({ classificationSeconds: timings.classificationSeconds ?? jobDuration('changes'),
+    verdictSeconds: timings.verdictSeconds ?? jobDuration('ci-gate'),
     schedulingSeconds: waits.length && waits.every(value => value !== null) ? Math.max(...waits) : null });
   const cancellation = cancellationOwnership(jobs);
   const continuity = releaseContinuity(jobs, captured.endpoints ?? {});
