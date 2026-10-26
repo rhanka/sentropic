@@ -27,6 +27,14 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
+  "peerDependencies": {
+    "faster-whisper-ts": "1.2.1"
+  },
+  "peerDependenciesMeta": {
+    "faster-whisper-ts": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.10.10",
     "typescript": "5.4.5"
