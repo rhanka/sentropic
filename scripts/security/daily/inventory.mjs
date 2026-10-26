@@ -1,10 +1,12 @@
 // S1 inventory: required surfaces, derived-pin consumers, fail-closed report checks.
 // Pure helpers plus filesystem inventory over the checked-out repository root.
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadContract } from './schema.mjs';
+import { joinRegister, loadContract, validDate } from './schema.mjs';
 
-export const REQUIRED_LOCKS = ['package-lock.json', 'ui/package-lock.json', 'docs/governance/kit/package-lock.json'];
+export const REQUIRED_LOCKS = ['package-lock.json', 'api/package-lock.json', 'ui/package-lock.json',
+  'docs/governance/kit/package-lock.json', 'apps/auth-idp/web/package-lock.json', 'e2e/package-lock.json',
+  'tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json'];
 export const REQUIRED_IMAGES = ['api-production', 'api-toolbox', 'ui-production'];
 
 export function failClosedReport(raw) {
@@ -24,7 +26,8 @@ export function failClosedReport(raw) {
 }
 
 export function inventoryLocks(root = '.') {
-  return REQUIRED_LOCKS.map((rel) => ({ path: rel, present: existsSync(join(root, rel)) }));
+  const found = repositoryFiles(root).filter((path) => /(?:^|\/)(?:.*package-lock\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?)$/.test(path));
+  return [...new Set([...REQUIRED_LOCKS, ...found])].sort().map((path) => ({ path, present: existsSync(join(root, path)), includeDev: true }));
 }
 
 export function inventoryImages(contract) {
@@ -40,40 +43,32 @@ export function inventorySastRoots(contract) {
   return { roots, blockedUntil: contract?.inventory?.sastBlockedUntil || 'S2c', qualified: false };
 }
 
-export function findDerivedPinConsumers(root = '.', maxFiles = 200) {
-  const hits = [];
-  const visit = (dir, depth = 0) => {
-    if (hits.length >= maxFiles || depth > 6) return;
-    let entries = [];
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (hits.length >= maxFiles) return;
-      if (entry === 'node_modules' || entry === '.git') continue;
-      const full = join(dir, entry);
-      let stat;
-      try {
-        stat = statSync(full);
-      } catch {
-        continue;
-      }
-      if (stat.isDirectory()) visit(full, depth + 1);
-      else if (entry.endsWith('.mjs') || entry.endsWith('.json') || entry.endsWith('.sha256')) {
-        let text = '';
-        try {
-          text = readFileSync(full, 'utf8');
-        } catch {
-          continue;
-        }
-        if (text.includes('declaredLockSha256')) hits.push(full);
-      }
+const SKIP = new Set(['.git', '.track', '.tmp', '.remote', '.claude', '.codex', '.agents', 'tmp',
+  'node_modules', 'dist', 'build', 'coverage', '.svelte-kit', 'history', 'lock-snapshots', 'fixtures']);
+
+function repositoryFiles(root, limit = 100000) {
+  const files = [];
+  const visit = (rel = '') => {
+    for (const entry of readdirSync(join(root, rel), { withFileTypes: true })) {
+      if (SKIP.has(entry.name)) continue;
+      const path = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) throw new Error(`inventory cannot qualify symlink: ${path}`);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile()) files.push(path);
+      if (files.length > limit) throw new Error('inventory file bound exceeded');
     }
   };
-  visit(root);
-  return hits.sort();
+  visit();
+  return files.sort();
+}
+
+export function findDerivedPinConsumers(root = '.', maxFiles = 200) {
+  const pattern = /declaredLockSha256|lock[A-Za-z]*Sha256|[Ll]ock.{0,30}[Ss][Hh][Aa]-?256|[Ss][Hh][Aa]-?256.{0,30}[Ll]ock/;
+  const hits = repositoryFiles(root).filter((path) =>
+    /\.(?:[cm]?[jt]s|json|sha256)$/.test(path) && !/package-lock\.json$|(?:^|\/)tests?\/|\.test\.|^scripts\/security\/daily\/|^\.security\/security-fix.json$/.test(path) &&
+    pattern.test(readFileSync(join(root, path), 'utf8')));
+  if (hits.length > maxFiles) throw new Error('derived consumer bound exceeded');
+  return hits;
 }
 
 export function inventoryRepository(root = '.', contract = loadContract(join(root, '.security/security-fix.json'))) {
