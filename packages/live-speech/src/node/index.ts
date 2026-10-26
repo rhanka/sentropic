@@ -3,7 +3,8 @@ export { selectLocalSttProfile, LOCAL_STT_PROFILES, UnknownSpeechProfileError } 
 export type { LocalSttProfile, LocalSttModelId, LocalSttModelPin } from './profiles.js';
 export type { SttEnginePort, SttSegment, SttTranscription, SttTranscribeOptions } from './engine-port.js';
 export { NodeWorkerClient, SessionClosedError } from './worker-port.js';
-export type { WorkerPort } from './worker-port.js';
+export type { NodeWorkerClientOptions, WorkerPort } from './worker-port.js';
+export { ENGINE_VAD_ASSET, ModelDigestMismatchError, resolveModelDir, verifyModelDir } from './model-pins.js';
 export { LocalSttSession } from './local-stt.js';
 export type { LocalSttEvent, LocalSttSessionOptions } from './local-stt.js';
 export { UtteranceBuffer, rmsDbfs } from './utterance-buffer.js';
