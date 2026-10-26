@@ -26,6 +26,18 @@
     ],
     "sastRoots": ["api/src", "ui/src"],
     "sourceTrees": ["api", "ui", "packages", "apps", "scripts", "tools", "docs/governance/kit"],
+    "derivedPinConsumers": [
+      "tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json",
+      "tools/memory-mcp-l5/pack.mjs", "tools/memory-mcp-l5/precandidate.mjs",
+      "tools/memory-mcp-l5/receipt.mjs", "tools/memory-mcp-l5/schema-validator.mjs",
+      "tools/memory-mcp-l5/schemas/artifact-manifest-v1.schema.json",
+      "tools/memory-mcp-l5/schemas/checkpoint-v1.schema.json",
+      "tools/gateway-evolution/bundle.mjs", "tools/gateway-evolution/run.mjs",
+      "packages/artifacts/probe/l8d/install.mjs", "packages/artifacts/probe/l8d/smoke.mjs",
+      "packages/artifacts/probe/l8d/summary.mjs", "packages/artifacts/probe/l8d/radar-receipt.json",
+      "packages/artifacts/probe/l8d/FINAL-0.2.0-evidence.json"
+    ],
+    "consumerDiscoveryNote": "Inventory references only, not new derived-pin permission. L5 consumes root-lock provenance; gateway/probe receipts bind separate release/install locks. Unknown consumers block policy admission.",
     "lockExclusions": ["historical L5 lock snapshots", "test fixtures"],
     "sastBlockedUntil": "S2c native Rust ast-grep qualification",
     "toolbox": {
