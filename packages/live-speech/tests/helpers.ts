@@ -1,7 +1,37 @@
 // Deterministic PCM fixtures and a scripted in-process worker port (no microphone,
 // no native code). All timing derives from sample counts; only the event order matters.
+import { fileURLToPath } from 'node:url';
 import type { SttTranscription } from '../src/node/engine-port.js';
-import { SessionClosedError, type WorkerPort } from '../src/node/worker-port.js';
+import { selectLocalSttProfile } from '../src/node/profiles.js';
+import type { LocalSttProfile } from '../src/node/profiles.js';
+import { SessionClosedError, type NodeWorkerClientOptions, type WorkerPort } from '../src/node/worker-port.js';
+
+export const FAKE_ENGINE_MODULE = fileURLToPath(new URL('./fixtures/fake-engine.mjs', import.meta.url));
+export const FAKE_MODELS_ROOT = fileURLToPath(new URL('./fixtures/models', import.meta.url));
+
+/** Pinned digests of tests/fixtures/models/fake-tiny (4 small synthetic files). */
+export const FAKE_TINY_DIGESTS = {
+  modelBin: 'sha256:5496d6743cdde4fe98674e290e44b3220f5a42bf0c442eb207e88fd041e34d48',
+  configJson: 'sha256:ae8fb62dd15a64fd56860cfe31600449521927d61a646a51d70915fa8dff1109',
+  tokenizerJson: 'sha256:cdab9a7cfeceac70f8bacbe0353be26d42031f8a0c6fdc3eb9e9783d3a52fe89',
+  vocabularyTxt: 'sha256:7ab82891dea734d29eebbb543978d88ea0d6b809dd6644d1a5c0e12e460c22a8',
+} as const;
+
+/** Test profile bound to the fake-tiny fixture dir (selection determines load). */
+export function fakeTinyProfile(): LocalSttProfile {
+  const base = selectLocalSttProfile('local-tiny');
+  return { ...base, model: { ...base.model, modelDirName: 'fake-tiny', files: { ...FAKE_TINY_DIGESTS } } };
+}
+
+/** NodeWorkerClient options driving the fake engine with a scripted step array. */
+export function fakeClientOptions(script: unknown[]): NodeWorkerClientOptions {
+  return {
+    profile: fakeTinyProfile(),
+    modelsRoot: FAKE_MODELS_ROOT,
+    engineModule: FAKE_ENGINE_MODULE,
+    engineOptions: { script },
+  };
+}
 
 export const RATE = 16000;
 
