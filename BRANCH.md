@@ -26,6 +26,7 @@
 ## Feedback Loop
 - [x] Owner clarification: official Docker targets using `--rm` are allowed under the shared flock; no ad-hoc Docker recipe is allowed.
 - [x] Main has only pre-candidate Lot 1; [producer audit](spec/evidence/memory-mcp-l5/candidate-0212/PRODUCERS.md) identifies absent source suites, later lots and predecessor integrations.
+- [x] Official gate blocked by another session's nested flock; only the childless L5 waiter stopped; other session untouched.
 - [x] FAIL evidence: [qualification report](spec/evidence/memory-mcp-l5/candidate-0212/REPORT.md); no runtime qualification or receipt claimed.
 ## AI Flaky tests
 - [x] No waiver and no missing proof treated as passed.
@@ -41,5 +42,6 @@
 - [x] Lot 1: audit candidate/catalog; record FAIL with missing P01-P09 files and unexecuted P10; no receipt.
 - [x] Lot 2: evidence pushed; draft PR #762 opened; no merge authorized or performed.
 - [x] Attempt 2: verify archive digests and unchanged P2; rebase existing PR onto origin/main; audit every official proof producer.
-- [ ] Attempt 2 execution: official gate queued under the shared Docker flock; collect results and clean up the isolated test environment.
+- [x] Attempt 2 execution: [evidence](spec/evidence/memory-mcp-l5/candidate-0212/EXECUTION.md) records the unstarted gate, wrapper exit 143, cleanup lock timeout and empty `make ps` result.
+- [x] Attempt 2 handoff: no candidate-bound proofs, receipt or digest; P01-P09 missing sources, P10 unexecuted; existing draft PR #762 updated.
 - [ ] Acceptance: full candidate gate and schema-valid receipt (blocked; no receipt issued).
