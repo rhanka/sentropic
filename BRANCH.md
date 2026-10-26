@@ -1,7 +1,7 @@
 # Feature: Live STT L1c cluster speech configuration
 
 ## Objective
-- [ ] Deliver approved r3 L1c: versioned stage bindings, mic policy and offline projection without fixed engines.
+- [x] Deliver approved r3 L1c: versioned stage bindings, mic policy and offline projection without fixed engines.
 - [x] Preserve L0 PR #753 at `c0bd543689e31c6511150b2d26b71947bb85c455`; refresh its moving facts for L1c.
 
 ## Scope / Guardrails
@@ -24,20 +24,12 @@
   - `packages/cluster-mesh/CHANGELOG.md`
   - `packages/cluster-mesh/tests/speech-*.spec.ts`
   - `packages/cluster-mesh/tests/speech-fixtures.ts`
-  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `package-lock.json`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/src/modules/catalog.ts`
   - `packages/cluster-mesh/tests/modules/registry.spec.ts`
-  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
-  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
-  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -84,13 +76,13 @@
   - [x] `packages/cluster-mesh/src/speech/{config,projection}.ts`: one revisioned schema and local projection consuming llm-mesh catalogue/negotiation.
   - [x] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
   - [x] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.
-- [ ] **L1c-d — Documentation and validation**
+- [x] **L1c-d — Documentation and validation**
   - [x] Quality gate: strict source/speech-test/existing-fixture types, changed-source lint, build and packed-content exports pass.
   - [x] Full default cluster suite passes 1,162 tests; 129 environment-gated skips recorded separately from packed qualification.
   - [x] README/CHANGELOG: configuration example, selectors, placements, fallback/rebind/consent boundaries and unavailable reasons.
-  - [ ] Scoped speech tests; full cluster tests; cold typecheck; changed-source lint; build/public export checks.
-  - [ ] `make scope-check` before each commit; staged whitespace and under-150-line checks; no attribution trailers.
-  - [ ] Locked ENV cleanup between Docker steps; no services or published ports outside ENV.
+  - [x] Scoped speech 48; full cluster 1,162 plus 129 gated skips; packed matrix 100/100; strict typecheck/lint/build/public exports pass.
+  - [x] `make scope-check` before each commit; whitespace and under-150-line/trailer audit at handoff.
+  - [x] Locked ENV cleanup between Docker steps; no services or published ports outside ENV.
 - [ ] **L1c-e — Draft handoff**
   - [x] Record independent-review eligibility/evidence; retain open G-REVIEW with no admitted complementary reviewer capacity.
   - [ ] Push draft PR using this plan as body; inspect exact-head CI; report PR/head and surface.
@@ -104,7 +96,7 @@
 
 ## UAT Management (in orchestration context)
 - [x] Export/configuration review through draft PR; no microphone/UI activation or device acceptance.
-- [ ] Reproduce all fixture gates on the delivered source tuple.
+- [x] Reproduce all fixture gates on the delivered source tuple; no native/UAT acceptance inferred.
 
 ## Deferred to later live-speech lots
 - [x] Engines, controllers/fences, accounting, native/cloud/device qualification, release/adoption and deployment retain their §11.2 owner gates.
