@@ -54,6 +54,8 @@ export async function callMemoryBridge(tool: BridgeTool, args: Record<string, un
     if (typeof context.audit?.emit !== 'function') throw new MemoryTrustedContextError();
     projectMemoryContext(context, typeof args.purpose_ref === 'string' ? args.purpose_ref : context.memory!.binding.purpose_ref);
   } catch { throw safeMcpProtocolError(new McpError(-32603, '')); }
+  signal = AbortSignal.any([signal, AbortSignal.timeout(
+    Date.parse(context.memory!.binding.deadline_at) - Date.parse(context.memory!.now))]);
   const budget = typeof args.max_packet_bytes === 'number' ? args.max_packet_bytes : tool.maxPacketBytes ?? 65536;
   const failure = (code: 'INVALID_SCHEMA' | 'RESULT_TOO_LARGE' | 'MUTATION_OUTCOME_UNKNOWN' | 'CAPABILITY_UNAVAILABLE', message: string) =>
     encodeBoundedMemoryEnvelope({ ok: false, auditId: context.auditId, redactionClass: 'high',
