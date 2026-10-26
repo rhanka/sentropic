@@ -389,10 +389,16 @@ sync rewrites the reviewed workload policy to these exact bindings:
    64 hexadecimal characters without a trailing newline. Store it as the
    preprod `immo-mcp-workload` credential. Never reuse a production/development
    credential or place the value in Git, CLI arguments, logs or a PR.
-   If this client already exists, verify its existing credential through the
-   protected channel; a different credential or a revoked row stops the import.
-   Rotation/revocation requires the existing explicit credential lifecycle;
-   registration neither rotates nor reactivates an existing client.
+   First inspect row presence and metadata through an approved read-only DB
+   console (never select the hash):
+
+   ```sql
+   SELECT client_id, revoked_at, allowed_scopes, resource_indicators, exchange_policy
+   FROM service_clients WHERE client_id = 'immo-mcp-workload';
+   ```
+
+   No row means bootstrap is needed. An active row will be rekeyed if the Secret
+   changes; a revoked row remains revoked and never blocks identity sync.
 2. Materialize an Opaque Secret **by name** in `sentropic-preprod`:
    `immo-mcp-workload`, key `IMMO_MCP_WORKLOAD_CLIENT_SECRET`, through the
    approved Kubernetes secret-management interface. Transfer the same credential
@@ -400,6 +406,8 @@ sync rewrites the reviewed workload policy to these exact bindings:
    key in `radar-immobilier-preprod`, as radar's
    `RUNBOOK-PREPROD-MCP-RACCORDEMENTS.md` steps 3–4 require.
    No cross-namespace Secret reference is possible; these are two local copies.
+   This sync is the only preprod creation/rotation path; do not run the generic
+   provisioning/rotation Make targets against this preprod registry.
 3. Merge the qualified PR to `main`; normal CI pins and rolls out the preprod
    API/IdP images and the sync ConfigMap/CronJob. Verify `deploy-preprod` succeeds.
    For an explicitly approved manual rollout from that exact main checkout:
@@ -417,8 +425,10 @@ sync rewrites the reviewed workload policy to these exact bindings:
    confirm `outcome=committed`. This established workflow also triggers the
    restricted prod identity export and creates a preprod backup before import;
    its protected environment approvals still apply.
-   The import Job reads the named preprod Secret, hashes it locally and creates
-   only the reviewed `service_clients` row inside the identity transaction.
+   The import Job validates exactly 64 lowercase hex characters without a newline,
+   hashes in its shell process, unsets the plaintext, and sends only the hash to
+   Postgres. It creates/rekeys only the reviewed workload inside the transaction.
+   Invalid input reports `workload_credential_invalid` before SQL execution.
    The Secret reference is optional so unrelated identity sync continues before
    bootstrap; an absent Secret plus absent row leaves exchange unavailable.
 5. Confirm the preprod service registry contains `immo-mcp-workload`, is not
@@ -430,6 +440,17 @@ sync rewrites the reviewed workload policy to these exact bindings:
    Wrong subject/target audiences, unknown clients, form-only credentials and
    `client_credentials` for this workload must fail. Radar then completes its
    digest-bound A2 qualification before arming its receiver.
+
+For rotation (at least every 90 days), pause scheduled identity-sync dispatches
+so they cannot race the dry-run. Replace the source Secret through the
+approved manager, repeat step 4's dry-run and commit, then update radar's copy
+and reload/restart its consumer. Commit replaces the active row's hash: the new
+credential authenticates and the old credential is revoked immediately (no grace
+period). Verify both results before recording success. Keep the source Secret
+aligned with every rotation; do not rotate the DB independently. For revocation,
+the owner sets `revoked_at` through the approved credential process and removes
+both Secret copies. A leftover Secret cannot reactivate the row or block sync.
+Resume scheduled dispatches after verification.
 
 Exchange becomes available as soon as registration commits and radar has the
 matching Secret. Allow **10–20 minutes for the owner-operated sync/rollout**
