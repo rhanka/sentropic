@@ -43,5 +43,6 @@
 - [x] Registry pre-bump observation: published platform is 0.4.0; propose 0.4.1 for pack-only validation.
 - [ ] Lot 1: transfer schema admission and wire/context bridge with both profile suites.
 - [x] Transfer bounded wire implementation and schema-profile test coverage from c83189032.
+- [x] Transfer additive bridge admission, verified dispatch and complete-envelope codec.
 - [ ] Lot 2: run platform tests and pack-mcp-platform; inspect additive package exports.
 - [ ] Lot 3: create draft PR against main; retain conductor decision pending; no merge.
