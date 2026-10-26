@@ -34,7 +34,8 @@ const envSchema = z.object({
   // dev/UAT point it at the gitignored SA key under the workspace bind-mount,
   // e.g. GOOGLE_APPLICATION_CREDENTIALS=/workspace/.secrets/gcp-sa.json.
   GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
-  OPENAI_MODEL: z.string().default('gpt-4.1-nano'),
+  OPENAI_MODEL: z.string().default('gpt-5.4-nano'),
+  DOCUMENT_MODEL: z.string().default('gpt-5-nano'),
   TAVILY_API_KEY: z.string().optional(),
   // ---------------------------------------------------------------------------
   // Document storage (S3-compatible: MinIO dev/test, Scaleway Object Storage prod)

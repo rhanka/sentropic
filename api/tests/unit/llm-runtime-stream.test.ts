@@ -1799,7 +1799,7 @@ describe('LLM stream event normalization', () => {
     expect((reasoningDeltas[0].data as { delta: string }).delta).toBe('hidden planning');
   });
 
-  it('should strip mesh reasoning for GPT-4.1 Nano when chat passes reasoning options', async () => {
+  it('should preserve mesh reasoning for retired GPT-4.1 Nano after cutover to its reasoning-capable successor', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
     const provider = providerRegistry.requireProvider('openai');
     let capturedRequest: unknown;
@@ -1825,7 +1825,7 @@ describe('LLM stream event normalization', () => {
     );
 
     const requestOptions = (capturedRequest as { requestOptions?: { reasoning?: unknown } }).requestOptions;
-    expect(requestOptions?.reasoning).toBeUndefined();
+    expect(requestOptions?.reasoning).toEqual({ effort: 'medium', summary: 'auto' });
     expect(events.some((event) => event.type === 'content_delta')).toBe(true);
     expect(events.some((event) => event.type === 'done')).toBe(true);
   });
@@ -1977,6 +1977,62 @@ describe('LLM stream event normalization', () => {
       { type: 'input_text', text: 'Describe this' },
       { type: 'input_image', image_url: 'data:image/png;base64,iVBORw0KGgo=', detail: 'auto' },
     ]);
+  });
+
+  it('should preserve image content parts for Mistral chat input', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('mistral');
+    const dispatch = vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: 'Red image' } }] };
+        yield { choices: [{ delta: {}, finish_reason: 'stop' }] };
+      })(),
+    );
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+    const content = [
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+    ];
+    const events = await collectStreamEvents(callLLMStream({
+      messages: [{ role: 'user', content }] as never,
+      providerId: 'mistral', model: 'mistral-small-2603',
+    }));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      requestOptions: expect.objectContaining({ messages: [{ role: 'user', content }] }),
+    }));
+    expect(events.filter((event) => event.type === 'content_delta')).toHaveLength(1);
+  });
+
+  it('should stream Mistral images with instructions and tools without a separate analysis call', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('mistral');
+    const analyze = vi.spyOn(provider, 'generate').mockResolvedValue({
+      choices: [{ message: { content: '' } }],
+    });
+    const dispatch = vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () { yield { choices: [{ delta: { content: 'Blue' } }] }; })(),
+    );
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+    const system = { role: 'system', content: 'Application instructions' };
+    const content = [
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+    ];
+    const tools = [{ type: 'function', function: { name: 'lookup', description: 'Look up data', parameters: { type: 'object', properties: {} } } }];
+    const events = await collectStreamEvents(callLLMStream({
+      messages: [system, { role: 'user', content }] as never,
+      tools: tools as never, providerId: 'mistral', model: 'mistral-small-2603',
+    }));
+    expect(analyze).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      requestOptions: expect.objectContaining({
+        tools,
+        messages: [system, { role: 'user', content }],
+      }),
+    }));
+    expect(content).toHaveLength(2);
+    expect(events).toContainEqual({ type: 'content_delta', data: { delta: 'Blue' } });
   });
 
   it('should convert image content parts for Gemini request input', async () => {

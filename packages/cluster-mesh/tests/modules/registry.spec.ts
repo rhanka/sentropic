@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   ClusterMeshModuleUnavailableError,
   isClusterMeshModuleUnavailableError,
 } from '../../src/modules/errors.js';
 import { createModuleRegistry } from '../../src/modules/registry.js';
 import { satisfiesRange } from '../../src/modules/semver.js';
-import { evaluations, fakeGateway, fakeMesh, moduleSource, PackageTree } from '../fixtures/package-tree.js';
+import { evaluations, fakeAuthHono, fakeGateway, fakeMesh, moduleSource, PackageTree } from '../fixtures/package-tree.js';
 
 let tree: PackageTree;
 let anchorDir: string;
@@ -21,6 +22,50 @@ const registry = (disabled: readonly string[] = []) =>
   createModuleRegistry({ disabled: disabled as never }, { anchorDir });
 
 describe('module registry', () => {
+  it.each(['0.15.2', '0.16.0', '0.17.0', '0.18.0'])('should enforce the qualified auth-hono boundary for %s', async (version) => {
+    tree.install('app', fakeMesh('mesh'));
+    tree.install('app', fakeGateway('gateway'));
+    tree.install('app', fakeAuthHono('auth', version));
+    const load = registry().load('gateway/auth-hono');
+    if (version === '0.18.0') {
+      await expect(load).rejects.toMatchObject({ reason: 'incompatible_version', packageName: '@sentropic/auth-hono' });
+      expect(evaluations()).toEqual([]);
+    } else {
+      await expect(load).resolves.toHaveProperty('AuthHonoVerifyToken');
+    }
+  });
+
+  it('should load Radar 0.19.2 mesh, facade and a gateway sharing that mesh', async () => {
+    tree.install('app', fakeMesh('radar', '0.19.2'));
+    tree.install('app', fakeGateway('gw'));
+    const modules = registry();
+    for (const entry of ['llm-mesh', 'llm-mesh/facade', 'gateway'] as const) {
+      await expect(modules.load(entry)).resolves.toBeDefined();
+    }
+    expect(evaluations()).toEqual(['radar', 'radar/facade', 'gw']);
+  });
+
+  it('should accept the current comments leaf version and still require its optional peer', async () => {
+    const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+    tree.install('app', { name: '@sentropic/cluster-mesh', version, exports: {
+      './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
+    } });
+    await expect(registry().load('comments')).rejects.toMatchObject({
+      reason: 'not_installed', packageName: '@sentropic/comments',
+    });
+    expect(evaluations()).toEqual([]);
+  });
+
+  it('should refuse the next unqualified comments leaf minor before evaluation', async () => {
+    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.23.0', exports: {
+      './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
+    } });
+    await expect(registry().load('comments')).rejects.toMatchObject({
+      reason: 'incompatible_version', packageName: '@sentropic/cluster-mesh',
+    });
+    expect(evaluations()).toEqual([]);
+  });
+
   it('should resolve and evaluate nothing at construction', () => {
     tree.install('app', fakeMesh('mesh'));
     const modules = registry();
@@ -47,7 +92,7 @@ describe('module registry', () => {
     const modules = registry();
     const failure = modules.load('llm-mesh/facade');
     await expect(failure).rejects.toThrow(
-      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.28.0" and restart.',
+      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@"0.19.2 || >=0.22.0 <0.29.0" and restart.',
     );
     const error = await failure.catch((caught: unknown) => caught);
     expect(isClusterMeshModuleUnavailableError(error)).toBe(true);
@@ -67,7 +112,7 @@ describe('module registry', () => {
   });
 
   it.each([
-    ['0.28.0', '0.28.0'],
+    ['0.29.0', '0.29.0'],
     ['0.21.2', '0.21.2'],
     ['0.22.1-rc.1', '0.22.1-rc.1'],
   ])('should refuse llm-mesh %s as incompatible_version', async (version, installedVersion) => {

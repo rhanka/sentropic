@@ -19,7 +19,7 @@ import {
   resolveConnectedMistralVibeTransport,
   type AntigravityFallbackRoute,
 } from '../provider-connections';
-import { isProviderId, type ProviderId } from '../provider-runtime';
+import { isDecisionOnlyProvider, isProviderId, type ProviderId } from '../provider-runtime';
 import { parseGcpModelId } from '../providers/gcp-provider';
 import { CLOUDCODE_PA_PROVIDER_ID } from '../providers/cloudcode-pa-provider';
 import { settingsService } from '../settings';
@@ -113,11 +113,17 @@ export const resolveRuntimeSelection = async (input: {
   model?: string | null;
   userId?: string | null;
 }): Promise<RuntimeSelection> => {
+  if (isDecisionOnlyProvider(input.providerId ?? '')) {
+    throw new Error('Decision-only providers cannot be selected for chat');
+  }
   const [aiSettings, models] = await Promise.all([
     settingsService.getAISettings({ userId: input.userId ?? null }),
     Promise.resolve(providerRegistry.listModels()),
   ]);
 
+  if (!isProviderId(input.providerId ?? '') && isDecisionOnlyProvider(aiSettings.defaultProviderId)) {
+    throw new Error('Decision-only providers cannot be selected for chat');
+  }
   const requestedModel = (input.model ?? '').trim() || aiSettings.defaultModel;
   const inferredProvider = inferProviderFromModelIdWithLegacy(
     models.map((entry) => ({
@@ -795,7 +801,7 @@ const extractClaudeText = (payload: unknown): string => {
 
 type MistralMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
+  content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
   [key: string]: unknown;
 };
 
@@ -803,9 +809,13 @@ const buildMistralMessages = (
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
 ): MistralMessage[] => {
   return messages.map((m) => {
-    const content = stringifyContent(
-      (m as unknown as { content?: unknown }).content
-    );
+    const rawContent = (m as unknown as { content?: unknown }).content;
+    const parts = normalizeContentParts(rawContent);
+    const content: MistralMessage['content'] = parts
+      ? parts.map((part) => part.type === 'text'
+        ? { type: 'text', text: part.text }
+        : { type: 'image_url', image_url: { url: imageDataUrl(part)! } })
+      : stringifyContent(rawContent);
     const role = m.role as MistralMessage['role'];
     const base: MistralMessage = { role, content };
     if (role === 'assistant') {

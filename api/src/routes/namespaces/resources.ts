@@ -22,7 +22,7 @@ const targetShape = {
   path: z.string().startsWith('/').optional(),
   ref: ref.optional(),
 };
-const withTarget = <T extends z.ZodRawShape>(shape: T) => z.object({
+const withTarget = (shape: z.ZodRawShape) => z.object({
   ...targetShape,
   ...shape,
 }).strict().refine((value) => (value.path === undefined) !== (value.ref === undefined));
