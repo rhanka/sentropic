@@ -119,4 +119,49 @@ describe.skipIf(!pgEnabled)('postgres open/commit ownership guards', () => {
       await fixture.close();
     }
   });
+
+
+
+  it('refuses a module record that diverges from options (readback)', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const incarnation = 'fixed-test-incarnation';
+      await createPostgresKernel({ ...fixture.options, incarnation });
+      await fixture.tx.run(false, (session) =>
+        session.execute({
+          text: `UPDATE "${fixture.name}".modules SET incarnation='intruder' WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      await assert.rejects(createPostgresKernel({ ...fixture.options, incarnation }), (error: unknown) => {
+        assert.ok(error instanceof PostgresStorageError);
+        return true;
+      });
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('reads the module record back through the installed guard', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const stored = await fixture.tx.run(false, (session) =>
+        ensurePgModuleRecord(session, `"${fixture.name}"`, {
+          moduleId: 'comments',
+          incarnation: 'readback-incarnation',
+          effectiveIncarnation: 'readback-incarnation',
+        }),
+      );
+      assert.equal(stored, 'readback-incarnation');
+      const rows = await fixture.tx.run(true, (session) =>
+        session.execute({
+          text: `SELECT incarnation FROM "${fixture.name}".modules WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      assert.equal(decodePgText(rows.rows[0]?.incarnation), 'readback-incarnation');
+    } finally {
+      await fixture.close();
+    }
+  });
 });
