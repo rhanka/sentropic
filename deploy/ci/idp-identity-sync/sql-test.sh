@@ -65,7 +65,7 @@ IFS=, read -r snapshot users credentials consents clients < snapshot.csv
 echo 'PASS: read-only snapshot users=8 credentials=18'
 mkdir -p /sql
 cp "$map" /sql/client-map.csv
-for policy in host-map.csv client-policy.sql sync-clients.sql client-postcondition.sql service-policy.sql sync-services.sql; do
+for policy in host-map.csv client-policy.sql sync-clients.sql client-postcondition.sql service-policy.sql register-workload.sql sync-services.sql; do
   cp "/workspace/deploy/k8s/overlays/preprod/idp-identity-sync/$policy" "/sql/$policy"
 done
 pair='9f11d240-fc75-4d55-80be-1bafcd79eadb>1b9b9e15-2956-4df4-9ee1-a42273f0d096'

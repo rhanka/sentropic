@@ -1,4 +1,65 @@
-# Feature: Fix CI gateway mesh range wait (merged with main sec-zod4 plan; both kept)
+# Feature: RFC 8693 token exchange for the radar preprod workload client
+
+## Objective
+- [ ] Register `immo-mcp-workload` through the existing preprod sync using a named Kubernetes Secret; qualify the exchange-only policy for radar.
+
+## Scope / Guardrails
+- [x] Worktree `tmp/worktrees/idp-token-exchange`, branch `feat/idp-token-exchange-preprod`, from `origin/main`; harness branch check passed.
+- [x] `ENV=test-idp-token-exchange` last; shared Docker flock and teardown; no Python, deployment, secret minting or production changes.
+- [x] No schema, package source or discovery change: live preprod now advertises RFC 8693 unconditionally.
+- [x] Historical plans inherited from main below are reference only and authorize no work on this branch.
+
+## Branch Scope Boundaries (MANDATORY)
+- [x] **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `deploy/k8s/overlays/preprod/idp-identity-sync/**`
+  - `deploy/ci/idp-identity-sync/import-job.tmpl.yaml`
+  - `deploy/ci/idp-identity-sync/bundle-checks.mjs`
+  - `deploy/ci/idp-identity-sync/services-test.sh`
+  - `deploy/ci/idp-identity-sync/sql-test.sh`
+  - `deploy/k8s/README.md`
+  - `api/tests/api/auth/oauth-token-exchange.test.ts`
+- [x] **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `deploy/k8s/overlays/prod/**`
+  - `.track/**`
+- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `.github/workflows/**`
+  - `api/drizzle/*.sql`
+- [x] **Exception process**: record reason, impact and rollback before editing a conditional or forbidden path.
+
+## Feedback Loop
+- [x] Existing policy rewrites the exact preprod MCP/API audiences but skips missing workload rows; register before its invariant snapshot.
+- [x] Author metadata: codex / gpt-6.1-sol / high; external reviews require repository reviewer authorization.
+
+## AI Flaky tests
+- [x] No live AI dependency in this scope.
+
+## Orchestration Mode (AI-selected)
+- [x] Single author; no delegated implementation.
+
+## UAT Management (in orchestration context)
+- [x] No UI change; preprod acceptance remains an owner action after rollout.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Read-only diagnosis**
+  - [x] Read Docker lock, rules, radar aadc5291 runbook steps 3–4 and server-http.ts; inspect CI deploy and live discovery.
+- [ ] **Lot 1 — Workload registration**
+  - [x] Add local Secret-backed registration and references in both preprod Job sources; preserve existing IDs and hashes.
+  - [ ] Test `services-test.sh` registration, invalid secret, mismatch, rollback, idempotence and unrelated-client preservation.
+  - [ ] Gate: `make test-idp-sync-selftest` and `make test-idp-sync-sql`, then teardown.
+- [ ] **Lot 2 — Policy regression**
+  - [ ] Test preprod allowed exchange, public/unregistered denial, wrong subject/target audiences and client_credentials denial in `api/tests/api/auth/oauth-token-exchange.test.ts`.
+  - [ ] Gate: scoped API endpoint suite, then teardown.
+- [ ] **Lot 3 — Operator handoff and draft PR**
+  - [ ] Document owner secret minting, radar handoff, dry-run, rollout and acceptance in `deploy/k8s/README.md`.
+  - [ ] Scope-check each atomic commit under 150 lines; push; open requested draft PR; monitor CI and record SHA/ETA in the external report.
+
+## Historical main plans (reference only)
+
+## Historical objective
 
 ## Objective
 Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves before publishing llm-gateway.
@@ -17,7 +78,7 @@ Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves bef
 - 0 Python in repos and jobs. One Docker build at a time machine-wide.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
+- **Inherited allowlist (reference only)**:
   - `api/package.json`
   - `api/package-lock.json`
   - `package-lock.json` (root workspace lock sync for packages/* bumps)
@@ -50,11 +111,11 @@ Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves bef
   - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `scripts/ci/publishable-classification.test.mjs`
   - `.github/workflows/ci.yml` (BR01-EX4: skills validation lane)
-- **Forbidden Paths (must not change in this branch)**:
+- **Inherited denylist (reference only)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+- **Inherited conditional list (reference only)**:
   - `Makefile`
   - `packages/cluster-mesh/packaging.mk`
   - `api/drizzle/*.sql` (max 1 file)
@@ -253,7 +314,7 @@ Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves bef
 - [x] Product durable-host §10.3, later providers/local serving and §9.3 architecture are outside this execution; portable client 2.09 is the explicit §10.2 cluster prerequisite.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [x] **Allowed Paths (implementation scope)**:
+- [x] **Inherited allowlist (reference only)**:
   - [x] `docs/comments-annotations/contract/package-zod4-migration.json` (BR96-EX33: incoming #752 contract attestation only)
   - [x] `packages/auth-hono/**`, `packages/auth-ui/**`, `packages/comments/**`, `packages/skills/**`, `package.json`, `scripts/ci/publishable-classification.test.mjs` (BR96-EX33: incoming #752 history only)
   - [x] `scripts/ci/publishable-manifests.mjs` (BR96-EX32: dependency-floor parsing only)
@@ -284,13 +345,13 @@ Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves bef
   - [x] `api/tests/api/decision-chat-settings.test.ts`, `api/tests/unit/decision-chat-selection.test.ts`, `api/tests/unit/decision-runtime-selection.test.ts`, `api/tests/unit/decision-wire-selection.test.ts` (V4-L2-R1 scope completion; renamed decision suites)
   - [x] `api/tests/unit/gateway-package-version.test.ts` (version literal follows the gateway bump only; BR96-EX8)
   - [x] `packages/llm-mesh/README.md`, `packages/cluster-mesh/README.md`, `spec/SPEC_EVOL_LLM_MESH.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` (judge semantics only)
-- [x] **Forbidden Paths (must not change in this branch)**:
+- [x] **Inherited denylist (reference only)**:
   - [x] `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `.github/workflows/idp-identity-sync.yml`, `plan/**`
   - [x] `packages/contracts/**`, `packages/events/**`, `package.json`
 - [x] `packages/llm-gateway/src/**`, `packages/llm-gateway/tests/**`, `packages/llm-gateway/scripts/**`, `packages/llm-gateway/README.md`, `packages/llm-gateway/CHANGELOG.md`, `packages/llm-gateway/LICENSE`, `packages/llm-gateway/tsconfig.json`, `packages/llm-gateway/tsconfig.test.json`
 - [x] `packages/cluster-mesh/tests/packaging/helpers.ts`, `packages/cluster-mesh/tests/packaging/*.mjs`, `packages/cluster-mesh/tests/packaging/*.sh`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer/**`, `packages/cluster-mesh/tests/packaging/fixtures/global-consumer-pinned/**`, `packages/cluster-mesh/tests/packaging/fixtures/separate-runtime/**`
   - [x] `ui/**`, `apps/**`, `deploy/**`, `api/src/db/**`, `api/drizzle/**`, `api/src/services/llm-metering/**`
-- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+- [x] **Inherited conditional list (reference only)**:
   - [x] `api/tests/ai/initiative-generation-async.test.ts` (composite live API test outer budget only; BR96-EX27)
   - [x] `.track/events.jsonl`, `.track/head.json` (workflow-managed consolidate/acceptance records only, no product content; BR96-EX16)
   - [x] `ui/package-lock.json` (nested EX10 vite 7.3.6 to 7.3.7 security pin only, otherwise converged to main; BR96-EX10, BR96-EX16)

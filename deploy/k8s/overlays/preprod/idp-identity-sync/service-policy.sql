@@ -35,4 +35,5 @@ SELECT client_id,
     'allowClientCredentials', false
   ) AS exchange_policy
 FROM desired_service_policy_raw;
+\i /sql/register-workload.sql
 CREATE TEMP TABLE services_before ON COMMIT DROP AS TABLE service_clients;
