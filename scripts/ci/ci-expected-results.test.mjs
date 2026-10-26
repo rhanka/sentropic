@@ -14,6 +14,7 @@ const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
 
 test('should select API and E2E gates for global changes on every pull request', () => {
+  assert.doesNotMatch(JSON.stringify(workflow), /decision_fixture_only|feat\/decision-v4-l5/);
   const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
   for (const job of ['test-api-unit-integration', 'test-e2e', 'e2e-vscode']) {
     const members = expected.filter((row) => row.job.startsWith(job));
