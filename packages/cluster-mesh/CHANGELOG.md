@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.23.0
+
+- Add versioned `speechProfiles` to cluster configuration and the `./speech`
+  subpath for exact catalogue projection and explicit quiescent rebind.
+  Independent STT/TTS or native-duplex bindings support every declared
+  provider/model/adapter and the five placements, with both microphone modes.
+- Profiles carry opaque policy/account/resource/budget references; projection
+  checks tenant, workspace, capabilities, media and egress without credentials,
+  implicit fallback, microphone activation or gateway admission.
+- Root exports the provider-free schema/decoder; importing `./speech` needs
+  the optional `@sentropic/llm-mesh` peer with the L1 speech contract (0.28).
+- Extend the unchanged comments leaf's self-version range to admit this
+  additive minor. The next minor remains refused until qualified.
+
 ## 0.22.0
 
 - Align manifest and runtime admission with spec r2 R4:

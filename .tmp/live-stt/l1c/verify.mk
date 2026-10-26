@@ -4,6 +4,8 @@ $(error This adapter requires ENV=test-live-stt-l1c)
 endif
 L1C_COMPOSE = docker compose -p $(ENV) -f docker-compose.immo-861.yml
 L1C_RUN = $(L1C_COMPOSE) run --rm --no-deps -T
+version:
+	@$(L1C_RUN) qualification sh -ec 'npm view @sentropic/cluster-mesh version; npm view @sentropic/llm-mesh version; npm view @sentropic/llm-gateway version'
 
 scope-check:
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
