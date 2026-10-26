@@ -66,5 +66,6 @@
 - [x] **Lot 1 — Tests first**: candidate probe reproduced 5 failures/1 pass before liaison; expanded memory suite passes 92/92 across 12 files, including installed constructor provenance and DTO compilation.
 - [x] **Lot 2 — Host liaison**: host-owned fixture; private authoritative issuance and pre-effect guards; no caller DTO or copied invocation creates a mapping; no production seam needed before E7.
 - [x] **Resume qualification**: 16/16 candidate scenarios pass; full pre-extension memory run 92/92; P2 unchanged; PR #764 is draft, targets integration and remains unmerged. Actual-base inherited E0 scope is explicit.
+- [x] **Review refinement**: all three foreign identity fields also refuse candidate lifecycle after a valid pending commit; focused 16/16 rerun passes.
 - [ ] **Lot 3 — Validation**: focused tests, memory suite, typecheck/lint/build, dev.4 manifest commit, scope checks, unchanged P2.
 - [ ] **Lot 4 — Handoff**: push; draft PR from this file; green E2 qualification; report PR/head/CI and producer questions; do not merge.
