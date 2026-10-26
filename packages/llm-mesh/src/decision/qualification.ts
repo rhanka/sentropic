@@ -38,10 +38,12 @@ export function discoverDecisionEvaluator(descriptor: DecisionEvaluatorDescripto
   const scopes: DecisionQualificationScope[] = [];
   for (const record of records) {
     if (!isRecord(record) || !isRecord(record.scope)) continue;
+    if (request && scope === null) continue;
     const recordedScope = record.scope as unknown as DecisionQualificationScope;
-    if (assessDecisionCalibration(record, descriptor, recordedScope).status === 'passed') scopes.push(recordedScope);
+    const selectedScope = request ? scope! : recordedScope;
+    if (assessDecisionCalibration(record, descriptor, selectedScope).status === 'passed') scopes.push(selectedScope);
   }
-  const calibrated = scope !== null && records.some((r) => assessDecisionCalibration(r, descriptor, scope).status === 'passed');
+  const calibrated = scope !== null && scopes.length > 0;
   const priced = !!request && quoteDecision(request, descriptor, evidence.price).ok;
   const reasons: string[] = [];
   if (!identity) reasons.push('identity-unqualified');

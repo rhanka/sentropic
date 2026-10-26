@@ -50,3 +50,20 @@ export function decisionChoiceMetrics(labels: string[], pairs: { gold: string; p
   }
   return { macroF1, minimumRecall, confusionMatrix: matrix };
 }
+
+/** Fixed-seed percentile bootstrap, 512 resamples; paired rows stay paired. */
+export function decisionBootstrap95<T>(rows: readonly T[], metric: (sample: T[]) => number): [number, number] {
+  if (!rows.length) return [0, 0];
+  let state = 0xdec1510;
+  const values: number[] = [];
+  for (let iteration = 0; iteration < 512; iteration++) {
+    const sample: T[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+      sample.push(rows[Math.floor(state / 4294967296 * rows.length)]);
+    }
+    values.push(metric(sample));
+  }
+  values.sort((a, b) => a - b);
+  return [values[Math.floor(0.025 * 511)], values[Math.ceil(0.975 * 511)]];
+}
