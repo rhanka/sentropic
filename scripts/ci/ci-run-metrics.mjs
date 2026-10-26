@@ -45,7 +45,8 @@ export function captureRecords(captured) {
     runId: row.run_id, attempt: row.run_attempt, jobId: row.id, name: row.name,
     conclusion: row.conclusion, queuedAt: row.created_at,
     startedAt: row.started_at, completedAt: row.completed_at, labels: row.labels,
-    headSha: row.head_sha ?? null, headBranch: row.head_branch ?? null,
+    headSha: row.head_sha ?? captured.run.head_sha ?? null,
+    headBranch: row.head_branch ?? captured.run.head_branch ?? null,
     runnerName: row.runner_name || undefined,
     steps: row.steps?.map((step) => ({ name: step.name, number: step.number,
       conclusion: step.conclusion, startedAt: step.started_at, completedAt: step.completed_at })),
@@ -123,7 +124,7 @@ export function criticalPathScheduling(records, dependencies = {}, endpoints = {
     if (rows.length && parents.every(Boolean)) {
       const parent = parents.sort((a, b) => b.end - a.end)[0] ?? { end: 0, jobs: [] };
       if (!executed.length) result = parent;
-      else if (executed.every(row => toMs(row.completedAt) !== null)) {
+      else if (executed.every(row => durationSeconds(row.startedAt, row.completedAt) !== null)) {
         const last = executed.sort((a, b) => toMs(b.completedAt) - toMs(a.completedAt))[0];
         result = { end: toMs(last.completedAt), jobs: [...parent.jobs, last] };
       }
@@ -134,7 +135,9 @@ export function criticalPathScheduling(records, dependencies = {}, endpoints = {
   };
   return Object.fromEntries(Object.entries(endpoints).map(([endpoint, names]) => {
     const paths = names.map(visit);
-    const path = paths.length && paths.every(Boolean) ? paths.sort((a, b) => b.end - a.end)[0] : null;
+    const executed = names.every(name => records.some(row => (row.name === name || row.name?.startsWith(`${name} (`))
+      && row.conclusion !== 'skipped'));
+    const path = executed && paths.length && paths.every(Boolean) ? paths.sort((a, b) => b.end - a.end)[0] : null;
     const jobs = path?.jobs.map(row => ({ key: jobKey(row), runId: row.runId,
       attempt: row.attempt, jobId: row.jobId, name: row.name, queueSeconds: queueSeconds(row) })) ?? [];
     const measured = jobs.length > 0 && jobs.every(row => row.queueSeconds !== null);
@@ -518,9 +521,10 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     availableSlots: capacity.availableSlots ?? null, reserveSlots: capacity.reserveSlots ?? 0 });
   const timings = captured.timings ?? {};
   const scheduling = criticalPathScheduling(jobs, captured.dependencies, captured.endpoints);
-  const waits = Object.values(scheduling).map(row => row.seconds).filter(value => value !== null);
+  const waits = Object.entries(scheduling).filter(([name]) => captured.endpoints[name].length > 0).map(([, row]) => row.seconds);
   const budgets = budgetVerdict({ classificationSeconds: timings.classificationSeconds ?? null,
-    verdictSeconds: timings.verdictSeconds ?? null, schedulingSeconds: waits.length ? Math.max(...waits) : null });
+    verdictSeconds: timings.verdictSeconds ?? null,
+    schedulingSeconds: waits.length && waits.every(value => value !== null) ? Math.max(...waits) : null });
   const cancellation = cancellationOwnership(jobs);
   const continuity = releaseContinuity(jobs, captured.endpoints ?? {});
   const identity = { sourceSha: captured.sourceSha ?? captured.run?.head_sha ?? null,
