@@ -11,7 +11,10 @@ Construct `SpeechCoordinator` with a trusted session-scoped `Journal`, opaque `C
 authenticated admission, including tenant, principal, target, source generation, controller epoch and
 consent revision. The journal must atomically persist transactions before acknowledging them, serialize
 all writers across controllers/processes, roll back exceptions and isolate returned values from storage.
-The package supplies no production in-memory persistence or independent billing ledger.
+`SessionJournal` implements isolated transactions, rollback and bounded CAS retries over the host's
+linearizable durable `AtomicJournalStorage` primitive. Restoring the same storage key retains fences,
+effects, admissions and accepted risk. The package supplies no production in-memory persistence or
+independent billing ledger.
 
 `createSession` requires interception coverage for every enabled tool class. A runtime integration must
 route every admission through `admitTool`, including known-safe reads, approvals, native tools and
