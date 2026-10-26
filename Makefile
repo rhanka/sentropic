@@ -1070,7 +1070,7 @@ LLM_MESH_REGISTRY_WAIT_SECONDS ?= 10
 
 .PHONY: wait-llm-gateway-mesh-dependency
 wait-llm-gateway-mesh-dependency: ## Wait until the gateway's mesh dependency floor is visible on npm (no-cache, cache-busted reads)
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; requirement="$$(node -p "require(\"./packages/llm-gateway/package.json\").dependencies[\"@sentropic/llm-mesh\"]")"; version="$${requirement#^}"; test "$$version" != "$$requirement"; node scripts/ci/publishable-manifests.mjs wait --spec "@sentropic/llm-mesh@$$version" --attempts "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" --delay "$(LLM_MESH_REGISTRY_WAIT_SECONDS)"'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; requirement="$$(node -p "require(\"./packages/llm-gateway/package.json\").dependencies[\"@sentropic/llm-mesh\"]")"; test -n "$$requirement"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs wait --spec "@sentropic/llm-mesh@$$requirement" --attempts "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" --delay "$(LLM_MESH_REGISTRY_WAIT_SECONDS)"'
 
 .PHONY: publish-llm-gateway
 .PHONY: wait-llm-gateway-auth-dependencies
