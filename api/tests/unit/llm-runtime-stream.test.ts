@@ -1799,7 +1799,7 @@ describe('LLM stream event normalization', () => {
     expect((reasoningDeltas[0].data as { delta: string }).delta).toBe('hidden planning');
   });
 
-  it('should strip mesh reasoning for GPT-4.1 Nano when chat passes reasoning options', async () => {
+  it('should preserve mesh reasoning for retired GPT-4.1 Nano after cutover to its reasoning-capable successor', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
     const provider = providerRegistry.requireProvider('openai');
     let capturedRequest: unknown;
@@ -1825,7 +1825,7 @@ describe('LLM stream event normalization', () => {
     );
 
     const requestOptions = (capturedRequest as { requestOptions?: { reasoning?: unknown } }).requestOptions;
-    expect(requestOptions?.reasoning).toBeUndefined();
+    expect(requestOptions?.reasoning).toEqual({ effort: 'medium', summary: 'auto' });
     expect(events.some((event) => event.type === 'content_delta')).toBe(true);
     expect(events.some((event) => event.type === 'done')).toBe(true);
   });

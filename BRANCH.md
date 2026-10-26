@@ -18,6 +18,9 @@
   - `packages/live-speech/**`
   - `.tmp/live-stt/l2/**`
   - `package-lock.json`
+  - `packages/cluster-mesh/README.md`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -32,6 +35,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] BR757-EX3: merge origin/main ab981b16d to enable PR776 CI. Preserve L1c 0.23 speech, main peer releases/Decision changes and both README sections. Authored conflict resolutions are small; imported main commits retain their original history. Scope-check at merge measures resolutions against AUTO_MERGE, excluding unchanged incoming commits. Rollback uses the pre-merge parent; never rewrite/rebase.
 - [x] Add exact barrier-revision approval binding (including previously unused approvals) and explicit paired cancellation for emitted calls denied before admission.
 - [x] Each official live-speech gate now invokes cleanup via Make on exit while still under the shared lock, preserving failures. CI selects this gate only for its package/build/workflow changes.
 - [x] Add explicit tests for 2s pending Stop, disconnect/reconnect fencing, completed-epoch late Stop and typed-acceptance replay after durable restart.

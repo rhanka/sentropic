@@ -42,7 +42,7 @@ describe('Me API', () => {
     expect(initial.status).toBe(200);
     const initialData = await initial.json();
     expect(initialData.defaultProviderId).toBe('openai');
-    expect(initialData.defaultModel).toBe('gpt-4.1-nano');
+    expect(initialData.defaultModel).toBe('gpt-5.4-nano');
 
     const update = await authenticatedRequest(
       app,
@@ -80,7 +80,7 @@ describe('Me API', () => {
     expect(anotherSettings.status).toBe(200);
     const anotherData = await anotherSettings.json();
     expect(anotherData.defaultProviderId).toBe('openai');
-    expect(anotherData.defaultModel).toBe('gpt-4.1-nano');
+    expect(anotherData.defaultModel).toBe('gpt-5.4-nano');
   });
 
   it('migrates legacy stored user defaults on read', async () => {
