@@ -44,6 +44,19 @@ describe('exact-u64 counter codec', () => {
 });
 
 describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
+  it.each(['9007199254740992', '9223372036854775808', U64_MAX])('records the E4/E5 commit-options epoch refusal at %s', async (epoch) => {
+    const fixture = await createPgFixture();
+    try {
+      const grant = grantFor({ operations: ['read', 'write'] });
+      const root = await fixture.open();
+      const bound = await root.bindNew(grant);
+      const fence = { fenceId: 'handoff', epoch, incarnation: root.incarnation, ownerId: grant.principalId };
+      await root.provisionFence(grant, fence);
+      await expect(bound.commitAtomic(recordUnit(), { fence })).rejects.toMatchObject({ code: 'invalid-command' });
+      expect(await bound.readRecord('u64-record')).toBeNull();
+      expect(await readCounters(fixture)).toBeUndefined();
+    } finally { await fixture.close(); }
+  });
   it.each(['9007199254740992', '9223372036854775808', U64_MAX])('replays, checkpoints and snapshots exact journal positions at %s', async (next) => {
     const descriptor = { contractVersion: 'v1', contractDigest: 'u64-snapshot', schemaVersions: ['1'], requiredProfiles: [], optionalProfiles: [], chainKinds: [], queryNames: ['scope-chain-index'], boundaries: [], pageLimits: { maxRecords: 10, maxEncodedBytes: 1048576 } };
     const fixture = await createPgFixture({ descriptor, queries: { 'scope-chain-index': async (_input, context) => {
@@ -100,7 +113,7 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
       expect(effects).toBe(0);
       expect(await bound.indexGet('bad')).toBeNull();
       expect(await bound.readRecord('u64-record')).toBeNull();
-      expect(await readCounters(fixture)).toEqual({ version: '0', sequence: '0' });
+      expect(await readCounters(fixture)).toBeUndefined();
     } finally { await fixture.close(); }
   });
   it('refuses decimal strings converted to Number or to signed BIGINT', async () => {
