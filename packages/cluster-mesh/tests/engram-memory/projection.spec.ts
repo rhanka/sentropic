@@ -13,12 +13,12 @@ describe.skipIf(!pgEnabled)('transactional memory projection', () => {
     try {
       const bound = await (await host.open()).bindNew(memoryGrant());
       await bound.transact({}, async (tx) => {
-        await tx.apply(memoryUnit({ updates: [memoryUpdate(k7, capture), memoryUpdate(k8, outcome)] }));
+        await tx.apply(memoryUnit({ appends: [memoryAppend('1')], updates: [memoryUpdate(k7, capture), memoryUpdate(k8, outcome)] }));
       });
       const completed = { ...capture, revision: 2, recordDigest: 'sha256:original' };
       const completion = await bound.commitAtomic(memoryUnit({ updates: [memoryUpdate(k7, completed, 2)] }));
       expect(completion.effectiveAppends).toBe(0);
-      expect(await bound.readHead('memory-journal')).toBeNull();
+      expect(await bound.readHead('memory-journal')).toBe('hash-1');
       const reopened = await (await host.open()).bind(memoryGrant());
       await expect(reopened.commitAtomic(memoryUnit({ updates: [memoryUpdate(k7, { ...completed, proof: {} }, 3)] })))
         .rejects.toMatchObject({ code: 'invalid-command' });
@@ -43,7 +43,7 @@ describe.skipIf(!pgEnabled)('transactional memory projection', () => {
       }));
       expect(count.rows[0]?.count).toBe('0');
       await expect(bound.commitAtomic(memoryUnit({
-        appends: [memoryAppend('1')], updates: [memoryUpdate(k7, capture)],
+        appends: [memoryAppend('1')], updates: [memoryUpdate(k7, { ...capture, revision: 2, recordDigest: 'sha256:original' }, 2)],
       }))).rejects.toMatchObject({ code: 'invalid-command' });
       expect(await bound.readHead('memory-journal')).toBeNull();
     } finally { await host.close(); }
