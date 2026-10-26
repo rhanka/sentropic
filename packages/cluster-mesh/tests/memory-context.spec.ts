@@ -122,7 +122,7 @@ describe('P01.mesh.memory-context', () => {
         requestInit: { headers: { 'x-mcp-tenant-ref': 'forged-tenant' } },
         fetch: async (_url, init) => router.request('/mcp', init),
       }));
-      expect((await client.listTools()).tools[0]).toMatchObject({ outputSchema: capability.outputSchema, _meta: { source: 'mcp:engram-memory' } });
+      expect((await client.listTools()).tools[0]).toMatchObject({ outputSchema: { type: 'object', ...capability.outputSchema as object }, _meta: { source: 'mcp:engram-memory' } });
       expect(await client.callTool({ name: capability.name, arguments: { record_id: 'mem_abc', purpose_ref: 'purpose-1' } }))
         .toEqual({ isError: true, structuredContent: envelope, content: [{ type: 'text', text: JSON.stringify(envelope) }] });
       expect(calls).toBe(1);
