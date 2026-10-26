@@ -161,7 +161,7 @@ jobs:
       ai: ${{ steps.filter.outputs.ai }}
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
       cluster_mesh: ${{ steps.filter.outputs.cluster_mesh }}
-      engram_e2: ${{ steps.filter.outputs.engram_e2 }}
+      engram_e2: ${{ github.base_ref == 'feat/engram-e2-integration' && steps.filter.outputs.engram_e2 == 'true' }}
       cluster_mesh_publish: ${{ steps.filter.outputs.cluster_mesh_publish }}
       llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
