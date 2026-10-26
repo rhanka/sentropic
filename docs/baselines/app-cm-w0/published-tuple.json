@@ -1,4 +1,6 @@
 {
+  "historicalObservation": true,
+  "currentEvidence": "published-tuple-2026-10-26.json",
   "observedAt": "2026-10-18T23:26:00Z",
   "sourceSha": "9ed96eb83cd77da710f1adeb83a19e425d6c4910",
   "status": "published-selected-not-deployed",
