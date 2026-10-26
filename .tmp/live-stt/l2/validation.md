@@ -11,6 +11,9 @@
 - Full final tests: 27/27 pass across all four suites at source 5e51979ba, including CAS restart and immutable typed risk.
 - Final lint and build/export/pack pass; package dry-run contains 12 files with all root exports importable.
 - All local gates pass: strict source/test types, lint, 27 tests, build/export/pack. Exact-head CI remains pending.
+- Default CI contains credentialed live-AI suites selected by Makefile changes. Its queued runs were
+  cancelled before provider-backed tests began. Dedicated Live Speech Core CI has no provider secrets;
+  a green result there must not be described as a green global CI gate.
 - Every local container/test gate uses the shared Docker flock, ENV=test-stt-l2 last and Make cleanup.
   Official gates now clean their qualification network on exit, including failures; no ports published.
 - Mechanical branch gate passed before source work; scope gate run before each commit.
