@@ -106,6 +106,42 @@ export function queueWaits(records) {
   };
 }
 
+// Follow the last-finishing dependency at each join in the observed DAG.
+// The receipt sums readiness waits on that path, retaining every execution ID.
+// A maximum single-job wait is not an aggregate scheduling measurement.
+export function criticalPathScheduling(records, dependencies = {}, endpoints = {}) {
+  const memo = new Map();
+  const visiting = new Set();
+  const visit = (name) => {
+    if (memo.has(name)) return memo.get(name);
+    if (!Array.isArray(dependencies[name]) || visiting.has(name)) return null;
+    visiting.add(name);
+    const parents = dependencies[name].map(visit);
+    const rows = records.filter(row => row.name === name || row.name?.startsWith(`${name} (`));
+    const executed = rows.filter(row => row.conclusion !== 'skipped');
+    let result = null;
+    if (rows.length && parents.every(Boolean)) {
+      const parent = parents.sort((a, b) => b.end - a.end)[0] ?? { end: 0, jobs: [] };
+      if (!executed.length) result = parent;
+      else if (executed.every(row => toMs(row.completedAt) !== null)) {
+        const last = executed.sort((a, b) => toMs(b.completedAt) - toMs(a.completedAt))[0];
+        result = { end: toMs(last.completedAt), jobs: [...parent.jobs, last] };
+      }
+    }
+    visiting.delete(name);
+    memo.set(name, result);
+    return result;
+  };
+  return Object.fromEntries(Object.entries(endpoints).map(([endpoint, names]) => {
+    const paths = names.map(visit);
+    const path = paths.length && paths.every(Boolean) ? paths.sort((a, b) => b.end - a.end)[0] : null;
+    const jobs = path?.jobs.map(row => ({ key: jobKey(row), runId: row.runId,
+      attempt: row.attempt, jobId: row.jobId, name: row.name, queueSeconds: queueSeconds(row) })) ?? [];
+    const measured = jobs.length > 0 && jobs.every(row => row.queueSeconds !== null);
+    return [endpoint, { seconds: measured ? jobs.reduce((sum, row) => sum + row.queueSeconds, 0) : null, jobs }];
+  }));
+}
+
 // Per-step spans of one job row carrying API steps[]. Conclusions and
 // missing stamps pass through unchanged; unmeasurable steps stay null.
 export function stepSpans(record) {
@@ -334,7 +370,7 @@ export function cancellationOwnership(records, context = {}) {
     const run = record?.runId ?? 'unknown';
     const rerunSuperseded = latestAttempt.get(run) !== null && attempt < latestAttempt.get(run);
     const branch = branchOf(run) ?? `run:${String(run)}`;
-    const crossRunSuperseded = latestRunByBranch.get(branch)?.run !== run;
+    const crossRunSuperseded = branch !== 'main' && latestRunByBranch.get(branch)?.run !== run;
     const ownership = rerunSuperseded || crossRunSuperseded ? 'superseded' : 'current';
     if (ownership === 'superseded') superseded += 1;
     cancelled.push({ key: jobKey(record), runId: record.runId, attempt,
@@ -481,8 +517,10 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const admission = admissionDecision({ peak: summary.concurrencyPeak,
     availableSlots: capacity.availableSlots ?? null, reserveSlots: capacity.reserveSlots ?? 0 });
   const timings = captured.timings ?? {};
+  const scheduling = criticalPathScheduling(jobs, captured.dependencies, captured.endpoints);
+  const waits = Object.values(scheduling).map(row => row.seconds).filter(value => value !== null);
   const budgets = budgetVerdict({ classificationSeconds: timings.classificationSeconds ?? null,
-    verdictSeconds: timings.verdictSeconds ?? null, schedulingSeconds: queue.maxSeconds });
+    verdictSeconds: timings.verdictSeconds ?? null, schedulingSeconds: waits.length ? Math.max(...waits) : null });
   const cancellation = cancellationOwnership(jobs);
   const continuity = releaseContinuity(jobs, captured.endpoints ?? {});
   const identity = { sourceSha: captured.sourceSha ?? captured.run?.head_sha ?? null,
@@ -496,5 +534,5 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     queueSeconds: queueSeconds(record), steps: stepSpans(record),
   }));
   console.log(JSON.stringify({ file, identity, summary, readiness, queue, runnerMinutes: minutes, delivery, cache,
-    admission, budgets, cancellation, continuity, executions }, null, 2));
+    admission, budgets, scheduling, cancellation, continuity, executions }, null, 2));
 }
