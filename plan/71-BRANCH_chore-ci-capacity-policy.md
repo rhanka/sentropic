@@ -58,7 +58,7 @@
   - [x] Lot gate: inventory receipts attached with API routes/IDs; unknowns stay to-measure, never assumed.
 - [ ] **Lot 2 — Bounded dispatch and concurrency**
   - [x] Admit full PR/main DAGs only at <=15 slots (17 observed minus 2 release allowance); ordinary publishers use one lane, existing mesh/gateway/cluster barriers and bootstrap remain intact. API/E2E widths settle at 2/2.
-  - [x] Stagger package validation into two dependency lanes; bound API/E2E matrices to 2/2 slots without changing matrix members or the PR/main cancellation groups.
+  - [x] Review r1: remove the 13/10-deep validator chains; six queued capacity groups preserve 23 independent jobs and their selected-result identities.
   - [x] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots.
   - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
 - [ ] **Lot 3 — Contention budgets and rollback drill**
