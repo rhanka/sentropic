@@ -31,6 +31,8 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
   - `packages/cluster-mesh/tests/storage/generate-pg-manifest.mjs` (`007` file entry only)
   - `packages/cluster-mesh/tests/storage/postgres-u64.spec.ts`
   - `packages/cluster-mesh/tests/storage/postgres-u64-migration.spec.ts`
+  - `packages/cluster-mesh/tests/storage/postgres-module-migrations.spec.ts` (007 occupies order 7; hypothetical future asset moves 007→008)
+  - `packages/cluster-mesh/tests/storage/postgres-reattest.spec.ts` (007 shifts last-receipt ordinal 6→7)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -68,6 +70,7 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
 - [x] Read windows and consumer positions stay bounded: `readPgJournal`/snapshots refuse above-safe journals with the existing capacity error (fail-closed; u64-scale replay is follow-on, not this lot).
 - [x] Commit-options fences stay safe-only (`validateCommitOptions` frozen); u64 epochs flow through `provisionFence`/`fence` direct paths.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; E2 qualification green; no merge.
+- [x] 007 consequence: the two specs pinning migration-chain ordinals move with the new version (module hypothetical 007→008, reattest last receipt 6→7); no behavior change.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky waiver applies.
