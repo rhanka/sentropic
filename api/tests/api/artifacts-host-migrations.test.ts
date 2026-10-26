@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fork } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -99,6 +99,29 @@ describe('artifact host migrations', () => {
     expect(await journal()).toEqual([]);
   });
 
+  it('should append assets in order on an installed database and verify without replaying DDL', async () => {
+    await runMigrations(database);
+    const before = await journal();
+    const additions = [
+      'CREATE TABLE control.additive_witness (id integer PRIMARY KEY);',
+      'INSERT INTO control.additive_witness VALUES (1);',
+    ].map((source, index) => ({
+      id: `@sentropic/artifacts/migrations/000${index + 4}_witness.sql`,
+      sha256: createHash('sha256').update(source).digest('hex'),
+      read: () => source,
+    }));
+    const assets = [...artifactMigrationAssets, ...additions];
+    await installArtifactPackageAssets(database, undefined, assets);
+    expect(await journal()).toEqual([...before, ...additions.map(({ id, sha256 }) => ({ asset_id: id, sha256 }))]);
+    const installed = await database.query('SELECT * FROM control.artifact_package_migrations ORDER BY asset_id');
+    await database.query(`CREATE FUNCTION reject_replay() RETURNS event_trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'unexpected boot DDL'; END $$;
+      CREATE EVENT TRIGGER reject_replay ON ddl_command_start EXECUTE FUNCTION reject_replay();`);
+    await installArtifactPackageAssets(database, undefined, assets);
+    expect((await database.query('SELECT * FROM control.artifact_package_migrations ORDER BY asset_id')).rows).toEqual(installed.rows);
+    expect((await database.query('SELECT id FROM control.additive_witness')).rows).toEqual([{ id: 1 }]);
+  });
+
   it('should refuse an installed journal hash mismatch without replacing its receipt', async () => {
     await runMigrations(database);
     await database.query(`UPDATE control.artifact_package_migrations SET sha256 = repeat('0', 64) WHERE asset_id = $1`, [artifactMigrationAssets[0].id]);
@@ -122,7 +145,7 @@ describe('artifact host migrations', () => {
 
   it('should refuse missing receipts when an installed package schema remains', async () => {
     await runMigrations(database);
-    await database.query(`DELETE FROM control.artifact_package_migrations WHERE asset_id = $1`, [artifactMigrationAssets[3].id]);
+    await database.query(`DELETE FROM control.artifact_package_migrations WHERE asset_id = $1`, [artifactMigrationAssets[2].id]);
     await database.query('ALTER TABLE artifacts.operation_receipts DROP COLUMN receipt');
     const before = await journal();
     await expect(installArtifactPackageAssets(database)).rejects.toThrow(/missing.*receipt/i);
