@@ -41,6 +41,11 @@
       "types": "./dist/adapters/postgres-commit.d.ts",
       "import": "./dist/adapters/postgres-commit.js"
     },
+    "./adapters/postgres-activation": {
+      "types": "./dist/adapters/postgres-activation.d.ts",
+      "import": "./dist/adapters/postgres-activation.js"
+    },
+    "./sql/*": "./sql/*",
     "./migrations/*": "./migrations/*",
     "./server/ports": {
       "types": "./dist/server/ports.d.ts",
@@ -168,6 +173,7 @@
     "l0-freeze",
     "src/contracts.ts",
     "migrations",
+    "sql",
     "docs/migration-l6.md",
     "examples/radar-commit-setup.ts",
     "README.md",

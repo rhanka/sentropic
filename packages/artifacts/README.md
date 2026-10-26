@@ -1,5 +1,86 @@
 # @sentropic/artifacts — generic artifact contracts (L-5a)
 
+## Shared PostgreSQL activation (UP-T, 0.2.3)
+
+W1.c/W3.a and Radar S1/A6 use the same imports:
+
+```ts
+import {
+  createPostgresActivationStore, ACTIVATION_MAX_TTL_SECONDS, ACTIVATION_SQL_ASSET,
+} from '@sentropic/artifacts/adapters/postgres-activation';
+import { createTicketService } from '@sentropic/artifacts/content/grants';
+import { readFile } from 'node:fs/promises';
+
+const sql = await readFile(new URL(import.meta.resolve(ACTIVATION_SQL_ASSET)), 'utf8');
+// Apply these exact bytes once through the host's journaled migration executor.
+const activation = createPostgresActivationStore({ pool, namespace: trustedHostNamespace });
+const tickets = createTicketService({ store: activation.tickets, ttlSeconds: ACTIVATION_MAX_TTL_SECONDS });
+```
+
+The SQL asset is `@sentropic/artifacts/sql/0001_activation.sql`; it creates the
+independent `artifact_host` schema. The adapter never applies DDL or opens a
+connection on construction. Journal the asset hash and verify it before serving.
+This store is independent of the publication coordinator.
+
+Persist a flow through `activation.flows.put`: `flowId`, `ticketId`, `subjectId`,
+`artifactId`, `releaseId`, `channel`, `nonceDigest`, `sessionId`, `profileDigest`,
+`policyRevision`, `targetOrigin`, `expiresAt`. Nonce/profile digests are lowercase
+SHA-256 hex; the origin is an exact HTTPS origin. One flow is associated with one
+ticket. Both IDs must be fresh cryptographically random values, never reused on
+retry or after cleanup. Duplicate IDs reject; records cannot be updated. The
+trusted namespace comes from host configuration, never browser input.
+
+Ticket deadlines remain the service's exact millisecond values: no silent
+shortening by the adapter. PostgreSQL refuses deadlines beyond 60 seconds from
+insertion. Flow expiry must be live and no later than its ticket. The historical
+120-second default of `createTicketService` is unchanged; hosts explicitly select
+`ttlSeconds <= ACTIVATION_MAX_TTL_SECONDS` for this adapter.
+
+For browser activation call `activation.consume({flowId,ticketId,expected},
+authorize)`. `expected` contains every flow binding above except IDs and expiry.
+Obtain these values from verified session/browser evidence and compiled policy.
+The adapter locks namespace, flow, then ticket on one leased READ COMMITTED client,
+checks exact bindings and database-time expiry after lock waits, invokes current
+authority, and checks expiry again after authority waits at the atomic deletion.
+Missing/expired/wrong bindings and explicit denial return `undefined`; authority
+outage and transaction failures reject. Neither path permits a grant.
+
+The host's `authorize({client,namespace,ticket,flow})` must recheck current session,
+ACL, policy/profile, exact origin and stable-release fence on that client, holding
+the relevant policy locks until COMMIT. Return `true` only with this protection.
+Do not sign, set cookies, or perform externally visible effects in this callback.
+Sign and emit a host-only cookie only after `consume` resolves with a record.
+`ActivationCommitUnknownError` means issue no grant; obtain a fresh ticket/flow
+after a new authority check. A crash after commit similarly requires a fresh
+flow. Do not automatically replay a consumed ticket. Standalone `tickets.take`
+implements the existing port; browser activation uses the combined operation.
+
+Schedule `cleanup(limit)` at least once per minute and collect counts/errors
+without token values. It deletes at most `limit` total rows (default 100, maximum
+1000), skips locked candidates and respects namespace boundaries. Expiry denial
+works even when cleanup stops. Ordinary application-process restart preserves
+live state and single use.
+
+During restore keep both replicas/issuers closed, restore the activation tables
+and migration journal alongside business/ACL state, call `invalidate()` for each
+trusted namespace, and rotate the host signing credential before admitting
+either replica. Invalidation advances a durable namespace generation in O(1);
+all restored tickets/flows deny immediately and bounded cleanup removes them.
+Reconcile current authority independently of the restored ACL snapshot. Fresh
+authorized sessions create fresh flows; revoked readers stay denied. Rollback
+disables activation while retaining the additive schema and accepted artifacts.
+
+Package conformance lives in `tests/postgres-activation.test.ts` and
+`tests/postgres-activation.integration.test.ts`, with the independent process
+witness `tests/fixtures/activation-process.mjs`. Run through
+`make test-artifacts` and `make test-artifacts-integration` on an isolated test
+environment. The vectors cover namespace/binding isolation, immutable IDs,
+one connection, no pre-commit result, uncertain commit, DB expiry after lock and
+authority waits, bounded cleanup, two OS processes, restart, race, crashes before
+and after commit, restored snapshot invalidation and fresh authority recovery.
+Host migration/journal, actual session/ACL fences, signing-key rotation and real
+browser/deployment receipts remain W1.c/W3.a/A6 obligations.
+
 Version 0.2.1 fixes host commit authorization being masked by the built-in
 publication guard and wires the optional trusted `mapHostError` dependency.
 Publication retains its lifecycle, ACL and policy revision checks; the host

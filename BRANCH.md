@@ -55,10 +55,12 @@
   - [x] Versioned SQL: immutable rows, full binding FK, namespace generation, 60s cap and indexed expiry.
   - [x] Companion flow/authority ports and leased transaction boundary; unknown COMMIT destroys the connection.
   - [x] Durable TicketStore and browser-flow storage; immutable inserts, exact association and DB-time expiry.
-- [ ] Lot 3: real PG vectors: two OS processes, restart, race, pre/post-commit crash, restore; no skipped vectors.
+- [x] Lot 3: real PG vectors: two OS processes, restart, race, pre/post-commit crash, restore; no skipped vectors.
   - [x] Add independent OS-process witness and restart/race/crash tests; execute in the scoped PG gate.
   - [x] Add lock-delayed/authority-delayed expiry, real committed acknowledgement loss and bounded cleanup vectors.
   - [x] Add restored pre-consume snapshot invalidation, fresh authority/flow recovery, SQL immutability and missing migration denial.
+  - [x] Scoped gate green: 18/18 tests (4 unit, 14 real PG), 2026-10-26; cleanup completed afterward.
 - [ ] Lot 4: exact imports and authority/restore obligations; merge main again after #759.
+  - [x] Export the adapter and unchanged versioned SQL; document W1.c/A6 composition and host authority/restore obligations.
 - [ ] Lot 5: separate pack-only 0.2.3 bump; typecheck/lint/unit/integration/pack gates.
 - [ ] Lot 6: scope-check before atomic commits (<150 lines); push; draft PR body from this file; CI green; do not merge.
