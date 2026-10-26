@@ -1,5 +1,5 @@
 -- B06 reserves 0020 for W1.a; 0012–0019 belong to #677.
--- Package DDL stays in its original assets and is installed by runMigrations.
+-- Package DDL stays upstream; receipts share the reserved control migration journal.
 CREATE TABLE "control"."artifact_host_kv" (
   "storage_scope_id" text NOT NULL CHECK ("storage_scope_id" <> ''),
   "key" text NOT NULL,
@@ -7,8 +7,4 @@ CREATE TABLE "control"."artifact_host_kv" (
   PRIMARY KEY ("storage_scope_id", "key")
 );
 --> statement-breakpoint
-CREATE TABLE "control"."artifact_package_migrations" (
-  "asset_id" text PRIMARY KEY,
-  "sha256" text NOT NULL CHECK ("sha256" ~ '^[0-9a-f]{64}$'),
-  "installed_at" timestamptz NOT NULL DEFAULT now()
-);
+ALTER TABLE "public"."__drizzle_control_migrations" ADD COLUMN "asset_id" text UNIQUE;

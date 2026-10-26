@@ -36,7 +36,7 @@ afterEach(async () => {
 afterAll(() => admin.end());
 
 async function journal() {
-  return (await database.query(`SELECT asset_id, sha256 FROM control.artifact_package_migrations ORDER BY asset_id`)).rows;
+  return (await database.query(`SELECT asset_id, hash AS sha256 FROM public.__drizzle_control_migrations WHERE asset_id IS NOT NULL ORDER BY asset_id`)).rows;
 }
 
 function rejectQueries(client: PoolClient, failures: Map<string, Error>) {
@@ -54,7 +54,7 @@ describe('artifact host migrations', () => {
   it('should serialize concurrent first installations and package reruns', async () => {
     await Promise.all([runMigrations(database), runMigrations(database)]);
     await Promise.all([installArtifactPackageAssets(database), installArtifactPackageAssets(database)]);
-    expect(await journal()).toHaveLength(4);
+    expect(await journal()).toHaveLength(3);
   });
 
   it('should leave a later reserved control migration eligible for installation', async () => {
@@ -84,16 +84,16 @@ describe('artifact host migrations', () => {
 
   it('should retain journal timestamps and rows on rerun', async () => {
     await runMigrations(database);
-    const before = await database.query('SELECT * FROM control.artifact_package_migrations ORDER BY asset_id');
+    const before = await database.query('SELECT * FROM public.__drizzle_control_migrations ORDER BY id');
     await createArtifactHostKv(database, 'scope-a').putIfAbsent('binding/a', 'original');
     await runMigrations(database);
-    expect((await database.query('SELECT * FROM control.artifact_package_migrations ORDER BY asset_id')).rows).toEqual(before.rows);
+    expect((await database.query('SELECT * FROM public.__drizzle_control_migrations ORDER BY id')).rows).toEqual(before.rows);
     expect(await createArtifactHostKv(database, 'scope-a').get('binding/a')).toBe('original');
   });
 
   it('should refuse a changed asset before executing any pending SQL', async () => {
     await runMigrations(database);
-    await database.query('DELETE FROM control.artifact_package_migrations');
+    await database.query('DELETE FROM public.__drizzle_control_migrations WHERE asset_id IS NOT NULL');
     const load = (id: string) => `${artifactMigrationAssets.find((asset) => asset.id === id)!.read()}\nSELECT 1;`;
     await expect(installArtifactPackageAssets(database, load)).rejects.toThrow(/asset hash mismatch/);
     expect(await journal()).toEqual([]);
@@ -113,18 +113,18 @@ describe('artifact host migrations', () => {
     const assets = [...artifactMigrationAssets, ...additions];
     await installArtifactPackageAssets(database, undefined, assets);
     expect(await journal()).toEqual([...before, ...additions.map(({ id, sha256 }) => ({ asset_id: id, sha256 }))]);
-    const installed = await database.query('SELECT * FROM control.artifact_package_migrations ORDER BY asset_id');
+    const installed = await database.query('SELECT * FROM public.__drizzle_control_migrations ORDER BY id');
     await database.query(`CREATE FUNCTION reject_replay() RETURNS event_trigger LANGUAGE plpgsql AS $$
       BEGIN RAISE EXCEPTION 'unexpected boot DDL'; END $$;
       CREATE EVENT TRIGGER reject_replay ON ddl_command_start EXECUTE FUNCTION reject_replay();`);
     await installArtifactPackageAssets(database, undefined, assets);
-    expect((await database.query('SELECT * FROM control.artifact_package_migrations ORDER BY asset_id')).rows).toEqual(installed.rows);
+    expect((await database.query('SELECT * FROM public.__drizzle_control_migrations ORDER BY id')).rows).toEqual(installed.rows);
     expect((await database.query('SELECT id FROM control.additive_witness')).rows).toEqual([{ id: 1 }]);
   });
 
   it('should refuse an installed journal hash mismatch without replacing its receipt', async () => {
     await runMigrations(database);
-    await database.query(`UPDATE control.artifact_package_migrations SET sha256 = repeat('0', 64) WHERE asset_id = $1`, [artifactMigrationAssets[0].id]);
+    await database.query(`UPDATE public.__drizzle_control_migrations SET hash = repeat('0', 64) WHERE asset_id = $1`, [artifactMigrationAssets[0].id]);
     const before = await journal();
     await expect(runMigrations(database)).rejects.toThrow(/journal hash mismatch/);
     expect(await journal()).toEqual(before);
@@ -136,28 +136,28 @@ describe('artifact host migrations', () => {
         RAISE EXCEPTION 'injected asset failure'; END IF; END $$;
       CREATE EVENT TRIGGER reject_receipts ON ddl_command_end EXECUTE FUNCTION reject_receipts();`);
     await expect(runMigrations(database)).rejects.toThrow(/injected asset failure/);
-    expect((await database.query(`SELECT to_regclass('control.artifact_package_migrations') AS journal`)).rows[0].journal).toBeNull();
+    expect(await journal()).toEqual([]);
     expect((await database.query(`SELECT to_regnamespace('artifacts') AS schema`)).rows[0].schema).toBeNull();
     await database.query('DROP EVENT TRIGGER reject_receipts');
     await runMigrations(database);
-    expect(await journal()).toHaveLength(4);
+    expect(await journal()).toHaveLength(3);
   });
 
   it('should refuse missing receipts when an installed package schema remains', async () => {
     await runMigrations(database);
-    await database.query(`DELETE FROM control.artifact_package_migrations WHERE asset_id = $1`, [artifactMigrationAssets[2].id]);
+    await database.query(`DELETE FROM public.__drizzle_control_migrations WHERE asset_id = $1`, [artifactMigrationAssets[1].id]);
     await database.query('ALTER TABLE artifacts.operation_receipts DROP COLUMN receipt');
     const before = await journal();
     await expect(installArtifactPackageAssets(database)).rejects.toThrow(/missing.*receipt/i);
     expect(await journal()).toEqual(before);
   });
 
-  it('should refuse a lost host journal instead of re-attesting an existing artifact schema', async () => {
+  it('should refuse lost package receipts instead of re-attesting an existing artifact schema', async () => {
     await runMigrations(database);
-    await database.query('DROP TABLE control.artifact_package_migrations, control.artifact_host_kv');
+    await database.query('DELETE FROM public.__drizzle_control_migrations WHERE asset_id IS NOT NULL');
     await database.query('ALTER TABLE artifacts.operation_receipts DROP COLUMN receipt');
     await expect(installArtifactPackageAssets(database)).rejects.toThrow(/untracked artifact schema/i);
-    expect((await database.query(`SELECT to_regclass('control.artifact_package_migrations') AS journal`)).rows[0].journal).toBeNull();
+    expect(await journal()).toEqual([]);
   });
 
   it('should refuse a missing required table even when every receipt survives', async () => {
@@ -191,7 +191,7 @@ describe('artifact host migrations', () => {
     const release = vi.fn();
     const client = { release, query: vi.fn(async (statement: string) => {
       if (statement === 'ROLLBACK') throw rollback;
-      if (statement.includes('to_regclass')) throw primary;
+      if (statement.includes('SELECT asset_id')) throw primary;
       return { rows: [] };
     }) };
     await expect(installArtifactPackageAssets({ connect: async () => client } as unknown as Pool))
@@ -227,6 +227,6 @@ describe('artifact host migrations', () => {
     expect(observed).toBe(value);
     await runMigrations(database);
     expect(await createArtifactHostKv(database, 'scope-a').putIfAbsent('scope/binding', 'replacement')).toBe(false);
-    expect(await journal()).toHaveLength(4);
+    expect(await journal()).toHaveLength(3);
   });
 });

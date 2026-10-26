@@ -1,13 +1,12 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
 import type { Pool, PoolClient } from 'pg';
 import type { KvPort } from '@sentropic/artifacts/server/ports';
 
 const require = createRequire(import.meta.url);
 const requiredRelations = [
-  'control.artifact_host_kv', 'control.artifact_package_migrations',
+  'control.artifact_host_kv', 'public.__drizzle_control_migrations',
   ...['storage_scopes', 'artifacts', 'releases', 'artifact_current', 'blobs', 'uploads',
     'object_intents', 'idempotency_keys', 'artifact_access', 'artifact_sources',
     'blob_ref_holders', 'blob_pins', 'operation_keys', 'operation_receipts'].map((name) => `artifacts.${name}`),
@@ -15,12 +14,6 @@ const requiredRelations = [
 
 /** Upstream identities and bytes are pinned independently of package versions. */
 export const artifactMigrationAssets = Object.freeze([
-  // Own journal: advancing Drizzle's frontier here would skip #677's pending 0012–0019.
-  Object.freeze({
-    id: '@sentropic/app/control/0020_app_artifact_host.sql',
-    sha256: '4f761972850c0cbceee2630c72cd8919483ac525a6f45ce5e7f40dd0aedc128e',
-    read: () => readFileSync(resolve('drizzle/control/0020_app_artifact_host.sql'), 'utf8'),
-  }),
   ...[
     ['0001_artifacts.sql', '7b12713b949a956ad0b4c370a16e80fb4625a99a5097769ed0653df5973dc533'],
     ['0002_lifecycle.sql', 'fdfbe97f84774b47a207e66915f7426926650e85b6dbb9a4d80272591df624fd'],
@@ -51,20 +44,13 @@ export async function installArtifactPackageAssets(
   try {
     await client.query('BEGIN');
     await client.query(`SELECT pg_advisory_xact_lock(hashtext('sentropic:artifact-package-migrations'))`);
-    const journal = await client.query(`SELECT to_regclass('control.artifact_package_migrations') AS relation`);
-    const fresh = journal.rows[0].relation === null;
-    if (fresh) {
+    const { rows } = await client.query<{ asset_id: string; sha256: string }>(
+      'SELECT asset_id, hash AS sha256 FROM public.__drizzle_control_migrations WHERE asset_id IS NOT NULL',
+    );
+    if (!rows.length) {
       const schema = await client.query(`SELECT to_regnamespace('artifacts') AS namespace`);
       if (schema.rows[0].namespace !== null) throw new Error('Untracked artifact schema requires migration reconciliation');
-      await client.query(assets[0].source);
-      await client.query(
-        'INSERT INTO control.artifact_package_migrations (asset_id, sha256) VALUES ($1, $2)',
-        [assets[0].id, assets[0].sha256],
-      );
     }
-    const { rows } = await client.query<{ asset_id: string; sha256: string }>(
-      'SELECT asset_id, sha256 FROM control.artifact_package_migrations',
-    );
     for (const row of rows) {
       if (assets.find((asset) => asset.id === row.asset_id)?.sha256 !== row.sha256) {
         throw new Error(`Artifact migration journal hash mismatch: ${row.asset_id}`);
@@ -76,12 +62,13 @@ export async function installArtifactPackageAssets(
     if (firstPending !== -1 && assets.slice(firstPending).some((asset) => applied.has(asset.id))) {
       throw new Error('Missing artifact migration receipt requires migration reconciliation');
     }
-    for (const asset of assets) {
+    for (const [index, asset] of assets.entries()) {
       if (applied.has(asset.id)) continue;
       await client.query(asset.source);
       await client.query(
-        'INSERT INTO control.artifact_package_migrations (asset_id, sha256) VALUES ($1, $2)',
-        [asset.id, asset.sha256],
+        // Negative positions cannot advance Drizzle's positive timestamp frontier.
+        'INSERT INTO public.__drizzle_control_migrations (asset_id, hash, created_at) VALUES ($1, $2, $3)',
+        [asset.id, asset.sha256, -(index + 1)],
       );
     }
     const missing = await client.query<{ name: string }>(

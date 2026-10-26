@@ -22,6 +22,7 @@
   - `api/drizzle/control/meta/_journal.json`
   - `api/tests/api/artifacts-host-migrations.test.ts`
   - `api/package.json`
+  - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -30,13 +31,14 @@
   - `plan/**`
   - `.track/**`
   - `api/package-lock.json`
-  - `package*.json`
+  - `package.json`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - [x] **Exception process**: declare BR-W1A-EXn with reason, impact and rollback before scope expansion.
 
 ## Feedback Loop
-- [x] BR-W1A-EX1, owner 26 October: add the exact published artifacts dependency to api/package.json for runtime resolution. Impact: supersedes W2.b's sole manifest-writer reservation for this one pin; W2.b still reconciles locks/physical dependency tree. Rollback: revert the dependency pin before integration.
+- [x] Opus r1 P2 journal: register 0020 in Drizzle metadata and put package receipts in public.__drizzle_control_migrations (asset_id/hash/negative created_at), removing the third journal. 0020 timestamp is immediately after this base's last control entry, before #677's reserved slots; package positions never advance that frontier. W2.b reindexes merged generator metadata; W5/B02 compare the two reserved journals including asset rows.
+- [x] BR-W1A-EX1, owner 26 October: add artifacts 0.2.1 to api/package.json and the matching root lock entry (published metadata/integrity) so strict workspace npm ci can resolve the runtime dependency. Impact: supersedes W2.b's manifest/lock reservation only for this required pin; W2.b still reconciles the final tree. Rollback: revert pin and matching lock entries before integration.
 - [x] BR-W1A-EX2, owner 26 October: retain base 2568c25 and integration branch created there per plan-v2 instead of accepted #702 plus fbfe68f0. Reason: preserve the assigned branch train; impact: W0-close.e and final base/payload reconciliation remain merge gates; rollback: rebase onto the accepted integration base.
 - [x] BR-W1A-EX3, owner 26 October: use assigned tmp/worktrees/app-w1a and test-app-w1a 8791/5177/1084 instead of W0's app-cm-w1 / test-app-cm-w1 9711/5911/1811. Reason: isolated W1.a dispatch; impact: W1.b/c must not reuse its live slot; rollback: tear down test-app-w1a and return to the reservation.
 - [x] CI delivery: draft PR targets main solely to trigger ci.yml; actual integration remains through feat/app-cm-integration after W0-close.e. No direct main merge is authorized.
