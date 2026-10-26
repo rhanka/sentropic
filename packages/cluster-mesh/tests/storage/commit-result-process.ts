@@ -16,7 +16,8 @@ try {
     driver: { transaction: async (options, operation) => {
       const result = await connection.driver.transaction(options, operation);
       // The DB committed; the caller has never observed the receipt.
-      if (armed) process.kill(process.pid, 'SIGKILL');
+      if (armed && result && typeof result === 'object' && 'receipt' in result)
+        process.kill(process.pid, 'SIGKILL');
       return result;
     } },
     layout: { dataSchema: name, projectionSchemas: { comments: name }, outboxSchema: name },
