@@ -37,6 +37,7 @@
 - [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
+- [x] P24 dated GA schema: two additional missing-usage-details controls failed before correction; require cache/reasoning objects while preserving independently reported counters.
 - [x] BR93-EX2: mesh 0.29.0 is rejected by cluster's current <0.29.0 bound. Extend only mesh compatibility to <0.30.0, gateway mesh dependency and exact fixture/CI tuple; patch-bump the affected metadata/source packages. Impact: admits the tested native Decisions minor via the existing loader. Rollback: revert tuple/range cells together. Conditional `.github/workflows/ci.yml` changes are limited to its three exact PEERS tuples.
 - [x] BR93-EX1: synchronize only the llm-mesh workspace version in `package-lock.json` after the mandatory feature bump. Impact: one workspace metadata cell, no dependency resolution changes. Rollback: revert that cell with the package version.
 - [x] OD-5 remains open; live identity, billing and calibration belong to L5/L6.
@@ -54,21 +55,23 @@
 - [x] **Lot 0 — Baseline and scope**
   - [x] Read Docker lock, complete spec v4, Sol review, merged PR #693 and its branch plan.
   - [x] Run mechanical harness branch check before work.
-- [ ] **Lot 1 — P25 JEV versioned discriminator**
-  - [ ] Add failing versioned binary/choice/graded discriminator fixtures and contradiction controls.
-  - [ ] Correct closed JEV codec and run scoped decision-jev-v4l3.test.ts.
-- [ ] **Lot 2 — P24 separate Decisions codec**
-  - [ ] Add failing native controls and independent name/count/type/refusal/usage/identity mutations in decision-openai-v4l3.test.ts.
-  - [ ] Implement one-question predicate/choice/score protocol with independent usage evidence.
+- [x] **Lot 1 — P25 JEV versioned discriminator**
+  - [x] Add failing versioned binary/choice/graded discriminator fixtures and contradiction controls.
+  - [x] Correct closed JEV codec and run scoped decision-jev-v4l3.test.ts; require discriminator on provider responses.
+- [x] **Lot 2 — P24 separate Decisions codec**
+  - [x] Add failing native controls and independent name/count/type/refusal/usage/identity mutations in decision-openai-v4l3.test.ts.
+  - [x] Implement one-question predicate/choice/score protocol with independent usage evidence.
 - [ ] **Lot 3 — Transport, registration and tariff**
-  - [ ] Add fixed HTTPS Decisions transport and adapter with explicit descriptor registration.
-  - [ ] Test endpoint, credentials, one attempt, no CLI route, protocol tariff collision and unqualified refusal.
-  - [ ] Keep JEV baseline and OpenAI candidate report packets with source evidence and outstanding qualification.
+  - [x] Add fixed HTTPS Decisions transport and adapter with explicit descriptor registration.
+  - [x] Test endpoint, credentials, one attempt, no CLI route, protocol tariff collision and unqualified refusal.
+  - [x] Keep JEV baseline and OpenAI candidate report packets with source evidence and outstanding qualification.
   - [ ] Test mesh 0.29 admission, update cluster/gateway compatibility metadata and verify packed tuple.
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Update mesh README and tracked specification; record package version check/bump.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Update mesh README and tracked specification; registry baseline mesh 0.28.1/gateway 0.21.3/cluster 0.22.4; candidates 0.29.0/0.21.4/0.22.5.
 - [ ] **Lot N — Final validation**
-  - [ ] Full mesh tests, mesh typecheck/lint and relevant cluster Decision tests.
+  - [x] Full mesh tests: 1440 passed across 80 files; mesh typecheck/lint passed on ENV=test-decision-v4l3.
+  - [ ] Full cluster tests and typecheck/lint; packed consumer qualification.
+  - [x] CI wiring tests: 24 passed; memory-l5-verify: 30 files/54 edges, unchanged retained manifest.
   - [ ] Independent harness review; reconcile findings with tests.
   - [ ] Scope-check before every selective atomic commit under 150 lines.
   - [ ] Push and open draft PR with this plan as body and requested title.
