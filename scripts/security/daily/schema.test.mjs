@@ -19,7 +19,8 @@ const target = { surface: 'api-toolbox', imageLineage: 'ghcr.io/rhanka/sentropic
 const scan = (day) => ({
   kind: 'daily-full', day, scanId: `public-${day}`, sourceSha: 'a'.repeat(40),
   scannedAt: `${day}T05:17:00Z`, dbUpdatedAt: `${day}T04:00:00Z`, dbIdentity: `sha256:${'b'.repeat(64)}`,
-  scannerIdentity: 'trivy@sha256:qualified', policyIdentity: 'policy-1', flags: ['all-severities'],
+  scannerIdentity: `trivy:0.76.0@sha256:${'e'.repeat(64)}`, policyIdentity: `sha256:${'f'.repeat(64)}`, flags: ['all-severities'],
+  severities: ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
   complete: true, findingsMatched: 0, gaps: 0,
   coverage: [{ ...target, imageDigest: `sha256:${'c'.repeat(64)}` }],
 });
@@ -84,7 +85,8 @@ test('N=2 reconciliation accepts two complete scans and resets on gaps', () => {
   assert.equal(checkReconciliationStreak([good], target).ok, false);
   for (const patch of [{ gaps: 1 }, { flags: ['HIGH', 'CRITICAL'] }, { findingsMatched: 1 },
     { coverage: [] }, { sourceSha: '' }, { scannerIdentity: 'different' },
-    { dbUpdatedAt: '2026-10-20T00:00:00Z' }, { policyIdentity: 'changed' }, { kind: 'partial' }]) {
+    { dbUpdatedAt: '2026-10-20T00:00:00Z' }, { policyIdentity: 'changed' }, { kind: 'partial' },
+    { severities: ['HIGH', 'CRITICAL'] }]) {
     assert.equal(checkReconciliationStreak([good, { ...next, ...patch }], target).ok, false, JSON.stringify(patch));
   }
   assert.equal(checkReconciliationStreak([good, scan('2026-10-27')], target).ok, false);

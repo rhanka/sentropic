@@ -90,6 +90,7 @@ test('should join register metadata only on the exact affected identity', () => 
   for (const field of ['component', 'path', 'version', 'platform', 'imageDigest', 'scanner']) {
     assert.equal(joinRegister(finding, [{ ...row, [field]: 'other' }]).register, 'none', field);
   }
+  assert.equal(joinRegister({ ...finding, id: 'GHSA-cg2g-xh64-v4q7', aliases: [finding.id] }, [row]).register, 'registered-exception');
   assert.equal(joinRegister(finding, [{ ...row, status: 'resolved' }]).register, 'none');
   assert.equal(joinRegister(finding, [{ ...row, review_due: 'bad-date' }]).register, 'none');
 });
@@ -142,6 +143,7 @@ test('should inventory the current register separately from its historical 67-ro
   assert.equal(report.unresolvedRegister, 68);
   assert.equal(report.expired, 7);
   assert.equal(report.expiryHistogram['2026-11-20'], 60);
+  assert.equal(report.staleContainerCandidates, 7);
   assert.equal(report.expiryHistogram['2026-10-30'], 1);
   assert.equal(report.verificationPending.length, 68);
   assert.equal(report.status, 'complete-with-findings');
