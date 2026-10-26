@@ -113,7 +113,8 @@ test('should group all affected locks with stable keys and retain no-fix finding
     path: 'package-lock.json', fixedTarget: '1.2.4', severity: 'LOW' };
   const grouped = groupFindings([finding, { ...finding, path: 'ui/package-lock.json', id: 'another' }]);
   assert.deepEqual(grouped[0].locks, ['package-lock.json', 'ui/package-lock.json']);
-  assert.match(grouped[0].unitKey, /package-lock.json,ui\/package-lock.json/);
+  assert.match(grouped[0].unitKey, /ui\/package-lock.json/);
+  assert.notEqual(grouped[0].unitKey, groupFindings([finding])[0].unitKey);
   assert.equal(groupFindings([{ ...finding, fixedTarget: null }])[0].state, 'no-upstream-fix');
 });
 
