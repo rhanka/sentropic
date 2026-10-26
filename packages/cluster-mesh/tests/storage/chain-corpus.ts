@@ -82,3 +82,11 @@ export const runChainCorpus = async (bound: ChainCorpusStore): Promise<void> => 
     'K2a-RED chains: disposed identities cannot be recreated under an old creation expectation',
   );
 };
+
+// E1 additive: exact-u64 absent allocations are validated by the new
+// validateU64ChainExpectation path, not by the safe-only creation gate.
+export const U64_CHAIN_ALLOCATION_VECTORS: readonly string[] = [
+  '9007199254740991',
+  '9007199254740992',
+  '18446744073709551615',
+];
