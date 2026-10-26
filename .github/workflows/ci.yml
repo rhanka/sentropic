@@ -108,6 +108,7 @@ jobs:
       ui: ${{ steps.filter.outputs.ui }}
       ai: ${{ steps.filter.outputs.ai }}
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
+      live_speech: ${{ steps.filter.outputs.live_speech }}
       cluster_mesh: ${{ steps.filter.outputs.cluster_mesh }}
       cluster_mesh_publish: ${{ steps.filter.outputs.cluster_mesh_publish }}
       llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
@@ -243,6 +244,10 @@ jobs:
               - 'packages/chat-ui/**'
               - 'packages/cowork-desktop/**'
               - 'packages/cowork-bridge/**'
+            live_speech:
+              - 'Makefile'
+              - 'packages/live-speech/**'
+              - '.github/workflows/ci.yml'
             llm_mesh:
               - 'Makefile'
               - 'package.json'
@@ -579,6 +584,8 @@ jobs:
 
   validate-live-speech:
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.live_speech == 'true' || needs.changes.outputs.global == 'true'
     steps:
       - uses: actions/checkout@v6
       - name: Typecheck, lint, test and pack interruption core
