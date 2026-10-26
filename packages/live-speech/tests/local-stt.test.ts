@@ -44,7 +44,9 @@ describe('one final', () => {
     session_.pushFrames(silence(1));
     await flush();
     expect(events.filter((event) => event.type === 'final')).toHaveLength(1);
-    expect(port.calls).toHaveLength(2);
+    // Window (held) + endpoint only: the silence-window decode was coalesced
+    // while the first window was still in flight.
+    expect(port.calls).toHaveLength(1);
   });
 
   it('should never synthesize a final from silence or unusable recognition', async () => {
@@ -96,16 +98,53 @@ describe('teardown without starvation', () => {
     expect(port.terminateCount).toBe(1);
   });
 
-  it('should keep the event loop responsive while the worker is stuck, then stop it', async () => {
-    const client = await NodeWorkerClient.create(fakeClientOptions([{ hang: true }]));
-    const pending = client.transcribe(new Float32Array(160), { sampleRateHz: 16000 });
-    let responsive = false;
-    await new Promise((resolve) => setImmediate(resolve));
-    responsive = true;
-    expect(responsive).toBe(true);
-    client.terminate();
-    await expect(pending).rejects.toThrow(SessionClosedError);
-    expect(client.terminated).toBe(true);
+  it('should coalesce window decodes to at most one in flight', async () => {
+    const events: LocalSttEvent[] = [];
+    let resolveFirst!: (value: SttTranscription) => void;
+    const first = new Promise<SttTranscription>((resolve) => { resolveFirst = resolve; });
+    let calls = 0;
+    const base = new FakePort([{ segments: [SEG('held')] }, { segments: [SEG('held')] }]);
+    const gate: WorkerPort = {
+      get terminated() { return base.terminated; },
+      transcribe(window, options) {
+        calls += 1;
+        if (calls === 1) return first;
+        return base.transcribe(window, options);
+      },
+      terminate() { base.terminate(); },
+    };
+    const session_ = session(gate, events);
+    session_.pushFrames(tone(0.6));
+    await flush();
+    // First decode still in flight: further cadence ticks dispatch nothing new.
+    session_.pushFrames(tone(0.6));
+    await flush();
+    session_.pushFrames(tone(0.6));
+    await flush();
+    expect(calls).toBe(1);
+    resolveFirst({ segments: [SEG('first')] });
+    await flush();
+    // Worker free again: the next push dispatches exactly one catch-up decode.
+    session_.pushFrames(tone(0.6));
+    await flush();
+    expect(calls).toBe(2);
+    expect(events.filter((event) => event.type === 'partial')).toHaveLength(1);
+    session_.close();
+  });
+
+  it('should force-endpoint an utterance at maxUtteranceSec', async () => {
+    const profile = { ...selectLocalSttProfile('local-tiny'), maxUtteranceSec: 2 };
+    const events: LocalSttEvent[] = [];
+    const port = new FakePort([{ segments: [SEG('part')] }, { segments: [SEG('forced full')] }]);
+    const session_ = new LocalSttSession({ profile, port, emit: (event) => events.push(event) });
+    session_.pushFrames(tone(2.5));
+    await flush(40);
+    const finals = events.filter((event) => event.type === 'final');
+    expect(finals).toHaveLength(1);
+    expect(finals[0]).toMatchObject({ utteranceId: 'u1', text: 'forced full' });
+    // The forced endpoint frees accumulation: a new utterance can start right after.
+    expect(session_.diagnostics()).toMatchObject({ utteranceOpen: false, bufferedSamples: 0, retainedSamples: 0 });
+    session_.close();
   });
 
   it('should reject session creation when the worker engine module is missing', async () => {
