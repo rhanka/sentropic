@@ -9,6 +9,8 @@ export { createRemoteDecisionClient } from './client.js';
 export { validateDecisionResult } from './validate-result.js';
 export type { RemoteDecisionClientOptions } from './client.js';
 export type { ResolvedDecisionCriterion } from './descriptor.js';
+export type { DecisionEvaluatorDiscovery, DecisionOperatingPolicy, DecisionQualificationScope } from './qualification.js';
+export type { DecisionAssessmentReport } from './assessment-types.js';
 export type { DecisionValidationContext, DecisionValidationProfile, DecisionValidationSemantics,
   DecisionValidationScoreSemantics, DecisionValidationConfidenceSemantics, DecisionRegisteredResolution,
   DirectDecisionCriterion, DecisionValidationContextResolver } from './validation-context.js';

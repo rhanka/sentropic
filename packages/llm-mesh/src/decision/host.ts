@@ -17,3 +17,10 @@ export type { DecisionBudgetPort, DecisionReceiptSink, DecisionAdmission, Decisi
   DecisionDispatchResult, DecisionSettlement } from './budget.js';
 export type { DecisionPrice, DecisionQuote } from './pricing.js';
 export type { DecisionClock } from './execution.js';
+export { discoverDecisionEvaluator, decisionExecutionDigest, decisionQualificationScope } from './qualification.js';
+export { assessDecisionCalibration } from './assessment.js';
+export { recordDecisionAssessmentRow, decisionAssessmentCapacity } from './assessment-recording.js';
+export type { DecisionReadinessEvidence, DecisionEvaluatorDiscovery, DecisionOperatingPolicy,
+  DecisionQualificationScope } from './qualification.js';
+export type { DecisionAssessment, DecisionAssessmentReport, DecisionAssessmentRow, DecisionAssessmentSample,
+  DecisionAssessmentPopulation } from './assessment-types.js';
