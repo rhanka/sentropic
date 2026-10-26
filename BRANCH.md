@@ -53,6 +53,7 @@
   - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
 
 ## Feedback Loop
+- [x] Scoped green attempt: 44 pass, 2 fixture failures because native-duplex cases retained chained stt requirements. Replace those fixture requirements with an empty stage map; preserve strict pipeline validation.
 - [x] BRLIVE-L1C-EX2: additive feature prepares cluster 0.23.0 above registry 0.22.1; extend only the self comments-leaf range to <0.24.0, retain next-minor refusal, and align frozen selected archive/lock. Impact: same comments API on additive speech release; rollback with the 0.23 bump. Full module/packaging checks required.
 - [x] Scoped parser failure pinpoints a line break before the type assertion; keep the assertion with its expression and rerun the same suites.
 - [x] origin/feat/live-stt-l1c absent; created from origin/main and merged approved L1 head `01d784be8` by fast-forward, no rebase.
