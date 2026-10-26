@@ -102,11 +102,11 @@ describe('artifact host migrations', () => {
         RAISE EXCEPTION 'injected asset failure'; END IF; END $$;
       CREATE EVENT TRIGGER reject_receipts ON ddl_command_end EXECUTE FUNCTION reject_receipts();`);
     await expect(runMigrations(database)).rejects.toThrow(/injected asset failure/);
-    expect(await journal()).toEqual([]);
+    expect((await database.query(`SELECT to_regclass('control.artifact_package_migrations') AS journal`)).rows[0].journal).toBeNull();
     expect((await database.query(`SELECT to_regnamespace('artifacts') AS schema`)).rows[0].schema).toBeNull();
     await database.query('DROP EVENT TRIGGER reject_receipts');
     await runMigrations(database);
-    expect(await journal()).toHaveLength(3);
+    expect(await journal()).toHaveLength(4);
   });
 
   it('should keep one immutable KV value across competing writers and a fresh process', async () => {
@@ -137,6 +137,6 @@ describe('artifact host migrations', () => {
     expect(observed).toBe(value);
     await runMigrations(database);
     expect(await createArtifactHostKv(database, 'scope-a').putIfAbsent('scope/binding', 'replacement')).toBe(false);
-    expect(await journal()).toHaveLength(3);
+    expect(await journal()).toHaveLength(4);
   });
 });
