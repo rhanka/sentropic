@@ -25,6 +25,9 @@
   - `packages/llm-mesh/CHANGELOG.md`
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `api/tests/unit/gateway-package-version.test.ts`
@@ -52,12 +55,13 @@
   - [x] Declare BRLIVE-L1-EXn with reason, impact and rollback before extending scope; none planned.
 
 ## Feedback Loop
-- [x] BRLIVE-L1-EX4: exact-head CI 40289904989 passes cluster tests but packed qualification cannot open the frozen 0.22.1 candidate archive. Align only selected fixture candidate/train versions, ranges and real packed sibling integrity, and add a tuple regression. Impact: installed release qualification uses cluster 0.22.2 / mesh 0.28.0 / gateway 0.21.1; no gate weakened. Rollback: restore fixture metadata if these candidate bumps are reverted.
+- [x] BRLIVE-L1-EX4: exact-head CI 40289904989 passes cluster tests but packed qualification cannot open the frozen 0.22.1 candidate archive. Align selected fixture candidate/train versions, ranges and real packed sibling integrity, add a tuple regression and update stale optional-install/skew refusal messages. Impact: installed release qualification uses cluster 0.22.2 / mesh 0.28.0 / gateway 0.21.1; no gate weakened. Rollback: restore fixture metadata/assertions if these candidate bumps are reverted.
 - [x] BRLIVE-L1-EX2: finish the 0.28 additive tuple qualification in cluster packaging tests and update only the API gateway release assertion to 0.21.1. Impact: no API runtime change; new speech subpath and separate evidence catalogue do not alter text routing. Rollback: restore assertions if the release tuple is reverted.
 - [x] BRLIVE-L1-EX3: add the missing mesh 0.28.0 changelog/migration entry. Impact: document public speech and audio-output types. Rollback: remove the entry if 0.28.0 is withdrawn.
 - [x] R1: reproduce and fix all P1/P2 findings; scoped speech 31 passed, full mesh 855 passed, source/test typechecks pass. Final tuple/lint/pack and exact-head CI are reported at handoff.
 - [x] R1 P1-2/P1-3/P2-2: open speech engine identity and independent multi-tuple catalogue; session selector membership and gateway-owned account/resource admission; remove provider speech inheritance.
 - [x] R1 P2-1/P2-3: executable partial-revision projection with immutable finals and stale/range rejection; 0.28.0 migration entry and updated public catalogue documentation.
+- [x] R1 packed follow-through: 15 packaging files / 100 tests pass with real guarded mesh/gateway archives; frozen lock integrity matches CI bytes and incompatible old tuples remain refused.
 - [x] L0 is an open draft; retain exact evidence commit and open G-REVIEW.
 - [x] External Make adapter rebinds existing mesh targets to existing Compose qualification service; tracked build files unchanged.
 - [x] External gates remain with L0 owners; deterministic contract work can proceed per §11.2.
