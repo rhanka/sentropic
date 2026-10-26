@@ -42,7 +42,7 @@ beforeAll(() => {
 describe('published decision boundaries', () => {
   it('exports the three exact subpaths without changing package versions', () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
-    expect(pkg.version).toBe('0.27.2');
+    expect(pkg.version).toBe('0.28.1');
     for (const [name, path] of [['decision', 'decision/index'], ['decision/host', 'decision/host'], ['transport/jev', 'transport/jev']]) {
       expect(pkg.exports[`./${name}`]).toEqual({ types: `./dist/${path}.d.ts`, import: `./dist/${path}.js` });
     }
