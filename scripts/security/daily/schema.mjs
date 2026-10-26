@@ -56,29 +56,51 @@ export function joinRegister(finding, rows = [], today = new Date().toISOString(
 export function groupFindings(findings = []) {
   const byTarget = new Map();
   for (const finding of findings) {
-    const unitKey = stableUnitKey({
-      repository: finding.repository,
-      repairClass: finding.repairClass,
-      targets: [finding.component],
-      fixedTarget: finding.fixedTarget,
-    });
-    if (!byTarget.has(unitKey)) byTarget.set(unitKey, { unitKey, findings: [], locks: new Set() });
-    const unit = byTarget.get(unitKey);
+    const { repository, repairClass, component, fixedTarget, platform, imageLineage, defectIdentity } = finding;
+    if (![repository, repairClass, component, finding.path].every((value) => typeof value === 'string' && value)) {
+      throw new Error('finding requires repository, repair class, component and path');
+    }
+    const key = JSON.stringify([repository, repairClass, component, fixedTarget, platform, imageLineage, defectIdentity]);
+    if (!byTarget.has(key)) byTarget.set(key, { repository, repairClass, component, fixedTarget,
+      platform, imageLineage, defectIdentity, findings: [], locks: new Set() });
+    const unit = byTarget.get(key);
     unit.findings.push(finding);
     for (const lock of finding.locks || [finding.path]) unit.locks.add(lock);
   }
-  return [...byTarget.values()].map((unit) => ({ unitKey: unit.unitKey, findings: unit.findings, locks: [...unit.locks].sort() }));
+  return [...byTarget.values()].map((unit) => ({ ...unit,
+    state: unit.fixedTarget ? 'queued' : 'no-upstream-fix',
+    unitKey: stableUnitKey({ ...unit, fixedTarget: unit.fixedTarget || 'no-upstream-fix',
+      targets: [unit.component, ...unit.locks, unit.platform || '', unit.imageLineage || '', unit.defectIdentity || ''].filter(Boolean) }),
+    locks: [...unit.locks].sort(),
+  }));
 }
 
 export function batchLots(units = [], bounds = { maxUnits: 3, maxFiles: 10, maxLines: 150 }) {
-  const sorted = [...units].sort((a, b) => (a.unitKey < b.unitKey ? -1 : 1));
+  for (const [key, maximum] of Object.entries({ maxUnits: 3, maxFiles: 10, maxLines: 150 })) {
+    if (!Number.isInteger(bounds[key]) || bounds[key] < 1 || bounds[key] > maximum) throw new Error('invalid lot bounds');
+  }
+  const priority = (unit) => {
+    const ranks = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, UNKNOWN: 4 };
+    const findings = unit.findings || [];
+    return [Math.min(4, ...findings.map((f) => ranks[String(f.severity).toUpperCase()] ?? 4)),
+      findings.map((f) => f.review_due || '9999-12-31').sort()[0] || '9999-12-31',
+      findings.map((f) => f.firstSeen || '9999-12-31').sort()[0] || '9999-12-31', unit.unitKey].join('|');
+  };
+  const sorted = [...units].sort((a, b) => priority(a).localeCompare(priority(b)));
+  const seen = new Set();
   const lots = [];
   let current = { lotKey: '', units: [], files: 0, lines: 0 };
   const flush = () => { if (current.units.length) lots.push({ ...current, lotKey: current.units.map((u) => u.unitKey).sort().join('~') }); };
   for (const unit of sorted) {
-    const files = unit.files ?? 1;
-    const lines = unit.lines ?? 10;
-    const overflows = current.units.length >= bounds.maxUnits || current.files + files > bounds.maxFiles || current.lines + lines > bounds.maxLines;
+    const { files, lines, repository, repairClass, unitKey } = unit;
+    if (!repository || !repairClass || !unitKey || seen.has(unitKey)) throw new Error('missing or duplicate unit identity');
+    seen.add(unitKey);
+    if (unit.state === 'no-upstream-fix') throw new Error('no upstream fix; keep unit queued');
+    if (!Number.isInteger(files) || files < 1 || !Number.isInteger(lines) || lines < 1) throw new Error('missing unit estimate');
+    if (files > bounds.maxFiles || lines > bounds.maxLines) throw new Error('unit exceeds lot bounds');
+    const first = current.units[0];
+    const incompatible = first && (first.repository !== repository || first.repairClass !== repairClass);
+    const overflows = incompatible || current.units.length >= bounds.maxUnits || current.files + files > bounds.maxFiles || current.lines + lines > bounds.maxLines;
     if (overflows) { flush(); current = { lotKey: '', units: [], files: 0, lines: 0 }; }
     current.units.push(unit);
     current.files += files;
