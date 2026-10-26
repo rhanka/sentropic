@@ -1,70 +1,70 @@
 # @sentropic/mcp-broker
 
-BR-72 DEPTH Lot 2 proof: a **minimal, connector-AGNOSTIC MCP provider broker** — private,
-not published. It generalizes the "mount + invoke" seam proven per-connector in
-`@sentropic/mcp-connector-github`'s live broker (BR-72 DEPTH Lot 1,
-`../mcp-connector-github/src/live-broker.ts`) into a small library any
-`@sentropic/mcp-platform` `AppConnectorProviderAdapter` can be mounted into and invoked
-through, with **no connector-specific code in this package**. Production residence of a
-broker like this one (in-process library vs. hosted service, real secret-store wiring,
-tenant/enrollment resolution policy) is an **architect D4 decision, deferred** — this
-package is a proof, not the shipped runtime.
+MCP-L5 Lot 1: a **plan-bound MCP provider broker** with the frozen memory
+contract entry. `McpProviderBroker` dispatches against the immutable
+compiled registry plan; adapters are bound once at construction from that
+plan and consumers cannot register handlers separately or replace it.
+Every invocation requires a verified host `StpConnectorContext` — the
+broker never manufactures identity, and a missing or untrusted context
+throws the M2 pre-dispatch protocol error (-32603) before any provider
+contact. The pure memory contract entry ships under `./memory`; the
+durable reference store arrives under `./memory-reference` in Lot 2.
+
+Memory selection combines the compiled tool's human-confirmation/elicitation
+gates, the host's `ctx.memory.confirmationRequired` and mandatory destructive
+confirmation. A required elicitation reference is checked before provider contact.
+The selection and `AppInvocationEnvelope.memoryConfirmationRequired` retain that
+effective policy alongside the unchanged A03 projection. Selection refusals use
+the frozen public error codes; missing trusted audit remains protocol `-32603`.
 
 ## What's here
 
-- `src/registry.ts` — `ConnectorRegistry`: `register(adapter)` / `get(connectorId)` /
-  `list()`, keyed by `adapter.connectorId`. Throws `DuplicateConnectorError` on a
-  duplicate `register()` for the same `connectorId`.
-- `src/context.ts` — `createInMemoryContext(opts)`: a contract-complete, connector-agnostic
-  in-memory `StpConnectorContext` factory generalized from the github live broker's
-  `makeLiveConnectorContext`. **`getSecret` delegates to an injectable `opts.secretResolver`**
-  — this is the seam a future EnrollmentStore / TenantResolver PORT plugs into; the factory
-  deliberately does not pre-empt that PORT's shape, it only defines the injection point.
-  `audit.emit` writes a REDACTED line to `console.error` by default (overridable via
-  `opts.auditSink`); `logger` defaults to `console`.
-- `src/broker.ts` — `McpProviderBroker`: `listConnectors()`, `listCapabilities(connectorId, ctx?)`
-  (calls the adapter's own `resolveTenant()` + `listCapabilities()`), and
-  `invoke(connectorId, capabilityRef, input, opts?)` — resource-vs-tool dispatch decided from
-  the capability's OWN declared `kind` in the connector's manifest (never a per-connector
-  allowlist). A resource capability's URI is built from its manifest `uriTemplate` by
-  substituting `{param}` placeholders out of the caller-supplied `input` object — no
-  connector-specific URI-building logic lives here (contrast with the github live broker's
-  per-capability `buildResourceUri` switch, which this generalizes away). Throws
-  `UnknownConnectorError` for an unmounted `connectorId`; guards the `DurableCallRef` string
-  return of `invokeTool` the same way the github live broker does.
-- `src/index.ts` — public entry: `ConnectorRegistry`, `McpProviderBroker`,
-  `createInMemoryContext`, plus the typed error classes and option types.
+- `src/registry.ts` — **internal** plan-derived connector index (not a
+  public entry): mounts adapters for the providers present in the compiled
+  plan. Duplicate mounts throw the typed `duplicate_connector` error;
+  adapters for unknown providers are refused at construction.
+- `src/context.ts` — `SecretResolver` contract type only. The in-memory
+  context factory is deleted with no compatibility fallback.
+- `src/broker.ts` — `McpProviderBroker`: `listConnectors()`,
+  `listCapabilities(connectorId, ctx)` and
+  `invoke(connectorId, capabilityRef, input, opts)` with required trusted
+  `opts.ctx`. Resource-vs-tool dispatch is decided from the capability's
+  OWN declared `kind`. Memory tools additionally resolve their exact plan
+  entry, provider/connector source binding and scope/claim coverage, and
+  bind the neutral context projection before the adapter is contacted.
+  Throws `UnknownConnectorError` for an unmounted `connectorId`; guards
+  the `DurableCallRef` string return.
+- `src/memory/` — pure frozen memory contract entry (`./memory`):
+  closed source-binding records and verified compiled dispatch
+  (`CompiledMemoryDispatch`, `MemoryDispatchRefusal`).
+- `src/index.ts` — frozen public entry: `McpProviderBroker`,
+  `McpBrokerError`, `UnknownConnectorError`, `InvokeOptions`,
+  `SecretResolver`. No testing export, no compatibility fallback.
 
 ## Proof scope
 
-- `tests/broker.test.ts` — **HERMETIC**, no real network. Registers a mock
-  `AppConnectorProviderAdapter`, invokes a resource capability and a tool capability through
-  the broker, and asserts: correct dispatch + envelope shape, an unknown-connector typed
-  error, a duplicate-register typed error, an unknown-capability error envelope, the
-  `DurableCallRef` guard, and that `createInMemoryContext` produces every REQUIRED
-  `StpConnectorContext` field (`../mcp-platform/src/runtime.ts`).
-- `scripts/smoke-broker-github.mjs` — the LIVE proof: mounts the REAL github live adapter
-  from `../mcp-connector-github/src/live-adapter.ts` (BR-72 DEPTH Lot 1) into a
-  `ConnectorRegistry`, then calls
-  `broker.invoke('github', 'get_repository', { owner: 'octocat', repo: 'Hello-World' })`
-  — a REAL network call to `https://api.github.com` — and prints the real `full_name` /
-  `stargazers_count`. This is the only file in this package that imports anything
-  github-specific; it exists to prove the generic broker actually drives a real connector,
-  not to make this package connector-aware.
+- `tests/broker.test.ts` — **HERMETIC**, no real network. Plan-bound
+  dispatch with explicit verified contexts: duplicate-mount refusal,
+  trusted-context requirement (-32603), resource URI building, unknown
+  connector/capability behavior and the `DurableCallRef` guard.
+- `tests/memory/` — **HERMETIC** memory seam proofs: verified invocation
+  context, source binding, forged-call refusal, literal-true verdicts and
+  M2 audit refusal, with zero unauthorized handler or effect calls.
+- `scripts/smoke-broker-github.mjs` — the LIVE proof (manual-only, never
+  in CI): mounts the REAL github live adapter and performs a REAL network
+  call to `https://api.github.com`.
 
 ## Make targets
 
 - `make typecheck-mcp-broker`
-- `make test-mcp-broker` (hermetic; `ENV=<slug>` accepted per repo convention, unused by
-  this Node-only target but kept for command-style consistency)
-- `make smoke-mcp-broker-github` — REAL network, not hermetic, never wired into CI (mirrors
-  `make smoke-mcp-connector-github-live`'s rationale: shares GitHub's unauthenticated rate
-  limit, manual-only by design)
+- `make test-mcp-broker` (hermetic; `SCOPE=` selects files)
+- `make build-mcp-broker`
+- `make pack-mcp-broker`
+- `make smoke-mcp-broker-github` — REAL network, not hermetic, never wired into CI
 
-## Non-goals (this proof)
+## Non-goals (this lot)
 
-- No real secret store / EnrollmentStore / TenantResolver — `createInMemoryContext`'s
-  `secretResolver` is the seam that PORT will plug into later, not an implementation of it.
-- No durable-call tracking — a tool capability returning a `DurableCallRef` (string) is
-  guarded and rejected, not queued/polled.
-- No production wiring, no publishing, no connector-specific logic outside the smoke script.
+- No durable reference store — `./memory-reference` arrives in Lot 2.
+- No real secret store / EnrollmentStore / TenantResolver.
+- No durable-call tracking — a tool capability returning a `DurableCallRef`
+  (string) is guarded and rejected, not queued/polled.
