@@ -1,7 +1,7 @@
 # Feature: fix(memory-l5): rescope P09 to existing suites and re-freeze pre-candidate P3
 
 ## Objective
-- [ ] Apply only the approved P09 correction and prepare immutable P3 for owner authorization.
+- [x] Remove P09 references to four later-lot suites so L5 qualifies its 18 existing suites; retain remote coverage as unchecked R2/R7a obligations.
 - [ ] L0 reissue awaits owner authorization.
 
 ## Scope / Guardrails
@@ -9,6 +9,10 @@
 - [x] Branch: `fix/memory-l5-p09-p3`; worktree: `tmp/worktrees/mem-l5-p3`.
 - [x] Approved correction SHA-256: `b13bcd77f4a78e20c7f6ed36561b5f2e57eeb7442ad5623d8607991a952a6ee9`.
 - [x] Catalog SHA-256: `9bf377b774dda54a3b37189eea57cb845acca7b27b8b55b399f23c20215a1211`.
+- [x] P3 manifest SHA-256: `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`.
+- [x] Reissued L0 SHA-256: `0541b15ba4d5e49ba3b30d92da1c5e3c2fd668e40937e4f942103a678e849bfb`.
+- [x] P3 freezing commit: `c919b638686fb93c8c90a2634d3c004fd25348b3`; producer heads and retained closure are unchanged.
+- [x] L0 also corrects the stale artifact-manifest schema pin; the schema bytes are unchanged.
 - [x] Make-only tests, shared Docker lock, isolated `ENV=test-mem-l5-p3` last, cleanup after each step.
 - [x] No service startup or port reservation; existing official disposable container targets only.
 - [x] No package/source/schema changes, repack, E4 rebuild, publication, registration or merge.
@@ -62,17 +66,17 @@
   - [x] Create isolated worktree from exact base and pass mechanical `harness check branch`.
   - [x] Run existing `make memory-l5-tooling` and `make memory-l5-test LOT=1` before changing frozen bytes.
   - [x] Exercise real L0 catalog/schema validation and stale-hash refusals with the targeted regression.
-- [ ] **Lot 1 — Exact frozen-byte correction**
+- [x] **Lot 1 — Exact frozen-byte correction**
   - [x] Retain predecessor manifest and sidecar in history; preserve historical P2.
   - [x] Copy approved catalog byte-for-byte; change exactly two L0 fields.
   - [x] Derive P3 by exactly two inventory hash substitutions; emit matching sidecar.
   - [x] Record base, seven inherited P2 deviations and detached signature slots explicitly pending.
   - [x] Preserve both unchecked v9 R2-MEMORY/R7a-MEMORY obligations in repository evidence if v9 is outside Git.
-  - [ ] Record P3 digest and freezing commit in the existing root BINDING.md under P3.
+  - [x] Record P3 digest and freezing commit in the existing root BINDING.md under P3.
 - [ ] **Lot 2 — Validation and draft PR**
-  - [ ] Run real L0 validator and existing tooling tests (`tools/memory-mcp-l5/tests/*.test.mjs`).
-  - [ ] Run Lot 1: platform `tests/memory/*.test.ts`, `request-identity.test.ts`, `wire-parity.test.ts`, `registry-dispatch.test.ts`; broker `tests/*.test.ts`.
-  - [ ] Verify P3 retained inventory/archives using `make memory-l5-verify`.
-  - [ ] Record pending authority and remaining checkpoint obligations without claiming qualification.
-  - [ ] Run `make scope-check` before each commit; inspect exact diff and hashes.
+  - [x] Run real L0 validator and existing tooling tests (`tools/memory-mcp-l5/tests/*.test.mjs`): 104 passed, including both stale-hash refusals.
+  - [x] Run Lot 1: platform `tests/memory/*.test.ts`, `request-identity.test.ts`, `wire-parity.test.ts`, `registry-dispatch.test.ts`; broker `tests/**/*.test.ts`: 183 passed before and after the correction.
+  - [x] Verify P3 retained inventory/archives using `make memory-l5-verify`: 30 files, 54 edges, exact P3 digest.
+  - [x] Record pending authority and the five retained checkpoint obligations in `spec/evidence/memory-mcp-l5/p3-validation.md`; metadata checks do not authorize owner signatures.
+  - [x] Run `make scope-check` before each commit; inspect exact diff and hashes.
   - [ ] Push, open draft PR to main using this plan as body, inspect CI and leave unmerged.
