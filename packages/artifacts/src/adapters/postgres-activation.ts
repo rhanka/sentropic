@@ -182,3 +182,72 @@ function recordStores(run: Run, namespace: string): Pick<PostgresActivationStore
   };
   return { tickets, flows };
 }
+
+/** No eager I/O or DDL. Hosts issue fresh random IDs with ttlSeconds <=60.
+ * Use consume for browser activation; standalone TicketStore supports existing services.
+ * Only an acknowledged consume result permits the host to sign/set a grant cookie.
+ */
+export function createPostgresActivationStore(options: { pool: Pool; namespace: string }): PostgresActivationStore {
+  const namespace = text(options.namespace);
+  const pool = options.pool;
+  const run: Run = work => transaction(pool, namespace, work);
+  return {
+    ...recordStores(run, namespace),
+    async consume(value, authorize) {
+      // Snapshot before acquisition waits; callers cannot retarget an in-flight consume.
+      const flowId = text(value.flowId);
+      const ticketId = text(value.ticketId);
+      const expected = { ...value.expected };
+      return run(async (client, generation) => {
+        const params = [namespace, flowId, generation];
+        const flowResult = await client.query<{ payload: BrowserFlowRecord }>(
+          'SELECT payload FROM artifact_host.browser_flows WHERE namespace=$1 AND flow_id=$2 AND generation=$3 FOR UPDATE', params);
+        const flow = flowResult.rows[0]?.payload;
+        if (!flow || flow.ticketId !== ticketId || flowKeys.some(key => flow[key] !== expected[key])) return undefined;
+        const ticketResult = await client.query<{ payload: TicketRecord }>(
+          'SELECT payload FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2 AND generation=$3 FOR UPDATE',
+          [namespace, ticketId, generation]);
+        const ticket = ticketResult.rows[0]?.payload;
+        if (!ticket || bindingKeys.some(key => ticket[key] !== expected[key])) return undefined;
+        // This read happens AFTER both row-lock waits; authority may wait again.
+        const live = await client.query(`SELECT 1 FROM artifact_host.browser_flows
+          WHERE namespace=$1 AND flow_id=$2 AND generation=$3 AND expires_ms>${nowSql}`, params);
+        if (live.rows.length === 0) return undefined;
+        if (await authorize({ client, namespace, ticket: Object.freeze({ ...ticket }), flow: Object.freeze({ ...flow }) }) !== true) return undefined;
+        // One visibility decision after ALL authority waits; cascade consumes the flow.
+        const consumed = await client.query<{ payload: TicketRecord }>(
+          `DELETE FROM artifact_host.activation_tickets t WHERE t.namespace=$1 AND t.ticket_id=$2
+           AND t.generation=$3 AND t.expires_ms>${nowSql} AND EXISTS (
+             SELECT 1 FROM artifact_host.browser_flows f WHERE f.namespace=t.namespace
+             AND f.ticket_id=t.ticket_id AND f.flow_id=$4 AND f.generation=t.generation AND f.expires_ms>${nowSql})
+           RETURNING payload`, [namespace, ticketId, generation, flowId]);
+        return consumed.rows[0]?.payload;
+      });
+    },
+    async cleanup(limit = 100) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('invalid activation cleanup limit');
+      return run(async (client, generation) => {
+        const flows = await client.query(`WITH due AS (
+          SELECT flow_id FROM artifact_host.browser_flows WHERE namespace=$1
+          AND (expires_ms<=${nowSql} OR generation<$2) ORDER BY expires_ms,flow_id
+          LIMIT $3 FOR UPDATE SKIP LOCKED)
+          DELETE FROM artifact_host.browser_flows f USING due WHERE f.namespace=$1 AND f.flow_id=due.flow_id`,
+          [namespace, generation, limit]);
+        const flowCount = flows.rowCount ?? 0;
+        const tickets = await client.query(`WITH due AS (
+          SELECT ticket_id FROM artifact_host.activation_tickets t WHERE namespace=$1
+          AND (expires_ms<=${nowSql} OR generation<$2)
+          AND NOT EXISTS (SELECT 1 FROM artifact_host.browser_flows f WHERE f.namespace=t.namespace AND f.ticket_id=t.ticket_id)
+          ORDER BY expires_ms,ticket_id LIMIT $3 FOR UPDATE SKIP LOCKED)
+          DELETE FROM artifact_host.activation_tickets t USING due WHERE t.namespace=$1 AND t.ticket_id=due.ticket_id`,
+          [namespace, generation, limit - flowCount]);
+        return { flows: flowCount, tickets: tickets.rowCount ?? 0 };
+      });
+    },
+    async invalidate() {
+      await transaction(pool, namespace, async client => {
+        await client.query('UPDATE artifact_host.activation_namespaces SET generation=generation+1 WHERE namespace=$1', [namespace]);
+      }, true);
+    },
+  };
+}
