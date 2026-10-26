@@ -82,7 +82,7 @@ into `#702`; no Lane B edit under `docs/baselines/app-cm-w0/**`.
 - Confirm row counts match the manifest (`organizations` plus the B02
   journal/frontier counts from the baseline).
 - Confirm no production or preprod object was written (source bucket holds
-  only the read object; scratch bucket holds nothing unexpected).
+  only the read object; nothing was written outside the restore namespace).
 - Record the recovery duration in the receipt.
 
 ### Rotation
@@ -99,7 +99,7 @@ into `#702`; no Lane B edit under `docs/baselines/app-cm-w0/**`.
 | `PG_BACKUP_SHA256` missing or malformed | unset or not 64-char hex; mismatch aborts the restore | before any write + in-pod compare |
 | `RESTORE_KUBECONFIG` missing | unset | before any write |
 | `RESTORE_KUBECONFIG` not isolated | not an absolute path, not a file, `$HOME/.kube/poc.yaml` | before any write |
-| Identity capability | negative `auth can-i create pods\|get secrets` in `sentropic` and `sentropic-preprod` (literals plus overrides) answers `yes` | read-only checks |
+| Identity capability | `auth can-i create pods` in the restore namespace must be `yes`; negative `auth can-i create pods\|get secrets` in `sentropic` and `sentropic-preprod` (literals plus overrides) answers `yes` | read-only checks |
 | `RESTORE_NAMESPACE` | empty, `default`, `sentropic`, `sentropic-preprod`, not `sentropic-restore-*` | before any write |
 | `RESTORE_PGHOST` | empty, live hosts, dotted or hex IP literals, illegal chars, FQDN outside the restore namespace | before any write |
 | `RESTORE_PGDB` | empty, `app`, `postgres`, `template0`, `template1`, missing `_restore` suffix | before any write |
