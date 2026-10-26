@@ -107,6 +107,7 @@ describe('durable interruption', () => {
 
   it('should refuse an enabled class without an intercept', () => {
     expect(() => new TestJournal(createSession(scope, { native: 'read-only' }, [], []))).toThrow('coverage');
+    expect(() => createSession({ ...scope, workspaceId: undefined } as never, {}, [], [])).toThrow('scope');
     expect(SpeechCoordinator).toBeDefined();
   });
 
