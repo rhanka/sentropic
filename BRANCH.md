@@ -57,7 +57,7 @@
 - [x] **Lot 0 — Baseline and scope**
   - [x] Read Docker lock, spec v4 sections 3/7/8/9, rules and branch template; retain receipt v1.
   - [x] Run mechanical harness branch check before work.
-- [ ] **Lot 1 — Discovery and isolated qualification**
+- [x] **Lot 1 — Discovery and isolated qualification**
   - [x] Tests first: decision-qualification.test.ts, independent missing gates and execution/criterion/policy mutations; initial run rejects missing implementation.
   - [x] Bind evidence to execution digest, exact criterion and operating policy; scope mutation controls pass.
   - [x] Qualification accepts provisional expected IDs while preserving auth, finite bounds, one attempt and experimental discovery.
@@ -67,7 +67,7 @@
   - [x] Deterministic assessment/report schema with distinct held-out/challenge/repeat populations and conservative attempt/cost aggregation.
   - [x] Cap exhaustion and missing evidence produce incomplete/blocked reports; fixtures never establish semantic calibration.
   - [x] Scoped assessment controls pass; recording tests validate receipt projections, independent work counts and pre-dispatch cap stops.
-- [ ] **Lot N-1 — Docs consolidation**
+- [x] **Lot N-1 — Docs consolidation**
   - [x] Public exports, README, tracked mesh spec and L6 report/run-packet needs; feature tuple mesh 0.30.0 / gateway 0.21.5 / cluster 0.22.6.
 - [ ] **Lot N — Final validation**
   - [ ] Full mesh tests, typecheck, lint, build/pack; cluster compatibility and packed consumer gates; no product UI changes.
