@@ -100,6 +100,9 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
 - [x] PR765 r1 P2 upgrade: populated 006 scopes/journal/fences/boundaries above 2^53 and at signed max survive 007, reopen, journal read and publication; all six counter columns reject negative and above-u64 writes.
 - [x] 006 numeric JSON consumer positions normalize to exact decimal strings after upgrade without changing delivery/checkpoint behavior.
 - [x] First real PG run: 75 passed, six new fixture setup refusals (empty descriptor chainKinds; comments grant on memory module). Fixed the descriptor and matching memory grant; upgrade, invalid indexes and post-publish rollback passed. Cleanup exit=0; rerun required.
+- [x] R1 focused verification on source head `5eeb20d32`: `make engram-e2-lane E2_LANE=postgres API_PORT=9010 UI_PORT=5210 MAILDEV_UI_PORT=1110 ENV=test-e2-int` under the shared Docker lock: 81 passed, two dedicated crash-mode tests skipped; postgres-u64 25/25 and migration 5/5. Typecheck passed; both lane receipts record exit=0 and cleanup=0 in tmp/engram-e2-receipts.
+- [x] R1 source push completed; full qualification remains assigned to queued CI (run 40400619477 on `5eeb20d32`). Removed the redundant local full-qualification waiter before any lane started; no orphan stack or lock holder.
+- [ ] Rerun validate-cluster-mesh: requested after push, GitHub returned 403 because run 40388446346 is already queued/active; retry once it leaves that state. New-head CI also pending, no green CI claim.
 - [x] Commit-options fences stay safe-only (`validateCommitOptions` frozen); u64 epochs flow through `provisionFence`/`fence` direct paths.
 - [x] PR765 r1 P2-3 handoff to E4 (canonical PG acquisition) / E5 (neutral binding): widen commit-options epoch validation and replace strict representation comparisons in postgres/staged.ts, units.ts and seals.ts with exact u64 value comparisons. Acceptance: fenced ordinary/staged commits accept equal canonical epochs at 2^53, 2^63 and max u64, refuse stale epochs, and preserve frozen common behavior. Verification: real PG ownership/staged tests plus common-rule corpus. E2 regression explicitly proves current commitAtomic refusal before persistence; no E4/E5 implementation here.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; E2 qualification green; no merge.
@@ -131,6 +134,6 @@ Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/
   - [x] Accept u64 aggregate versions/guards in PG effects (`U64AtomicUnit`, `validateU64AtomicUnit`); persist versions as given.
   - [x] Validate allocation comparison in readers (corruption on malformed).
 - [ ] **Lot 3 — Final validation**
-  - [ ] `make scope-check` before each commit; commits under 150 lines via `make commit`.
+  - [x] `make scope-check` before each commit; commits under 150 lines via `make commit`.
   - [ ] Run build, typecheck, lint, memory, common, grants and real PG lanes with `ENV=test-e2-int` last.
   - [ ] Push and open draft PR targeting `feat/engram-e2-integration`; verify E2 qualification green without merging.
