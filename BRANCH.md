@@ -23,6 +23,9 @@
   - `spec/evidence/memory-mcp-l5/lot2/**`
   - `Makefile`
   - `.github/workflows/ci.yml`
+  - `deploy/k8s/README.md`
+  - `docs/runbooks/app-cm-baseline-restore.md`
+  - `scripts/test-pgbackup-restore-isolation.sh`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -33,6 +36,7 @@
   - [x] L5L2-EX1: bounded Makefile Lot 2 delegation/manifest forwarding; local/CI parity; rollback added wiring only.
   - [x] L5L2-EX2: update only broker workspace version in package-lock.json; retain frozen P3 lock snapshot; rollback this scalar.
   - [x] L5L2-EX3: CI uses explicit source/reference mode with historical P3 validation; strict qualification remains unchanged. Required after the new broker version; rollback only this CI mode/wiring.
+  - [x] L5L2-EX4: inherit origin/main ab981b16d (#756) unchanged to resolve the CI merge conflict; listed restore paths are inheritance-only. Preserve this branch's Lot 2 plan. Upstream committed lines are outside the authored atomic budget; rollback the merge only.
 ## Feedback Loop
 - [ ] gr-conductor: real P3-bound lot2-manifest/sidecar, E2/backend/neutral/profile/lock closure and G1–G4/C9 receipts pending; fixture is unverified.
 - [ ] Owner/Engram: authoritative enrollment/assurance mapping and current L0 role dispositions pending; no deployed identity acceptance.
@@ -58,3 +62,4 @@
   - [x] Canonical report guard rejects source-only/cross-tuple results; all five real E2 cases are mandatory before Lot 2 can close.
   - [x] Malformed host configuration/driver digests refuse; receiving-harness suite passed 112 tests; retained report refreshed.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
+  - [ ] Merge current main ab981b16d, preserve identical Track blobs and frozen P3 bytes, then rerun the source gate; P3 #769 remains open.
