@@ -19,10 +19,18 @@ function bound(limit: number): number {
 export async function createPrivateArtifactStorage(options: { client: S3Client; bucket: string }) {
   const { client, bucket } = options;
   if (!bucket) throw new Error('Private artifact bucket required');
+  let privateUntil = 0;
+  let checking: Promise<void> | undefined;
   async function assertPrivate() {
-    const { PublicAccessBlockConfiguration: config } = await client.send(new GetPublicAccessBlockCommand({ Bucket: bucket }));
-    if (!config || !['BlockPublicAcls', 'IgnorePublicAcls', 'BlockPublicPolicy', 'RestrictPublicBuckets']
-      .every(field => config[field as keyof typeof config] === true)) throw new Error('Artifact bucket must remain private');
+    if (Date.now() < privateUntil) return;
+    // Bucket-scoped positive cache; concurrent expiry checks share one request. Failures are never cached.
+    checking ??= (async () => {
+      const { PublicAccessBlockConfiguration: config } = await client.send(new GetPublicAccessBlockCommand({ Bucket: bucket }));
+      if (!config || !['BlockPublicAcls', 'IgnorePublicAcls', 'BlockPublicPolicy', 'RestrictPublicBuckets']
+        .every(field => config[field as keyof typeof config] === true)) throw new Error('Artifact bucket must remain private');
+      privateUntil = Date.now() + 30000;
+    })().finally(() => { checking = undefined; });
+    await checking;
   }
   await assertPrivate();
   const upstream = createS3BlobStore(options);
