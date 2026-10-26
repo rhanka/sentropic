@@ -56,6 +56,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read lock/rules/spec/schedule/template; mechanically verify isolated branch and P3.
 - [ ] Lot 1: failing wire/schema tests; profile admission, full-envelope codec, protocol refusal.
+  - [x] Schema test reproduced missing admission module; wire SDK tests specified; finite schema admission implemented.
 - [ ] Lot 2: mesh context/guards/cancellation/compiled dispatch; concurrent subject/tenant/workspace tests.
 - [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
 - [ ] Lot 4: review, push draft PR to main, final-head CI green; list manifest-blocked proofs and Lot 4 estimate.
