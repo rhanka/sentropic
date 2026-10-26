@@ -47,7 +47,8 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read lock/rules/specs/template; create isolated worktree; mechanically check branch.
-- [ ] Lot 1: filenames frozen above; tests first for namespace/bindings, collisions, expiry, commit visibility and uncertainty.
+- [x] Lot 1: filenames frozen above; tests first for namespace/bindings, collisions, expiry, commit visibility and uncertainty.
+  - [x] Red: scoped integration target fails on missing postgres-activation module before implementation (2026-10-26).
 - [ ] Lot 2: versioned SQL, TicketStore/flow port, atomic consume, bounded cleanup and invalidation.
 - [ ] Lot 3: real PG vectors: two OS processes, restart, race, pre/post-commit crash, restore; no skipped vectors.
 - [ ] Lot 4: exact imports and authority/restore obligations; merge main again after #759.
