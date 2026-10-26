@@ -89,7 +89,7 @@
   - [ ] Acceptance command: `make ci-capacity-policy CI_REQUIRE_CAPACITY_PROOF=1 CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json' ENV=test-ci-capacity`; static admission alone never qualifies timing.
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [x] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity` must parse/import the changed scripts and reject invalid result sets.
-  - [x] Local qualification: 35 metrics + 17 expected-results + 24 unchanged publication-wiring tests passed; finite full-selection PR/main bound 15. Final-head CI and all unmet budgets remain open until their actual receipts.
+  - [x] Review r1 local qualification: 35 metrics + 21 expected-results and 90 publication tests pass (includes 24 wiring checks). Static PR/main bounds 15/17; final-policy timing acceptance remains open.
   - [ ] Build: no image/package build recipe changes; retain the final concurrent PR/main runs' existing build and artifact receipts.
   - [ ] API regression: no API source/test edits; verify every selected API result from the concurrent runs is present and successful.
   - [ ] UI regression: no UI source/test edits; verify the unchanged UI test/build results are present in the complete verdict.

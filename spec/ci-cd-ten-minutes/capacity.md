@@ -15,34 +15,56 @@ GitHub CLI (no credentials retained):
 | `GET /repos/rhanka/sentropic/branches/main` | base SHA above | #760 is still open at inventory time; no unmerged changes are imported. |
 
 The finite policy uses the BR-76 **observed lower bound of 17 slots**, not
-the unverified 24-worker hypothesis or an account quota. Two slots are the
-declared release allowance; the per-run DAG must demand at most 15 slots.
+the unverified 24-worker hypothesis or an account quota. Fifteen shared
+job concurrency groups cover common work; the existing npm train and API
+image publication groups account for the other two slots.
 This is a repository dispatch bound, not a provisioned runner reservation:
 other runs/repos can still consume shared hosted capacity. Concurrent-run
 admission must compare the combined measured peak against that lower bound;
 it cannot be accepted from this static per-run check alone.
 
-`make ci-capacity-policy` computes the maximum weighted antichain of the
-actual workflow dependencies (matrix weights respect `max-parallel`). It
-fails above 15 slots. The expected manifest also retains those dependencies
+`make ci-capacity-policy` bounds the weighted antichain by the number of
+distinct execution mutexes (matrix indices share the common pool). It
+rejects PR demand above 15, main demand above 17, validator dependency
+chains, and unsafe pool queues. The expected manifest retains dependencies
 so queue waits can be summed along identified observed critical paths.
 
 ## BR-77 policy and live qualification
 
-The active policy staggers package validation in two dependency lanes,
-ordinary npm publication in one lane, and API/E2E matrices at widths 2/2.
-The existing mesh → gateway → cluster train, bootstrap, publication guards,
-Mistral routing and E2 integration qualification are preserved. Chained
-validators override automatic dependency-skip propagation; publishers also
-refuse upstream failure/cancellation. Complete selected-result enforcement
-remains mandatory. The PR and main full-selection DAG bounds both read 15.
+The active policy keeps 23 independent package validators ready after
+`changes`, sharing six execution mutexes. Every common job uses one of
+15 repository-wide slots; API/E2E use their reference widths 15/5 and
+matrix indices share those slots. These reference widths are not a newly
+measured optimum. Ordinary publishers depend on their own validators;
+the existing oauth → mcp-auth and mesh → gateway → cluster registry
+dependencies remain. Every common-pool mutex sets `queue: max` and
+`cancel-in-progress: false`: waiting jobs are retained, without `needs`
+chains or the default replacement of pending jobs. The two existing release
+mutexes remain separate. Other workflows/repositories remain outside this bound.
+
+Static admission is not timing acceptance. Use `CI_REQUIRE_CAPACITY_PROOF=1`
+and `CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json'` with
+`make ci-capacity-policy`. Both identified runs must complete successfully,
+carry the exact workflow policy digest, and finish within the 2288s baseline.
+One must be a PR, the other a push on main. Cancelled runs, incomplete
+captures, old-policy main runs and branch dry-runs never qualify this proof.
+The prior 13/10-deep chains are rejected: run `40368572524` was still
+unfinished at 81 minutes. No final-policy timing acceptance is claimed yet.
+
+Dispatch this branch with `capacity_publish_dry_run=true` to exercise all
+21 actual package publication jobs and their dependency guards. Each runs
+`make ci-capacity-publish-dry-run PACKAGE=<slug> ENV=test-ci-capacity`,
+which executes the existing real guarded pack and logs a run/SHA/package
+receipt. Registry writers and registry post-publication qualification steps
+are disabled only in that mode. This proves branch publication wiring after
+completion; it is not a main release receipt.
 
 | Receipt | Identified observation | Acceptance |
 | --- | --- | --- |
 | New-base baseline | Main `40341027258`, attempt 1, source `440599d04e91bb33e3874588f067c6a90bffd1b3`: 89 rows, 68 measured, 21 skipped; peak 15; 211.15 runner-minutes; execution queue p50 111s, max 882s. | Jobs API baseline, not the bounded policy's result. |
 | Baseline endpoints | Qualification 2288s; selected images 2128s; preproduction 2254s; cluster publication 1879s from workflow creation. Classification job `121635441567` 18s; gate `121657161589` 14s. | Classification/verdict budgets breached; no fresh npm-publication claim. |
 | Superseded PR | `40352448337`, attempt 1, head `0a1eb32ea873a48b71833d163537719dae1e2bb1`, automatically cancelled when rollback head was pushed; 57 identified cancelled rows. Gate `121681630885` failed as required. Classification `121675860608` 21s; gate 19s. | Cancellation observed; 15s/5s budgets breached. |
-| Conservative rollback | Head `474e023163fd1be0b2f0ac7f33442c2d97dc561c`, run `40353670942`, attempt 1: one package validation lane, API/E2E 1/1; static bounds PR 13 / main 14. Classification `121682062979` 20s. | Live dispatch observed; classification breached. Restore the qualified bounded policy afterwards. |
+| Conservative rollback | Head `474e023163fd1be0b2f0ac7f33442c2d97dc561c`, run `40353670942`, attempt 1: one package validation lane, API/E2E 1/1; cancelled before completion. Classification `121682062979` 20s. | Drill not accepted; passing metrics job `121682975411` is insufficient. Require a completed drill and record its run ID before ticking. |
 | Concurrent release | Main `40341027258`, attempt 2, same source: completed successfully through both PR supersessions. 89 rows / 68 executions / 21 skipped; peak 12; 210.45 runner-minutes; execution queues p50 383s / max 860s. | All four selected endpoints continuous. Classification `121676338012` 19s; gate `121701213010` 19s; critical-path scheduling 1559s: all three budgets breached. |
 | Concurrent endpoints | Main attempt 2: qualification 2750s; selected images 2359s; preproduction 2534s; selected packages 2477s. Longest qualification-path wait: `smoke-idp-screens` job `121684322205`, 860s. | Completed measured delivery, not a ten-minute result or a fresh npm-publication sample. |
 | New-base release | Main `40356941217`, source `22d8a9e68b1abae2665fedb528526d2a84c6bc4d`, attempt 2 succeeded after retrying the failed 2.7-GB toolbox download in object-registry job `121708995656`; retry job `121742300480` passed. All four selected endpoints continuous; 41 measured rows and 48 skipped. | Classification 17s / verdict 24s breach 15s/5s. Mixed carried-forward execution stamps leave aggregate scheduling to-measure. Package completions before retry creation have null elapsed timing, not a fresh delivery sample. |
