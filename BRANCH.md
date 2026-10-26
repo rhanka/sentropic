@@ -62,7 +62,7 @@
   - [x] All-class admission returns explicit dispatch/dedupe receipts with authority ordering; consumed approval IDs and exact tool/arguments bindings persist across restart.
   - [x] core/session.ts: trusted scoped authority, atomic journal, persisted epochs/tombstones, opaque control port implemented.
   - [x] core/interrupt.ts: all-class fence receipts, outcome pairing, effect barrier and typed authenticated risk acceptance implemented.
-  - [x] core/playback.ts: monotonic rendered samples, bounded transient queue, queue clearing and stale frame refusal implemented.
+  - [x] core/playback.ts: L1-compatible session/stream headers, monotonic rendered samples, bounded transient queue and stale epoch refusal implemented.
   - [x] core/usage-receipts.ts: canonical operation identity, strict metadata fields and signed revision-deduplicated adjustments implemented.
 - [ ] **Lot 3 — Documentation and validation**
   - [x] README: control/journal integration, authority and runtime qualification boundaries, L3 integration seam documented.
