@@ -6,12 +6,54 @@ const unresolved = (state: SessionState) => Object.values(state.effects)
   .filter(e => (e.status === 'unknown' || e.status === 'completion-pending')
     && (state.turns[e.turnEpoch].fence || isTerminal(state.turns[e.turnEpoch])));
 
+const promptFor = (state: SessionState, effectIds: string[]): RiskPrompt => {
+  const ids = [...effectIds].sort();
+  if (!ids.length || new Set(ids).size !== ids.length) throw new Error('Selected effect IDs required');
+  const pending = unresolved(state);
+  const displayed = ids.map(effectId => {
+    const effect = pending.find(e => e.effectId === effectId);
+    if (!effect) throw new Error('Effect is not awaiting risk confirmation');
+    return { effectId, operation: effect.operation, lastEvidence: effect.evidence.at(-1)?.evidence ?? 'No terminal evidence',
+      uncertainty: 'The original operation or descendants may still complete; no rollback or replay is authorized.' };
+  });
+  return { scope: state.scope, barrierRevision: state.barrierRevision, effectIds: ids, displayed,
+    confirmation: `Accept unresolved effects: ${ids.join(', ')}` };
+};
+
 export class InterruptAuthority {
   constructor(protected readonly journal: Journal, protected readonly control: ControlPort,
     protected readonly authority: TrustedAuthority, private readonly stopPlayback: (turnEpoch: number) => void,
     protected readonly now: () => number) {}
 
   async status(ref: TurnRef) { return this.journal.transact(state => getTurn(state, ref)); }
+
+  async riskPrompt(effectIds: string[]): Promise<RiskPrompt> {
+    return this.journal.transact(state => promptFor(state, effectIds));
+  }
+
+  async acceptRisk(request: RiskRequest): Promise<RiskAcceptance> {
+    const actor = await this.authority.verifyRisk(request);
+    if (actor.method !== 'typed') throw new Error('Authenticated typed confirmation required');
+    return this.journal.transact(state => {
+      assertScope(state, request.scope);
+      if (actor.principalId !== state.scope.principalId || actor.tenantId !== state.scope.tenantId) throw new Error('Controlling principal required');
+      const snapshot: RiskPrompt = { scope: request.scope, barrierRevision: request.barrierRevision,
+        effectIds: request.effectIds, displayed: request.displayed, confirmation: request.confirmation };
+      const prior = state.riskAcceptances[request.requestId];
+      if (prior) {
+        const { requestId: _id, principalId: _principal, timestamp: _timestamp, ...original } = prior;
+        if (!same(snapshot, original)) throw new Error('Risk confirmation identity conflict');
+        return prior;
+      }
+      if (request.barrierRevision !== state.barrierRevision) throw new Error('Stale barrier revision');
+      if (!request.requestId || !same(snapshot, promptFor(state, request.effectIds))) throw new Error('Risk confirmation mismatch');
+      const acceptance = { ...snapshot, requestId: request.requestId, principalId: actor.principalId, timestamp: this.now() };
+      for (const id of request.effectIds) state.effects[id].status = 'unknown-accepted';
+      state.barrierRevision++;
+      state.riskAcceptances[request.requestId] = acceptance;
+      return acceptance;
+    });
+  }
 
   async admitTool(ref: TurnRef, call: ToolCall): Promise<ToolResult | undefined> {
     const preliminary = await this.journal.transact(state => {
@@ -49,6 +91,7 @@ export class InterruptAuthority {
         if (!call.effectId || !call.operation || state.effects[call.effectId]) throw new Error('New effect identity required');
         state.effects[call.effectId] = { effectId: call.effectId, turnEpoch: ref.turnEpoch, callId: call.callId,
           operation: call.operation, status: 'completion-pending', evidence: [] };
+        state.barrierRevision++;
       }
       state.actions[call.actionId] = { turnEpoch: ref.turnEpoch, callId: call.callId };
       turn.tools[call.callId] = { call: normalized };
@@ -68,8 +111,8 @@ export class InterruptAuthority {
       }
       if (effect.evidence.some(e => e.status === outcome && e.evidence === evidence)) return;
       effect.evidence.push({ status: outcome, evidence, timestamp: this.now() });
-      const terminal = !['unknown', 'completion-pending'].includes(effect.status);
-      if (!terminal || !['unknown', 'completion-pending'].includes(outcome)) effect.status = outcome;
+      if (['unknown', 'completion-pending'].includes(effect.status)
+        || (effect.status === 'unknown-accepted' && !['unknown', 'completion-pending'].includes(outcome))) effect.status = outcome;
       const tool = state.turns[effect.turnEpoch].tools[effect.callId];
       tool.result ??= { callId: effect.callId, effectId, outcome, evidence };
       state.barrierRevision++;
@@ -124,6 +167,7 @@ export class InterruptAuthority {
       if (!turn.interruptIds.includes(interruptId)) turn.interruptIds.push(interruptId);
       if (turn.fence) return turn.fence;
       const sequence = ++state.sequence;
+      state.barrierRevision++;
       turn.fence = { eventId: `fence:${sequence}`, sequence, turnEpoch: turn.turnEpoch,
         submitKey: turn.submitKey, coverage: Object.keys(state.enabledClasses).sort() };
       if (turn.phase === 'committed') { turn.phase = 'interrupted'; turn.terminal = 'cancelled-before-start'; }

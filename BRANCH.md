@@ -57,7 +57,7 @@
 - [ ] **Lot 2 — Implementation**
   - [x] All-class admission and call/action dedupe, paired results and append-only late effect evidence implemented.
   - [x] core/session.ts: trusted scoped authority, atomic journal, persisted epochs/tombstones, opaque control port implemented.
-  - [ ] core/interrupt.ts: all-class fence receipts, outcome pairing, effect barrier and typed authenticated risk acceptance.
+  - [x] core/interrupt.ts: all-class fence receipts, outcome pairing, effect barrier and typed authenticated risk acceptance implemented.
   - [ ] core/playback.ts: monotonic rendered samples, queue clearing and stale frame refusal.
   - [ ] core/usage-receipts.ts: canonical operation identity and signed revision-deduplicated adjustments.
 - [ ] **Lot 3 — Documentation and validation**
