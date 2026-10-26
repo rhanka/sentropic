@@ -213,13 +213,13 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
     // Per-chunk calls are bounded
     for (let i = 0; i < 3; i += 1) {
       const args = mockCallLLM.mock.calls[i]?.[0];
-      expect(args?.model).toBe('gpt-4.1-nano');
+      expect(args?.model).toBe('gpt-5.4-nano');
       expect(args?.maxOutputTokens).toBe(6000);
     }
 
     // Merge call is bounded (avoid truncation)
     const mergeArgs = mockCallLLM.mock.calls[3]?.[0];
-    expect(mergeArgs?.model).toBe('gpt-4.1-nano');
+    expect(mergeArgs?.model).toBe('gpt-5.4-nano');
     expect(mergeArgs?.maxOutputTokens).toBe(20000);
 
     estimateSpy.mockRestore();

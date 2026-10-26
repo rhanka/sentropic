@@ -23,13 +23,21 @@ LAZY_SIBLING_ENV = $(if $(SIBLING_ARCHIVES_FILE),$(if $(and $(filter 1,$(words $
 LAZY_SIBLING_CHECK = $(if $(SIBLING_ARCHIVES_FILE),@test -f "$(CLUSTER_MESH_SIBLING_RECEIPTS)" || { echo "ERROR: $(CLUSTER_MESH_SIBLING_RECEIPTS) is not a file"; exit 1; })
 LAZY_PACKAGE_RUN = docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(LAZY_SIBLING_ENV) \
 	-v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE)
+ifneq ($(filter $(ENV),test-861-int test-llm-judge),)
+LAZY_PACKAGE_RUN = docker compose -p $(ENV) -f docker-compose.immo-861.yml run --rm --no-deps \
+	-u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(LAZY_SIBLING_ENV) \
+	-v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh qualification
+endif
 
 .PHONY: test-lazy-package refresh-lazy-package-lock check-train-lock-integrity
 test-lazy-package:
 	$(LAZY_SIBLING_CHECK)
 	@$(MAKE) --no-print-directory -f Makefile build-cluster-mesh ENV=$(ENV)
-	@$(MAKE) --no-print-directory -f Makefile build-mcp-platform ENV=$(ENV)
+	@$(MAKE) --no-print-directory -f Makefile $(if $(filter test-861-int,$(ENV)),immo-861-build-mcp-platform,build-mcp-platform) ENV=$(ENV)
 	@$(MAKE) --no-print-directory -f Makefile build-artifacts ENV=$(ENV)
+	@$(MAKE) --no-print-directory -f Makefile build-llm-mesh ENV=$(ENV)
+	@$(MAKE) --no-print-directory -f Makefile build-llm-gateway ENV=$(ENV)
+	@$(MAKE) --no-print-directory -f Makefile build-comments ENV=$(ENV)
 	@$(LAZY_PACKAGE_RUN) sh -lc 'set -eu; work=/tmp/lazy-package; sh tests/packaging/prepare.sh "$$work"; \
 		cp vitest.config.ts "$$work/tools/vitest.config.ts"; \
 		CLUSTER_MESH_PACKAGING_DIR="$$work" NODE_PATH="$$work/tools/node_modules" \

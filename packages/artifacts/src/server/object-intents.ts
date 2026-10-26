@@ -9,6 +9,8 @@
  * Postgres adapter serves the L-5b integration proof.
  */
 import type { JsonValue } from '../contracts.js';
+export { inspectPreparations, scheduleBoundedPreparationCleanup } from './preparation-cleanup.js';
+export type { PreparationCleanupHost, PreparationAttempt } from './preparation-cleanup.js';
 
 export type IntentKind = 'commit-release' | 'delete-blob' | 'promote-release';
 export type IntentState = 'pending' | 'done' | 'failed';
@@ -31,11 +33,23 @@ export interface IntentStore {
   listPending(): Promise<ObjectIntent[]>;
 }
 
+/** Durable preparation history; cleanup never turns a failed attempt into success. */
+export interface PreparationIntentQuery {
+  readonly artifactId?: string;
+  readonly throughMs?: number;
+  readonly limit?: number;
+}
+export interface PreparationIntentStore extends IntentStore {
+  listPreparationIntents(query?: PreparationIntentQuery): Promise<ObjectIntent[]>;
+  claimPreparationCleanup(intentId: string, throughMs: number): Promise<ObjectIntent | undefined>;
+  settlePreparationCleanup(intentId: string): Promise<void>;
+}
+
 /** In-memory IntentStore double for unit tests. */
 export function createMemoryIntentStore(
   clock: () => string = () => new Date().toISOString(),
   ids: () => string = () => crypto.randomUUID(),
-): IntentStore {
+): PreparationIntentStore {
   const intents = new Map<string, ObjectIntent>();
   return {
     async record(kind: IntentKind, payload: Record<string, JsonValue | undefined>): Promise<ObjectIntent> {
@@ -71,6 +85,34 @@ export function createMemoryIntentStore(
       return [...intents.values()]
         .filter((intent) => intent.state === 'pending')
         .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+    },
+    async listPreparationIntents(query = {}) {
+      return structuredClone([...intents.values()].filter((intent) => {
+        const deadline = intent.payload.cleanupDeadlineMs;
+        return intent.kind === 'commit-release' && intent.state !== 'done' && deadline !== undefined &&
+          (query.artifactId === undefined || intent.payload.artifactId === query.artifactId) &&
+          (query.throughMs === undefined || (!intent.error?.startsWith('invalid preparation metadata') && Number(deadline) <= query.throughMs &&
+            (intent.payload.cleanupState !== 'failed-cleaned' || Number(deadline) >= query.throughMs - 60_000)));
+      }).sort((a, b) => query.throughMs === undefined ? 0 : Number(a.payload.cleanupState === 'failed-cleaned') -
+        Number(b.payload.cleanupState === 'failed-cleaned') ||
+        Number(a.payload.cleanupDeadlineMs) - Number(b.payload.cleanupDeadlineMs))
+        .slice(0, query.limit));
+    },
+    async claimPreparationCleanup(intentId, throughMs) {
+      const intent = intents.get(intentId);
+      if (intent === undefined || intent.state === 'done' ||
+          typeof intent.payload.cleanupDeadlineMs !== 'number' ||
+          intent.payload.cleanupDeadlineMs > throughMs) return undefined;
+      intent.state = 'failed';
+      intent.error ??= 'preparation expired; explicit retry required';
+      intent.updatedAt = clock();
+      return structuredClone(intent);
+    },
+    async settlePreparationCleanup(intentId) {
+      const intent = intents.get(intentId);
+      if (intent === undefined || intent.state !== 'failed') throw new Error('cleanup needs a failed preparation');
+      intent.payload.cleanupState = 'failed-cleaned';
+      intent.updatedAt = clock();
     },
   };
 }

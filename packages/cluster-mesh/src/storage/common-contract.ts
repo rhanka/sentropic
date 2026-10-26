@@ -9,7 +9,6 @@ import {
   isHexDigest,
   isPositiveSafeInteger,
   isSafeInteger,
-  isStorageModuleId,
   okResult,
   validateStorageScope,
   validateWriterFence,
@@ -18,7 +17,15 @@ import {
   type WriterFence,
 } from './contracts.js';
 
+// Keep the dedicated common-contract subpath data-only, including host scope/fence bindings.
+export { validateStorageScope, validateWriterFence } from './contracts.js';
+export type { StorageScope, WriterFence } from './contracts.js';
+
 export const COMMON_CONTRACT_VERSION = '1' as const;
+const COMMON_V1_MODULE_IDS = Object.freeze(['comments', 'engram-live'] as const);
+const isCommonV1ModuleId = (value: unknown): boolean =>
+  typeof value === 'string' && (COMMON_V1_MODULE_IDS as readonly string[]).includes(value);
+
 export const KNOWN_COMMON_CONTRACT_VERSIONS: readonly string[] = ['1'];
 
 export const isKnownCommonContractVersion = (value: unknown): value is string =>
@@ -118,7 +125,7 @@ export const validateCommonManifestBody = (value: unknown): ValidationResult => 
   if (typeof candidate['manifestVersion'] !== 'string' || candidate['manifestVersion'].length === 0) {
     return errResult('manifest version must be non-empty');
   }
-  if (!isStorageModuleId(candidate['module'])) return errResult('module must be a known storage module');
+  if (!isCommonV1ModuleId(candidate['module'])) return errResult('module must be a known storage module');
   const scopeResult = validateStorageScope(candidate['scope']);
   if (!scopeResult.ok) return scopeResult;
   if (!isCommonSurface(candidate['surface'])) return errResult('surface must be a known common surface');

@@ -55,7 +55,7 @@ export interface ReasoningCapabilities {
 
 export interface ModalityCapabilities {
   input: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
-  output: readonly ('text' | 'json' | 'tool-call')[];
+  output: readonly ('text' | 'json' | 'tool-call' | 'audio')[];
 }
 
 export interface AuthCapabilities {
@@ -64,6 +64,7 @@ export interface AuthCapabilities {
 }
 
 export interface ProviderCapabilities {
+  decision?: { support: CapabilitySupport };
   tools: ToolUseCapabilities;
   streaming: StreamingCapabilities;
   structuredOutput: StructuredOutputCapabilities;

@@ -8,12 +8,12 @@ export async function inspect(svg, name) {
     const overlap = (a, b) => a.left < b.right - .5 && a.right > b.left + .5 && a.top < b.bottom - .5 && a.bottom > b.top + .5;
     const boxes = [...svg.querySelectorAll('[data-node], [data-group]')];
     const byId = new Map(boxes.map(box => [box.dataset.node || box.dataset.group, box]));
-    const card = svg.querySelector('.service-node');
+    const card = svg.querySelector(".service-node:not(.card-folded)");
     const rangeBox = element => { const range = document.createRange(); range.selectNodeContents(element); return range.getBoundingClientRect(); };
     const scale = svg.getScreenCTM().a;
     // The embedded title font has 1px top / 1.59375px bottom CSS leading.
     const cardGap = card ? (rangeBox(card.querySelector('.card-name')).top - rangeBox(card.querySelector('.service-name')).bottom) / scale : 7.59375;
-    for (const group of boxes.filter(box => box.dataset.group)) {
+    for (const group of boxes.filter(box => box.dataset.group && box.dataset.collapsed !== "true")) {
       const title = group.querySelector(':scope > text:not(.diagram-detail):not(.diagram-product-kicker)');
       const subtitle = group.querySelector('.diagram-detail');
       const gap = subtitle.getBBox().y - title.getBBox().y - title.getBBox().height;
@@ -22,19 +22,7 @@ export async function inspect(svg, name) {
         const style = getComputedStyle(text);
         if (text.hasAttribute('textLength') || text.hasAttribute('lengthAdjust') || style.letterSpacing !== bodyStyle.letterSpacing || style.wordSpacing !== bodyStyle.wordSpacing) failures.push(`Subtitle spacing differs from card body ${group.dataset.group}`);
       }
-      if (group.dataset.collapsed === 'true') {
-        const rect = group.querySelector('rect').getBBox(), sub = subtitle.getBBox();
-        const kickerTop = +group.querySelector('.diagram-product-kicker').getAttribute('y') - 22;
-        const headerBottom = title.getBBox().y + title.getBBox().height + 1.59375;
-        const freeTop = Math.max(kickerTop + 70, headerBottom), freeBottom = rect.y + rect.height - 16;
-        if (Math.abs(sub.y + sub.height / 2 - (freeTop + freeBottom) / 2) > .02) failures.push(`Collapsed subtitle vertical centre ${group.dataset.group}`);
-        if (sub.x < rect.x + 32 - .02 || sub.x + sub.width > rect.x + rect.width - 32 + .02) failures.push(`Collapsed subtitle margins ${group.dataset.group}`);
-        const lines = [...subtitle.querySelectorAll('tspan')];
-        for (const line of lines) {
-          const centre = line.getStartPositionOfChar(0).x + line.getComputedTextLength() / 2;
-          if (getComputedStyle(line).textAnchor !== 'middle' || Math.abs(centre - rect.x - rect.width / 2) > .02) failures.push(`Collapsed subtitle line centre ${group.dataset.group}`);
-        }
-      } else {
+      {
         if (Math.abs(gap - cardGap) > .02) failures.push(`Header gap ${group.dataset.group}: ${gap}, card ${cardGap}`);
         const rule = +group.querySelector('.diagram-card-rule').getAttribute('y1');
         const sub = subtitle.getBBox(), rect = group.querySelector('rect').getBBox();
@@ -56,16 +44,21 @@ export async function inspect(svg, name) {
       const rect = box.querySelector('rect').getBoundingClientRect();
       if (box.dataset.collapsed === 'true') {
         const size = box.querySelector('rect').getBBox();
-        if (size.width !== 460 || size.height !== 272) failures.push(`Nonstandard collapsed card ${id}`);
+        if (size.width !== 460 || size.height !== 200) failures.push(`Nonstandard collapsed card ${id}`);
+        const body = box.querySelector('.card-body'), summary = box.querySelector('.card-summary');
+        const b = body.getBoundingClientRect(), s = summary.getBoundingClientRect();
+        if (Math.abs((b.left-rect.left)/scale-16) > .02 || Math.abs((rect.right-b.right)/scale-16) > .02) failures.push(`Collapsed summary side insets ${id}`);
+        if (Math.abs(s.top+s.height/2-b.top-b.height/2)/scale > .02) failures.push(`Collapsed body centre ${id}`);
+        if (Math.abs(s.left+s.width/2-rect.left-rect.width/2)/scale > .02) failures.push(`Collapsed line centre ${id}`);
       }
       const texts = [...box.querySelectorAll('tspan, text:not(:has(tspan)), .service-node span:not(.card-gap, .card-rule), .service-node strong')];
       for (const text of texts) {
         if (!within(text.getBoundingClientRect(), rect)) failures.push(`Text outside ${id}: ${text.textContent}`);
         if (text.closest('.service-node')) {
           const style = getComputedStyle(text);
-          if (text.matches('.service-name, .card-name, .card-detail') && (style.whiteSpace !== 'normal' || !(Number(style.webkitLineClamp) > 0))) failures.push(`Missing multiline text budget ${id}: ${text.textContent}`);
+          if (style.textOverflow === "ellipsis" || Number(style.webkitLineClamp) > 0 || style.whiteSpace === "nowrap") failures.push(`Forbidden ellipsis, clamp or nowrap ${id}: ${text.textContent}`);
           if (text.scrollHeight > text.clientHeight + 1 || text.scrollWidth > text.clientWidth + 1) {
-            failures.push(`Clipped or ellipsized text ${id}: ${text.textContent}`);
+            failures.push(`Text exceeds allocated slot ${id}: ${text.textContent}`);
           }
         }
       }
@@ -83,7 +76,7 @@ export async function inspect(svg, name) {
         const separator = box.querySelector('.diagram-card-rule');
         if (separator?.getAttribute('vector-effect') !== 'non-scaling-stroke') failures.push(`Scaling separator ${id}`);
         const ruleStyle = getComputedStyle(card.querySelector('.card-rule'));
-        if (ruleStyle.backgroundColor !== 'rgb(189, 202, 208)' || ruleStyle.marginTop !== '4px' || ruleStyle.marginBottom !== '4px') failures.push(`Reference separator ${id}`);
+        if (ruleStyle.backgroundColor !== 'rgba(0, 0, 0, 0)' || ruleStyle.marginTop !== '4px' || ruleStyle.marginBottom !== '4px') failures.push(`Reference separator allocation ${id}`);
         const footer = card.querySelector('.repo-label').getBoundingClientRect();
         const rule = card.querySelector('.card-rule').getBoundingClientRect();
         const scale = rect.height / card.offsetHeight;
