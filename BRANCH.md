@@ -61,7 +61,7 @@
   - [ ] Qualification accepts provisional expected IDs while preserving auth, finite bounds, one attempt and experimental discovery.
   - [ ] Scoped gate: make test-llm-mesh SCOPE=tests/decision-qualification.test.ts ENV=test-decision-v4l5.
 - [ ] **Lot 2 — Reproducible assessment**
-  - [ ] Tests first: decision-assessment.test.ts and recorded fixtures; reject leakage, missing provenance, held-out tuning and insufficient denominators.
+  - [x] Tests first: decision-assessment.test.ts and recorded fixtures; initial failure confirms absent assessment implementation.
   - [ ] Deterministic assessment/report schema with distinct held-out/challenge/repeat populations and conservative attempt/cost aggregation.
   - [ ] Cap exhaustion and missing evidence produce incomplete/blocked reports; fixtures never establish semantic calibration.
   - [ ] Scoped gate: make test-llm-mesh SCOPE=tests/decision-assessment.test.ts ENV=test-decision-v4l5.
