@@ -1,0 +1,52 @@
+{
+  "format": "engram-memory-neutral-asset-inventory/v1",
+  "asset": {
+    "name": "engram-memory-neutral-contract",
+    "version": "1.0.0",
+    "source": "src/engram-memory/neutral-contract.ts",
+    "declaration": "contracts/engram-memory-neutral-contract-v1.d.ts",
+    "declarationSha256": null,
+    "status": "final bytes pending"
+  },
+  "semanticManifest": "contract-manifest.json",
+  "profileInventory": "equivalence.json",
+  "contractDigest": "sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28",
+  "declarationDesign": {
+    "closure": "single file; no imports or re-exports; all referenced neutral types declared locally",
+    "entrypoints": ["NeutralMemoryHandle", "NeutralModuleStorageBinding", "ModuleStorageMemoryStoreOptionsV1"],
+    "constructor": "openModuleStorageCanonicalMemoryStoreV1",
+    "constructorResult": "Engram-owned Result<CanonicalMemoryStorePort>; not redefined by C6",
+    "options": ["handle", "scope_binding", "grant", "clock", "deadline_at", "work_limits"],
+    "handleMetadata": ["moduleId", "descriptor", "backend", "profiles"],
+    "handleMethods": ["transact", "query", "readAggregate", "readCommitResult", "acquireFence", "checkFence", "releaseFence"],
+    "boundMethods": ["transact", "query", "readAggregate", "readCommitResult", "acquireFence", "checkFence", "releaseFence"],
+    "transactionMethods": ["readAggregate", "readRecords", "readChain", "findIdempotency", "apply"],
+    "errorMapping": "src/engram-memory/neutral-contract.ts#MEMORY_NEUTRAL_ERROR_MAPPING",
+    "optionalRecovery": "readCommitResult is optional in 0.21.1; absence refuses original-result recovery, never recomputes it",
+    "hostMaintenance": "separate host authority; no checkpoint, resync or snapshot maintenance port is exposed to Engram"
+  },
+  "additiveMapping": [
+    {"manifestIndex": 0, "surface": ["NeutralMemoryHandle.acquireFence", "NeutralMemoryHandle.checkFence", "NeutralMemoryHandle.releaseFence", "NeutralBoundScope"], "obligation": "canonical ownership, durable epoch, continuous commit validation; E4/E5"},
+    {"manifestIndex": 1, "surface": ["NeutralCommitOptions.fence", "NeutralWriterFence", "NeutralFenceProof"], "obligation": "same acquisition identity through effective COMMIT/ROLLBACK; E5"},
+    {"manifestIndex": 2, "surface": ["NeutralMemoryHandle.readCommitResult", "NeutralBoundScope.readCommitResult", "NeutralAtomicUnit.moduleResult"], "obligation": "scoped original immutable moduleResult; E3"},
+    {"manifestIndex": 3, "surface": ["NeutralProfileClaim", "NeutralMemoryHandle.profiles", "NeutralModuleStorageBinding.profiles"], "obligation": "five required semantic identities mapped to exact backend claims; E7/E9"},
+    {"manifestIndex": 4, "surface": ["NeutralMemoryHandle.query", "NeutralBoundScope.query", "NeutralModuleDescriptor.queryNames"], "obligation": "four memory queries plus scope-chain-index for memory-journal; E6"},
+    {"manifestIndex": 5, "surface": ["NeutralEncodedValue", "NeutralAtomicUnit", "NeutralModuleDescriptor.contractDigest"], "obligation": "registered codecs, keys, kinds and index policies in unchanged semanticManifest; E6/E9"}
+  ],
+  "constraints": {
+    "moduleId": "engram-memory",
+    "backends": ["memory", "sqlite", "postgres"],
+    "grantOperations": ["read", "write"],
+    "u64": {"encoding": "canonical decimal string", "maximum": "18446744073709551615", "arithmetic": "exact; never Number or signed BIGINT narrowing"},
+    "scope": "one tenant/workspace pair per store_id/journal; authoritative resolveScope outside DTOs",
+    "candidateLiaison": "C7 candidate-to-scope mapping remains E8; 0.21.1 DTOs unchanged",
+    "captureCompletion": {"maxAppends": 1, "maxRecords": 1, "maxEncodedBytes": 65536, "actualAppends": 0},
+    "commonV1": "separate common-contract identity and two-module domain; no activation or common-rule acceptance"
+  },
+  "producerAgreement": {
+    "sentropic": "E0 code-author declaration design frozen in this PR",
+    "engram": "identity/version acknowledgement pending conductor relay",
+    "finalAcceptance": "C9/L5 pending; this inventory is not an accepted E2 tuple field"
+  },
+  "qualification": {"postgres": "pending E9/E10", "sqlite": "separate campaign; planning checkpoint 2026-10-30", "equivalence": "equivalence pending"}
+}
