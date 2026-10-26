@@ -64,7 +64,7 @@
 - [ ] **Lot 2 — Reproducible assessment**
   - [x] Tests first: decision-assessment.test.ts and recorded fixtures; all 10 initial assessment controls pass.
   - [x] Deterministic assessment/report schema with distinct held-out/challenge/repeat populations and conservative attempt/cost aggregation.
-  - [ ] Cap exhaustion and missing evidence produce incomplete/blocked reports; fixtures never establish semantic calibration.
+  - [x] Cap exhaustion and missing evidence produce incomplete/blocked reports; fixtures never establish semantic calibration.
   - [ ] Scoped gate: make test-llm-mesh SCOPE=tests/decision-assessment.test.ts ENV=test-decision-v4l5.
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Public exports, README, tracked mesh spec and L6 report/run-packet needs; coherent package feature tuple.
