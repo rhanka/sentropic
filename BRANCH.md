@@ -46,9 +46,9 @@
   - `.github/workflows/**`
 - **Exception process**:
   - [x] L5L3-EX1: bounded root Makefile/CI source/regression wiring; preserve frozen producing recipes; rollback Lot 3 delegation only.
-  - [x] L5L3-EX2: package version/lock scalars above published releases; retain frozen snapshots; successor pre-candidate/E4 required before installed acceptance.
+  - [x] L5L3-EX2: mesh patch version only; platform package.json restored byte-for-byte to P3 0.4.0; retain its existing dependency floor and frozen snapshots.
   - [x] L5L3-EX3: add one Lot 3 action to the existing disposable cold workspace; reuse its installation, no additional runtime; rollback that action only.
-  - [x] L5L3-EX4: prepare the existing MCP packaging fixtures in isolation and update their platform floor to 0.4.1; three required P09 cases otherwise skip. Rollback the preparation mode and floor assertion together.
+  - [x] L5L3-EX4: prepare the existing MCP packaging fixtures in isolation with the frozen platform 0.4.0 floor; three required P09 cases otherwise skip. Rollback the preparation mode only.
 ## Feedback Loop
 - [ ] gr-conductor: verified P3-bound lot2-manifest/sidecar, E2/backend/neutral/profile/lock closure and G1–G4/C9 receipts required; stop dependent qualification.
 - [ ] Lot 4: S1 normalization, compatible frozen successor/E4, installed six-suite qualification and owner UAT remain owning-lot gates.
@@ -63,11 +63,13 @@
 - [x] Lot 1: failing wire/schema tests; profile admission, full-envelope codec, protocol refusal.
   - [x] Schema test reproduced missing admission module; wire SDK tests specified; finite schema admission implemented.
   - [x] Added explicit transport call context types; memory text uses the complete JSON envelope without changing the default codec.
-  - [x] SDK red run: outputSchema loss and absent-audit protocol refusal reproduced; explicit memory bridge implemented; platform 0.4.1 fixes the existing declared profile within current peer intervals.
+  - [x] SDK red run: outputSchema loss and absent-audit protocol refusal reproduced; explicit memory bridge implemented; platform version remains frozen at 0.4.0.
 - [x] Lot 2: mesh context/guards/cancellation/compiled dispatch; concurrent subject/tenant/workspace tests.
-  - [x] Preserve full context and cancellation; compile policy uses verified claims/source; mesh 0.22.5 requires corrected platform 0.4.1.
+  - [x] Preserve full context and cancellation; compile policy uses verified claims/source; mesh 0.22.5 retains the platform >=0.4.0 floor.
   - [x] HTTP SDK proof: strict client reproduced missing root object type; full rerun passes with the complete frozen oneOf preserved (136 platform/28 mesh).
 - [ ] Lot 3: profile/context tests and all 18 P09 suites; retain reports and publication/writer evidence.
   - [x] New runner/tests: tools/memory-mcp-l5/lot3-source.mjs and tests/lot3-source.test.mjs; exact P09 file set bound to the unchanged P3 catalog.
   - [x] First exact run: platform 132 passed; mesh 24 passed/3 skipped, rejected by the reporter. Existing packaging fixtures now prepare those three required cases.
 - [ ] Lot 4: review, push draft PR to main, final-head CI green; list manifest-blocked proofs and Lot 4 estimate.
+  - [x] Draft PR #777 targets main; no merge. Published predecessor archive/provenance/CI observations prepared for retention.
+  - [ ] Two-peer review launch approval pending under rules/subagents.md; no consensus claimed.
