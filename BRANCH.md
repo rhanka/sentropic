@@ -99,6 +99,7 @@
 - [x] CI head `978b99770`: E2 qualification green; full package tests found dev-version registry/fixture assertions. Reuse shared #767 by serial atomic merges, retaining its original commit identities and frozen fixture bytes; Comments installed compatibility stays out of scope.
 - [x] Shared #767 merge 1/4: inherit `49abeb593` dev-pin assertions; E3 implementation and pack version remain unchanged.
 - [x] Shared #767 merge 2/4: inherit `66258e171` explicit pack-only dev predicate and its tests.
+- [x] Shared #767 merge 3/4: inherit `52747b5b0` bounded version helper and synthetic proofs; final stable-candidate proof follows separately to keep this merge under 150 lines.
 - [x] The inherited E0/E1/E2 paths above describe stacked PR ancestry only; authored E3 changes are restricted to recovery files and pack metadata.
 - [ ] Push draft PR to `feat/engram-e2-integration`; get E2 qualification green; do not merge.
 
