@@ -1,4 +1,4 @@
-// S1 inventory tests (make test-publishable-manifests SCOPE=... ENV=test-sec-s1).
+// S1 inventory tests (make test-publishable-manifests SCOPE=... ENV=test-sec-lot1).
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

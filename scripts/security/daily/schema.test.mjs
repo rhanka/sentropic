@@ -1,4 +1,4 @@
-// S1 schema tests (make test-publishable-manifests SCOPE=... ENV=test-sec-s1).
+// S1 schema tests (make test-publishable-manifests SCOPE=... ENV=test-sec-lot1).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';

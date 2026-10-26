@@ -40,7 +40,7 @@
 ## Feedback Loop
 - [x] SECDAILY-S1-EX1: permit only an S1 test step in the existing manifest-validation CI job; required to exercise the new contract in public CI. No schedule, permissions, gate selection or image change. Rollback removes this test step; implementation stays disabled.
 - [x] Integration: merge `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`; retain S1 plan and all 342 prior Track events. Scope-check includes incoming main files; the independent harness check against `origin/main` limits authored changes to S1.
-- [ ] Approved-r4 alignment: tests first for exact register matching, all-severity inventory, separate own-code scope, bounded grouping, complete dated reconciliation and discovered lock/hash consumers.
+- [x] Approved-r4 alignment: tests first for exact register matching, all-severity inventory, separate own-code scope, bounded grouping, complete dated reconciliation and discovered lock/hash consumers.
 - [x] Tests-first evidence: existing 14 tests passed; expanded S1 suite reproduces nine contract/inventory failures before implementation (22 tests, 13 pass, 9 fail).
 - [x] Contract alignment: all-severity public inventory, disabled exact own-code paths, separate automatic reconciliation, exact exception joins and explicit current-main L5 compatibility blocker.
 - [x] Grouping alignment: stable lock-set/defect/image identities, visible no-upstream-fix units, severity/expiry/age order, explicit estimates and strict repository/class/size bounds.
@@ -120,7 +120,7 @@
   - [x] Contract records r4, disabled activation and the current L5 compatibility blocker; source planning documents remain unchanged.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck and lint not applicable to plain Node security scripts.
-  - [ ] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1` after approved-r4 corrections.
-  - [ ] Final gate step 1: update existing draft #732 using `BRANCH.md` text as PR body.
+  - [x] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1` after approved-r4 corrections: 24 pass, no failures or skips; official existing pinned Node image, shared Docker lock and scoped teardown.
+  - [x] Final gate step 1: update existing draft #732 using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run and verify branch CI green.
   - [ ] Final gate step 3: do not merge, report PR number, head SHA, CI URL.
