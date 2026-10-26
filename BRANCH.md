@@ -53,8 +53,8 @@
   - [x] `packages/mcp-broker/tests/memory/oidc-assurance.test.ts`
   - [x] `tools/memory-mcp-l5/tests/lot2-{assurance,manifest,retained-inputs,envelope,canonical-report}.test.mjs`
 - [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
-- [x] Lot 3: reference 66/tooling 111 passed; full source gate passed; reference archive and complete hashed reports retained; absent/unverified manifest refusals passed; Node 24.21.0/SQLite 3.53.4 WAL/FULL, no Python executable.
+- [x] Lot 3: reference 66/tooling 112 passed; full source gate passed; reference archive and complete hashed reports retained; absent/unverified manifest refusals passed; Node 24.21.0/SQLite 3.53.4 WAL/FULL, no Python executable.
   - [x] Namespace-only recovery lookup regression reproduced and fixed; reference archive and reports refreshed; import/export graph passed with 55 files/114 edges.
   - [x] Canonical report guard rejects source-only/cross-tuple results; all five real E2 cases are mandatory before Lot 2 can close.
-  - [x] Malformed host configuration/driver digests refuse; receiving-harness suite passed 112 tests; refresh its retained report.
+  - [x] Malformed host configuration/driver digests refuse; receiving-harness suite passed 112 tests; retained report refreshed.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
