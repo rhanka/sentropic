@@ -60,7 +60,7 @@
   - [ ] core/playback.ts: monotonic rendered samples, queue clearing and stale frame refusal.
   - [ ] core/usage-receipts.ts: canonical operation identity and signed revision-deduplicated adjustments.
 - [ ] **Lot 3 — Documentation and validation**
-  - [ ] README: control/journal integration, authority and runtime qualification boundaries, L3 integration seam.
+  - [x] README: control/journal integration, authority and runtime qualification boundaries, L3 integration seam documented.
   - [ ] Strict source/test types, lint, build/exports and full package tests through locked Make targets.
   - [ ] make scope-check before every commit; atomic-size, whitespace and trailer audit.
   - [ ] Review dossier records exact author/head and independent review outcome without inferred capacity.
