@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as assessment from '../src/decision/assessment.js';
 import { createJevAdapter } from '../src/decision/adapter.js';
 import { createDecisionService } from '../src/decision/service.js';
 import { createProviderRegistry } from '../src/registry.js';
@@ -59,7 +60,9 @@ describe('production prerequisites and isolated qualification', () => {
       receipt: { attempts: 1, schemaVersion: 1, experimental: true, servedEvaluator: { provisional: true } } });
     expect(validateDecisionResult(request, trustedNativeContext(request), result)).toBeNull();
     // Removing the outer warning still cannot turn the experimental receipt into production evidence.
-    expect(validateDecisionResult(request, trustedNativeContext(request), { ...result, kind: 'verdict', experimental: undefined })).toBeNull();
+    const { experimental, ...unmarked } = result;
+    expect(experimental).toBe(true);
+    expect(validateDecisionResult(request, trustedNativeContext(request), { ...unmarked, kind: 'verdict' })).toBeNull();
     expect(discoverDecisionEvaluator(f.descriptor, undefined, request)).toMatchObject({ experimental: true, productionReady: false });
     expect(f.options.resolveAuth).toHaveBeenCalledTimes(1);
     expect(f.budget.settle).toHaveBeenCalledTimes(1);
@@ -70,12 +73,33 @@ describe('production prerequisites and isolated qualification', () => {
     f.options.resolveAuth = async () => { throw new Error('no credentials'); };
     expect(await createDecisionService(f.options).decide((await import('./decision-fixtures.js')).decisionRequest()))
       .toMatchObject({ kind: 'error', experimental: true, receipt: { experimental: true, attempts: 0 } });
+    f.options.resolveAuth = () => new Promise(() => {});
+    expect(await createDecisionService({ ...f.options, policy: { timeoutMs: 5 } })
+      .decide((await import('./decision-fixtures.js')).decisionRequest()))
+      .toMatchObject({ experimental: true, error: { code: 'TIMEOUT' }, receipt: { experimental: true, attempts: 0 } });
   });
   it('should snapshot calibration evidence before asynchronous price resolution', async () => {
     const f = productionFixture();
     const service = createDecisionService(f.options);
     f.options.readiness!.assessments = [];
     expect(await service.decide(f.request)).toMatchObject({ ok: true });
+  });
+  it('should reuse exact-scope assessments while rechecking price and refusing changed criteria', async () => {
+    const f = productionFixture();
+    const assess = vi.spyOn(assessment, 'assessDecisionCalibration');
+    try {
+      const service = createDecisionService(f.options);
+      const price = vi.mocked(f.options.resolvePrice);
+      expect(await service.decide(f.request)).toMatchObject({ ok: true });
+      expect(await service.decide(f.request)).toMatchObject({ ok: true });
+      expect(assess).toHaveBeenCalledTimes(1);
+      price.mockReturnValueOnce(null);
+      expect(await service.decide(f.request)).toMatchObject({ ok: false, receipt: { attempts: 0 } });
+      expect(assess).toHaveBeenCalledTimes(1);
+      const other = { ...f.request, criterion: { kind: 'binary' as const, instructions: 'Different rubric.' } };
+      expect(await service.decide(other)).toMatchObject({ ok: false, receipt: { attempts: 0 } });
+      expect(assess).toHaveBeenCalledTimes(2);
+    } finally { assess.mockRestore(); }
   });
   it('should retain production custody, one-attempt settlement and deadline refusal', async () => {
     const f = productionFixture();

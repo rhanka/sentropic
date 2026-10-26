@@ -17,6 +17,7 @@ import { dispatchDecision } from './dispatch.js';
 import { hasOnlyKeys } from './validation.js';
 import { isMicroUsd } from './pricing.js';
 import { runWithDecisionDeadline } from './deadline.js';
+import { createDecisionReadinessCheck } from './qualification.js';
 
 export interface DecisionSelectionOptions {
   registry: ProviderRegistry;
@@ -133,6 +134,7 @@ export function createDecisionService(supplied: DecisionServiceOptions): Decisio
   const options = { ...supplied, policy: freezeDecisionData(policy.value as DecisionHostPolicy),
     readiness: freezeDecisionData(readiness.value as DecisionServiceOptions['readiness']),
     evaluatorAllowlist: freezeDecisionData(supplied.evaluatorAllowlist.map((entry) => ({ ...entry }))) };
+  const productionReady = createDecisionReadinessCheck(options.readiness);
   return { async decide(candidate, callOptions) {
     const execution = beginDecisionExecution(candidate, { clock: options.clock, generateId: options.generateId,
       timeoutMs: options.policy.timeoutMs, signal: callOptions?.signal });
@@ -145,12 +147,13 @@ export function createDecisionService(supplied: DecisionServiceOptions): Decisio
       execution.receipt.evaluator = { ...selection.descriptor.evaluator };
       if (selection.descriptor.executionProfile === 'qualification') execution.receipt.experimental = true;
       execution.receipt.retention = structuredClone(selection.descriptor.retention);
-      const admitted = await admitDecision(execution, selection, options);
+      const admitted = await admitDecision(execution, selection, options, productionReady);
       if (!admitted.ok) return persistDecisionResult(execution, options.receipts, admitted.error);
       return dispatchDecision(execution, selection, admitted, options);
     });
-    if (execution.receipt.experimental) return { ...result, experimental: true,
-      ...(result.ok ? { kind: 'experimental-verdict' as const } : {}) };
+    if (execution.receipt.experimental) return result.ok
+      ? { ...result, experimental: true, kind: 'experimental-verdict' }
+      : { ...result, experimental: true };
     return result;
   } };
 }

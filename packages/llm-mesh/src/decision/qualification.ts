@@ -5,7 +5,7 @@ import { decisionQualificationScope } from './qualification-scope.js';
 import { assessDecisionCalibration } from './assessment.js';
 import { freezeDecisionData } from './descriptor-validation.js';
 import { quoteDecision } from './pricing.js';
-import { isRecord, snapshotBoundedJson } from './validation.js';
+import { digestStructuredArtifact, isRecord, snapshotBoundedJson } from './validation.js';
 
 export { decisionExecutionDigest, decisionQualificationScope } from './qualification-scope.js';
 export type { DecisionOperatingPolicy, DecisionQualificationScope } from './qualification-scope.js';
@@ -27,6 +27,20 @@ export function discoverDecisionEvaluator(descriptor: DecisionEvaluatorDescripto
   candidate?: DecisionReadinessEvidence, request?: DecisionRequest): DecisionEvaluatorDiscovery {
   const snapshot = snapshotBoundedJson(candidate ?? {}, 16 * 1024 * 1024);
   const evidence = snapshot.ok && isRecord(snapshot.value) ? snapshot.value : {};
+  return discoverFromSnapshot(descriptor, evidence, request);
+}
+
+/** Service-owned cache: evidence is detached once and assessment keys bind every input scope. */
+export function createDecisionReadinessCheck(candidate?: Omit<DecisionReadinessEvidence, 'price'>) {
+  const snapshot = snapshotBoundedJson(candidate ?? {}, 16 * 1024 * 1024);
+  const evidence = freezeDecisionData(snapshot.ok && isRecord(snapshot.value) ? snapshot.value : {});
+  const cache = new Map<string, boolean>();
+  return (descriptor: DecisionEvaluatorDescriptor, request: DecisionRequest, price: unknown): boolean =>
+    discoverFromSnapshot(descriptor, { ...evidence, price }, request, cache).productionReady === true;
+}
+
+function discoverFromSnapshot(descriptor: DecisionEvaluatorDescriptor, evidence: Record<string, unknown>,
+  request?: DecisionRequest, cache?: Map<string, boolean>): DecisionEvaluatorDiscovery {
   const profile = descriptor.executionProfile ?? 'production';
   const identity = descriptor.qualification.servedIdentity === 'qualified' && descriptor.acceptedServedModelIds.length > 0;
   const billing = descriptor.qualification.billingBound === 'qualified';
@@ -41,7 +55,15 @@ export function discoverDecisionEvaluator(descriptor: DecisionEvaluatorDescripto
     if (request && scope === null) continue;
     const recordedScope = record.scope as unknown as DecisionQualificationScope;
     const selectedScope = request ? scope! : recordedScope;
-    if (assessDecisionCalibration(record, descriptor, selectedScope).status === 'passed') scopes.push(selectedScope);
+    // Records are immutable within this service. Their index plus the complete scope digest
+    // identifies all deterministic assessment inputs; price remains a fresh independent gate.
+    const key = `${records.indexOf(record)}:${digestStructuredArtifact(selectedScope)}`;
+    let passed = cache?.get(key);
+    if (passed === undefined) {
+      passed = assessDecisionCalibration(record, descriptor, selectedScope).status === 'passed';
+      cache?.set(key, passed);
+    }
+    if (passed) scopes.push(selectedScope);
   }
   const calibrated = scope !== null && scopes.length > 0;
   const priced = !!request && quoteDecision(request, descriptor, evidence.price).ok;

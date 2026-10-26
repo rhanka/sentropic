@@ -44,6 +44,7 @@
 - [x] R1 P1-2: remove the branch-named CI bypass and assert selection of every API/E2E matrix member for global changes.
 - [x] R1 P1-1: distinguish experimental verdicts, mark qualification results and persisted receipts, flag provisional served identity; production validation rejects them.
 - [x] R1 P2-3: identity independently denies discovery and admission; production controls retain custody, one attempt, settlement and deadline refusal.
+- [x] R1 P2-1: snapshot readiness once per service and memoize deterministic assessments by record index and exact scope digest; price and admission remain live gates.
 - [x] P22: test reproduced two rounded micro-USD for combined sub-micro input/output work; round the per-receipt sum once, preserving v1 accounting sources and conservative unknown-usage reserves.
 - [x] Final mesh: 1485 tests / 86 files, typecheck and lint passed; CI selection/wiring: 40 tests passed. Cluster fixtures explicitly use the experimental profile; next-minor refusal assertions follow the new compatibility bound.
 - [ ] REVIEW: independent complementary review availability must be recorded; no consensus without two completed eligible legs.
