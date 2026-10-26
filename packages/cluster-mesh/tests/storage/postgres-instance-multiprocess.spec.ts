@@ -1,92 +1,72 @@
-/** Cross-process PG ownership: children open their own TCP connection and
- * replicate `acquirePgInstanceOwnership` in raw SQL; the lease row arbitrates. */
+/** Cross-process PG ownership: each child opens its own TCP connection and a
+ * real opt-in kernel (same production code as in-process). The PG lease row
+ * is the only arbiter; a claimed lease survives the child exit. */
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { createPgFixture } from './pg-fixture.js';
 import { pgEnabled } from './pg-driver.js';
 const CHILD_TIMEOUT_MS = 15_000, EXIT_REFUSED = 3;
-
 interface ChildArgs {
   pgEntry: string;
   connectionString: string;
+  kernelUrl: string;
   schema: string;
-  module: string;
   leaseSecs: number;
 }
 interface ChildResult {
   ok: boolean;
   code?: string;
   epoch?: string;
-  holderUntil?: string;
+  message?: string;
 }
 const CHILD_SOURCE = `
-  import { createRequire } from 'node:module';
-  import { randomUUID } from 'node:crypto';
+  import { registerHooks } from 'node:module';
+  registerHooks({ resolve(specifier, context, next) {
+    if (specifier.endsWith('.js')) { try { return next(specifier.slice(0, -3) + '.ts', context); } catch {} }
+    return next(specifier, context);
+  } });
   const args = JSON.parse(process.argv[1]);
+  const { createRequire } = await import('node:module');
   const { Pool } = createRequire(args.pgEntry)(args.pgEntry);
-  const pool = new Pool({ connectionString: args.connectionString, max: 1, connectionTimeoutMillis: 5000 });
-  const state = (e) => (e && typeof e === 'object' ? (e.code ?? e.sqlState) : undefined);
-  const raced = (e) => state(e) === '55P03' || state(e) === '40001' || state(e) === '40P01';
-  const busy = (extra = {}) => ({ ok: false, code: 'instance-busy', ...extra });
+  const { createPostgresKernel } = await import(args.kernelUrl);
+  const pool = new Pool({ connectionString: args.connectionString, max: 8, connectionTimeoutMillis: 5000 });
+  const driver = { transaction: async (options, operation) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE ' + (options.readOnly ? 'READ ONLY' : 'READ WRITE'));
+      const results = [await operation({ execute: (s) => client.query(s.text, s.values) })];
+      await client.query('COMMIT');
+      return results[0];
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  } };
   const report = (result, exit) => {
     process.stdout.write(JSON.stringify(result) + '\\n');
     pool.end().then(() => process.exit(exit), () => process.exit(exit));
   };
-  (async () => {
-    const client = await pool.connect();
-    const rb = () => client.query('ROLLBACK').catch(() => undefined);
-    try {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
-        let row = null;
-        try {
-          const selected = await client.query(
-            'SELECT instance, epoch, holder_until, clock_timestamp() AS now FROM "' + args.schema + '".instance_ownership WHERE module=$1 FOR UPDATE',
-            [args.module]);
-          row = selected.rows[0] ?? null;
-        } catch (error) {
-          await rb();
-          if (state(error) === '42P01') { report({ ok: false, code: 'open-refused' }, ${EXIT_REFUSED}); return; }
-          if (raced(error)) { report(busy(), ${EXIT_REFUSED}); return; }
-          throw error;
-        }
-        if (row !== null && new Date(row.holder_until).getTime() > new Date(row.now).getTime()) {
-          await rb();
-          report(busy({ epoch: String(row.epoch), holderUntil: new Date(row.holder_until).toISOString() }), ${EXIT_REFUSED});
-          return;
-        }
-        const epoch = row === null ? '1' : (BigInt(row.epoch) + 1n).toString();
-        const instance = row === null ? 'instance-' + randomUUID() : String(row.instance);
-        try {
-          const claimed = await client.query(
-            row === null
-              ? 'INSERT INTO "' + args.schema + '".instance_ownership(module, instance, epoch, holder_until) VALUES($1, $2, $3, clock_timestamp() + make_interval(secs => $4)) ON CONFLICT(module) DO NOTHING'
-              : 'UPDATE "' + args.schema + '".instance_ownership SET instance=$2, epoch=$3, holder_until = clock_timestamp() + make_interval(secs => $4) WHERE module=$1',
-            [args.module, instance, epoch, args.leaseSecs]);
-          if (row === null && claimed.rowCount === 0) { await rb(); continue; }
-          if (row !== null && claimed.rowCount !== 1) { await rb(); report(busy(), ${EXIT_REFUSED}); return; }
-          await client.query('COMMIT');
-          report({ ok: true, epoch }, 0);
-          return;
-        } catch (error) {
-          await rb();
-          if (raced(error)) { report(busy(), ${EXIT_REFUSED}); return; }
-          throw error;
-        }
-      }
-      report(busy(), ${EXIT_REFUSED});
-    } catch (error) {
-      report({ ok: false, code: 'error' }, 1);
-    } finally {
-      client.release();
-    }
-  })();
+  try {
+    const kernel = await createPostgresKernel({
+      moduleId: 'comments',
+      driver,
+      layout: { dataSchema: args.schema, projectionSchemas: { comments: args.schema }, outboxSchema: args.schema },
+      history: {
+        read: async (session) => (await session.execute({ text: 'SELECT receipt FROM "' + args.schema + '".host_history ORDER BY ordinal', values: [] })).rows.map((row) => row.receipt),
+        complete: async (session, receipt) => { await session.execute({ text: 'INSERT INTO "' + args.schema + '".host_history VALUES((SELECT COALESCE(MAX(ordinal),0)+1 FROM "' + args.schema + '".host_history),$1::jsonb)', values: [JSON.stringify(receipt)] }); },
+      },
+      cursorSecret: 'qualification-host-secret',
+      canonicalOwnership: { leaseMs: Math.round(args.leaseSecs * 1000) },
+    });
+    if (!kernel.ownership) throw new Error('opt-in kernel opened without ownership');
+    report({ ok: true, epoch: kernel.ownership.handle.storageEpoch }, 0);
+  } catch (error) { report({ ok: false, code: error?.code, message: String(error?.message ?? error).slice(0, 300) }, ${EXIT_REFUSED}); }
 `;
 const runOpener = (args: ChildArgs): Promise<{ result: ChildResult; status: number | null }> =>
   new Promise((resolve, reject) => {
+    // Full type transformation (not strip-only): production sources use
+    // parameter properties, which strip-only mode rejects.
     const child = spawn(process.execPath,
-      ['--input-type=module', '-e', CHILD_SOURCE, JSON.stringify(args)],
+      ['--experimental-transform-types', '--input-type=module', '-e', CHILD_SOURCE, JSON.stringify(args)],
       { stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '', stderr = '';
     const timer = setTimeout(() => {
@@ -103,12 +83,11 @@ const runOpener = (args: ChildArgs): Promise<{ result: ChildResult; status: numb
       else resolve({ result: JSON.parse(line) as ChildResult, status });
     });
   });
-
 const openerArgs = (schema: string, leaseSecs: number): ChildArgs => ({
   pgEntry: createRequire(import.meta.url).resolve('pg'),
   connectionString: process.env.CM_PG_URL as string,
+  kernelUrl: new URL('../../src/storage/postgres/index.ts', import.meta.url).href,
   schema,
-  module: 'comments',
   leaseSecs,
 });
 describe.skipIf(!pgEnabled)('postgres instance ownership across OS processes', () => {
@@ -117,19 +96,15 @@ describe.skipIf(!pgEnabled)('postgres instance ownership across OS processes', (
     try {
       const args = openerArgs(fixture.name, 300);
       const first = await runOpener(args);
-      expect(first.status).toBe(0);
+      expect(`${first.status} ${first.result.message ?? ''}`).toBe('0 ');
       expect(first.result).toMatchObject({ ok: true, epoch: '1' });
       const second = await runOpener(args);
-
       expect(second.status).toBe(EXIT_REFUSED);
       expect(second.result.code).toBe('instance-busy');
-      expect(second.result.holderUntil).toBeDefined();
-      expect(second.result.epoch).toBe('1');
     } finally {
       await fixture.close();
     }
   }, 60_000);
-
   it('takeover after lease expiry allocates the next epoch (crashed holder releases nothing)', async () => {
     const fixture = await createPgFixture();
     try {

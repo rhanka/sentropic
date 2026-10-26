@@ -118,9 +118,12 @@ describe.skipIf(!pgEnabled)('postgres open/commit ownership guards', () => {
       );
       await assert.rejects(
         fixture.tx.run(true, (session) => assertPgOwnershipCatalog(session, fixture.name)),
-        (error: unknown) => error instanceof PostgresStorageError,
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'open-refused',
       );
-      await assert.rejects(withCanonical(fixture.options), (error: unknown) => error instanceof PostgresStorageError);
+      await assert.rejects(
+        withCanonical(fixture.options),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'open-refused',
+      );
     } finally {
       await fixture.close();
     }
