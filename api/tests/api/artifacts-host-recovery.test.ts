@@ -7,7 +7,7 @@ import { createHmacGrantSigner } from '@sentropic/artifacts/content/grants';
 import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
 import { runMigrations } from '../../src/db/run-migrations';
 import { createArtifactHost } from '../../src/services/artifacts/composition';
-import { createArtifactHostJobs, createPrivateArtifactStorage } from '../../src/services/artifacts/lifecycle';
+import { createArtifactHostJobs, createPrivateArtifactStorage, type ArtifactBlobPage } from '../../src/services/artifacts/lifecycle';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 let pool: Pool;
@@ -30,7 +30,8 @@ afterAll(() => admin.end());
 
 function fixture(allow = true) {
   const blobs = createMemoryBlobStore();
-  const page = vi.fn(async (prefix: string, limit: number, _cursor?: string) => ({ keys: (await blobs.listKeys(prefix)).slice(0, limit) }));
+  const page = vi.fn(async (prefix: string, limit: number, _cursor?: string): Promise<ArtifactBlobPage> =>
+    ({ keys: (await blobs.listKeys(prefix)).slice(0, limit) }));
   const authorize = vi.fn(async () => allow);
   const jobs = createArtifactHostJobs({ pool, blobs, page, authorize, batchSize: 2 });
   return { blobs, page, authorize, jobs, store: createPostgresArtifactStore(pool) };
@@ -102,6 +103,47 @@ describe('artifact host recovery', () => {
     await expect(jobs.collect(scope)).rejects.toThrow(/page/);
     page.mockResolvedValueOnce({ keys: [key('a').replace(scope, 'foreign')] });
     await expect(jobs.collect(scope)).rejects.toThrow(/page/);
+    expect(await blobs.getBlob(key('a'))).toBeDefined();
+  });
+
+  it('should retain failed erasure for retry after the job is recreated', async () => {
+    const { jobs, blobs, page, authorize } = fixture();
+    await blobs.putBlob(key('a'), new Uint8Array([1]));
+    const remove = blobs.deleteBlob;
+    blobs.deleteBlob = vi.fn().mockRejectedValueOnce(new Error('object unavailable')).mockImplementation(remove);
+    expect((await jobs.collect(scope)).failures).toHaveLength(1);
+    expect(await blobs.getBlob(key('a'))).toBeDefined();
+    const restarted = createArtifactHostJobs({ pool, blobs, page, authorize });
+    expect((await restarted.collect(scope)).deleted).toEqual([key('a')]);
+  });
+
+  it('should resume after a retained page rather than starving later orphan objects', async () => {
+    const { jobs, blobs, page, store } = fixture();
+    for (const hex of ['a', 'b']) await blobs.putBlob(key(hex), new Uint8Array([1]));
+    await store.addRef(blobDigestOfKey(key('a')), 'release');
+    page.mockResolvedValueOnce({ keys: [key('a')], cursor: 'next' });
+    const first = await jobs.collect(scope);
+    page.mockResolvedValueOnce({ keys: [key('b')] });
+    expect((await jobs.collect(scope, first.cursor)).deleted).toEqual([key('b')]);
+    expect(page).toHaveBeenLastCalledWith(`artifacts/${scope}/blobs/sha256/`, 2, 'next');
+  });
+
+  it('should deny erasure when maintenance authority is revoked during a digest wait', async () => {
+    const { jobs, blobs, authorize } = fixture();
+    await blobs.putBlob(key('a'), new Uint8Array([1]));
+    const blocker = await pool.connect();
+    await blocker.query('BEGIN');
+    await blocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`artifacts-blob:${blobDigestOfKey(key('a'))}`]);
+    const pending = jobs.collect(scope);
+    try {
+      await vi.waitFor(async () => {
+        expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
+          AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`)).rowCount).toBeGreaterThan(0);
+      });
+      authorize.mockResolvedValue(false);
+    } finally { await blocker.query('ROLLBACK'); blocker.release(); }
+    expect((await pending).failures).toHaveLength(1);
     expect(await blobs.getBlob(key('a'))).toBeDefined();
   });
 
