@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, publishFilter, waitForVersion } from './publishable-manifests.mjs';
+import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFloor, publishFilter, waitForVersion } from './publishable-manifests.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -217,7 +217,7 @@ test('lint wiring follows baseline evidence, independently per package, before t
 });
 
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
-const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.0';
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.3,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1';
 
 test('cluster-mesh qualification installs every declared optional Sentropic peer', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages/cluster-mesh/package.json'), 'utf8'));
@@ -395,7 +395,7 @@ test('sibling Make targets gate PACKAGE/SIBLING_DIR on the host before docker an
   }
   assert.match(recipe('pack-candidate-siblings'), /siblings '\$\(PACKAGE\)' '\$\(SIBLING_DIR\)'/);
   const r = recipe('publishable-sibling-plan');
-  assert.ok(r.indexOf("@case '$(PACKAGE)' in") < r.indexOf('docker run'), 'host slug check before docker run');
+  assert.ok(r.indexOf("@case '$(PACKAGE)' in") < r.indexOf('$(ARTIFACTS_RUN)'), 'host slug check before container launch');
   assert.match(r, /-e PACKAGE="\$\(PACKAGE\)" -e SIBLING_DIR="\$\(SIBLING_DIR\)"/);
   const inner = r.slice(r.indexOf("sh -lc '"));
   assert.ok(!/\$\((?:PACKAGE|SIBLING_DIR)\)/.test(inner), 'no Make interpolation inside the container script');
@@ -491,6 +491,19 @@ test('Cluster Mesh publication tolerates registry visibility beyond the old 18-r
     assert.equal(found.status, visibleAt === Infinity ? 'absent' : 'present');
     assert.equal(reads, Math.min(visibleAt, attempts));
   }
+});
+
+test('gateway mesh wait resolves a union range to an exact dependency floor', () => {
+  for (const [range, expected] of [['^0.27.0', '0.27.0'], ['^0.27.0 || ^0.28.0', '0.27.0'],
+    ['>=0.28.1 <0.29.0', '0.28.1']]) assert.equal(dependencyFloor(range), expected);
+  for (const range of ['', 'latest', 'file:../llm-mesh', '>2.0.0 <1.0.0']) {
+    assert.throws(() => dependencyFloor(range));
+  }
+  const command = recipe('wait-llm-gateway-mesh-dependency').match(/version="\$\$\((.*?)\)"; node /)?.[1];
+  assert.ok(command, 'execute the real Make version selector without polling the registry');
+  const result = spawnSync('sh', ['-ec', command], { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '0.27.0');
 });
 
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {

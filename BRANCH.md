@@ -2,7 +2,7 @@
 
 ## Objective
 - [x] Make memory and S3 listKeys reject the same invalid prefixes through one validator.
-- [ ] Release a compatible patch at 0.2.2; push a PR with green CI and do not merge.
+- [ ] Release a compatible patch at 0.2.2; push a PR with green CI, then merge on owner GO.
 
 ## Scope / Guardrails
 - [x] Base: origin/main; branch: fix/artifacts-0.2.2-listkeys-parity.
@@ -69,4 +69,5 @@
   - [ ] Push and open PR to main using this file as PR body.
   - [ ] Verify enforce-package-bump and all CI checks on exact head SHA.
   - [ ] Tear down isolated stack; report PR number, head SHA and CI URL.
-  - [x] Do not merge or remove BRANCH.md for merge preparation.
+  - [x] Owner GO « Go 0.2.2 » received 2026-10-26: merge authorized via gh pr merge --merge --match-head-commit, then remove BRANCH.md for merge preparation.
+- [x] BR022-EX2: merge origin/main 2026-10-26; resolved BRANCH.md (kept branch file) and Makefile (union of ENV selectors, kept main recipes); package-lock auto-merged with artifacts 0.2.2 intact. Rollback: git reset --hard 01499d513.
