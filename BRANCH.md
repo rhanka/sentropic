@@ -24,6 +24,9 @@
   - `packages/cluster-mesh/tests/storage/postgres-result-recovery.spec.ts`
   - `packages/cluster-mesh/tests/storage/commit-result-corpus.ts`
   - `packages/cluster-mesh/tests/storage/commit-result-process.ts`
+  - `packages/cluster-mesh/tests/fixtures/reserved-versions.ts` (inherited shared CI fix #767)
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts` (inherited shared CI fix #767)
+  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (inherited shared CI fix #767)
   - `packages/cluster-mesh/src/storage/atomic.ts` (additive `U64AtomicUnit` + `validateU64AtomicUnit` only)
   - `packages/cluster-mesh/src/storage/postgres/codec.ts`
   - `packages/cluster-mesh/src/storage/postgres/effects.ts`
@@ -65,6 +68,8 @@
   - `.cursor/rules/**`
   - `.track/**`
   - `packages/artifacts/**`
+  - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/**`
   - `packages/cluster-mesh/src/storage/u64.ts`
   - `packages/cluster-mesh/src/storage/contracts.ts`
   - `packages/cluster-mesh/src/storage/backend.ts`
@@ -91,6 +96,8 @@
 - [x] E2 #765 is in review at `75076d43e`; E3 owns recovery hooks next; E5 follows E3/E4 serially.
 - [x] Source manifest baseline is inherited `f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642`; no P2/P3 re-pin or manifest edit is authorized here.
 - [x] Known comments-installed `incompatible_version` on development bumps is explicitly out of scope.
+- [x] CI head `978b99770`: E2 qualification green; full package tests found dev-version registry/fixture assertions. Reuse shared #767 by serial atomic merges, retaining its original commit identities and frozen fixture bytes; Comments installed compatibility stays out of scope.
+- [x] Shared #767 merge 1/4: inherit `49abeb593` dev-pin assertions; E3 implementation and pack version remain unchanged.
 - [x] The inherited E0/E1/E2 paths above describe stacked PR ancestry only; authored E3 changes are restricted to recovery files and pack metadata.
 - [ ] Push draft PR to `feat/engram-e2-integration`; get E2 qualification green; do not merge.
 
@@ -122,7 +129,7 @@
 - [ ] **Lot 3 — Final validation**
   - [x] Focused PostgreSQL recovery: 5 tests passed, zero skips; includes independent post-COMMIT SIGKILL/restart.
   - [x] Typecheck identified generic base64 versus frozen memory UTF-8 boundary; bridge now refuses base64 without decoding or resampling.
-  - [ ] Rerun focused recovery and typecheck after the UTF-8 boundary correction.
+  - [x] Rerun focused recovery and typecheck after UTF-8 correction: 5 PG tests, zero skips; source/test typechecks and lint pass.
   - [ ] `make scope-check` before each commit; commits under 150 lines via `make commit`.
   - [ ] Run build, typecheck, lint, memory, common, grants and real PG lanes with `ENV=test-e2-int` last.
   - [ ] Push and open draft PR targeting `feat/engram-e2-integration`; verify E2 qualification green without merging.
