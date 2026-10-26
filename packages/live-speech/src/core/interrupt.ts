@@ -294,12 +294,15 @@ export class InterruptAuthority {
         throw new Error('Invalid generation rotation');
       }
       const turns = Object.values(state.turns).filter(t => !isTerminal(t));
-      for (const turn of turns) installFence(state, turn, `rotation:${next.controllerEpoch}`, this.now());
+      for (const turn of turns) {
+        if (turn.phase === 'committed' && !turn.fence) turn.scope = next;
+        else installFence(state, turn, `rotation:${next.controllerEpoch}`, this.now());
+      }
       state.scope = next;
       state.barrierRevision++;
       state.connectionEpoch++;
       state.connected = true;
-      return turns;
+      return turns.filter(t => t.fence);
     });
     for (const turn of previous) {
       this.stopPlayback(turn.turnEpoch);

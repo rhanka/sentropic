@@ -46,7 +46,9 @@ export class UsageReceipts {
     await this.turns.transact(state => {
       const turn = getTurn(state, entry);
       if (turn.phase === 'committed' || turn.terminal === 'cancelled-before-start'
-        || entry.nativeTurnId !== turn.nativeTurnId) throw new Error('Receipt needs its admitted native turn');
+        || (entry.nativeTurnId !== undefined && entry.nativeTurnId !== turn.nativeTurnId)) {
+        throw new Error('Receipt needs its admitted native turn');
+      }
     });
     return this.journal.transact(entries => {
       const previous = entries.find(e => e.operationId === entry.operationId && e.revision === entry.revision);
