@@ -12,7 +12,7 @@
 - Keep old exports/signatures compatible; legacy safe-integer paths keep frozen behavior.
 - Specific-file staging; `make commit` only, each below 150 changed lines, without attribution trailers.
 - Unique pack-only `0.23.0-dev.6`; Engram stays exactly `0.21.1`.
-- Published 001-006 and comments SQL stay byte-identical (checksums pinned in tests); only `007` is new.
+- Published SQL stays byte-identical; `007` is inherited from E2. No E3 migration or receipt table.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -116,7 +116,7 @@
 - [ ] **Lot 2 — Implementation**
   - [x] Add scoped lookup over existing immutable commit receipts; reuse stored moduleResult exclusively.
   - [x] Add and export neutral recovery bridge with required current fence provider; keep memory factory closed until E7.
-  - [ ] Preserve frozen manifests, SQL, neutral contract and Engram version.
+  - [x] Preserve frozen manifests, SQL, neutral contract and Engram version; pack-only mesh bump is `0.23.0-dev.6`.
 - [ ] **Lot 3 — Final validation**
   - [ ] `make scope-check` before each commit; commits under 150 lines via `make commit`.
   - [ ] Run build, typecheck, lint, memory, common, grants and real PG lanes with `ENV=test-e2-int` last.
