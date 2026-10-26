@@ -19,7 +19,7 @@ export interface Turn extends TurnRef {
   utteranceId: string; inputRef: string; nativeTurnId?: string;
   phase: 'committed' | 'starting' | 'running' | 'cancelling' | 'completed' | 'interrupted' | 'failed';
   terminal?: string; fence?: FenceReceipt; interruptIds: string[];
-  tools: Record<string, { call: Omit<ToolCall, 'proof'>; result?: ToolResult }>;
+  tools: Record<string, { call: Omit<ToolCall, 'proof'>; admissionSequence: number; result?: ToolResult }>;
 }
 export interface Effect {
   effectId: string; turnEpoch: number; callId: string; operation: string; status: EffectStatus;
@@ -37,6 +37,7 @@ export interface SessionState {
   enabledClasses: Record<string, 'read-only' | 'mutating' | 'unclassified'>; statusTools: string[];
   turns: Record<string, Turn>; utterances: Record<string, number>; effects: Record<string, Effect>;
   actions: Record<string, { turnEpoch: number; callId: string }>;
+  authorizations: Record<string, string>;
   riskAcceptances: Record<string, RiskAcceptance>;
 }
 /** Storage owns serialization, durability, rollback and isolation; callbacks must be synchronous. */
@@ -48,7 +49,8 @@ export interface ControlPort {
   query(turn: TurnRef): Promise<{ status: 'unknown' | 'running' | 'completed' | 'interrupted' | 'failed'; nativeTurnId?: string }>;
 }
 export interface MutationRequest {
-  scope: Scope; actionId: string; argumentsDigest: string; proof: unknown;
+  scope: Scope; turnEpoch: number; submitKey: string; toolClass: string; toolName: string;
+  actionId: string; argumentsDigest: string; proof: unknown;
 }
 export interface TrustedAuthority {
   verifyRisk(request: RiskRequest): Promise<{ principalId: string; tenantId: string; method: 'typed' }>;
@@ -56,7 +58,12 @@ export interface TrustedAuthority {
     authorizationId: string; principalId: string; tenantId: string;
   }>;
 }
-export const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical)
+  : value !== null && typeof value === 'object' ? Object.fromEntries(Object.entries(value)
+    .filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, canonical(v)])) : value;
+export const same = (a: unknown, b: unknown): boolean => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+export const validIdentity = (id: string): boolean => typeof id === 'string' && id.length > 0 && id.length <= 512
+  && !['__proto__', 'constructor', 'prototype'].includes(id);
 export const assertScope = (state: SessionState, scope: Scope): void => {
   if (!same(state.scope, scope)) throw new Error('Stale or unauthorized scope');
 };
@@ -73,13 +80,14 @@ export const createSession = (scope: Scope, enabledClasses: SessionState['enable
     || Object.keys(enabledClasses).some(c => !interceptedClasses.includes(c))) throw new Error('Invalid scope or fence coverage');
   return { schemaVersion: 1, scope: structuredClone(scope), nextEpoch: 1, sequence: 0, barrierRevision: 0,
     connected: true, connectionEpoch: 1, enabledClasses: { ...enabledClasses }, statusTools: [...statusTools],
-    turns: {}, utterances: {}, effects: {}, actions: {}, riskAcceptances: {} };
+    turns: {}, utterances: {}, effects: {}, actions: {}, authorizations: {}, riskAcceptances: {} };
 };
 
 export class SpeechCoordinator extends InterruptAuthority {
   async commit(input: { scope: Scope; utteranceId: string; inputRef: string }): Promise<TurnRef> {
     return this.journal.transact(state => {
       assertScope(state, input.scope);
+      if (!validIdentity(input.utteranceId)) throw new Error('Invalid utterance identity');
       const existing = state.turns[state.utterances[input.utteranceId]];
       if (existing) {
         if (existing.inputRef !== input.inputRef) throw new Error('Immutable final reference conflict');

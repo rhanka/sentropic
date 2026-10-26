@@ -1,4 +1,4 @@
-import { assertScope, getTurn, isTerminal, same } from './session.js';
+import { assertScope, getTurn, isTerminal, same, validIdentity } from './session.js';
 import type { ControlPort, FenceReceipt, Journal, RiskAcceptance, RiskPrompt, RiskRequest, Scope,
   SessionState, ToolCall, ToolOutcome, ToolResult, TrustedAuthority, TurnRef } from './session.js';
 
@@ -39,6 +39,7 @@ export class InterruptAuthority {
       if (actor.principalId !== state.scope.principalId || actor.tenantId !== state.scope.tenantId) throw new Error('Controlling principal required');
       const snapshot: RiskPrompt = { scope: request.scope, barrierRevision: request.barrierRevision,
         effectIds: request.effectIds, displayed: request.displayed, confirmation: request.confirmation };
+      if (!validIdentity(request.requestId)) throw new Error('Invalid risk confirmation identity');
       const prior = state.riskAcceptances[request.requestId];
       if (prior) {
         const { requestId: _id, principalId: _principal, timestamp: _timestamp, ...original } = prior;
@@ -55,7 +56,9 @@ export class InterruptAuthority {
     });
   }
 
-  async admitTool(ref: TurnRef, call: ToolCall): Promise<ToolResult | undefined> {
+  async admitTool(ref: TurnRef, call: ToolCall): Promise<{ admitted: boolean; admissionSequence: number; result?: ToolResult }> {
+    if (![call.callId, call.actionId, call.toolClass].every(validIdentity)
+      || (call.effectId !== undefined && !validIdentity(call.effectId))) throw new Error('Invalid tool identity');
     const preliminary = await this.journal.transact(state => {
       const turn = getTurn(state, ref);
       if (turn.fence || isTerminal(turn) || !state.connected) throw new Error('Turn fenced');
@@ -64,7 +67,8 @@ export class InterruptAuthority {
       if (!classification) throw new Error('Tool class lacks fence coverage');
       return classification !== 'read-only';
     });
-    const request = { scope: ref.scope, actionId: call.actionId, argumentsDigest: call.argumentsDigest, proof: call.proof };
+    const request = { ...ref, toolClass: call.toolClass, toolName: call.toolName,
+      actionId: call.actionId, argumentsDigest: call.argumentsDigest, proof: call.proof };
     const grant = preliminary ? await this.authority.verifyMutation(request) : undefined;
     return this.journal.transact(state => {
       const turn = getTurn(state, ref);
@@ -78,7 +82,7 @@ export class InterruptAuthority {
       if (prior) {
         const existing = state.turns[prior.turnEpoch].tools[prior.callId];
         if (prior.turnEpoch !== ref.turnEpoch || !same(existing.call, normalized)) throw new Error('Action identity conflict or replay');
-        return existing.result;
+        return { admitted: false, admissionSequence: existing.admissionSequence, result: existing.result };
       }
       if (!call.callId || !call.actionId || !call.argumentsDigest || !call.toolName || turn.tools[call.callId]) {
         throw new Error('Invalid or duplicate call identity');
@@ -87,15 +91,20 @@ export class InterruptAuthority {
       if (mutating) {
         if (!grant || grant.actionId !== call.actionId || grant.argumentsDigest !== call.argumentsDigest
           || !same(grant.scope, state.scope) || grant.principalId !== state.scope.principalId
-          || grant.tenantId !== state.scope.tenantId || !grant.authorizationId) throw new Error('Fresh authorization required');
+          || grant.tenantId !== state.scope.tenantId || !validIdentity(grant.authorizationId)
+          || grant.turnEpoch !== ref.turnEpoch || grant.submitKey !== ref.submitKey
+          || grant.toolClass !== call.toolClass || grant.toolName !== call.toolName
+          || state.authorizations[grant.authorizationId]) throw new Error('Fresh authorization required');
         if (!call.effectId || !call.operation || state.effects[call.effectId]) throw new Error('New effect identity required');
         state.effects[call.effectId] = { effectId: call.effectId, turnEpoch: ref.turnEpoch, callId: call.callId,
           operation: call.operation, status: 'completion-pending', evidence: [] };
         state.barrierRevision++;
+        state.authorizations[grant.authorizationId] = call.actionId;
       }
       state.actions[call.actionId] = { turnEpoch: ref.turnEpoch, callId: call.callId };
-      turn.tools[call.callId] = { call: normalized };
-      return undefined;
+      const admissionSequence = ++state.sequence;
+      turn.tools[call.callId] = { call: normalized, admissionSequence };
+      return { admitted: true, admissionSequence };
     });
   }
 

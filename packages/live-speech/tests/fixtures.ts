@@ -34,7 +34,7 @@ export const fixture = (journal = new TestJournal()) => {
   };
   const authority: TrustedAuthority = {
     verifyRisk: vi.fn(async () => ({ principalId: scope.principalId, tenantId: scope.tenantId, method: 'typed' as const })),
-    verifyMutation: vi.fn(async (request) => ({ ...request, authorizationId: 'auth-1',
+    verifyMutation: vi.fn(async (request) => ({ ...request,
       authorizationId: `auth:${request.actionId}`, principalId: scope.principalId, tenantId: scope.tenantId })),
   };
   const stopPlayback = vi.fn();
