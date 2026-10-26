@@ -83,3 +83,4 @@
 - [x] Atomic artifact: feat(decision): register native OpenAI adapter and credentials.
 - [x] Atomic artifact: feat(decision): bind native host validation and service tariff.
 - [x] Atomic artifact: docs(decision): publish V4-L3 contracts and candidate packet.
+- [x] Atomic artifact: fix(decision): require JEV wire discriminators and retain identity liability.

@@ -38,7 +38,11 @@ export function decodeJevResponse(candidate: unknown, request: DecisionRequest, 
     return { ok: false, error: createDecisionError('USAGE_INVALID', 'parse'), ...evidence };
   }
   if (!answered) return { ok: false, error: createDecisionError('VERDICT_INVALID', 'parse'), ...evidence };
-  const verdict = decodeJevVerdict((body.answers as Record<string, unknown>).verdict, request, descriptor);
+  const answer = (body.answers as Record<string, unknown>).verdict;
+  if (!isRecord(answer) || !has(answer, 'type')) {
+    return { ok: false, error: createDecisionError('VERDICT_INVALID', 'parse'), ...evidence };
+  }
+  const verdict = decodeJevVerdict(answer, request, descriptor);
   return verdict.ok ? { ok: true, verdict: verdict.verdict, ...evidence }
     : { ok: false, error: createDecisionError(verdict.code, 'parse'), ...evidence };
 }
