@@ -306,4 +306,13 @@ describe('app artifact host publication', () => {
     expect((await other.mcp({ tool: 'artifacts_list', args: {} })).body).toEqual({ total: 0, artifacts: [] });
     expect(await durable()).toEqual(before);
   });
+
+  it('should refuse caller scope in both transport bodies even when it equals the verified scope', async () => {
+    const bound = await request();
+    const args = { ...ensureArgs('caller-scope'), storageScopeId: bound.invocation.storageScopeId };
+    const before = await durable();
+    expect((await bound.mcp({ tool: 'artifacts_ensure', args })).status).toBe(400);
+    expect((await bound.http({ method: 'POST', path: '/ensure', body: args })).status).toBe(400);
+    expect(await durable()).toEqual(before);
+  });
 });
