@@ -88,9 +88,9 @@
 - [ ] **Lot 3 — Documentation and validation**
   - [x] README: control/journal integration, authority and runtime qualification boundaries, L3 integration seam documented.
   - [ ] Strict source/test types, lint, build/exports and full package tests through locked Make targets.
-  - [ ] make scope-check before every commit; atomic-size, whitespace and trailer audit.
+  - [x] make scope-check before every commit; repeatable first-parent atomic-size, whitespace and attribution-trailer audit provided.
   - [x] Review dossier records exact author/source and selection failure without inferred reviewer allocation or consensus; G-REVIEW remains open for merge.
 - [ ] **Lot 4 — Draft handoff**
   - [x] Push branch and create draft PR776 to main using this plan as body; plan comment follows final validation.
   - [ ] Obtain green exact-head CI; report PR, head SHA, CI URL and L3 readiness.
-  - [ ] Keep BRANCH.md and draft; do not merge.
+  - [x] Keep BRANCH.md and draft; no merge/publication/deployment performed.
