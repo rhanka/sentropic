@@ -54,7 +54,7 @@
   - [x] Test preprod allowed exchange, public/unregistered denial, wrong subject/target audiences and client_credentials denial in `api/tests/api/auth/oauth-token-exchange.test.ts`.
   - [ ] Gate: scoped API endpoint suite, then teardown.
 - [ ] **Lot 3 — Operator handoff and draft PR**
-  - [ ] Document owner secret minting, radar handoff, dry-run, rollout and acceptance in `deploy/k8s/README.md`.
+  - [x] Document owner secret minting, radar handoff, dry-run, rollout and acceptance in `deploy/k8s/README.md`.
   - [ ] Scope-check each atomic commit under 150 lines; push; open requested draft PR; monitor CI and record SHA/ETA in the external report.
 
 ## Historical main plans (reference only)
