@@ -12,7 +12,7 @@ describe.skipIf(!pgEnabled)('operator schema re-attestation', () => {
       const referenceFingerprint = receipts.at(-1)!.schemaFingerprint;
       // Simulate a receipt made before a PostgreSQL catalog-rendering change.
       await f.tx.run(false, (s) => s.execute({
-        text: `UPDATE "${f.name}".host_history SET receipt=jsonb_set(receipt,'{schemaFingerprint}',to_jsonb($1::text)) WHERE ordinal=6`,
+        text: `UPDATE "${f.name}".host_history SET receipt=jsonb_set(receipt,'{schemaFingerprint}',to_jsonb($1::text)) WHERE ordinal=7`,
         values: ['0'.repeat(64)],
       }));
       await expect(f.open()).rejects.toMatchObject({ condition: 'schema-drift' });
@@ -20,7 +20,7 @@ describe.skipIf(!pgEnabled)('operator schema re-attestation', () => {
       const history = { ...f.options.history, reattest: async (s, attestation) => {
         attested++;
         await s.execute({
-          text: `UPDATE "${f.name}".host_history SET receipt=jsonb_set(receipt,'{schemaFingerprint}',to_jsonb($1::text)) WHERE ordinal=6`,
+          text: `UPDATE "${f.name}".host_history SET receipt=jsonb_set(receipt,'{schemaFingerprint}',to_jsonb($1::text)) WHERE ordinal=7`,
           values: [attestation.schemaFingerprint],
         });
       } } satisfies migrations.PgHostHistory;

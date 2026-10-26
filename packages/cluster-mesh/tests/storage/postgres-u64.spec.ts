@@ -54,6 +54,7 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
     try {
       const root = await fixture.open();
       const bound = await root.bindNew(grantFor({ operations: ['read', 'write'] }));
+      await bound.commitAtomic(recordUnit());
       await seedCounters(fixture, SIGNED_MAX);
       await bound.commitAtomic(recordUnit());
       expect(await readCounters(fixture)).toEqual({ version: '9223372036854775808', sequence: '9223372036854775808' });
@@ -73,6 +74,7 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
     try {
       const root = await fixture.open();
       const bound = await root.bindNew(grantFor({ operations: ['read', 'write'] }));
+      await bound.commitAtomic(recordUnit());
       await seedCounters(fixture, '18446744073709551614');
       await bound.commitAtomic(recordUnit());
       expect(await readCounters(fixture)).toEqual({ version: U64_MAX, sequence: U64_MAX });
@@ -84,7 +86,7 @@ describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
     const fixture = await createPgFixture();
     try {
       const root = await fixture.open();
-      const grant = grantFor({ operations: ['read', 'write'] });
+      const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
       await root.provisionFence(grant, { fenceId: 'u64', epoch: '9223372036854775808' } as unknown as WriterFence);
       await expect(root.provisionFence(grant, { fenceId: 'u64', epoch: '1' } as unknown as WriterFence)).rejects.toMatchObject({ code: 'invalid-command' });
       const reopened = await fixture.open();
