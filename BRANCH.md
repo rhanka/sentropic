@@ -45,6 +45,7 @@
   - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
 
 ## Feedback Loop
+- [x] Draft #757 targets feat/live-stt-l1 to isolate this lot. Existing CI triggers only for main PRs, so exact-head workflow query returns no runs. Owner/integrator must merge #754 then retarget #757 to main and obtain its CI result before merge; no workflow gate changed.
 - [x] Cold source typecheck found TS2322 on the already validated cost field; explicitly type its normalized numeric output, retaining NaN/negative refusal tests. Quality adapter also compiles existing type fixtures.
 - [x] Existing packaging gate requires a root declaration graph free of optional peers; make the profile schema self-contained and check structural compatibility at the L1 negotiation boundary. No provider/router implementation is copied.
 - [x] Scoped green attempt: 44 pass, 2 fixture failures because native-duplex cases retained chained stt requirements. Replace those fixture requirements with an empty stage map; preserve strict pipeline validation.
@@ -83,9 +84,9 @@
   - [x] Scoped speech 48; full cluster 1,162 plus 129 gated skips; packed matrix 100/100; strict typecheck/lint/build/public exports pass.
   - [x] `make scope-check` before each commit; whitespace and under-150-line/trailer audit at handoff.
   - [x] Locked ENV cleanup between Docker steps; no services or published ports outside ENV.
-- [ ] **L1c-e — Draft handoff**
+- [x] **L1c-e — Draft handoff**
   - [x] Record independent-review eligibility/evidence; retain open G-REVIEW with no admitted complementary reviewer capacity.
-  - [ ] Push draft PR using this plan as body; inspect exact-head CI; report PR/head and surface.
+  - [x] Push draft #757 using this plan as body; exact-head CI queried, no run because base is L1; final head and surface reported at handoff.
 
 ## AI Flaky tests
 - [x] Deterministic fixtures only; no flaky waiver.
