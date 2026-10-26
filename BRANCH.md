@@ -2,7 +2,7 @@
 
 ## Objective
 - [ ] Deliver approved r3 L1c: versioned stage bindings, mic policy and offline projection without fixed engines.
-- [x] Read L0 PR #753 at `008d66b5fd6ff04d1c44f69cf52892c4c3587980`; its docs/evidence remain the prerequisite inventory.
+- [x] Preserve L0 PR #753 at `c0bd543689e31c6511150b2d26b71947bb85c455`; refresh its moving facts for L1c.
 
 ## Scope / Guardrails
 - [x] Author: codex / gpt-6.1-sol / high; spec SHA-256 `5a666faa9e1856245ef94b19988cb08514e6e1aeac32918715c07f8ce4a24c61`.
@@ -64,26 +64,26 @@
 ## Plan / Todo (lot-based)
 - [x] L1c baseline: Docker lock first, rules/spec/owner answers and L0 evidence read; mechanical branch check passes.
 - [x] Replace inherited scope/plan with L1c file-level gates before source edits.
-- [ ] **L1c-a — Reconcile L0**
+- [x] **L1c-a — Reconcile L0**
   - [x] Preserve L0 baseline and complete §11.2 gate register from source head `c0bd543689`.
   - [x] Preserve SDK/native provenance/toolchain/license inventory and all required placements; artifacts remain unadmitted.
   - [x] Preserve L0 release-owner/ledger scope and validation receipts; all eight historical deliverables retained byte-for-byte.
-  - [ ] Preserve eight L0 files under `.tmp/live-stt/l0/`; refresh heads, gate register, SDK/provenance/license/ledger/release and placement evidence in `.tmp/live-stt/l1c/baseline.md`.
+  - [x] Preserve eight L0 files under `.tmp/live-stt/l0/`; refresh heads, gate register, SDK/provenance/license/ledger/release and placement evidence in `.tmp/live-stt/l1c/baseline.md`.
   - [x] Carry dedicated capacity study and explicit zero allocation; no native inference or quota exception.
-- [ ] **L1c-b — Tests first**
+- [x] **L1c-b — Tests first**
   - [x] `packages/cluster-mesh/tests/speech-fixtures.ts`: five primary tuples, whisper.cpp and synthetic future/native-duplex/placement entries.
   - [x] `packages/cluster-mesh/tests/speech-config.spec.ts`: bindings/selectors, invalid shapes, all placements, both mic modes, empty/explicit fallback, unsupported capability refusal, no secrets.
   - [x] `packages/cluster-mesh/tests/speech-projection.spec.ts`: offline snapshot, tenant/policy/egress refusal, unavailable catalogue, safe rebind, immutable revision, consent and no fallback.
   - [x] Red at `ac7134bfd`: both suites fail on missing speech/config.js before source implementation.
   - [x] Red run before implementation; first scoped green 48 tests after config/projection and existing seam integration.
   - [x] Add reproducible Compose-only strict speech-test types, changed-source lint/build/content and existing packed-tuple adapter; root files unchanged.
-- [ ] **L1c-c — Implementation**
+- [x] **L1c-c — Implementation**
   - [x] Strict profile decoder, immutable snapshots and existing cluster config seam implemented; catalogue projection follows.
   - [x] Catalogue projection negotiates each exact stage tuple and intersects trusted tenant/policy/placement/egress evidence; no routing or credentials added.
   - [x] Explicit rebind barrier requires cancellation/reconciliation/drained playback and renewed revision-bound consent; speech subpath preserves optional provider loading.
-  - [ ] `packages/cluster-mesh/src/speech/{config,projection}.ts`: one revisioned schema and local projection consuming llm-mesh catalogue/negotiation.
-  - [ ] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
-  - [ ] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.
+  - [x] `packages/cluster-mesh/src/speech/{config,projection}.ts`: one revisioned schema and local projection consuming llm-mesh catalogue/negotiation.
+  - [x] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
+  - [x] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.
 - [ ] **L1c-d — Documentation and validation**
   - [x] README/CHANGELOG: configuration example, selectors, placements, fallback/rebind/consent boundaries and unavailable reasons.
   - [ ] Scoped speech tests; full cluster tests; cold typecheck; changed-source lint; build/public export checks.
