@@ -42,6 +42,50 @@ describe('exact-u64 counter codec', () => {
 });
 
 describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
+  it.each(['9007199254740992', '9223372036854775808', U64_MAX])('replays, checkpoints and snapshots exact journal positions at %s', async (next) => {
+    const descriptor = { contractVersion: 'v1', contractDigest: 'u64-snapshot', schemaVersions: ['1'], requiredProfiles: [], optionalProfiles: [], chainKinds: [], queryNames: ['scope-chain-index'], boundaries: [], pageLimits: { maxRecords: 10, maxEncodedBytes: 1048576 } };
+    const fixture = await createPgFixture({ descriptor, queries: { 'scope-chain-index': async (_input, context) => {
+      const result = await context.session.execute({ text: `SELECT "${context.layout.dataSchema}".map_get($1::bigint,$2) AS value`, values: [context.root, '["record","u64-record"]'] });
+      return { records: [JSON.parse(Buffer.from(result.rows[0]!.value as Uint8Array).toString('utf8'))], nextCursor: null };
+    } } });
+    try {
+      const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
+      const root = await fixture.open();
+      const bound = await root.bindNew(grant);
+      const fence = await bound.journalFence();
+      await bound.commitAtomic(recordUnit());
+      const previous = (BigInt(next) - 1n).toString();
+      await seedCounters(fixture, previous);
+      const before = await bound.journalResync('u64', fence);
+      expect(before.journalSeq).toBe(previous);
+      expect((await bound.snapshotRead(before.snapshotRoot, 0, 10)).watermark).toBe(previous);
+      await bound.journalCheckpoint('u64', '0', previous, fence);
+      await bound.commitAtomic(recordUnit());
+      const delivery = await bound.journalRead(BigInt(previous), 10, 'u64');
+      expect(delivery.watermark).toBe(next);
+      expect(delivery.events.map((event) => event.seq)).toEqual([next]);
+      expect((await bound.journalInspect('fresh')).lag).toBe(next);
+      await bound.journalPoison('u64', delivery.events[0]!.eventId, 'decode failed');
+      const rebound = await (await fixture.open()).bind(grant);
+      expect(await rebound.journalInspect('u64')).toMatchObject({ cursor: previous, lag: '1', status: 'stalled' });
+      await expect(rebound.journalCheckpoint('u64', previous, next, fence)).rejects.toMatchObject({ code: 'invalid-command' });
+      await rebound.journalRetry('u64', delivery.events[0]!.eventId, fence);
+      expect((await rebound.journalRead(previous, 10, 'u64')).events).toEqual(delivery.events);
+      await rebound.journalCheckpoint('u64', previous, next, fence);
+      expect(await rebound.journalInspect('u64')).toMatchObject({ cursor: next, lag: '0', failedEvent: null });
+      await expect(rebound.journalCheckpoint('u64', previous, next, fence)).rejects.toMatchObject({ code: 'cas-conflict' });
+      const snapshot = await rebound.journalResync('snapshot', fence);
+      expect(snapshot.journalSeq).toBe(next);
+      const page = await rebound.snapshotRead(snapshot.snapshotRoot, 0, 10);
+      expect(page.watermark).toBe(next);
+      expect(page.rows).toHaveLength(1);
+      expect(page.next).toBeNull();
+      await rebound.journalCheckpoint('snapshot', 0, next, fence);
+      expect(await rebound.journalInspect('snapshot')).toMatchObject({ cursor: next, lag: '0' });
+      expect(await rebound.journalRead(next, 10)).toEqual({ events: [], watermark: next });
+      await expect(rebound.journalRead(9007199254740992, 10)).rejects.toMatchObject({ code: 'invalid-command' });
+    } finally { await fixture.close(); }
+  });
   it.each([undefined, [1], [''], ['r', 'r'], [null], ['r', undefined]])('refuses invalid index result ids %j before persistence', async (resultIds) => {
     let effects = 0;
     const fixture = await createPgFixture({ validateEffects: async () => { effects += 1; } });
