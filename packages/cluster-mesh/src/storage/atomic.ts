@@ -416,7 +416,7 @@ export const validateU64AtomicUnit = (unit: U64AtomicUnit, limits?: WorkLimits):
   }
   for (const write of unit.indexWrites) {
     if (!write) { errors.push('index write must be an object'); continue; }
-    if (!isNonEmptyString(write.key) || !isNonEmptyString(write.digest) || !Array.isArray(write.resultIds) || (write.resultHash !== null && !isNonEmptyString(write.resultHash))) errors.push('index write must carry key, digest, result ids and result hash');
+    if (!isNonEmptyString(write.key) || !isNonEmptyString(write.digest) || !Array.isArray(write.resultIds) || !write.resultIds.every(isNonEmptyString) || new Set(write.resultIds).size !== write.resultIds.length || (write.resultHash !== null && !isNonEmptyString(write.resultHash))) errors.push('index write must carry key, digest, unique non-empty result ids and result hash');
   }
   if (unit.moduleResult !== undefined && !validateEncodedValue(unit.moduleResult).ok) errors.push('module result must be an encoded value');
   return errors.length === 0 ? okResult() : errResult(...errors);

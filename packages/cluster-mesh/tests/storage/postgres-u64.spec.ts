@@ -3,7 +3,8 @@
 // u64 maximum, with reopen and rollback. A decimal string converted to
 // Number or to signed BIGINT must fail.
 import { describe, expect, it } from 'vitest';
-import { decodePgCounter, pgSafeCounter, decodePgCounterU64 } from '../../src/storage/postgres/codec.js';
+import { decodePgCounter, decodePgCounterU64 } from '../../src/storage/postgres/codec.js';
+import { pgSafeCounter } from '../../src/storage/postgres/journal.js';
 import { createPgFixture } from './pg-fixture.js';
 import { pgEnabled } from './pg-driver.js';
 import { grantFor } from './authority-corpus.js';
@@ -41,6 +42,21 @@ describe('exact-u64 counter codec', () => {
 });
 
 describe.skipIf(!pgEnabled)('exact-u64 persistence on PostgreSQL', () => {
+  it.each([undefined, [1], [''], ['r', 'r'], [null], ['r', undefined]])('refuses invalid index result ids %j before persistence', async (resultIds) => {
+    let effects = 0;
+    const fixture = await createPgFixture({ validateEffects: async () => { effects += 1; } });
+    try {
+      const bound = await (await fixture.open()).bindNew(grantFor({ operations: ['read', 'write'] }));
+      for (const version of [1, '9223372036854775808']) {
+        const unit = { ...recordUnit(), updates: [{ key: 'k3', version, value: { format: 'utf8', data: 'v' } }], indexWrites: [{ key: 'bad', digest: 'd', resultIds, resultHash: null }] } as unknown as AtomicUnit;
+        await expect(bound.commitAtomic(unit)).rejects.toMatchObject({ code: 'invalid-command' });
+      }
+      expect(effects).toBe(0);
+      expect(await bound.indexGet('bad')).toBeNull();
+      expect(await bound.readRecord('u64-record')).toBeNull();
+      expect(await readCounters(fixture)).toEqual({ version: '0', sequence: '0' });
+    } finally { await fixture.close(); }
+  });
   it('refuses decimal strings converted to Number or to signed BIGINT', async () => {
     expect(() => pgSafeCounter('9007199254740992')).toThrow();
     const fixture = await createPgFixture();
