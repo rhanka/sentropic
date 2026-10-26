@@ -4,7 +4,7 @@
 // counters stay safe-integer only and keep their frozen behavior.
 
 import {
-  compareU64Counter as compareU64,
+  compareU64Counter,
   isPositiveU64Counter,
   isU64Counter,
   maxU64Counter,
@@ -144,7 +144,7 @@ export const isConsumedVersion = (value: unknown): value is ConsumedVersion => i
 
 export const parseConsumedVersion = (value: unknown): bigint | null => parseU64Counter(value);
 
-export const compareConsumedCounter = (left: string, right: string): -1 | 0 | 1 => compareU64(left, right);
+export const compareConsumedCounter = (left: string, right: string): -1 | 0 | 1 => compareU64Counter(left, right);
 
 export const nextConsumedCounter = (value: string): ConsumedCounter | undefined => nextU64Counter(value);
 
