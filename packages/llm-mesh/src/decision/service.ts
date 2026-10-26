@@ -118,10 +118,12 @@ const isEvaluatorAllowlist = (value: unknown): value is readonly EvaluatorRef[] 
 /** Trusted composition only. Construction performs no discovery, key resolution or I/O. */
 export function createDecisionService(supplied: DecisionServiceOptions): DecisionClient {
   const policy = snapshotBoundedJson(supplied.policy ?? {});
+  const readiness = snapshotBoundedJson(supplied.readiness ?? null, 16 * 1024 * 1024);
   if (!supplied.registry || ![supplied.resolveEvaluator, supplied.resolveAuth, supplied.resolvePrice, supplied.authorize,
     supplied.budget?.admit, supplied.budget?.markDispatched, supplied.budget?.release, supplied.budget?.settle,
     supplied.receipts?.persist].every((port) => typeof port === 'function')
     || !isEvaluatorAllowlist(supplied.evaluatorAllowlist)
+    || !readiness.ok
     || !policy.ok || !isRecord(policy.value)
     || !hasOnlyKeys(policy.value, ['timeoutMs', 'maxCostMicroUsd', 'allowRaw'])
     || (policy.value.timeoutMs !== undefined && (!Number.isSafeInteger(policy.value.timeoutMs)
@@ -129,6 +131,7 @@ export function createDecisionService(supplied: DecisionServiceOptions): Decisio
     || (policy.value.maxCostMicroUsd !== undefined && !isMicroUsd(policy.value.maxCostMicroUsd))
     || (policy.value.allowRaw !== undefined && typeof policy.value.allowRaw !== 'boolean')) throw new Error('Invalid decision host configuration.');
   const options = { ...supplied, policy: freezeDecisionData(policy.value as DecisionHostPolicy),
+    readiness: freezeDecisionData(readiness.value as DecisionServiceOptions['readiness']),
     evaluatorAllowlist: freezeDecisionData(supplied.evaluatorAllowlist.map((entry) => ({ ...entry }))) };
   return { async decide(candidate, callOptions) {
     const execution = beginDecisionExecution(candidate, { clock: options.clock, generateId: options.generateId,

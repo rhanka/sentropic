@@ -28,7 +28,7 @@ export function decodeJevResponse(candidate: unknown, request: DecisionRequest, 
   const usage = parseDecisionUsage({ tokens: { input: token(input), output: token(output),
     total: total === null ? token(null) : { value: total, source: 'derived-sum' } },
     evaluatorCalls: answered ? 1 : null, explanations: answered ? 0 : null }) ?? unreportedDecisionUsage('unknown');
-  const identityMatches = servedModelId !== null && descriptor.qualification.servedIdentity === 'qualified'
+  const identityMatches = servedModelId !== null
     && descriptor.acceptedServedModelIds.includes(servedModelId);
   const evidence = { usage, servedModelId, servedEvaluator: identityMatches ? { ...descriptor.evaluator } : null,
     ...(providerRequestId === null ? {} : { providerRequestId }) };
