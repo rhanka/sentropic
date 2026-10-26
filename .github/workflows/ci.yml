@@ -260,6 +260,7 @@ jobs:
               - 'scripts/test-api-tag-guard.sh'
               - 'scripts/resolve-api-image.sh'
               - 'scripts/test-api-image-canonical.sh'
+              - 'scripts/test-pgbackup-restore-isolation.sh'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
             # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs
@@ -1237,6 +1238,9 @@ jobs:
       - name: Test publish-api-image tag-collision guard
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-tag-guard ENV=test-ci-api
+      - name: Test pgbackup restore isolation guards
+        if: needs.changes.outputs.global == 'true'
+        run: make test-pgbackup-restore-isolation ENV=test-ci-restore-guard
       - name: Test canonical API image artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-image-canonical ENV=test-ci-api
