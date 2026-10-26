@@ -7,7 +7,7 @@
 - Current [guide](https://developers.openai.com/api/docs/guides/decisions), retrieved 2026-10-26, now describes GA and paid cache writes/discounted cache reads. This supersedes the spec's dated public-beta/cache-free observation without establishing account entitlement.
 - Supported operating policy: text evidence serialized as data, explicit cache mode without breakpoints (cache disabled), standard short context, no region premium. The descriptor is unqualified; these assumptions require confirmation before financial admission.
 - Published base tariff: $0.10/M uncached input, no output charge. Candidate price revision is service-specific and bound to `control.model_pricing`; it is not a Responses tariff and grants no spending authority.
-- Protocol fixtures: `packages/llm-mesh/tests/decision-openai-v4l3.test.ts`; synthetic documented answers, not live recordings. Usage includes separately validated input/output/total and optional cache/reasoning details.
+- Protocol fixtures: `packages/llm-mesh/tests/decision-openai-v4l3.test.ts`; synthetic documented answers, not live recordings. Usage requires the dated schema's input/output/total and cache/reasoning details, validated independently.
 - Identity: model string observable; accepted model set empty by default. Frozen selection, checkpoint stability, account access and liability bound remain unverified. OD-6 is not decided by choosing this candidate.
 - Retention: conservative unknown receipt; vendor feature availability does not prove account-specific terms.
 - Attempts/work/billable units: zero live attempts, zero model work, zero live spend. No measured latency, semantic calibration or universal readiness claim.

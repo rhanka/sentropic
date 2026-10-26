@@ -41,10 +41,10 @@ export function decodeOpenAiDecisionsResponse(candidate: unknown, request: Decis
   const reasoning = native.output_tokens_details;
   if (input === null || output === null || sum === null || native.total_tokens !== sum
     || !hasOnlyKeys(native, ['input_tokens', 'output_tokens', 'total_tokens', 'input_tokens_details', 'output_tokens_details'])
-    || (cache !== undefined && (!isRecord(cache) || !hasOnlyKeys(cache, ['cached_tokens', 'cache_write_tokens'])
-      || cache.cached_tokens !== 0 || cache.cache_write_tokens !== 0))
-    || (reasoning !== undefined && (!isRecord(reasoning) || !hasOnlyKeys(reasoning, ['reasoning_tokens'])
-      || !count(reasoning.reasoning_tokens) || reasoning.reasoning_tokens > output))) return failed('USAGE_INVALID');
+    || !isRecord(cache) || !hasOnlyKeys(cache, ['cached_tokens', 'cache_write_tokens'])
+    || cache.cached_tokens !== 0 || cache.cache_write_tokens !== 0
+    || !isRecord(reasoning) || !hasOnlyKeys(reasoning, ['reasoning_tokens'])
+    || !count(reasoning.reasoning_tokens) || reasoning.reasoning_tokens > output) return failed('USAGE_INVALID');
   if (!answered) return failed('VERDICT_INVALID');
   const answer = (body.answers as Record<string, unknown>[])[0];
   if (answer.type === 'refusal') return failed(hasOnlyKeys(answer, ['name', 'type']) ? 'PROVIDER_REJECTED' : 'VERDICT_INVALID');

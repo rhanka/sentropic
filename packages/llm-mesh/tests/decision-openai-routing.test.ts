@@ -11,7 +11,9 @@ const setup = () => {
   const descriptor = { ...structuredClone(openAiDecisionsDescriptor), acceptedServedModelIds: ['gpt-6-luna'],
     qualification: { servedIdentity: 'qualified' as const, billingBound: 'qualified' as const, evidenceRefs: ['fixture:qualified'] } };
   const body = { model: 'gpt-6-luna', answers: [{ name: 'verdict', type: 'predicate', probability: 0.25 }],
-    usage: { input_tokens: 1000, output_tokens: 0, total_tokens: 1000 } };
+    usage: { input_tokens: 1000, output_tokens: 0, total_tokens: 1000,
+      input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+      output_tokens_details: { reasoning_tokens: 0 } } };
   const fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify(body),
     { headers: { 'content-type': 'application/json', 'x-request-id': 'synthetic-request' } }));
   const adapter = createOpenAiDecisionsAdapter({ descriptor, transport: createOpenAiDecisionsTransport({ fetch }) });
