@@ -4,7 +4,7 @@ review-author:
   host: codex
   model: gpt-6.1-sol
   effort: high
-target-ref: 5e51979ba
+target-ref: 5e51979ba0a02cce045e877f6354683bc52ccb26
 target-path: packages/live-speech/src/core/
 legs: []
 observed-failure: No two evidenced complementary Claude-hosted model routes with current entitled allocation were supplied within this task's no-paid-API constraint; no reviewer inference was dispatched.
