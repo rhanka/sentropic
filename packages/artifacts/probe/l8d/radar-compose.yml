@@ -1,0 +1,4 @@
+# Match the pinned Radar database runtime; its migrations require PostGIS.
+services:
+  postgres:
+    image: postgis/postgis:16-3.4

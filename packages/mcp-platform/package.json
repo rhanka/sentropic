@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/mcp-platform",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Generic Sentropic/STP MCP provider platform contract: manifest/adapter/context schemas, session/consent/enrollment/secret records, elicitation, per-request authz, discovery/visibility and durable-call refs (SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM). Broker-aware public surface — DRAFT, not frozen. In-memory mocks are a test harness only.",
   "type": "module",
   "license": "MIT",
@@ -41,9 +41,21 @@
       "types": "./dist/registry-entry.d.ts",
       "import": "./dist/registry-entry.js"
     },
+    "./memory": {
+      "types": "./dist/memory/index.d.ts",
+      "import": "./dist/memory/index.js"
+    },
     "./transport/bridge": {
       "types": "./dist/transport/bridge.d.ts",
       "import": "./dist/transport/bridge.js"
+    },
+    "./transport/tool-schemas": {
+      "types": "./dist/transport/tool-schemas.d.ts",
+      "import": "./dist/transport/tool-schemas.js"
+    },
+    "./transport/result-codec": {
+      "types": "./dist/transport/result-codec.d.ts",
+      "import": "./dist/transport/result-codec.js"
     },
     "./transport/dispatch": {
       "types": "./dist/transport/dispatch.d.ts",
@@ -56,6 +68,9 @@
   },
   "typesVersions": {
     "*": {
+      "transport/bridge": ["./dist/transport/bridge.d.ts"],
+      "transport/tool-schemas": ["./dist/transport/tool-schemas.d.ts"],
+      "transport/result-codec": ["./dist/transport/result-codec.d.ts"],
       "experimental": [
         "./dist/experimental.d.ts"
       ],
@@ -70,6 +85,9 @@
       ],
       "registry": [
         "./dist/registry.d.ts"
+      ],
+      "memory": [
+        "./dist/memory/index.d.ts"
       ]
     }
   },

@@ -7,6 +7,7 @@
 .env.*
 *.local
 .auth/
+.h2a/
 .agents/
 .claude/
 .codex
@@ -64,3 +65,32 @@ pnpm-debug.log*
 *.tar.gz
 *.tgz
 *.zip
+
+# API production image determinism (fix/api-image-canonical-artifact):
+# the canonical tag must equal the shipped bytes. Files no image stage
+# needs (global-only changes, docs, tooling, non-consumed packages) must
+# not enter the build context, or the production digest drifts without a
+# tag change and publish refuses a tag collision.
+Makefile
+BRANCH.md
+/*.md
+/LICENSE
+api/data.db
+*.db
+.github/
+scripts/
+tools/
+spec/
+plan/
+docs/
+rules/
+track/
+deploy/
+# e2e test sources stay out, except the toolbox build manifests and the
+# fixtures imported by api unit tests (document-text-office-extension).
+e2e/*
+!e2e/package.json
+!e2e/package-lock.json
+!e2e/tests/
+e2e/tests/*
+!e2e/tests/fixtures/

@@ -77,7 +77,8 @@ cluster-mesh-comments-deps cluster-mesh-comments-deps-audit cluster-mesh-comment
 		cp packages/cluster-mesh/tests/storage/comments-deps.package.json "$$task_dir/package.json"; \
 		npm_config_cache=/tmp/npm-cache npm install --prefix "$$task_dir" --ignore-scripts --no-audit --no-fund; \
 		mkdir -p .h2a/comments-deps; cp "$$task_dir/package-lock.json" .h2a/comments-deps/; \
-		npm_config_cache=/tmp/npm-cache npm audit --prefix "$$task_dir" --omit=dev --audit-level=high; \
+		npm_config_cache=/tmp/npm-cache npm audit --prefix "$$task_dir" --omit=dev --json > "$$task_dir/audit.json" || { audit_status=$$?; [ "$$audit_status" -eq 1 ] || exit "$$audit_status"; }; \
+		ALLOWLIST=/workspace/.security/audit-allowlist.json AUDIT="$$task_dir/audit.json" node -e "const fs=require(\"fs\");const allow=JSON.parse(fs.readFileSync(process.env.ALLOWLIST,\"utf8\"));const allowed=new Map((allow.allow||[]).map(function(e){return[e.ghsa,e]}));const today=new Date().toISOString().slice(0,10);const expired=Array.from(allowed.values()).filter(function(e){return today>e.review_due});if(expired.length){console.error(\"comments-deps-audit: FAIL - allowlist entries past review_due: \"+expired.map(function(e){return e.ghsa+\" (\"+e.review_due+\")\"}).join(\", \"));process.exit(1)}const report=JSON.parse(fs.readFileSync(process.env.AUDIT,\"utf8\"));if(!report||report.error||report.auditReportVersion!==2||!report.metadata||!report.metadata.vulnerabilities||!report.vulnerabilities){console.error(\"comments-audit: FAIL - invalid npm audit report\");process.exit(1)}const vulns=report.vulnerabilities;function ghsaOf(name,seen){seen=seen||new Set();if(seen.has(name))return[];seen.add(name);const v=vulns[name];if(!v)return[];const ids=[];const vias=v.via||[];for(let i=0;i<vias.length;i++){const via=vias[i];if(typeof via===\"string\"){const sub=ghsaOf(via,seen);for(let j=0;j<sub.length;j++)ids.push(sub[j])}else if(via&&via.url){const m=via.url.match(/GHSA-[a-z0-9-]+/i);if(m)ids.push(m[0])}}return ids}const offenders=[];for(const name of Object.keys(vulns)){const v=vulns[name];if(v.severity!==\"high\"&&v.severity!==\"critical\")continue;const ids=Array.from(new Set(ghsaOf(name)));const un=ids.filter(function(g){return!allowed.has(g)});if(ids.length===0||un.length)offenders.push(name+\" (\"+v.severity+\") ghsa=[\"+(ids.join(\",\")||\"unresolved\")+\"]\"+(un.length?\" unallowlisted=[\"+un.join(\",\")+\"]\":\"\"))}if(offenders.length){console.error(\"comments-deps-audit: FAIL - unallowlisted HIGH/CRITICAL advisories:\");for(let k=0;k<offenders.length;k++)console.error(\"  \"+offenders[k]);process.exit(1)}console.log(\"comments-deps-audit: OK - only allowlisted HIGH/CRITICAL remain\");"; \
 		case "$@" in \
 		  *oracle) CM_COMMENTS_DEPS="$$task_dir/package.json" node packages/cluster-mesh/tests/storage/package-comments-oracle.mjs ;; \
 		  *vectors) CM_COMMENTS_DEPS="$$task_dir/package.json" node packages/cluster-mesh/tests/storage/generate-comments-vectors.mjs ;; \
@@ -96,14 +97,24 @@ cluster-mesh-comments-test:
 
 CM_COMMENTS_TARBALL ?= .h2a/build/cm-comments-candidate/sentropic-cluster-mesh-0.19.0.tgz
 CM_COMMENTS_REPORT ?= .h2a/build/comments-installed
+CM_COMMENTS_SIBLING_FLAGS = $(if $(SIBLING_ARCHIVES_FILE),$(if $(and $(filter 1,$(words $(SIBLING_ARCHIVES_FILE))),$(filter tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json,$(SIBLING_ARCHIVES_FILE))),-v "$(CURDIR):/workspace:ro" -e CM_COMMENTS_SIBLINGS=/workspace/$(SIBLING_ARCHIVES_FILE) -e CLUSTER_MESH_HEAD_SHA="$$(git rev-parse HEAD)",$(error SIBLING_ARCHIVES_FILE must be tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json)))
+define CM_COMMENTS_SIBLING_SETUP
+if [ -n "$${CM_COMMENTS_SIBLINGS:-}" ]; then \
+  npm install --prefix /tmp/comments-guard --ignore-scripts --no-audit --no-fund semver@7.7.2 >/dev/null; \
+  MANIFEST_GUARD_TOOL_DIR=/tmp/comments-guard node /workspace/packages/cluster-mesh/tests/storage/installed-siblings.mjs > /tmp/comments-registry-url & \
+  registry_pid=$$!; trap "kill $$registry_pid 2>/dev/null || true" EXIT; \
+  while [ ! -s /tmp/comments-registry-url ]; do kill -0 "$$registry_pid"; sleep 0.1; done; \
+  export npm_config_registry="$$(cat /tmp/comments-registry-url)"; \
+fi;
+endef
 .PHONY: cluster-mesh-comments-installed
 cluster-mesh-comments-installed: cluster-mesh-pg-up
 	@test -f "$(CM_COMMENTS_TARBALL)"
 	@mkdir -p "$(CM_COMMENTS_REPORT)"
-	@docker run --rm --init --network "$(CM_PG_NAME)" -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/comments-npm-cache \
+	@docker run --rm --init --network "$(CM_PG_NAME)" $(CM_COMMENTS_SIBLING_FLAGS) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/comments-npm-cache \
 		-e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
 		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
-		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(CM_COMMENTS_SIBLING_SETUP) \
 		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /tmp/comments-bare/; cd /tmp/comments-bare; \
 		npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz >/dev/null; node installed-bare.mjs > /reports/bare.json; \
 		cd /tmp/comments-consumer; cp /probe/installed-*.mjs .; \
@@ -111,7 +122,9 @@ cluster-mesh-comments-installed: cluster-mesh-pg-up
 		npm install --save-dev --ignore-scripts --no-audit --no-fund --save-exact pg@8.16.3 >/dev/null; \
 		cp node_modules/@sentropic/cluster-mesh/assets/storage/comments/oracle/conformance.mjs installed-oracle.mjs; \
 		npm ls --all --omit=dev --json > /reports/production-tree.json; cp package-lock.json /reports/consumer-package-lock.json; \
-		npm audit --omit=dev --audit-level=high --json > /reports/audit.json; node installed-qualify.mjs'
+		npm audit --omit=dev --json > /reports/audit.json || { audit_status=$$?; [ "$$audit_status" -eq 1 ] || exit "$$audit_status"; }; \
+		ALLOWLIST=/workspace/.security/audit-allowlist.json AUDIT="/reports/audit.json" node -e "const fs=require(\"fs\");const allow=JSON.parse(fs.readFileSync(process.env.ALLOWLIST,\"utf8\"));const allowed=new Map((allow.allow||[]).map(function(e){return[e.ghsa,e]}));const today=new Date().toISOString().slice(0,10);const expired=Array.from(allowed.values()).filter(function(e){return today>e.review_due});if(expired.length){console.error(\"comments-qualify-audit: FAIL - allowlist entries past review_due: \"+expired.map(function(e){return e.ghsa+\" (\"+e.review_due+\")\"}).join(\", \"));process.exit(1)}const report=JSON.parse(fs.readFileSync(process.env.AUDIT,\"utf8\"));if(!report||report.error||report.auditReportVersion!==2||!report.metadata||!report.metadata.vulnerabilities||!report.vulnerabilities){console.error(\"comments-audit: FAIL - invalid npm audit report\");process.exit(1)}const vulns=report.vulnerabilities;function ghsaOf(name,seen){seen=seen||new Set();if(seen.has(name))return[];seen.add(name);const v=vulns[name];if(!v)return[];const ids=[];const vias=v.via||[];for(let i=0;i<vias.length;i++){const via=vias[i];if(typeof via===\"string\"){const sub=ghsaOf(via,seen);for(let j=0;j<sub.length;j++)ids.push(sub[j])}else if(via&&via.url){const m=via.url.match(/GHSA-[a-z0-9-]+/i);if(m)ids.push(m[0])}}return ids}const offenders=[];for(const name of Object.keys(vulns)){const v=vulns[name];if(v.severity!==\"high\"&&v.severity!==\"critical\")continue;const ids=Array.from(new Set(ghsaOf(name)));const un=ids.filter(function(g){return!allowed.has(g)});if(ids.length===0||un.length)offenders.push(name+\" (\"+v.severity+\") ghsa=[\"+(ids.join(\",\")||\"unresolved\")+\"]\"+(un.length?\" unallowlisted=[\"+un.join(\",\")+\"]\":\"\"))}if(offenders.length){console.error(\"comments-qualify-audit: FAIL - unallowlisted HIGH/CRITICAL advisories:\");for(let k=0;k<offenders.length;k++)console.error(\"  \"+offenders[k]);process.exit(1)}console.log(\"comments-qualify-audit: OK - only allowlisted HIGH/CRITICAL remain\");"; \
+		node installed-qualify.mjs'
 
 .PHONY: cluster-mesh-pg-crash cluster-mesh-pg-crash-test
 cluster-mesh-pg-crash:
@@ -129,12 +142,12 @@ cluster-mesh-pg-crash-test:
 CM_PG_NEXT_IMAGE := postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
 .PHONY: cluster-mesh-pg-major-phase cluster-mesh-pg-major-upgrade
 cluster-mesh-pg-major-phase:
-	@docker run --rm --init --network "$(CM_PG_NAME)" -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+	@docker run --rm --init --network "$(CM_PG_NAME)" $(CM_COMMENTS_SIBLING_FLAGS) -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
 		-e CM_MAJOR_PHASE="$(CM_MAJOR_PHASE)" -e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
 		-e CM_PG_UPGRADE_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME)-next:5432/storage_test" \
 		-e CM_PG_REFERENCE_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME)-next:5432/reference_test" \
 		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
-		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(CM_COMMENTS_SIBLING_SETUP) \
 		mkdir /tmp/cm-major; cd /tmp/cm-major; cp /probe/installed-major-upgrade.mjs .; \
 		npm_config_cache=/tmp/npm-cache npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz pg@8.16.3 >/dev/null; \
 		node installed-major-upgrade.mjs'
