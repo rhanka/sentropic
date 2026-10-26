@@ -31,6 +31,7 @@
 - [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
+- [x] BR93-EX1: synchronize only the llm-mesh workspace version in `package-lock.json` after the mandatory feature bump. Impact: one workspace metadata cell, no dependency resolution changes. Rollback: revert that cell with the package version.
 - [x] OD-5 remains open; live identity, billing and calibration belong to L5/L6.
 
 ## AI Flaky tests
@@ -64,3 +65,4 @@
   - [ ] Scope-check before every selective atomic commit under 150 lines.
   - [ ] Push and open draft PR with this plan as body and requested title.
   - [ ] Verify CI green at final head; do not merge.
+- [x] Atomic artifact: test(decision): pin JEV discriminator conformance.
