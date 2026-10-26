@@ -29,6 +29,7 @@
   - [x] Declare BR-E2-EX1 below before implementation; retain main and Immo qualification and publication predicates.
 
 ## Feedback Loop
+- [x] Owner GO for PR #755: merge origin/main after #751, preserve both qualification environments and all reviewed CI triggers and predicates; exact-head CI gates the final merge.
 - [x] BR-E2-EX1 — `acknowledge`, owner: sole release integrator, 2026-10-26; bounded to `.github/workflows/ci.yml` and `Makefile`.
   - [x] Mechanical alias `BR2-EX1` names the same exception because the installed harness accepts only numbered BR identifiers.
   - [x] Rationale: topic merges otherwise bypass the required checks.
