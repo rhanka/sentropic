@@ -4,7 +4,7 @@ set -eu
 /tmp/cm-tools/node_modules/.bin/tsc -p tsconfig.json
 /tmp/cm-tools/node_modules/.bin/tsc --noEmit -p tsconfig.test.json
 /tmp/cm-tools/node_modules/.bin/tsc --noEmit --strict --skipLibCheck --target ES2022 \
-  --module NodeNext --moduleResolution NodeNext tests/speech-config.spec.ts tests/speech-projection.spec.ts
+  --module NodeNext --moduleResolution NodeNext tests/speech-*.spec.ts
 npm_config_cache=/tmp/npm-cache npm install --prefix /tmp/l1c-lint --ignore-scripts \
   --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null
 cat > /tmp/l1c-lint/eslint.config.mjs <<'CONFIG'
@@ -15,7 +15,7 @@ export default tseslint.config(...tseslint.configs.recommended, { rules: {
 } });
 CONFIG
 /tmp/l1c-lint/node_modules/.bin/eslint --config /tmp/l1c-lint/eslint.config.mjs \
-  src/speech src/config.ts src/index.ts src/modules/catalog.ts \
-  tests/speech-config.spec.ts tests/speech-projection.spec.ts tests/speech-fixtures.ts
+  src/speech src/config.ts src/index.ts src/modules/catalog.ts src/modules/contracts.ts \
+  tests/speech-*.spec.ts tests/speech-fixtures.ts tests/packaging/tuple-skew.spec.ts
 npm pack --ignore-scripts --dry-run --json > /tmp/l1c-pack.json
 node /source/.tmp/live-stt/l1c/public-check.mjs "$PWD" /tmp/l1c-pack.json

@@ -2,6 +2,9 @@
 
 ## 0.23.0
 
+- Allow STT-only dictation, TTS-only synthesis and independent stages alongside
+  duplex. Guard the speech peer at 0.28 before import, and pin canonical content
+  digests in profile selections, projections, reload history checks and consent.
 - Add versioned `speechProfiles` to cluster configuration and the `./speech`
   subpath for exact catalogue projection and explicit quiescent rebind.
   Independent STT/TTS or native-duplex bindings support every declared

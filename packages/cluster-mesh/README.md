@@ -421,6 +421,9 @@ the schema and `resolveSpeechProfiles` without loading a provider peer. Import
 `projectSpeechProfile` / `rebindSpeechProfile` from `@sentropic/cluster-mesh/speech`
 when using the L1 `@sentropic/llm-mesh` speech contract (0.28). Existing capacity-only
 configuration keeps its previous shape.
+The speech entry checks `>=0.28.0 <0.29.0` and export members through the module
+registry before loading the peer; older text-compatible versions receive a typed
+`cluster_mesh_module_unavailable` refusal when speech is requested.
 
 Every profile pins `schemaVersion: 1`, profile/configuration identity, trusted
 tenant/workspace scope, pipeline, coordinator placement, microphone mode and
@@ -459,6 +462,7 @@ const config = resolveClusterMeshConfig({
 // trustedContext comes from the existing authenticated host, catalogue and route inventory.
 const projected = projectSpeechProfile(config.speechProfiles!, {
   profileId: 'headset', configRevision: 'revision:1',
+  contentDigest: config.speechProfiles![0].contentDigest,
 }, trustedContext);
 ```
 
@@ -466,7 +470,10 @@ Replace illustrative artifact pins with qualified immutable identities. These
 names do not register an engine or certify its license, device, transport or
 latency. A missing tuple is unavailable; configuration never downloads a model.
 
-`chained` requires STT and TTS; `native-duplex` requires only a duplex binding.
+`chained` allows STT-only dictation, TTS-only synthesis or both stages.
+`native-duplex` requires a duplex binding and allows independently selected STT
+and TTS alongside it. Every profile has at least one active binding; capability
+requirements may refer only to active stages.
 Supported placement identifiers are `endpoint-native`, `browser-wasm`,
 `local-companion`, `cluster-hosted` and `cloud-relay`. Coordinator and individual
 stage placements can differ, including cloud STT with local TTS. Key and open-mic
@@ -483,14 +490,21 @@ catalogue entries and unavailable routes return a reason and stage. Projection
 does not allocate resources, select accounts or replace gateway admission.
 
 Snapshots are cloned and frozen. Unknown fields, credentials/activation fields,
-malformed media, duplicate identities, missing stages and unpinned `latest`
+malformed media, duplicate identities, empty stage sets and unpinned `latest`
 revisions are refused. `fallbacks` is an ordered list of explicit profile/revision
 references in the same scope, empty by default. Projection never switches to one
 automatically; the client must request it and obtain fresh admission/consent.
 
+Each resolved profile carries a canonical SHA-256 `contentDigest`. Persist it
+with the profile/revision selection and session receipt; projection refuses a
+different or missing digest, including after reload. On configuration reload,
+pass the host's retained revision history as `resolveSpeechProfiles(input,
+knownRevisions)` to reject changed content under an existing scoped revision.
+Retain that history across reloads/restarts; edited content needs a new revision.
+
 Edits apply to new sessions. Explicit rebind requires the current revision,
 authoritative quiescence/cancellation/reconciliation/drained-playback evidence
-and a new consent revision bound to the selected profile/configuration/egress
+and a new consent revision bound to the selected profile/configuration/digest/egress
 policy. A changed profile cannot reuse its old revision. Every successful
 projection still reports `micEnabled: false` and `requiresSessionAdmission: true`.
 It is a configuration receipt, not proof that native work was cancelled.

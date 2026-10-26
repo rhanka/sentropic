@@ -47,6 +47,7 @@
   - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
 
 ## Feedback Loop
+- [x] PR757 verification adds native Node ESM speech imports against 0.19.2/0.22/0.27 without speech exports and 0.28 with missing/invalid/valid exports; strict types and lint now cover all four speech suites.
 - [x] PR757-P2-2: two tests first reproduce missing digest and same-revision reload acceptance. Canonical SHA-256 pins selections, projections and consent; reload accepts known revision history and refuses content changes under an existing scoped identity.
 - [x] PR757-P2-1: eight tests first fail on missing speech registration; speech now loads through the typed registry with >=0.28.0 <0.29.0 metadata/member checks before provider evaluation, retaining existing text ranges and the topology guard.
 - [x] BRLIVE-L1C-EX3: register speech with the existing guarded module catalogue and extend the packed skew probe. Scope adds only module IDs and tuple-skew assertions; rollback removes that entry and probe. Required by PR757-P2-1; broad text-peer compatibility is retained.
