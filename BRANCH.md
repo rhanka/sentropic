@@ -29,7 +29,7 @@
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [x] BR77-EX1 — Workflow exception: cap/stagger package fan-out on measured slots, serialize main releases, keep PR-only cancellation. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [x] BR77-EX1 — Workflow exception: bound shared runner concurrency, independent package validation/publication, branch dry-run publication qualification, keep PR-only cancellation. Impact: dispatch and required results. Rollback: revert workflow policy while preserving complete-result checks.
 - [x] BR77-EX2 — Makefile exception: capacity-policy entry points only. Impact: named CI measurement/policy entry points only. Rollback: restore the previous recipes and rerun their qualification.
 - [x] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 - [ ] Inherited open acceptance from BR-76/Round-4: account quota/reservation/cost inventory; bounded dispatch policy; concurrent PR/current-main delivery; rollback drill; classification ≤15s, verdict ≤5s, aggregate scheduling ≤60s under declared concurrent traffic.
@@ -73,13 +73,14 @@
   - [x] Qualify aggregate scheduling receipts on identified critical-path executions; preserve single-job queue statistics. Main cancellations remain current across newer main runs (32 metrics tests).
   - [x] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
   - [ ] Budget to measure: classification ≤15s, verdict ≤5s, aggregate critical-path scheduling ≤60s under declared concurrent traffic.
-  - [x] Rollback drill: restore prior scheduling policy and conservative dispatch width; keep expected-result and metrics checks; demonstrate that cancellation never stops the current release.
+  - [ ] Rollback drill: require a completed drill and record its run ID; cancelled run 40353670942 does not qualify.
   - [x] Prepare live conservative rollback: one package validation lane and API/E2E widths 1/1; retain the pre-BR77 cancellation/release groups and every completeness/metrics check. Run beside main 40341027258 attempt 2.
-  - [x] Rollback head 474e023163fd1be0b2f0ac7f33442c2d97dc561c started run 40353670942; prior run 40352448337 was automatically cancelled (57 cancelled rows; its complete-result gate failed). Main attempt 2 continued. Restore bounded 2/2 policy and retain dependency/capacity inputs in workflow artifacts.
+  - [ ] Rollback head 474e023163fd1be0b2f0ac7f33442c2d97dc561c started run 40353670942, cancelled before completion; a passing metrics job is not a completed drill.
   - [x] Main 40341027258 attempt 2 completed successfully through both supersessions: all four endpoints continuous; peak 12; 210.45 runner-minutes. Classification/verdict/scheduling 19s/19s/1559s breach 15s/5s/60s; retain these failures in capacity.md. Rollback metrics job 121682975411 passed live.
 - [x] **Lot 4 — Docs consolidation**
   - [x] Update this plan, the study, and `spec/ci-cd-ten-minutes/capacity.md` with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
+  - [ ] Review r1: tests first for queued capacity groups, independent validators/publishers; require completed final-policy PR/main receipts <=2288s; no receipt, no acceptance.
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [x] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity` must parse/import the changed scripts and reject invalid result sets.
   - [x] Local qualification: 35 metrics + 17 expected-results + 24 unchanged publication-wiring tests passed; finite full-selection PR/main bound 15. Final-head CI and all unmet budgets remain open until their actual receipts.
