@@ -62,6 +62,7 @@
 - [x] BRLIVE-L1C-EX1: existing cold workspace/Compose targets only; external adapter avoids inherited raw Docker scope prerequisite; no tracked build/CI change.
 
 ## Plan / Todo (lot-based)
+- [x] PR757-r1: reproduce P1/P2-1/P2-2 before their fixes; deliver independent stage sets, guarded speech loading and canonical revision pins. Full cluster suite passes 1,180 tests (66 speech), with 129 environment-gated skips; native ESM guard/type/lint/build checks pass. Rechecked registry; preserve stacked base and independent-review boundary.
 - [x] L1c baseline: Docker lock first, rules/spec/owner answers and L0 evidence read; mechanical branch check passes.
 - [x] Replace inherited scope/plan with L1c file-level gates before source edits.
 - [x] **L1c-a — Reconcile L0**
