@@ -9,7 +9,7 @@ export interface DecisionAssessmentSample {
 }
 /** Recorded receipt projection. Receipt v1 remains unchanged; work/billable units live here. */
 export interface DecisionAssessmentRow {
-  callId: string; sampleId: string; population: DecisionAssessmentPopulation; attempts: 0 | 1;
+  callId: string; sampleId: string; inputDigest: string; population: DecisionAssessmentPopulation; attempts: 0 | 1;
   outcome: 'verdict' | 'refusal' | 'malformed' | 'transport-failure';
   pass: boolean | null; score: number | null; label: string | null;
   internalWorkUnits: number; billableUnits: number; amountMicroUsd: string;
