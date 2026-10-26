@@ -1,4 +1,5 @@
-W0_NODE_IMAGE := node@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+W0_COMPOSE := docker compose --env-file /dev/null -p $(ENV) -f docker-compose.immo-861.yml
+W0_HOST_PROBE ?= host-fit-probe.mjs
 W0_RECORD_DIR := $(CURDIR)/docs/baselines/app-cm-w0
 W0_OUTPUT_DIR := $(CURDIR)/tmp/app-cm-w0-probe
 W0_SOURCE_SHA := 9ed96eb83cd77da710f1adeb83a19e425d6c4910
@@ -10,9 +11,13 @@ w0-probe-env:
 	@mkdir -p "$(W0_OUTPUT_DIR)"
 
 w0-host-fit: w0-probe-env
-	@docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(W0_RECORD_DIR)/host-fit-probe.mjs:/probe.mjs:ro" -v "$(W0_OUTPUT_DIR):/out" -w /tmp $(W0_NODE_IMAGE) sh -ec 'probe_dir=$$(mktemp -d); cd "$$probe_dir"; npm install --ignore-scripts --no-audit --no-fund --save-exact $(W0_PROBE_PACKAGES) > /out/install.log 2>&1; cp /probe.mjs ./probe.mjs; node probe.mjs > /out/probe-result.json; cp package-lock.json /out/probe-package-lock.json'
+	@$(W0_COMPOSE) run --rm --no-deps --user "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(W0_RECORD_DIR)/$(W0_HOST_PROBE):/probe.mjs:ro" -v "$(W0_OUTPUT_DIR):/out" -w /tmp qualification sh -ec 'probe_dir=$$(mktemp -d); cd "$$probe_dir"; npm install --strict-peer-deps --ignore-scripts --no-audit --no-fund --save-exact $(W0_PROBE_PACKAGES) > /out/install.log 2>&1; cp /probe.mjs ./probe.mjs; node probe.mjs > /out/probe-result.json; cp package-lock.json /out/probe-package-lock.json'
 
 w0-record-check: w0-probe-env
 	@mkdir -p "$(W0_OUTPUT_DIR)/baseline-source"
 	@git archive $(W0_SOURCE_SHA) package-lock.json api/package-lock.json api/package.json deploy/k8s | tar -x -C "$(W0_OUTPUT_DIR)/baseline-source"
-	@docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp -e W0_SOURCE_SHA=$(W0_SOURCE_SHA) -v "$(CURDIR):/source:ro" -v "$(W0_OUTPUT_DIR)/baseline-source:/baseline-source:ro" -v "$(W0_RECORD_DIR)/verify-vectors.mjs:/validate.mjs:ro" -v "$(W0_OUTPUT_DIR):/out" -w /tmp $(W0_NODE_IMAGE) sh -ec 'probe_dir=$$(mktemp -d); cd "$$probe_dir"; npm install --ignore-scripts --no-audit --no-fund --save-exact @sentropic/h2a@0.98.6 > /out/validate-install.log 2>&1; cp /validate.mjs ./validate.mjs; node validate.mjs'
+	@$(W0_COMPOSE) run --rm --no-deps --user "$$(id -u):$$(id -g)" -e HOME=/tmp -e W0_SOURCE_SHA=$(W0_SOURCE_SHA) -v "$(CURDIR):/source:ro" -v "$(W0_OUTPUT_DIR)/baseline-source:/baseline-source:ro" -v "$(W0_RECORD_DIR)/verify-vectors.mjs:/validate.mjs:ro" -v "$(W0_OUTPUT_DIR):/out" -w /tmp qualification sh -ec 'probe_dir=$$(mktemp -d); cd "$$probe_dir"; npm install --ignore-scripts --no-audit --no-fund --save-exact @sentropic/h2a@0.98.6 > /out/validate-install.log 2>&1; cp /validate.mjs ./validate.mjs; node validate.mjs'
+
+.PHONY: down
+down:
+	@$(W0_COMPOSE) down --volumes --remove-orphans

@@ -62,6 +62,7 @@
   - [x] W0-close.a/B02: current package-journal discovery and complete cutover/author/generation/lease inventory recorded; absent runtime authority is explicit and positive fencing remains W2 qualification.
   - [x] W0-close.a/B04: dated scoped SQL inventory and per-source leave-in-place disposition; 4 unscoped chat messages explicitly excluded from import, legacy readers retained.
   - [x] W0-close.a/B04 object/ACL evidence: 14 scoped S3 reads/checksums, size matches, private ACLs and failed anonymous HEADs recorded; no content/keys/credentials exported or objects changed.
+  - [x] W0-close.d probe runner uses the existing pinned Compose qualification service and matching down target; preserve historical defaults while accepting the current published-fit probe/tuple.
   - [x] Read MASTER/workflow, README/TODO/PLAN, branch template and approved owner request/plan.
   - [x] Mechanical `harness check branch` passes; branch is clean and starts at pinned main.
   - [x] Follow-up: branch verified, remote pulled with fast-forward only, main integrated under BR142-EX2; identical Track blobs and all 342 event IDs preserved. Track acceptance refresh stays with the designated root writer.
