@@ -36,6 +36,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] BR757-EX5: the standard manifest gate requires a literal root pack-live-speech target for this changed public package. Add only that lane using the existing guarded pack macro and a transient L2 build; no publication. Rollback removes the lane and package pack script.
 - [x] PR776 P2-3 follow-through: late evidence on accepted effects and old terminal acknowledgements leave current approvals valid; unresolved-effect changes still invalidate grants. Add a parallel-call regression spanning both histories.
 - [x] PR776 r1 local package tests: 34/34 pass across interruption, ordering, playback and usage. All seven correction commits stay below 150 lines; head workflows are submitted and remain required for handoff.
 - [x] PR776 combined recovery: generation rotation preserves unsent queued finals with their immutable epoch/submit key; old references fail scope checks. Usage estimates without a native ID remain replayable after ACK recovery.
