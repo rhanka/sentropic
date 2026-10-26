@@ -165,6 +165,10 @@ export function validateContract(config = {}) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) return { ok: false, errors: ['contract object'] };
   const errors = [];
   const need = (path, ok) => { if (!ok) errors.push(path); };
+  // These reviewed safety bounds are independent of the candidate policy file.
+  const exactSet = (value, expected) => Array.isArray(value) && value.length === expected.length &&
+    new Set(value).size === expected.length && expected.every((entry) => value.includes(entry));
+  need('enabled', config.enabled === false);
   need('severity.actionable', JSON.stringify(config.severity?.actionable) === '["HIGH","CRITICAL"]');
   need('severity.inventory', JSON.stringify(config.severity?.inventory) === '["UNKNOWN","LOW","MEDIUM","HIGH","CRITICAL"]');
   need('severity.raw', config.severity?.rawMeansBeforeSuppression === true && config.severity?.identicalFlagsRequired === true);
@@ -172,17 +176,35 @@ export function validateContract(config = {}) {
   need('inventory.locks[root/UI/kit]', ['package-lock.json', 'ui/package-lock.json', 'docs/governance/kit/package-lock.json'].every((lock) => config.inventory?.locks?.includes(lock)));
   need('inventory.toolbox', config.inventory?.toolbox?.path === 'api/Dockerfile');
   need('register.baseline67', config.register?.baselineOutstanding === 67);
-  need('automaticScope.allow', Array.isArray(config.automaticScope?.allow) && config.automaticScope.allow.length >= 3);
+  need('automaticScope.allow', exactSet(config.automaticScope?.allow, [
+    'patch-only dependency/range or existing override value with unchanged major/minor including 0.x plus deterministic lock changes',
+    'existing image pin digest and associated patch-version tokens in same registry/repository OS release purpose architecture family with attested patch-only delta',
+    'declared deterministic derived pins such as l5-root-lock',
+  ]));
+  need('automaticScope.deny', exactSet(config.automaticScope?.deny, [
+    'undeclared source/tests', 'docs', 'new dependency/override', 'minor/major upgrade', 'Docker instruction',
+    'runtime config', 'policy', 'workflow', 'Makefile', 'gate', 'new/renewed/broadened exception',
+    'allowlist', 'generated source', 'L5 packed-closure', 'history archive',
+  ]));
+  for (const key of ['undeclaredRefuses', 'branchFileAbsentFromDiff']) need(`automaticScope.${key}`, config.automaticScope?.[key] === true);
   need('automaticScope.ownCode', config.automaticScope?.ownCode?.enabled === false &&
     ['sourcePaths', 'testPaths', 'patchVersionFields'].every((key) => Array.isArray(config.automaticScope?.ownCode?.[key]) && config.automaticScope.ownCode[key].length === 0));
   need('automaticScope.reconciliation', config.automaticScope?.reconciliation?.removalOnly === true && config.automaticScope?.reconciliation?.separateLot === true);
   need('automaticScope.register', config.automaticScope?.registerByteIdenticalOnRepairs === true);
   need('grouping.bounds', JSON.stringify(config.grouping?.lotBounds) === '{"maxUnits":3,"maxFiles":10,"maxLines":150}');
-  need('derivedPins.l5-root-lock', Boolean(config.derivedPins?.['l5-root-lock']));
+  for (const key of ['noCrossRepo', 'noMixWithReconciliation']) need(`grouping.${key}`, config.grouping?.[key] === true);
+  need('derivedPins.l5-root-lock', config.derivedPins?.['l5-root-lock']?.enabled === false);
+  need('derivedPins.undeclaredConsumerIsBlocker', config.derivedPins?.undeclaredConsumerIsBlocker === true);
   need('credentials.reader', typeof config.credentials?.reader === 'string' && config.credentials.reader.includes('Variables'));
+  need('credentials.killSwitchVar', config.credentials?.killSwitchVar === 'SECURITY_FIX_ENABLED');
+  need('credentials.missingOrUnreadableMeansOff', config.credentials?.missingOrUnreadableMeansOff === true);
+  need('credentials.recheckSeconds', Number.isInteger(config.credentials?.recheckSeconds) && config.credentials.recheckSeconds > 0 && config.credentials.recheckSeconds <= 15);
   need('bumpGateManual', typeof config.bumpGateManual?.rule === 'string');
   need('reconciliation.scansRequired=2', config.reconciliation?.scansRequired === 2);
-  need('limits.2pr', config.limits?.newPRsPerDayFleet === 2);
+  for (const key of ['exactSurfacePlatformPathFlags', 'freshPreMergeRescan']) need(`reconciliation.${key}`, config.reconciliation?.[key] === true);
+  for (const [key, maximum] of Object.entries({ newPRsPerDayFleet: 2, openPRsMax: 6, inferenceUnitsPerDayFleet: 4, perSlotPerDay: 2 })) {
+    need(`limits.${key}`, Number.isInteger(config.limits?.[key]) && config.limits[key] > 0 && config.limits[key] <= maximum);
+  }
   need('runtime.public', typeof config.runtime === 'string' && config.runtime.includes('no private'));
   need('credentials.publicRepo', config.credentials?.killSwitchRepo === 'rhanka/sentropic');
   return { ok: errors.length === 0, errors };

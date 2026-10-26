@@ -39,6 +39,8 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] Opus r1 P2-1: pin disabled activation, exact allow/deny scope, grouping, fail-closed kill switch, blocked L5 class and budget ceilings independently of the candidate JSON; weakened fixtures reproduce the former acceptance gap.
+- [x] Review-fix validation uses `ENV=test-sec-s1` last and the shared Docker lock; all 70 weakened-contract fixtures pass after the validator fix (the remaining failing npm-counter regression is handled separately).
 - [x] SECDAILY-S1-EX1: register S1 suites in the existing required Node test entrypoint `scripts/ci/publishable-ci-wiring.test.mjs`; restore `.github/workflows/ci.yml` to main bytes. Editing that workflow selects global CI including legacy Python SAST, outside this zero-Python lot. Existing filters and gates stay unchanged; rollback removes only the S1 suite imports, with implementation disabled.
 - [x] Integration: merge `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`; retain S1 plan and all 342 prior Track events. Scope-check includes incoming main files; the independent harness check against `origin/main` limits authored changes to S1.
 - [x] Approved-r4 alignment: tests first for exact register matching, all-severity inventory, separate own-code scope, bounded grouping, complete dated reconciliation and discovered lock/hash consumers.

@@ -31,12 +31,56 @@ test('contract validates: images, locks, toolbox, register, scope, pins, P3-1, P
   assert.equal(result.ok, true);
 });
 
-test('expiry split stays 60 unexpired plus 7 expired', () => {
+test('historical contract snapshot records 60 unexpired plus 7 expired rows', () => {
   assert.equal(contract.register.baselineOutstanding, 67);
   assert.equal(contract.register['due2026-11-20'], 60);
   assert.equal(contract.register.expired.total, 7);
   assert.equal(contract.register.staleContainerCandidates, 7);
 });
+
+const weakenedInvariants = [
+  ['enabled', true],
+  ['severity.actionable', []], ['severity.inventory', ['HIGH', 'CRITICAL']],
+  ['severity.rawMeansBeforeSuppression', false, 'severity.raw'],
+  ['severity.identicalFlagsRequired', false, 'severity.raw'],
+  ['automaticScope.allow', [...contract.automaticScope.allow, 'arbitrary edits']],
+  ['automaticScope.allow', ['arbitrary edits', 'other edits', 'any edits']],
+  ['automaticScope.deny', []],
+  ...contract.automaticScope.deny.map((denied) =>
+    ['automaticScope.deny', contract.automaticScope.deny.filter((entry) => entry !== denied)]),
+  ['automaticScope.undeclaredRefuses', false],
+  ['automaticScope.branchFileAbsentFromDiff', false],
+  ['automaticScope.ownCode.enabled', true, 'automaticScope.ownCode'],
+  ...['sourcePaths', 'testPaths', 'patchVersionFields'].map((key) =>
+    [`automaticScope.ownCode.${key}`, ['unreviewed'], 'automaticScope.ownCode']),
+  ...['removalOnly', 'separateLot'].map((key) =>
+    [`automaticScope.reconciliation.${key}`, false, 'automaticScope.reconciliation']),
+  ['automaticScope.registerByteIdenticalOnRepairs', false, 'automaticScope.register'],
+  ...['noCrossRepo', 'noMixWithReconciliation'].map((key) => [`grouping.${key}`, false]),
+  ...['maxUnits', 'maxFiles', 'maxLines'].map((key) =>
+    [`grouping.lotBounds.${key}`, contract.grouping.lotBounds[key] + 1, 'grouping.bounds']),
+  ['derivedPins.l5-root-lock.enabled', true, 'derivedPins.l5-root-lock'],
+  ['derivedPins.undeclaredConsumerIsBlocker', false],
+  ['credentials.killSwitchVar', 'OTHER_SWITCH'],
+  ['credentials.killSwitchRepo', 'other/repository', 'credentials.publicRepo'],
+  ['credentials.missingOrUnreadableMeansOff', false],
+  ...[16, 0, -1, '15', null].map((value) => ['credentials.recheckSeconds', value]),
+  ['reconciliation.scansRequired', 1, 'reconciliation.scansRequired=2'],
+  ['reconciliation.exactSurfacePlatformPathFlags', false],
+  ['reconciliation.freshPreMergeRescan', false],
+  ...Object.entries({ newPRsPerDayFleet: 2, openPRsMax: 6, inferenceUnitsPerDayFleet: 4, perSlotPerDay: 2 })
+    .flatMap(([key, max]) => [max + 1, 0, -1, '2', null].map((value) => [`limits.${key}`, value])),
+];
+for (const [path, value, error = path] of weakenedInvariants) {
+  test(`should refuse weakened contract ${path}=${JSON.stringify(value)}`, () => {
+    const fixture = structuredClone(contract);
+    const keys = path.split('.');
+    keys.slice(0, -1).reduce((node, key) => node[key], fixture)[keys.at(-1)] = value;
+    const result = validateContract(fixture);
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.includes(error), JSON.stringify(result.errors));
+  });
+}
 
 test('severity contract keeps HIGH/CRITICAL actionable with identical flags', () => {
   assert.equal(isActionable('HIGH'), true);
