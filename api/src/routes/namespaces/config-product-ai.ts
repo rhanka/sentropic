@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { getModelCatalogPayload, resolveDefaultSelection } from '../../services/model-catalog';
-import { isProviderId } from '../../services/provider-runtime';
+import { isDecisionOnlyProvider, isProviderId } from '../../services/provider-runtime';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 
@@ -90,7 +90,7 @@ export const createProductAISettingsRouter = (): Hono => {
       const { value, description } = await context.req.json();
       if (!value) return context.json({ message: 'Value is required' }, 400);
       if (key === 'default_provider_id'
-        && (typeof value !== 'string' || !isProviderId(value))) {
+        && (typeof value !== 'string' || !isProviderId(value) || isDecisionOnlyProvider(value))) {
         return context.json({ message: 'Invalid provider id' }, 400);
       }
       await settingsService.set(key, value, description);

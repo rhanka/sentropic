@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cluster-mesh",
-  "version": "0.22.3",
+  "version": "0.22.4",
   "description": "Injectable Cluster Mesh control-plane contracts, namespace modules, and single-instance runtime.",
   "type": "module",
   "license": "MIT",
@@ -72,6 +72,18 @@
       "types": "./dist/integrations/llm-mesh/transport/cloud-code.d.ts",
       "import": "./dist/integrations/llm-mesh/transport/cloud-code.js"
     },
+    "./llm-mesh/transport/jev": {
+      "types": "./dist/integrations/llm-mesh/transport/jev.d.ts",
+      "import": "./dist/integrations/llm-mesh/transport/jev.js"
+    },
+    "./llm-mesh/decision": {
+      "types": "./dist/integrations/llm-mesh/decision.d.ts",
+      "import": "./dist/integrations/llm-mesh/decision.js"
+    },
+    "./llm-mesh/decision/host": {
+      "types": "./dist/integrations/llm-mesh/decision/host.d.ts",
+      "import": "./dist/integrations/llm-mesh/decision/host.js"
+    },
     "./gateway": {
       "types": "./dist/integrations/gateway/index.d.ts",
       "import": "./dist/integrations/gateway/index.js"
@@ -103,6 +115,18 @@
     "./loaders/llm-mesh/transport/cloud-code": {
       "types": "./dist/loaders/llm-mesh/transport/cloud-code.d.ts",
       "import": "./dist/loaders/llm-mesh/transport/cloud-code.js"
+    },
+    "./loaders/llm-mesh/transport/jev": {
+      "types": "./dist/loaders/llm-mesh/transport/jev.d.ts",
+      "import": "./dist/loaders/llm-mesh/transport/jev.js"
+    },
+    "./loaders/llm-mesh/decision": {
+      "types": "./dist/loaders/llm-mesh/decision.d.ts",
+      "import": "./dist/loaders/llm-mesh/decision.js"
+    },
+    "./loaders/llm-mesh/decision/host": {
+      "types": "./dist/loaders/llm-mesh/decision/host.d.ts",
+      "import": "./dist/loaders/llm-mesh/decision/host.js"
     },
     "./loaders/gateway": {
       "types": "./dist/loaders/gateway/index.d.ts",
