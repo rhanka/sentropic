@@ -2500,6 +2500,7 @@ jobs:
       - typecheck-lint-ui
       - typecheck-lint-api
       - validate-idp-sync
+      - validate-live-speech
       - validate-llm-mesh
       - validate-cluster-mesh
       - validate-llm-gateway
@@ -2579,7 +2580,7 @@ jobs:
       contents: read
       actions: read
     needs: [changes, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
-      validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
+      validate-idp-sync, validate-live-speech, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
       validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
       validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
