@@ -124,12 +124,12 @@ Fix `wait-llm-gateway-mesh-dependency` so a semver range dependency resolves bef
   - [x] Add maintained tests: single caret, `||` range, unsatisfiable range.
   - [x] Lot gate:
     - [x] `make test-publishable-manifests ENV=test-ci-gateway-wait` (88 pass).
-- [ ] **Lot 2 — Circular lazy gate (BR02-EX1)**
-  - [ ] Pack workspace llm-gateway in `prepare.sh`; resolve via new `siblings.mjs train-spec` (receipt wins, else registry when published, else local tarball; other-version receipt, missing tarball, bad flag and non-404 registry errors fail).
-  - [ ] Build llm-gateway dist in `test-lazy-package` before packing.
-  - [ ] Regression checks: `train-spec` decision table in `siblings.spec.ts`; local-pack allowance in `release-matrix.spec.ts`.
-  - [ ] Lot gate:
-    - [ ] `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-ci-gateway-wait`
+- [x] **Lot 2 — Circular lazy gate (BR02-EX1)**
+  - [x] Pack workspace llm-gateway in `prepare.sh`; resolve via new `siblings.mjs train-spec` (receipt wins, else registry when published, else local tarball; other-version receipt, missing tarball, bad flag and non-404 registry errors fail).
+  - [x] Build llm-gateway dist in `test-lazy-package` before packing.
+  - [x] Regression checks: `train-spec` decision table in `siblings.spec.ts`; local-pack allowance in `release-matrix.spec.ts`.
+  - [x] Lot gate:
+    - [x] `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-ci-gateway-wait` (15 files, 106 tests pass; gateway 0.21.2 installed from the local pack).
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest UI (cf Lot1, copy checklist)
