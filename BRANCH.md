@@ -43,5 +43,5 @@
 - [x] Lot 0: read lock/schedule/spec/template; verify mechanical branch and immutable baseline.
 - [x] Lot 1: six reference test files, signed-token corpus and manifest refusal tests specified; first store run fails on missing reference module.
 - [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
-- [ ] Lot 3: unverified fixture retained; add pinned E2/tamper checks, case IDs and JSON reporting; final gates next.
+- [ ] Lot 3: pinned-input/case/JSON reporting complete; preserve full hashed reports and measure runtime; final gates next.
 - [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
