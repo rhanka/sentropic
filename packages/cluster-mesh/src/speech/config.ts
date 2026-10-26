@@ -85,3 +85,51 @@ export function freezeSpeechSnapshot<T>(value: T): T {
   }
   return value;
 }
+
+function parseProfile(value: unknown): SpeechProfile {
+  const p = object(value);
+  keys(p, ['schemaVersion', 'profileId', 'configRevision', 'tenantId', 'workspaceId', 'pipeline',
+    'placement', 'bindings', 'micMode', 'policyRef', 'egressPolicyRef', 'budgetRef', 'allowedPlacements',
+    'allowedEgress', 'requiredCapabilities', 'inputFormats', 'outputFormats', 'maxDurationMs', 'maxCostUsd', 'fallbacks']);
+  if (p.schemaVersion !== 1 || !Number.isSafeInteger(p.maxDurationMs) || (p.maxDurationMs as number) <= 0
+    || typeof p.maxCostUsd !== 'number' || !Number.isFinite(p.maxCostUsd) || p.maxCostUsd < 0) fail();
+  const pipeline = choice(p.pipeline, ['chained', 'native-duplex']);
+  const stages: readonly SpeechStage[] = pipeline === 'chained' ? ['stt', 'tts'] : ['duplex'];
+  const rawBindings = object(p.bindings); keys(rawBindings, stages);
+  const bindings: Partial<Record<SpeechStage, SpeechBinding>> = {};
+  for (const stage of stages) bindings[stage] = binding(rawBindings[stage]);
+  const rawRequired = object(p.requiredCapabilities); keys(rawRequired, stages);
+  const requiredCapabilities: Partial<Record<SpeechStage, SpeechCapabilityName[]>> = {};
+  for (const stage of stages) {
+    requiredCapabilities[stage] = list(rawRequired[stage] ?? [], (item) => choice(item, features));
+  }
+  return {
+    schemaVersion: 1, profileId: text(p.profileId), configRevision: text(p.configRevision),
+    tenantId: text(p.tenantId), workspaceId: text(p.workspaceId), pipeline,
+    placement: choice(p.placement, placements), bindings, micMode: choice(p.micMode, ['key', 'open-mic']),
+    policyRef: text(p.policyRef), egressPolicyRef: text(p.egressPolicyRef), budgetRef: text(p.budgetRef),
+    allowedPlacements: list(p.allowedPlacements, (item) => choice(item, placements), true),
+    allowedEgress: list(p.allowedEgress, (item) => choice(item, ['device', 'cluster', 'provider']), true),
+    requiredCapabilities, inputFormats: list(p.inputFormats, format, true),
+    outputFormats: list(p.outputFormats, format, true), maxDurationMs: p.maxDurationMs as number,
+    maxCostUsd: p.maxCostUsd, fallbacks: list(p.fallbacks ?? [], selection),
+  };
+}
+
+/** Configuration is descriptive. Runtime availability and admission are separately projected. */
+export function resolveSpeechProfiles(input: unknown): readonly SpeechProfile[] {
+  const profiles = list(input, parseProfile);
+  const identity = (p: SpeechProfile) => JSON.stringify([p.tenantId, p.workspaceId, p.profileId, p.configRevision]);
+  if (new Set(profiles.map(identity)).size !== profiles.length) fail();
+  for (const p of profiles) {
+    const seen = new Set<string>();
+    for (const fallback of p.fallbacks) {
+      const key = JSON.stringify([fallback.profileId, fallback.configRevision]);
+      if (seen.has(key) || (fallback.profileId === p.profileId && fallback.configRevision === p.configRevision)
+        || !profiles.some((other) => other.tenantId === p.tenantId && other.workspaceId === p.workspaceId
+          && other.profileId === fallback.profileId && other.configRevision === fallback.configRevision)) fail();
+      seen.add(key);
+    }
+  }
+  return freezeSpeechSnapshot(profiles);
+}
