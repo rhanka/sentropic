@@ -130,7 +130,11 @@ const organizationInput = z.object({
   challenges: z.string().optional(),
   objectives: z.string().optional(),
   technologies: z.string().optional(),
-  status: z.enum(['draft', 'enriching', 'completed']).default('completed'),
+  status: z.enum(['draft', 'enriching', 'completed']),
+});
+
+const organizationCreateInput = organizationInput.extend({
+  status: organizationInput.shape.status.default('completed'),
 });
 
 export const organizationsRouter = new Hono();
@@ -189,7 +193,7 @@ organizationsRouter.get('/', async (c) => {
   return c.json({ items: rows.map(hydrateOrganization) });
 });
 
-organizationsRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', organizationInput), async (c) => {
+organizationsRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', organizationCreateInput), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
   const id = createId();
