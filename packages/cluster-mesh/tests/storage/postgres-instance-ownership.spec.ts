@@ -7,6 +7,7 @@ import { describe, it } from 'vitest';
 import {
   CanonicalInstanceRegistry,
   CanonicalOwnershipError,
+  type CanonicalOwnershipCode,
 } from '../../src/storage/instance-ownership.js';
 import {
   resolvePgStoreKey,
@@ -43,6 +44,16 @@ type PgTestKernel = Awaited<ReturnType<PgTestFixture['open']>>;
 const owned = (kernel: PgTestKernel): PgInstanceOwnershipSession => {
   assert.ok(kernel.ownership);
   return kernel.ownership;
+};
+
+// Open-time refusals surface through the open transaction: the canonical
+// code rides on the cause of the PostgresStorageError wrapper.
+const rejectsCause = async (promise: Promise<unknown>, code: CanonicalOwnershipCode): Promise<void> => {
+  await assert.rejects(promise, (error: unknown) => {
+    assert.ok(error instanceof PostgresStorageError);
+    const cause = (error as { cause?: unknown }).cause;
+    return cause instanceof CanonicalOwnershipError && cause.code === code;
+  });
 };
 
 const commitAs = async (kernel: PgTestKernel, chainId: string, hash: string) => {
@@ -88,10 +99,7 @@ describe.skipIf(!pgEnabled)('postgres durable instance ownership', () => {
     const fixture = await createPgFixture({ instanceRegistry: new CanonicalInstanceRegistry() });
     try {
       await fixture.open();
-      await assert.rejects(
-        fixture.open(),
-        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'instance-busy',
-      );
+      await rejectsCause(fixture.open(), 'instance-busy');
     } finally {
       await fixture.close();
     }
@@ -201,10 +209,7 @@ describe.skipIf(!pgEnabled)('postgres durable instance ownership', () => {
       );
       const top = await fixture.open();
       assert.equal(owned(top).handle.storageEpoch, '18446744073709551615');
-      await assert.rejects(
-        fixture.open(),
-        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'stale-epoch',
-      );
+      await rejectsCause(fixture.open(), 'stale-epoch');
     } finally {
       await fixture.close();
     }
@@ -236,10 +241,7 @@ describe.skipIf(!pgEnabled)('postgres durable instance ownership', () => {
     assert.ok(legacy.length === 7);
     const fixture = await createPgFixture({ assets: legacy });
     try {
-      await assert.rejects(
-        fixture.open(),
-        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'open-refused',
-      );
+      await rejectsCause(fixture.open(), 'open-refused');
     } finally {
       await fixture.close();
     }
