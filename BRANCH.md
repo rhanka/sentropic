@@ -21,6 +21,9 @@
   - `packages/cluster-mesh/assets/storage/postgres/engram-memory/**`
   - `packages/cluster-mesh/tests/engram-memory/**`
   - `packages/cluster-mesh/tests/storage/postgres-memory.spec.ts`
+  - `packages/cluster-mesh/tests/fixtures/reserved-versions.ts` (inherited #767 only; BR6-EX3)
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts` (inherited #767 only; BR6-EX3)
+  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (inherited #767 only; BR6-EX3)
   - `packages/cluster-mesh/src/storage/postgres/migrations.ts`
   - `PLAN.md` (inherited E0 only)
   - `packages/cluster-mesh/src/engram-memory/neutral-contract.ts` (inherited E0 only)
@@ -42,13 +45,14 @@
   - `package-lock.json`
 - **Exception process**:
   - [x] BR6-EX1: `packages/cluster-mesh/package.json` and `package-lock.json` unique pack-only 0.23.0-dev.5 version fields; never publish; rollback both fields together.
-  - [x] BR6-EX2: owner-requested integration merge, preserving incoming tuple gateway 0.21.3 / cluster 0.22.4 / mesh 0.28.1 and #767 fixture tolerance. E6 retains its 0.23.0-dev.5 pack-only version above published 0.22.4; retain E6 BRANCH.md and P2 bytes. Temporary incoming-only path grants passed merge-time scope-check and are now retired; no new upstream implementation is authorized. Rollback: revert the merge with first-parent selection.
+  - [x] BR6-EX2: owner-requested integration merge, preserving incoming tuple gateway 0.21.3 / cluster 0.22.4 / mesh 0.28.1. E6 retains its 0.23.0-dev.5 pack-only version above published 0.22.4; retain E6 BRANCH.md and P2 bytes. Temporary incoming-only path grants passed merge-time scope-check and are now retired; no new upstream implementation is authorized. Rollback: revert the merge with first-parent selection.
+  - [x] BR6-EX3: #767 is still open and its three test files are absent from integration `d22fc3f24`; merge its head `0cc3b1bf863651d22d55b0a14abd5cb249a387f9` to inherit the requested fixture tolerance without rewriting it. No product, frozen fixture, version, peer range or pin edit. Rollback: revert this dependency merge with first-parent selection.
 
 ## Feedback Loop
 - [x] BR6-EX1 allows `packages/cluster-mesh/package.json` and `package-lock.json` version fields for the owner's unique dev.5 reservation; impact pack-only, rollback both fields together.
 - [x] Shared `packages/cluster-mesh/src/storage/postgres/migrations.ts` has one integration writer: E2 (#765), owner of core `007-consumed-counters.sql`. E6 supplies memory hooks and `assets/storage/postgres/engram-memory/001-projections.sql`, sequenced after E2 as receipt 008; its independent module number remains 001.
 - [ ] Conductor obtains the integrator's single-writer ACK before integration of E6; no ACK claimed here. Earlier coordination artifact: h2a 26836350-4047-4c6f-bb57-a6c105a7ba04.
-- [x] Incoming #767 supplies the Comments package-migration and packaging-fixture tolerance repairs; previous exclusions are historical and are not new failure waivers.
+- [x] CI 40371657186 qualified E2 but exposed two full-suite fixture failures: Comments prerelease refusal vs expected missing peer (`tests/modules/registry.spec.ts:53`) and selected 0.22.4 vs candidate 0.23.0-dev.5 (`tests/packaging/prepare-artifacts.spec.ts:15`). #767 remains open, so its tolerance was not in the integration merge; BR6-EX3 merges that exact dependency. No failure waiver.
 - [x] K7 creation may share capture's append; the inherited zero-append guard applies to completion (revision 2), preserving the approved §5.2 distinction.
 - [x] `postgres-memory.spec.ts` enrolls memory PG tests in the existing E2 real-PG lane; standalone memory lane lacks PG and is not the durable receipt.
 - [x] Add adversarial same-unit duplicate event/proof tests; projection must refuse before publishing any canonical root.
@@ -65,6 +69,7 @@
 - [x] PostgreSQL lane: those same 10 E6 cases execute through `tests/storage/postgres-memory.spec.ts`, zero memory skips; 61 total passes in the retained local receipt. Only `tests/storage/postgres-crashes.spec.ts` skips its 2 cases, `seeds a partially prepared hidden unit before SIGKILL` and `reopens the recovered server and finishes from the saved prefix`: they require separate `CM_PG_CRASH_PHASE=seed/verify` runs around an actual server crash and are outside this campaign. No other test skip is waived.
 - [x] Track containment: 346 pre-merge event IDs retained in 370 merged events (`track events-contains`); no manual log edit or concurrent Track write.
 - [x] Post-merge local PostgreSQL rerun at pushed `4779c72401d941e60a461a38a2b6d2a76a27335e`: 61 pass, only the 2 declared crash skips, E6 memory 10/10; exit=0 and cleanup=0. Receipt `tmp/engram-e6-resync-receipts/postgres.log` SHA-256 `e97fdf97c0a60dc9842350ec4172b0b2a32161e29445e017c26e0db020c27990`; inventory SHA-256 `e9be37762b6cd498ef8962b5f2e7049157f8d4106f4855153b2ea298e9696db2`.
+- [x] #767 dependency rerun on E6 0.23.0-dev.5: registry 49/49, prepare-artifacts 14/14, zero skips, both exit=0/cleanup=0. Logs under `tmp/engram-e6-resync-receipts/`: `registry.spec.ts.log` SHA-256 `7659d6dfe8b4a1023cb06f55e5edbcf3dfdb98ff64746f5c00a0be9187a8d6a2`; `prepare-artifacts.spec.ts.log` SHA-256 `bdd104e244849826b0935a42d035c32645b50042eb2926455279213c1b79a471`. The first two-file filter attempt ran no tests; separate file runs supply the passing proof.
 - [ ] Independent peer launch awaits owner authorization required by rules/subagents.md; no consensus review claimed.
 
 ## AI Flaky tests
