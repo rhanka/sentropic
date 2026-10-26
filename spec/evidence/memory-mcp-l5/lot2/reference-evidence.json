@@ -2,12 +2,12 @@
   "status": "unverified",
   "qualificationAccepted": false,
   "scope": "source reference and receiving harness only",
-  "sourceHead": "5a93d999d099ee8e63115ca6ff3516dea4f274b9",
+  "sourceHead": "f2cb4790ab55f8d185ea7b4a210770a273b30ff1",
   "reports": [
     {
       "kind": "reference",
-      "path": "spec/evidence/memory-mcp-l5/lot2/reports/3c9a4185f69be898e9aa5f3d6f7e03e435994e5174bcd4dc9f3cfcf5c6f6b48a.json.gz",
-      "sha256": "3c9a4185f69be898e9aa5f3d6f7e03e435994e5174bcd4dc9f3cfcf5c6f6b48a",
+      "path": "spec/evidence/memory-mcp-l5/lot2/reports/9a0d1417868c5cc592048786ddd0e1acb406f10ae2351b7aaf44ce3c95d7c748.json.gz",
+      "sha256": "9a0d1417868c5cc592048786ddd0e1acb406f10ae2351b7aaf44ce3c95d7c748",
       "tests": 66,
       "files": [
         {"path":"packages/mcp-broker/tests/memory/audit-refusal.test.ts","assertions":3,"status":"passed"},
@@ -27,9 +27,9 @@
     },
     {
       "kind": "tooling",
-      "path": "spec/evidence/memory-mcp-l5/lot2/reports/f5630786897ca282059fda0d6eb6dd2b8b94da0a626f6be3df36bf3165600134.json.gz",
-      "sha256": "f5630786897ca282059fda0d6eb6dd2b8b94da0a626f6be3df36bf3165600134",
-      "tests": 109,
+      "path": "spec/evidence/memory-mcp-l5/lot2/reports/a0fe15148809ae86137263bc71f6ab66ab8cdd649716d40ace034b0603645860.json.gz",
+      "sha256": "a0fe15148809ae86137263bc71f6ab66ab8cdd649716d40ace034b0603645860",
+      "tests": 111,
       "files": [
         {"path":"tools/memory-mcp-l5/tests/artifact-manifest.test.mjs","assertions":5,"status":"passed"},
         {"path":"tools/memory-mcp-l5/tests/ci-contract.test.mjs","assertions":5,"status":"passed"},
@@ -38,6 +38,7 @@
         {"path":"tools/memory-mcp-l5/tests/lock-closure.test.mjs","assertions":18,"status":"passed"},
         {"path":"tools/memory-mcp-l5/tests/lock-fingerprint.test.mjs","assertions":38,"status":"passed"},
         {"path":"tools/memory-mcp-l5/tests/lot2-assurance.test.mjs","assertions":2,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/lot2-canonical-report.test.mjs","assertions":2,"status":"passed"},
         {"path":"tools/memory-mcp-l5/tests/lot2-envelope.test.mjs","assertions":1,"status":"passed"},
         {"path":"tools/memory-mcp-l5/tests/lot2-manifest.test.mjs","assertions":1,"status":"passed"},
         {"path":"tools/memory-mcp-l5/tests/lot2-retained-inputs.test.mjs","assertions":1,"status":"passed"},
@@ -64,9 +65,12 @@
     {"path":"packages/mcp-broker/src/memory-reference/driver.ts","sha256":"dd188a92e56f8d9636fdd54160c897bb8b526980a7857b89dab1bcb0d4e977e6"},
     {"path":"packages/mcp-broker/src/memory-reference/index.ts","sha256":"7a0a62fddf82b5b3242cfb53bf59010c1ea6351e91312845ec303dd9f78ba004"},
     {"path":"packages/mcp-broker/src/memory-reference/schema.ts","sha256":"1eb73d6d2be7d70989c4ceac733c7ad68ad100d1806e1fcbb5f82674f98f0f72"},
-    {"path":"packages/mcp-broker/src/memory-reference/sqlite-memory-workflow-store.ts","sha256":"9dc46c1ebaad624b5a483e1c0152639443de33daf6a18704452a030bd20bd4df"},
+    {"path":"packages/mcp-broker/src/memory-reference/sqlite-memory-workflow-store.ts","sha256":"8d33ff09d9078803a7423e74010879e0b84c8906b8d8ccfed8518629b39e667e"},
+    {"path":"tools/memory-mcp-l5/policies/production-v1.json","sha256":"3c0802eec22bf9be97dc45595c444a29bb4ccf6e095423b590fa1233a03662d4"},
+    {"path":"tools/memory-mcp-l5/policies/qualification-v1.json","sha256":"5096d136574eea3a72bdece500afef3ebf2fda92ec829a410a3671de17c57d84"},
     {"path":"tools/memory-mcp-l5/verifier.mjs","sha256":"f75537030ca6f28df805ae10623beb6ef38199681809574e3704d46523f8503c"},
-    {"path":"tools/memory-mcp-l5/lot2-manifest.mjs","sha256":"8fbff4358267a13ed304666c327bee52a1aeccb1af922d32e877a83908c90d76"}
+    {"path":"tools/memory-mcp-l5/lot2-manifest.mjs","sha256":"8fbff4358267a13ed304666c327bee52a1aeccb1af922d32e877a83908c90d76"},
+    {"path":"tools/memory-mcp-l5/lot2-canonical-report.mjs","sha256":"549f3f281f9578f752247e6e6031605f1c8005477819efcc009f4a2366c1cf38"}
   ],
   "waitingFor": [
     "real P3/E2/PG lot2-manifest and sidecar",
