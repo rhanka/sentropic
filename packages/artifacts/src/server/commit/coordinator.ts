@@ -39,7 +39,7 @@ import {
   type StoredCommitReceipt,
 } from './types.js';
 import { commitFenceBrand, commitTransactionBrand } from './brands.js';
-import { classifyArtifactFailure } from '../failures.js';
+import { classifyArtifactFailure, type ArtifactHostFailureMapper } from '../failures.js';
 
 function failure(
   category: FailureCategory,
@@ -110,10 +110,11 @@ const classifyOperational = (
   phase: UnitPhase,
   commitState: 'not_committed' | 'unknown',
   error: unknown,
+  mapHostError?: ArtifactHostFailureMapper,
 ): ArtifactFailure => {
   const classified = classifyArtifactFailure(error, {
     invocationId: request.invocationId, operation: request.operation, phase, commitState,
-  });
+  }, mapHostError);
   if (classified.kind === 'operational') return classified;
   return failure('provider_error', request, phase, commitState, error, { variant: 'unclassified' });
 };
@@ -319,7 +320,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     const code = typeof error === 'object' && error !== null
       ? (error as { code?: unknown }).code : undefined;
     if (settleError === undefined && typeof code === 'string' && RETRIABLE_SQLSTATES.has(code)) {
-      return { ok: false, failure: classifyOperational(request, 'commit', 'not_committed', error) };
+      return { ok: false, failure: classifyOperational(request, 'commit', 'not_committed', error, options.mapHostError) };
     }
     return unknownOutcome(
       request,
@@ -511,7 +512,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       await abandon(request);
       return {
         ok: false,
-        failure: classifyOperational(request, phase, 'not_committed', error),
+        failure: classifyOperational(request, phase, 'not_committed', error, options.mapHostError),
       };
     }
     const settle = trackSettlement(connection);
@@ -558,7 +559,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
       }
       return {
         ok: false,
-        failure: classifyOperational(request, phase, 'not_committed', error),
+        failure: classifyOperational(request, phase, 'not_committed', error, options.mapHostError),
       };
     }
   };
@@ -617,7 +618,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           ok: false,
           failure: isConnectionLoss(error)
             ? failure('provider_unavailable', request, phase, 'not_committed', error)
-            : classifyOperational(request, phase, 'not_committed', error),
+            : classifyOperational(request, phase, 'not_committed', error, options.mapHostError),
         };
       }
       const active = connection;
@@ -755,7 +756,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         }
         return {
           ok: false,
-          failure: classifyOperational(request, phase, 'not_committed', error),
+          failure: classifyOperational(request, phase, 'not_committed', error, options.mapHostError),
         };
       }
     },
@@ -772,7 +773,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         await abandon(request);
         return {
           ok: false,
-          failure: classifyOperational(request, phase, 'not_committed', error),
+          failure: classifyOperational(request, phase, 'not_committed', error, options.mapHostError),
         };
       }
       const active = connection;
@@ -873,7 +874,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         }
         return {
           ok: false,
-          failure: classifyOperational(request, phase, 'not_committed', error),
+          failure: classifyOperational(request, phase, 'not_committed', error, options.mapHostError),
         };
       }
     },

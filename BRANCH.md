@@ -7,7 +7,7 @@
 ## Scope / Guardrails
 - [x] Author: codex / gpt-6.1-sol / high; spec SHA-256 `5a666faa9e1856245ef94b19988cb08514e6e1aeac32918715c07f8ce4a24c61`.
 - [x] Branch `feat/live-stt-l1c`, worktree `tmp/worktrees/live-stt-l1c`, origin/main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`.
-- [x] Make-only, ENV last: `ENV=test-live-stt-l1c`; shared Docker flock; existing Compose qualification service, no published ports.
+- [x] Make-only, ENV last: integration uses `ENV=test-stt-l1c`; shared Docker flock; existing Compose qualification service, no published ports.
 - [x] No paid API, inference, microphone, model download, Python, publication or deployment.
 - [x] Specific-file staging; make commit only; commits under 150 changed lines; no attribution trailers.
 - [x] Preserve root and other worktrees; Sol serializes shared catalogue/barrel/manifest edits.
@@ -47,6 +47,8 @@
   - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
 
 ## Feedback Loop
+- [x] PR757-r2 post-merge default cluster suite: 142 files / 1,208 tests pass, including all 66 speech tests; 56 files / 129 environment-gated tests skipped. Ran through locked make/Compose with ENV=test-stt-l1c; exact-head CI follows the merge push while the PR remains draft.
+- [x] PR757-r2 integration: retarget draft to main and merge origin/main without rebasing; preserve cluster 0.23.0, speech exports and comments <0.24.0 with main's Decision support and selected fixture tuple. Scope checks compare the merge result to origin/main so inherited upstream changes are excluded; the adapter accepts the owner's test-stt-l1c ENV.
 - [x] PR757 verification adds native Node ESM speech imports against 0.19.2/0.22/0.27 without speech exports and 0.28 with missing/invalid/valid exports; strict types and lint now cover all four speech suites.
 - [x] PR757-P2-2: two tests first reproduce missing digest and same-revision reload acceptance. Canonical SHA-256 pins selections, projections and consent; reload accepts known revision history and refuses content changes under an existing scoped identity.
 - [x] PR757-P2-1: eight tests first fail on missing speech registration; speech now loads through the typed registry with >=0.28.0 <0.29.0 metadata/member checks before provider evaluation, retaining existing text ranges and the topology guard.
