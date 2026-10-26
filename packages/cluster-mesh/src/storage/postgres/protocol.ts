@@ -7,6 +7,7 @@ import type { AtomicUnit } from '../atomic.js';
 import type { PgInstalledOperation, PgPurgeFinalizer } from './installed-contracts.js';
 import type { PgStagedModule } from './staged-module.js';
 import type { ScopeGrant } from '../authority.js';
+import type { CanonicalInstanceRegistry } from '../instance-ownership.js';
 
 export type SqlValue = string | number | boolean | bigint | Uint8Array | null | readonly SqlValue[];
 export interface SqlStatement {
@@ -110,6 +111,10 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
    * admission with a deferred COMMIT guard (G-P0a/G-P0b) is still required
    * for qualification. */
   readonly onCommitPossession?: () => void | Promise<void>;
+  /** Shared live-holder registry: when supplied, a second open of the same
+   * store in this process is refused promptly (instance-busy) instead of
+   * superseding. Defaults to a fresh registry per open (durable row wins). */
+  readonly instanceRegistry?: CanonicalInstanceRegistry;
   readonly stagedModules?: Readonly<Record<string, PgStagedModule>>;
   readonly pgPredicates?: Readonly<
     Record<
