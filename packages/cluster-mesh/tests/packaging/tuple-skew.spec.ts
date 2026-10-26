@@ -3,6 +3,32 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { enabled, fixtureDir, nodeJson, read } from './helpers.js';
 import { npmSkewViolations, runtimeRefusalViolations, type Detail, type Probe, type SkewTuple } from './skew-invariants.js';
+import { satisfiesRange } from '../../src/modules/semver.js';
+import { LLM_MESH_RANGE, PROVIDER_CATALOG } from '../../src/modules/catalog.js';
+
+describe('Radar llm-mesh compatibility range', () => {
+  const range = LLM_MESH_RANGE;
+  it('should keep the runtime catalog aligned with the manifest peer range', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+    expect(range).toBe('0.19.2 || >=0.22.0 <0.29.0');
+    expect(range).toBe(manifest.peerDependencies['@sentropic/llm-mesh']);
+    for (const entry of Object.values(PROVIDER_CATALOG).filter((entry) => entry.owner === 'llm-mesh')) {
+      expect(entry.range).toBe(range);
+    }
+  });
+  // 0.28 adds an independent speech contract; existing text routing stays compatible.
+  it.each(['0.19.2', '0.22.0', '0.27.9', '0.28.0', '0.28.9'])('should admit the qualified version %s', (version) => {
+    expect(satisfiesRange(version, range)).toBe(true);
+  });
+  it.each(['0.19.1', '0.19.3', '0.20.0', '0.21.2', '0.29.0', '0.22.0-dev.1'])
+    ('should refuse the unqualified version %s', (version) => {
+      expect(satisfiesRange(version, range)).toBe(false);
+    });
+  it.each(['|| 0.19.2', '0.19.2 ||', '0.19.2 || garbage'])
+    ('should refuse a malformed alternative %s', (invalid) => {
+      expect(satisfiesRange('0.19.2', invalid)).toBe(false);
+    });
+});
 
 // Skewed trees: the old tuple and a partial bump (the candidate with the consumer's own llm-mesh ^0.21.2 and
 // llm-gateway ^0.18.0). npm's exact outcome depends on npm and on the registry state (before and after the train

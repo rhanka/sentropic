@@ -22,7 +22,7 @@ const KEBAB_PATTERN = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 
 /** Loose JSON Schema fragment validator: must be a plain non-null object. */
 const jsonSchemaFragmentSchema: z.ZodType<JsonSchemaFragment> = z
-  .record(z.unknown())
+  .record(z.string(), z.unknown())
   .refine((value) => value !== null && typeof value === 'object', {
     message: 'inputSchema must be a JSON Schema object',
   });

@@ -46,7 +46,7 @@ test.describe('Chat organization_update tool', () => {
     return (fromData || fromTop || '').trim();
   };
 
-  test('updates the organization technologies field on request (default model)', async ({
+  test('updates the organization technologies field on request (mistral model)', async ({
     browser,
   }) => {
     const userAApi = await request.newContext({
@@ -126,12 +126,21 @@ test.describe('Chat organization_update tool', () => {
       const composer = page.locator('[role="textbox"][aria-label="Composer"]');
       await expect(composer).toBeVisible({ timeout: 10_000 });
 
+      // CI model: mistral-small-2603 (gpt-4.1-nano retired; production default unchanged).
+      // Track 01M5PCVH1Y8ZAVM7T94SRAWVR5: revert/review when seats are available.
+      const modelSelect = page.locator('#chat-model-selection');
+      await expect(
+        modelSelect.locator('option[value="mistral::mistral-small-2603"]'),
+      ).toHaveCount(1, { timeout: 10_000 });
+      await modelSelect.selectOption('mistral::mistral-small-2603');
+
       const editable = composer.locator('[contenteditable="true"]');
       await editable.click();
       await page.keyboard.press('Control+A');
       await page.keyboard.press('Backspace');
       await page.keyboard.type(
-        `Update the technologies field of this organization to exactly: ${TARGET_VALUE}`,
+        `Use organization_update to update the technologies field of organization ${orgId} (${orgName}) ` +
+        `to exactly: ${TARGET_VALUE}. Apply the change with the tool before replying; do not just describe the update.`,
       );
 
       const [sendResponse] = await Promise.all([
@@ -162,6 +171,7 @@ test.describe('Chat organization_update tool', () => {
       console.log(
         `[org-update.spec] BUG-1 proof — technologies before=${JSON.stringify(before)} after=${JSON.stringify(after)} toolCallObserved=${toolCallObserved}`,
       );
+      console.log(`[org-update.spec] assistant response: ${await assistantResponse.innerText()}`);
 
       // Primary assertion: the field changed and carries the requested value.
       expect(after).not.toBe(before);

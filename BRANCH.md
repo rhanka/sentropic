@@ -5,11 +5,11 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
 
 ## Scope / Guardrails
 - Scope limited to S1 inventory and contract only.
-- No service, schedule, credential, branch, commit, or merge activation.
+- No service, schedule, credential or merge activation.
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/sentropic` is reserved for user dev (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/sec-s1`.
-- Automated test campaigns run on dedicated environments (`ENV=test-sec-s1`), never on root `dev`.
+- Branch development happens in isolated worktree `tmp/worktrees/sec-lot1`.
+- Automated test campaigns run on dedicated environments (`ENV=test-sec-lot1`), never on root `dev`.
 - UAT qualification worktree must be commit-identical to the branch under qualification (same HEAD SHA).
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
@@ -38,6 +38,8 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] Integration: merge `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`; retain S1 plan and all 342 prior Track events. Scope-check includes incoming main files; the independent harness check against `origin/main` limits authored changes to S1.
+- [ ] Approved-r4 alignment: tests first for exact register matching, all-severity inventory, separate own-code scope, bounded grouping, complete dated reconciliation and discovered lock/hash consumers.
 - `SECDAILY-EX6-note` / `attention`: toolbox path `api/Dockerfile` is listed in Allowed Paths as read-only inventory reference only, no modification in S1. It fixes the exact existing approved toolbox path (`ci-tools` and `ci-esbuild` stages) that S2c exception SECDAILY-EX6 depends on.
 - `owner-all-public` / `acknowledge`: binding owner decision (OWNER-REQUEST.md 2026-10-23 disclosure section) supersedes the spec private-scan design. No private scan repo, everything runs in the public repos, fix PRs are public and auto-merged after other-model review and green CI. S1 contract adapted accordingly.
 
@@ -50,7 +52,7 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
   - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [x] **Mono-branch** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
 - Rationale: S1 is a single isolated contract and inventory unit with no orthogonal sub-branches.
 
@@ -58,18 +60,18 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
 - UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
 - Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/sec-s1`.
+  - Develop and run tests in `tmp/worktrees/sec-lot1`.
   - Push branch before UAT.
   - Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
-  - Switch back to `tmp/worktrees/sec-s1` after UAT.
+  - Switch back to `tmp/worktrees/sec-lot1` after UAT.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
-  - [x] Create isolated worktree `tmp/worktrees/sec-s1` from `origin/main` on branch `feat/security-autofix-s1`.
+  - [x] Create isolated worktree `tmp/worktrees/sec-lot1` from `origin/main` on branch `feat/security-autofix-s1`.
   - [x] Capture Makefile targets needed for debug/testing.
-  - [x] Define environment mapping (`ENV=test-sec-s1`) for this branch.
-  - [x] Confirm command style: `make ... ENV=test-sec-s1` with `ENV` last.
+  - [x] Define environment mapping (`ENV=test-sec-lot1`) for this branch.
+  - [x] Confirm command style: `make ... ENV=test-sec-lot1` with `ENV` last.
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
   - [x] Resolve existing toolbox path `api/Dockerfile` (`ci-tools`, `ci-esbuild` stages) as inventory fact for SECDAILY-EX6.
@@ -84,29 +86,29 @@ Implement S1 inventory and contract for autonomous daily security fixes with sea
   - [x] Declare N=2 reconciliation rule with reset conditions.
   - [x] Declare kill switches and rate limits.
   - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec-s1`
-    - [x] `make commit MSG="..." ENV=test-sec-s1` with selective `git add`
+    - [x] `make scope-check ENV=test-sec-lot1`
+    - [x] `make commit MSG="..." ENV=test-sec-lot1` with selective `git add`
 - [x] **Lot 2 — S1 modules `scripts/security/daily/schema.mjs` and `inventory.mjs`**
   - [x] Implement schema validation for contract, findings, units, lots, reconciliation evidence.
   - [x] Implement inventory of locks, images, SAST roots, derived-pin consumers.
   - [x] Implement raw/register join, grouping, lot batching, reconciliation streak check.
   - [x] Implement bumpGate manual classification hook.
   - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec-s1`
-    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-s1`
+    - [x] `make scope-check ENV=test-sec-lot1`
+    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1`
 - [x] **Lot 3 — S1 tests `schema.test.mjs` and `inventory.test.mjs`**
   - [x] Cover three images, root/UI/kit locks, 67-row expiry split, seven stale-container candidates.
   - [x] Cover N=2 complete-scan fixture, severity flags, aliases, malformed data.
   - [x] Cover P3-1 credential fields and P3-4 manual class.
   - [x] Cover owner all-public decision (no private scan repo or storage).
   - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec-s1`
-    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-s1`
+    - [x] `make scope-check ENV=test-sec-lot1`
+    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1`
 - [x] **Lot N-1 — Docs consolidation**
   - [x] No spec consolidation needed for S1 contract branch.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck and lint not applicable to plain Node security scripts.
-  - [x] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-s1` (14 pass).
+  - [x] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1` (14 pass).
   - [ ] Final gate step 1: create draft PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run and verify branch CI green.
   - [ ] Final gate step 3: do not merge, report PR number, head SHA, CI URL.
