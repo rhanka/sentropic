@@ -49,10 +49,10 @@
   - [x] Create worktree from origin/main; mechanical harness branch check passed.
   - [x] Identify existing Compose test, lint, typecheck, freeze and cleanup targets.
   - [x] Enable requested ENV in existing disposable Compose lane.
-- [ ] **Lot 1 — Regression first**
-  - [ ] Add a shared memory/S3 case matrix in tests/s3.integration.test.ts.
-  - [ ] Exercise empty, embedded '..', valid matching and unmatched prefixes on real MinIO.
-  - [ ] Observe memory regression failures before changing production code.
+- [x] **Lot 1 — Regression first**
+  - [x] Add a shared memory/S3 case matrix in tests/s3.integration.test.ts.
+  - [x] Exercise empty, embedded '..', valid matching and unmatched prefixes on real MinIO.
+  - [x] Before production changes: 12 expected failures (6 memory acceptances, 6 untyped S3 errors), 15 passing tests. Command: make -o build-artifacts test-artifacts-integration SCOPE=tests/s3.integration.test.ts ENV=test-artifacts-022.
 - [ ] **Lot 2 — Shared validation and patch version**
   - [ ] Add one shared prefix validator; both stores call it before enumeration/I/O.
   - [ ] Reuse typed invalid_request errors, preserve message, add stable invalid_blob_prefix code.
