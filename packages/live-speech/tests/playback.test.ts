@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { Playback } from '../src/core/playback.js';
 
 const frame = (sequence = 0, sampleOffset = 0) => ({
+  speechSessionId: 'speech-1', streamId: 'stream-1',
   connectionEpoch: 1, turnEpoch: 1, outputItemId: 'output-1', responseId: 'response-1',
-  sequence, sampleOffset, sampleCount: 480, sampleRateHz: 24000, payload: new Uint8Array(960),
+  sequence, sampleOffset, sampleCount: 480, format: { codec: 'pcm16-le', sampleRateHz: 24000, channels: 1 } as const,
+  payload: new Uint8Array(960),
 });
 
 describe('heard prefix and stale output', () => {
   it('should measure rendered samples and never equate generation done with heard audio', () => {
-    const p = new Playback(1, 1);
+    const p = new Playback('speech-1', 1, 1);
     expect(p.enqueue(frame())).toBe(true);
     expect(p.enqueue(frame(1, 480))).toBe(true);
     p.generatedDone('output-1');
@@ -21,7 +23,7 @@ describe('heard prefix and stale output', () => {
   });
 
   it('should clear immediately and reject late old-epoch output across channel reordering', () => {
-    const p = new Playback(1, 1);
+    const p = new Playback('speech-1', 1, 1);
     p.enqueue(frame());
     expect(p.clear()).toEqual([{ outputItemId: 'output-1', playedSamples: 0, uncertaintySamples: 0 }]);
     expect(p.take()).toBeUndefined();
@@ -33,7 +35,7 @@ describe('heard prefix and stale output', () => {
   });
 
   it('should refuse duplicates, gaps, invalid payloads and queues over 250ms', () => {
-    const p = new Playback(1, 1);
+    const p = new Playback('speech-1', 1, 1);
     expect(p.enqueue(frame())).toBe(true);
     expect(p.enqueue(frame())).toBe(false);
     expect(p.enqueue(frame(2, 960))).toBe(false);
@@ -42,5 +44,14 @@ describe('heard prefix and stale output', () => {
     expect(p.enqueue(frame(12, 5760))).toBe(false);
     p.take();
     expect(p.enqueue(frame(12, 5760))).toBe(true);
+  });
+
+  it('should isolate sessions and order each stream independently across output items', () => {
+    const p = new Playback('speech-1', 1, 1);
+    expect(p.enqueue({ ...frame(), speechSessionId: 'other-session' })).toBe(false);
+    expect(p.enqueue(frame())).toBe(true);
+    expect(p.enqueue({ ...frame(1), outputItemId: 'output-2' })).toBe(true);
+    expect(p.enqueue({ ...frame(), streamId: 'stream-2', outputItemId: 'output-3' })).toBe(true);
+    expect(p.enqueue({ ...frame(2, 480), streamId: 'stream-2' })).toBe(false);
   });
 });
