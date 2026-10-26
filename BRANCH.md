@@ -62,7 +62,7 @@ Extend `k8s-pgbackup-restore` to restore into the isolated namespace/PG/DB only,
   - [x] Remove swallowed checksum/count failures; print the B03 manifest block.
   - [x] `make -n` dry-run plus `scope-check` before commit.
 - [ ] **Lot 2 — Runbook plus isolation test**
-  - [ ] `docs/runbooks/app-cm-baseline-restore.md` with the exact tenant command for W0-close.c.
+  - [x] `docs/runbooks/app-cm-baseline-restore.md` with the exact tenant command for W0-close.c.
   - [ ] `scripts/test-pgbackup-restore-isolation.sh` (shell, fake kubectl, no cluster).
 - [ ] **Lot 3 — Local guard verification**
   - [ ] Run the isolation test green with `ENV=test-app-w0-restore` last.
