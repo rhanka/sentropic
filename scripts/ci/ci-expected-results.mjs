@@ -11,6 +11,51 @@ import { createRequire } from 'node:module';
 
 const BLOCKING = new Set(['failed', 'cancelled', 'timed_out', 'stale']);
 
+// Maximum weighted antichain: a conservative per-run slot bound, independent
+// of job durations or selection. Matrix weights honor max-parallel. Dilworth's
+// bipartite matching counts slots that cannot share a dependency chain.
+export function capacityDemand(workflow) {
+  const jobs = workflow.jobs;
+  const ancestors = new Map();
+  const visiting = new Set();
+  const visit = name => {
+    if (!jobs[name]) throw new Error(`Invalid capacity dependency: ${name}`);
+    if (visiting.has(name)) throw new Error(`Capacity dependency cycle: ${name}`);
+    if (ancestors.has(name)) return ancestors.get(name);
+    visiting.add(name);
+    const needs = jobs[name].needs ?? [];
+    const result = new Set();
+    for (const parent of typeof needs === 'string' ? [needs] : needs) {
+      result.add(parent);
+      for (const ancestor of visit(parent)) result.add(ancestor);
+    }
+    visiting.delete(name);
+    ancestors.set(name, result);
+    return result;
+  };
+  const slots = Object.entries(jobs).flatMap(([name, job]) => {
+    visit(name);
+    const count = job.strategy?.matrix?.include?.length ?? 1;
+    const width = Math.min(count, job.strategy?.['max-parallel'] ?? count);
+    if (!Number.isInteger(width) || width < 1) throw new Error(`Invalid capacity width: ${name}`);
+    return Array(width).fill(name);
+  });
+  const matched = new Map();
+  const augment = (left, seen) => {
+    for (let right = 0; right < slots.length; right++) {
+      if (seen.has(right) || !ancestors.get(slots[right]).has(slots[left])) continue;
+      seen.add(right);
+      if (!matched.has(right) || augment(matched.get(right), seen)) {
+        matched.set(right, left);
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let left = 0; left < slots.length; left++) augment(left, new Set());
+  return slots.length - matched.size;
+}
+
 export function normalizeConclusion(conclusion) {
   return String(conclusion ?? '').trim().toLowerCase();
 }
@@ -233,12 +278,20 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   if (args.includes('--workflow-file')) {
     const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
     const workflow = YAML.parse(fs.readFileSync(args[args.indexOf('--workflow-file') + 1], 'utf8'));
+    if (args.includes('--capacity-policy')) {
+      const demand = capacityDemand(workflow);
+      console.log(JSON.stringify({ perRunSlots: demand, availableSlots: 17, reserveSlots: 2,
+        source: 'BR-76 observed lower bound; account quota remains to-measure', admitted: demand <= 15 }, null, 2));
+      process.exit(demand <= 15 ? 0 : 1);
+    }
     const context = JSON.parse(process.env.CI_SELECTION_CONTEXT);
     const expected = workflowExpected(workflow, context);
     const gateExpected = workflow.jobs['ci-gate'].needs.map((job) => ({ job,
       selected: job === 'ci-capacity-receipts' || expected.some((row) => row.selected
         && (row.job === job || row.job.startsWith(`${job} (`))) }));
-    const manifest = { identity: context.identity, expected, gateExpected };
+    const dependencies = Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
+      [name, typeof job.needs === 'string' ? [job.needs] : job.needs ?? []]));
+    const manifest = { identity: context.identity, expected, gateExpected, dependencies };
     fs.writeFileSync(args[args.indexOf('--manifest-file') + 1], JSON.stringify(manifest, null, 2));
     process.exit(0);
   }
