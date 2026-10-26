@@ -17,6 +17,7 @@
   - `api/src/services/mcp/cluster-registry.ts`
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/vitest.config.ts`
+  - `api/tsconfig.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -32,7 +33,9 @@
 - [x] Exception process: BR02-EXn records reason, impact and rollback before scope expansion.
 
 ## Feedback Loop
+- [x] BR02-EX2: one workspace artifacts type graph for the new mesh builtin import resolves the conflicting API/private and workspace 0.2.1 frozen types; API typecheck and lint pass. Bounded api/tsconfig.json path mapping; runtime locks remain W2.b; rollback removes mapping.
 - [x] BR02-EX1: Vitest root aliases resolve new registry leaves as index.ts/subpath (ENOTDIR). Add exact mesh/platform leaf aliases in api/vitest.config.ts; test-only impact; rollback removes those aliases.
+- [x] BR02-EX1 pins all test artifacts imports to workspace dist, matching the mesh loader and keeping HTTP/MCP on one profile instance. Root lock installs an API-private artifacts copy; its profile WeakSet refuses cross-copy profiles. Production physical resolution remains W2.b's required gate.
 - [x] W2.b owns route mounting, identity/dispatch integration and root/API lock reconciliation.
 - [x] W4 consumes the returned compiled registry exact-name map without sanitization.
 - [ ] Independent review and final CI receipts remain required; no inherited review approves this diff.
@@ -49,9 +52,12 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: mechanical branch check; freeze scope, dependencies, environment and contract.
 - [x] Lot 1: tests first in `api/tests/api/app-mcp-registry.test.ts`; missing-module red captured in `/tmp/app-w2a-module-red.log` after BR02-EX1.
-- [ ] Lot 2: implement `api/src/services/mcp/cluster-registry.ts` using mesh modules, builtin and facade.
-- [ ] Lot 3: same test file covers exact names, explicit selection/config, collisions, missing peers, profile/schema/policy integrity and atomic refusal.
+- [x] Lot 2: implement `api/src/services/mcp/cluster-registry.ts` using mesh modules, builtin and facade.
+- [x] Lot 3: same test file covers exact names, explicit selection/config, collisions, missing peers, profile/schema/policy integrity and atomic refusal.
 - [ ] Lot 4: focused API suite, API typecheck/lint, relevant registry and MCP regressions; cleanup.
+  - [x] API typecheck; lint 0 errors/219 warnings; focused registry 17/17: `/tmp/app-w2a-types-coherence.log`, `/tmp/app-w2a-final-focused.log`.
+  - [ ] API regressions: `api/tests/api/{app-mcp-registry,artifacts-host-publication,artifacts-host-migrations,mcp-resource-server,cluster-mesh-mcp-singleton,cluster-mesh-namespace-inventory}.test.ts`.
+  - [ ] Consumed mesh registry suite: `packages/cluster-mesh/tests/mcp-registry.spec.ts`.
 - [ ] Lot 5: independent review; push, draft PR from this file, exact-head CI green; report names and SHA.
 
 ## Inherited main qualification record
