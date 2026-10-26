@@ -182,6 +182,7 @@ export class InterruptAuthority {
     const input = await this.journal.transact(state => {
       const turn = getTurn(state, ref);
       if (turn.fence || turn.phase !== 'committed' || !state.connected) return undefined;
+      if (Object.values(state.turns).some(t => t.turnEpoch < turn.turnEpoch && !isTerminal(t) && !t.fence)) return undefined;
       turn.phase = 'starting'; // Durable before the single native submission attempt.
       return { ...ref, inputRef: turn.inputRef };
     });
