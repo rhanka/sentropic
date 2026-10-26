@@ -227,7 +227,7 @@ export function deliveryElapsed(records, runCreatedAt, endpoints = {}) {
       const member = Math.max(...ends);
       if (latest === null || member > latest) latest = member;
     }
-    result[endpoint] = { status, elapsedSeconds: !complete || latest === null ? null : (latest - base) / 1000 };
+    result[endpoint] = { status, elapsedSeconds: !complete || latest === null ? null : durationSeconds(base, latest) };
   }
   return result;
 }

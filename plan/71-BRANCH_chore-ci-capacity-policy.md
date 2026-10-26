@@ -59,7 +59,7 @@
 - [ ] **Lot 2 — Bounded dispatch and concurrency**
   - [x] Admit full PR/main DAGs only at <=15 slots (17 observed minus 2 release allowance); ordinary publishers use one lane, existing mesh/gateway/cluster barriers and bootstrap remain intact. API/E2E widths settle at 2/2.
   - [x] Stagger package validation into two dependency lanes; bound API/E2E matrices to 2/2 slots without changing matrix members or the PR/main cancellation groups.
-  - [ ] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots.
+  - [x] Cancel only superseded PR attempts; preserve main release execution and avoid release overlap; cap/stagger package fan-out based on measured available slots.
   - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
 - [ ] **Lot 3 — Contention budgets and rollback drill**
   - [x] Combine real run captures for observed-peak admission, execution-overlap witnesses, superseded PR ownership and per-main-release continuity; incomplete runs remain to-measure.
@@ -68,11 +68,12 @@
   - [x] Post-run classification/verdict timing uses that same runner-dispatch evidence; absent runners never receive duration credit. New policy qualification uses ENV=test-ci-capacity.
   - [x] Include workflow admission before root job creation (rollback 189s; completed main 1s) in critical-path scheduling. Preserve unknown admission/readiness as null; completed main aggregate is 1559s.
   - [x] Reject admission credit for partial/empty captures or missing execution stamps; reject release continuity without endpoint mappings. Preserve raw observed peaks separately (35 metrics tests).
+  - [x] Main 40356941217 attempt 2 is green on base 22d8a9e68: all selected endpoints continuous after retrying an artifact-download failure. Carried package endpoints completed before retry creation retain null elapsed timing; reuse durationSeconds to reject the observed negative interval.
   - [x] Add post-run Make capture using the actual run/attempt Jobs API, exact source workflow, and retained pre-dispatch manifest. Missing artifacts fail closed; no selection reconstructed from outcomes.
   - [x] Qualify aggregate scheduling receipts on identified critical-path executions; preserve single-job queue statistics. Main cancellations remain current across newer main runs (32 metrics tests).
-  - [ ] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
+  - [x] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
   - [ ] Budget to measure: classification ≤15s, verdict ≤5s, aggregate critical-path scheduling ≤60s under declared concurrent traffic.
-  - [ ] Rollback drill: restore prior scheduling policy and conservative dispatch width; keep expected-result and metrics checks; demonstrate that cancellation never stops the current release.
+  - [x] Rollback drill: restore prior scheduling policy and conservative dispatch width; keep expected-result and metrics checks; demonstrate that cancellation never stops the current release.
   - [x] Prepare live conservative rollback: one package validation lane and API/E2E widths 1/1; retain the pre-BR77 cancellation/release groups and every completeness/metrics check. Run beside main 40341027258 attempt 2.
   - [x] Rollback head 474e023163fd1be0b2f0ac7f33442c2d97dc561c started run 40353670942; prior run 40352448337 was automatically cancelled (57 cancelled rows; its complete-result gate failed). Main attempt 2 continued. Restore bounded 2/2 policy and retain dependency/capacity inputs in workflow artifacts.
   - [x] Main 40341027258 attempt 2 completed successfully through both supersessions: all four endpoints continuous; peak 12; 210.45 runner-minutes. Classification/verdict/scheduling 19s/19s/1559s breach 15s/5s/60s; retain these failures in capacity.md. Rollback metrics job 121682975411 passed live.
