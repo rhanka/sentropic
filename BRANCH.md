@@ -35,6 +35,7 @@
 - [x] **Exception process**: declare BR-W1A-EXn with reason, impact and rollback before scope expansion.
 
 ## Feedback Loop
+- [x] Review ISO-1 accepted: refuse lost/partial receipts alongside existing schema rather than replaying IF NOT EXISTS DDL and inventing installation history; add both partial-restore regressions first.
 - [x] Review MIG-1/MIG-2 accepted: test future reserved-slot eligibility and concurrent first installation; install 0020 in the host asset journal without advancing Drizzle's control frontier, and retain one connection for the API migration lock.
 - [x] Red PostgreSQL proof: 6/8 pass; concurrent first installation fails with pg_namespace_nspname_index, and the reserved-slot witness is skipped. Both findings reproduced before correction.
 - [x] Full API migration entry now retains its session lock/client across public/control/package installation; package installation can reuse that client without a second pool lease.
