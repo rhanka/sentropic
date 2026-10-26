@@ -49,6 +49,7 @@
 - [x] Backlog alignment: raw all-severity findings remain queued, unresolved unmatched rows remain verification-pending, expiry is computed from current rows and malformed/missing/errored reports cannot produce clean state.
 - [x] Coverage alignment: discover package/app/script/tool source roots and workspace manifests, verify the three image stages, enumerate reviewed hash consumers and expose missing locks/unknown consumers/SAST qualification as blockers.
 - [x] Identity hardening: malformed aliases and ambiguous/empty key components fail closed; source defects may use an explicit stable defect identity. Local editor-rule symlinks are excluded from application surface discovery.
+- [ ] Independent review: harness selection failed because no reachable exact-model catalog establishes two eligible Claude-hosted models; dossier retained in `.tmp/daily-sec-fix/s1-review-dossier.md`. No consensus or merge readiness claimed.
 - [x] SECDAILY-EX6 inventory: `api/Dockerfile` (`ci-tools` and `ci-esbuild`) is the existing approved toolbox path; S1 does not modify it or introduce an image.
 - `owner-all-public` / `acknowledge`: binding owner decision (OWNER-REQUEST.md 2026-10-23 disclosure section) supersedes the spec private-scan design. No private scan repo, everything runs in the public repos, fix PRs are public and auto-merged after other-model review and green CI. S1 contract adapted accordingly.
 

@@ -46,7 +46,8 @@ export function summarizeBacklog(findings, rows, { today = new Date().toISOStrin
     (joined.length || unresolved.length ? 'complete-with-findings' : 'complete-clean'),
   findings: joined, unresolvedRegister: unresolved.length, expired,
   unexpired: unresolved.length - expired - invalidRegister, invalidRegister, expiryHistogram, verificationPending,
-  coverageBlocked, staleContainerCandidates: unresolved.filter((row) => validDate(row.review_due) && today > row.review_due && row.component?.includes('tool')).length };
+  coverageBlocked, staleContainerCandidates: unresolved.filter((row) => validDate(row.review_due) && today > row.review_due &&
+    (row.imageDigest || /image|toolbox|production|api-tool/.test(row.component || ''))).length };
 }
 
 export function inventoryLocks(root = '.') {
