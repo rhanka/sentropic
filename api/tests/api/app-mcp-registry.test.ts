@@ -17,7 +17,9 @@ function fixture() {
     createInvocation,
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
-    configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {} };
+    configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
+      'sentropic.artifacts': { manifestDigest: 'ccf8a4ddd9365537741eb0550efa49954d86a0c2d1ee808fb18ca81ef7090e9a' },
+    } };
 }
 
 function localFixture() {
@@ -34,6 +36,8 @@ function localFixture() {
 describe('app MCP registry compilation', () => {
   it('should expose the exact APP-P1 names and schemas without invoking a host port', async () => {
     const input = fixture();
+    expect(input.artifacts.profile.profileDigest)
+      .toBe('0de19f966eacb5b63142b525611a6210a0d4aaeefbdaad92dfb3b6227575b6ef');
     const result = await compileAppMcpRegistry(input);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
@@ -50,6 +54,13 @@ describe('app MCP registry compilation', () => {
     expect(result.registry.resolveTool('artifacts-ensure')).toBeUndefined();
     expect(input.execute).not.toHaveBeenCalled();
     expect(input.createInvocation).not.toHaveBeenCalled();
+  });
+
+  it('should refuse a missing artifacts compatibility receipt without exposing a registry', async () => {
+    const result = await compileAppMcpRegistry({ ...fixture(), compatibility: {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.diagnostics[0].code).toBe('missing_compatibility');
+    expect(result).not.toHaveProperty('registry');
   });
 
   it('should expose nothing and not load artifacts when selection is explicitly empty', async () => {
@@ -92,7 +103,7 @@ describe('app MCP registry compilation', () => {
     local.manifest = { ...local.manifest, providerId: 'app.local' };
     const result = await compileAppMcpRegistry({ ...input, registrations: [local],
       selection: ['sentropic.artifacts', 'app.local'],
-      compatibility: { 'app.local': { manifestDigest: computeManifestDigest(local.manifest) } } });
+      compatibility: { ...input.compatibility, 'app.local': { manifestDigest: computeManifestDigest(local.manifest) } } });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'duplicate_tool' })]));
@@ -183,5 +194,29 @@ describe('app MCP registry compilation', () => {
       compatibility: { 'sentropic.artifacts': { manifestDigest: 'stale' } } });
     expect(stale.ok).toBe(false);
     if (!stale.ok) expect(stale.diagnostics[0].code).toBe('compatibility_mismatch');
+  });
+
+  // Reload last: artifacts rejects profiles crossing module instances after resetModules.
+  it('should refuse an APP-P1 package schema drift with unchanged capability names and no receipt', async () => {
+    const drift = { ...RADAR_ARTIFACTS_PROFILE, operations: RADAR_ARTIFACTS_PROFILE.operations.map((op) =>
+      op.operation === 'list' ? { ...op, limits: { ...op.limits, listLimitMax: 99 } } : op) };
+    vi.resetModules();
+    vi.doMock('@sentropic/artifacts/mcp-core', async () => ({
+      ...await vi.importActual('@sentropic/artifacts/mcp-core'), RADAR_ARTIFACTS_PROFILE: drift,
+    }));
+    try {
+      const { compileArtifactsProfile: compile } = await import('@sentropic/artifacts/mcp-core');
+      const compiled = compile(drift);
+      const input = { ...fixture(), compatibility: {} };
+      input.artifacts = { ...input.artifacts, profile: compiled,
+        app: { ...input.artifacts.app, profileDigest: compiled.profileDigest, selectedCapabilities: compiled.selectedCapabilities } };
+      expect(compiled.selectedCapabilities).toEqual(profile().selectedCapabilities);
+      expect(compiled.schemas.artifacts_list).not.toEqual(profile().schemas.artifacts_list);
+      const { compileAppMcpRegistry: compileRegistry } = await import('../../src/services/mcp/cluster-registry');
+      await expect(compileRegistry(input)).rejects.toThrow(/frozen APP-P1/);
+    } finally {
+      vi.doUnmock('@sentropic/artifacts/mcp-core');
+      vi.resetModules();
+    }
   });
 });
