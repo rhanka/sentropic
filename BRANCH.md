@@ -21,6 +21,7 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
+  - [x] `docs/comments-annotations/contract/package-zod4-migration.json` (BR96-EX33: incoming #752 contract attestation only)
   - [x] `packages/auth-hono/**`, `packages/auth-ui/**`, `packages/comments/**`, `packages/skills/**`, `package.json`, `scripts/ci/publishable-classification.test.mjs` (BR96-EX33: incoming #752 history only)
   - [x] `scripts/ci/publishable-manifests.mjs` (BR96-EX32: dependency-floor parsing only)
   - [x] `.tmp/live-stt/l1/**`, `packages/llm-mesh/src/speech/**`, `packages/llm-mesh/src/index.ts`, `packages/llm-mesh/tests/speech-contract.test.ts`, `packages/llm-mesh/CHANGELOG.md` (BR96-EX31: incoming #754 history only)
@@ -78,6 +79,8 @@
 - [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; active: BR96-EX4, BR96-EX7, BR96-EX8, BR96-EX9, BR96-EX10, BR96-EX11, BR96-EX12, BR96-EX13, BR96-EX14, BR96-EX15, BR96-EX16, BR96-EX17, BR96-EX18, BR96-EX19, BR96-EX20, BR96-EX21, BR96-EX22, BR96-EX23, BR96-EX24.
 
 ## Feedback Loop
+- [x] EX33 scope completion: the advisory C2 scan flagged the incoming Comments Zod contract attestation as undeclared; add that exact inherited document path and recheck the full integration delta with SCOPE_BASE=31630a0fa. No authored document or product change.
+- [x] Lifecycle refresh at merge 3bddd94f0: Track CLI re-anchored two eligible done items; reread leaves the same 15 done items NOT consolidated - to treat (acceptance unknown). Journal integrity remains valid at 370 events.
 - [x] BR96-EX33: main advanced through Zod 4 #752 (7815a2a85) while CI 40319367382 had passed Cluster Mesh and all E2E groups. Merge main without rebase, retain its Zod 4 migration, validation envelopes, security removals and configurable pack runner; preserve the reviewed Decision sources and the tested compound-range wait fix. Advance cluster to 0.22.4 above main 0.22.3 and gateway candidate to 0.21.3 above main 0.21.2; retain mesh 0.28.1. Align current auth/comments peers and real archive fixture metadata. Drop the resolved Zod/provider-utils branch exceptions, retain only the unrelated pre-existing undici toolbox record. Scope: incoming migration plus bounded merge/tuple resolutions only. Rollback: revert this integration merge and tuple alignment.
 - [x] EX32 final qualification: gateway 0.21.2 and mesh 0.28.1 guarded archives match the selected lock; packed consumer/import/type/skew qualification passed 100/100. Full publication-guard regression suite passed 88/88 after aligning CI peers; per-step Compose cleanup completed. Candidate Gateway metadata now differs from main, so same-PR sibling qualification includes its archive without relying on the failed 0.21.1 publication.
 - [x] EX32 regression validation: wiring suite 24/24 passed, including the real Make version-selector command, caret/union/comparator ranges and malformed/unsatisfiable refusal. The actual wait-llm-gateway-mesh-dependency target passed with one cache-bypassing registry read of mesh 0.27.0; cleanup completed.
