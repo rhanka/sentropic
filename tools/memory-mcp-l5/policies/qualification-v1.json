@@ -1,0 +1,11 @@
+{
+  "version": "qualification/v1",
+  "purpose": "qualification",
+  "issuer": "https://qualification.memory.test",
+  "audience": "memory-l5",
+  "mappingStatus": "qualification-only",
+  "maxStepUpAgeSeconds": 300,
+  "keys": {},
+  "acr": ["urn:qualification:2fa"],
+  "amr": ["pwd", "otp"]
+}
