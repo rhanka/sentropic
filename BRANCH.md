@@ -1,7 +1,7 @@
 # Feature: feat(artifacts): ship UP-T conformance vectors (0.2.4)
 
 ## Objective
-- [ ] Deliver UP-T-2: publish importable activation conformance vectors for W1.c and Radar host executors.
+- [x] Deliver UP-T-2: ship importable activation conformance vectors for W1.c and Radar host executors in the 0.2.4 candidate tarball.
 
 ## Scope / Guardrails
 - [x] Additive testing surface only; activation implementation and SQL bytes stay unchanged.
@@ -35,13 +35,13 @@
 ## Feedback Loop
 - [x] UP-T-2 / P1-1 in `pr794_opus_r1.md`: existing 0.2.3 vectors are repository tests absent from the published package; this branch supplies an executable package export.
 - [x] TYPE-1: strict installed-consumer compilation requires `@types/pg` in the consumer tree, alongside `pg`; fixture corrected without changing package production code.
-- [ ] REV-1: owner review on the draft PR; harness consensus selection unavailable because live peer discovery does not provide exact model IDs (`.tmp/upt2-review.md`); no consensus claimed.
+- [ ] REV-1: owner review on draft PR #797; harness consensus selection unavailable because live peer discovery does not provide exact model IDs (`.h2a/reviews/upt2-author.md`); no consensus claimed.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky acceptance in this package-only scope.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; single package writer; independent review before handoff.
+- [x] Mono-branch; single package writer; external review on the draft PR.
 
 ## UAT Management (in orchestration context)
 - [x] Package consumer qualification replaces browser UAT; host session/ACL and deployment qualification remain consumer obligations.
@@ -64,6 +64,6 @@
   - [x] Package unit tests: 451/451 (37 files); lint passes; strict package build passed during packed-consumer qualification (`/tmp/artifacts-upt2-unit-lint.log`).
   - [x] Wire packed-vector qualification into artifacts CI under BR861-EX3.
   - [x] Run scope check before each commit; author diff inspection complete; external review tracked as REV-1.
-  - [ ] Push and create draft PR with this file as body; post 3-step plan.
+  - [x] Push and create draft PR #797 to main with this file as body; 3-step plan posted.
   - [ ] Verify CI on the exact head; report PR, head, vector import path.
   - [x] Tear down `test-artifacts-upt2` after each test step; retain BRANCH.md and draft status; do not merge.
