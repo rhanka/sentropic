@@ -6,7 +6,7 @@ import {
 } from '../../src/modules/errors.js';
 import { createModuleRegistry } from '../../src/modules/registry.js';
 import { satisfiesRange } from '../../src/modules/semver.js';
-import { isPrerelease, RESERVED_NEXT } from '../fixtures/reserved-versions.js';
+
 import { evaluations, fakeAuthHono, fakeGateway, fakeMesh, moduleSource, PackageTree } from '../fixtures/package-tree.js';
 
 let tree: PackageTree;
@@ -51,25 +51,21 @@ describe('module registry', () => {
     tree.install('app', { name: '@sentropic/cluster-mesh', version, exports: {
       './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
     } });
-    // Pack-only dev bumps sit outside the frozen Comments range by design (see
-    // the pinned 0.23.0 refusal below): any prerelease leaf is refused before
-    // peer resolution, while a released leaf must reach the peer requirement.
-    if (isPrerelease(version as string)) {
-      await expect(registry().load('comments')).rejects.toMatchObject({
-        reason: 'incompatible_version', packageName: '@sentropic/cluster-mesh',
-      });
-    } else {
-      await expect(registry().load('comments')).rejects.toMatchObject({
-        reason: 'not_installed', packageName: '@sentropic/comments',
-      });
-    }
+    // The reserved pack-only dev line sits inside the Comments range by design
+    // (see the range table below): a prerelease leaf on the reserved line is
+    // accepted and must reach the peer requirement, while any other
+    // prerelease stays refused before peer resolution.
+    await expect(registry().load('comments')).rejects.toMatchObject({
+      reason: 'not_installed', packageName: '@sentropic/comments',
+    });
     expect(evaluations()).toEqual([]);
   });
 
-  it('should refuse a reserved-next dev leaf before peer resolution', async () => {
-    // Memory lots carry `<reservedNext>-dev.N` by plan; the leaf stays outside
-    // the frozen Comments range, so it is refused before peer resolution.
-    tree.install('app', { name: '@sentropic/cluster-mesh', version: `${RESERVED_NEXT}-dev.1`, exports: {
+  it('should refuse an unreserved dev leaf before peer resolution', async () => {
+    // Only the reserved `<reservedNext>-dev.N` line sits inside the Comments
+    // range; a dev leaf on any other line stays outside and is refused
+    // before peer resolution.
+    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.23.1-dev.1', exports: {
       './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
     } });
     await expect(registry().load('comments')).rejects.toMatchObject({
@@ -280,6 +276,14 @@ describe('release range check', () => {
     ['0.20.0+build.7', '>=0.19.0 <0.20.0', false],
     ['0.19.0-beta.1+build.7', '>=0.19.0 <0.20.0', false],
     ['0.19.0+', '>=0.19.0 <0.20.0', false],
+    // Pack-only dev line: named by a same-tuple prerelease comparator.
+    ['0.23.0-dev.9', '>=0.21.0 <0.23.0 || >=0.23.0-dev <0.23.0', true],
+    ['0.23.0-dev.1', '>=0.21.0 <0.23.0 || >=0.23.0-dev <0.23.0', true],
+    ['0.23.0', '>=0.21.0 <0.23.0 || >=0.23.0-dev <0.23.0', false],
+    ['0.23.1-dev.1', '>=0.21.0 <0.23.0 || >=0.23.0-dev <0.23.0', false],
+    ['0.22.9-rc.1', '>=0.21.0 <0.23.0 || >=0.23.0-dev <0.23.0', false],
+    ['0.23.0-dev.9', '>=0.21.0 <0.23.0', false],
+    ['0.19.0-beta.1', '>=0.19.0 <0.20.0 || >=0.23.0-dev <0.23.0', false],
     [undefined, '^5.10.0', false],
   ])('should evaluate %s against %s as %s', (version, range, expected) => {
     expect(satisfiesRange(version, range)).toBe(expected);
