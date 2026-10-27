@@ -60,6 +60,7 @@
 ## Feedback Loop
 - [x] BR00D-EX5: merge published artifacts 0.2.4 source 60affbaf6, including its existing packed-vector CI gate; package/packaging/workflow paths are inherited only. Impact is source/published byte alignment and upstream gate coverage; rollback reverts this merge with the tuple refresh. No package release is authored here.
 - [x] BR00D-EX4: owner-requested merge of integration ca3239295 brings W1/W2/W4 catalog and chat ancestry; these paths are merge-only. Impact is the integrated app baseline; rollback reverts the merge. Preserve this PR's BRANCH.md; inherited merge diff is outside the authored 150-line limit.
+- [x] BR00D-EX4 extension (Opus r2 P1): authorize the Makefile prerequisite for build-artifacts in prepare-node-workspace because clean API typecheck/startup needs its dist exports. Impact: canonical dev/test/CI preparation builds artifacts idempotently after mcp-platform; frozen tuple and activation remain unchanged. Rollback: remove this prerequisite; clean consumers then require an explicit artifacts build again.
 - [x] BR00D-EX3: transport.ts carries the frozen APP-P1 digest refreshed by this lot. Share the registry constant and add a transport-readiness regression; impact is startup acceptance of qualified artifacts 0.2.4, with exact compatibility checks retained. Rollback restores the prior qualified tuple, registry pin and transport together.
 - [x] Opus r1 P1: 85/85 transport/credentials/MCP/resource tests; real API listener, HTTP 200/readiness ready and healthy container; locked teardown completed. See runtime-qualification-2026-10-27.md.
 - [x] Opus r1 P2: regenerate 0.2.4 tuple vectors; historical/current w0-record-check passes without weakening. Final-head push/CI evidence is reported in PR #796.
@@ -88,6 +89,7 @@
 - [x] Lot 5: installed/profile tests, scope/branch gates, locked make down, empty stack, draft PR and head.
 - [x] Lot 6: resolve Opus r1 startup and record-check findings; #794 must drop its registry pin after #796 lands and retain the qualified workspace source; no #794 edits.
 - [x] Lot 6a: retain all historical signature/source checks; add regenerated current-tuple vectors and exact receipt/lock/source consistency checks for artifacts 0.2.4.
+- [x] Lot 7: resolve Opus r2 P1; clean-worktree canonical API typecheck/lint/startup without manual build-artifacts, repeat preparation and locked teardown. See clean-workspace-qualification-2026-10-27.md; exact-head CI evidence follows in PR #796.
 
 ## Inherited main qualification record
 
