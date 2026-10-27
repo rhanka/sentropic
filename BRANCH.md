@@ -57,7 +57,7 @@
   - [ ] tests/speech-metering.test.ts: cumulative/incremental updates, duplicate/conflicting revisions, absent dimensions and invalid prices.
 - [ ] **Lot 2 — Admission binding**
   - [x] Define transaction views over existing owner holds/buckets/allocator receipts; no production store supplied.
-  - [ ] src/speech/admission.ts: trusted campaign identity, UTC daily and campaign caps, authoritative allocator links, bounded holds and fail-closed host port.
+  - [x] src/speech/admission.ts: trusted campaign identity, UTC daily and campaign caps, authoritative allocator links, bounded holds and fail-closed host port.
   - [ ] tests/speech-admission.test.ts: daily/total refusal, provider switching, concurrent reservations, restart/replay, allocator identity and ledger outage.
 - [ ] **Lot 3 — Settlement binding**
   - [ ] src/speech/settlement.ts: one billable operation, conservative missing-usage estimate, signed true-ups, replay and retained uncertainty.
