@@ -103,7 +103,8 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
 - [x] **Lot R5 — Opus r5 review fixes (timeout reap + receipt + strict test)**
   - [x] Silent-child timeout reaps arecord (SIGTERM, then SIGKILL) and rejects only after close; precise timeout message kept.
   - [x] Receipt `blocked.liveMicCapture.detail` no longer mentions the dropped device-listing trace.
-  - [x] Early-exit helper emits no bytes and exits 2 after 60 ms; the test asserts `DeviceOpenError` (any restored fixed delay fails it).
+  - [x] Early-exit helper emits no bytes and exits 2 sixty ms after start; the test asserts `DeviceOpenError` (a restored probe shorter than that fails it; longer blind delays pass it yet stay wrong).
+  - [x] Silent-child timeout covered by a committed test: no bytes ever, open rejects with `DeviceOpenError` only after the SIGTERM/SIGKILL reap and close, no orphan left (pid proven dead).
 - [ ] **Lot N — Final validation**
   - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
   - [x] Retest package green on head (72/72 over 11 files via `make test-live-speech ENV=test-stt-l4`, r1+r2+r3 fixes included)
