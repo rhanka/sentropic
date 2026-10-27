@@ -20,9 +20,19 @@
   - `packages/llm-gateway/package.json`
   - `packages/llm-gateway/README.md`
   - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `package-lock.json`
   - `.tmp/live-stt/l8/**`
   - `.github/workflows/ci.yml`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -37,6 +47,11 @@
   - [x] Declare BRL8-EXn with reason, impact and rollback before sensitive changes.
 
 ## Feedback Loop
+- [x] BRL8-EX6: run 40505571158 proves the runtime gateway range and frozen selected tuple still reject gateway 0.22.0. Align only catalog/train ranges, affected test expectations and fixture package/lock; use the verified CI gateway archive's SHA-512. Cluster 0.23.1 supplies the required source bugfix bump. Rollback restores the old ranges/tuple with gateway 0.21.3.
+- [x] Frozen gateway 0.22.0 lock integrity comes from run 40507121290, llm-gateway-candidate artifact 12735344167; archive SHA-256 30529da3c0230df3787c30b108b6e7d9f2ba10479ecebd5af0b31b7f02588dc8 matches the prior successful BLOCK packs.
+- [x] Run 40509273838 passes gateway (1370 tests, including 27 speech), API/UI typecheck/lint and both BLOCK packs; align the two remaining installed-gateway version assertions via TRAIN_LLM_GATEWAY_VERSION=0.22.0.
+- [x] BRL8-EX5: retain the verified gateway pack as a seven-day CI artifact for the required frozen Cluster Mesh release-lock refresh while local Docker is reserved; no publication, credential, permission or validation change. Rollback removes the artifact upload and pack destination.
+- [x] BRL8-EX4: update the real gateway dependency-floor assertion in scripts/ci/publishable-ci-wiring.test.mjs from 0.27.0 to required speech floor 0.28.0 (run 40504853431); impact is one CI regression expectation, no gate bypass. Rollback restores the assertion with the old dependency range.
 - [x] R1 P1/P2-1: build incremental totals through a mutable dimension map; require llm-mesh >=0.28.0 for speech contracts.
 - [x] R1 manifests: registry latest gateway 0.21.3 / cluster-mesh 0.22.4 on 2026-10-27; gateway feature 0.22.0 and cluster peer-range patch 0.23.1 remain unpublished BLOCK candidates. Mirror versions/ranges in package-lock.json; retain full pack gates.
 - [ ] G-LEDGER (open, 2026-10-27): L8b durable owner-adapter sub-lot, gateway/ledger owner + Sol; outside this PR's api/** scope. Bind SpeechLedgerPort to control.budgets/budget_holds/cost_ledger, allocator receipts and leases; qualify real DB restart, replica concurrency, UTC rollover, crash/replay and unavailable-store refusal before L8 acceptance or cloud activation.
@@ -44,7 +59,7 @@
 - [x] R1 reconciliation also detects the same scoped native turn counted under different submit keys/epochs; tenant/session boundaries remain isolated.
 - [x] Docker reservation takes precedence over the container-backed scope target; temporary host Make adapter invokes the same installed harness C2 check before every commit.
 - [x] Registry latest is 0.21.3 (2026-10-27); feature version will be 0.22.0, without publication.
-- [x] BRL8-EX1: gateway 0.22.0 requires widening cluster-mesh's optional gateway peer upper bound from 0.22 to 0.23 and mirroring workspace metadata in package-lock.json. Impact: manifest-only compatibility for the additive subpaths; rollback restores those three version/range fields. No cluster-mesh source changes.
+- [x] BRL8-EX1: gateway 0.22.0 requires widening cluster-mesh's optional gateway peer upper bound from 0.22 to 0.23 and mirroring workspace metadata in package-lock.json. Initial manifest compatibility is completed by BRL8-EX6's runtime range and frozen tuple; rollback restores the previous version/range fields.
 - [x] BRL8-EX2: permit .tmp/live-stt/l8 review/validation receipts only; no raw media, credentials or accounting store.
 - [x] BRL8-EX3: CI ignores pull requests targeting feat/live-stt-l2. Add only that base to the existing pull_request branch filter so PR798 runs standard gates; no job, secret, permission or publication change. Rollback removes the one branch entry.
 - [ ] G-REVIEW: author-complementary peer selection remains pending; .tmp/live-stt/l8/review.md records exact target, requested author tuple and selection failure. No reviewer allocation inferred; no consensus claimed.
@@ -84,7 +99,7 @@
   - [x] tests/fixtures/speech-ledger.ts: deterministic owner transaction fixture; never exported or used as a production ledger.
 - [ ] **Lot 4 — Contract review and integration documentation**
   - [x] Document ledger-owner binding, dispatch bounds, limitations and G-LEDGER acceptance in README.md.
-  - [x] Export speech subpath and bump package to 0.22.0; keep all shared owner source files unchanged.
+  - [x] Export speech subpath and bump package to 0.22.0; shared owner sources change only for BRL8-EX6's bounded compatibility range.
   - [ ] Reconcile independent correctness and accounting/security reviews; no self-certification of durable host acceptance.
 - [ ] **L8b — Durable owner adapter (gateway/ledger owner + Sol; dated 2026-10-27; separate lot)**
   - [ ] Supply the real DB SpeechLedgerPort adapter and one trusted cross-provider campaign identity; no production adapter is provided by L8a.
