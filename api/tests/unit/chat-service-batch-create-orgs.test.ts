@@ -7,6 +7,7 @@ import {
   folders,
   jobQueue,
   organizations,
+  tenantMemberships,
   users,
   workspaces,
   workspaceMemberships,
@@ -93,6 +94,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     });
 
     ({ workspaceId } = await ensureWorkspaceForUser(userId));
+    await db.insert(tenantMemberships).values({ userId, tenantId: 'sentropic', status: 'approved' });
 
     folderId = createId();
     await db.insert(folders).values({

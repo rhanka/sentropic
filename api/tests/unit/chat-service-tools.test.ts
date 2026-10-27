@@ -10,6 +10,7 @@ import {
   folders,
   plans,
   tasks,
+  tenantMemberships,
   todos,
   users,
   workspaces,
@@ -77,6 +78,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
 
     // Ensure owner workspace exists (ChatService relies on it).
     ({ workspaceId } = await ensureWorkspaceForUser(userId));
+    await db.insert(tenantMemberships).values({ userId, tenantId: 'sentropic', status: 'approved' });
 
     folderId = createId();
     await db.insert(folders).values({
