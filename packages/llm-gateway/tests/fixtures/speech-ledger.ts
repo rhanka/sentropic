@@ -28,7 +28,7 @@ interface State {
 /** Test transaction fixture only: models existing owner rows, rollback and durable-byte restart. */
 export class SpeechLedgerFixture implements SpeechLedgerPort {
   readonly durability = 'durable' as const;
-  unavailable = false; failAppend = false;
+  unavailable = false; failAppend = false; failPut = false;
   nowMs = instant;
   currentPrice: SpeechPrice | undefined = price();
   state: State = { holds: {}, days: {}, campaign: emptyBudget(), entries: [], allocator: {
@@ -47,7 +47,9 @@ export class SpeechLedgerFixture implements SpeechLedgerPort {
       const tx: SpeechLedgerTransaction = {
         lock: async () => undefined, // The fixture queue serializes; production uses owner DB locks.
         getHold: async id => Object.hasOwn(draft.holds, id) ? structuredClone(draft.holds[id]) : undefined,
-        putHold: async hold => { Object.defineProperty(draft.holds, hold.operation.operationId, {
+        putHold: async hold => {
+          if (this.failPut) throw new Error('private hold write failure');
+          Object.defineProperty(draft.holds, hold.operation.operationId, {
           value: structuredClone(hold), enumerable: true, configurable: true, writable: true }); },
         budgets: async (_campaign, day) => ({ daily: draft.days[day] ?? emptyBudget(), campaign: draft.campaign }),
         adjustBudgets: async (_campaign, day, reservedDelta, spentDelta) => {

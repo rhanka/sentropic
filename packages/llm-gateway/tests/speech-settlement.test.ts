@@ -88,4 +88,30 @@ describe('speech settlement', () => {
     await settleSpeech(marked.options(), { operationId: 'stt-1', outcome: 'failed' });
     expect(marked.state.campaign.spentMicroUsd).toBe(1_000_000);
   });
+
+  it('should roll back the appended financial entry and budget change if closing the hold fails', async () => {
+    const ledger = await dispatched();
+    const before = ledger.bytes();
+    ledger.failPut = true;
+    await expect(settleSpeech(ledger.options(), final)).rejects.toMatchObject({ code: 'unavailable' });
+    expect(ledger.bytes()).toBe(before);
+    ledger.failPut = false;
+    expect(await settleSpeech(ledger.options(), final)).toBe(true);
+    expect(ledger.state.entries).toHaveLength(1);
+  });
+
+  it('should conservatively charge partial overrun evidence and never drop billed discarded output', async () => {
+    const ledger = await dispatched();
+    await settleSpeech(ledger.options(), { operationId: 'stt-1', outcome: 'unknown' });
+    const partial = { eventId: 'usage', revision: 1, mode: 'cumulative' as const, usage: { connectedSeconds: 90 } };
+    await recordSpeechUsage(ledger.options(), 'stt-1', partial);
+    expect(await settleSpeech(ledger.options(), { operationId: 'stt-1', outcome: 'cancelled' })).toBe(true);
+    expect(ledger.state.campaign.spentMicroUsd).toBe(1_500_000);
+    expect(ledger.state.entries[1]).toMatchObject({ kind: 'adjustment', uncertain: true, overrun: true, deltaMicroUsd: 500_000 });
+    expect(await settleSpeech(ledger.options(), { operationId: 'stt-1', outcome: 'cancelled' })).toBe(false);
+    await settleSpeech(ledger.options(), { ...final, usage: { connectedSeconds: 90, admittedAudioSeconds: 10 } });
+    expect(ledger.state.entries[2]).toMatchObject({ kind: 'adjustment', uncertain: false, deltaMicroUsd: 0 });
+    await expect(settleSpeech(ledger.options(), { ...final, outcome: 'completed',
+      usage: { connectedSeconds: 90, admittedAudioSeconds: 10 } })).rejects.toMatchObject({ code: 'conflict' });
+  });
 });
