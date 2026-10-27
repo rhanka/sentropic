@@ -32,6 +32,7 @@
   - `api/src/services/cluster-mesh-adapter.ts`
   - `api/tests/api/app-artifacts-transport.test.ts`
   - `api/tests/api/artifacts-host-credentials.test.ts`
+  - `api/tests/api/artifacts-host-publication.test.ts`
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/app-mcp-installed.test.ts`
   - `api/package.json`
@@ -78,7 +79,8 @@
 - [x] Lot 2 manifests/locks regenerated strictly without peer overrides; API leaf metadata refreshed to source versions.
 - [ ] Lot 2 strict install/physical compilation final receipt.
 - [x] Lot 3 tests authored in api/tests/api/app-artifacts-transport.test.ts; exact dispatch, denial, HTTP and MCP routing.
-- [ ] Lot 3 real HTTP/MCP same-effect receipt.
+- [x] Lot 3 durable test: HTTP session ensure and OAuth MCP replay, MCP publish and HTTP replay; assert one artifact/release and two receipts.
+- [x] Current-reader vectors include matching/wrong DPoP proof, revocation during artifact-row waits and expiry during quota waits for both credential kinds.
 - [x] Lot 4 core: compiled exact-name dispatch and bounded APP-P1 HTTP adapter delegate to W1 host.
 - [x] Lot 4 singleton: one durable PG host with dedicated private S3, explicit quota and default-closed activation.
 - [x] Lot 4 mount: verified credential tuples, shared MCP supervisor guard, resources author and /resources/artifacts/*; 28 namespaces retained.
