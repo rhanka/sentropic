@@ -1097,10 +1097,6 @@ jobs:
 
   validate-chat-server:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-5
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.chat_server == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1122,10 +1118,6 @@ jobs:
 
   validate-comments:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-0
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.comments == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1147,10 +1139,6 @@ jobs:
 
   validate-skills:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-1
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1166,10 +1154,6 @@ jobs:
 
   validate-flow:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-2
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.flow == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1189,10 +1173,6 @@ jobs:
 
   validate-artifacts:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-3
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1220,10 +1200,6 @@ jobs:
 
   validate-harness:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-4
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.harness == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1246,10 +1222,6 @@ jobs:
   # Build API Docker image (independent from API tests)
   build-api-image:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-11
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     env:
       DOCKER_USERNAME: nologin
@@ -1294,10 +1266,6 @@ jobs:
 
   build-api-tool-image:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-12
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     steps:
@@ -1334,10 +1302,6 @@ jobs:
 
   test-api-unit-integration:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-${{ strategy.job-index }}
-      queue: max
-      cancel-in-progress: false
     needs: [changes, build-api-image, build-api-tool-image]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     continue-on-error: ${{ matrix.suite == 'ai' }}
@@ -1444,10 +1408,6 @@ jobs:
   # Build & Unit Test UI
   build-ui:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-13
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     steps:
       - uses: actions/checkout@v6
@@ -1493,10 +1453,6 @@ jobs:
 
   test-e2e:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-${{ strategy.job-index }}
-      queue: max
-      cancel-in-progress: false
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     strategy:
@@ -1559,10 +1515,6 @@ jobs:
 
   e2e-vscode:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-14
-      queue: max
-      cancel-in-progress: false
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
@@ -1621,10 +1573,6 @@ jobs:
   # API/unit suite never exercised the served consent screen end-to-end.
   smoke-idp-screens:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-6
-      queue: max
-      cancel-in-progress: false
     needs: [changes, typecheck-lint-api, build-api-image, build-api-tool-image, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
@@ -1666,10 +1614,6 @@ jobs:
   # Security: SAST and SCA scans (code and dependencies)
   security-sast-sca:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-7
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
     steps:
@@ -1707,10 +1651,6 @@ jobs:
   # Security: IaC scans (infrastructure configuration)
   security-iac:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-8
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.global == 'true'
     steps:
@@ -1733,10 +1673,6 @@ jobs:
   # Security: Container scans (Docker images)
   security-container:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-9
-      queue: max
-      cancel-in-progress: false
     needs: [changes, build-api-image, build-api-tool-image, build-ui]
     # UI-only changes intentionally skip the toolbox job; keep the UI scan active.
     if: >-
@@ -1800,10 +1736,6 @@ jobs:
 
   test-smoke-restore:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-10
-      queue: max
-      cancel-in-progress: false
     needs: [changes, build-api-image, build-api-tool-image, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
@@ -1862,10 +1794,6 @@ jobs:
 
   publish-ui-image:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-11
-      queue: max
-      cancel-in-progress: false
     needs: [changes, test-e2e, e2e-vscode, security-container]
     if: (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
@@ -2005,10 +1933,6 @@ jobs:
 
   publish-chat-ui:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-14
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-chat-ui]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2032,10 +1956,6 @@ jobs:
 
   publish-cited-source-viewer:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-6
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-cited-source-viewer]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-cited-source-viewer.result == 'success' && (needs.changes.outputs.cited_source_viewer_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2059,10 +1979,6 @@ jobs:
 
   publish-cowork-bridge:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-7
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-cowork-bridge]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-bridge.result == 'success' && (needs.changes.outputs.cowork_bridge_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2086,10 +2002,6 @@ jobs:
 
   publish-oauth-verify:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-8
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-oauth-verify]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-oauth-verify.result == 'success' && (needs.changes.outputs.oauth_verify_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2115,10 +2027,6 @@ jobs:
   # only after the sibling publisher succeeded or was skipped, as gateway waits for mesh.
   publish-mcp-auth:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-9
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-mcp-auth, publish-oauth-verify]
     if: >-
       always() && !cancelled() && needs.changes.result == 'success' &&
@@ -2182,10 +2090,6 @@ jobs:
 
   publish-mcp-platform:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-10
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-mcp-platform]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-platform.result == 'success' && (needs.changes.outputs.mcp_platform_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2209,10 +2113,6 @@ jobs:
 
   publish-artifacts:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-11
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-artifacts]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' && (needs.changes.outputs.artifacts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2236,10 +2136,6 @@ jobs:
 
   publish-auth-hono:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-12
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-auth-hono]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-auth-hono.result == 'success' && (needs.changes.outputs.auth_hono_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2263,10 +2159,6 @@ jobs:
 
   publish-auth-client:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-13
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-auth-client]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-auth-client.result == 'success' && (needs.changes.outputs.auth_client_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2290,10 +2182,6 @@ jobs:
 
   publish-auth-ui:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-14
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-auth-ui]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-auth-ui.result == 'success' && (needs.changes.outputs.auth_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2317,10 +2205,6 @@ jobs:
 
   publish-cowork-desktop:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-6
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-cowork-desktop]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-desktop.result == 'success' && (needs.changes.outputs.cowork_desktop_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2344,10 +2228,6 @@ jobs:
 
   publish-contracts:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-7
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-contracts]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-contracts.result == 'success' && (needs.changes.outputs.contracts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
