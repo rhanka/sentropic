@@ -56,6 +56,12 @@ Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a loc
 - [x] No UI change; no UAT required (no microphone path exercised by a human in this lot; narration proven with fake ports + qualified host aplay binary).
 
 ## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read packet, spec-plan r3 (L6a l.425, voice §l.239-245, retention table l.339, §9 gates l.364), §8.1 receipts, L2 (#776, unmerged — journal seam left open) and L4 contracts.
+  - [x] Create worktree `tmp/worktrees/stt-l6a` on `feat/live-stt-l4` as `feat/live-stt-l6a`.
+  - [x] Qualify host audio helpers: aplay 1.2.15.2 (byte-identical to vetted arecord, same sha256), espeak-ng BINARY ABSENT (lib 1.1.51 + data 1.52.0 GPL-3 present, no CLI) → entry unwired, receipt blocked.
+  - [x] Confirm scope: no Makefile/CI changes, no exceptions; Docker yielded to radar until 21:00 UTC (host `harness check scope` + GitHub CI meanwhile).
+  - [x] Lot gate: host `harness check scope` PASS C2; lane `make scope-check` reruns post-21:00 UTC.
 - [x] **Lot 1 — TTS registry**
   - [x] `src/node/tts-registry.ts`: `TtsEnginePort`, espeak-ng entry (argv-pinned spawn, digest-verify with empty built-in pins + `ESPEAK_DIGESTS` allowlist, injected runner for tests), `TtsRegistry` config-only selection, fail-closed unknown engines.
   - [x] `tests/tts-registry.test.ts`: selection/switch, capability differences, unpinned refusal, unknown refusal, argv exactness, temp-file hygiene.
@@ -68,3 +74,12 @@ Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a loc
 - [ ] **Lot 4 — Receipts + wiring**
   - [x] `bench/l6a-g-native.receipt.json` (status blocked, exact missing §8.1 items), README section, `src/node/index.ts` exports.
   - [ ] Retest green, push, draft PR against `feat/live-stt-l4`, CI green, report without merging.
+  - [ ] Lot gate: `make test-live-speech ENV=test-stt-l6a` green (post-21:00 UTC lane run) + `validate-live-speech` green on the exact head.
+- [ ] **Lot N-1 — Docs**
+  - [x] README L6a section (registry/playback/loop, refusal semantics).
+  - [x] `bench/l6a-g-native.receipt.json` (status blocked, trust boundary recorded, no native claim).
+- [ ] **Lot N — Final validation**
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. (New private package: CI skips bump check.)
+  - [ ] Final gate step 1: draft PR #799 to `feat/live-stt-l4` using `BRANCH.md` text as PR body (source of truth). Draft PR open, no merge.
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
