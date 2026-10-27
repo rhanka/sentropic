@@ -448,3 +448,148 @@ describe('openai session lifecycle', () => {
       return new GateSocket();
     };
     const controller = new AbortController();
+    controller.abort();
+    await expect(openTranscriptionSession(liveConfig, {
+      request: sessionRequest('gpt-live-transcribe'),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect,
+      usage: new RecordingSink(),
+      signal: controller.signal,
+    })).rejects.toMatchObject({ code: 'aborted' });
+    expect(connected).toBe(0);
+  });
+
+  it('should close the socket and settle cancelled on abort', async () => {
+    const socket = new HangSocket();
+    const sink = new RecordingSink();
+    let clock = 5_000;
+    const controller = new AbortController();
+    const session = await openTranscriptionSession(liveConfig, {
+      request: sessionRequest('gpt-live-transcribe'),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => socket,
+      usage: sink,
+      nowMs: () => clock,
+      signal: controller.signal,
+    });
+    clock += 2_000;
+    controller.abort();
+    const deadline = Date.now() + 10_000;
+    while (sink.settles.length === 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await session.close();
+    expect(socket.closed).toBe(true);
+    // No usage attached: the composition settles from the cumulative records.
+    expect(sink.settles).toEqual([{ operationId: 'op-1', outcome: 'cancelled' }]);
+    await expect(session.write(frame('u1', 10))).rejects.toMatchObject({ code: 'closed' });
+  });
+
+  it('should enforce maxDurationMs with an injectable scheduler', async () => {
+    const driven = await openDriven(liveConfig, {
+      admission: admission({ maxDurationMs: 500 }),
+      request: sessionRequest('gpt-live-transcribe'),
+    });
+    expect(driven.expiries).toHaveLength(1);
+    expect(driven.expiries[0]?.ms).toBe(500);
+    await driven.turn('u1', 10);
+    driven.advance(600);
+    await expect(driven.session.write(frame('u2', 30))).rejects.toMatchObject({ code: 'ceiling' });
+    await expect(driven.session.command(commitCommand('u2'))).rejects.toMatchObject({ code: 'ceiling' });
+    driven.expiries[0]?.fn();
+    await flush();
+    expect(driven.socket.closed).toBe(true);
+    expect(driven.sink.settles).toEqual([{ operationId: 'op-1', outcome: 'cancelled' }]);
+  });
+
+  it('should record cumulative totals under a stable eventId', async () => {
+    const driven = await openDriven();
+    await driven.turn('u1', 10);
+    await driven.turn('u2', 30);
+    expect(driven.sink.records).toEqual([
+      {
+        eventId: 'op-1:audio', revision: 0, mode: 'cumulative',
+        usage: { admittedAudioSeconds: 0.02, connectedSeconds: 0 },
+      },
+      {
+        eventId: 'op-1:audio', revision: 1, mode: 'cumulative',
+        usage: { admittedAudioSeconds: 0.04, connectedSeconds: 0 },
+      },
+    ]);
+    await driven.session.close();
+    expect(driven.sink.settles).toEqual([{ operationId: 'op-1', outcome: 'completed' }]);
+  });
+
+  it('should meter audio seconds and refuse past the admitted ceiling', async () => {
+    const driven = await openDriven(liveConfig, {
+      admission: admission({ ceiling: { connectedSeconds: 60, admittedAudioSeconds: 0.03 } }),
+    });
+    await driven.session.write(frame('u1', 10, 480));
+    expect(driven.socket.sent.filter((message) => JSON.parse(message).type === 'input_audio_buffer.append')).toHaveLength(1);
+    await expect(driven.session.write(frame('u1', 30, 480))).rejects.toMatchObject({ code: 'ceiling' });
+    // The commit seals the admitted audio; the composition enforces caps on record.
+    await driven.session.command(commitCommand('u1'));
+    expect(JSON.stringify(driven.sink)).not.toContain('transcript');
+    await driven.session.close();
+  });
+
+  it('should keep profiles independent on separate sockets and sinks', async () => {
+    const open = (config: typeof liveConfig) => openDriven(config, {
+      admission: admission({ operationId: `op-${config.modelId}` }),
+    });
+    const [live, whisper] = await Promise.all([open(liveConfig), open(whisperConfig)]);
+    await live.turn('u_fr', 10);
+    await whisper.turn('u_en', 10);
+    live.socket.push(...frameScriptFr);
+    whisper.socket.push(...frameScriptEnCorrected);
+    const [liveEvents, whisperEvents] = await Promise.all([live.collect(), whisper.collect()]);
+    const liveFinals = liveEvents.filter((event) => event.type === 'transcript.final');
+    const whisperFinals = whisperEvents.filter((event) => event.type === 'transcript.final');
+    expect(liveFinals).toHaveLength(1);
+    expect(whisperFinals).toHaveLength(1);
+    expect((liveFinals[0] as unknown as { utteranceId: string }).utteranceId).toBe('u_fr');
+    expect((whisperFinals[0] as unknown as { utteranceId: string }).utteranceId).toBe('u_en');
+    expect(live.socket.sent).not.toEqual(whisper.socket.sent);
+    expect(live.sink.settles).toHaveLength(1);
+    expect(whisper.sink.settles).toHaveLength(1);
+  });
+
+  it('should redact the bearer token from failures and store no audio', async () => {
+    const failingConnect: OpenAiTranscriptionConnect = async () => {
+      throw new Error('provider connect failed (status 401, bearer bearer-secret-fixture)');
+    };
+    try {
+      await openTranscriptionSession(liveConfig, {
+        request: sessionRequest('gpt-live-transcribe'),
+        admission: admission(),
+        bearerToken: 'bearer-secret-fixture',
+        connect: failingConnect,
+        usage: new RecordingSink(),
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect(String(error)).not.toContain('bearer-secret-fixture');
+      expect(String(error)).toContain('[REDACTED]');
+    }
+    const driven = await openDriven(liveConfig, { bearerToken: 'bearer-secret-fixture' });
+    await driven.session.write(frame('u1', 10, 24));
+    const append = JSON.parse(driven.socket.sent[1] as string) as { audio: string };
+    expect(Buffer.from(append.audio, 'base64')).toEqual(Buffer.alloc(48));
+    expect(driven.session).not.toHaveProperty('bearerToken');
+    await driven.session.close();
+  });
+
+  it('should keep the G-CLOUD receipt blocked and never claim live evidence', () => {
+    const receiptPath = fileURLToPath(new URL('../bench/l9-openai-stt.receipt.json', import.meta.url));
+    const receipt = JSON.parse(readFileSync(receiptPath, 'utf8')) as {
+      status: string;
+      missing: Array<{ item: string; status: string }>;
+    };
+    expect(receipt.status).toBe('blocked');
+    for (const item of receipt.missing) {
+      expect(item.status).toBe('blocked');
+    }
+  });
+});
