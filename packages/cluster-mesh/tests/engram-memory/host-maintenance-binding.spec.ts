@@ -10,7 +10,7 @@
 // refused, empty ledger refuses) are covered here.
 
 import { describe, expect, it } from 'vitest';
-import { assembleMemoryHostBinding } from '../../src/engram-memory/binding.js';
+import { assembleMemoryHostBinding, issueContinuationGrant } from '../../src/engram-memory/binding.js';
 import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
 import { createMemoryHostLedger } from '../../src/engram-memory/ledger.js';
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
@@ -112,6 +112,38 @@ describe('host maintenance binding', () => {
       expect(() => ledger.recordContinuation('cand-1', 'inv-2')).toThrow(StorageDeniedError);
       expect(() => ledger.recordContinuation('cand-1', '')).toThrow(StorageDeniedError);
       expect(() => ledger.recordContinuation('unknown', 'inv-9')).toThrow(StorageDeniedError);
+    });
+
+    it('issues continuation grants against retained authority only', () => {
+      const ledger = createMemoryHostLedger();
+      ledger.record(entryFor('cand-1'));
+      const attestation = { invocationId: 'inv-2', issuedAt: '2026-10-27T00:00:00.000Z', hostPrincipal: 'host-1' };
+      const continued = issueContinuationGrant(ledger, 'cand-1', attestation);
+      expect(continued.candidateId).toBe('cand-1');
+      expect(continued.storeId).toBe('store-1');
+      expect(continued.grant.operations).toEqual(['read', 'write']);
+      expect(continued.grant.lifetime).toEqual({ kind: 'invocation', invocationId: 'inv-2' });
+      expect(continued.grant.scope).toEqual({ tenantId: 'tenant-a', workspaceId: 'workspace-a' });
+      expect(ledger.read('cand-1')?.continuationIds).toEqual(['inv-2']);
+    });
+
+    it('refuses continuations without retained authority or fresh authn', () => {
+      const ledger = createMemoryHostLedger();
+      const attestation = { invocationId: 'inv-2', issuedAt: '2026-10-27T00:00:00.000Z', hostPrincipal: 'host-1' };
+      expect(() => issueContinuationGrant(ledger, 'unknown', attestation)).toThrow(StorageDeniedError);
+      ledger.record(entryFor('cand-1'));
+      expect(() => issueContinuationGrant(ledger, 'cand-1', { ...attestation, invocationId: '' })).toThrow(
+        StorageDeniedError,
+      );
+      expect(() => issueContinuationGrant(ledger, 'cand-1', { ...attestation, hostPrincipal: '' })).toThrow(
+        StorageDeniedError,
+      );
+      // Copied retained invocation fields never grant.
+      expect(() => issueContinuationGrant(ledger, 'cand-1', { ...attestation, invocationId: 'inv-1' })).toThrow(
+        StorageDeniedError,
+      );
+      issueContinuationGrant(ledger, 'cand-1', attestation);
+      expect(() => issueContinuationGrant(ledger, 'cand-1', attestation)).toThrow(StorageDeniedError);
     });
 
     it('refuses malformed entries without recording', () => {
