@@ -1,14 +1,15 @@
 // Cancellable WAV playback (r3 L6a). The loop never touches the speaker
-// directly: playback owns one aplay child, a bounded temp file, and a fence
-// cancel (SIGTERM, then SIGKILL) that the voice loop invokes synchronously on
-// barge-in. The binary is hash-verified before every play, exactly like the L4
-// arecord backend; anything unpinned is refused before any audio flows.
+// directly: playback owns one aplay child fed over stdin — no audio files at
+// any point, only a bounded RAM buffer that is dropped after close. Barge-in
+// cancels through a generation counter, so a cancel that lands during the
+// pre-spawn verification still prevents the spawn (sticky cancel): audio can
+// never play after the fence. The binary is hash-verified before every play,
+// exactly like the L4 arecord backend; anything unpinned is refused before
+// any audio flows.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { access, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 export class PlaybackError extends Error {
   readonly code = 'tts_playback_failed';
@@ -74,10 +75,13 @@ async function digestBinary(path: string): Promise<string> {
 /** Absolute WAV bound: larger payloads are refused, never partially played. */
 export const PLAYBACK_MAX_WAV_BYTES = 16 * 1024 * 1024;
 
-/** Exact aplay argv for WAV playback. Pure: unit-tested without spawning. */
-export function buildAplayArgs(wavPath: string, options: { device?: string }): string[] {
-  if (options.device !== undefined) return ['-D', options.device, wavPath];
-  return [wavPath];
+/**
+ * Exact aplay argv for stdin WAV playback (WAV header autodetected by aplay,
+ * per its man page: no filename means standard input). Pure.
+ */
+export function buildAplayArgs(options: { device?: string }): string[] {
+  if (options.device !== undefined) return ['-D', options.device];
+  return [];
 }
 
 export interface PlaybackPort {
@@ -89,13 +93,15 @@ export interface PlaybackPort {
   close(): void;
 }
 
-let tempCounter = 0;
+/** SIGKILL escalation delay: bounded by the §9 150 ms stop-to-silence gate. */
+const ESCALATE_MS = 100;
 
-/** aplay subprocess playback with fence cancel and temp-file hygiene. */
+/** aplay subprocess playback with fence cancel. Sticky across the pre-spawn window. */
 export class AplayPlayback implements PlaybackPort {
   private child: ReturnType<typeof spawn> | null = null;
   private settlePlay: ((error: Error | null) => void) | null = null;
-  private cancelled = false;
+  private playGen = -1;
+  private runGen = 0;
   private _playing = false;
   private _closed = false;
 
@@ -126,37 +132,48 @@ export class AplayPlayback implements PlaybackPort {
     if (wav.length > PLAYBACK_MAX_WAV_BYTES) {
       throw new PlaybackError(`WAV too large: ${wav.length} bytes (max ${PLAYBACK_MAX_WAV_BYTES})`);
     }
+    // Capture the generation first: a cancel that lands during verification
+    // still wins — the child is never spawned after the fence.
+    const myGen = this.runGen;
     // Pins first: no child exists yet, so nothing can leak on mismatch.
     const binary = await this.verifiedBinary();
-    const wavPath = join(tmpdir(), `live-stt-play-${process.pid}-${tempCounter++}.wav`);
-    await writeFile(wavPath, wav);
-    this._playing = true;
-    this.cancelled = false;
-    try {
-      await new Promise<void>((resolve, reject) => {
-        this.settlePlay = (error) => (error === null ? resolve() : reject(error));
-        const child = spawn(binary, buildAplayArgs(wavPath, { device: this.device }), {
-          shell: false,
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        this.child = child;
-        let stderr = '';
-        child.on('error', () => this.settle(new PlaybackError(`${binary} is not installed or not executable`)));
-        child.stderr?.on('data', (chunk: Buffer) => {
-          stderr = `${stderr}${chunk.toString('utf8')}`.slice(-300);
-        });
-        child.on('close', (code) => {
-          if (this.cancelled) this.settle(new PlaybackCancelledError());
-          else if (code === 0) this.settle(null);
-          else this.settle(new PlaybackError(`aplay exited ${String(code)}: ${stderr}`));
-        });
+    if (this.runGen !== myGen) {
+      throw new PlaybackCancelledError();
+    }
+    await new Promise<void>((resolve, reject) => {
+      this.settlePlay = (error) => (error === null ? resolve() : reject(error));
+      const child = spawn(binary, buildAplayArgs({ device: this.device }), {
+        shell: false,
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
-    } finally {
+      this.child = child;
+      this.playGen = myGen;
+      this._playing = true;
+      let stderr = '';
+      child.on('error', () => this.settle(new PlaybackError(`${binary} is not installed or not executable`)));
+      child.stdin?.on('error', () => {
+        // The child died early (e.g. nonzero exit before reading): the close
+        // code below decides the outcome, never the pipe.
+      });
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderr = `${stderr}${chunk.toString('utf8')}`.slice(-300);
+      });
+      try {
+        child.stdin?.write(wav);
+        child.stdin?.end();
+      } catch {
+        // Already gone; the close event settles the play.
+      }
+      child.on('close', () => {
+        if (this.runGen !== myGen) this.settle(new PlaybackCancelledError());
+        else if (child.exitCode === 0) this.settle(null);
+        else this.settle(new PlaybackError(`aplay exited ${String(child.exitCode)}: ${stderr}`));
+      });
+    }).finally(() => {
       this._playing = false;
       this.child = null;
       this.settlePlay = null;
-      await rm(wavPath, { force: true });
-    }
+    });
   }
 
   private settle(error: Error | null): void {
@@ -166,9 +183,11 @@ export class AplayPlayback implements PlaybackPort {
   }
 
   cancel(): void {
+    // Always bump the generation — even with no child yet — so a cancel that
+    // lands before spawn still prevents it.
+    this.runGen += 1;
     const child = this.child;
     if (child === null || !this._playing) return;
-    this.cancelled = true;
     try {
       child.kill('SIGTERM');
     } catch {
@@ -180,7 +199,7 @@ export class AplayPlayback implements PlaybackPort {
       } catch {
         // Gone between the two signals.
       }
-    }, 500);
+    }, ESCALATE_MS);
     escalate.unref?.();
     child.once('close', () => clearTimeout(escalate));
   }
