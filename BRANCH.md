@@ -1,57 +1,84 @@
-# Feature: BR-77 — Bound CI execution capacity and qualify contention/rollback
+# Feature: feat(governance-kit): render only the dossier's data + artifact size budget
 
 ## Objective
-- [ ] Enforce finite execution capacity and qualify contention/rollback on measured receipts.
-- [ ] Branch `chore/ci-capacity-policy`, step 2 of nine; train order BR-76 → BR-77; dependency: BR-76 (PR #705, metrics + expected-results) merged.
+- [ ] Deliver W0, W1 and W4 from the approved artifact-weight analysis: dossier-only runtime data and a reproducible CI size budget, without changing the DS package.
 
 ## Scope / Guardrails
-- [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` and `spec/ci-cd-ten-minutes/capacity.md`; BR-76 receipts are inputs, not deliverables.
-- [ ] Work in `tmp/worktrees/ci-capacity-policy`; rebase on main after BR-76 merge; one implementation branch active on the shared workflow/Makefile.
-- [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-capacity` or `ENV=test-ci-capacity`, never `dev`; no secrets in evidence.
-- [ ] Slot 0 owner: branch author; API_PORT=9385, UI_PORT=5585, MAILDEV_UI_PORT=1485; verify availability before starting services and pass all three ports to service commands.
-- [ ] The agent inventories quotas and costs itself via the GitHub API (account/plan, billing usage with `user` scope, runner inventory); no owner-supplied inventory is assumed.
-- [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
+- [x] Base: `origin/main` at `80b140557393667d468a0a99363a6bec99ed9150`; branch: `feat/artifact-render-budget`.
+- [x] Isolated worktree: `tmp/worktrees/artifact-weight`; root remains reserved for owner work.
+- [x] Make-only execution; no Python; no DS package or dependency version changes.
+- [x] Environment: `test-artifact-weight`, last argument of every make command; no application service ports required by the isolated file/build lane.
+- [x] Docker yielded to radar until 2026-10-27 21:00 UTC; author code/tests first.
+- [x] Every Docker build/test uses `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; release between steps; finish each step with `make down` under the lock.
+- [x] Atomic commits under 150 changed lines; selective staging; `make commit`; no AI trailers.
+- [x] Preserve full governance geometry, languages and runtime routing behavior; no unrelated cleanup.
+- [x] Typical fixture limits: portable/initial closure 409600 B, initial JS 307200 B, optional chunk 131072 B, release 524288 B.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] **Allowed Paths (implementation scope)**:
-  - [ ] `BRANCH.md`; `plan/71-BRANCH_chore-ci-capacity-policy.md`; `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
-  - [ ] `scripts/ci/ci-run-metrics.mjs`
-  - [ ] `scripts/ci/ci-run-metrics.test.mjs`
-  - [ ] `scripts/ci/ci-expected-results.mjs`
-  - [ ] `scripts/ci/ci-expected-results.test.mjs`
-  - [ ] `spec/ci-cd-ten-minutes/capacity.md`
-- [ ] **Forbidden Paths (must not change in this branch)**:
-  - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
-  - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
-- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR77-EX1; `Makefile` under BR77-EX2.
-  - [ ] `scripts/ci/publishable-ci-wiring.test.mjs` under BR77-EX3.
-
-- [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `docs/governance/kit/**`
+- **Forbidden Paths (must not change in this branch)**:
+  - `packages/**`
+  - `api/**`
+  - `ui/**`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
+  - `.github/workflows/ci.yml`
+- **Exception process**:
+  - [x] Declare reason, impact and rollback before edits in Feedback Loop.
 
 ## Feedback Loop
-- [x] BR77-EX1 — Workflow exception: bound shared runner concurrency, independent package validation/publication, branch dry-run publication qualification, keep PR-only cancellation. Impact: dispatch and required results. Rollback: revert workflow policy while preserving complete-result checks.
-- [x] Review r2 owner instruction: replace repo-wide slot mutexes with per-run matrix widths and PR cancellation; measure hosted-runner scheduling. Static demand no longer claims account admission. API quality remains required at the gate and image publishers.
-- [x] BR77-EX2 — Makefile exception: capacity-policy entry points only. Impact: named CI measurement/policy entry points only. Rollback: restore the previous recipes and rerun their qualification.
-- [x] BR77-EX2 includes the requested dry-run publication target: real existing guarded packs, per-package receipts, no registry writes; rollback removes the target and dispatch mode.
-- [x] BR77-EX3 — Permit `scripts/ci/publishable-ci-wiring.test.mjs` to assert the explicit branch dry-run alternative while preserving all production publication barriers. Rollback: restore assertions with the workflow.
-- [x] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
-- [ ] Inherited open acceptance from BR-76/Round-4: account quota/reservation/cost inventory; bounded dispatch policy; concurrent PR/current-main delivery; rollback drill; classification ≤15s, verdict ≤5s, aggregate scheduling ≤60s under declared concurrent traffic.
+- [x] BR84-EX1 — Owner-authorized Makefile exception: add artifact budget/build/test targets and enable installed-host scope checking for this ENV. Reason: reproducible Make-only validation and pre-21:00 non-Docker commits. Impact: additive tooling lane; no application runtime changes. Rollback: remove the targets and ENV condition.
+- [x] BR84-EX2 — Owner-authorized CI exception: add the budget step/report upload in `validate-artifacts`, extend its change filter to kit and DS consumer inputs. Reason: prevent data-corpus regressions. Impact: this validation job runs for those paths; publication filters remain unchanged. Rollback: remove the added step/upload and filter entries.
+- [x] Approved analysis: `.tmp/ds-artifact-weight/analysis.md` sections 3–5; review `.h2a/reviews/ds_artifact_weight_opus_r1.md` APPROVE; incorporate P2-1 through P2-4 in the committed receipt and validation.
 
 ## AI Flaky tests
-- [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
+- [x] No AI/provider tests in this scope; no flaky exception requested.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Multi-branch** — This is one independently reviewed/qualified branch of the serialized nine-branch train.
-- [ ] Rationale: preserve branch-level rollback and serialize shared workflow/Makefile edits; internal CI lanes may run concurrently.
+- [x] **Mono-branch** — one code author; no cherry-pick; focused file/build validation.
+- [ ] **Multi-branch**
+- [x] Rationale: W0/W1/W4 implement one dossier data boundary and its regression gate.
 
 ## UAT Management (in orchestration context)
-- [ ] Run the lot UAT on the exact pushed qualification SHA; record immutable source/target SHAs for any integrated qualification workspace.
-- [ ] Use isolated automated environments; web/Chrome/VSCode UAT below is limited to affected behavior; no root-dev automated testing.
+- [x] Qualification uses the integrated branch, isolated file/browser probes and output hashes; no root dev stack.
+- [x] Web app, Chrome plugin and VS Code plugin are not modified.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, relevant security/domain rules, `README.md`, `TODO.md`, the execution `PLAN.md`, the study, `spec/ci-cd-ten-minutes/capacity.md`, and `plan/BRANCH_TEMPLATE.md`.
-  - [x] Verify branch mechanically with harness; confirm BR-76 merged; inventory the actual files and existing assertions at the new base.
-  - [x] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
-  - [x] Base origin/main 440599d04e91bb33e3874588f067c6a90bffd1b3; harness C1 passed; inherited suites passed 45/45. BR77 uses ENV=test-ci-capacity per owner packet.
+- [ ] **W0 — Baseline receipt**
+  - [x] Read project rules, approved analysis/review and Docker lock; verify branch mechanically.
+  - [ ] Pin harness r5 input/dependency hashes, renderer/toolchain and preserved before/slim/Focus output hashes in `docs/governance/kit/fixtures/artifact-weight/baseline.json`.
+  - [ ] Preserve the representative two-diagram, two-question/six-option, 24-row/eight-gap fixture and its source provenance.
+  - [ ] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs.
+  - [ ] Record the read-before-publication contract, corrected source anchors and separate L1/host qualification limits in `docs/governance/kit/ARTIFACT_BUDGET.md`.
+- [ ] **W1 — Dossier data boundary**
+  - [ ] Remove global route/summary imports from the diagram engine; explicitly bind governance data in its consumer and preparation scripts.
+  - [ ] Supply selected scenes, folds/plans, summary geometry and locale dictionary through dossier inputs; fail missing required projection data.
+  - [ ] Scope route cache identity to scene/geometry/routing version; preserve bounded runtime routing for uncovered folds.
+  - [ ] Add `scripts/artifact-input.test.mjs`: scoped projection, missing routes, fold geometry/cache identity and translation equivalence.
+  - [ ] Add `scripts/portable.test.mjs`: reject dynamic `assets/` imports and external portable dependencies.
+  - [ ] Run focused Node tests, full-governance geometry/routing checks and offline browser interactions for the typical fixture.
+  - [ ] UAT: both diagrams/folds, light/dark, mobile/desktop, zoom, option state, inventory totals and JSON downloads.
+- [ ] **W4 — Artifact size budget**
+  - [ ] Add deterministic fixture build and Vite module/chunk manifest reporting, without mutating tracked source.
+  - [ ] Add `scripts/artifact-budget.mjs` and `scripts/artifact-budget.test.mjs`: raw/gzip/Brotli/SHA-256, initial/static/startup/full closures, per-chunk limits and agent read cost.
+  - [ ] Negative tests: corpus reimport, oversized startup data, deferred JS excess, missing/unreferenced assets and portable dynamic imports.
+  - [ ] Add `make check-artifact-budget` and CI step in `validate-artifacts` with `docs/governance/kit/**` filter and output report artifact.
+  - [ ] Preserve a separately bounded full-governance profile; do not claim actual A2UI L1 DS 0.36.0/chart qualification.
+
+- [ ] **Docs consolidation**
+  - [ ] Document explicit input/build contract, budget counting, baseline comparison and report reproduction.
+  - [ ] Record server-side pinned-runtime reuse as a future host qualification candidate, without claiming support.
+
+- [ ] **Final validation**
+  - [ ] Focused tests and budget build under the shared lock, after 21:00 UTC.
+  - [ ] Full-governance geometry/routing checks; typical offline/browser checks; report output digests and before/after sizes.
+  - [ ] Review final diff and mechanically validate scope before every commit.
+  - [ ] Run `make down ENV=test-artifact-weight` under the shared lock.
+  - [ ] Push `feat/artifact-render-budget` and create draft PR to `main` with this plan as body and the requested title.
+  - [ ] Wait for CI on the pushed head and resolve branch failures; report head and measured sizes.
+  - [x] Package version bump not applicable: no package source changes; draft PR only, no merge requested.
