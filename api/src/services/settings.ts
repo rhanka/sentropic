@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { db } from '../db/client';
 import { settings } from '../db/schema';
 import { normalizeLegacyModelSelection } from './model-selection-legacy';
+import { isDecisionOnlyProvider } from './provider-runtime';
 
 export const CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING = 'connector_accounts_max_per_provider';
 
@@ -23,7 +24,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   ai_concurrency: '10',
   publishing_concurrency: '5',
   default_provider_id: 'openai',
-  default_model: 'gpt-4.1-nano',
+  default_model: 'gpt-5.4-nano',
   queue_processing_interval: '1000',
   [CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING]: String(env.CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER),
 };
@@ -238,22 +239,25 @@ export class SettingsService {
       this.get('default_model', {
         userId,
         fallbackToGlobal: true,
-      }).then((value) => value || 'gpt-4.1-nano'),
+      }).then((value) => value || 'gpt-5.4-nano'),
       this.getNumber('queue_processing_interval', 1000, {
         fallbackToGlobal: true,
       }),
     ]);
 
-    const normalizedSelection = normalizeLegacyModelSelection({
-      providerId: defaultProviderId,
-      modelId: defaultModel,
-    });
+    // Preserve both stored values so legacy model migration cannot erase the refusal marker.
+    const normalizedSelection = isDecisionOnlyProvider(defaultProviderId.trim())
+      ? { providerId: defaultProviderId.trim(), modelId: defaultModel }
+      : normalizeLegacyModelSelection({
+        providerId: defaultProviderId,
+        modelId: defaultModel,
+      });
 
     return {
       concurrency,
       publishingConcurrency,
       defaultProviderId: normalizedSelection.providerId || 'openai',
-      defaultModel: normalizedSelection.modelId || 'gpt-4.1-nano',
+      defaultModel: normalizedSelection.modelId || 'gpt-5.4-nano',
       processingInterval,
     };
   }

@@ -24,6 +24,20 @@ const validCondition = () => ({
   operationId: 'op-1',
 });
 describe('L01a common-rule vectors', () => {
+  it('should keep common v1 limited to its original modules on every surface', () => {
+    const vector = COMMON_RULE_VECTORS_BY_ID['common-v1-transactional'];
+    const body = JSON.parse(vector.canonicalBytes) as Record<string, unknown>;
+    for (const surface of ['transactional', 'analytical', 'live-graph']) {
+      for (const module of ['comments', 'engram-live']) {
+        assert.deepEqual(validateCommonManifestBody({ ...body, module, surface }), { ok: true, errors: [] });
+      }
+      assert.deepEqual(validateCommonManifestBody({ ...body, module: 'engram-memory', surface }), {
+        ok: false,
+        errors: ['module must be a known storage module'],
+      });
+    }
+  });
+
   it('should accept every frozen vector body as a valid manifest', () => {
     for (const vector of COMMON_RULE_VECTORS) {
       const body: unknown = JSON.parse(vector.canonicalBytes);
