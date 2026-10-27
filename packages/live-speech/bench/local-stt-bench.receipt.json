@@ -1,7 +1,7 @@
 {
   "status": "measured",
   "lot": "L3",
-  "createdAt": "2026-10-26T23:48:27.768Z",
+  "createdAt": "2026-10-27T01:28:26.293Z",
   "note": "Functional pipeline timings through worker + session on eSpeak NG fixtures resampled to 16 kHz in-process; quality and latency budgets belong to the M1 campaign with real speech fixtures.",
   "node": "v22.22.1 linux x64",
   "engine": "faster-whisper-ts@1.2.1",
@@ -14,7 +14,7 @@
   "engineId": "faster-whisper-ts/1.2.1",
   "espeak": {
     "binary": "/tmp/espeak-root/usr/bin/espeak-ng",
-    "version": "eSpeak NG text-to-speech: 1.52.0  Data at: /tmp/espeak-root/usr/lib/x86_64-linux-gnu/espeak-ng-data"
+    "version": "eSpeak NG text-to-speech: 1.52.0  Data at: /usr/lib/x86_64-linux-gnu/espeak-ng-data"
   },
   "provisioned": {
     "faster-whisper-ts": {
@@ -73,27 +73,29 @@
     "local-tiny": {
       "fixture": {
         "lang": "en",
-        "text": "The quick brown fox jumps over the lazy dog",
+        "text": "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.",
         "voice": "en",
         "speed": 175,
-        "wavDigest": "sha256:83ea33100ffa63cf21b178dbfaaf7148f4d776c8cc47e12b63b9ab66a7d44d7a"
+        "wavDigest": "sha256:935a8bf911427409293d0e3d232ff48df233cf53f8d63cdc40b437effd561583"
       },
       "runs": [
         {
-          "loadMs": 97.8,
+          "loadMs": 188.3,
           "fixture": "espeak",
-          "samples": 44554,
-          "elapsedMs": 1166.3,
+          "samples": 89118,
+          "elapsedMs": 6632.5,
           "finals": 1,
-          "chars": 43,
+          "partials": 1,
+          "chars": 87,
           "errors": []
         },
         {
-          "loadMs": 101.7,
+          "loadMs": 199,
           "fixture": "silence",
           "samples": 16000,
-          "elapsedMs": 504,
+          "elapsedMs": 1008.5,
           "finals": 0,
+          "partials": 0,
           "chars": 0,
           "errors": []
         }
@@ -102,27 +104,29 @@
     "local-base": {
       "fixture": {
         "lang": "fr",
-        "text": "Bonjour, comment allez vous ?",
+        "text": "Bonjour, comment allez vous ? Bonjour, comment allez vous ? Bonjour, comment allez vous ?",
         "voice": "fr",
         "speed": 120,
-        "wavDigest": "sha256:f0e6b62e04be0b739639c608f6d00f78e71da9196ce18146bc61126dec8d675c"
+        "wavDigest": "sha256:bd1f2295a83b271e823a36c4b6077e1e3aeee19084b4655f102a6325c657caef"
       },
       "runs": [
         {
-          "loadMs": 161.9,
+          "loadMs": 333.5,
           "fixture": "espeak",
-          "samples": 40793,
-          "elapsedMs": 2025,
+          "samples": 122390,
+          "elapsedMs": 7589.1,
           "finals": 1,
+          "partials": 2,
           "chars": 26,
           "errors": []
         },
         {
-          "loadMs": 147,
+          "loadMs": 310.7,
           "fixture": "silence",
           "samples": 16000,
-          "elapsedMs": 503.9,
+          "elapsedMs": 1006.6,
           "finals": 0,
+          "partials": 0,
           "chars": 0,
           "errors": []
         }
