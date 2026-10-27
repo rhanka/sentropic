@@ -6,6 +6,10 @@ import { createPostgresKernel } from '../../src/storage/postgres/index.js';
 import { applyPgMigrations, type PgHostHistory, type PgMigrationReceipt } from '../../src/storage/postgres/migrations.js';
 import { checkMemoryPostgresDriver, createMemoryPostgresRegistration } from '../../src/engram-memory/postgres.js';
 import { assembleMemoryHostBinding } from '../../src/engram-memory/binding.js';
+import type { MemoryMaintenanceRunner } from '../../src/engram-memory/host-maintenance.js';
+import type { ScopeGrant } from '../../src/storage/authority.js';
+import type { PgPosition } from '../../src/storage/postgres/journal.js';
+import type { JournalFence } from '../../src/storage/staged-core.js';
 import type { InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 
@@ -46,6 +50,43 @@ export const memoryHostComposed = (pool: InjectedPgDriver, invocationId = 'inv-h
   const binding = assembleMemoryHostBinding({ driver, maintainGrant: memoryMaintainGrant(), invocationId });
   return { provider: driver, binding };
 };
+/** Kernel-bound maintenance surface behind the host-only ports. */
+export interface MemoryLiveBound {
+  readonly journalFence: () => Promise<JournalFence>;
+  readonly journalCheckpoint: (
+    consumer: string, expected: PgPosition, next: PgPosition, fence: JournalFence,
+  ) => Promise<void>;
+  readonly journalPoison: (consumer: string, event: string, reason: string) => Promise<void>;
+  readonly journalRetry: (
+    consumer: string, expected: string | null, fence: JournalFence,
+  ) => Promise<void>;
+  readonly journalResync: (
+    consumer: string, fence: JournalFence,
+  ) => Promise<{ snapshotRoot: string; journalSeq: string }>;
+  readonly snapshotRead: (
+    token: string, after: number, limit: number,
+  ) => Promise<{ rows: readonly unknown[] }>;
+}
+/**
+ * Live maintenance runner for the positive fixture: every port delegates
+ * 1:1 to the kernel-bound handle, which enforces the maintain authority on
+ * every call. Poison/retry/snapshot stay kernel-coupled (consumer delivery
+ * and snapshot reads need read authority the strict maintain-only runner
+ * cannot carry): they delegate here and their live kernel behavior is
+ * owned by the storage lanes; G1b wires the read+maintain runner.
+ */
+export const memoryLiveRunner = (
+  grant: ScopeGrant<unknown>,
+  bound: MemoryLiveBound,
+): MemoryMaintenanceRunner => ({
+  grant,
+  currentFence: () => bound.journalFence(),
+  checkpoint: (consumer, expected, next, fence) => bound.journalCheckpoint(consumer, expected, next, fence),
+  poison: (consumer, event, reason) => bound.journalPoison(consumer, event, reason),
+  retry: (consumer, expected, fence) => bound.journalRetry(consumer, expected, fence),
+  resync: (consumer, fence) => bound.journalResync(consumer, fence),
+  snapshot: (token, after, limit) => bound.snapshotRead(token, after, limit),
+});
 export const memoryUnit = (extra: Partial<AtomicUnit> = {}): AtomicUnit => ({
   guards: [], records: [], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [], ...extra,
 });

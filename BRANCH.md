@@ -106,6 +106,7 @@ E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,pos
   - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256` (inherited base lots E0-E6 only; BR7-EX2)
 - **Exception process**:
   - [x] BR7-EX2: r1 qualification scope — the stacked diff base...HEAD carries 76 unknown paths plus the frozen `instance-ownership.ts` files (inherited bytes) from base lots E0-E6; E7 authors none of them. Docs-only declaration, no implementation authorized. Rollback: drop these annotation lines.
+  - [x] BR7-EX3: P1-5 activates the conditional `002-*.sql` path — new file `assets/storage/postgres/engram-memory/002-host-ledger.sql` (sha256 `e4dc0805…63d6d9b`, memory-only `memory_host_ledger` table, requires 001) authored by E7; `migrations.ts` untouched and `engram-memory/manifest.json` registration deferred to E2-writer coordination (E2 owns the migration single-writer; the P1-5 test applies the asset SQL directly). Rollback: delete the 002 file.
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
