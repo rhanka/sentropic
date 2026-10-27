@@ -19,7 +19,6 @@ import {
   proveForRecoveryAuthorized,
   reattachMemoryMaintenance,
   verifyHostBinding,
-  type MemoryMaintainGrant,
   type MemoryNeutralGrant,
 } from '../../src/engram-memory/binding.js';
 import { pgEnabled, testPgDriver } from '../storage/pg-driver.js';
@@ -131,7 +130,7 @@ describe('host maintenance binding', () => {
     // stubbing success. Live backend calls are covered PG-side.
     await expect(ports.checkFence({} as never)).rejects.toThrow('no backend');
     await expect(ports.checkpoint('consumer', '0', '0', {} as never)).rejects.toThrow('no backend');
-    await expect(ports.poison('consumer', 'reason')).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(ports.poison('consumer', 'event-1', 'reason')).rejects.toBeInstanceOf(StorageUnavailableError);
     await expect(ports.resync('scope', {} as never)).rejects.toBeInstanceOf(StorageUnavailableError);
     await expect(ports.snapshot('token', 0, 10)).rejects.toBeInstanceOf(StorageUnavailableError);
     expect(() => openMemoryMaintenance(null as never, undefined as never)).toThrow(StorageDeniedError);
@@ -146,12 +145,12 @@ describe('host maintenance binding', () => {
     expect(() =>
       openMemoryMaintenance({ provider, maintainGrant: g1Grant() } as never, undefined as never),
     ).toThrow(StorageDeniedError);
-    // Type-level: a combined grant is not a maintain-only grant, and the
-    // neutral grant cannot open maintenance.
+    // Runtime: a combined grant is not a maintain-only grant. The
+    // type-level denial lives in the typechecked host-type-denial spec.
     const combined = grantFor({ moduleId: 'engram-memory', operations: ['read', 'write', 'maintain'] });
-    // @ts-expect-error combined grants are not maintain-only
-    const rejected: MemoryMaintainGrant = combined;
-    expect(rejected).toBe(combined);
+    expect(() =>
+      assembleMemoryHostBinding({ driver: provider, maintainGrant: combined, invocationId: 'inv-host-1' }),
+    ).toThrow(StorageDeniedError);
     const neutral: MemoryNeutralGrant = assembleMemoryHostBinding({
       driver: provider,
       maintainGrant: maintainGrant(),
@@ -159,8 +158,10 @@ describe('host maintenance binding', () => {
     }).memoryGrant;
     expect([...neutral.operations]).toEqual(['read', 'write']);
     expect(() =>
-      // @ts-expect-error the neutral grant carries no maintain authority
-      openMemoryMaintenance({ provider, maintainGrant: neutral }),
+      openMemoryMaintenance(
+        { provider, maintainGrant: neutral } as never,
+        stubRunner(maintainGrant()),
+      ),
     ).toThrow(StorageDeniedError);
   });
   it('refuses expired maintain grants at assembly and at open', () => {
@@ -415,7 +416,7 @@ describe('host maintenance binding', () => {
     const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
     const ports = openMemoryMaintenance(binding, stubRunner(binding.maintainGrant));
     await expect(ports.checkpoint('consumer', '0', '0', {} as never)).rejects.toBeInstanceOf(StorageUnavailableError);
-    await expect(ports.poison('consumer', 'poisoned')).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(ports.poison('consumer', 'event-1', 'poisoned')).rejects.toBeInstanceOf(StorageUnavailableError);
   });
 
   it('resyncs scope-chain-index and snapshots through maintenance ports', async () => {
