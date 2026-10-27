@@ -1,135 +1,114 @@
-# Feature: Security autofix S1 inventory and contract
+# Feature: Live STT L1c cluster speech configuration
 
 ## Objective
-- [x] Resume #732 as approved S1 inventory and contract, integrating the binding r4 owner amendment.
+- [x] Deliver approved r3 L1c: versioned stage bindings, mic policy and offline projection without fixed engines.
+- [x] Preserve L0 PR #753 at `c0bd543689e31c6511150b2d26b71947bb85c455`; refresh its moving facts for L1c.
 
 ## Scope / Guardrails
-- Scope limited to S1 inventory and contract only.
-- No service, schedule, credential or merge activation.
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/sentropic` is reserved for user dev (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/sec-lot1`.
-- Automated test campaigns run on dedicated environments (`ENV=test-sec-lot1`), never on root `dev`.
-- UAT qualification worktree must be commit-identical to the branch under qualification (same HEAD SHA).
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
-- Zero Python in automation.
+- [x] Author: codex / gpt-6.1-sol / high; spec SHA-256 `5a666faa9e1856245ef94b19988cb08514e6e1aeac32918715c07f8ce4a24c61`.
+- [x] Branch `feat/live-stt-l1c`, worktree `tmp/worktrees/live-stt-l1c`, origin/main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`.
+- [x] Make-only, ENV last: integration uses `ENV=test-stt-l1c`; shared Docker flock; existing Compose qualification service, no published ports.
+- [x] No paid API, inference, microphone, model download, Python, publication or deployment.
+- [x] Specific-file staging; make commit only; commits under 150 changed lines; no attribution trailers.
+- [x] Preserve root and other worktrees; Sol serializes shared catalogue/barrel/manifest edits.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `.security/security-fix.json`
-  - `scripts/security/daily/schema.mjs`
-  - `scripts/security/daily/inventory.mjs`
-  - `scripts/security/daily/schema.test.mjs`
-  - `scripts/security/daily/inventory.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `.github/workflows/ci.yml`
   - `BRANCH.md`
+  - `.tmp/live-stt/l1c/**`
+  - `.tmp/live-stt/l0/**`
+  - `packages/cluster-mesh/src/speech/**`
+  - `packages/cluster-mesh/src/config.ts`
+  - `packages/cluster-mesh/src/index.ts`
+  - `packages/cluster-mesh/README.md`
+  - `packages/cluster-mesh/CHANGELOG.md`
+  - `packages/cluster-mesh/tests/speech-*.spec.ts`
+  - `packages/cluster-mesh/tests/speech-fixtures.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `package-lock.json`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/src/modules/contracts.ts`
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md`
+  - `.github/workflows/**`
+  - `.track/**`
+  - `api/**`
+  - `ui/**`
+  - `plan/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/ci.yml` (SECDAILY-S1-EX1 only)
+  - `scripts/**` (none planned).
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop`.
+  - [x] Declare BRLIVE-L1C-EXn with reason, impact and rollback before extending scope.
 
 ## Feedback Loop
-- [x] Opus r1 P2-2: validate npm entry names, severities, via/range types and exact per-severity/total counters; refuse empty contradictory reports and null/malformed entries, with clean and populated positive controls.
-- [x] Opus r1 P2-3: exercise real Dockerfile stages plus a missing-stage fixture, assert required lock presence, compute seven stale candidates on the 67-row fixture and derive the current-register count; retitle metadata-only assertions.
-- [x] Review-fix final local gate: required `scripts/ci/publishable-ci-wiring.test.mjs` entrypoint passes all 119 tests after merging `365e8b313`; locked Make execution on `ENV=test-sec-s1`, no failures or skips.
-- [x] Resync after Opus r1: merge `origin/main` at `365e8b313f1c4c627c87db4f6761847a1e6a5ae7`, retain the S1 plan on the sole `BRANCH.md` conflict and preserve Track events; incoming L5 artifacts remain main's exact bytes, with the repair class disabled.
-- [x] Opus r1 P2-1: pin disabled activation, exact allow/deny scope, grouping, fail-closed kill switch, blocked L5 class and budget ceilings independently of the candidate JSON; weakened fixtures reproduce the former acceptance gap.
-- [x] Review-fix validation uses `ENV=test-sec-s1` last and the shared Docker lock; all 70 weakened-contract fixtures pass after the validator fix (the remaining failing npm-counter regression is handled separately).
-- [x] SECDAILY-S1-EX1: register S1 suites in the existing required Node test entrypoint `scripts/ci/publishable-ci-wiring.test.mjs`; restore `.github/workflows/ci.yml` to main bytes. Editing that workflow selects global CI including legacy Python SAST, outside this zero-Python lot. Existing filters and gates stay unchanged; rollback removes only the S1 suite imports, with implementation disabled.
-- [x] Integration: merge `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`; retain S1 plan and all 342 prior Track events. Scope-check includes incoming main files; the independent harness check against `origin/main` limits authored changes to S1.
-- [x] Approved-r4 alignment: tests first for exact register matching, all-severity inventory, separate own-code scope, bounded grouping, complete dated reconciliation and discovered lock/hash consumers.
-- [x] Tests-first evidence: existing 14 tests passed; expanded S1 suite reproduces nine contract/inventory failures before implementation (22 tests, 13 pass, 9 fail).
-- [x] Contract alignment: all-severity public inventory, disabled exact own-code paths, separate automatic reconciliation, exact exception joins and explicit current-main L5 compatibility blocker.
-- [x] Grouping alignment: stable lock-set/defect/image identities, visible no-upstream-fix units, severity/expiry/age order, explicit estimates and strict repository/class/size bounds.
-- [x] Reconciliation alignment: distinct consecutive UTC daily full scans, immutable source/image/database identities, fresh databases and exact unchanged registered path/platform/lineage/flags/policy; pre-merge proof remains a separate S5a guard.
-- [x] Discovery alignment: enumerate independent lockfiles with dev dependencies and tracked source/hash consumers; fail on unreadable trees, symlinks and exhausted discovery bounds rather than silently truncating coverage.
-- [x] Backlog alignment: raw all-severity findings remain queued, unresolved unmatched rows remain verification-pending, expiry is computed from current rows and malformed/missing/errored reports cannot produce clean state.
-- [x] Current-register boundary: normalize the real YAML document without inferring missing affected identities; current main has 68 unresolved rows (60 due November 20, seven expired, one due October 30), distinct from the historical 67-row fixture. Register bytes remain unchanged.
-- [x] Receipt boundary: require digest-qualified scanner/policy identities and full severity coverage for absence evidence; join GHSA/CVE aliases without relaxing the affected path/version/image match. Legacy container candidates remain pending qualification.
-- [x] Reconciliation regression: current-register integration checks preserve its actual pending rows without freezing the count in CI; a removal-only document fixture proves legitimate future reconciliation does not require test edits.
-- [x] Malformed-report regression: Trivy result rows and finding identities are validated, so a valid outer envelope cannot turn missing/partial nested findings into a clean report.
-- [x] Coverage alignment: discover package/app/script/tool source roots and workspace manifests, verify the three image stages, enumerate reviewed hash consumers and expose missing locks/unknown consumers/SAST qualification as blockers.
-- [x] Identity hardening: malformed aliases and ambiguous/empty key components fail closed; source defects may use an explicit stable defect identity. Local editor-rule symlinks are excluded from application surface discovery.
-- [ ] Independent review: Opus r1 on `d405cf7e0` returned CHANGES (0 P1, 3 P2); the three findings are corrected above, with re-review/approval pending. No consensus or merge readiness claimed.
-- [x] SECDAILY-EX6 inventory: `api/Dockerfile` (`ci-tools` and `ci-esbuild`) is the existing approved toolbox path; S1 does not modify it or introduce an image.
-- `owner-all-public` / `acknowledge`: binding owner decision (OWNER-REQUEST.md 2026-10-23 disclosure section) supersedes the spec private-scan design. No private scan repo, everything runs in the public repos, fix PRs are public and auto-merged after other-model review and green CI. S1 contract adapted accordingly.
-
-## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
-
-## Orchestration Mode (AI-selected)
-- [x] **Mono-branch** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: S1 is a single isolated contract and inventory unit with no orthogonal sub-branches.
-
-## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/sec-lot1`.
-  - Push branch before UAT.
-  - [x] Web app, Chrome and VSCode UAT are not applicable to pure security inventory helpers.
-  - Switch back to `tmp/worktrees/sec-lot1` after UAT.
+- [x] Main advanced during CI through #769 to 365e8b313f1c4c627c87db4f6761847a1e6a5ae7. Preserve the L1c plan in the BRANCH.md-only conflict; speech/cluster/mesh/lock bytes remain unchanged from 5258b9a6c. Locked speech rerun passes all 66 tests with ENV=test-stt-l1c; obtain CI on the new merge head.
+- [x] PR757-r2 post-merge default cluster suite: 142 files / 1,208 tests pass, including all 66 speech tests; 56 files / 129 environment-gated tests skipped. Ran through locked make/Compose with ENV=test-stt-l1c; exact-head CI follows the merge push while the PR remains draft.
+- [x] PR757-r2 integration: retarget draft to main and merge origin/main without rebasing; preserve cluster 0.23.0, speech exports and comments <0.24.0 with main's Decision support and selected fixture tuple. Scope checks compare the merge result to origin/main so inherited upstream changes are excluded; the adapter accepts the owner's test-stt-l1c ENV.
+- [x] PR757 verification adds native Node ESM speech imports against 0.19.2/0.22/0.27 without speech exports and 0.28 with missing/invalid/valid exports; strict types and lint now cover all four speech suites.
+- [x] PR757-P2-2: two tests first reproduce missing digest and same-revision reload acceptance. Canonical SHA-256 pins selections, projections and consent; reload accepts known revision history and refuses content changes under an existing scoped identity.
+- [x] PR757-P2-1: eight tests first fail on missing speech registration; speech now loads through the typed registry with >=0.28.0 <0.29.0 metadata/member checks before provider evaluation, retaining existing text ranges and the topology guard.
+- [x] BRLIVE-L1C-EX3: register speech with the existing guarded module catalogue and extend the packed skew probe. Scope adds only module IDs and tuple-skew assertions; rollback removes that entry and probe. Required by PR757-P2-1; broad text-peer compatibility is retained.
+- [x] PR757-P1: tests first reproduced three refusals; chained profiles now allow STT-only or TTS-only, and native duplex permits independently selected companion stages. Empty profiles and requirements on absent stages remain refused.
+- [x] Draft #757 targets feat/live-stt-l1 to isolate this lot. Existing CI triggers only for main PRs, so exact-head workflow query returns no runs. Owner/integrator must merge #754 then retarget #757 to main and obtain its CI result before merge; no workflow gate changed.
+- [x] Cold source typecheck found TS2322 on the already validated cost field; explicitly type its normalized numeric output, retaining NaN/negative refusal tests. Quality adapter also compiles existing type fixtures.
+- [x] Existing packaging gate requires a root declaration graph free of optional peers; make the profile schema self-contained and check structural compatibility at the L1 negotiation boundary. No provider/router implementation is copied.
+- [x] Scoped green attempt: 44 pass, 2 fixture failures because native-duplex cases retained chained stt requirements. Replace those fixture requirements with an empty stage map; preserve strict pipeline validation.
+- [x] BRLIVE-L1C-EX2: additive feature prepares cluster 0.23.0 above registry 0.22.1; extend only the self comments-leaf range to <0.24.0, retain next-minor refusal, and align frozen selected archive/lock. Impact: same comments API on additive speech release; rollback with the 0.23 bump. Full module/packaging checks required.
+- [x] Scoped parser failure pinpoints a line break before the type assertion; keep the assertion with its expression and rerun the same suites.
+- [x] origin/feat/live-stt-l1c absent; created from origin/main and merged approved L1 head `01d784be8` by fast-forward, no rebase.
+- [x] BRLIVE-L1C-EX1: existing cold workspace/Compose targets only; external adapter avoids inherited raw Docker scope prerequisite; no tracked build/CI change.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
-  - [x] Create isolated worktree `tmp/worktrees/sec-lot1` from `origin/main` on branch `feat/security-autofix-s1`.
-  - [x] Capture Makefile targets needed for debug/testing.
-  - [x] Define environment mapping (`ENV=test-sec-lot1`) for this branch.
-  - [x] Confirm command style: `make ... ENV=test-sec-lot1` with `ENV` last.
-  - [x] Confirm scope and guardrails.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
-  - [x] Resolve existing toolbox path `api/Dockerfile` (`ci-tools`, `ci-esbuild` stages) as inventory fact for SECDAILY-EX6.
-- [x] **Lot 1 — S1 contract `.security/security-fix.json`**
-  - [x] Declare inventory surfaces (three images, root/UI/kit locks, SAST roots, derived pins).
-  - [x] Declare HIGH/CRITICAL severity contract with identical flags before/after and reconciliation.
-  - [x] Declare raw/register join with 67-row expiry split (60 due 2026-11-20, 7 expired).
-  - [x] Declare grouping into remediation units and bounded lots (3 units, 10 files, 150 lines).
-  - [x] Declare exact automatic scope from spec section 7 with exclusion list.
-  - [x] Integrate P3-1 credential naming (read-only access on the public repository, owner all-public decision).
-  - [x] Integrate P3-4 bumpGate manual class for published package dependency edits.
-  - [x] Declare N=2 reconciliation rule with reset conditions.
-  - [x] Declare kill switches and rate limits.
-  - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec-lot1`
-    - [x] `make commit MSG="..." ENV=test-sec-lot1` with selective `git add`
-- [x] **Lot 2 — S1 modules `scripts/security/daily/schema.mjs` and `inventory.mjs`**
-  - [x] Implement schema validation for contract, findings, units, lots, reconciliation evidence.
-  - [x] Implement inventory of locks, images, SAST roots, derived-pin consumers.
-  - [x] Implement raw/register join, grouping, lot batching, reconciliation streak check.
-  - [x] Implement bumpGate manual classification hook.
-  - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec-lot1`
-    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1`
-- [x] **Lot 3 — S1 tests `schema.test.mjs` and `inventory.test.mjs`**
-  - [x] Cover three images, root/UI/kit locks, 67-row expiry split, seven stale-container candidates.
-  - [x] Cover N=2 complete-scan fixture, severity flags, aliases, malformed data.
-  - [x] Cover P3-1 credential fields and P3-4 manual class.
-  - [x] Cover owner all-public decision (no private scan repo or storage).
-  - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec-lot1`
-    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1`
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] Contract records r4, disabled activation and the current L5 compatibility blocker; source planning documents remain unchanged.
-- [ ] **Lot N — Final validation**
-  - [x] Typecheck and lint not applicable to plain Node security scripts.
-  - [x] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1` after approved-r4 corrections: 24 pass, no failures or skips; official existing pinned Node image, shared Docker lock and scoped teardown.
-  - [x] Final gate step 1: update existing draft #732 using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: run and verify branch CI green.
-  - [ ] Final gate step 3: do not merge, report PR number, head SHA, CI URL.
+- [x] PR757-r1: reproduce P1/P2-1/P2-2 before their fixes; deliver independent stage sets, guarded speech loading and canonical revision pins. Full cluster suite passes 1,180 tests (66 speech), with 129 environment-gated skips; native ESM guard/type/lint/build checks pass. Rechecked registry; preserve stacked base and independent-review boundary.
+- [x] L1c baseline: Docker lock first, rules/spec/owner answers and L0 evidence read; mechanical branch check passes.
+- [x] Replace inherited scope/plan with L1c file-level gates before source edits.
+- [x] **L1c-a — Reconcile L0**
+  - [x] Preserve L0 baseline and complete §11.2 gate register from source head `c0bd543689`.
+  - [x] Preserve SDK/native provenance/toolchain/license inventory and all required placements; artifacts remain unadmitted.
+  - [x] Preserve L0 release-owner/ledger scope and validation receipts; all eight historical deliverables retained byte-for-byte.
+  - [x] Preserve eight L0 files under `.tmp/live-stt/l0/`; refresh heads, gate register, SDK/provenance/license/ledger/release and placement evidence in `.tmp/live-stt/l1c/baseline.md`.
+  - [x] Carry dedicated capacity study and explicit zero allocation; no native inference or quota exception.
+- [x] **L1c-b — Tests first**
+  - [x] `packages/cluster-mesh/tests/speech-fixtures.ts`: five primary tuples, whisper.cpp and synthetic future/native-duplex/placement entries.
+  - [x] `packages/cluster-mesh/tests/speech-config.spec.ts`: bindings/selectors, invalid shapes, all placements, both mic modes, empty/explicit fallback, unsupported capability refusal, no secrets.
+  - [x] `packages/cluster-mesh/tests/speech-projection.spec.ts`: offline snapshot, tenant/policy/egress refusal, unavailable catalogue, safe rebind, immutable revision, consent and no fallback.
+  - [x] Red at `ac7134bfd`: both suites fail on missing speech/config.js before source implementation.
+  - [x] Red run before implementation; first scoped green 48 tests after config/projection and existing seam integration.
+  - [x] Add reproducible Compose-only strict speech-test types, changed-source lint/build/content and existing packed-tuple adapter; root files unchanged.
+- [x] **L1c-c — Implementation**
+  - [x] Strict profile decoder, immutable snapshots and existing cluster config seam implemented; catalogue projection follows.
+  - [x] Catalogue projection negotiates each exact stage tuple and intersects trusted tenant/policy/placement/egress evidence; no routing or credentials added.
+  - [x] Explicit rebind barrier requires cancellation/reconciliation/drained playback and renewed revision-bound consent; speech subpath preserves optional provider loading.
+  - [x] `packages/cluster-mesh/src/speech/{config,projection}.ts`: one revisioned schema and local projection consuming llm-mesh catalogue/negotiation.
+  - [x] Extend existing `src/config.ts` and public barrel/subpath; keep mic activation and gateway account/resource admission with session authorities.
+  - [x] Prepare semver above registry; align only directly affected version assertions and selected packed fixture; no publication.
+- [x] **L1c-d — Documentation and validation**
+  - [x] Quality gate: strict source/speech-test/existing-fixture types, changed-source lint, build and packed-content exports pass.
+  - [x] Full default cluster suite passes 1,162 tests; 129 environment-gated skips recorded separately from packed qualification.
+  - [x] README/CHANGELOG: configuration example, selectors, placements, fallback/rebind/consent boundaries and unavailable reasons.
+  - [x] Scoped speech 48; full cluster 1,162 plus 129 gated skips; packed matrix 100/100; strict typecheck/lint/build/public exports pass.
+  - [x] `make scope-check` before each commit; whitespace and under-150-line/trailer audit at handoff.
+  - [x] Locked ENV cleanup between Docker steps; no services or published ports outside ENV.
+- [x] **L1c-e — Draft handoff**
+  - [x] Record independent-review eligibility/evidence; retain open G-REVIEW with no admitted complementary reviewer capacity.
+  - [x] Push draft #757 using this plan as body; exact-head CI queried, no run because base is L1; final head and surface reported at handoff.
+
+## AI Flaky tests
+- [x] Deterministic fixtures only; no flaky waiver.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch, sequential; no inferred reviewer/native capacity.
+- [ ] Multi-branch not required for this single lot.
+
+## UAT Management (in orchestration context)
+- [x] Export/configuration review through draft PR; no microphone/UI activation or device acceptance.
+- [x] Reproduce all fixture gates on the delivered source tuple; no native/UAT acceptance inferred.
+
+## Deferred to later live-speech lots
+- [x] Engines, controllers/fences, accounting, native/cloud/device qualification, release/adoption and deployment retain their §11.2 owner gates.
