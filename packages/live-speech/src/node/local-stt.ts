@@ -18,6 +18,13 @@ export interface LocalSttSessionOptions {
   readonly port: WorkerPort;
   readonly emit: (event: LocalSttEvent) => void;
   readonly language?: string;
+  /**
+   * Backpressure bound: at most this many window decodes in flight (default 1).
+   * A cadence tick that lands above the bound is skipped and retried on the next
+   * push, so the queue behind the endpoint decode stays bounded and the final
+   * never starves behind stale windows.
+   */
+  readonly maxInflightWindows?: number;
 }
 
 const MIN_UTTERANCE_MS = 150;
@@ -37,13 +44,15 @@ export class LocalSttSession {
   private readonly tracker = new HypothesisTracker();
   private closed = false;
   private utteranceFinalEmitted = false;
-  private windowInFlight = false;
+  private windowsInFlight = 0;
+  private readonly maxInflight: number;
 
   constructor(options: LocalSttSessionOptions) {
     this.profile = options.profile;
     this.port = options.port;
     this.emitEvent = options.emit;
     this.language = options.language;
+    this.maxInflight = Math.max(1, Math.floor(options.maxInflightWindows ?? 1));
   }
 
   diagnostics(): { closed: boolean; utteranceOpen: boolean; bufferedSamples: number; retainedSamples: number } {
@@ -91,19 +100,19 @@ export class LocalSttSession {
   }
 
   /**
-   * Decode one rolling window. At most one window decode is ever in flight: a
-   * cadence tick that lands while the worker is busy is skipped (the dispatch
+   * Decode one rolling window. At most maxInflight window decodes are ever in
+   * flight: a cadence tick that lands above the bound is skipped (the dispatch
    * returns false and the sample counter is left running, so the next push
-   * retries immediately). The queue behind the endpoint decode is therefore
-   * bounded by one window decode, and the final never starves behind stale windows.
+   * retries immediately). The queue behind the endpoint decode therefore stays
+   * bounded, and the final never starves behind stale windows.
    * Returns true when a decode was dispatched.
    */
   private decodeWindow(): boolean {
     const utterance = this.buffer.utteranceId;
-    if (utterance === null || this.closed || this.windowInFlight) return false;
+    if (utterance === null || this.closed || this.windowsInFlight >= this.maxInflight) return false;
     const { window, endSample } = this.buffer.window(this.profile, this.tracker.committedEndSample);
     if (window.length === 0) return false;
-    this.windowInFlight = true;
+    this.windowsInFlight += 1;
     void this.runWindowDecode(utterance, window, endSample);
     return true;
   }
@@ -127,7 +136,7 @@ export class LocalSttSession {
       if (partial === null) return;
       this.emitEvent({ type: 'partial', utteranceId: utterance, ...partial });
     } finally {
-      this.windowInFlight = false;
+      this.windowsInFlight = Math.max(0, this.windowsInFlight - 1);
     }
   }
 

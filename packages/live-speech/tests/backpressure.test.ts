@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { LocalSttSession, type LocalSttEvent } from '../src/node/local-stt.js';
 import { NodeWorkerClient } from '../src/node/worker-port.js';
-import { fakeClientOptions, fakeTinyProfile, flush, silence, tone } from './helpers.js';
+import { FakePort, fakeClientOptions, fakeTinyProfile, flush, silence, tone } from './helpers.js';
 
 describe('backpressure', () => {
   it('should deliver the final without waiting behind stale window decodes', async () => {
@@ -41,6 +41,36 @@ describe('backpressure', () => {
       // an 8-deep stale queue would impose.
       expect(elapsedMs).toBeLessThan(1500);
       expect(alive).toBeGreaterThan(0);
+    } finally {
+      session_.close();
+    }
+  });
+
+  it('should honour the maxInflightWindows bound while a window decode is pending', async () => {
+    // Gated port: the first window decode hangs, so a naive session would pile a
+    // second window decode behind it. Exactly one window call happens while the
+    // gate is held; the third cadence tick must skip rather than queue.
+    const port = new FakePort([
+      { hang: true },
+      { segments: [{ startSec: 0, endSec: 1, text: 'late window' }] },
+      { segments: [{ startSec: 0, endSec: 2, text: 'done' }] },
+    ]);
+    const events: LocalSttEvent[] = [];
+    const session_ = new LocalSttSession({
+      profile: fakeTinyProfile(),
+      port,
+      emit: (event) => events.push(event),
+      maxInflightWindows: 1,
+    });
+    try {
+      session_.pushFrames(tone(1.2));
+      await flush();
+      expect(port.calls).toHaveLength(1);
+      session_.pushFrames(tone(1.2));
+      await flush();
+      expect(port.calls).toHaveLength(1);
+      session_.close();
+      await flush();
     } finally {
       session_.close();
     }
