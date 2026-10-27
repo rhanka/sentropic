@@ -18,6 +18,7 @@ import { createDecisionError, isDecisionErrorCode } from './errors.js';
 import { unreportedDecisionUsage } from './receipt.js';
 import { isRecord, snapshotBoundedJson } from './validation.js';
 import { makeJevProviderRaw } from './raw.js';
+import { canExecuteDecisionCandidate } from './qualification.js';
 
 /** Adapter evidence stays available when verdict validation fails after dispatch. */
 interface DecisionAdapterEvidence {
@@ -58,7 +59,7 @@ export class JevAdapter implements ProviderAdapter {
     const empty = { usage: unreportedDecisionUsage('not-dispatched'), servedEvaluator: null, servedModelId: null };
     const encoded = encodeJevRequest(request, this.descriptor);
     if (!encoded.ok) return { ok: false, error: createDecisionError(encoded.code, 'preflight'), ...empty };
-    if (this.descriptor.qualification.servedIdentity !== 'qualified') {
+    if (!canExecuteDecisionCandidate(this.descriptor)) {
       return { ok: false, error: createDecisionError('PROVIDER_UNAVAILABLE', 'preflight'), ...empty };
     }
     const auth = getSecretAuthMaterial(context?.auth);

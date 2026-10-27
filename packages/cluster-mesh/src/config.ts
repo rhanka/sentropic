@@ -1,6 +1,9 @@
+import { resolveSpeechProfiles, type SpeechProfile, type SpeechProfileInput } from './speech/config.js';
+
 export const DEFAULT_CLUSTER_MESH_MAX_CONCURRENT = 12;
 
 export interface ClusterMeshConfigInput {
+  readonly speechProfiles?: readonly SpeechProfileInput[];
   readonly capacity: {
     readonly poolSize: number;
     readonly maxConcurrent?: number;
@@ -8,6 +11,7 @@ export interface ClusterMeshConfigInput {
 }
 
 export interface ClusterMeshConfig {
+  readonly speechProfiles?: readonly SpeechProfile[];
   readonly capacity: {
     readonly poolSize: number;
     readonly maxConcurrent: number;
@@ -34,5 +38,6 @@ export function resolveClusterMeshConfig(input: ClusterMeshConfigInput): Cluster
       'clusterMesh.capacity.poolSize must be a positive integer not greater than maxConcurrent',
     );
   }
-  return { capacity: { maxConcurrent, poolSize } };
+  return { capacity: { maxConcurrent, poolSize },
+    ...(input.speechProfiles === undefined ? {} : { speechProfiles: resolveSpeechProfiles(input.speechProfiles) }) };
 }

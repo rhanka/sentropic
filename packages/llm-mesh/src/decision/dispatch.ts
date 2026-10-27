@@ -30,7 +30,8 @@ export async function dispatchDecision(execution: DecisionExecution, selection: 
   const result = parseDecisionAdapterResult(candidate, request, selection.descriptor, secret);
   receipt.dispatch = result.ok || result.error.phase === 'parse' ? 'completed' : 'unknown';
   receipt.usage = result.usage;
-  receipt.servedEvaluator = result.servedEvaluator;
+  receipt.servedEvaluator = result.servedEvaluator === null ? null : { ...result.servedEvaluator,
+    ...(receipt.experimental ? { provisional: true as const } : {}) };
   receipt.servedModelId = result.servedModelId;
   if (result.providerRequestId) receipt.providerRequestId = result.providerRequestId;
   if (result.providerLatencyMs !== undefined) receipt.providerLatencyMs = result.providerLatencyMs;
@@ -43,7 +44,9 @@ export async function dispatchDecision(execution: DecisionExecution, selection: 
     error = createDecisionError('TIMEOUT', result.error.phase);
   }
   closeDecisionReceipt(execution, error);
-  try { await options.budget.settle({ holdId: admitted.holdId, receipt: copyDecisionReceipt(receipt), boundViolated: priced.overrun }); }
+  // Invalid native usage cannot release the admitted hold through settlement.
+  const retainHold = selection.descriptor.protocol === 'openai-decisions' && !result.ok && result.error.code === 'USAGE_INVALID';
+  try { if (!retainHold) await options.budget.settle({ holdId: admitted.holdId, receipt: copyDecisionReceipt(receipt), boundViolated: priced.overrun }); }
   catch {
     receipt.budget.state = 'pending-reconciliation';
     error = createDecisionError('SETTLEMENT_UNAVAILABLE', 'settlement');
