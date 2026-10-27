@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-27T06:18:07Z",
+  "createdAt": "2026-10-27T08:31:09Z",
   "kind": "l4-g-native-receipt",
   "lot": "L4",
   "spec": "r3 §5.1 + §8.1",
@@ -36,12 +36,8 @@
     "pw-record": "Removed in r2: the previously recorded digest was a corrupted transcription (62 hex chars, not a real hash). No verified digest exists — neither in-image (no lane provisions pipewire) nor re-measured for claim — so the entry is dropped entirely instead of carrying an unverified hash. pw-record stays an unqualified alternative and is not wired."
   },
   "deviceTrace": {
-    "command": "arecord -l",
-    "capturedAt": "2026-10-27T06:18:07Z",
-    "locale": "fr_FR.UTF-8",
-    "exit": 0,
-    "output": "**** Liste des périphériques matériels CAPTURE ****\ncarte 1 : Generic_1 [HD-Audio Generic], périphérique 0 : ALC294 Analog [HD-Audio Generic]\n  Sous-périphériques : 1/1\n  Sous-périphérique #0 : subdevice #0",
-    "note": "Verbatim stdout of the command above on the Ubuntu host (UTF-8, no trailing whitespace): proves backend parsing against real hardware enumeration. No capture attempted — no microphone in this environment, and microphone capture is forbidden in CI tests (FakeDevice covers behavior; a non-Python node fixture covers the real spawn/frame/loss/cleanup path)."
+    "status": "dropped",
+    "detail": "The arecord -l trace was removed in r3: its content is disputed across environments (card vs device naming) and a pasted trace cannot be re-verified by review. Enumeration parsing is instead proven by unit tests over both the English and French locale forms (tests/device.test.ts, real host capture as fixture). No capture was ever attempted — no microphone in this environment, and microphone capture is forbidden in CI tests."
   },
   "networkPosture": {
     "microphone": false,
