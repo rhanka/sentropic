@@ -12,6 +12,8 @@ import type { AtomicUnit } from '../storage/atomic.js';
 import { MEMORY_DESCRIPTOR } from './manifest.js';
 import { MEMORY_PG_QUERIES } from './postgres-queries.js';
 import { MEMORY_STORAGE_LIMITS } from './limits.js';
+import { projectMemoryPgEffects, validateMemoryPgEffects } from './projection.js';
+import type { PgRegisteredProjection } from '../storage/postgres/protocol.js';
 import {
   isMemoryAdmissionOutcome,
   isMemoryCaptureProof,
@@ -22,7 +24,8 @@ import {
 export interface MemoryPostgresRegistration {
   readonly assets: Awaited<ReturnType<typeof loadPgAssets>>;
   readonly descriptor: typeof MEMORY_DESCRIPTOR;
-  readonly validateEffects: (effects: AtomicUnit, context: unknown) => Promise<void>;
+  readonly validateEffects: PgRegisteredProjection;
+  readonly projection: PgRegisteredProjection;
   readonly queries: typeof MEMORY_PG_QUERIES;
   readonly limits: typeof MEMORY_STORAGE_LIMITS;
 }
@@ -89,16 +92,16 @@ export const validateMemoryEffects = async (
   effects: AtomicUnit,
   resolveCurrent?: MemoryCurrentStateResolver,
 ): Promise<void> => {
-  let touchesCapture = false;
+  let completesCapture = false;
   for (const update of effects.updates) {
     const kind = updateKind(update.key);
     if (kind === null) throw new StorageInvalidCommandError('memory aggregate update requires a compound key');
     const value = decodeUpdateValue(update.value);
     if (kind === 'memory-capture-idempotency-v1') {
-      touchesCapture = true;
       if (!isMemoryCaptureProof(value)) {
         throw new StorageInvalidCommandError('memory capture update requires a capture proof value');
       }
+      completesCapture ||= value.revision !== 1;
       if (resolveCurrent !== undefined) {
         const current = await resolveCurrent(update.key);
         const transition = validateCaptureTransition(current ?? null, value);
@@ -123,18 +126,17 @@ export const validateMemoryEffects = async (
       }
     }
   }
-  if (touchesCapture && effects.appends.length !== 0) {
+  if (completesCapture && effects.appends.length !== 0) {
     throw new StorageInvalidCommandError('memory capture completion carries strictly zero appends');
   }
 };
 
 export const createMemoryPostgresRegistration = async (): Promise<MemoryPostgresRegistration> =>
   Object.freeze({
-    assets: await loadPgAssets(),
+    assets: await loadPgAssets({ memory: true }),
     descriptor: MEMORY_DESCRIPTOR,
-    validateEffects: async (effects: AtomicUnit) => {
-      await validateMemoryEffects(effects);
-    },
+    validateEffects: validateMemoryPgEffects,
+    projection: projectMemoryPgEffects,
     queries: MEMORY_PG_QUERIES,
     limits: MEMORY_STORAGE_LIMITS,
   });

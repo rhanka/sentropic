@@ -4,7 +4,7 @@ import { PostgresStorageError, PgSchemaDriftError } from './errors.js';
 import { decodePgText } from './codec.js';
 import { quotePgIdentifier, validatePgLayout, type PgLayout, type PgSession } from './protocol.js';
 export interface PgAsset {
-  readonly schemaRole?: 'comments';
+  readonly schemaRole?: 'comments' | 'engram-memory';
   readonly id: string;
   readonly file: string;
   readonly order: number;
@@ -67,7 +67,7 @@ const validateChains = (assets: readonly PgAsset[]): void => {
     seen.add(asset.id);
   }
 };
-export const loadPgAssets = async (selected: { readonly comments?: boolean } = {}): Promise<readonly PgAsset[]> => {
+export const loadPgAssets = async (selected: { readonly comments?: boolean; readonly memory?: boolean } = {}): Promise<readonly PgAsset[]> => {
   const directory = new URL('../../../assets/storage/postgres/', import.meta.url);
   const manifest = JSON.parse(await readFile(new URL('manifest.json', directory), 'utf8')) as {
     version: number;
@@ -79,9 +79,14 @@ export const loadPgAssets = async (selected: { readonly comments?: boolean } = {
     if (module.version !== 1 || !Array.isArray(module.assets)) refuse();
     manifest.assets.push(...module.assets);
   }
+  if (selected.memory) {
+    const module = JSON.parse(await readFile(new URL('engram-memory/manifest.json', directory), 'utf8')) as typeof manifest;
+    if (module.version !== 1 || !Array.isArray(module.assets)) refuse();
+    manifest.assets.push(...module.assets);
+  }
   const assets: PgAsset[] = [];
   for (const asset of manifest.assets) {
-    if (!/^(comments\/)?\d{3}-[a-z-]+\.sql$/.test(asset.file)) refuse();
+    if (!/^(comments\/|engram-memory\/)?\d{3}-[a-z-]+\.sql$/.test(asset.file)) refuse();
     const sql = await readFile(new URL(asset.file, directory), 'utf8');
     if (digest(sql) !== asset.checksum) refuse();
     assets.push(Object.freeze({ ...asset, requires: Object.freeze([...asset.requires]), sql }));
@@ -91,9 +96,10 @@ export const loadPgAssets = async (selected: { readonly comments?: boolean } = {
 };
 const fingerprint = async (session: PgSession, layout: PgLayout, assets: readonly PgAsset[]): Promise<string> => {
   const owned = assets.flatMap((asset) =>
-    [...asset.sql.matchAll(/CREATE (TABLE|FUNCTION) (__DATA_SCHEMA__|__COMMENTS_SCHEMA__)\.([a-z_]+)/g)].map(
+    [...asset.sql.matchAll(/CREATE (TABLE|FUNCTION) (__DATA_SCHEMA__|__COMMENTS_SCHEMA__|__MEMORY_SCHEMA__)\.([a-z_]+)/g)].map(
       (match) => [
-        match[2] === '__DATA_SCHEMA__' ? layout.dataSchema : layout.projectionSchemas.comments,
+        match[2] === '__DATA_SCHEMA__' ? layout.dataSchema
+          : layout.projectionSchemas[match[2] === '__COMMENTS_SCHEMA__' ? 'comments' : 'engram-memory'],
         match[3],
         match[1],
       ],
@@ -221,10 +227,12 @@ export const applyPgMigrations = async (
     if (digest(asset.sql) !== asset.checksum) refuse();
     if (asset.requires.some((id) => !installed.has(id))) refuse();
     if (asset.schemaRole === 'comments' && !layout.projectionSchemas.comments) refuse();
+    if (asset.schemaRole === 'engram-memory' && !layout.projectionSchemas['engram-memory']) refuse();
     await session.execute({
       text: asset.sql
         .replaceAll('__DATA_SCHEMA__', schema)
-        .replaceAll('__COMMENTS_SCHEMA__', quotePgIdentifier(layout.projectionSchemas.comments ?? layout.dataSchema)),
+        .replaceAll('__COMMENTS_SCHEMA__', quotePgIdentifier(layout.projectionSchemas.comments ?? layout.dataSchema))
+        .replaceAll('__MEMORY_SCHEMA__', quotePgIdentifier(layout.projectionSchemas['engram-memory'] ?? layout.dataSchema)),
       values: [],
     });
     const { sql: _sql, file: _file, ...identity } = asset;
