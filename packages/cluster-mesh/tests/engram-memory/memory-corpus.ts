@@ -4,6 +4,9 @@ import { memoryJcs } from '../../src/engram-memory/codec.js';
 import { MEMORY_PINNED_PROFILES } from '../../src/engram-memory/manifest.js';
 import type { MemoryCampaignHost } from './memory-pg-host.js';
 import { DEADLINE, DIGEST, memoryCaptureRequest, memoryEngine } from './memory-engine.js';
+import { assembleMemoryHostBinding, verifyHostBinding } from '../../src/engram-memory/binding.js';
+import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
+import { memoryMaintainGrant } from './pg-host.js';
 
 export const MEMORY_STAGE_B_PROFILES = [
   'atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1', 'scope-outbox-v1', 'fenced-writers-v1',
@@ -121,6 +124,77 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       expect(valueOf(await h.store.readAdmissionOutcome!(candidate))).toEqual(first);
       expect(await h.handle.readCommitResult!(journal.at(-1)!.event_id, h.binding.memoryGrant)).toEqual(original);
       expect(valueOf(await h.store.readJournal({ after: '0', limit: 10 }))).toEqual(journal);
+    });
+    scenario('scope-outbox-v1/checkpoint-resync-snapshot: should retain a host snapshot while memory advances', async (h) => {
+      valueOf(await h.store.commitPending(pendingCapture()));
+      const maintained = await h.kernel.bind(h.binding.maintainGrant);
+      const fence = await maintained.journalFence();
+      expect(await h.maintenance.checkFence(fence)).toEqual(fence);
+      await expect(h.maintenance.checkFence({ ...fence, epoch: '999' })).rejects.toMatchObject({ code: 'denied' });
+      const captured = await h.maintenance.resync('stage-b-snapshot', fence);
+      valueOf(await h.store.commitPending(pendingCapture('candidate-2')));
+      const snapshot = await h.maintenance.snapshot(captured.snapshotRoot, 0, 1);
+      expect(snapshot.rows).toHaveLength(1);
+      expect(snapshot.rows[0]).toMatchObject({ chainId: 'memory-journal', allocation: '1' });
+      await h.maintenance.checkpoint('stage-b-snapshot', '0', captured.journalSeq, fence);
+      await expect(h.maintenance.checkpoint('stage-b-snapshot', '0', captured.journalSeq, fence))
+        .rejects.toMatchObject({ code: 'cas-conflict' });
+      const memory = await h.kernel.bind(h.binding.memoryGrant);
+      await expect(memory.journalFence()).rejects.toMatchObject({ code: 'denied' });
+      await expect(memory.journalCheckpoint('stage-b-snapshot', '0', '1', fence)).rejects.toMatchObject({ code: 'denied' });
+      await expect(memory.journalResync('forbidden', fence)).rejects.toMatchObject({ code: 'denied' });
+      await expect(memory.snapshotRead(captured.snapshotRoot, 0, 1)).rejects.toMatchObject({ code: 'denied' });
+    });
+    scenario('scope-outbox-v1/poison-retry: should refuse checkpoints until the poisoned event is redelivered', async (h) => {
+      valueOf(await h.store.commitPending(pendingCapture()));
+      const fence = await (await h.kernel.bind(h.binding.maintainGrant)).journalFence();
+      const delivery = await h.hostReplay('0', 1, 'stage-b-poison');
+      expect(delivery.events).toHaveLength(1);
+      const event = delivery.events[0]!;
+      await h.maintenance.poison('stage-b-poison', event.eventId, 'decode failure');
+      await expect(h.maintenance.checkpoint('stage-b-poison', '0', event.seq, fence)).rejects.toMatchObject({ code: 'invalid-command' });
+      await h.maintenance.retry('stage-b-poison', event.eventId, fence);
+      await expect(h.maintenance.checkpoint('stage-b-poison', '0', event.seq, fence)).rejects.toMatchObject({ code: 'invalid-command' });
+      expect((await h.hostReplay('0', 1, 'stage-b-poison')).events).toEqual(delivery.events);
+      await h.maintenance.checkpoint('stage-b-poison', '0', event.seq, fence);
+      expect(await (await h.kernel.bind(h.binding.memoryGrant)).journalInspect('stage-b-poison')).toMatchObject({ cursor: event.seq, lag: '0' });
+    });
+    scenario('scope-outbox-v1/authority-refusals: should refuse absent foreign and revoked host authority independently', async (h) => {
+      expect(() => openMemoryMaintenance(undefined!, undefined!)).toThrow(/assembled binding/);
+      expect(() => assembleMemoryHostBinding({ driver: h.binding.provider, maintainGrant: undefined, invocationId: 'inv' })).toThrow(/maintain grant/);
+      const foreign = assembleMemoryHostBinding({ driver: h.binding.provider, maintainGrant: memoryMaintainGrant('foreign'), invocationId: 'foreign' });
+      await h.kernel.bindNew(foreign.maintainGrant);
+      await expect(verifyHostBinding(h.kernel, foreign, h.scopeBinding.scope)).rejects.toMatchObject({ code: 'denied' });
+      const neverIssued = assembleMemoryHostBinding({ driver: h.binding.provider,
+        maintainGrant: { ...h.binding.maintainGrant, token: 'never-issued' }, invocationId: 'unknown' });
+      await expect(verifyHostBinding(h.kernel, neverIssued, h.scopeBinding.scope)).rejects.toMatchObject({ code: 'denied' });
+      const fence = await (await h.kernel.bind(h.binding.maintainGrant)).journalFence();
+      await h.kernel.revoke(h.binding.maintainGrant.token);
+      for (const operation of [
+        () => h.maintenance.checkFence(fence), () => h.maintenance.resync('revoked', fence),
+        () => h.maintenance.checkpoint('revoked', '0', '0', fence), () => h.maintenance.snapshot('unknown', 0, 1),
+        () => h.maintenance.poison('revoked', 'unknown', 'reason'), () => h.maintenance.retry('revoked', null, fence),
+      ]) await expect(operation()).rejects.toMatchObject({ code: 'denied' });
+      // The independent read/write authority remains valid.
+      expect(valueOf(await h.store.readiness()).storage_epoch).toBe('1');
+    });
+    scenario('fenced-writers-v1/C7: should deny unknown foreign and copied candidate authority before effects', async (h) => {
+      const host = memoryEngine(h);
+      expect(await h.store.commitPending(pendingCapture('unknown'))).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
+      const before = h.units.length;
+      expect(await host.engine.capture(memoryCaptureRequest('foreign', 'foreign-scope'))).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
+      host.enter(null);
+      expect(await host.engine.capture(memoryCaptureRequest('missing'))).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
+      expect(h.units).toHaveLength(before);
+      host.enter(host.original);
+      const captured = valueOf(await host.engine.capture(memoryCaptureRequest()));
+      const count = h.units.length;
+      for (const invocation of [{ ...host.original }, { ...host.original, invocationId: 'foreign-invocation' }]) {
+        host.enter(invocation);
+        expect(await host.engine.requestAdmission({ candidate_id: captured.candidate_id!,
+          authorization: { credential: 'credential-memory' }, deadline_at: DEADLINE })).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
+      }
+      expect(h.units).toHaveLength(count);
     });
   });
 };
