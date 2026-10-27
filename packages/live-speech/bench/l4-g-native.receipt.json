@@ -1,10 +1,10 @@
 {
-  "createdAt": "2026-10-27T04:55:00Z",
+  "createdAt": "2026-10-27T06:18:07Z",
   "kind": "l4-g-native-receipt",
   "lot": "L4",
   "spec": "r3 §5.1 + §8.1",
-  "status": "partial",
-  "note": "L4 adds no native build and no new npm dependency. The arecord helper digest is host-measured (not in-image), the pinned CI image has no pinned digest and ships no alsa-utils, and there is no offline execution trace inside that image — so this receipt is partial, never a pass. Runtime enforcement (digest check at open, refuse on mismatch) is implemented in ArecordDevice and covered by unit tests.",
+  "status": "blocked",
+  "note": "L4 adds no native build and no new npm dependency. The runtime digest check (refuse on mismatch, at open AND at list) is implemented and unit-covered, but the helper digests are host-measured only: they are NOT the pinned CI image's bytes. Until every digest and trace below is real, this receipt stays blocked, never measured.",
   "toolchain": {
     "testImage": "node:24-bookworm-slim (tag only; image digest not pinned — no lane exposes it, ad-hoc docker inspection is forbidden)",
     "arch": "amd64",
@@ -26,26 +26,22 @@
       "version": "arecord: version 1.2.15.2",
       "hostDigest": "sha256:4436d05a3f9ce9d92432ea73dd5b6233f69d6243a6cfb3b6b1b8852622cb26c5",
       "hostDigestScope": "measured on the Ubuntu qualification host — NOT the node:24-bookworm-slim image, which ships no alsa-utils",
-      "imageDigest": "pending — blocked: no lane provisions arecord inside the pinned image",
+      "imageDigest": "missing — blocked: no lane provisions arecord inside the pinned image",
       "license": "GPL-2 (separate native executable, subprocess aggregation — same treatment as the L3 eSpeak NG binary)",
       "invocation": "arecord -D <id> -f S16_LE -r <rate> -c 1 -t raw (explicit argv, shell:false; stdout streamed as PCM, stderr drained as text, no audio files)",
-      "runtimeEnforcement": "ArecordDevice.open resolves the binary to an absolute path, hashes it, and refuses anything outside ARECORD_SHA256_PINS plus constructor/ARECORD_DIGESTS allowlist (DeviceOpenError on mismatch; DeviceUnavailableError when missing)"
-    },
-    "pw-record": {
-      "role": "qualified alternative, not wired (single-backend surface)",
-      "binary": "/usr/bin/pw-record",
-      "package": "pipewire-bin 1.6.2-1ubuntu1.1 (libpipewire 1.6.2)",
-      "hostDigest": "sha256:19d0bdba77511b1710d174ceb0a9420a978d4168f56e1409855c657caef0bd",
-      "hostDigestScope": "measured on the Ubuntu qualification host — NOT the node:24-bookworm-slim image",
-      "imageDigest": "pending — blocked: same provisioning gap as arecord",
-      "license": "package mix Expat/LGPL-2.1+ (see /usr/share/doc/pipewire-bin/copyright); subprocess aggregation only"
+      "runtimeEnforcement": "ArecordDevice.open and ArecordDevice.listDevices resolve the binary to an absolute path, hash it, and refuse anything outside ARECORD_SHA256_PINS plus constructor/ARECORD_DIGESTS allowlist (DeviceOpenError on mismatch, DeviceUnavailableError when missing)"
     }
+  },
+  "removedEntries": {
+    "pw-record": "Removed in r2: the previously recorded digest was a corrupted transcription (62 hex chars, not a real hash). No verified digest exists — neither in-image (no lane provisions pipewire) nor re-measured for claim — so the entry is dropped entirely instead of carrying an unverified hash. pw-record stays an unqualified alternative and is not wired."
   },
   "deviceTrace": {
     "command": "arecord -l",
+    "capturedAt": "2026-10-27T06:18:07Z",
+    "locale": "fr_FR.UTF-8",
     "exit": 0,
     "output": "**** Liste des périphériques matériels CAPTURE ****\ncarte 1 : Generic_1 [HD-Audio Generic], périphérique 0 : ALC294 Analog [HD-Audio Generic]\n  Sous-périphériques : 1/1\n  Sous-périphérique #0 : subdevice #0",
-    "note": "Listing only, on the Ubuntu host: proves backend parsing against real hardware enumeration. No capture attempted — no microphone in this environment, and microphone capture is forbidden in CI tests (FakeDevice covers behavior; a non-Python node fixture covers the real spawn/frame/loss/cleanup path)."
+    "note": "Verbatim stdout of the command above on the Ubuntu host (UTF-8, no trailing whitespace): proves backend parsing against real hardware enumeration. No capture attempted — no microphone in this environment, and microphone capture is forbidden in CI tests (FakeDevice covers behavior; a non-Python node fixture covers the real spawn/frame/loss/cleanup path)."
   },
   "networkPosture": {
     "microphone": false,
@@ -55,7 +51,7 @@
   },
   "sbom": {
     "status": "measured",
-    "delta": "empty — L4 adds zero packages to package.json/package-lock.json; SBOM is the unchanged L3 set plus two system binaries hashed above"
+    "delta": "empty — L4 adds zero packages to package.json/package-lock.json; SBOM is the unchanged L3 set plus one hashed system binary"
   },
   "blocked": {
     "liveMicCapture": {
@@ -72,7 +68,7 @@
     },
     "inImageHelper": {
       "status": "blocked",
-      "detail": "arecord/pw-record are absent from node:24-bookworm-slim and no lane may provision them (ad-hoc docker work forbidden). Exact missing items: pinned image digest, in-image helper digests, offline execution trace inside the image, network-denial log for that provisioning."
+      "detail": "arecord/pw-record are absent from node:24-bookworm-slim and no lane may provision them (ad-hoc docker work is forbidden). Exact missing §8.1 items: (1) pinned image digest for node:24-bookworm-slim, (2) in-image arecord digest, (3) offline execution trace inside that image, (4) network-denial log for that provisioning."
     }
   }
 }
