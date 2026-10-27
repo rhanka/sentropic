@@ -63,10 +63,10 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
   - [x] `ArecordDevice`: argv-pinned `arecord` spawn (no shell), S16_LE raw stdout to Float32Array frames, list via `arecord -l`, fail closed without binary.
   - [x] `tests/device.test.ts` + `tests/fixtures/fake-device.ts` (scripted frames, open-failure and loss injection): list/open/frames, open failure, mid-stream loss, missing binary, argv exactness.
   - [x] Lot gate: `make test-live-speech SCOPE=tests/device.test.ts ENV=test-stt-l4` green (8/8).
-- [ ] **Lot 2 — Capture session**
-  - [ ] `src/node/capture.ts`: mic-off default, mute independent of VAD, level meter (dBFS only), bounded downstream queue with drop counter, device-loss event, idempotent close.
-  - [ ] `tests/capture.test.ts`: starts muted/off, toggle, mute/VAD independence, meter values, bounded drops, loss propagation, cleanup.
-  - [ ] Lot gate: `make test-live-speech SCOPE=tests/capture.test.ts ENV=test-stt-l4` green.
+- [x] **Lot 2 — Capture session**
+  - [x] `src/node/capture.ts`: mic-off default, mute independent of VAD, level meter (dBFS only), bounded downstream queue with drop counter, device-loss event, idempotent close.
+  - [x] `tests/capture.test.ts`: starts muted/off, toggle, mute/VAD independence, meter values, bounded drops, loss propagation, cleanup.
+  - [x] Lot gate: `make test-live-speech SCOPE=tests/capture.test.ts ENV=test-stt-l4` green (7/7).
 - [ ] **Lot 3 — Terminal control + wiring**
   - [ ] `src/node/terminal-control.ts`: toggle + explicit start/end keys on its own TTY stream, no hold without qualified hotkey (fail closed), documented defaults, TTY restore on close, never forwards keys.
   - [ ] `tests/terminal-control.test.ts`: toggle/stop keys, unknown keys ignored, no leakage, raw-mode restore, hold-without-hotkey throws.
