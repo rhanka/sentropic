@@ -46,6 +46,9 @@
 
 ## Feedback Loop
 - [x] Owner authorization covers all listed approved lots and the E9 API adaptation.
+- [x] BR1-EX1 implemented: existing qualification routes accept test-mem-batch1, preserve Compose cleanup and guard the exact approved P3 bytes; no Compose/workflow file changes.
+- [x] All nine lot heads are ancestors of the batch; E2/E3/E4 were already present through E7. No lot excluded for a content conflict.
+- [ ] Stage B retains 23 explicit blocked cases from approved E9; no five-profile qualification is claimed by this batch.
 - [ ] #758 approved review filename not found locally; conductor clarification pending.
 - [ ] #793 review is included in pr792_opus_r1.md; dedicated approval filename pending clarification.
 

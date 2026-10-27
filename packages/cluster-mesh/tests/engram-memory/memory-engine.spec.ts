@@ -15,7 +15,7 @@ describe('memory engine authorized recovery', () => {
     recovery.prove.mockReset(); recovery.verify.mockReset();
     const refused = { ok: false, error: { code: 'UNAUTHORIZED', operation: 'request_admission', retryable: false } };
     const scope = { tenantId: 'tenant-a', workspaceId: 'workspace-a' };
-    const store = { readPending: vi.fn(async () => refused), commitPending: vi.fn(),
+    const store = { readPending: vi.fn(async (_input: unknown) => refused), commitPending: vi.fn(),
       applyLifecycle: vi.fn(), applyAdmission: vi.fn() };
     const host = { store, scopeBinding: { store_id: 'store-1', scope, resolveScope: () => scope },
       binding: { memoryGrant: { principalId: 'host-1' } }, kernel: { bind: vi.fn() },
