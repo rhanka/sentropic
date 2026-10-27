@@ -124,17 +124,32 @@ class FakePlayback implements PlaybackPort {
   }
 }
 
-interface Harness {
+interface Harness<T extends TtsEnginePort = TtsEnginePort, P extends PlaybackPort = PlaybackPort> {
   loop: VoiceLoop;
-  tts: FakeTts;
-  playback: FakePlayback;
+  tts: T;
+  playback: P;
   events: VoiceLoopEvent[];
+}
+
+interface HarnessOptions {
+  readonly micMode?: 'key' | 'open-mic';
+  readonly sensitivePatterns?: readonly RegExp[];
 }
 
 function harness(
   tts?: FakeTts,
   playback?: FakePlayback,
-  options: { micMode?: 'key' | 'open-mic'; sensitivePatterns?: readonly RegExp[] } = {},
+  options?: HarnessOptions,
+): Harness<FakeTts, FakePlayback>;
+function harness(
+  tts?: TtsEnginePort,
+  playback?: PlaybackPort,
+  options?: HarnessOptions,
+): Harness;
+function harness(
+  tts?: TtsEnginePort,
+  playback?: PlaybackPort,
+  options: HarnessOptions = {},
 ): Harness {
   const events: VoiceLoopEvent[] = [];
   const fakeTts = tts ?? new FakeTts();
@@ -182,9 +197,10 @@ describe('voice loop', () => {
   it('should preview each chunk and play a narration end to end', async () => {
     const h = harness(new FakeTts(), new FakePlayback(false));
     const text =
-      'Alpha clause states the case plainly. ' +
-      'Beta clause follows with more detail here. ' +
-      'Gamma clause closes the narration now.';
+      'Alpha clause states the case plainly and at length. ' +
+      'Beta clause follows with more detail here and now. ' +
+      'Gamma clause closes the narration now for good. ' +
+      'Delta clause adds the final tail of the story here.';
     const result = await h.loop.speak(text, { turnEpoch: 3, submitKey: 's1' });
     expect(result).toMatchObject({ status: 'played', chars: text.length, truncated: false });
     expect(result.chunks).toBeGreaterThan(1);
@@ -486,6 +502,17 @@ describe('voice loop', () => {
           await new Promise((resolve) => setTimeout(resolve, 10));
         }
         expect(playback.playing).toBe(true);
+        // Wait for the child to boot before barging: killing it mid-exec
+        // would reap it before the pidfile, making the proof vacuous.
+        const bootDeadline = Date.now() + 10000;
+        while (Date.now() < bootDeadline) {
+          try {
+            readFileSync(pidFile, 'utf8');
+            break;
+          } catch {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+        }
         const start = Date.now();
         h.loop.barge('vad');
         await expect(pending).resolves.toMatchObject({ status: 'cancelled' });
