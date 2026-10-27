@@ -43,6 +43,7 @@
   - [x] Product resolver rechecks session/conversation ownership, authoritative tenant and active account/memberships; consumes W2 compiled names directly.
 - [ ] Lot 3: require context at every HTTP product port; filter before ranking and serialization.
   - [x] Every HTTP transport path authenticates, resolves authority and disables caching; product ports require context.
+  - [x] Direct product discovery ports reject missing or copied context at runtime.
   - [x] Context-view tests authored before filtering: interleaved users, ranking, source absence and read-only mutations.
   - [x] Synchronous request-local snapshots filter tools/skills before collision resolution, ranking and limiting; private sources absent globally.
 - [ ] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
