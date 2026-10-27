@@ -104,6 +104,12 @@ describe('arecord backend', () => {
     await expect(device.open('hw:0,0', OPEN_OPTS)).rejects.toThrow(/before first frame/);
   });
 
+  it('should verify the digest before listing devices, not just before open', async () => {
+    // G-NATIVE: enumeration executes the helper too, so the check applies here.
+    const device = new ArecordDevice(process.execPath);
+    await expect(device.listDevices()).rejects.toThrow(/digest mismatch/);
+  });
+
   it('should decode frames and surface a nonzero exit as device loss', async () => {
     await withMode('frames-loss', async () => {
       const device = new ArecordDevice(FAKE_ARECORD, [digestOf(FAKE_ARECORD)]);
