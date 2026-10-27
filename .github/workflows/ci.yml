@@ -486,6 +486,9 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/artifacts/**'
+              - 'docs/governance/kit/**'
+              - 'packages/components-svelte/**'
+              - 'packages/design-system-themes/**'
               - '.github/workflows/ci.yml'
             artifacts_publish:
               - 'packages/artifacts/**'
@@ -1180,6 +1183,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Check dossier artifact size budget
+        run: make check-artifact-budget ENV=test-ci-artifact-budget
+      - name: Upload dossier size and browser receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: artifact-size-reports
+          path: |
+            docs/governance/kit/.cache/artifact-weight/**/artifact-size-report.*
+            docs/governance/kit/.cache/artifact-weight/**/browser.json
+            docs/governance/kit/.cache/artifact-weight/**/startup.json
+            docs/governance/kit/.cache/geometry-review.json
+            docs/governance/kit/.cache/routing-budget.json
+      - name: Remove artifact qualification stack
+        if: always()
+        run: make down ENV=test-ci-artifact-budget
       - name: Typecheck Artifacts
         run: make typecheck-artifacts
       - name: Build Artifacts
