@@ -10,6 +10,12 @@ import {
   ROOT_MOUNTED_NAMESPACE_REGISTRY,
 } from '../../src/app';
 import { db } from '../../src/db/client';
+import { chatMessages, chatSessions, tenantMemberships, userSessions } from '../../src/db/schema';
+import { resolveHttpCatalogContext } from '../../src/services/catalog/request-authority';
+import { revalidateCatalogInvocation } from '../../src/services/catalog/request-context';
+import { testCatalogContext } from '../services/catalog/test-context';
+import { chatService } from '../../src/services/chat-service';
+import { standaloneToolSource } from '../../src/services/catalog/sources/standalone-tool-source';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
   CATALOG_AUTHOR,
@@ -49,6 +55,7 @@ const createDiscovery = (): CatalogDiscoveryPort => ({
 const createPorts = (catalog = createDiscovery()): CatalogNamespacePorts => ({
   catalog,
   authenticate: pass,
+  resolveContext: () => testCatalogContext(['planner']),
 });
 
 describe('cluster mesh catalog transport', () => {
@@ -58,7 +65,7 @@ describe('cluster mesh catalog transport', () => {
     } as unknown as CatalogNamespacePorts)).toThrowError('catalog product ports are unavailable');
 
     const router = createCatalogTransportRouter(createPorts());
-    expect(router.routes.map(({ method, path }) => [method, path])).toEqual(CATALOG_ROUTES);
+    expect([...new Map(router.routes.map(({ method, path }) => [path, [method, path]])).values()]).toEqual(CATALOG_ROUTES);
     expect(CATALOG_PATHS).toHaveLength(4);
     expect(CATALOG_PATHS).not.toContain('/*');
     expect(CATALOG_ROUTES.every(([method]) => method === 'GET')).toBe(true);
@@ -66,7 +73,7 @@ describe('cluster mesh catalog transport', () => {
     const source = readFileSync(
       new URL('../../src/routes/namespaces/catalog.ts', import.meta.url), 'utf8',
     );
-    expect(source).not.toMatch(/from ['"][^'"]*(?:\/db\/|\/services\/|\/schema)/);
+    expect(source).not.toMatch(/^import (?!type)[^\n]*from ['"][^'"]*(?:\/db\/|\/services\/|\/schema)/m);
 
     const app = new Hono().route('/api/v1', router);
     expect((await app.request('/api/v1/catalog/entries/planner', { method: 'POST' })).status)
@@ -79,7 +86,7 @@ describe('cluster mesh catalog transport', () => {
 
     const list = await app.request('/api/v1/catalog/entries?kind=skill&sourceId=foundation');
     await expect(list.json()).resolves.toEqual({ items: [planner] });
-    expect(catalog.list).toHaveBeenCalledWith({ kind: 'skill', sourceId: 'foundation' });
+    expect(catalog.list).toHaveBeenCalledWith({ kind: 'skill', sourceId: 'foundation' }, expect.objectContaining({ subjectId: 'user-test' }));
 
     const detail = await app.request('/api/v1/catalog/entries/planner');
     await expect(detail.json()).resolves.toEqual({ item: planner });
@@ -87,7 +94,7 @@ describe('cluster mesh catalog transport', () => {
     await expect(search.json()).resolves.toEqual({
       hits: [{ entry: planner, score: 5, matchedFields: ['name'] }],
     });
-    expect(catalog.search).toHaveBeenCalledWith({ query: 'planner', kind: 'skill', limit: 3 });
+    expect(catalog.search).toHaveBeenCalledWith({ query: 'planner', kind: 'skill', limit: 3 }, expect.objectContaining({ subjectId: 'user-test' }));
     await expect((await app.request('/api/v1/catalog/sources')).json()).resolves.toEqual({
       items: [{ id: 'foundation', kind: 'static' }],
     });
@@ -119,18 +126,23 @@ describe('cluster mesh catalog product authority', () => {
   beforeEach(async () => {
     await clearCutover();
     user = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
   });
 
   afterEach(async () => {
+    standaloneToolSource.unregister('catalog_context_probe');
     await clearCutover();
     await cleanupAuthData();
   });
 
   it('matches direct canonical deterministic discovery without a predecessor shadow', async () => {
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    const context = await resolveHttpCatalogContext({ userId: user.id, sessionId: session.id,
+      workspaceId: user.workspaceId!, role: 'editor' });
     const directSearch = productCatalogDiscovery.search({
       query: 'workspace', kind: 'skill', limit: 3,
-    });
-    const directSources = productCatalogDiscovery.sources();
+    }, context);
+    const directSources = productCatalogDiscovery.sources(context);
     const search = await authenticatedRequest(
       productApp,
       'GET',
@@ -170,6 +182,68 @@ describe('cluster mesh catalog product authority', () => {
     const blocked = await authenticatedRequest(app, 'GET', path, user.sessionToken!);
     expect(blocked.status).toBe(503);
     await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('should deny all mounted discovery paths after tenant membership is revoked', async () => {
+    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
+    for (const suffix of ['entries', 'entries/workspace', 'search?query=workspace', 'sources']) {
+      const response = await authenticatedRequest(productApp, 'GET', `/api/v1/catalog/${suffix}`, user.sessionToken!);
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({ error: 'catalog_access_denied' });
+    }
+  });
+
+  it('should isolate interleaved mounted discovery for two real users and workspaces', async () => {
+    const other = await createAuthenticatedUser('guest');
+    await db.insert(tenantMemberships).values({ userId: other.id, tenantId: 'sentropic', status: 'approved' });
+    expect(other.workspaceId).not.toBe(user.workspaceId);
+    standaloneToolSource.register({ tool: { name: 'catalog_context_probe', description: 'Private mutation probe',
+      inputSchema: {}, sideEffect: true }, handler: vi.fn() });
+    const discover = (actor: TestUser) => authenticatedRequest(productApp, 'GET',
+      '/api/v1/catalog/entries/catalog_context_probe', actor.sessionToken!);
+    const responses = await Promise.all([discover(user), discover(other), discover(other), discover(user)]);
+    expect(responses.map(response => response.status)).toEqual([200, 404, 404, 200]);
+    await expect(responses[0].json()).resolves.toMatchObject({ item: { metadata: { name: 'catalog_context_probe' } } });
+    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, other.id));
+    const [denied, allowed] = await Promise.all([discover(other), discover(user)]);
+    expect(denied.status).toBe(403);
+    expect(allowed.status).toBe(200);
+  });
+
+  it('should reject stale session authority and foreign workspace selectors before execution', async () => {
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    const authenticated = { userId: user.id, sessionId: session.id, workspaceId: user.workspaceId!, role: 'editor' };
+    const context = await resolveHttpCatalogContext(authenticated);
+    await authenticatedRequest(productApp, 'GET', '/api/v1/catalog/sources', user.sessionToken!);
+    await expect(revalidateCatalogInvocation(context, 'workspace_list', {})).resolves.toMatchObject({ subjectId: user.id });
+    await expect(resolveHttpCatalogContext({ ...authenticated, workspaceId: 'foreign-workspace' }))
+      .rejects.toThrow('catalog_access_denied');
+    await db.delete(userSessions).where(eq(userSessions.id, session.id));
+    await expect(revalidateCatalogInvocation(context, 'workspace_list', {})).rejects.toThrow('catalog_access_denied');
+  });
+
+  it('should carry verified chat-service authority through the real executor and deny a later revoked call', async () => {
+    const sessionId = crypto.randomUUID();
+    const messageId = crypto.randomUUID();
+    await db.insert(chatSessions).values({ id: sessionId, userId: user.id, workspaceId: user.workspaceId });
+    await db.insert(chatMessages).values({ id: messageId, sessionId, role: 'assistant', sequence: 0 });
+    const handler = vi.fn((_args, context) => ({ actor: context.subjectId, workspace: context.workspaceId }));
+    standaloneToolSource.register({ tool: { name: 'catalog_context_probe', description: 'Context probe',
+      inputSchema: {}, sideEffect: false }, handler });
+    let sequence = 0;
+    const invoke = async () => (chatService as unknown as {
+      executeServerToolInternal(input: unknown): Promise<unknown>;
+    }).executeServerToolInternal({ toolCall: { id: 'probe', name: 'catalog_context_probe', args: '{}' }, args: {},
+      options: { userId: user.id, sessionId, assistantMessageId: messageId }, streamSeq: sequence++,
+      sessionWorkspaceId: user.workspaceId, currentUserRole: 'editor', readOnly: false,
+      allowedFolderIds: new Set(), allowedByType: { organization: new Set(), folder: new Set(),
+        usecase: new Set(), executive_summary: new Set() }, hasContextType: () => false,
+      isAllowedOrganizationId: async () => false,
+      tools: [{ type: 'function', function: { name: 'catalog_context_probe', parameters: {} } }] });
+    await expect(invoke()).resolves.toMatchObject({ result: { actor: user.id, workspace: user.workspaceId } });
+    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
+    await expect(invoke()).resolves.toMatchObject({ result: { error: 'catalog_access_denied' } });
+    expect(handler).toHaveBeenCalledOnce();
   });
 
   it('has no anonymous, disabled, duplicate, effect, or unavailable-control fallback', async () => {

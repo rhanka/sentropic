@@ -45,6 +45,7 @@ import {
 } from '../../../../packages/skills/src/index.js';
 import { CompositeCatalogRegistry, type CatalogSearchOptions } from '../catalog/composite-registry.js';
 import { CatalogExecutionSeam } from '../catalog/execution-seam.js';
+import { isTrustedCatalogContext, type CatalogRequestContext } from '../catalog/request-context.js';
 import {
   SEARCH_CATALOG_RESOLVED_TOOL,
   type SearchCatalogInput,
@@ -164,6 +165,7 @@ export const foundationSkillsToolRegistry = new SkillsToolRegistry(
 );
 
 export interface ResolveFoundationChatToolsInput {
+  readonly context?: CatalogRequestContext;
   readonly userId: string;
   readonly workspaceId: string;
   // ARCH-11 G1b (spec §4.2.2): the tenant is resolved UPSTREAM (via reconcileTenantId) and
@@ -210,10 +212,20 @@ export function resolvedToolToOpenAIChatTool(
 export function resolveFoundationChatTools(
   input: ResolveFoundationChatToolsInput,
 ): OpenAI.Chat.Completions.ChatCompletionTool[] {
-  const authz = buildFoundationSkillsAuthz(input);
-  const tools = foundationSkillsToolRegistry
+  if (input.context !== undefined && !isTrustedCatalogContext(input.context)) return [];
+  const context = input.context;
+  const authz = buildFoundationSkillsAuthz(context ? { ...input, userId: context.subjectId,
+    tenantId: context.tenantId, workspaceId: context.workspaceId, workspaceType: context.workspaceType,
+    currentUserRole: context.roles?.[0], allowedTools: context.allowedTools } : input);
+  const tools = requestSkillsRegistry(context)
     .resolveTools(authz)
     .map((tool) => resolvedToolToOpenAIChatTool(tool));
+  if (context) {
+    for (const entry of compositeCatalogRegistry.list(context)) {
+      if (entry.kind === 'tool') tools.push({ type: 'function', function: { name: entry.metadata.name,
+        description: entry.metadata.description, parameters: entry.tool.inputSchema } });
+    }
+  }
 
   // Lot 7 (SPEC_EVOL_CATALOG §3.5): inject `search_catalog` as the ADDITIVE
   // sibling at position 1 (immediately after `search_skills`).
@@ -225,16 +237,18 @@ export function resolveFoundationChatTools(
   if (searchSkillsEntry === undefined) {
     // Defensive: should never happen (adapter always prepends search_skills),
     // but if it does, just prepend search_catalog first.
-    return [searchCatalogTool];
+    return context && !context.allowedTools.includes('search_catalog') ? [] : [searchCatalogTool];
   }
-  return [searchSkillsEntry, searchCatalogTool, ...rest];
+  return [searchSkillsEntry, searchCatalogTool, ...rest]
+    .filter(tool => tool.type === 'function' && (!context || context.allowedTools.includes(tool.function.name)));
 }
 
 export function executeFoundationSearchSkills(input: {
   readonly authz: ResolveFoundationChatToolsInput;
   readonly payload: SearchSkillsInput;
+  readonly context?: CatalogRequestContext;
 }): ReadonlyArray<SkillSearchHit> {
-  return foundationSkillsToolRegistry.executeSearchSkills(
+  return requestSkillsRegistry(input.context).executeSearchSkills(
     buildFoundationSkillsAuthz(input.authz),
     input.payload,
   );
@@ -252,8 +266,10 @@ export function executeFoundationSearchSkills(input: {
  * Uses the Lot 1 `CatalogSearchOptions` shape (kindHint + categoryHint).
  */
 export function executeFoundationSearchCatalog(
-  payload: SearchCatalogInput,
+  input: { readonly payload: SearchCatalogInput; readonly context: CatalogRequestContext },
 ): SearchCatalogResult {
+  const { payload, context } = input;
+  if (!isTrustedCatalogContext(context)) return { status: 'completed', hits: [] };
   const query = typeof payload.query === 'string' ? payload.query : '';
   if (query.trim().length === 0) {
     return { status: 'completed', hits: [] };
@@ -269,7 +285,7 @@ export function executeFoundationSearchCatalog(
     ...(categoryHint !== undefined ? { categoryHint } : {}),
   };
 
-  const rawHits = compositeCatalogRegistry.search(query, searchOptions);
+  const rawHits = compositeCatalogRegistry.search(query, searchOptions, context);
 
   const hits: CatalogHit[] = rawHits.map((h) => ({
     kind: h.entry.kind,
@@ -282,4 +298,13 @@ export function executeFoundationSearchCatalog(
   }));
 
   return { status: 'completed', hits };
+}
+
+function requestSkillsRegistry(context?: CatalogRequestContext): SkillsToolRegistry {
+  if (!context) return foundationSkillsToolRegistry;
+  const registry = new InMemorySkillRegistry();
+  for (const entry of compositeCatalogRegistry.list(context)) {
+    if (entry.kind === 'skill') registry.register(entry.skill);
+  }
+  return new SkillsToolRegistry(registry);
 }
