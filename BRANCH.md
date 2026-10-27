@@ -145,4 +145,4 @@ E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,pos
 - E7 gate = engram-memory lanes + PG storage lanes green (E9 runs the five-profile acceptance later, not here).
 - AI CI job red-on-main is out of scope for this lot's gate.
 - Slices landed: PG provider check, host assembly, fail-closed maintenance ports, ledger + continuation + proof-only, positive host calls through the injected pool, neutral-handle denial; binding-compatibility pinned.
-- E7 receipts (ENV=test-e2-int, CM_PG_URL=postgresql://app:app@postgres:5432/app, head `aba2cbb97`): `SCOPE=tests/engram-memory` 16 files 122 passed, 0 todo; `SCOPE=tests/storage` 78 passed | 1 skipped files, 502 passed | 4 skipped; typecheck/lint exit 0; scope-check PASS C2. CI rerun pending.
+- E7 receipts (ENV=test-e2-int, CM_PG_URL=postgresql://app:app@postgres:5432/app, head `3cadffdc4`): `SCOPE=tests/engram-memory` 18 files 133 passed, Type Errors none; `SCOPE=tests/storage` 78 passed | 1 skipped files, 502 passed | 4 skipped; typecheck/lint exit 0; scope-check PASS C2. R2 P1-A–E implemented; CI run pending on the head.
