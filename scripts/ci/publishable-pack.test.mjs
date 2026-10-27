@@ -321,6 +321,40 @@ test('fresh registry reads bypass the CDN: no-cache headers and a unique cache-b
   assert.notEqual(calls[0].url, calls[1].url, 'each fresh read has its own cache key');
 });
 
+test('wait: resolves a single caret, an || range and fails closed on an unsatisfiable range', async () => {
+  const rangeRegistry = (docs) => {
+    let calls = 0;
+    return {
+      registry: 'http://registry.test',
+      get calls() { return calls; },
+      async packument(name, { fresh = false } = {}) {
+        assert.equal(name, '@fx/mesh');
+        assert.equal(fresh, true, 'range wait must bypass the cache and the CDN');
+        calls += 1;
+        return docs[Math.min(calls, docs.length) - 1];
+      },
+      async lookup() { throw new Error('range wait must use fresh packuments, not exact lookups'); },
+    };
+  };
+  const docOf = (...versions) => ({ versions: Object.fromEntries(versions.map((v) => [v, { dist: {} }])) });
+  const single = rangeRegistry([docOf(), docOf('0.27.0')]);
+  const singleOut = sink();
+  assert.equal(await commandWait({ spec: '@fx/mesh@^0.27.0', attempts: '5', delay: '0' }, { registry: single, out: singleOut }), 0);
+  assert.equal(single.calls, 2);
+  assert.match(singleOut.text(), /Waiting for @fx\/mesh@\^0\.27\.0 \(1\/5\)/);
+  assert.match(singleOut.text(), /is visible .* \(matched 0\.27\.0\)/);
+  const union = rangeRegistry([docOf('0.26.0'), docOf('0.27.0', '0.28.0')]);
+  const unionOut = sink();
+  assert.equal(await commandWait({ spec: '@fx/mesh@^0.27.0 || ^0.28.0', attempts: '5', delay: '0' }, { registry: union, out: unionOut }), 0);
+  assert.equal(union.calls, 2);
+  assert.match(unionOut.text(), /\(matched 0\.28\.0\)/);
+  const missing = rangeRegistry([docOf('0.27.0', '0.28.0')]);
+  const missingOut = sink();
+  assert.equal(await commandWait({ spec: '@fx/mesh@^99.0.0', attempts: '3', delay: '0' }, { registry: missing, out: missingOut }), 1);
+  assert.equal(missing.calls, 3);
+  assert.match(missingOut.text(), /is not visible .* after 3 x 0s/);
+});
+
 test('wait: default budget is 18 x 10 s; polls fresh lookups until visible, fails after the budget', async () => {
   assert.deepEqual(waitBudget(), { attempts: 18, delaySeconds: 10 });
   assert.throws(() => waitBudget({ attempts: 0 }), /invalid registry wait budget/);
