@@ -38,8 +38,8 @@ and the two existing release groups remain.
 E2E no longer waits on the 637–656s `typecheck-lint-api` job. The API/IdP
 typecheck, IdP build and API lint steps remain intact, parallel to E2E, and
 required in receipts and `ci-gate`. Both image publishers now depend directly
-on that job to preserve the previous promotion barrier. No job, matrix member,
-assertion or timeout was removed or relaxed. Qualification of the revised
+on that job to preserve the previous promotion barrier. No required job, matrix
+member or application assertion was removed; timeouts remain unchanged. Qualification of the revised
 policy requires new completed receipts; historical slot-policy timings below
 remain failed evidence.
 
@@ -243,6 +243,58 @@ files rejects both fresh, attested timing receipts. The requested main-like
 run is `workflow_dispatch` on the branch; it does not replace the strict
 reader's actual-main-push requirement or prove main delivery. No policy
 change or acceptance tick follows these measurements; PR #766 stays draft.
+
+## Review r2 completed measurements — 2026-10-27
+
+Source: `0dfeda7b43ffed65af8057fca1a15e7ef209b3e8`, rebased on main
+`72bb2da3d00b036e35c6dc56137aa936b7853673`. All `ci-capacity-*` job
+mutexes are removed; reference matrix widths 15/5, independent validators
+and publishers, PR cancellation and existing release groups remain.
+API/IdP quality runs beside E2E and remains required at the gate and both
+image publishers. No required job or matrix member was removed; timeouts and
+application assertions are unchanged.
+Local checks passed before dispatch: 35 metrics + 22 expected-results + 90
+publication tests, plus harness branch/scope checks.
+
+| Receipt | Run / attempt | UTC creation → completion | Wall | Critical-path scheduling | Critical-path execution | Finalization |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| PR | [40476067709 / 2](https://github.com/rhanka/sentropic/actions/runs/40476067709/attempts/2) | 09:21:03 → 10:53:23 | **5540s** | 4765s | 774s | 1s |
+| Main-like guarded-pack dry-run | [40476084177 / 1](https://github.com/rhanka/sentropic/actions/runs/40476084177) | 08:48:23 → 10:43:52 | **6929s** | 5811s | 1117s | 1s |
+
+Both completed successfully with the unchanged 89 expanded job identities:
+PR 62 executions / 27 skips; dry-run 82 / 7. Both have zero timestamp gaps,
+unmeasured executions or carried-forward copies. Both pre-dispatch manifests
+attest policy digest
+`dfb44d98051d4a9a4b47bb9598d29d7db972ff8a1ccea87aa0a11e5611b5d2ff`.
+All 21 dry-run publisher jobs passed their real guarded packs; all registry
+writers and post-publication registry checks were skipped.
+
+PR attempt 1 failed on npm `ECONNRESET` while building the toolbox (job
+`122097352356`). It was cancelled at 09:19:44 UTC and receives no timing
+acceptance. Every job was rerun: attempt 2 is fresh throughout. From the
+original 08:48:15 trigger to the successful attempt's 10:53:23 completion,
+the PR took **7508s**, including the failed attempt and retry interval.
+Pre-rebase dispatch `40475602504` was cancelled and is also excluded.
+
+The dependency cut is observable: all five dry-run E2E members became ready
+at 09:34:02, before API quality job `122098480648` ended at 09:37:05.
+E2E D `122113514738` then waited 978s for a runner and executed for 278s.
+The PR's final critical path instead follows changes → toolbox → API
+initiative/summary member → receipts → gate. Toolbox `122109467046`
+waited 2791s and executed 290s; member `122131569102` waited 1765s and
+executed 432s. The dry-run path follows the existing release validation/train
+barriers; gateway `122118875679` accumulated 2067s of scheduling delay.
+These waits remain measured scheduling, not a claimed account-quota diagnosis.
+
+Classification/verdict: PR 18s/19s, dry-run 22s/16s, still above 15s/5s.
+Per-run executed peaks were 8/8; queue p50/max were 1501s/3214s and
+1365s/2543s. These are observations, not a runner reservation.
+Canonical captures and metrics are retained under
+`tmp/ci-capacity/40476067709-2/` and `tmp/ci-capacity/40476084177-1/`.
+The strict proof command rejects both fresh, attested timing receipts:
+they exceed 2288s by 3252s/4641s, and the branch dispatch is not main delivery.
+**P1 remains unticked; PR #766 stays draft.** No new rollback drill completed;
+its checkbox remains unticked and cancelled run `40353670942` does not qualify.
 
 ## BR-76 retained measurements
 
